@@ -71,6 +71,18 @@
         covered? (fn [died] (some #(if-let [t (:death-t (:data %))] (= t (:t died)) (> (:t %) (:t died))) recovered))]
     (into [] (remove covered?) (mem/entries view :died))))
 
+(defn danger-hold
+  "The data of the :recover-danger entry ({:death-t :until :text}) while recover-drops' decline of death for a danger
+  is remembered (view's :now before its :until), else nil."
+  [view death]
+  (some #(when (and (= (:t death) (:death-t (:data %))) (< (:now view) (:until (:data %)))) (:data %))
+        (reverse (mem/entries view :recover-danger))))
+
+(defn actionable-deaths
+  "open-deaths without those whose danger decline is still remembered (danger-hold)."
+  [view]
+  (into [] (remove #(danger-hold view %)) (open-deaths view)))
+
 (defn respawned-since?
   "True when a :respawned entry newer than death exists: the body is alive again."
   [view death]

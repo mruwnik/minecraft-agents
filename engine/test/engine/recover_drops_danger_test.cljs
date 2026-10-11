@@ -137,22 +137,51 @@
               r (await ((fetch-run "fall" {:blocks wet})))]
           (is (re-find #"danger [1-9][0-9.]*,.*: water" (decided-text (:seen r)))))))))
 
-(deftest a-skip-for-danger-is-tried-again-when-the-danger-is-gone
+(deftest an-agent-retry-weighs-a-remembered-danger-anew
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng p]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})]
           (die! eng {:pos dt/death-pos :inventory pile})
-          (core/submit! eng (list 'jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
+          (core/submit! eng '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
           (await (run-until-empty eng 5))
-          (is (nil? (recovered eng)) "a danger skip is not final")
-          (is (true? (died/died nil (mem/view (:store eng)) {})) "the died trigger fires again")
-          (is (= [] (tu/walk-calls p)))
           (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
-          (core/submit! eng job {})
+          (core/submit! eng '(jobs.survival.recover-drops {:retry true}) {})
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng)))))))))
+
+(deftest a-killer-is-priced-at-a-pile-far-below-the-surface
+  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
+        death {:pos {:x 20 :y 24 :z 0} :inventory dt/death-pile-of-the-field-report :cause "skeleton"}]
+    (die! eng death)
+    (is (= ["skeleton"]
+           (mapv :name (:top-mobs (recover-drops/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000)))))))
+
+(deftest a-later-death-by-a-mob-near-an-older-pile-guards-that-pile-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
+          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 120000)
+          (die! eng {:pos (update dt/death-pos :x - 6) :inventory [] :cause "skeleton"})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (re-find #"skip: value [1-9].*: skeleton" (decided-text seen)) (decided-text seen))
+          (is (= [] (tu/walk-calls p))))))))
+
+(deftest a-death-with-nothing-carried-starts-no-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})]
+          (die! eng {:pos dt/death-pos :inventory [] :cause "skeleton"})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= :skip (:decision (recovered eng))))
+          (is (false? (died/died nil (mem/view (:store eng)) {})))
+          (is (= [] (tu/walk-calls p))))))))
 
 (deftest an-older-open-pile-is-fetched-before-a-newer-empty-one
   (async done
@@ -326,3 +355,27 @@
       (fn ^:async t []
         (let [{:keys [eng]} (await (settings/with-settings {::recover-drops/open-night-radius 400} (open-night-run 200)))]
           (is (= :collected (:decision (recovered eng)))))))))
+
+(deftest a-skip-for-danger-is-remembered-then-tried-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
+              dear '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}})]
+          (die! eng {:pos dt/death-pos :inventory pile})
+          (core/submit! eng dear {})
+          (await (run-until-empty eng 5))
+          (is (nil? (recovered eng)) "a danger skip is not final")
+          (is (false? (died/died nil (mem/view (:store eng)) {})) "the died trigger rests while the danger is remembered")
+          (let [id (core/submit! eng dear {})]
+            (await (core/tick! eng))
+            (is (= :danger-remembered (:reason (core/waiting eng id))) (pr-str (core/waiting eng id)))
+            (is (re-find #"zombie" (str (:text (core/waiting eng id)))) "the wait names what made it decline")
+            (is (= 1 (count (dt/emitted seen :recover-drops.decided))) "the danger is not weighed again")
+            (is (= [] (tu/walk-calls p)))
+            (swap! clock + 151000)
+            (is (true? (died/died nil (mem/view (:store eng)) {})) "the died trigger fires again once the memory has run out")
+            (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
+            (await (run-until-empty eng 20))
+            (is (= :collected (:decision (recovered eng))))))))))

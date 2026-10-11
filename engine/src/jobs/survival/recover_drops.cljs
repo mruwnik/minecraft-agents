@@ -36,10 +36,11 @@
   - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (jobs.lib.cost/route-danger)
     past the hostiles the body knows of (seen or heard, jobs.lib.danger/known-hostiles; :danger-overrides, after armour),
     many times dearer for a mob the body (its best weapon, armour, health) cannot afford to fight.
-    The killer named in the :died cause is assumed at the pile for ::killer-guard-ms after the death only.
+    The killer named in the :died cause is assumed at the pile for ::killer-guard-ms after the death only, and so is
+    the killer of any other death that young where it killed. The pile itself ends the route, however far below the surface.
   - A pile in water (its cell or the one above) or lost to drowning adds :wet-danger points of route danger (named water or drowning).
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
-  A skip for danger alone (the pile would be fetched were the route safe) is not final: the run ends :declined, the death stays open and the died trigger weighs the pile anew until the window closes; a skip for value is final.
+  A skip for danger alone (the pile would be fetched were the route safe) is not final: the run ends :declined and the death stays open. The danger is remembered (:recover-danger) for ::danger-memory-ms (an assumed killer alone: while its guard lasts): the died trigger rests and the check waits :danger-remembered for that death meanwhile, cutting no other job; then the pile is weighed anew, until the window closes. :retry weighs it now. A skip for value is final.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
   Kit: before the decision, when the pile is worth the trip were the route safe, a body with no weapon or with an empty armour slot, whose killer or the hostiles it knows make the route
   dangerous, fetches the best weapon and armour piece a chest of known stock (:fetch/stock) holds (jobs.lib.fetch, chests only,
@@ -60,7 +61,7 @@
   Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
   A run cut by a higher reflex, or a restarted body, goes on with the same trip.
   Warns respawn_away_from_bed once per death when the body respawned over 10 blocks from its respawn bed (the live :spawn-bed, else the :bed it slept in).
-  Memory: reads :died, :respawned, :bed, :slept, :recover-trip, the scaffold ledger. Writes :recovered and :recover-trip.")
+  Memory: reads :died, :respawned, :bed, :slept, :recover-trip, :recover-danger, the scaffold ledger. Writes :recovered, :recover-trip and :recover-danger.")
 
 (a/defargs args
   {:margin {:doc "added to the fetch cost before comparing it to the value" :spec (a/num-in nil nil) :default 0}
@@ -69,7 +70,7 @@
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.fetch limits); false: no kit fetch" :spec fetch/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
    :leg-s {:doc "the walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again" :spec (a/num-in 0.1 120) :default 6}
-   :retry {:doc "try a pile again that an earlier run ended :abandoned, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}
+   :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :spec (a/num-in 0 nil) :default 10}})
 
 (a/defargs settings
@@ -86,11 +87,13 @@
    ::deep-reach {:default 24 :doc "How far aside of a deep pile the walk goes on before the stair down is cut." :spec (a/num-in 0 nil)}
    ::stair-step-s {:default 3 :doc "Seconds one block of a stair down and its run is reckoned to take, against the despawn window left." :spec (a/num-in 0 nil)}
    ::killer-guard-ms {:default 60000 :doc "How long after a death its killer is assumed to still stand at the pile; later only the hostiles the body knows of count." :spec (a/num-in 0 nil)}
+   ::danger-memory-ms {:default 150000 :doc "How long a skip for danger is remembered: the died trigger rests and the job waits (:danger-remembered) for that death, then the danger is weighed anew. A skip for the assumed killer alone lasts only while the killer guard does." :spec (a/num-in 0 nil)}
    ::hold-at-night {:default true :doc "At night a body that stands in a shelter (a roof, a closed room, underground) does not walk out of it for the pile: the run ends :declined (:night) and the died trigger tries again, by day if the pile is still there." :spec boolean?}
    ::open-night-radius {:default 48 :doc "At night a body under the open sky does not walk farther than this for the pile: the run ends :declined (:night) so the night reflex shelters it where it stands; the trip resumes by day while the pile lasts." :spec (a/num-in 0 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
 (defn seal-radius [] (settings/get settings ::seal-radius))
 (defn killer-guard-ms [] (settings/get settings ::killer-guard-ms))
+(defn danger-memory-ms [] (settings/get settings ::danger-memory-ms))
 (defn wet-danger [] (settings/get settings ::wet-danger))
 (defn arrive-range [] (settings/get settings ::arrive-range))
 (defn max-hostile-cuts [] (settings/get settings ::max-hostile-cuts))
@@ -102,6 +105,7 @@
 (def day-ms (* 24 60 60 1000))
 (def recovered-policy {:cap 10 :ttl day-ms})
 (def trip-policy {:cap 1 :ttl day-ms}) ; wall clock; the despawn window itself is counted in game ticks
+(def danger-policy {:cap 5 :ttl day-ms})
 
 (defn finite [n] (if (js/isFinite n) n :infinite))
 
@@ -151,13 +155,24 @@
       [died])))
 
 (defn open-deaths
-  "body/open-deaths, plus the death :retry takes up again."
+  "The open deaths to serve: body/actionable-deaths (with :retry every open one, a remembered danger too), plus the
+  death :retry takes up again."
   [c]
-  (vec (sort-by :t (concat (retried-deaths c) (body/open-deaths (ctx/view c))))))
+  (let [view (ctx/view c)]
+    (vec (sort-by :t (concat (retried-deaths c)
+                             (if (:retry (:args c)) (body/open-deaths view) (body/actionable-deaths view)))))))
+
+(defn danger-wait
+  "The wait reason while the only open deaths are ones declined for a remembered danger, else nil."
+  [view]
+  (when-let [{:keys [until text]} (some #(body/danger-hold view %) (body/open-deaths view))]
+    {:reason :danger-remembered :until until
+     :text (str "the pile was declined for danger (" text "); weighed again in " (js/Math.ceil (/ (- until (:now view)) 1000))
+                " s, or now with (jobs.survival.recover-drops {:retry true})")}))
 
 (defn check [c]
   (or (seq (open-deaths c))
-      (ctx/wait c (decided-wait (ctx/view c)))))
+      (ctx/wait c (or (danger-wait (ctx/view c)) (decided-wait (ctx/view c))))))
 
 (defn death-score
   "What a death's pile is worth net of the walk to it: its carried items' value less 0.3 per block."
@@ -239,17 +254,30 @@
   (let [[x y z] (map js/Math.floor [(:x pos) (:y pos) (:z pos)])]
     (boolean (and pos (or (= :water (kind-at x y z)) (= :water (kind-at x (inc y) z)))))))
 
+(defn later-killers
+  "[{:name :pos :left-ms}] (:left-ms of its guard) of the killers of the body's other deaths inside ::killer-guard-ms, each assumed where it killed: a
+  mob that killed the body again near an older pile guards that pile too. Not the death at pos itself."
+  [c pos]
+  (let [view (ctx/view c)]
+    (for [d (mem/entries view :died)
+          :let [{:keys [cause] at :pos} (:data d)
+                left (- (killer-guard-ms) (settings/ticks->ms (game/ticks-since d view)))]
+          :when (and at (not= at pos) (string? cause) (pos? left))]
+      {:name cause :pos at :left-ms left})))
+
 (defn estimate
-  "{:value :cost :parts :reason :top-items :top-mobs} of recovering the drops of the :died data (cost js/Infinity when
-  they cannot be fetched)."
+  "{:value :cost :parts :reason :top-items :top-mobs :hold-ms} (:hold-ms: how long a skip for this danger is remembered,
+  ::danger-memory-ms, or what is left of the killer guards when only assumed killers add danger) of recovering the
+  drops of the :died data (cost js/Infinity when they cannot be fetched)."
   [c {:keys [pos inventory cause experience]} elapsed]
   (let [p (:primitives c)
         here (u/self-pos c)
         kind-at (reach/lookup p)
         worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
-        route (when pos (cost/straight-route kind-at here pos))
+        route (when pos (conj (cost/straight-route kind-at here pos) pos)) ; the straight route keeps to the surface: a pile far below is its end all the same
         version (game/version-of p)
-        guard (when (and pos (string? cause) (< elapsed (killer-guard-ms))) [{:name cause :pos pos}]) ; route-danger drops a cause that is no hostile mob
+        guard (concat (when (and pos (string? cause) (< elapsed (killer-guard-ms))) [{:name cause :pos pos :left-ms (- (killer-guard-ms) elapsed)}]) ; route-danger drops a cause that is no hostile mob
+                      (later-killers c pos))
         threat (if route
                  (cost/route-danger version kind-at route (concat (danger-q/seen-hostiles p) guard) (.-equipment (.self p))
                                     :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p)))
@@ -260,6 +288,9 @@
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (* (xp-per-level) (or (:level experience) 0)))
              :cost (:cost fetch)
+             :hold-ms (if (every? (set (map :pos guard)) (map :pos (:mobs threat)))
+                        (min (danger-memory-ms) (apply max 0 (map :left-ms guard)))
+                        (danger-memory-ms))
              :top-items (mapv #(select-keys % [:name :count :value]) (take (top-n) (:items worth)))}
       (:parts fetch) (assoc :parts (:parts fetch))
       (:reason fetch) (assoc :reason (:reason fetch))
@@ -537,16 +568,20 @@
        (> (:value e) (+ (- (:cost e) (get-in e [:parts :danger])) margin))))
 
 (defn retry-later!
-  "A skip for danger is not final while the window is open: report it, forget the estimate and end :declined, so the
-  died trigger runs the job again and the danger is weighed anew."
-  [c decided]
-  (ctx/update-mem! c dissoc :decided)
-  (save-trip! c)
-  (ctx/emit! c :recover-drops.decided :info
-             (assoc (select-keys decided [:value :cost :parts :top-items :top-mobs])
-                    :decision :skip :retry true :pos (:pos (:data (current-death c)))
-                    :text (str (decision-text :skip decided (:margin (:args c))) "; looks again")))
-  :declined)
+  "A skip for danger is not final while the window is open: report it, forget the estimate, remember the danger
+  (:recover-danger, for ::danger-memory-ms; an assumed killer alone only while its guard lasts) and end :declined. The
+  died trigger and the check rest for this death meanwhile, then the danger is weighed anew."
+  [c entry decided]
+  (let [hold-ms (:hold-ms decided (danger-memory-ms))
+        mobs (str/join ", " (map :name (:top-mobs decided)))]
+    (ctx/update-mem! c dissoc :decided)
+    (save-trip! c)
+    (ctx/remember! c :recover-danger {:death-t (:t entry) :until (+ (ctx/now c) hold-ms) :text mobs} danger-policy)
+    (ctx/emit! c :recover-drops.decided :info
+               (assoc (select-keys decided [:value :cost :parts :top-items :top-mobs])
+                      :decision :skip :retry true :pos (:pos (:data entry)) :hold-s (js/Math.round (/ hold-ms 1000))
+                      :text (str (decision-text :skip decided (:margin (:args c))) "; looks again in " (js/Math.round (/ hold-ms 1000)) " s")))
+    :declined))
 
 (defn deep-pile
   "{:below n :aside d} when the pile lies ::deep-drop or more under the body and within ::deep-reach aside of it, else nil.
@@ -619,7 +654,7 @@
 
       (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
       (if (danger-only? decided margin)
-        (retry-later! c decided)
+        (retry-later! c entry decided)
         (if (and (= :too-far (:reason decided)) (pos? (:blocked-retries (ctx/mem c) 0)))
           (finish! c :abandoned (assoc decided :reason :unreachable :detail (unreachable-detail c pos)))
           (finish! c :skip decided)))
