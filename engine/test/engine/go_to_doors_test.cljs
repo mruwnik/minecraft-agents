@@ -631,3 +631,37 @@
             (core/submit! eng '(recording-parent) {})
             (await (tick-out! eng clock 60))
             (is (= arrives? (boolean (:arrived @out))) (pr-str label (select-keys @out [:arrived :why])))))))))
+
+;; ------------------------------------------------------------------ a pen holding animals
+
+(def pen-world
+  "A fence pen x 5..9, z -2..2 with a gate at 5,64,0 (open or not) and a cow and a sheep in it; the body at x."
+  (let [stone (box 5 63 -2 9 63 2 "stone")
+        fence (merge (box 5 64 -2 9 64 -2 "oak_fence") (box 5 64 2 9 64 2 "oak_fence")
+                     (box 5 64 -2 5 64 2 "oak_fence") (box 9 64 -2 9 64 2 "oak_fence"))]
+    (fn [open x]
+      {:self {:pos {:x x :y 64 :z 0}} :blocks (merge flat stone fence {"5,64,0" "oak_fence_gate"})
+       :states {"5,64,0" {:open open :facing "east"}}
+       :entities [{:id 7 :name "cow" :kind "passive" :pos {:x 7.5 :y 64 :z 0.5}}
+                  {:id 8 :name "sheep" :kind "passive" :pos {:x 7.5 :y 64 :z 1.5}}]})))
+
+(deftest a-walk-through-a-crowded-pens-gate-shuts-it-behind-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p eng seen]} (await (go! (pen-world false 0) {:pos [7 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (false? (open? p [5 64 0])) "shut again as soon as the body is clear of the gate cell")
+          (is (empty? (opened eng))))))))
+
+(deftest a-walk-away-from-a-pen-whose-gate-stands-open-with-animals-in-it-warns
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (await (go! (pen-world true 3) {:pos [20 64 -3] :range 0}))
+              near (await (go! (pen-world true 3) {:pos [3 64 0] :range 0}))
+              shut (await (go! (pen-world false 3) {:pos [20 64 -3] :range 0}))]
+          (is (= 1 (count (events-of far :go-to.pen-gate-open))))
+          (is (re-find #"\[5 64 0\]" (str (:text (first (events-of far :go-to.pen-gate-open))))))
+          (is (empty? (events-of near :go-to.pen-gate-open)) "the goal is by the gate")
+          (is (empty? (events-of shut :go-to.pen-gate-open)) "a shut gate"))))))

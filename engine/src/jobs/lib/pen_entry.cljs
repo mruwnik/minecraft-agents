@@ -7,12 +7,16 @@
             [jobs.lib.apiary :as apiary]
             [jobs.lib.combat :as combat]
             [jobs.lib.pen :as pen]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [engine.ctx :as ctx]
+            [clojure.string :as str]))
 
 (a/defargs settings
   {::radius {:default 24 :doc "Blocks round the body in which animals are looked for to find the pens whose gates a block job's walk keeps out of." :spec (a/int-in 1 nil)}
    ::max-animals {:default 12 :doc "The nearest animals checked for a pen." :spec (a/int-in 1 nil)}
-   ::max-cells {:default 400 :doc "Most cells searched for one pen." :spec (a/int-in 1 nil)}})
+   ::max-cells {:default 400 :doc "Most cells searched for one pen." :spec (a/int-in 1 nil)}
+   ::open-radius {:default 6 :doc "A go-to that starts within this many blocks of an open gate of a pen holding animals warns when its goal is far from the gate." :spec (a/int-in 1 nil)}
+   ::leave-dist {:default 8 :doc "The goal of such a walk is this far from the gate or farther." :spec (a/int-in 1 nil)}})
 
 (defn animal-cell [e]
   (let [{:keys [x y z]} (u/pos-of (.-pos e))]
@@ -34,6 +38,20 @@
             (let [answer (pen/check {:block-at (apiary/seen-block-at-fn p) :at cell :max-cells (settings/get settings ::max-cells)})]
               (recur (rest todo)
                      (if (and (contains? (:inside answer) k) (seq (:gates answer)))
-                       (conj found {:inside (:inside answer) :gates (mapv :pos (:gates answer)) :animals 1})
+                       (conj found {:inside (:inside answer) :gates (mapv :pos (:gates answer)) :open (mapv :pos (filter :open? (:gates answer))) :animals 1})
                        found)))))
         (mapv #(dissoc % :inside) found)))))
+
+(defn warn-left-open!
+  "Warn (once a call) when the walk to goal {:x :y :z} leads away from a pen with animals in it whose gate stands open
+  within ::open-radius of the body: the pen empties in about a minute."
+  [c goal]
+  (when (every? number? (map goal [:x :y :z]))
+    (let [here (u/self-pos c)
+          gates (->> (pens c) (mapcat :open)
+                     (filter #(and (<= (u/dist here %) (settings/get settings ::open-radius))
+                                   (>= (u/dist % goal) (settings/get settings ::leave-dist))))
+                     vec)]
+      (when (seq gates)
+        (ctx/warn-once! c :pen-gate-open :go-to.pen-gate-open
+                        {:gates gates :text (str "walking away from a pen with animals in it whose gate stands open: " (str/join " " (map (fn [{:keys [x y z]}] [x y z]) gates)))})))))
