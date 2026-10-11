@@ -419,6 +419,34 @@
           (is (= 1 (:walks r)) "no second walk of the old plan")
           (is (= :searching (:status (:done r))) "the caller searches on from where the body stands"))))))
 
+;; a re-plan the caller refused (near/walk-once!'s stair-check): {:refused true} with its :stop
+(def refused {:status "found" :r #js {} :steps [] :stop {:status :stair-cheaper :why :dives} :refused true :ms 5})
+
+(defn follow-refused [why]
+  (let [walks (atom 0)
+        walk-fn (fn [steps _]
+                  (js/Promise.resolve
+                   (if (= 1 (swap! walks inc))
+                     [{:status :replan :why why :step 1 :at [1 64 0] :cells []} 1]
+                     [{:status :arrived :at [(:x (peek steps)) 64 0]} 1])))
+        c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}]
+    (-> (walk/follow! c {:status "partial" :r #js {} :steps (line 3) :ms 5}
+                      {:plan-fn (fn [_] (js/Promise.resolve refused)) :walk-fn walk-fn :to [9 64 0] :policy executor/policy})
+        (.then (fn [r] (assoc r :walks @walks))))))
+
+(deftest a-refused-replan-ends-the-walk-with-its-stop-unless-it-was-only-a-refresh
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (tu/each-async [:changed :health :danger :mob]
+                 (fn ^:async each [why]
+                   (let [r (await (follow-refused why))]
+                     (is (= 1 (:walks r)) (str why ": the old plan is not walked on"))
+                     (is (= {:status :stair-cheaper :why :dives} (select-keys (:done r) [:status :why])) (str why))))))
+        (let [r (await (follow-refused :refresh))]
+          (is (= 2 (:walks r)) "nothing new on the old way: it is walked on")
+          (is (= :arrived (:status (:done r)))))))))
+
 ;; ---------------------------------------------------------------- the health stop
 
 (def drop-ahead

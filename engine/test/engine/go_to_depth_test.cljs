@@ -188,6 +188,23 @@
           (is (= #{:way-dives} (set (map :why (gt/events-of s :go-to.escalated)))))
           (is (<= 37 (lowest s)) "never more than ::cave-dip below where the call began"))))))
 
+;; The stair tunnel left open, a zombie standing in it at x -10 once the body is past x -3.
+(defn zombie-on-stair! []
+  (let [there (atom false)]
+    (fn [p pos]
+      (when (and (< (first pos) -3) (not @there))
+        (reset! there true)
+        (fake/add-entity! p {:id 77 :name "zombie" :kind "hostile" :pos [-9.5 50 0.5]})))))
+
+(deftest a-re-plan-round-a-new-danger-that-dips-into-the-cave-does-not-walk-the-old-way-on-past-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! (assoc in-shallow :blocks walled-stair :on-move (zombie-on-stair!)) {:pos mass-top}))]
+          (is (= [{:why :danger :kept false}] (map #(select-keys % [:why :kept]) (gt/events-of s :replan))))
+          (is (= #{:way-dives} (set (map :why (gt/events-of s :go-to.escalated)))))
+          (is (<= 37 (lowest s)) "never more than ::cave-dip below where the call began"))))))
+
 (deftest the-cave-is-walked-with-a-y-margin-or-a-deeper-cave-dip
   (async done
     (tu/run-async done

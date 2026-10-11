@@ -157,7 +157,7 @@
                              (await (walk/follow! c plan {:plan-fn (fn ^:async replan [cells]
                                                                 (let [fresh (await (plan! c to range doors (policy-of) (into (into (vec keep-out) walls) cells) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls unknown))]
                                                                   (if-let [why (and stair-check (nil? (wplan/no-walk fresh 0 (policy-of))) (stair-check fresh false))]
-                                                                    (assoc fresh :steps [] :stop {:status :stair-cheaper :why why})
+                                                                    (assoc fresh :steps [] :refused true :stop {:status :stair-cheaper :why why})
                                                                     fresh)))
                                                           :walk-fn walk-fn :to to :policy (policy-of) :announce! announce! :dangers dangers}))
                              _ (walk/note-mismatch! c planned began (:fall-margin (:args c)))]
