@@ -79,7 +79,7 @@
     (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground; a walk down to open air leaves a roofed hut) waits for day: a listed
     go-to declines {:reason :night-sheltered :shelter :goal}, a child call waits 1 s and yields :continue (info
     go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
-  - A walk without :escalate from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not beyond the near band, 8 blocks, nor while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
+  - A walk without :escalate from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not beyond the near band, 8 blocks, nor while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min, in all across the go-to children of one root job) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
     walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
@@ -946,33 +946,42 @@
         (when kind {:reason :night-sheltered :shelter kind :goal goal})))))
 
 (def plug-since
-  "Job id -> when its plug-wait began (in process, like approaches); kept while the hold is due, so a deadline stays passed."
+  "Root job id -> when its plug-wait began (in process, like approaches); one clock for all the go-to children of a parent, kept while the hold is due, so a deadline stays passed."
   (atom {}))
 
-(defn plug-held?
-  "Whether the body is shut in with a retreat plug of its ledger standing, a known hostile is near and the body is
-  neither starving nor hurt, a heard-only one not counting beyond the near band or while heard mobs are muted (waiting costs food and health, and underground a hostile may stay for ever)."
+(defn plug-hostiles
+  "The known hostiles that hold a body shut in with a retreat plug of its ledger standing, neither starving nor hurt:
+  a heard-only one not counting beyond the near band or while heard mobs are muted (waiting costs food and health, and
+  underground a hostile may stay for ever). Empty when the body is not so held."
   [c]
   (let [p (:primitives c)
         self (.self p)]
-    (and (some #(= :retreat-plug (:purpose %)) (ledger/open-entries (ctx/view c)))
-         (> (or (.-food self) 20) (plug-wait-min-food))
-         (> (or (.-health self) 20) (plug-wait-min-health))
-         (escape/enclosed? p (some-> (:doors (:args c)) keyword))
-         (seq (cond->> (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)})
-                (body/heard-muted? (ctx/view c)) (filter danger-q/seen-only?)
-                :always (remove #(and (not (danger-q/seen-only? %)) (> (danger-q/mob-distance p %) obs/near-band))))))))
+    (when (and (some #(= :retreat-plug (:purpose %)) (ledger/open-entries (ctx/view c)))
+               (> (or (.-food self) 20) (plug-wait-min-food))
+               (> (or (.-health self) 20) (plug-wait-min-health))
+               (escape/enclosed? p (some-> (:doors (:args c)) keyword)))
+      (cond->> (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)})
+        (body/heard-muted? (ctx/view c)) (filter danger-q/seen-only?)
+        :always (remove #(and (not (danger-q/seen-only? %)) (> (danger-q/mob-distance p %) obs/near-band)))))))
+
+(defn hostile-facts
+  "{:mob :band :sensed} of the nearest of hostiles: its kind, :near or :far, and :seen or :heard."
+  [p hostiles]
+  (let [e (apply min-key #(danger-q/mob-distance p %) hostiles)]
+    {:mob (.-name e)
+     :band (if (<= (danger-q/mob-distance p e) obs/near-band) :near :far)
+     :sensed (if (danger-q/seen-only? e) :seen :heard)}))
 
 (defn plug-wait
-  "The wait {:reason :sealed-hostile-near} while plug-held? and this walk may not dig out (no :escalate), until
+  "The wait {:reason :sealed-hostile-near} while plug-hostiles hold it and this walk may not dig out (no :escalate), until
   :plug-wait-ms have passed since it began. Never under a reflex job."
   [c]
   (when (and (not (:reflex c)) (not (:escalate (:args c))))
-    (if (plug-held? c)
-      (let [since (get (swap! plug-since update (:id c) #(or % (ctx/now c))) (:id c))]
+    (if-let [hostiles (seq (plug-hostiles c))]
+      (let [since (get (swap! plug-since update (:root c) #(or % (ctx/now c))) (:root c))]
         (when (< (- (ctx/now c) since) (plug-wait-ms))
-          {:reason :sealed-hostile-near}))
-      (do (swap! plug-since dissoc (:id c)) nil))))
+          (assoc (hostile-facts (:primitives c) hostiles) :reason :sealed-hostile-near)))
+      (do (swap! plug-since dissoc (:root c)) nil))))
 
 (defn wait-reason [c] (or (night-wait c) (plug-wait c)))
 
@@ -1015,7 +1024,12 @@
                              (assoc night :text (str "night: waiting for day in its shelter (" (name (:shelter night)) ") instead of walking out"))))
                 (await (ctx/act c :wait #js {:ms (night-wait-ms) :why :night-sheltered}))
                 :continue)
-      plug (do (await (ctx/act c :wait #js {:ms (night-wait-ms) :why (:reason plug)}))
+      plug (do (when-not (:plug-said (ctx/mem c))
+                 (ctx/update-mem! c assoc :plug-said true)
+                 (ctx/emit! c :go-to.sealed-hostile-near :info
+                            (assoc (select-keys plug [:mob :band :sensed])
+                                   :text (str "sealed in: waiting for a " (name (:sensed plug)) " " (:mob plug) " (" (name (:band plug)) ") to go"))))
+               (await (ctx/act c :wait #js {:ms (night-wait-ms) :why (:reason plug)}))
                :continue)
       :else
       (let [state (note-restart! c pos)

@@ -12,7 +12,8 @@
             [engine.memory :as mem]
             [jobs.lib.body :as body]
             [jobs.lib.child :as child]
-            [jobs.lib.ledger :as ledger]))
+            [jobs.lib.ledger :as ledger]
+            [jobs.movement.go-to :as go-to]))
 
 (def pit
   (merge (into {} (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str dx "," y "," dz) "dirt"]))
@@ -22,15 +23,23 @@
   {:check (constantly true)
    :round (fn ^:async walker [c] (await (child/call-walk c :walk {:pos [15 64 0] :escalate false})))})
 
+(def hopper
+  "Like parent, but each round walks in a fresh child slot, the way a stair or tunnel parent issues a go-to per step."
+  (let [n (atom 0)]
+    {:check (constantly true)
+     :round (fn ^:async hop [c] (await (child/call-walk c (keyword (str "step" (swap! n inc))) {:pos [15 64 0] :escalate false})))}))
+
 (defn ^:async sealed
   "A noon world with the body in a 1-cell pit whose east side is a retreat plug, a skeleton outside; ticks n."
   ([n] (sealed n nil))
   ([n self] (sealed n self nil))
-  ([n self setup]
+  ([n self setup] (sealed n self setup 'walker))
+  ([n self setup job]
+  (reset! go-to/plug-since {})
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake (merge {:floor tu/walk-floor :time st/noon :self (merge {:pos {:x 0 :y 64 :z 0}} self) :blocks pit}))
-        eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
+        eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent 'hopper hopper) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
         waits (atom [])
@@ -42,7 +51,7 @@
     (ledger/write! (:store eng) [{:cell [1 64 0] :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}])
     (fake/add-entity! p {:id 9 :name "skeleton" :kind "hostile" :pos {:x -6 :y 64 :z 0} :health 20})
     (when setup (setup eng p))
-    (core/submit! eng '(walker) {})
+    (core/submit! eng (list job) {})
     (await (st/tick-n eng n))
     s)))
 
@@ -111,3 +120,22 @@
         (doseq [[x held?] [[-6 true] [-20 false]]]
           (let [{:keys [seen]} (await (sealed 6 nil (fn [_ p] (swap! (fake/state p) update :entities (partial mapv #(assoc-in % [:pos 0] x))))))]
             (is (= held? (boolean (seq (st/emitted seen :holding)))) (str "skeleton at x " x))))))))
+
+(deftest the-hold-deadline-counts-across-a-parents-fresh-go-to-children
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (await (sealed 6 nil nil 'hopper))]
+          (is (empty? (st/emitted seen :unreachable)))
+          (doseq [_ (range 4)]
+            (swap! clock + (* 60 1000))
+            (await (st/tick-n eng 3)))
+          (is (seq (st/emitted seen :unreachable)) "4 minutes of holds over several children pass the 3 minute limit"))))))
+
+(deftest the-hold-event-names-the-hostile-it-waits-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (sealed 6))]
+          (is (= [{:mob "skeleton" :band :near :sensed :heard}]
+                 (map #(select-keys % [:mob :band :sensed]) (st/emitted seen :go-to.sealed-hostile-near)))))))))
