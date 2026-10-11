@@ -195,14 +195,16 @@
      (or (passable? n) (and (or (natural? n) (boolean (and n (own? cell n)))) (boolean (may-dig? cell)))))))
 
 (defn stair-heading
-  "The first heading of dirs (each [dx dz]) with a solid block in front at feet height to stand on and every cell of
-  the n steps' cuts diggable? (natural terrain, may-dig?), as a keyword (:east ...), or nil."
+  "The first heading of dirs (each [dx dz]) with a solid block in front at feet height to stand on (bridge?: or none,
+  the stair lays that floor) and every cell of the n steps' cuts diggable? (natural terrain, may-dig?), as a keyword
+  (:east ...), or nil."
   ([block-at feet dirs] (stair-heading block-at feet dirs 1 (constantly true)))
   ([block-at feet dirs n may-dig?] (stair-heading block-at feet dirs n may-dig? (constantly false)))
-  ([block-at feet dirs n may-dig? own?]
+  ([block-at feet dirs n may-dig? own?] (stair-heading block-at feet dirs n may-dig? own? false))
+  ([block-at feet dirs n may-dig? own? bridge?]
    (some (fn [d]
            (let [front (ahead feet d 1)]
-             (when (and (solid? (block-at front)) (not (protected? (block-at front)))
+             (when (and (or bridge? (solid? (block-at front))) (not (protected? (block-at front)))
                         (every? #(diggable? block-at may-dig? own? %) (stair-cuts feet d (max 1 n))))
                (heading-names d))))
          dirs)))
@@ -302,6 +304,8 @@
     diggable one, up to max-depth, before :none.
   - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first; in the free part of a
     shut door's cell with no door-spot in sight, step back off the panel (door-back).
+  - on a ledge (no side solid, no wall-spot) under a higher goal with a pillar block carried: a stair whose first
+    floor the stair job lays.
   - {:step :none :why kw}: none of these. :why :no-headroom: a pit the carried blocks would pillar out of but for
     the block over the head; :no-dig: nothing natural and allowed to dig; :no-wall: no wall to walk to."
   ([p feet goal] (choose p feet goal (constantly true)))
@@ -322,6 +326,8 @@
          climb (delay (when-not (or (skip :stair) (pos? rise))
                         (some (fn [n] (some-> (stair-heading block-at feet stair-dirs n may-dig? own?) (vector n)))
                               (range (max-depth) 0 -1))))
+         ledge (delay (when (and item (not (skip :stair)) (pos? rise) (not (walled-side? block-at feet)))
+                        (stair-heading block-at feet stair-dirs rise may-dig? own? true)))
          gap (when (and dir (not (skip :clear-path))) (door block-at (unseen-of p) feet dir (max-door)))
          spot (delay (when (and dir (not (skip :approach)) (walled-side? block-at feet))
                        (door-spot p feet dir #(diggable? block-at may-dig? own? %))))
@@ -346,8 +352,14 @@
        @back
        {:step :approach :pos @back}
 
+       (and (not (skip :approach)) (not (walled-side? block-at feet)) (wall-spot p feet dir))
+       {:step :approach :pos (wall-spot p feet dir)}
+
+       @ledge
+       {:step :stair :heading @ledge :steps rise}
+
        (and (not (skip :approach)) (not (walled-side? block-at feet)))
-       (if-let [spot (wall-spot p feet dir)] {:step :approach :pos spot} {:step :none :why :no-wall})
+       {:step :none :why :no-wall}
 
        @climb
        (let [[heading n] @climb] {:step :stair :heading heading :steps n})

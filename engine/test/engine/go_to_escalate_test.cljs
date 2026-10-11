@@ -117,6 +117,20 @@
   (is (= {:step :approach :pos [2 64 0]} (escape/choose (tu/fake (merge in-room {:blocks room})) [0 64 0] [8 64 0]))
       "the nearest cell with the wall toward the goal beside it"))
 
+(def ledge-room
+  "A sealed dirt room 5 high (inside x -2..2, z -2..2, feet y 64..68) on stone, with a dirt post 2 high in its middle:
+  a body on the post (feet y 66) has no wall beside it and no level cell to step to."
+  (merge (box -6 63 -6 12 63 6 "stone")
+         (apply dissoc (box -3 64 -3 3 69 3 "dirt") (for [x (range -2 3) z (range -2 3) y (range 64 69)] (str x "," y "," z)))
+         (box 0 64 0 0 65 0 "dirt")))
+
+(def on-ledge {:self {:pos {:x 0 :y 66 :z 0}} :blocks ledge-room})
+
+(deftest escape-choose-stairs-on-from-a-ledge-when-it-carries-a-block-for-the-floor
+  (is (= {:step :stair :heading :east :steps 4}
+         (escape/choose (tu/fake (assoc on-ledge :inventory [{:name "cobblestone" :count 8}])) [0 66 0] [8 70 0])))
+  (is (= {:step :none :why :no-wall} (escape/choose (tu/fake on-ledge) [0 66 0] [8 70 0]))))
+
 (deftest escape-choose-pillars-only-with-enough-blocks
   (is (= {:step :pillar :height 3 :item "dirt"}
          (escape/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 3}]})) [0 61 0] [10 64 0])))
