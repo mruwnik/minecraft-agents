@@ -1,10 +1,11 @@
 (ns triggers.survival.needs-weapon
   "The needs-weapon trigger: by day, an awake body carrying no weapon (jobs.lib.combat/default-weapons) gets a sword
   (jobs.items.obtain, the best it can make: iron, else stone, else wooden), so a mob it meets is fought, not fled from
-  with the fist. Not while an open death's live pile holds a weapon: recover-drops fetches it first."
+  with the fist. Not at night, in the first light, or with a hostile known near (jobs.lib.dawn), nor while an open death's live pile holds a weapon: recover-drops fetches it first."
   (:require [engine.game :as game]
             [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
+            [jobs.lib.dawn :as dawn]
             [jobs.lib.shelter :as sh]))
 
 (def defaults {:any-of ["iron_sword" "stone_sword" "wooden_sword"] :count 1 :explore true})
@@ -24,5 +25,6 @@
    (and (not (body/dead? view))
         (not (sh/night? p))
         (not (sh/sleeping? p))
+        (dawn/calm? p)
         (not (weapon-in-pile? view))
         (nil? (combat/best-weapon p combat/default-weapons)))))

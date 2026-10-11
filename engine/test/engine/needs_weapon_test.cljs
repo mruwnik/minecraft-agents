@@ -5,11 +5,15 @@
             [engine.expr :as expr]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.settings :as settings]
+            [jobs.lib.dawn :as dawn]
             [engine.test-util :as tu]
             [triggers.survival.needs-weapon :as nw]))
 
-(defn holds? [{:keys [night inv self]}]
-  (nw/needs-weapon (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :self self} night (assoc :time 18000)))
+(defn holds? [{:keys [night inv self time entities]}]
+  (nw/needs-weapon (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :self self :entities entities}
+                                       night (assoc :time 18000)
+                                       time (assoc :time time)))
                    (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)})) {}))
 
 (deftest an-unarmed-body-needs-a-sword-by-day-only
@@ -19,6 +23,18 @@
     {:inv [{:name "wooden_sword" :count 1}]} false
     {:inv [{:name "iron_axe" :count 1}]} false
     {:night true} false))
+
+(def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}})
+
+(deftest first-light-and-a-known-hostile-keep-an-unarmed-body-in
+  (are [world expected] (= expected (holds? world))
+    {:time 23500} false
+    {:time 400} false
+    {:time 1000} true
+    {:time 6000 :entities [zombie]} false
+    {:time 6000 :entities [(assoc zombie :pos {:x 90 :y 64 :z 0})]} true)
+  (is (true? (settings/with-settings {::dawn/with-hostile true} #(holds? {:time 6000 :entities [zombie]}))))
+  (is (true? (settings/with-settings {::dawn/grace-ticks 0} #(holds? {:time 23500})))))
 
 (deftest the-trigger-args-are-valid-obtain-args
   (is (nil? (expr/problem registry/jobs (list 'jobs.items.obtain nw/defaults)))))

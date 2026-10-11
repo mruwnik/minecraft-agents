@@ -2,8 +2,10 @@
   "The needs-bed trigger: by day, a body overdue for sleep (sh/max-days-awake in-game days since it last rested:
   sh/rest-since, its sleep or respawn, else the first thing it remembers) with
   no bed carried and none remembered within the urgent radius gets one (jobs.items.obtain: wool from sheep, planks), so
-  the night job can put it down and sleep before phantoms come."
+  the night job can put it down and sleep before phantoms come. Not in the first light or with a hostile known near
+  (jobs.lib.dawn)."
   (:require [jobs.lib.body :as body]
+            [jobs.lib.dawn :as dawn]
             [jobs.lib.shelter :as sh]))
 
 (def beds
@@ -20,6 +22,7 @@
    (and (not (body/recovery-pending? view))
         (not (sh/night? p))
         (not (sh/sleeping? p))
+        (dawn/calm? p)
         (>= (or (sh/days-awake-in view) 0) sh/max-days-awake)
         (nil? (sh/carried-bed p))
         (nil? (sh/bed-in-view p view sh/urgent-bed-radius)))))

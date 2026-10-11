@@ -8,16 +8,18 @@
             [jobs.lib.shelter :as sh]
             [triggers.survival.needs-bed :as nb]))
 
+(def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}})
+
 (defn holds?
   "The trigger over a fake world (night? and inv given), the memory entries [[kind data age-days] ..] written age-days ago."
-  [{:keys [night inv entries] :or {entries []}}]
+  [{:keys [night inv entries time entities] :or {entries []}}]
   (let [clock (atom 0)
         store (mem/open (tu/tmp-dir) {:now #(deref clock)})]
     (doseq [[kind data age] entries]
       (reset! clock (- (* 10 sh/ms-per-day) (* age sh/ms-per-day)))
       (mem/write! store kind data {:cap 8 :ttl (* 20 sh/ms-per-day)}))
     (reset! clock (* 10 sh/ms-per-day))
-    (nb/needs-bed (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv [])} night (assoc :time 18000)))
+    (nb/needs-bed (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities} night (assoc :time 18000) time (assoc :time time)))
                   (mem/view store) {})))
 
 (def slept-long-ago [[:slept {:pos {:x 0 :y 64 :z 0}} 4]])
@@ -34,6 +36,10 @@
 (deftest a-rested-body-or-one-with-no-memory-does-not
   (is (false? (holds? {:entries [[:slept {:pos {:x 0 :y 64 :z 0}} 1] [:looked {} 4]]})))
   (is (false? (holds? {}))))
+
+(deftest first-light-or-a-known-hostile-hold-the-errand
+  (is (false? (holds? {:entries slept-long-ago :time 400})))
+  (is (false? (holds? {:entries slept-long-ago :entities [zombie]}))))
 
 (deftest a-carried-or-remembered-bed-or-the-night-needs-no-errand
   (is (false? (holds? {:entries slept-long-ago :inv [{:name "red_bed" :count 1}]})))
