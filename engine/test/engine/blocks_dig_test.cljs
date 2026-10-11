@@ -125,8 +125,16 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "stone"}})]
-          (is (= {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} (await (waiting-after env (list job {:pos at :fetch false}) 3))))
+          (is (= {:reason :no-tool :needs "wooden_pickaxe" :block "stone"}
+                 (dissoc (await (waiting-after env (list job {:pos at :fetch false}) 3)) :hint)))
           (is (empty? (calls (:p env) "dig"))))))))
+
+(deftest the-no-tool-wait-says-need-drop-false-digs-by-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self body :blocks {"2,64,0" "stone"}})]
+          (is (re-find #":need-drop false" (:hint (await (waiting-after env (list job {:pos at :fetch false}) 3))))))))))
 
 (deftest need-drop-false-digs-without-the-tool
   (async done

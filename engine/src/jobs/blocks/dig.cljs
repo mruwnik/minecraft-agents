@@ -28,8 +28,8 @@
   - {:reason :hazard :pos :hazards [:under-feet] :why :no-side-stand}: the block is under the feet with no seen solid
     floor below it, and no cell beside (jobs.lib.step-off, within 1 block) to dig it from. The wait lasts while the
     body stands where it found none and still sees none.
-  - {:reason :no-tool :needs item :block name}: with :need-drop, no carried tool harvests the block
-    (tools/can-harvest?). :needs is the cheapest tool that does.
+  - {:reason :no-tool :needs item :block name :hint}: with :need-drop, no carried tool harvests the block
+    (tools/can-harvest?). :needs is the cheapest tool that does; :hint says :need-drop false digs it by hand (no drop).
   - {:reason :inventory-full :pos}: with :collect, no free slot and no carried stack of the block's drop to
     grow. The drop is judged by minecraft-data (stone gives cobblestone, leaves nothing).
   - {:reason :unreachable :pos :why kw}: the go-to child gave up, or arrived with the block still out of reach.
@@ -114,6 +114,8 @@
       (cond-> {:reason :hazard :pos pos :hazards [:under-feet] :why :no-side-stand}
         why (assoc :walk why)))))
 
+(def no-tool-hint "no tool harvests it: pass :need-drop false to dig it by hand (slow, no drop)")
+
 (defn problem
   "Why the job cannot run now: a wait reason map (see doc), or nil. Bad args, air and fluids pass: the round ends them.
   A block still to be looked at (b/to-see?) is only guessed: tool and room are judged once the round has looked."
@@ -135,7 +137,7 @@
                       (b/unreachable-wait c m pos)
                       (when-not (b/to-see? c pos)
                         (or (when-let [{:keys [tool]} (needs c block)]
-                              {:reason :no-tool :needs tool :block block})
+                              {:reason :no-tool :needs tool :block block :hint no-tool-hint})
                             (when (and collect (not (room? p block)))
                               {:reason :inventory-full :pos pos}))))
               :hazard {:reason :hazard :pos pos
