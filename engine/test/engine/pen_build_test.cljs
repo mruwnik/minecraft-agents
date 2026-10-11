@@ -268,3 +268,31 @@
         (let [{:keys [eng]} (b/start (spec kit) {"pen" (ring-plan)} [])
               result (await (tu/child-outcome eng job {:plan "pen"} 1))]
           (is (true? (:closed? result))))))))
+
+;; ---------------------------------------------------------------- uneven
+
+(def two-wide-ring
+  [{:pos [2 64 2] :want "oak_fence"} {:pos [3 64 2] :want "oak_fence"} {:pos [4 66 2] :want "oak_fence"}
+   {:pos [3 64 4] :want {:block "oak_fence_gate" :facing :north}}])
+
+(deftest steps-of-more-than-one-between-neighbouring-fences-are-uneven
+  (are [cells top-of expected] (= expected (pen/uneven cells top-of))
+    two-wide-ring (constantly nil) [{:why :step :at [3 64 2] :to [4 66 2] :step 2}]
+    [{:pos [2 64 2] :want "oak_fence"} {:pos [3 65 2] :want "oak_fence"}] (constantly nil) []
+    [{:pos [2 64 2] :want "oak_fence"} {:pos [3 70 2] :want "oak_fence"}] (constantly nil) [{:why :step :at [2 64 2] :to [3 70 2] :step 6}]
+    (conj (mapv (fn [pos] {:pos pos :want "oak_fence"}) fenced-ring) {:pos [3 64 2] :want {:block "oak_fence_gate"}})
+    (fn [_ z _] (if (= 3 z) 60 63))
+    [{:why :gate-drop :gate [3 64 2] :inside [3 3] :drop 3}]
+    (conj (mapv (fn [pos] {:pos pos :want "oak_fence"}) fenced-ring) {:pos [3 64 2] :want {:block "oak_fence_gate"}})
+    (fn [_ _ _] 63) []))
+
+(deftest a-pen-with-an-uneven-ring-declines-naming-the-steps-unless-allowed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "pen" :parts [{:id "fence" :cells [[2 64 2] [3 64 2] [4 66 2]] :want "oak_fence"}]}
+              r (await (declines (spec kit) {"pen" plan} {:plan "pen" :surface false}))
+              ok (await (declines (spec kit) {"pen" plan} {:plan "pen" :surface false :uneven? true}))]
+          (is (= [{:plan "pen" :reason "the pen is uneven (steps over 1): [3 64 2] to [4 66 2] steps 2"}] (:declined r)))
+          (is (= 0 (:places r)))
+          (is (= [] (:declined ok))))))))

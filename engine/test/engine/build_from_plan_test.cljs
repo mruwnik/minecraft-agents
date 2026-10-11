@@ -770,6 +770,17 @@
           (is (= "oak_fence" (block p [4 65 1])) "the column on the higher ground")
           (is (= [] (:missing result))))))))
 
+(deftest a-surface-build-ignores-the-canopy-over-the-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hill (into {} (for [x (range 0 8) z (range 0 4) y (range 62 64)] [(h/cell-key x y z) "stone"]))
+              canopy (into {} (for [z (range 0 4) y [66 67]] [(h/cell-key 4 y z) "birch_leaves"]))
+              plan {:id "wood" :parts [{:id "fence" :cells [[4 64 1]] :want "oak_fence"}]}
+              {:keys [eng p]} (start {:blocks (merge hill canopy) :inventory [{:name "oak_fence" :count 2}] :self {:pos {:x 2.5 :y 64 :z 2.5}}} {"wood" plan})
+              _ (await (tu/child-outcome eng job {:plan "wood" :surface true} 200))]
+          (is (= "oak_fence" (block p [4 64 1])) "on the ground under the leaves, not on them"))))))
+
 (deftest what-is-carried-is-placed-before-the-rest-is-fetched
   (async done
     (tu/run-async done

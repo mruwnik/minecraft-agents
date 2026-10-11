@@ -242,14 +242,19 @@
   "Names that stand on the ground and are not it: fences, gates, walls and torches."
   #"(_fence|_fence_gate|_wall|torch)$")
 
+(defn top-fn
+  "(fn [x z y]) the y of the seen ground top of column x z around y, nil when unknown (the arity follow-surface takes)."
+  [c]
+  (let [p (:primitives c)
+        name-fn (fn [pos] (let [n (u/seen-name p pos)] (if (and n (re-find on-ground n)) "air" n)))]
+    (fn [x z y] (spot/column-top name-fn x z y surface-depth))))
+
 (defn surfaced
   "answer with its cells put on the seen ground when the args ask for it (:surface)."
   [c answer]
   (if-not (and answer (:surface (:args c)))
     answer
-    (let [p (:primitives c)
-          name-fn (fn [pos] (let [n (u/seen-name p pos)] (if (and n (re-find on-ground n)) "air" n)))]
-      (update answer :cells follow-surface (fn [x z y] (spot/column-top name-fn x z y surface-depth))))))
+    (update answer :cells follow-surface (top-fn c))))
 
 (defn judged
   "The plan's cells (of part) judged against the world, each with the :item to place it with. A generic wood want

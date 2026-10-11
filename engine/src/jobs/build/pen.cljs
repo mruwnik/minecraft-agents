@@ -25,6 +25,8 @@
   Closed gives info pen-build.done. Not closed gives one warn pen-build.leaky naming the leaks {:pos :why}
   (:gap :open-gate :climb :open :unloaded; at most 12) and what the build left (:refused, :given-up, :short).
   Declines:
+  - with a pen-build.declined warn naming the cells when the ring steps more than 1 between neighbouring fences, or a
+    gate is more than 1 above the ground of an inside neighbour (animals will not step down 2), unless :uneven? true.
   - with one pen-build.declined warn while the plan is missing, unreadable, has no cells (in :part), has no
     fence cells, or no zone list has been read (unless :ignore-zones?).
   - without a warn when nothing is missing and the pen already holds. Nothing is rebuilt after a restart: the
@@ -41,6 +43,7 @@
    :max-cells {:doc "most cells the pen check visits before it gives up with :unbounded" :spec (a/int-in 1 nil) :default pen/default-max-cells}
    :fetch {:doc "as jobs.build.from-plan: get the blocks the plan lacks; false builds with what is carried" :spec fetch/option? :default {:explore true}}
    :surface {:doc "as jobs.build.from-plan: each column of the pen on the seen ground (a pen on a slope)" :spec boolean? :default true}
+   :uneven? {:doc "build although the ring steps more than 1 between neighbouring fences or the inside drops more than 1 at the gate" :spec boolean? :default false}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it (passed to jobs.build.from-plan)" :spec boolean? :default false}})
 
 ;; ------------------------------------------------------------------ the pen from the plan
@@ -68,6 +71,40 @@
             hi (apply map max ps)]
         {:min (zipmap [:x :y :z] lo) :max (zipmap [:x :y :z] hi)}))))
 
+(defn gate? [want] (boolean (some #(str/ends-with? % "_fence_gate") (want-blocks want))))
+
+(def max-step "The most an animal steps up or down between neighbouring cells of a pen." 1)
+
+(defn uneven
+  "Where the pen is too uneven for animals: [{:why :step :at :to :step}] for neighbouring barrier columns whose
+  lowest cells differ by more than max-step, [{:why :gate-drop :gate :inside [x z] :drop}] for a gate more than
+  max-step above the seen ground (top-of x z y, nil when unknown) of an inside neighbour column."
+  [cells top-of]
+  (let [low (reduce (fn [m {[x y z] :pos :keys [want]}]
+                      (if (barrier? want) (update m [x z] #(min y (or % y))) m))
+                    {} cells)
+        box (barrier-box cells)
+        inside? (fn [[x z]] (and (<= (:x (:min box)) x (:x (:max box))) (<= (:z (:min box)) z (:z (:max box)))))
+        near (fn [[x z]] [[(inc x) z] [x (inc z)]])
+        steps (for [[col y] (sort low) n (near col) :let [y2 (low n)] :when (and y2 (> (js/Math.abs (- y y2)) max-step))]
+                {:why :step :at [(first col) y (second col)] :to [(first n) y2 (second n)] :step (js/Math.abs (- y y2))})
+        drops (for [{[x y z] :pos :keys [want]} cells
+                    :when (gate? want)
+                    [nx nz :as n] [[(inc x) z] [(dec x) z] [x (inc z)] [x (dec z)]]
+                    :when (and (not (low n)) (inside? n))
+                    :let [top (top-of nx nz y)]
+                    :when (and top (> (- y (inc top)) max-step))]
+                {:why :gate-drop :gate [x y z] :inside n :drop (- y (inc top))})]
+    (vec (concat steps drops))))
+
+(defn uneven-text [problems]
+  (str "the pen is uneven (steps over " max-step "): "
+       (str/join ", " (map (fn [{:keys [why at to step gate inside drop]}]
+                             (if (= :step why)
+                               (str (pr-str at) " to " (pr-str to) " steps " step)
+                               (str "gate " (pr-str gate) " drops " drop " to " (pr-str inside))))
+                           (take 4 (sort-by #(- (or (:step %) (:drop %))) problems))))))
+
 (defn planned
   "{:cells judged} for the plan in the args, or {:trouble text} (warned once per reason)."
   [c]
@@ -78,6 +115,8 @@
                 (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))
         trouble (or (plan/plan-trouble answer cells)
                     (when-not (barrier-box cells) "the plan has no fence, wall or gate cells")
+                    (when-not (:uneven? (:args c))
+                      (when-let [bad (seq (uneven cells (plan/top-fn c)))] (uneven-text bad)))
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
     (if-not trouble
       {:cells cells}

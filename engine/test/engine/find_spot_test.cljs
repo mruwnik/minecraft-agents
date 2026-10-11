@@ -61,7 +61,11 @@
     {[0 53 0] "dirt"} 53
     {[0 52 0] "dirt"} nil
     {[0 76 0] "dirt"} 76
-    {[0 77 0] "dirt"} nil))
+    {[0 77 0] "dirt"} nil
+    {[0 63 0] "dirt" [0 64 0] "oak_log" [0 65 0] "oak_log" [0 66 0] "oak_leaves"} 63
+    {[0 63 0] "dirt" [0 68 0] "birch_leaves" [0 69 0] "birch_leaves"} 63
+    {[0 60 0] "dirt" [0 65 0] "birch_leaves"} 60
+    {[0 63 0] "dirt" [0 64 0] "oak_leaves"} 63))
 
 (deftest column-top-is-nil-for-unloaded-or-covered
   (is (nil? (surface/column-top (fn [{:keys [y]}] (when (not= y 70) "air")) 0 0 64 12)) "unloaded above the ground")
