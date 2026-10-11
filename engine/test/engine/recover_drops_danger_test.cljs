@@ -8,6 +8,9 @@
             [engine.library-test :refer [setup]]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
+            [engine.settings :as settings]
+            [engine.shelter-test :as st]
+            [jobs.survival.recover-drops :as recover-drops]
             [engine.test-util :as tu :refer [run-until-empty]]
             [triggers.survival.died :as died]))
 
@@ -242,3 +245,43 @@
           (await (run-until-empty eng 40))
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng)))
           (is (= [far] (mapv :cell (ledger/open-entries (mem/view (:store eng))))) "the far scaffold block is still there"))))))
+
+;; ------------------------------------------------------------ night in a shelter
+
+(def roofed-at-night {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}})
+
+(defn night-run
+  "Die with the field-report pile 20 blocks off while the body is under a roof at night, run the job once."
+  [world]
+  (fn ^:async t []
+    (let [pile dt/death-pile-of-the-field-report
+          {:keys [eng seen p]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} world))]
+      (die! eng {:pos dt/death-pos :inventory pile})
+      (core/submit! eng job {})
+      (await (run-until-empty eng 20))
+      {:eng eng :seen seen :p p})))
+
+(deftest a-body-under-a-roof-at-night-does-not-walk-out-for-the-pile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (await ((night-run roofed-at-night)))]
+          (is (= [] (tu/walk-calls p)))
+          (is (nil? (recovered eng)) "not final: the window may still be open at dawn")
+          (is (every? #{:night} (map :reason (dt/emitted seen :recover-drops.declined))) "every decline names the night")
+          (is (seq (dt/emitted seen :recover-drops.declined)))
+          (is (true? (died/died nil (mem/view (:store eng)) {})) "the died trigger fires again"))))))
+
+(deftest the-night-hold-is-a-setting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (settings/with-settings {::recover-drops/hold-at-night false} (night-run roofed-at-night)))]
+          (is (not-any? #{:night} (map :reason (dt/emitted seen :recover-drops.declined)))))))))
+
+(deftest a-body-under-a-roof-by-day-walks-for-the-pile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (await ((night-run (assoc roofed-at-night :time st/noon))))]
+          (is (= :collected (:decision (recovered eng)))))))))

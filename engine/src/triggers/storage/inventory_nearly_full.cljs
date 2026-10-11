@@ -27,6 +27,6 @@
   The 120 s cooldown stops a body with nothing it may toss from retrying every tick; :rest-s (setting, default 120 s)
   keeps it quiet after a toss, whose items the body may pick up again."
   [world memory args]
-  (and (not (body/recovery-pending? memory))
+  (and (not (body/recovery-pending? memory :inventory-nearly-full))
        (<= (u/free-slots world) (:free args (nearly-full-free)))
        (not (resting? memory args))))

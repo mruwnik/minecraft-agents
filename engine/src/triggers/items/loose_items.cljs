@@ -18,7 +18,7 @@
   [p view _args kn _live]
   (let [o (loose/options {})]
     (boolean
-     (and (not (body/recovery-pending? view))
+     (and (not (body/recovery-pending? view :loose-items))
           (not (false? (.-onGround (.self p))))
           (> (u/free-slots p) (nearly-full/nearly-full-free))
           (nil? (danger-q/nearest-danger p (:danger-radius o) {} {}))

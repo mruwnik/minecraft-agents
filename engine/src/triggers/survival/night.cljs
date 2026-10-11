@@ -16,5 +16,5 @@
 
 (defn night
   [world memory args kn]
-  (and (not (body/recovery-pending? memory))
+  (and (not (body/recovery-pending? memory :night))
        (sh/night-holds? world memory args (sh/bed-permit world kn))))

@@ -19,7 +19,7 @@
   sh/urgent-bed-radius."
   [p view _args]
   (boolean
-   (and (not (body/recovery-pending? view))
+   (and (not (body/recovery-pending? view :needs-bed))
         (not (sh/night? p))
         (not (sh/sleeping? p))
         (dawn/calm? p)

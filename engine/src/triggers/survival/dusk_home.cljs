@@ -19,7 +19,7 @@
         left-s (/ (- sh/dusk-tick (.-timeOfDay self)) 20)
         pos (sh/home-target view)]
     (boolean
-     (and pos (pos? left-s) (not (body/recovery-pending? view)) (not (sh/sleeping? p))
+     (and pos (pos? left-s) (not (body/recovery-pending? view :dusk-home)) (not (sh/sleeping? p))
           (not-any? #(= pos (get-in % [:data :home])) (mem/entries view :too-far))
           (let [d (u/dist (u/self-pos {:primitives p}) pos)]
             (and (< arrive d) (<= d warn-limit)

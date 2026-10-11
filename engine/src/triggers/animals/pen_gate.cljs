@@ -32,4 +32,4 @@
 (defn pen-gate
   "Holds when holds? says so; args :radius :min-dist :quiet-s :held-s. The job it starts shuts the gate."
   [world view args kn]
-  (if (and kn (not (body/recovery-pending? view))) (holds? world view args kn) false))
+  (if (and kn (not (body/recovery-pending? view :pen-gate))) (holds? world view args kn) false))

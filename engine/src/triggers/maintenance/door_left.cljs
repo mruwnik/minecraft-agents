@@ -11,5 +11,5 @@
 (defn door-left
   "Holds when doors/holds? says so; args :radius :open-s. The job it starts shuts the blocks."
   [world view args _kn]
-  (and (not (body/recovery-pending? view))
+  (and (not (body/recovery-pending? view :door-left))
        (doors/holds? world view args)))

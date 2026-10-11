@@ -9,9 +9,11 @@
             [engine.library-test :refer [setup calls inv]]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
+            [jobs.lib.body :as body]
             [jobs.survival.recover-drops :as recover-drops]
             [triggers.survival.died :as died]))
 
@@ -69,6 +71,31 @@
 (deftest died-trigger-does-not-hold-after-five-minutes
   (is (true? (died-holds (memory-with (+ 1000 299000) died-at respawned-at))))
   (is (false? (died-holds (memory-with (+ 1000 300000) died-at respawned-at)))))
+
+;; ---------------------------------------------------- reflexes held while a pile is pending
+
+(def dead-view (memory-with 2000 died-at))
+(def alive-view (memory-with 2000 died-at respawned-at))
+
+(deftest a-dead-body-holds-every-covered-reflex-back
+  (is (every? #(body/recovery-pending? dead-view %) [:night :dusk-home :needs-bed :hungry :loose-items])))
+
+(deftest a-respawned-body-is-sheltered-by-night-reflexes-and-kept-off-errands
+  (are [id held] (= held (body/recovery-pending? alive-view id))
+    :night false
+    :dusk-home false
+    :needs-bed false
+    :hungry true
+    :loose-items true))
+
+(deftest the-covered-reflexes-are-a-setting
+  (is (false? (settings/with-settings {::body/recovery-holds #{}} #(body/recovery-pending? alive-view :hungry))))
+  (is (true? (settings/with-settings {::body/recovery-holds #{:night}} #(body/recovery-pending? alive-view :night)))))
+
+(deftest the-hold-after-a-respawn-ends-after-a-set-time
+  (let [later (memory-with (+ 1000 200000) died-at respawned-at)]
+    (is (false? (body/recovery-pending? later :hungry)))
+    (is (true? (settings/with-settings {::body/recovery-hold-s 250} #(body/recovery-pending? later :hungry))))))
 
 (deftest died-trigger-is-registered-and-runs-the-job
   (is (= died/died (:when (:died triggers/all))))

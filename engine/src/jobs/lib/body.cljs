@@ -10,7 +10,12 @@
 
 (a/defargs settings
   {::risky-min-health {:default 6 :spec (a/num-in 0 20)
-                       :doc "Below this health (of 20) a risky job (mining) waits to heal before it starts or goes on."}})
+                       :doc "Below this health (of 20) a risky job (mining) waits to heal before it starts or goes on."}
+   ::recovery-holds {:default #{:hungry :door-left :inventory-nearly-full :scaffold-left :tidy-pending :pen-gate :loose-items}
+                     :spec (a/set-of keyword?)
+                     :doc "Trigger ids that do not hold while an unrecovered death is inside ::recovery-hold-s of its time, so a saved register listing one ahead of :died cannot run it on the pile's errand. The sheltering reflexes (:night :dusk-home :needs-bed) are left out on purpose; every covered id also waits while the body is dead."}
+   ::recovery-hold-s {:default 180 :spec (a/num-in 0 nil)
+                      :doc "Seconds after a death during which the ::recovery-holds reflexes stay back (at most the despawn window)."}})
 
 (defn risky-min-health [] (settings/get settings ::risky-min-health))
 
@@ -77,11 +82,14 @@
     (boolean (and death (not (respawned-since? view death))))))
 
 (defn recovery-pending?
-  "True while the body is dead or an unrecovered death is inside the drops' despawn window: the :died reflex has the
-  body, so a later reflex in a saved register that lists it ahead of :died must not start."
-  [view]
+  "True when the trigger id must not hold now for the pile: the body is dead (all covered reflexes), or it is alive
+  with an unrecovered death younger than ::recovery-hold-s and id is in ::recovery-holds. The :died reflex has the
+  body then, so a later reflex in a saved register that lists it ahead of :died must not start."
+  [view id]
   (boolean (or (dead? view)
-               (some #(< (game/ticks-since % view) game/despawn-ticks) (open-deaths view)))))
+               (and (contains? (settings/get settings ::recovery-holds) id)
+                    (let [ticks (min game/despawn-ticks (settings/ms->ticks (* 1000 (settings/get settings ::recovery-hold-s))))]
+                      (some #(< (game/ticks-since % view) ticks) (open-deaths view)))))))
 
 (defn too-hurt
   "The wait reason {:reason :low-health :health :min-health :text} of a risky job while the body's health (primitives

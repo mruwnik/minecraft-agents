@@ -31,7 +31,7 @@
 
 (defn scaffold-left
   [p memory args kn]
-  (boolean (and (not (body/recovery-pending? memory))
+  (boolean (and (not (body/recovery-pending? memory :scaffold-left))
                 (some? (world/zones kn))
                 (or (settings/get settings ::at-night) (not (sh/night? p)))
                 (or (settings/get settings ::with-hostile)
