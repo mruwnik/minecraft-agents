@@ -36,6 +36,7 @@
   - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within :range + 3 blocks of :pos) and not in the cell of a planned gate, else the
     body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away (another carried item in hand when no slot is free); :near says whether the animal is by the spot.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
+  Every result gives :distance: the animal's, or its last sighting's when it is unseen.
   - :no-animal (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
     :unreachable (a walk gave up), :timeout (:timeout-s from the first round, not the food fetch).
   Every reason but :arrived ends the job :stopped with a :text.
@@ -123,7 +124,7 @@
         result {:reason reason :animal (:animal m) :at (u/self-pos c)
                 :animal-at (some-> a .-pos u/pos-of)
                 :in-box (when-let [box (:box (:args c))] (boolean (and a (animals/in-box? box (u/pos-of (.-pos a))))))
-                :distance (some-> a .-pos u/pos-of (u/flat-dist (:pos (:args c))))
+                :distance (some-> (or (some-> a .-pos u/pos-of) (:last-seen m)) (u/flat-dist (:pos (:args c))))
                 :near (boolean (and a (<= (u/flat-dist (u/pos-of (.-pos a)) (:pos (:args c))) near-spot)))}]
     (let [result (cond-> result
                    (= :lost reason) (assoc :lost (lost-detail c))

@@ -263,6 +263,7 @@
           (is (finished? s))
           (is (= :lost (:reason (done-event s))) (pr-str (done-event s)))
           (is (some? (:last-seen (:lost (done-event s)))))
+          (is (number? (:distance (done-event s))) "the distance of the last sighting from :pos")
           (is (= 1 (count (stopped s)))))))))
 
 (def gate-plan
