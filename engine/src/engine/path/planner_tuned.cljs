@@ -270,6 +270,7 @@
         ^js limits (.-limits options)
         margin (option options "margin" 64)
         y-margin (option options "yMargin" 48)
+        y-below (option options "yBelow" y-margin)
         goal-range (or-else (.-range goal) 0)
         ;; a goal set has no goal flood and no goal-not-standable or goal-unloaded answers (near false): those prove
         ;; things of one goal
@@ -332,7 +333,7 @@
      ;; search box
      (- (aget bounds 0) margin) (+ (aget bounds 1) margin)
      (- (aget bounds 2) margin) (+ (aget bounds 3) margin)
-     (- y-low y-margin) (+ y-high y-margin)
+     (- y-low y-below) (+ y-high y-margin)
      ;; directions
      (js/Int8Array. #js [1 -1 0 0 1 1 -1 -1]) (js/Int8Array. #js [0 0 1 -1 1 -1 1 -1])
      ;; node storage: cap slots hash-table node-keys xs ys zs hs moves slows corners shapes parents secs risks airs peaks wsecs opens gs fs heap-pos heap n-nodes heap-n

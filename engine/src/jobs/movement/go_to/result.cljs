@@ -53,7 +53,7 @@
               reason (assoc :detail (str reason)))
     (cond
       (or reason (= :no-path status)) (merge {:why (if reason (keyword reason) :no-path)}
-                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :heal :health :hp-cost :hp-budget]))
+                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :heal :health :hp-cost :hp-budget :dip :rise]))
       :else {:why :no-progress}))
    (select-keys result [:waypoint-why])))
 
@@ -82,7 +82,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile resets-spent mob mob-distance explored torches waypoint-why heal hp-cost hp-budget low-passage]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile resets-spent mob mob-distance explored torches waypoint-why heal hp-cost hp-budget low-passage dip rise]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if escalation
          (str "shut in here; " (escalation-words escalation))
@@ -110,6 +110,7 @@
            :air "every way there under water runs out of air"
            :air-lethal "every way there under water would drown the body to death"
            :one-way "the way back is one-way"
+           :way-dives (str "the goal is " rise " blocks above and the only way found dives more than " dip " blocks below where the walk began under ground: cut a stair up, or pass :y-margin to walk the deep way")
            :door-stuck "a door in the way will not open"
            :unseen-floor-dark (str "the way goes down onto floors it cannot see in the dark: carry a torch (held in the off hand it sees deeper), light the way, or set :place-torches (go-to lights them)"
                                    (case torches

@@ -329,7 +329,8 @@
                     :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))
                     :danger-cap (max cost/danger-cap (or (:danger-max-rate (:args c)) 0))}
                    (when-some [landing (:landing (:args c))] {:landing landing})
-                   (when-some [m (:y-margin (:args c))] {:y-margin m}))
+                   (when-some [m (:y-margin (:args c))] {:y-margin m})
+                   (when-some [m (:y-below c)] {:y-below m}))
       (breath/head-under? (:primitives c)) (-> (dissoc :air-grace) (assoc :air-used (cost/air-used (.-oxygen self)))
                                                (merge (drowning self (or (:hp-seconds (:args c)) cost/hp-seconds)))
                                                (merge (some->> (known-fn (:primitives c)) (hash-map :air-seen))))

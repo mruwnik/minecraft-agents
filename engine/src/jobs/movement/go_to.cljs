@@ -120,6 +120,10 @@
     looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call) and plans again.
   - Success is {:arrived true}, with :resolved the cell when go-to chose the y, plus :provisional true (a column's
     estimated y) or :stand-in true (a column with no ground known: the feet y). The result is also a :result info event.
+  - A body under ground (jobs.lib.shelter/buried?) whose goal lies ::climb-rise blocks or more above it plans no route
+    deeper than ::climb-dip blocks below where the call first found it so (it does not dive through deep caves to come
+    up under the goal); with no other way it gives up :why :way-dives with :dip and :rise, for the caller to cut a
+    stair up. An explicit :y-margin switches this off.
   - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
   - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
@@ -187,6 +191,8 @@
    ::wet-restarts {:default 2 :doc "Times a go-to's search under water may begin afresh (no walk) after its first slice before it swims to air first and plans from there." :spec (a/int-in 0 nil)}
    ::dry-radius {:default 6 :doc "Blocks from the body an arrival in water reads for a dry stand (also within :range of the goal)." :spec (a/num-in 0 nil)}
    ::dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}
+   ::climb-rise {:default 16 :doc "Blocks a goal must lie above a body under ground for its go-to to plan no dive (::climb-dip)." :spec (a/num-in 0 nil)}
+   ::climb-dip {:default 24 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (::climb-rise) may plan; a way that dives deeper is not walked (:way-dives)." :spec (a/num-in 0 nil)}
    ::night-wait-ms {:default 1000 :doc "Milliseconds a go-to waits before it yields :continue while it holds for day inside a shelter." :spec (a/int-in 0 nil)}
    ::plug-wait-ms {:default 180000 :doc "Milliseconds a go-to shut in by its retreat plug holds for a known hostile (:sealed-hostile-near) before it walks on as without the hold." :spec (a/int-in 0 nil)}
    ::plug-wait-min-food {:default 6 :doc "Food at or under which a go-to shut in by its retreat plug no longer holds for a hostile: starving beats waiting." :spec (a/num-in 0 20)}
@@ -205,6 +211,8 @@
 (defn dry-radius [] (settings/get settings ::dry-radius))
 (defn dry-walk-rounds [] (settings/get settings ::dry-walk-rounds))
 (defn night-wait-ms [] (settings/get settings ::night-wait-ms))
+(defn climb-rise [] (settings/get settings ::climb-rise))
+(defn climb-dip [] (settings/get settings ::climb-dip))
 (defn plug-wait-ms [] (settings/get settings ::plug-wait-ms))
 (defn plug-wait-min-food [] (settings/get settings ::plug-wait-min-food))
 (defn plug-wait-min-health [] (settings/get settings ::plug-wait-min-health))
@@ -668,8 +676,30 @@
     (ctx/emit! c :go-to.retrying :info {:reason reason :try tries
                                         :text (str "no way found (" (name reason) "), planning again (try " tries " of " max-blocked ")")})))
 
+(defn dive-floor!
+  "The lowest y this call's searches may reach, or nil: the body is under ground, pos lies ::climb-rise or more above it
+  and no :y-margin was passed. It is ::climb-dip below where the call first found the body so (mem :dive-floor), so the
+  legs of one call do not step down floor by floor."
+  [c pos]
+  (let [y (js/Math.floor (:y (u/self-pos c)))]
+    (when (and (nil? (:y-margin (:args c))) (:y pos) (>= (- (:y pos) y) (climb-rise)) (sh/buried? (:primitives c)))
+      (or (:dive-floor (ctx/mem c))
+          (let [floor (- y (climb-dip))]
+            (ctx/update-mem! c assoc :dive-floor floor)
+            floor)))))
+
+(defn dive-end
+  "A fruitless round's result as go-to gives it up under a dive floor: a search the floor cut short (:box) is :way-dives."
+  [c pos result]
+  (if (and (:y-below c) (= :box (some-> (:reason result) keyword)))
+    (assoc result :reason :way-dives :dip (climb-dip) :rise (js/Math.round (- (:y pos) (:y (u/self-pos c)))))
+    result))
+
 (defn ^:async walk! [c0 pos range doors]
-  (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
+  (let [floor (dive-floor! c0 pos)
+        c (cond-> c0
+            (:over-budget (ctx/mem c0)) (assoc :over-budget true)
+            floor (assoc :y-below (max 0 (- (js/Math.floor (:y (u/self-pos c0))) floor))))
         from (u/self-pos c)
         d (u/dist from pos)
         pw (wworld/path-world (:primitives c))]
@@ -772,7 +802,7 @@
               (do (when (pos? tries) (retrying! c result tries))
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
-                    result (dark-end c result)
+                    result (dive-end c pos (dark-end c result))
                     ended (cond-> (if (esc/escalate? c result) result (sight-end c pos (unloaded-end result unloaded?)))
                             (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]
                 (if (await (clear-goal-seal! c pos ended))
@@ -787,7 +817,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
                           (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
