@@ -58,7 +58,10 @@
     (is (= [[[4 59 0] floor]] (plans (solid-at [3 59 0]))) "only the cell under has a face: support first")
     (is (empty? (plans (solid-at [4 61 0]))) "the underside of the block over it cannot be aimed at from above")
     (is (= [[floor]] (bridge/bridge-plans (solid-at [4 61 0]) floor 60.5)) "but it can from below")
-    (is (empty? (plans (solid-at [9 9 9]))) "a void pocket")))
+    (is (empty? (plans (solid-at [9 9 9]))) "a void pocket")
+    (is (= [[[3 60 0] floor]] (bridge/bridge-plans (solid-at [2 60 0]) floor 70.0 {:back [-1 0] :depth 2}))
+        "a solid cell back along the line: the cells between are placed from it")
+    (is (empty? (bridge/bridge-plans (solid-at [1 60 0]) floor 70.0 {:back [-1 0] :depth 2})) "but not beyond the depth")))
 
 (deftest an-unseen-neighbour-is-tried-only-after-the-cells-with-a-known-face
   (let [floor [4 60 0]
@@ -665,15 +668,33 @@
   (-> (apply dissoc ground (for [x (range 0 3) y (range 60 64) z (range -1 2)] (str x "," y "," z)))
       (dissoc "1,64,0" "1,65,0")))
 
-(deftest a-cave-floor-with-only-the-block-over-it-to-place-against-stops-no-support
+(deftest a-cave-floor-with-a-solid-cell-further-back-is-bridged-from-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [inv (conj pick {:name "cobblestone" :count 10})
               {:keys [out p]} (await (stair! {:blocks cave-below :inventory inv} (assoc east :steps 1) (fn [_])))]
-          (is (= :no-support-floor (:reason @out)))
-          (is (= "air" (block-at p [1 63 0])) "nothing was placed")
-          (is (= "air" (block-at p [1 64 0]))))))))
+          (is (= :done (:status @out)) (pr-str (dissoc @out :dug)))
+          (is (= "cobblestone" (block-at p [0 63 0])) "under the floor the body stands on, against the solid cell behind it")
+          (is (= "cobblestone" (block-at p [1 63 0])) "the missing floor"))))))
+
+(def cave-void
+  "The cave of cave-below reaches back past the bridge depth: no solid cell within reach of the floor."
+  (apply dissoc cave-below (for [x (range -3 3) y (range 60 64) z (range -1 2)] (str x "," y "," z))))
+
+(deftest a-stair-that-cannot-bridge-a-cave-shuts-its-opening-or-names-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              sealed (await (stair! {:blocks cave-void :inventory inv} (assoc east :steps 1) (fn [_])))
+              bare (await (stair! {:blocks cave-void :inventory pick} (assoc east :steps 1) (fn [_])))]
+          (is (= :no-support-floor (:reason @(:out sealed))))
+          (is (= [[1 64 0]] (:sealed @(:out sealed))))
+          (is (= "cobblestone" (block-at (:p sealed) [1 64 0])) "the cut cell the cave opens into is shut")
+          (is (= "air" (block-at (:p sealed) [1 63 0])) "no floor was placed")
+          (is (= :no-floor (:reason @(:out bare))))
+          (is (= [[1 64 0]] (:open-to @(:out bare)))))))))
 
 (deftest a-bridge-plan-the-world-answers-no-support-to-gives-way-to-the-next
   (async done

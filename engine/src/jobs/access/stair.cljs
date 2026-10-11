@@ -41,9 +41,9 @@
 
   A step's floor must be solid, the cell under it not a fluid, nor air when no building block is carried (:cave-below), and everything loaded.
   A floor of air gets a carried building block (blocks/building-blocks, never an ore or valuable) after the
-  rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.lib.bridge/bridge-plans; a plan whose face was unseen air gives way to the next); a cave floor with no block beside or under it stops :no-support-floor (the underside of the block over it cannot be aimed at).
+  rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.lib.bridge/bridge-plans; a plan whose face was unseen air gives way to the next); a stair down also bridges back along its line, up to setting bridge-depth cells, from a solid cell (a cave under its last floor); a cave floor with nothing within that stops :no-support-floor (the underside of the block over it cannot be aimed at).
   The cell under a placed floor is not judged. With no such block: :no-floor with :filler :none; with no face to place
-  against at any of them (a void pocket): :no-support-floor with :cell, :tried and :why. A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
+  against at any of them (a void pocket): :no-support-floor with :cell, :tried and :why. A stair down that stops so shuts the cut cell over the missing floor with a carried block (:sealed [cell]), else the stop names it (:open-to [cell]). A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
   (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
 
   Each step is judged when chosen and each cell again right before its dig. Stops:
@@ -125,6 +125,7 @@
   {::max-cell-digs {:default 3 :doc "Digs of one cell before the stair stops :refills." :spec (a/int-in 0 nil)}
    ::max-fall-digs {:default 12 :doc "Digs of one cell a falling block (gravel, sand) keeps refilling before the stair stops :refills." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::bridge-depth {:default 2 :doc "How many cells back along a stair down a missing floor may be bridged from a solid cell (the cave under its last floor)." :spec (a/int-in 0 nil)}
    ::take-back-floors? {:default true :doc "A floor block a go-to stair (:note) places goes into the scaffold ledger for jobs.access.cleanup to take back; false keeps it." :spec boolean?}})
 (defn max-cell-digs [] (settings/get settings ::max-cell-digs))
 (defn max-fall-digs [] (settings/get settings ::max-fall-digs))
@@ -537,18 +538,38 @@
   [c]
   (boolean (and (:note (:args c)) (settings/get settings ::take-back-floors?))))
 
+(defn bridge-opts
+  "The bridge/bridge-plans opts of the stair: a stair down may bridge back along its line (a stair up would place into its own cut)."
+  [c]
+  (let [{:keys [dir heading]} (:args c)
+        [dx _ dz] (shape/delta dir heading)]
+    (when (= :down dir) {:back [(- dx) (- dz)] :depth (settings/get settings ::bridge-depth)})))
+
+(defn ^:async shut-opening!
+  "A stair down that cannot floor the cave it broke into shuts the cut cell over the missing floor with carried filler, so
+  the way into the cave is closed behind the body: the stop with :sealed [cell], or with :open-to [cell] when it stays open."
+  [c in stop {:keys [floor]} item]
+  (let [cell (update floor 1 inc)
+        open (assoc stop :open-to [cell])]
+    (cond
+      (not (and (= :down (:dir (:args c))) (#{:no-support-floor :no-floor} (:reason stop)))) stop
+      (or (nil? item) (not (rules/air ((:block-at in) cell)))) open
+      (await (bridge/place-floor! c in item cell (take-back-floor? c))) open
+      :else (assoc stop :sealed [cell]))))
+
 (defn ^:async bridge!
   "Place carried filler on the missing floor of the step (bridge/bridge-plans, a plan whose placing found no support gives way
-  to the next). :again, or a stop map (:no-support-floor when no plan works)."
-  [c in {:keys [floor]}]
+  to the next). :again, or a stop map (:no-support-floor when no plan works), with the opening shut-opening! leaves."
+  [c in {:keys [floor] :as cs}]
   (let [item (blocks/pick c blocks/building-blocks)
-        plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c))]
-    (cond
-      (nil? item) {:reason :no-floor :cell floor :block ((:block-at in) floor) :filler :none
-                   :why (str "no floor and no filler block carried (" (str/join ", " (take 4 blocks/building-blocks)) " ...)")}
-      (empty? plans) {:reason :no-support-floor :cell floor :tried [floor (update floor 1 dec)]
-                      :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
-      :else (or (await (bridge/place-plans! c in item plans (take-back-floor? c))) :again))))
+        plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c) (bridge-opts c))
+        stop (cond
+               (nil? item) {:reason :no-floor :cell floor :block ((:block-at in) floor) :filler :none
+                            :why (str "no floor and no filler block carried (" (str/join ", " (take 4 blocks/building-blocks)) " ...)")}
+               (empty? plans) {:reason :no-support-floor :cell floor :tried [floor (update floor 1 dec)]
+                               :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
+               :else (await (bridge/place-plans! c in item plans (take-back-floor? c))))]
+    (if stop (await (shut-opening! c in stop cs item)) :again)))
 
 (defn ^:async step!
   "Walk into the cut step. :again, :continue while the walk waits, or a stop map."
