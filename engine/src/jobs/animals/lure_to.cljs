@@ -28,7 +28,7 @@
   Ends with info lure-to.done and a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
   :near bool (the animal is within 6 blocks of :pos) :at pos}. Reasons:
   - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within 6 blocks of :pos), else the
-    body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away; :near says whether the animal is by the spot.
+    body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away (another carried item in hand when no slot is free); :near says whether the animal is by the spot.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
   - :none (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :lagging,
     :unreachable (a walk gave up), :timeout (:timeout-s from the first round, not the food fetch).
@@ -94,7 +94,7 @@
 (defn ^:async conclude!
   "Put the food away, emit the outcome, hand it to the parent and end the job."
   [c reason]
-  (when (hr/holds-food? c) (await (ctx/act c :unequip #js {})))
+  (await (hr/put-food-away! c))
   (let [m (ctx/mem c)
         a (escort/animal-now c)
         ok? (= :arrived reason)

@@ -41,6 +41,15 @@
           (is (= 4 (count-of s "wheat")) "no food is used")
           (is (nil? (.-held (.self (:p s)))) "the food is put away at the end"))))))
 
+(deftest a-full-inventory-still-ends-with-something-else-than-the-food-in-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [full (into wheat (map (fn [i] {:name (str "item_" i) :count 1}) (range 35)))
+              s (await (scenario {} {:inventory full :entities [(cow 1 3)]} 12))]
+          (is (= :arrived (:reason (done-event s))))
+          (is (not= "wheat" (.-held (.self (:p s)))) "unequip found no free slot: another item is taken in hand"))))))
+
 (deftest one-call-is-the-whole-attempt
   (async done
     (tu/run-async done

@@ -9,7 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.animals.escort :as escort]
             [jobs.lib.watch :as watch]
-            [jobs.animals.herd-run :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now follow-range out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
+            [jobs.animals.herd-run :as hr :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now follow-range out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
             [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves on-gate? set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
@@ -192,7 +192,7 @@
       :shut-click (await (shut-when-clear! c 4 (shut-look-ms) :deep nil #(set-phase! c :shut-behind)))
       :deep (await (go-then! c (let-go-cell (:inside (read-pen c)) (gate-cell c) (cell (:inside-cell m))) :deep-release))
       :deep-release (await (release-step! c #(released! c :deep-unequip)))
-      :deep-unequip (do (await (ctx/act c :unequip #js {})) (set-phase! c :exit))
+      :deep-unequip (do (await (ctx/act c :unequip #js {})) (await (hr/put-food-away! c)) (set-phase! c :exit))
       :exit (await (go-then! c (axis-cell in-1) :clear-in))
       :clear-in (await (wait-clear! c (or (crowded-near? c (axis-cell in-1) (crowd-in-radius)) (on-gate? c)) (crowd-ms) :in
                                     #(set-phase! c :exit-dash {:pen-before (count (in-pen-adults c (read-pen c))) :dash-tries 0 :reopens 0})))
