@@ -111,6 +111,16 @@
           (is (= "air" (block-at p {:x 12 :y 64 :z 0})))
           (is (= 1 (carried p "dirt"))))))))
 
+(deftest walk-false-declines-a-block-out-of-reach-without-a-step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self body :blocks {"12,64,0" "dirt"}})
+              r (await (waiting-after env (list job {:pos [12 64 0] :walk false}) 6))]
+          (is (= {:reason :unreachable :why :no-walk} (select-keys r [:reason :why])) (pr-str r))
+          (is (empty? (calls (:p env) "dig")))
+          (is (< (.-x (.-pos (.self (:p env)))) 1) "the body stood still"))))))
+
 (deftest air-is-already-clear-and-nothing-is-done
   (async done
     (tu/run-async done

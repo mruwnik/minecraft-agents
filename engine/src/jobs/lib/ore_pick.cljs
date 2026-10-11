@@ -76,7 +76,7 @@
   "The dig child over the booked :target: :continue while it waits, else nil with the pick booked or the cell skipped."
   [c {:keys [target block before]}]
   (let [p (:primitives c)
-        r (await (ctx/call-child c :ore 'jobs.blocks.dig {:pos target :fetch false :on-lava :leave :see true :ignore-zones? (boolean (:ignore-zones? (:args c))) :for-plan (:for-plan (:args c))}))]
+        r (await (ctx/call-child c :ore 'jobs.blocks.dig {:pos target :fetch false :walk false :on-lava :leave :see true :ignore-zones? (boolean (:ignore-zones? (:args c))) :for-plan (:for-plan (:args c))}))]
     (when-not (= :continue r)
       (let [dug? (= :dug (:reason (ctx/child-result c :ore)))
             item (blocks/item-name {:block block})]
