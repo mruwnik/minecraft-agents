@@ -786,6 +786,30 @@
         (.catch (fn [e] (is false (.-message e))))
         (.finally done))))
 
+(deftest write-plans-settled-rewrites-once-when-the-first-write-was-absorbed-silently
+  (async done
+    (-> (with-body-dir
+          (fn [opts _]
+            (let [plans (r/plans-dir opts)
+                  file (path/join plans "test-b-z.edn")
+                  mtime (atom nil)
+                  watch (atom nil)]
+              (fs/mkdirSync plans #js {:recursive true})
+              ;; a body that swallowed the first write at its start logs only for a later change of the file
+              (reset! watch (js/setInterval
+                             (fn []
+                               (when (fs/existsSync file)
+                                 (let [m (.-mtimeMs (fs/statSync file))]
+                                   (if (nil? @mtime)
+                                     (reset! mtime m)
+                                     (when (not= m @mtime) (log-reload! opts [file]) (js/clearInterval @watch))))))
+                             20))
+              (-> (r/write-plans-settled! (assoc opts :shared-settle-ms 1000) {:plans [{:id "z" :parts []}]})
+                  (.finally #(js/clearInterval @watch))))))
+        (.then (fn [files] (is (= ["test-b-z.edn"] (map path/basename files)))))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
 (deftest write-plans-settled-fails-loudly-when-the-body-never-re-reads
   (async done
     (-> (with-body-dir
