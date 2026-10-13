@@ -171,6 +171,15 @@
       (when (:unknown b) (u/note-read! :cells (u/cell-vec pos)))
       (update b :pos #(if (map? %) % (u/pos-of %))))))
 
+(defn beliefs
+  "What the body knows of ground, the body argument of jobs.lib.cost.base-rates: {:biome-at}, a fn of a pos -> the
+  biome of that cell when the body has seen the cell and its chunk is loaded, else nil."
+  [p]
+  {:biome-at (fn [pos]
+               (let [raw (.-rawWorld p)]
+                 (when (and raw (aget raw "biomeAt") (:name (seen-block p pos)))
+                   (.biomeAt raw (:x pos) (:y pos) (:z pos)))))})
+
 (defn seen-entities
   "The entities the body can place, as cljs maps of entities() (opts: its :radius :kind :names :max): players always;
   hostiles as perception's known mobs (seen or heard, nearest first) when it has them; every other kind only when

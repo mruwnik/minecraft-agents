@@ -1,0 +1,306 @@
+{
+  "version": "26.2",
+  "biomes": [
+    "badlands",
+    "bamboo_jungle",
+    "beach",
+    "birch_forest",
+    "cherry_grove",
+    "cold_ocean",
+    "dark_forest",
+    "deep_cold_ocean",
+    "deep_dark",
+    "deep_frozen_ocean",
+    "deep_lukewarm_ocean",
+    "deep_ocean",
+    "desert",
+    "dripstone_caves",
+    "eroded_badlands",
+    "flower_forest",
+    "forest",
+    "frozen_ocean",
+    "frozen_peaks",
+    "frozen_river",
+    "grove",
+    "ice_spikes",
+    "jagged_peaks",
+    "jungle",
+    "lukewarm_ocean",
+    "lush_caves",
+    "mangrove_swamp",
+    "meadow",
+    "mushroom_fields",
+    "ocean",
+    "old_growth_birch_forest",
+    "old_growth_pine_taiga",
+    "old_growth_spruce_taiga",
+    "pale_garden",
+    "plains",
+    "river",
+    "savanna",
+    "savanna_plateau",
+    "snowy_beach",
+    "snowy_plains",
+    "snowy_slopes",
+    "snowy_taiga",
+    "sparse_jungle",
+    "stony_peaks",
+    "stony_shore",
+    "sulfur_caves",
+    "sunflower_plains",
+    "swamp",
+    "taiga",
+    "warm_ocean",
+    "windswept_forest",
+    "windswept_gravelly_hills",
+    "windswept_hills",
+    "windswept_savanna",
+    "wooded_badlands"
+  ],
+  "ores": {
+    "coal": [
+      {
+        "feature": "ore_coal_lower",
+        "count": 20,
+        "size": 17,
+        "shape": "trapezoid",
+        "min": 0,
+        "max": 192
+      },
+      {
+        "feature": "ore_coal_upper",
+        "count": 30,
+        "size": 17,
+        "shape": "uniform",
+        "min": 136,
+        "max": 319
+      }
+    ],
+    "iron": [
+      {
+        "feature": "ore_iron_middle",
+        "count": 10,
+        "size": 9,
+        "shape": "trapezoid",
+        "min": -24,
+        "max": 56
+      },
+      {
+        "feature": "ore_iron_small",
+        "count": 10,
+        "size": 4,
+        "shape": "uniform",
+        "min": -64,
+        "max": 72
+      },
+      {
+        "feature": "ore_iron_upper",
+        "count": 90,
+        "size": 9,
+        "shape": "trapezoid",
+        "min": 80,
+        "max": 384
+      }
+    ],
+    "copper": [
+      {
+        "feature": "ore_copper",
+        "count": 16,
+        "size": 10,
+        "shape": "trapezoid",
+        "min": -16,
+        "max": 112,
+        "biomes": [
+          "badlands",
+          "bamboo_jungle",
+          "beach",
+          "birch_forest",
+          "cherry_grove",
+          "cold_ocean",
+          "dark_forest",
+          "deep_cold_ocean",
+          "deep_dark",
+          "deep_frozen_ocean",
+          "deep_lukewarm_ocean",
+          "deep_ocean",
+          "desert",
+          "eroded_badlands",
+          "flower_forest",
+          "forest",
+          "frozen_ocean",
+          "frozen_peaks",
+          "frozen_river",
+          "grove",
+          "ice_spikes",
+          "jagged_peaks",
+          "jungle",
+          "lukewarm_ocean",
+          "lush_caves",
+          "mangrove_swamp",
+          "meadow",
+          "mushroom_fields",
+          "ocean",
+          "old_growth_birch_forest",
+          "old_growth_pine_taiga",
+          "old_growth_spruce_taiga",
+          "pale_garden",
+          "plains",
+          "river",
+          "savanna",
+          "savanna_plateau",
+          "snowy_beach",
+          "snowy_plains",
+          "snowy_slopes",
+          "snowy_taiga",
+          "sparse_jungle",
+          "stony_peaks",
+          "stony_shore",
+          "sulfur_caves",
+          "sunflower_plains",
+          "swamp",
+          "taiga",
+          "warm_ocean",
+          "windswept_forest",
+          "windswept_gravelly_hills",
+          "windswept_hills",
+          "windswept_savanna",
+          "wooded_badlands"
+        ]
+      },
+      {
+        "feature": "ore_copper_large",
+        "count": 16,
+        "size": 20,
+        "shape": "trapezoid",
+        "min": -16,
+        "max": 112,
+        "biomes": [
+          "dripstone_caves"
+        ]
+      }
+    ],
+    "gold": [
+      {
+        "feature": "ore_gold",
+        "count": 4,
+        "size": 9,
+        "shape": "trapezoid",
+        "min": -64,
+        "max": 32
+      },
+      {
+        "feature": "ore_gold_extra",
+        "count": 50,
+        "size": 9,
+        "shape": "uniform",
+        "min": 32,
+        "max": 256,
+        "biomes": [
+          "badlands",
+          "eroded_badlands",
+          "wooded_badlands"
+        ]
+      },
+      {
+        "feature": "ore_gold_lower",
+        "count": 0.5,
+        "size": 9,
+        "shape": "uniform",
+        "min": -64,
+        "max": -48
+      }
+    ],
+    "redstone": [
+      {
+        "feature": "ore_redstone",
+        "count": 4,
+        "size": 8,
+        "shape": "uniform",
+        "min": -64,
+        "max": 15
+      },
+      {
+        "feature": "ore_redstone_lower",
+        "count": 8,
+        "size": 8,
+        "shape": "trapezoid",
+        "min": -96,
+        "max": -32
+      }
+    ],
+    "lapis": [
+      {
+        "feature": "ore_lapis",
+        "count": 2,
+        "size": 7,
+        "shape": "trapezoid",
+        "min": -32,
+        "max": 32
+      },
+      {
+        "feature": "ore_lapis_buried",
+        "count": 4,
+        "size": 7,
+        "shape": "uniform",
+        "min": -64,
+        "max": 64
+      }
+    ],
+    "diamond": [
+      {
+        "feature": "ore_diamond",
+        "count": 7,
+        "size": 4,
+        "shape": "trapezoid",
+        "min": -144,
+        "max": 16
+      },
+      {
+        "feature": "ore_diamond_buried",
+        "count": 4,
+        "size": 8,
+        "shape": "trapezoid",
+        "min": -144,
+        "max": 16
+      },
+      {
+        "feature": "ore_diamond_large",
+        "count": 0.1111111111111111,
+        "size": 12,
+        "shape": "trapezoid",
+        "min": -144,
+        "max": 16
+      },
+      {
+        "feature": "ore_diamond_medium",
+        "count": 2,
+        "size": 8,
+        "shape": "uniform",
+        "min": -64,
+        "max": -4
+      }
+    ],
+    "emerald": [
+      {
+        "feature": "ore_emerald",
+        "count": 100,
+        "size": 3,
+        "shape": "trapezoid",
+        "min": -16,
+        "max": 480,
+        "biomes": [
+          "cherry_grove",
+          "frozen_peaks",
+          "grove",
+          "jagged_peaks",
+          "meadow",
+          "snowy_slopes",
+          "stony_peaks",
+          "windswept_forest",
+          "windswept_gravelly_hills",
+          "windswept_hills"
+        ]
+      }
+    ]
+  }
+}

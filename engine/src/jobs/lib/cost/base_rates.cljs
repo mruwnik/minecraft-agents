@@ -1,0 +1,56 @@
+(ns jobs.lib.cost.base-rates
+  "Base rates: how much of a resource the ground holds before a body has looked, an input to costs (not a cost).
+  The numbers are the game's own placements, in base_rates.json beside this file, which tools/base-rates.mjs writes
+  from the server jar; nothing here counts blocks of the loaded world. Ores only so far (coal, iron, copper, gold,
+  redstone, lapis, diamond, emerald, the json's keys). Pure.
+
+  Every fn takes the body: a map of what the body knows, as jobs.lib.look/beliefs gives it. Today only :biome-at is
+  read, a fn of a pos -> the biome the body saw there, nil for ground it has not seen."
+  (:require [shadow.resource :as rc]))
+
+(def ^:private data (js->clj (js/JSON.parse (rc/inline "jobs/lib/cost/base_rates.json")) :keywordize-keys true))
+
+(def biomes "The biomes that carry any ore: the overworld's." (:biomes data))
+
+(def ^:private chunk-area 256)
+
+(defn- height-share
+  "The share of a placement's veins that start at height y, as the game draws it: uniform over min..max, or for a
+  trapezoid the sum of two even draws that together span it."
+  [{:keys [shape] low :min high :max} y]
+  (let [span (- high low)
+        k (- y low)]
+    (cond
+      (not (<= 0 k span)) 0
+      (= shape "uniform") (/ 1 (inc span))
+      :else (let [m (quot span 2)
+                  n (- span m)]
+              (/ (inc (min k m (- span k))) (* (inc m) (inc n)))))))
+
+(defn density
+  "Expected blocks of resource per block of ground at pos's height in biome: over the resource's placements there,
+  veins per chunk x the vein's size x the share of veins at that height, per chunk layer. The size is the game's
+  nominal one and the ground is taken as all stone, so caves, air and other fill make the real count lower.
+  0 for a resource or biome with no placement. body is not read yet."
+  [resource pos biome _body]
+  (let [y (js/Math.floor (:y pos))]
+    (->> (get (:ores data) (keyword resource))
+         (filter #(some #{biome} (or (:biomes %) biomes)))
+         (map #(/ (* (:count %) (:size %) (height-share % y)) chunk-area))
+         (reduce + 0))))
+
+(defn biome-chance
+  "The chance (0..1) that the ground at pos is biome. 1 or 0 where the body has seen that ground; for unseen ground
+  a very simple prior: every ore-carrying biome alike."
+  [biome pos body]
+  (let [seen (when-let [biome-at (:biome-at body)] (biome-at pos))]
+    (cond
+      seen (if (= seen biome) 1 0)
+      (some #{biome} biomes) (/ 1 (count biomes))
+      :else 0)))
+
+(defn expected-density
+  "density at pos when its biome is not given: each biome's density weighed by its biome-chance, so it holds for
+  seen and unseen ground alike."
+  [resource pos body]
+  (reduce + 0 (map #(* (biome-chance % pos body) (density resource pos % body)) biomes)))

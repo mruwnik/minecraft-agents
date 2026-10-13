@@ -50,6 +50,13 @@ test('stateAt reads the column and answers UNLOADED where no column is', () => {
     [id('stone'), id('air'), UNLOADED, UNLOADED])
 })
 
+test('biomeAt names the biome of a loaded cell, null where no column is', () => {
+  const { bot, column } = makeBot()
+  column.setBiome(new Vec3(3, 70, 4), registry.biomesByName.desert.id)
+  const raw = createRawWorld({ getBot: () => bot })
+  assert.deepEqual([raw.biomeAt(3, 70, 4), raw.biomeAt(40, 70, 4)], ['desert', null])
+})
+
 test('lightAt packs sky and block light of the cell', () => {
   const { bot } = makeBot()
   const raw = createRawWorld({ getBot: () => bot })

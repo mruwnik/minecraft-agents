@@ -107,3 +107,11 @@ Follows one minecart over RCON (game time, Pos, Motion each tick; `--near` pins 
 the player rides). JSON lines to `--out` or stdout; prints the minimum windowed speed (blocks/tick, 3D path length over `--window` ticks, so bends read true)
 and where, per-cell speeds, and the path distance from `--cell` until the speed is back at `--threshold`. Logic in
 `dashboard/src/dashboard/rcon_cart.cljs`; rebuild the bundle with `tools/compile dashboard rcon-tools --release`.
+
+### base-rates.mjs
+
+    node tools/base-rates.mjs /path/to/mojang_<version>.jar
+
+Writes `engine/src/jobs/lib/cost/base_rates.json` (ore placements per biome, read by `jobs.lib.cost.base-rates`) from the
+worldgen JSON in Mojang's server jar. Run it when the game version changes; nothing else needs the jar. A placement
+step it cannot price stops it.

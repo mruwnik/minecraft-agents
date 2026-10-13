@@ -193,6 +193,13 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
       if (block?.boundingBox !== 'block') return []
       return block.shapes?.length ? block.shapes : [[0, 0, 0, 1, 1, 1]]
     },
+    // the biome's name (plains) of the cell, null when its column is not loaded
+    biomeAt: (x, y, z) => {
+      const bot = follow()
+      const [fx, fy, fz] = [x, y, z].map(Math.floor)
+      const column = bot?.world?.getColumn?.(fx >> 4, fz >> 4)
+      return column ? bot.registry?.biomes?.[column.getBiome(new Vec3(fx & 15, fy, fz & 15))]?.name ?? null : null
+    },
     // the name of the item in the off hand (slot 45), or null
     offHand: () => follow()?.inventory?.slots?.[45]?.name ?? null,
     // the name of the held (main hand) item, or null

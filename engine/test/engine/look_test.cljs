@@ -31,6 +31,13 @@
     (is (= "iron_ore" (:name (look/seen-block p {:x 0 :y 64 :z 5}))))
     (is (:unknown (look/seen-block p {:x 6 :y 64 :z 0})))))
 
+(deftest beliefs-know-the-biome-of-seen-ground-only
+  (let [p (seeing {:blocks (merge wall {"6,64,0" "coal_ore" "0,64,5" "iron_ore"})})
+        _ (aset p "rawWorld" #js {:biomeAt (fn [_ _ _] "plains")})
+        biome-at (:biome-at (look/beliefs p))]
+    (is (= "plains" (biome-at {:x 0 :y 64 :z 5})))
+    (is (nil? (biome-at {:x 6 :y 64 :z 0})) "behind the wall: never seen")))
+
 (deftest live-drops-a-remembered-block-that-is-gone
   (async done
     (tu/run-async done
