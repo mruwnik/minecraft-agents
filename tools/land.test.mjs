@@ -233,3 +233,31 @@ test('merge-master brings master into job-contract, and aborts cleanly on a conf
     assert.equal(fs.existsSync(path.join(repo, '.git/commit-lock')), false)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
+
+test('land refuses a fix branch with no recorded fixbase instead of landing on the main checkout branch', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    assert.equal(run(repo, 'fixer-worktree.sh', CARD).status, 0)
+    git(wt, 'config', '--unset', `branch.fix/${CARD}.fixbase`)
+    commitIn(wt, 'a.txt', 'fixed\n')
+    const landed = run(wt, 'land.sh')
+    assert.equal(landed.status, 1)
+    assert.match(landed.stderr, /fixbase/)
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'one\n')
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('merge-master keeps git\'s own error when the merge fails without a conflict', () => {
+  const { root, repo, jc } = withJobContract()
+  try {
+    fs.writeFileSync(path.join(repo, 'c.txt'), 'master\n')
+    git(repo, 'add', 'c.txt')
+    git(repo, 'commit', '-q', '-m', 'add c')
+    fs.writeFileSync(path.join(jc, 'c.txt'), 'untracked\n')
+    const r = run(repo, 'merge-master.sh')
+    assert.equal(r.status, 1)
+    assert.match(r.stderr, /c\.txt/)
+    assert.match(r.stderr, /overwritten/)
+    assert.equal(fs.existsSync(path.join(repo, '.git/commit-lock')), false)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
