@@ -42,6 +42,7 @@
        :text (:message e)
        :error (or (:error data) (:reason data))
        :reason (:reason data) :since (:since data)
+       :ending (some-> (:kind data) field-name) :cause (:cause data)
        :attention (field-name (or (:attention e) :none))
        :request-id (:request-id e)})))
 

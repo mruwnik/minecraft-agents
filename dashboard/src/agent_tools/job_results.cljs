@@ -69,6 +69,7 @@
                                  :running :queued)}))
         (seq selected) (assoc :events (:value clipped))
         (or (> (count observations) event-limit) (:truncated? clipped)) (assoc :events-truncated? true)
+        (:kind (:data terminal)) (assoc :ending (select-keys (:data terminal) [:kind :cause :reason]))
         (= :failed (:kind terminal)) (assoc :error (:value (bounded (get-in terminal [:data :error])))))))))
 
 (defn with-recorded

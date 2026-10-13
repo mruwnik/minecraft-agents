@@ -151,3 +151,12 @@
   (is (nil? (x/jobs-idle [] #{})) "no jobs: not a job case")
   (is (= :completed (:state (x/jobs-idle [(job-ev :completed "j1") {:source :job :kind :waiting :context {:job-id "j1/c" :chain ["j1" "j1/c"]}}] #{"j1"})))
       "a child's events do not change the root's state"))
+
+(deftest ending-kind-and-cause-are-matched-and-explained
+  (let [stopped (job-ev :stopped "j1" :data {:kind :condition-failed :cause :no-site :reason :no-site})
+        mapped (job-ev :stopped "j2" :data {:kind :limit-reached :cause {:line :health :floor 12}})]
+    (is (x/matches? {:kind :stopped :data {:kind :condition-failed :cause :no-site}} stopped))
+    (is (x/matches? {:kind :stopped :data {:reason :no-site}} stopped) "old :reason still matches")
+    (is (x/matches? {:data {:kind :limit-reached :cause {:line :health}}} mapped))
+    (is (= "no-site" (:why (x/jobs-idle [stopped] #{"j1"}))))
+    (is (= "limit-reached: {:line :health, :floor 12}" (:why (x/jobs-idle [mapped] #{"j2"}))))))

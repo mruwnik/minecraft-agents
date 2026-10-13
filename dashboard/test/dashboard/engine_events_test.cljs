@@ -368,3 +368,10 @@
   (let [state (fold [{:source "job" :t 1000} {:source "job" :kind "round_started" :t 2000}])]
     (is (= 2000 (get-in state [:last :t])))
     (is (false? (boolean (ee/offline-event? {:source "job"}))))))
+
+(deftest canonical-event-carries-the-ending
+  (let [e (ee/canonical-event {:seq 1 :time-ms 5 :source :job :kind :stopped :context {:job-id "j1"}
+                               :data {:kind :condition-failed :cause :no-site :reason :no-site}})]
+    (is (= "condition-failed" (:ending e)))
+    (is (= :no-site (:cause e)))
+    (is (= :no-site (:reason e)))))

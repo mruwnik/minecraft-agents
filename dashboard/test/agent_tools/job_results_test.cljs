@@ -95,3 +95,10 @@
                (is (= :completed (:status result)))
                (is (<= @calls 6) (str @calls " requests"))
                (done))))))
+
+(deftest a-stopped-job-reports-its-ending
+  (let [r (results/project "j4" "g" [(event 1 "j4" :queued {})
+                                     (event 2 "j4" :stopped {:kind :nothing-possible :cause {:ways {:a :x}} :reason :ways})]
+                           false)]
+    (is (= :stopped (:status r)))
+    (is (= {:kind :nothing-possible :cause {:ways {:a :x}} :reason :ways} (:ending r)))))

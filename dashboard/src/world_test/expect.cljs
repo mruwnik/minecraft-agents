@@ -131,9 +131,11 @@
    :completed :ended :stopped :ended :failed :ended :cancelled :ended})
 
 (defn- why-text [e]
-  (or (:message e)
-      (some-> (get-in e [:data :reason]) name)
-      (some-> (get-in e [:data :error]) str)))
+  (let [{:keys [kind cause reason]} (:data e)]
+    (or (:message e)
+        (some-> reason name)
+        (when cause (if (keyword? cause) (name cause) (str (name (or kind :ended)) ": " (pr-str cause))))
+        (some-> (get-in e [:data :error]) str))))
 
 (defn job-ids-in
   "Ids of every job with a lifecycle event in events, whoever submitted it."
