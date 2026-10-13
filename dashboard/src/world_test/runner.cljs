@@ -966,20 +966,22 @@
       (poll))))
 
 (defn write-plans-settled!
-  "Writes the case's plans, then resolves to their files once the body logged world.reloaded for every one (it reads
-  them lazily, so a job submitted at once would see the previous case's plan of the same id); throws after
-  shared-settle-ms without."
+  "Writes the case's plans, then resolves to their files once the body logged world.reloaded for every one; throws after
+  shared-settle-ms without. A body that just started may have read the files silently at its first load, so after half
+  the time the plans are written again (a new stamp) and the wait goes on."
   [opts c]
   (if (empty? (:plans c))
     (js/Promise.resolve [])
     (let [cursor (log-cursor (events-file opts))
           since (js/Date.now)
-          files (write-plans! opts c)]
-      (-> (await-reload! opts cursor since (mapv path/basename files) (:shared-settle-ms opts shared-settle-ms))
+          limit (:shared-settle-ms opts shared-settle-ms)
+          files (write-plans! opts c)
+          names (mapv path/basename files)]
+      (-> (await-reload! opts cursor since names (quot limit 2))
+          (.then (fn [ok] (or ok (do (write-plans! opts c) (await-reload! opts cursor since names limit)))))
           (.then (fn [ok]
                    (when-not ok
-                     (throw (js/Error. (str "the body logged no world.reloaded for the plans within "
-                                            (:shared-settle-ms opts shared-settle-ms) " ms"))))
+                     (throw (js/Error. (str "the body logged no world.reloaded for the plans within " limit " ms"))))
                    files))))))
 
 (defn with-shared-files!
