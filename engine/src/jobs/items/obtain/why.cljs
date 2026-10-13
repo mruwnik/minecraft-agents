@@ -1,0 +1,76 @@
+(ns jobs.items.obtain.why
+  "The texts of a source that has nothing: why no source, what a failed try adds."
+  (:require [engine.game :as game]
+            [jobs.items.obtain.base :refer [limits sheep-radius seen-radius]]
+            [jobs.items.obtain.need :refer [explore-opts]]
+            [jobs.items.obtain.plan :refer [gather-plan]]
+            [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
+            [jobs.items.obtain.table :refer [gather-needs material-blocks]]
+            [jobs.items.recipes :as recipes]
+            [jobs.lib.look :as look]
+            [jobs.lib.storage :as storage]
+            [jobs.lib.trees :as trees]
+            [jobs.lib.util :as u]
+            [clojure.string]))
+
+(defn other-logs-seen
+  "The log names of other species seen for an unseen log need (oak_log wanted, birch_log seen), or nil."
+  [c {:keys [key]}]
+  (when (trees/log-name? key)
+    (not-empty (filter #(seq (look/seen-blocks (:primitives c) {:names [%] :radius (seen-radius) :max 1}))
+                       (remove #{key} trees/log-names)))))
+
+(defn unseen-why
+  "Text for the gather source: the raw needs of the chain whose blocks are not seen, those seen but not taken (a zone,
+  claim or plan footprint refuses them), or the general text."
+  [c names n]
+  (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))
+        seen (filter #(and (not (:sheep %)) (not (seen-of c %)) (seq (seen-blocks-of c % true))) needs)
+        unseen (remove #(or (seen-of c %) (seq (seen-blocks-of c % true))) needs)
+        label (fn [{:keys [key seen sheep] :as need}]
+                (cond
+                  sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)")
+                  (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")")
+                  :else (str key (when-let [o (other-logs-seen c need)]
+                                   (str " (only " (clojure.string/join "/" o) " seen: another species)")))))]
+    (str "nothing seen to gather what a craft lacks"
+         (when (some #(= "obsidian" (:key %)) needs)
+           " (obsidian: seen obsidian, or lava with open air above and a water bucket carried; a bucket is 3 iron plus a seen water source)")
+         (when (seq unseen) (str ": " (clojure.string/join ", " (map label unseen))))
+         (when (and (seq unseen) (not (explore-opts c))) " (pass :explore true to search for it)")
+         (when (seq seen)
+           (str "; seen but not taken (a zone, claim or plan footprint may refuse it): "
+                (clojure.string/join ", " (for [need seen :let [b (first (seen-blocks-of c need true))]]
+                                            (str (label need) (when-let [p (some-> b :pos)] (str " at " (:x p) " " (:y p) " " (:z p)))))))))))
+
+(defn pickaxe-why
+  "For a stone material wanted with no pickaxe carried: that it needs one, and what crafting the cheapest lacks; else nil."
+  [version have names]
+  (when (and (some #(material-blocks version %) names)
+             (not-any? (fn [[k v]] (and (pos? v) (clojure.string/ends-with? k "_pickaxe"))) have))
+    (str "mining it needs a pickaxe, none carried; " (recipes/lacking version have "wooden_pickaxe" 1))))
+
+(defn no-source-why
+  "Text for the no-source wait: what each allowed source lacks."
+  [c names n]
+  (let [how (:how (limits c))
+        have (storage/carried-totals (u/inventory (:primitives c)))
+        version (game/version-of (:primitives c))]
+    (clojure.string/join
+     "; "
+     (concat (when (contains? how :chest) [(str "no seen chest that may hold " (clojure.string/join "/" names))])
+             (when (contains? how :craft) [(recipes/lacking version have (first names) n)])
+             (when (contains? how :gather) [(unseen-why c names n)])
+             (when-let [w (and (contains? how :gather) (pickaxe-why version have names))] [w])))))
+
+(defn tried-text
+  "What a gather that was tried and failed adds to the no-source text (\"; gathering was tried and ended ..\", with the
+  child's reason when it gave one), or nil when none was tried."
+  ([tried] (tried-text tried nil))
+  ([tried why] (tried-text tried why nil))
+  ([tried why craft-detail]
+   (not-empty
+    (str (when-let [g (:gather tried)]
+           (str "; gathering was tried and ended " (pr-str g) (when why (str " (" why ")"))))
+         (when (and craft-detail (:craft tried))
+           (str "; crafting ended " (let [k (:craft tried)] (if (keyword? k) (name k) k)) ": " craft-detail))))))

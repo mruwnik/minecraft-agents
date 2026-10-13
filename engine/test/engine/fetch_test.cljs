@@ -10,6 +10,11 @@
             [engine.fake.raw-world :as fake-raw]
             [jobs.items.craft :as craft]
             [jobs.items.obtain :as obtain]
+            [jobs.items.obtain.base :as base]
+            [jobs.items.obtain.gather :as gather]
+            [jobs.items.obtain.plan :as plan]
+            [jobs.items.obtain.seen :as seen]
+            [jobs.items.obtain.table :as table]
             [jobs.lib.fetch :as fetch]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -933,7 +938,7 @@
   (let [s (start (-> (world {}) (assoc :inventory [{:name "oak_planks" :count 12} {:name "stick" :count 4}])) [own-zone])]
     (with-redefs [ctx/mem (constantly mem)
                   craft/nearest-table (constantly nil)]
-      (mapv :op (:steps (obtain/craft-plan {:primitives (:p s)} ["wooden_pickaxe"] 1))))))
+      (mapv :op (:steps (plan/craft-plan {:primitives (:p s)} ["wooden_pickaxe"] 1))))))
 
 (deftest obtain-plan-uses-the-remembered-table
   (is (= [:craft] (plan-ops {:table [1 64 0]}))))
@@ -1177,40 +1182,40 @@
           (is (= :no-source (:reason (last (events-of s :stopped))))))))))
 
 (deftest obtain-sapling-leaf-breaking-is-bounded
-  (let [need (obtain/gather-need {"oak_sapling" 1})]
-    (is (= obtain/sapling-leaf-limit (:dry-digs (:args need))) "digs per child run")
+  (let [need (table/gather-need {"oak_sapling" 1})]
+    (is (= table/sapling-leaf-limit (:dry-digs (:args need))) "digs per child run")
     (is (= 1 (:max-runs need)) "one fruitless run ends the source")
-    (is (nil? (:max-runs (obtain/gather-need {"cobblestone" 1}))) "other sources use the default bound")))
+    (is (nil? (:max-runs (table/gather-need {"cobblestone" 1}))) "other sources use the default bound")))
 
 (deftest each-gather-source-has-its-own-child-slot
   ;; a child slot's memory outlives its job while it runs: mine started over harvest-wood's :phase ended :count with nothing and a half tunnel
-  (let [slot #(obtain/gather-slot (obtain/gather-need %))]
+  (let [slot #(seen/gather-slot (table/gather-need %))]
     (is (not= (slot {"oak_log" 2}) (slot {"cobblestone" 1})))
     (is (not= (slot {"cobblestone" 1}) (slot {"coal" 1})))
     (is (= (slot {"cobblestone" 1}) (slot {"cobblestone" 3})) "the same source keeps its slot between rounds")))
 
 (deftest sapling-leaf-limit-is-60
-  (is (= 60 obtain/sapling-leaf-limit)))
+  (is (= 60 table/sapling-leaf-limit)))
 
 (deftest a-declined-child-is-not-a-fruitless-run
-  (let [sapling (obtain/gather-need {"oak_sapling" 1})]
-    (is (= 1 (obtain/fruitless-limit sapling :done)))
-    (is (= (obtain/max-fruitless) (obtain/fruitless-limit sapling :declined)) "a child that could not start broke no leaves")))
+  (let [sapling (table/gather-need {"oak_sapling" 1})]
+    (is (= 1 (gather/fruitless-limit sapling :done)))
+    (is (= (base/max-fruitless) (gather/fruitless-limit sapling :declined)) "a child that could not start broke no leaves")))
 
 (deftest gather-mines-fetch-a-pickaxe-without-gathering
-  (is (= obtain/mine-fetch (get-in (obtain/gather-need {"cobblestone" 1}) [:args :fetch])))
-  (is (= obtain/mine-fetch (get-in (obtain/gather-need {"coal" 1}) [:args :fetch]))))
+  (is (= table/mine-fetch (get-in (table/gather-need {"cobblestone" 1}) [:args :fetch])))
+  (is (= table/mine-fetch (get-in (table/gather-need {"coal" 1}) [:args :fetch]))))
 
 (deftest gather-needs-mine-the-block-that-drops-the-material
-  (is (= #{"stone"} (:seen (obtain/gather-need {"cobblestone" 1}))))
-  (let [n (obtain/gather-need {"cobbled_deepslate" 2})]
+  (is (= #{"stone"} (:seen (table/gather-need {"cobblestone" 1}))))
+  (let [n (table/gather-need {"cobbled_deepslate" 2})]
     (is (= #{"deepslate"} (:seen n)))
-    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2 :fetch obtain/mine-fetch :radius (obtain/seen-radius)} (:args n)))))
+    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2 :fetch table/mine-fetch :radius (base/seen-radius)} (:args n)))))
 
 (deftest the-stone-materials-are-those-of-the-bodys-version
-  (is (= #{"deepslate"} (obtain/material-blocks "26.1" "cobbled_deepslate")))
-  (is (nil? (obtain/material-blocks "1.16.5" "cobbled_deepslate")) "no deepslate in that version")
-  (is (nil? (:seen (obtain/gather-need {"cobbled_deepslate" 1} "1.16.5")))))
+  (is (= #{"deepslate"} (table/material-blocks "26.1" "cobbled_deepslate")))
+  (is (nil? (table/material-blocks "1.16.5" "cobbled_deepslate")) "no deepslate in that version")
+  (is (nil? (:seen (table/gather-need {"cobbled_deepslate" 1} "1.16.5")))))
 
 (deftest obtain-mines-seen-deepslate-for-a-stone-pickaxe
   (async done

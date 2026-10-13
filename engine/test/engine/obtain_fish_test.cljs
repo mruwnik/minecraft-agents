@@ -7,6 +7,7 @@
             [engine.test-util :as tu]
             [engine.game :as game]
             [jobs.items.obtain :as obtain]
+            [jobs.items.obtain.table :as table]
             [jobs.items.recipes :as recipes]))
 
 (defn ^:async obtain [world args]
@@ -31,4 +32,4 @@
           (is (= :no-source (:reason res))))))))
 
 (deftest a-cooked-fish-plan-gathers-the-raw-fish
-  (is (= {"cod" 2} (:gather (recipes/plan game/default-version {} "cooked_cod" 2 (merge (obtain/source-opts) {:gather? true :table? true}))))))
+  (is (= {"cod" 2} (:gather (recipes/plan game/default-version {} "cooked_cod" 2 (merge (table/source-opts) {:gather? true :table? true}))))))

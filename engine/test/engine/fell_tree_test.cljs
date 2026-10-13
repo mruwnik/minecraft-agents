@@ -12,6 +12,7 @@
             [engine.registry :as registry]
             [jobs.lib.access.approach :as approach]
             [jobs.items.obtain :as obtain]
+            [jobs.items.obtain.table :as table]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.trees :refer [axe-fetch-limits]]
             [jobs.lib.ledger :as ledger]
@@ -399,7 +400,7 @@
   (is (= 3 (:minutes (fetch/tighten {:minutes 3} {:how #{:chest}}))) "keys the wait lacks are the caller's"))
 
 (deftest a-gathered-log-need-fetches-no-axe
-  (let [need (first (obtain/gather-needs {"oak_log" 3}))]
+  (let [need (first (table/gather-needs {"oak_log" 3}))]
     (is (= 'jobs.forestry.harvest-wood (:job need)))
     (is (= #{:item} (:fetch (:args need))) "an axe fetch inside a gather would gather logs again")))
 

@@ -9,6 +9,9 @@
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
+            [jobs.items.obtain.base :as base]
+            [jobs.items.obtain.table :as table]
+            [jobs.items.obtain.why :as why]
             [jobs.lib.shelter :as sh]
             [jobs.items.recipes :as recipes]))
 
@@ -26,7 +29,7 @@
 (defn mine-events [s] (filterv #(re-find #"^mine\." (name (:kind %))) @(:seen s)))
 
 (deftest the-plan-for-an-iron-chestplate-from-nothing-gathers-raw-iron-and-smelts
-  (let [pl (recipes/plan game/default-version {} "iron_chestplate" 1 (assoc (obtain/source-opts) :gather? true))]
+  (let [pl (recipes/plan game/default-version {} "iron_chestplate" 1 (assoc (table/source-opts) :gather? true))]
     (is (= 8 (get-in pl [:gather "raw_iron"])))
     (is (some #(and (= :smelt (:op %)) (= "iron_ingot" (:item %))) (:steps pl)))))
 
@@ -228,10 +231,10 @@
           (is (= 1 (get (f/inv s) "iron_ingot"))))))))
 
 (deftest a-failed-gather-is-named-in-the-no-source-text
-  (is (nil? (obtain/tried-text {:craft :no-plan})))
-  (is (= "; gathering was tried and ended :gave-up" (obtain/tried-text {:gather :gave-up})))
-  (is (re-find #"searched" (obtain/tried-text {:gather {:searched "coal" :result :not-found}}))))
+  (is (nil? (why/tried-text {:craft :no-plan})))
+  (is (= "; gathering was tried and ended :gave-up" (why/tried-text {:gather :gave-up})))
+  (is (re-find #"searched" (why/tried-text {:gather {:searched "coal" :result :not-found}}))))
 
 (deftest the-bad-args-text-names-the-arg-and-its-value
-  (is (re-find #":count.*\"16\"" (obtain/args-error {:item "torch" :count "16"})))
-  (is (re-find #":item.*nil" (obtain/args-error {:count 4}))))
+  (is (re-find #":count.*\"16\"" (base/args-error {:item "torch" :count "16"})))
+  (is (re-find #":item.*nil" (base/args-error {:count 4}))))
