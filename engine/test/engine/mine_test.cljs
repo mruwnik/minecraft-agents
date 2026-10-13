@@ -8,6 +8,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -342,9 +343,9 @@
 (deftest the-drop-table-and-tools
   (is (= "cobblestone" (lb/drop-item "stone")))
   (is (= "raw_iron" (lb/drop-item "deepslate_iron_ore")))
-  (is (= "shovel" (tools/tool-kind "sand")))
-  (is (= "axe" (tools/tool-kind "oak_log")))
-  (is (= "pickaxe" (tools/tool-kind "stone"))))
+  (is (= "shovel" (kind/tool-kind "sand")))
+  (is (= "axe" (kind/tool-kind "oak_log")))
+  (is (= "pickaxe" (kind/tool-kind "stone"))))
 
 ;; ------------------------------------------------------------------ mend branches
 

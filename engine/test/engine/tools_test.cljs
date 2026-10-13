@@ -2,10 +2,11 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.fake]
             [engine.test-util :as tu]
+            [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]))
 
 (deftest tool-kind-by-block
-  (are [block kind] (= kind (tools/tool-kind block))
+  (are [block kind] (= kind (kind/tool-kind block))
     "dirt" "shovel"
     "sand" "shovel"
     "dirt_path" "shovel"
@@ -25,15 +26,6 @@
     "chest_minecart" "pickaxe"
     "cobweb" "shears"))
 
-(deftest best-tool-picks-the-highest-material-of-the-kind
-  (are [items block expected] (= expected (tools/best-tool items block))
-    ["wooden_shovel" "iron_shovel" "diamond_pickaxe"] "dirt" "iron_shovel"
-    ["stone_pickaxe" "diamond_pickaxe" "iron_shovel"] "stone" "diamond_pickaxe"
-    ["golden_axe" "stone_axe"] "oak_log" "stone_axe"
-    ["iron_shovel"] "stone" nil
-    [] "dirt" nil
-    ["stone" "dirt"] "dirt" nil))
-
 (deftest harvest-need-is-the-cheapest-listed-tool-no-carried-item-matches
   (are [carried harvest expected] (= expected (tools/harvest-need carried harvest))
     [] nil nil
@@ -44,34 +36,6 @@
     ["iron_pickaxe"] ["diamond_pickaxe" "netherite_pickaxe"] "diamond_pickaxe"
     ["golden_pickaxe"] ["iron_pickaxe" "golden_pickaxe"] nil
     ["golden_pickaxe"] ["iron_pickaxe" "diamond_pickaxe"] "iron_pickaxe"))
-
-(def stone-harvest ["wooden_pickaxe" "stone_pickaxe" "copper_pickaxe" "iron_pickaxe" "diamond_pickaxe" "golden_pickaxe"])
-(def diamond-harvest ["iron_pickaxe" "diamond_pickaxe" "netherite_pickaxe"])
-
-(defn items [& names] (mapv #(if (string? %) {:name % :count 1} %) names))
-
-(deftest suited-tool-is-the-cheapest-that-harvests
-  (are [carried block harvest expected] (= expected (tools/suited-tool carried block harvest))
-    (items "iron_pickaxe" "stone_pickaxe") "stone" stone-harvest "stone_pickaxe"
-    (items "diamond_pickaxe" "iron_pickaxe") "stone" stone-harvest "iron_pickaxe"
-    (items "iron_pickaxe" "stone_pickaxe") "diamond_ore" diamond-harvest "iron_pickaxe"
-    (items "stone_pickaxe") "diamond_ore" diamond-harvest nil
-    (items "iron_shovel" "wooden_shovel") "dirt" nil "wooden_shovel"
-    (items "iron_axe" "stone_axe") "oak_log" nil "stone_axe"))
-
-(deftest cobweb-is-dug-with-shears-else-a-sword
-  (are [carried expected] (= expected (tools/suited-tool (apply items carried) "cobweb" nil))
-    ["iron_pickaxe" "shears"] "shears"
-    ["iron_pickaxe" "stone_sword" "shears"] "shears"
-    ["iron_pickaxe" "stone_sword"] "stone_sword"
-    ["iron_pickaxe"] nil))
-
-(deftest suited-tool-uses-the-most-worn-of-a-tier-first
-  (is (= {:name "stone_pickaxe" :durability 20}
-         (tools/suited-item [{:name "stone_pickaxe" :durability 100}
-                             {:name "stone_pickaxe" :durability 20}
-                             {:name "iron_pickaxe" :durability 5}]
-                            "stone" stone-harvest))))
 
 (deftest wear-events
   (are [prev now expected] (= expected (tools/wear-event prev now))

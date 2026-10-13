@@ -44,9 +44,28 @@
 (deftest an-unknown-purpose-is-an-error
   (is (thrown? js/Error (choose/tools-for (body []) [:swim "stone"] 1))))
 
+(deftest the-most-worn-of-a-material-goes-first
+  (is (= [20 100] (map :uses-left (:list (choose/tools-for (body [(tool "stone_pickaxe" 100 131) (tool "stone_pickaxe" 20 131)]) [:dig "stone"] 1))))))
+
+(deftest cobweb-is-dug-with-shears-else-a-sword
+  (are [items expected] (= expected (map :item (:list (choose/tools-for (body items) [:dig "cobweb"] 1))))
+    [(tool "iron_pickaxe" 100 250) (tool "shears" 200 238)] ["shears"]
+    [(tool "iron_pickaxe" 100 250) (tool "stone_sword" 50 131) (tool "shears" 200 238)] ["shears"]
+    [(tool "iron_pickaxe" 100 250) (tool "stone_sword" 50 131)] ["stone_sword"]
+    [(tool "iron_pickaxe" 100 250)] []))
+
 (deftest a-spare-is-wanted-when-the-uses-fall-under-the-worn-line
   (are [items wanted] (= wanted (some? (trip/spare-need (body items) "stone")))
     [(tool "stone_pickaxe" 20 131)] true
     [(tool "stone_pickaxe" 100 131)] false
-    [(tool "stone_pickaxe" 20 131) (tool "iron_pickaxe" 200 250)] false
     [] false))
+
+(def worn-stone-and-iron [(tool "stone_pickaxe" 20 131) (tool "iron_pickaxe" 20 250)])
+
+(deftest a-spare-is-wanted-when-the-listed-uses-fall-short-of-the-amount
+  (are [items amount wanted] (= wanted (some? (trip/spare-need (body items) "stone" amount)))
+    worn-stone-and-iron 40 false
+    worn-stone-and-iron 41 true
+    [(tool "stone_pickaxe" 20 131)] 5 false
+    [(tool "stone_pickaxe" 20 131)] 21 true
+    [] 5 false))

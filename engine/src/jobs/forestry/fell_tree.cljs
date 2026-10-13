@@ -521,7 +521,7 @@
                            (ctx/update-mem! c assoc :first-logs (count logs)))
                          (or (await (fetch/fetch! c 'jobs.forestry.fell-tree #(axe-problem % logs)))
                              (when (and (zero? (:dug (ctx/mem c) 0)) (axe-carried? c))
-                               (await (trip/tool-ready! c (:name (first logs)))))))]
+                               (await (trip/tool-ready! c (:name (first logs)) (count logs))))))]
             f
             (let [_ (when-let [low (lower-base (ctx/mem c) logs)] (rebase! c low))
                   _ (await (watch/watch! c {:before-dig (:pos (first logs))}))

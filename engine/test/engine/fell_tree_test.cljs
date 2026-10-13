@@ -487,7 +487,7 @@
 
 ;; ------------------------------------------------------------------ a worn last axe gets a spare first
 
-(def worn-axe {:name "stone_axe" :count 1 :durability 10 :max-durability 131})
+(def worn-axe {:name "stone_axe" :count 1 :durability 5 :max-durability 131})
 
 (deftest a-worn-last-axe-gets-a-spare-from-a-seen-chest-before-the-tree-is-felled
   (async done

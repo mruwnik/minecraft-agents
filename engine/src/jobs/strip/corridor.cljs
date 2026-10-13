@@ -8,6 +8,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.strip :as strip]
+            [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
@@ -156,9 +157,9 @@
 
 (defn ^:async dig! [c {:keys [pos name class]}]
   (let [cell [(:x pos) (:y pos) (:z pos)]
-        kind (tools/tool-kind name)]
+        kind (kind/tool-kind name)]
     (cond
-      (and (not= :torch class) (not-any? #(tools/of-kind? (:name %) kind) (u/inventory (:primitives c)))) (stop! c :no-tool {:tool kind :cell cell})
+      (and (not= :torch class) (not-any? #(kind/of-kind? (:name %) kind) (u/inventory (:primitives c)))) (stop! c :no-tool {:tool kind :cell cell})
       :else
       (let [o (await (b/dig-cell! c pos (merge {:collect true :need-drop (not= :spawner class)} (select-keys (:args c) [:ignore-zones?]))))]
         (case o

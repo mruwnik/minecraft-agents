@@ -1,9 +1,11 @@
 (ns jobs.lib.tools
-  "Which carried tool suits a block."
+  "Wear of the held tool, equipping the one jobs.lib.choose/tools-for lists first, and what a block needs."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.choose :as choose]
+            [jobs.lib.tool-kind :as kind]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.util :as u]))
 
@@ -12,39 +14,6 @@
    ::wear-settle-ms {:default 250 :doc "Wait for the inventory to show a tool breaking, in ms." :spec (a/int-in 0 nil)}
    ::wear-settle-tries {:default 3 :doc "Times to wait for the break to show." :spec (a/int-in 0 nil)}
    ::quick-clear-ms {:default 1500 :doc "A block that carried tools or the bare hand break within this is cleared without a tool." :spec (a/int-in 0 nil)}})
-
-(def shovel-blocks
-  #{"dirt" "grass_block" "sand" "red_sand" "gravel" "clay" "soul_sand" "soul_soil" "mud" "snow_block"
-    "coarse_dirt" "rooted_dirt" "podzol" "mycelium" "farmland" "dirt_path"})
-
-(defn tool-kind
-  "\"shovel\", \"axe\", \"hoe\", \"shears\" or \"pickaxe\": the tool that digs block-name fastest."
-  [block-name]
-  (cond
-    (shovel-blocks block-name) "shovel"
-    (= block-name "cobweb") "shears"
-    (and (str/includes? block-name "fence") (not (str/starts-with? block-name "nether_brick"))) "axe"
-    (str/ends-with? block-name "_leaves") "hoe"
-    (some #(str/ends-with? block-name %) ["_log" "_wood" "_planks"]) "axe"
-    :else "pickaxe"))
-
-(defn of-kind?
-  "Whether item-name is a tool of kind: \"<material>_<kind>\", or the kind itself (shears)."
-  [item-name kind]
-  (or (= item-name kind) (str/ends-with? item-name (str "_" kind))))
-
-(def fallback-kind "What digs a block when its own kind is not carried." {"shears" "sword"})
-
-(defn best-tool
-  "The carried tool (of item-names) of the kind that suits block-name with the
-  highest material, or nil."
-  [item-names block-name]
-  (let [kind (tool-kind block-name)
-        rank weapon/weapon-rank]
-    (->> item-names
-         (filter #(of-kind? % kind))
-         (sort-by rank >)
-         first)))
 
 (def cheapness
   "Pickaxe materials, cheapest first, as a player would pick the tool to make: gold last (it harvests as wood does)."
@@ -62,23 +31,6 @@
   (when (and (seq harvest-tools) (not-any? (set harvest-tools) item-names))
     (cheapest-tool harvest-tools)))
 
-(defn suited-item
-  "The carried item (map {:name :durability ...}) a careful player digs block-name with, or nil. It is of the right
-  kind and, when harvest-tools is not empty, one of them. Cheapest material first, then the most worn."
-  [items block-name harvest-tools]
-  (let [kind (tool-kind block-name)
-        ok (set harvest-tools)
-        of (fn [k] (filter #(and (of-kind? (:name %) k) (or (empty? ok) (ok (:name %)))) items))
-        found (or (seq (of kind)) (some-> (fallback-kind kind) of seq))]
-    (->> found
-         (sort-by (juxt (comp weapon/cheap-rank :name) #(or (:durability %) js/Infinity)))
-         first)))
-
-(defn suited-tool
-  "Name of suited-item, or nil."
-  [items block-name harvest-tools]
-  (:name (suited-item items block-name harvest-tools)))
-
 (defn low-fraction [] (settings/get settings ::low-fraction))
 
 (defn wear-event
@@ -91,11 +43,6 @@
       (cond
         (< (:n now 0) (:n prev 1)) (when (<= (or (:durability prev) 0) 20) :tool-broke)
         (and (low? now) (not (:low-seen prev))) :tool-low))))
-
-(defn pick
-  "The carried item to dig block-name with (suited-item against the block's harvest tools), or nil."
-  [p block-name]
-  (suited-item (u/inventory p) block-name (some-> (.harvestTools p block-name) js->clj)))
 
 (defn wear-snapshot
   "{:name :durability :max :n} of the carried tool item: its most worn copy and how many of that name are carried."
@@ -148,17 +95,14 @@
                              (assoc m :tool-wear (cond-> now (or ev (:low-seen prev)) (assoc :low-seen true)))))))))
 
 (defn ^:async equip-tool!
-  "Hold the tool for digging block-name: the cheapest that harvests (pick), or with {:fast true} the best carried
-  one (best-tool). Emits :tool.low / :tool.broke / :tool.none for the tool held last time (note-wear!). Does nothing
+  "Hold the tool for digging block-name: the first jobs.lib.choose/tools-for lists (cheapest that harvests, or with
+  {:fast true} the best carried). Emits :tool.low / :tool.broke / :tool.none for the tool held last time (note-wear!). Does nothing
   when none is carried or it is already held. Resolves to the equip result, or nil."
   [c block-name opts]
   (let [p (:primitives c)
          _ (await (note-wear! c))
-         item (when block-name
-                (if (:fast opts)
-                  (some->> (best-tool (map :name (u/inventory p)) block-name) (assoc {} :name))
-                  (pick p block-name)))
-         tool (:name item)]
+         tool (when block-name (:item (first (:list (choose/tools-for c [:dig block-name] 1 opts)))))
+         item {:name tool}]
      (when tool
        (ctx/update-mem! c assoc :tool-wear
                         (let [snap (wear-snapshot p item)]
@@ -212,15 +156,16 @@
 (defn hand-better?
   "Whether the body should dig block bare-handed: a digging tool of another kind is held and none of the block's kind
   is carried (soil and leaves by hand, never wearing a pickaxe out on them)."
-  [p block]
-  (let [held (.-held (.self p))
-        kind (when held (some #(when (of-kind? held %) %) dig-kinds))]
-    (boolean (and block kind (not= kind (tool-kind block)) (nil? (pick p block))))))
+  [c block]
+  (let [held (.-held (.self (:primitives c)))
+        held-kind (when held (some #(when (kind/of-kind? held %) %) dig-kinds))]
+    (boolean (and block held-kind (not= held-kind (kind/tool-kind block))
+                  (empty? (:list (choose/tools-for c [:dig block] 1)))))))
 
 (defn ^:async equip!
   "Hold the best carried tool for block (the mined block when not given)."
   ([c] (equip! c (:block (:args c))))
   ([c block]
    (await (equip-for! c block))
-   (when (hand-better? (:primitives c) block)
+   (when (hand-better? c block)
      (await (ctx/act c :unequip #js {})))))

@@ -14,6 +14,7 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.near :as near]
             [jobs.lib.near :as near]
+            [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [jobs.lib.torch :as torch]
             [jobs.lib.util :as u]))
@@ -105,22 +106,27 @@
             (do (done! c :deposited (assoc (select-keys p [:free :cost]) :result (ctx/child-result c child))) nil)))))))
 
 (defn spare-need
-  "The carried tool ({:item :uses-left :max}) that tool-ready! wants a spare for when digging block-name, or nil: the
-  tools the chooser (jobs.lib.choose/tools-for) lists for it, in all, have fewer uses left than ::spare-fraction of
-  the best one's durability. A tool with no known durability counts as whole."
-  [c block-name]
-  (let [uses (:list (choose/tools-for c [:dig block-name] 1))
-        best (first uses)
-        full (some #(when (= (:item best) (:name %)) (:max %)) (u/inventory (:primitives c)))]
-    (when (and best full (< (transduce (map :uses-left) + 0 uses) (inc (js/Math.floor (* (spare-fraction) full)))))
-      (assoc best :max full))))
+  "The carried tool ({:item :uses-left :max}) that tool-ready! wants a spare for when digging block-name, or nil. With
+  an amount (digs the job will make) the chooser (jobs.lib.choose/tools-for) must be short of it: the listed tools'
+  uses together fall under amount. Without one, they must fall under ::spare-fraction of the first tool's durability.
+  A tool with no known durability counts as whole."
+  ([c block-name] (spare-need c block-name nil))
+  ([c block-name amount]
+   (let [{uses :list short :short} (choose/tools-for c [:dig block-name] (or amount 1))
+         best (first uses)
+         full (some #(when (= (:item best) (:name %)) (:max %)) (u/inventory (:primitives c)))
+         worn? (if amount
+                 (pos? short)
+                 (< (transduce (map :uses-left) + 0 uses) (inc (js/Math.floor (* (spare-fraction) (or full 0))))))]
+     (when (and best full worn?)
+       (assoc best :max full)))))
 
 (defn spent-tool?
   "Whether every carried tool that digs block-name is down to ::spent-uses uses or fewer (a tool with no known durability counts as whole) and some is carried:
   the spare was not had, so one more dig may leave the body without any."
   [p block-name]
   (let [harvest (some-> (.harvestTools p block-name) js->clj)
-        suffix (str "_" (tools/tool-kind block-name))
+        suffix (str "_" (kind/tool-kind block-name))
         ok (set harvest)
         usable (filter #(and (str/ends-with? (:name %) suffix) (or (empty? ok) (ok (:name %)))) (u/inventory p))]
     (boolean (and (seq usable) (every? #(and (:durability %) (<= (:durability %) (settings/get spare-settings ::spent-uses))) usable)))))
@@ -129,8 +135,8 @@
   "The tool to obtain as the spare for the worn need: the cheapest tool of its kind that harvests block-name and
   lasts (not wooden or golden: a stone pickaxe will do for stone), else the cheapest at all, else the worn tool's own name."
   [p block-name need]
-  (let [kind (tools/tool-kind block-name)
-        harvest (filter #(tools/of-kind? % kind) (some-> (.harvestTools p block-name) js->clj))
+  (let [kind (kind/tool-kind block-name)
+        harvest (filter #(kind/of-kind? % kind) (some-> (.harvestTools p block-name) js->clj))
         lasting (remove #(#{"wooden" "golden"} (weapon/material-of %)) harvest)]
     (or (tools/cheapest-tool (seq lasting)) (tools/cheapest-tool harvest) (:item need))))
 
@@ -144,10 +150,11 @@
   worn (spare-need), run jobs.items.obtain for the cheapest tool of its kind that harvests block-name (spare-name; child :spare; chest, craft, gather). Resolves nil
   to go on, :continue while the child waits on the world. Told once per tool name in the job's memory (:spare-tried):
   info tool.spare when one came, warn tool.no-spare with the child's reason when not (the job goes on with the worn
-  tool). The job's :fetch off, or a set of kinds without :tool, skips it; so does a job under a spare fetch (no spare of a spare)."
-  [c block-name]
+  tool). amount (the digs the job will make, optional) is spare-need's. The job's :fetch off, or a set of kinds without :tool, skips it; so does a job under a spare fetch (no spare of a spare)."
+  ([c block-name] (tool-ready! c block-name nil))
+  ([c block-name amount]
   (let [p (:primitives c)
-        need (when (and block-name (not (in-spare? c)) (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need c block-name))
+        need (when (and block-name (not (in-spare? c)) (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need c block-name amount))
         tool-name (when need (spare-name p block-name need))]
     (when (and need (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
       (let [r (await (ctx/call-child c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false}))]
@@ -163,7 +170,7 @@
               (ctx/emit! c :tool.no-spare :warn {:tool tool-name :durability (:uses-left need) :reason (:reason res) :status (:status res) :tried (:tried res)
                                                  :text (str "the last " tool-name " is worn (" (:uses-left need) " left) and no spare could be had"
                                                             (when-let [r (:reason res)] (str ": " (name r))))}))
-            nil))))))
+            nil)))))))
 
 (defn ^:async back-from-stocking!
   "After the torch trip, walk back to the cell it began on (:torches-from): :continue while the walk waits on the world, else nil."

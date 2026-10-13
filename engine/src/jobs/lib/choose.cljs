@@ -9,7 +9,7 @@
             [jobs.lib.cost.food :as food]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.foods :as foods]
-            [jobs.lib.tools :as tools]
+            [jobs.lib.tool-kind :as kind]
             [jobs.lib.util :as u]))
 
 (def whole "Uses of a tool with no known durability: counts as whole." 1000000)
@@ -44,18 +44,18 @@
    (let [p (:primitives c)
          harvest (some-> (.harvestTools p block) js->clj)
          ok (set harvest)
-         kind (tools/tool-kind block)
+         wanted (kind/tool-kind block)
          held (reserved c :tools)
          prefer (:prefer (overrides c :tools))
          rank-in (fn [name] (let [i (.indexOf prefer name)] (if (neg? i) (count prefer) i)))
          order (fn [t] [(rank-in (:name t))
                         (if (:fast opts) (- (weapon/weapon-rank (:name t))) (weapon/cheap-rank (:name t)))
                         (or (:durability t) whole)])
-         usable (->> (u/inventory p)
-                     (filter #(and (tools/of-kind? (:name %) kind) (or (empty? ok) (ok (:name %)))))
-                     (remove #(contains? held (:name %)))
-                     (remove #(zero? (or (:durability %) whole)))
-                     (sort-by order))
+         fit (fn [k] (->> (u/inventory p)
+                          (filter #(and (kind/of-kind? (:name %) k) (or (empty? ok) (ok (:name %)))))
+                          (remove #(contains? held (:name %)))
+                          (remove #(zero? (or (:durability %) whole)))))
+         usable (sort-by order (or (seq (fit wanted)) (some-> (kind/fallback-kind wanted) fit)))
          uses (mapv (fn [t] {:item (:name t) :uses-left (or (:durability t) whole)}) usable)]
      {:list uses
       :short (max 0 (- amount (transduce (map :uses-left) + 0 uses)))})))

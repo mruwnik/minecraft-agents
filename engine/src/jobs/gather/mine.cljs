@@ -51,7 +51,7 @@
     {:status :stopped :got 0 :reason :flooded}, later the dig phase ends :flooded and the body walks home.
   - Every carried tool that digs the block down to 3 uses (jobs.lib.trip/spent-tool?, no spare was had) ends the same way, :reason :no-tool,
     before the last one breaks deep down.
-  - A pickaxe block (jobs.lib.tools/tool-kind) with no *_pickaxe carried, at the start or later (the pick broke),
+  - A pickaxe block (jobs.lib.tool-kind/tool-kind) with no *_pickaxe carried, at the start or later (the pick broke),
     runs jobs.items.get-tool as a child first (unless :fetch is false). Nothing got: before any dig it ends at once, warn mine.no-tool,
     {:status :stopped :got 0 :reason :no-tool :tool <kind needed: pickaxe, sword, shears>}; in the dig phase the mend and walk home follow with
     :reason :no-tool. Shovel and axe blocks drop by hand. Soil or wood dug with only a pickaxe held empties the
