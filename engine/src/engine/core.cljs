@@ -40,6 +40,7 @@
             [engine.core.fruitless :as fruitless]
             [engine.core.register :as register]
             [engine.core.activity :as activity]
+            [engine.core.ending :as ending]
             [engine.core.list-edits :as list-edits]
             [engine.core.round :as round]
             [engine.core.settle :as settle]
@@ -202,7 +203,8 @@
   memory.edn when present, sweeps memory and appends a :restart entry.
   Options:
     :primitives, :dir, :now, :events, :body
-    :jobs        the registry {sym {:check :round :doc :args}}
+    :jobs        the registry {sym {:check :round :doc :args}}; a contract job's {:conditions :round ...} is wrapped
+                 (engine.core.ending)
     :triggers    {name trigger}
     :world       the body's world store (hooks :world/open; :world/blank when not given)
     :backoff     engine-wide backoff config of register entries, a map or false (see engine.backoff)
@@ -233,7 +235,7 @@
                              :world-time #(or (.-timeOfDay (.self primitives)) nil)
                              :world-age #(.worldAge primitives)
                              :live-jobs #(set (keys (:instances @st)))})
-        eng {:primitives primitives :jobs jobs :triggers triggers :dir dir :now now :events ev
+        eng {:primitives primitives :jobs (ending/registry jobs) :triggers triggers :dir dir :now now :events ev
              :store store
              :hurt (hurt/new-state)
              :world (or world ((:world/blank hooks/all)))

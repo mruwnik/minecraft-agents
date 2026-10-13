@@ -6,12 +6,14 @@
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
             [engine.core.list-edits :refer [submit!]]
+            [engine.core.ending :as ending]
             [engine.core.tally :as tally]
+            [engine.contract :as contract]
             [engine.chat :as chat]
             [engine.memory :as mem]
             ["crypto" :as crypto]))
 
-(declare call-child)
+(declare call call-child)
 
 (defn ^:async act!
   "Every acting primitive call from a job: check the ownership token, save
@@ -73,6 +75,7 @@
   (let [store (:store eng)
         results (or (:results base) (atom {}))
         child-wait (or (:child-wait base) (atom nil))
+        child-ending (atom nil)
         base (assoc base :results results :child-wait child-wait)
         id (mem/path->id root slots)
         check! #(when-not (owner? eng token) (throw (cut-error)))
@@ -103,6 +106,8 @@
      :act (fn [k act-args] (act! eng base id k act-args))
      :note-walk (fn [status moved] (record-act! eng base :walk #js {:status status} moved))
      :call-child (fn [slot def child-args] (call-child eng base slot def child-args))
+     :call (fn [slot def child-args] (call eng base child-ending slot def child-args))
+     :child-ending child-ending
      :result (fn [data] (check!) (swap! results assoc id data))
      :child-result (fn [slot] (get @results (mem/path->id root (conj slots slot))))
      :submit (fn [spec opts] (check!) (submit! eng spec (assoc opts :by id)))
@@ -198,6 +203,44 @@
                 (clear!))
             (swap! (:results base) dissoc child-id))
           status)))))
+
+(defn ^:async call
+  "One round of contract job def as the child in slot under parent base (ctx/call): :continue, or its ending with the
+  :report; the child's memory goes with any ending, and an ending other than :done is kept in child-ending, the
+  parent round's. Shares the parent's token, like call-child; each call emits job.child_started and
+  job.child_ended (with :ending)."
+  [eng base child-ending slot def args]
+  (let [def (ending/wrap def)
+        store (:store eng)
+        slots (conj (:slots base) slot)
+        child-id (mem/path->id (:root base) slots)
+        fields {:source :job :level :debug :job child-id :slot slot :chain (conj (:chain base) child-id)
+                :round (:round base) :reflex (:reflex base)}]
+    (when-not (ending/contract-job? def)
+      (throw (ex-info (str "ctx/call takes a contract job (one that exports conditions), in slot " slot) {:slot slot})))
+    (when-not (owner? eng (:token base)) (throw (cut-error)))
+    (emit! eng (assoc fields :kind :child_started))
+    (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
+      (mem/update-job! store (:root base) slots assoc :args args :children {}))
+    (let [t0 (now eng)
+          r (try (await ((:round def) (child-ctx eng base slot args)))
+                 (catch :default e
+                   (when-not (cut? e) (emit! eng (assoc fields :kind :child_ended :status :error)))
+                   (throw e))
+                 (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))]
+      (when-not (owner? eng (:token base)) (throw (cut-error)))
+      (if (= :continue r)
+        (do (emit! eng (assoc fields :kind :child_ended :status :continue)) :continue)
+        (let [e (assoc r :report (merge (tally/report eng (:root base) slots) (:report r)))
+              done? (= :done (:kind e))]
+          (emit! eng (merge fields {:kind :child_ended :status (if done? :done :stopped) :ending (dissoc (contract/for-event e) :report)
+                                    :report (:report e)}
+                            (when-not done? {:reason (contract/cause-key e)})))
+          (tally/remember! eng (:sym def) (some->> (:target def) (select-keys args)) (:report e))
+          (ending/cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended)
+          (mem/update-job! store (:root base) (:slots base) update :children dissoc slot)
+          (when-not done? (reset! child-ending e))
+          e)))))
 
 (defn ^:async run-round [eng run inst]
   (let [[def args] (job-of eng inst)

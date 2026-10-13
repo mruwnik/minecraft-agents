@@ -205,7 +205,7 @@ built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to t
 ## Jobs
 
 A job is a namespace under `src/jobs/` exporting `check` and `round`, and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
-`body.idle`). The namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
+`body.idle`). A contract job exports `conditions` in place of `check` (Contract jobs below). The namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
 
 ```clojure
 (ns jobs.survival.eat
@@ -225,7 +225,7 @@ A job is a namespace under `src/jobs/` exporting `check` and `round`, and option
 
 There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:check :round :doc :args}}`,
 built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
-that defines both `check` and `round` (others are helpers), fails the compile when such a file's `ns` does not match its
+that defines `round` and `check` or `conditions` (others are helpers), fails the compile when such a file's `ns` does not match its
 path, and the macro `engine.registry/job-registry` emits the map. `check` and `round` must be top-level `def`/`defn` forms, and a job must not
 require `engine.registry`.
 
@@ -270,6 +270,9 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(await (ctx/act ctx :moveTo #js {...}))` | call an acting primitive |
 | `(await (ctx/call-child ctx slot job args))` | run one round of a child (`:done`, `:continue`, `:declined`) |
 | `(await (jobs.lib.child/call-walk ctx slot go-to-args))` | a go-to child round that, when it yields `:continue` waiting for day in a shelter, holds the round still with `:night-sheltered` (or `:sealed-hostile-near`: shut in by its own retreat plug with a hostile near, no `:escalate`; ends after 3 min in all, counted across the parent's go-to children, or at low food or health; the event `go-to.sealed-hostile-near` names the mob, its band and whether it was seen or heard) so jobs show and body.idle name it; every walking parent uses it instead of `ctx/call-child` on go-to (`child/run!` of go-to does the same and returns `:continue` at once; the night, retreat, sleep, extinguish, breathe and dig-niche walks go at night on purpose and stay on `call-child`) |
+| `(await (ctx/call ctx slot job args))` | one round of a contract child: `:continue` or its ending (Contract jobs) |
+| `(ctx/end ctx kind cause data?)` | a contract job's ending, returned by its round |
+| `(ctx/way? ctx k)`, `(ctx/use ctx purpose)` | whether the call allows way `k`; the list the call gives for `purpose` |
 | `(ctx/check-child ctx slot job args)` | the child's check, for a parent's check |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
@@ -290,7 +293,20 @@ debt or intent with `update-mem!` before the `act` it protects. After every `mov
 `inventoryChange` wins), wear as a tool's durability drop, health only for the hurt causes fall, cactus, berry bush,
 drowning. Each round's time goes to its own frame only. `job.child_ended` and a root job's `completed`/`stopped`/
 `cancelled`/`reflex.ended` carry `:report` (`{:uses {... :time s} :yields {:items}}`); a finished job's goes to body
-memory `:job-report` (cap 256) as `{:job sym :report}`.
+memory `:job-report` (cap 256) as `{:job sym :report}` (and `:target`, the args its `target` names).
+
+**Contract jobs (engine.contract, engine.core.ending).** Exports `conditions` (`[[:fn f] ...]`, `(f c)` a cause or
+nil), `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`, `defaults` (a qualified keyword value is a
+setting), `done?` (`{:done? :done :left :units}`). Every job takes the call keys `:use :ways :spend :floor :deadline
+:least` beside its args (specced at submit; `:ways` only the job's); they are frozen at the first round in `:contract
+:call` (defaults under them, `:least` 1, `:deadline` the caller's). Each round: a failing condition ends it
+`:condition-failed`, done? true ends it `:done`, else the round runs. A listed one waits while its conditions fail
+until it starts; then any ending ends it. An ending is `{:kind :cause :because :report :data}`, kinds `:done`,
+`:condition-failed`, `:limit-reached`, `:nothing-possible`, `:cut-off` (`contract/prevailing` orders them); one not
+`:done` gets the last child ending not `:done` of its round as `:because` (events carry 4 of a chain). A root ending
+`:done` is `job.completed` `{:kind :done}`, any other `job.stopped` `{:kind :cause :reason}` (`:reason` the cause key);
+`job.child_ended` carries `:ending`. Cancel, drop and death cut off: `job.cancelled` `{:kind :cut-off :cause by}`,
+`reflex.ended` `:ending`, and a `child_ended :cut-off` for each started frame under an ended or cancelled one.
 
 **call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
 it returns `:continue` or `:declined`; on `:done` the sub-map is cleared so the next call starts fresh. A cut anywhere ends

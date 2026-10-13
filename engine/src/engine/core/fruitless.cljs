@@ -67,13 +67,14 @@
 
 (defn fruitless-run?
   "Whether a reflex job's run (round, its act tracker) that ended with outcome counts toward its entry's backoff:
-  no act made progress, and every act failed or the job gave up (declined, or stopped). A cut or failed run
+  no act made progress, and every act failed or the job gave up (declined, stopped, or an ending not :done). A cut or failed run
   does not count."
-  [round {:keys [status result]}]
+  [round {:keys [status result] :as outcome}]
   (let [{:keys [acts failed]} round]
     (and (not (#{:cut :error} status))
          (= acts failed)
-         (or (pos? acts) (= :declined status) (stopped-result? result)))))
+         (or (pos? acts) (= :declined status) (stopped-result? result)
+             (and (= :ended status) (not= :done (:kind (:ending outcome))))))))
 
 (defn book-round!
   "After a round of run ended with outcome: a fruitless run of a reflex job counts toward its register entry's
@@ -120,7 +121,7 @@
   its act tracker, see engine.backoff; a round that ends the job, is cut or fails is not counted). The third raises job.fruitless, a required attention request, once per spell; a round
   with progress ends the spell and resolves the request; a round with no act neither counts nor ends it. It only flags: nothing is held against the job."
   [eng id status round]
-  (when-not (#{:cut :error :done} status)
+  (when-not (#{:cut :error :done :ended} status)
     (if (backoff/fruitless-round? round)
       (let [n (get (swap! (:fruitless eng) update id (fnil inc 0)) id)]
         (when (= n fruitless-rounds)

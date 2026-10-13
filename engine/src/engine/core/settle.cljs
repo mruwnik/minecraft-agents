@@ -6,7 +6,9 @@
             [engine.core.fruitless :refer [book-round! note-fruitless!]]
             [engine.core.register :refer [trigger-holds?]]
             [engine.core.round :refer [run-round]]
+            [engine.core.ending :as ending]
             [engine.core.tally :as tally]
+            [engine.contract :as contract]
             [engine.backoff :as backoff]
             [engine.memory :as mem]))
 
@@ -60,11 +62,39 @@
                            :message (str "Manual job failed: " error)
                            :state-update #(remove-listed % id)}))
 
-(defn settle-listed-job! [eng {:keys [id]} {:keys [status error result child-wait]}]
+(defn ending-data
+  "A root job's ending as its terminal event's :data: :done as {:status :completed :kind :done}, any other kind as
+  {:status :stopped :kind :cause :reason (the cause key)}, with :because (cut for events) and the job's :data."
+  [e]
+  (if (= :done (:kind e))
+    (merge (:data e) {:status :completed :kind :done})
+    (merge (:data e) {:status :stopped :kind (:kind e) :cause (:cause e) :reason (contract/cause-key e)}
+           (when (:because e) {:because (:because (contract/for-event e))}))))
+
+(defn ending-report
+  "Root job id's report at its ending e, read before its memory goes: the tally, with done?'s count from e."
+  [eng id e]
+  (merge (tally/end-root! eng id true) (:report e)))
+
+(defn settle-listed-job! [eng {:keys [id]} {:keys [status error result child-wait ending]}]
   (note-child-wait! eng id status child-wait)
   (let [idx (.indexOf (:list (state eng)) id)
         fields (job-fields eng id)]
     (case status
+      :ended
+      (let [report (ending-report eng id ending)
+            data (ending-data ending)]
+        (resolve-job-attention! eng id :job-completed
+                                #(assoc (remove-listed % id) :cursor (max idx 0)))
+        (swap! (:fruitless eng) dissoc id)
+        (ending/cut-off! eng id [] (mem/job-mem (mem/view (:store eng)) id []) :ended)
+        (mem/delete-job! (:store eng) id)
+        (emit! eng (if (= :done (:kind ending))
+                     (merge fields {:source :job :kind :completed :level :info :attention :notice
+                                    :data data :report report})
+                     (merge fields {:source :job :kind :stopped :level :warn :attention :notice
+                                    :data data :text (stopped-text data) :report report}))))
+
       :done
       (let [report (tally/end-root! eng id true)]
         (resolve-job-attention! eng id :job-completed
@@ -172,8 +202,15 @@
 
 (defn settle-reflex!
   "End reflex job run after its one round."
-  [eng run {:keys [status error result]}]
+  [eng run {:keys [status error result ending]}]
   (case status
+    :ended
+    (if (= :done (:kind ending))
+      (end-reflex! eng run :done nil)
+      (let [data (ending-data ending)]
+        (emit! eng {:source :job :kind :stopped :level :warn :job (:id run) :reflex (:reflex run)
+                    :data data :text (stopped-text data) :report (merge (tally/report eng (:id run) []) (:report ending))})
+        (end-reflex! eng run :stopped (:reason data))))
     :declined
     (do (emit! eng {:source :reflex :kind :declined :level :info :reflex (:reflex run) :job (:id run)
                     :text (str "reflex " (name (:reflex run)) ": job " (:id run)

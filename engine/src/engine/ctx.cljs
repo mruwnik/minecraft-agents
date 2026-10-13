@@ -1,6 +1,8 @@
 (ns engine.ctx
   "Helpers a job's check and round call on their ctx. See README.md, section ctx."
-  (:require [engine.expr :as expr]
+  (:refer-clojure :exclude [use])
+  (:require [engine.contract :as contract]
+            [engine.expr :as expr]
             [engine.memory :as mem]))
 
 ;; ------------------------------------------------------------------ job memory
@@ -15,6 +17,29 @@
   this round was cut; a check cannot write."
   [ctx f & args]
   ((:update-mem ctx) f args))
+
+;; ------------------------------------------------------------------ the contract (engine.contract)
+
+(defn frozen-call
+  "The call keys of this contract job's call, frozen at its first round; nil before it starts."
+  [ctx]
+  (get-in (mem/job-mem ((:view ctx)) (:root ctx) (:slots ctx)) [:contract :call]))
+
+(defn way?
+  "Whether the call allows way k."
+  [ctx k]
+  (contains? (:ways (frozen-call ctx)) k))
+
+(defn use
+  "The list the call gives for purpose (:use), or nil."
+  [ctx purpose]
+  (get-in (frozen-call ctx) [:use purpose]))
+
+(defn end
+  "The ending a contract job's round returns: kind (:done :condition-failed :limit-reached :nothing-possible
+  :cut-off) and cause (a keyword or a map), data the job's own result fields. The engine adds :report and :because."
+  ([ctx kind cause] (end ctx kind cause nil))
+  ([_ctx kind cause data] (contract/ending kind cause data)))
 
 ;; ------------------------------------------------------------------ body memory
 
@@ -63,6 +88,14 @@
   [ctx slot job args]
   (let [[def args] (child-job ctx job args)]
     ((:call-child ctx) slot def args)))
+
+(defn call
+  "Run one round of contract job (a definition map, or a job namespace symbol) as the child in slot, with args (its
+  own and the call keys). A promise of :continue, or the child's ending with its :report; an ending other than
+  :done becomes this round's :because unless the job says its own."
+  [ctx slot job args]
+  (let [[def args] (child-job ctx job args)]
+    ((:call ctx) slot def args)))
 
 (defn result!
   "Hand data to the parent as this job's result. Only the round that ends

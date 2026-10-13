@@ -2,6 +2,7 @@
   "Edits of the job list: submit! (at the end, next or now), cancel! and retry!."
   (:require [engine.core.base :refer [add-instance driver? drop-reflex-job! emit! free-owner! job-fields job-of manual-job new-id! remove-listed running save-memory! state]]
             [engine.core.attention :refer [resolve-job-attention!]]
+            [engine.core.ending :as ending]
             [engine.core.tally :as tally]
             [engine.expr :as expr]
             [engine.memory :as mem]))
@@ -33,8 +34,8 @@
       (< pos cursor) (update :cursor inc))))
 
 (defn cancel!
-  "End job id (cutting its round if it is the one running): a listed job is removed; a reflex job
-  ends with reflex.ended :cancelled and its trigger may fire again. by names who asked."
+  "End job id (cutting its round if it is the one running): a listed job is removed, cut off by by (job.cancelled
+  :data); a reflex job ends with reflex.ended :cancelled and its trigger may fire again. by names who asked."
   ([eng id] (cancel! eng id :agent))
   ([eng id by]
    (let [fields (job-fields eng id)
@@ -45,12 +46,14 @@
    (if-let [reflex (get-in (state eng) [:instances id :reflex])]
      (drop-reflex-job! eng id reflex :cancelled {:how :cancelled :by by})
      (do (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
+         (ending/cut-off! eng id [] (mem/job-mem (mem/view (:store eng)) id []) by)
          (swap! (:fruitless eng) dissoc id)
          (swap! (:rounds eng) dissoc id)
          (mem/delete-job! (:store eng) id)
          (save-memory! eng)))
    (emit! eng (merge (into {} (filter val) (select-keys fields [:name :reflex]))
-                     {:source :job :kind :cancelled :level :info :job id :chain [id] :by by :report report})))))
+                     {:source :job :kind :cancelled :level :info :job id :chain [id] :by by :report report
+                      :data {:kind :cut-off :cause by}})))))
 
 (defn submit!
   "Put a job spec (an expression, see engine.expr) on the list. Returns the instance id; throws on a bad spec.

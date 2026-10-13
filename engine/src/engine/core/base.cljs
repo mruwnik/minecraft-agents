@@ -3,6 +3,8 @@
   state and memory saves, ids and instances, and small predicates (paused?, stopped-result?, wait-reason)."
   (:require [engine.args :as a]
             [engine.composite :as composite]
+            [engine.contract :as contract]
+            [engine.core.tally :as tally]
             [engine.events :as events]
             [engine.expr :as expr]
             [engine.fsutil :as fsu]
@@ -57,10 +59,14 @@
       (= id (:resume state)) (assoc :resume nil)
       (= id (:current state)) (assoc :current nil))))
 
-(defn normalize-result [r]
-  (if (#{:done :continue :declined} r)
-    {:status r}
-    {:status :error :error (js/Error. (str "a round returned " (pr-str r) ", not :done, :continue or :declined"))}))
+(defn normalize-result
+  "A round's return as {:status}: :done, :continue or :declined, or :ended with the :ending a contract job returned."
+  [r]
+  (cond
+    (#{:done :continue :declined} r) {:status r}
+    (contract/ending? r) {:status :ended :ending r}
+    :else {:status :error
+           :error (js/Error. (str "a round returned " (pr-str r) ", not :done, :continue, :declined or an ending"))}))
 
 (defn state [eng] @(:state eng))
 
@@ -253,12 +259,15 @@
 
 (defn drop-reflex-job!
   "Drop reflex job id (instance and memory) and emit its one reflex.ended with
-  outcome (:done :stopped :declined :cut :dropped :failed) and any extra fields."
+  outcome (:done :stopped :declined :cut :dropped :failed), its report, and any extra fields; a :dropped or
+  :cancelled one is cut off by (:by extra)."
   [eng id reflex outcome extra]
-  (let [text (reflex-text reflex (get-in (state eng) [:instances id :spec]))]
+  (let [text (reflex-text reflex (get-in (state eng) [:instances id :spec]))
+        report (tally/report eng id [])]
     (drop-instance! eng id)
     (emit! eng (merge {:source :reflex :kind :ended :level :info :reflex reflex :job id
-                       :outcome outcome :text (str text ": " (name outcome))}
+                       :outcome outcome :text (str text ": " (name outcome)) :report report}
+                      (when (#{:dropped :cancelled} outcome) {:ending {:kind :cut-off :cause (:by extra)}})
                       extra))))
 
 (defn offline?

@@ -13,7 +13,8 @@
   Nodes: {:op :leaf :job sym :args map}, {:op :seq|:any :children [node]},
   {:op :repeat :child node :times n?}, {:op :until :children [guard child]}. They are plain EDN, so they persist."
   (:require [clojure.string :as str]
-            [engine.args :as a]))
+            [engine.args :as a]
+            [engine.contract :as contract]))
 
 (def combinators #{'seq 'any 'repeat 'until 'hold})
 
@@ -22,24 +23,26 @@
 
 (defn leaf
   "[def args] for job symbol sym with args merged over its defaults (a declared group key by key) and conformed by
-  its spec (engine.args: positions become {:x :y :z}); throws when sym is not in the registry or a value does not fit."
+  its spec (engine.args: positions become {:x :y :z}); the call keys (engine.contract/call-keys) are checked apart.
+  Throws when sym is not in the registry or a value does not fit."
   [registry sym args]
   (let [entry (get registry sym)
         data (:args entry)]
     (cond
       (nil? entry) (throw (ex-info (str "unknown job " sym) {:job sym}))
-      (not (and (fn? (:check entry)) (fn? (:round entry))))
-      (throw (ex-info (str "job " sym " needs a check and a round") {:job sym}))
+      (not (and (or (fn? (:check entry)) (some? (:conditions entry))) (fn? (:round entry))))
+      (throw (ex-info (str "job " sym " needs a round and a check or conditions") {:job sym}))
+      (contract/call-problem sym (:ways entry) args) (fail (contract/call-problem sym (:ways entry) args) args)
       :else (try [entry (a/conform sym data (a/merge-args data (a/defaults data) args))]
                  (catch :default e (fail (ex-message e) args))))))
 
 (defn unknown-keys-message
-  "Why args holds keys the job does not declare, at any level, or nil: each unknown key of the first level holding one
+  "Why args holds keys the job does not declare (the call keys aside), at any level, or nil: each unknown key of the first level holding one
   named, then the keys of that level. The job registry always carries :args (nil for a job with none); a hand-built
   entry without the key is not checked."
   [sym entry args]
   (when (contains? entry :args)
-    (when-let [[[path known] :as all] (seq (a/unknown (:args entry) args))]
+    (when-let [[[path known] :as all] (seq (a/unknown (:args entry) (apply dissoc args (keys contract/call-keys))))]
       (let [level (vec (butlast path))
             ks (sort-by str (keep (fn [[p _]] (when (= level (vec (butlast p))) (last p))) all))
             listing (if (seq known) (str "its " (if (seq level) "keys" "args") " are " (str/join ", " (sort-by str known)))

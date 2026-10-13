@@ -1,5 +1,6 @@
 (ns engine.result-test
   (:require [cljs.test :refer [deftest is]]
+            [engine.core.base :as base]
             [jobs.lib.result :as r]))
 
 (defn fake [] (let [a (atom nil)] [{:result #(reset! a %)} a]))
@@ -40,3 +41,9 @@
   (let [[c a] (fake)]
     (r/finish! c)
     (is (= {:status :done} @a))))
+
+(deftest a-round-may-return-an-ending
+  (is (= {:status :ended :ending {:kind :nothing-possible :cause :no-tree}}
+         (base/normalize-result {:kind :nothing-possible :cause :no-tree})))
+  (is (= {:status :continue} (base/normalize-result :continue)))
+  (is (= :error (:status (base/normalize-result {:kind :gave-up})))))

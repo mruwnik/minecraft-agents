@@ -8,10 +8,6 @@
             [clojure.tools.reader :as reader]
             [clojure.tools.reader.reader-types :as rt]))
 
-(def exports
-  "What a job namespace may define, and whether it must."
-  {'check true 'round true 'doc false 'args false 'idle-ok false})
-
 (defn jobs-dir
   "The jobs/ directory on the classpath (engine/src/jobs), or nil."
   []
@@ -58,9 +54,10 @@
         symbol)))
 
 (defn job?
-  "A job file defines check and round (the required exports); any other file under jobs/ is a helper."
+  "A job file defines round, and check or (a contract job, engine.contract) conditions; any other file under jobs/
+  is a helper."
   [defines]
-  (every? (fn [[k required?]] (or (not required?) (defines k))) exports))
+  (boolean (and (defines 'round) (or (defines 'check) (defines 'conditions)))))
 
 (defn describe
   "{:ns sym :defines #{...}} for a job file, nil for a helper file (no check or no round), or throws when a job
@@ -135,13 +132,17 @@
     []))
 
 (defmacro job-registry
-  "{ns-symbol {:check :round :doc :args :idle-ok}} for every job namespace under jobs/."
+  "{ns-symbol {:check :round :doc :args :idle-ok}} for every job namespace under jobs/; a contract job's entry also
+  holds :conditions :target :ways :defaults :done? and its namespace's :settings."
   []
   (into {}
         (map (fn [{:keys [ns defines]}]
                (let [ref (fn [k] (when (defines k) (symbol (str ns) (str k))))]
-                 [(list 'quote ns) {:check (ref 'check) :round (ref 'round)
-                                    :doc (ref 'doc) :args (ref 'args) :idle-ok (ref 'idle-ok)}])))
+                 [(list 'quote ns) (cond-> {:check (ref 'check) :round (ref 'round)
+                                            :doc (ref 'doc) :args (ref 'args) :idle-ok (ref 'idle-ok)}
+                                     (defines 'conditions)
+                                     (merge {:conditions (ref 'conditions) :target (ref 'target) :ways (ref 'ways)
+                                             :defaults (ref 'defaults) :done? (ref 'done?) :settings (ref 'settings)}))])))
         (job-namespaces)))
 
 ;; ------------------------------------------------------------------ triggers and hooks

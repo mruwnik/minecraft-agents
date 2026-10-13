@@ -94,6 +94,31 @@
                   (not (s/valid? lk v)) (vary-meta update :wrong-typed (fnil conj #{}) k)))))
           {} (:args entry)))
 
+(defn gen-call
+  "Call keys (engine.contract/call-keys) for a case, each given with some chance, :ways only for a job with ways. Some
+  get a value their spec refuses (metadata :wrong-typed, as gen-args)."
+  [r entry]
+  (let [ways (:ways entry)
+        gens {:use #(pick r [{:tools ["stone_pickaxe"]} {:blocks ["dirt" "cobblestone"]} {}])
+              :ways #(set (filter (fn [_] (chance? r 0.5)) ways))
+              :spend #(pick r [{:time (pick r [0 5 30 600])} {:time 5 :items {"dirt" 4}} {:health 4 :wear {"iron_pickaxe" 3}}])
+              :floor #(pick r [{:health (pick r [0 6 12 20])} {:food 6}])
+              :deadline #(pick r [0 1000000 2000000])
+              :least #(pick r [1 3 :all])}
+        wrong {:use ["dirt"] :ways #{:no-such-way} :spend {:time "soon"} :floor 3 :deadline -5 :least 0}]
+    (reduce (fn [acc k]
+              (cond
+                (or (and (= :ways k) (empty? ways)) (not (chance? r 0.15))) acc
+                (chance? r 0.2) (vary-meta (assoc acc k (wrong k)) update :wrong-typed (fnil conj #{}) k)
+                :else (assoc acc k ((gens k)))))
+            {} [:use :ways :spend :floor :deadline :least])))
+
+(defn with-call
+  "own (gen-args) and gen-call's keys, from a second rng of seed so the job's own args and world stay as they were."
+  [own seed entry]
+  (let [call (gen-call (rng (+ seed 104729)) entry)]
+    (with-meta (merge own call) {:wrong-typed (into (set (:wrong-typed (meta own))) (:wrong-typed (meta call)))})))
+
 (def ore-ish ["oak_log" "stone" "dirt" "wheat" "water" "grass_block" "iron_ore" "chest" "oak_leaves" "farmland" "sand"])
 
 (defn gen-world [r]
@@ -219,7 +244,7 @@
   "Run one case ({:job :entry :seed}): {:job :seed :args :outcome (:refused/:ran) :defects [[kind detail]]}."
   [{:keys [job entry seed]}]
   (let [r (rng seed)
-        args (gen-args r job entry)
+        args (with-call (gen-args r job entry) seed entry)
         {:keys [spec ground]} (gen-world r)
         clock (atom 1000000)
         calls (atom {:all 0 :acts 0})
@@ -378,6 +403,12 @@
         gen #(gen-args (rng %) 'jobs.movement.go-to entry)]
     (is (= (gen 7) (gen 7)))
     (is (some #(seq (:wrong-typed (meta (gen %)))) (range 60)) "some seed puts a value its spec refuses in an arg")))
+
+(deftest call-keys-are-generated-and-some-are-wrong
+  (let [calls (map #(gen-call (rng %) {:ways [:carried :craft]}) (range 100))]
+    (is (every? #(some % calls) [:use :ways :spend :floor :deadline :least]))
+    (is (some #(seq (:wrong-typed (meta %))) calls))
+    (is (not-any? :ways (map #(gen-call (rng %) {}) (range 100))) "no :ways for a job without ways")))
 
 (deftest case-seeds-do-not-depend-on-the-job-filter
   (let [all (job-cases {:n 3 :base 1})
