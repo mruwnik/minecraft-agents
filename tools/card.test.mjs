@@ -2,14 +2,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { spawn } from 'node:child_process'
+import { spawn, execFileSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, copyFileSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const CARD = join(dirname(fileURLToPath(import.meta.url)), 'card')
 
 // Runs `tools/card <args>` against a fake server answering every request with `reply`.
-async function runCard(args, reply, status = 200) {
+async function runCard(args, reply, status = 200, { script = CARD, repo = '/repo/x' } = {}) {
   const requests = []
   const server = createServer((req, res) => {
     let body = ''
@@ -23,7 +25,7 @@ async function runCard(args, reply, status = 200) {
   })
   await new Promise((r) => server.listen(0, '127.0.0.1', r))
   const url = `http://127.0.0.1:${server.address().port}`
-  const child = spawn('bash', [CARD, ...args], { env: { ...process.env, DIFFER_URL: url, CARD_REPO: '/repo/x' } })
+  const child = spawn('bash', [script, ...args], { env: repo ? { ...process.env, DIFFER_URL: url, CARD_REPO: repo } : { ...process.env, DIFFER_URL: url, CARD_REPO: undefined } })
   let out = '', err = ''
   child.stdout.on('data', (c) => { out += c })
   child.stderr.on('data', (c) => { err += c })
@@ -109,3 +111,19 @@ for (const flag of ['help', '-h', '--help']) {
     assert.match(r.out, /tools\/card create/)
   })
 }
+
+test('board repo is the main checkout when tools/card runs from a linked worktree', async () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'card-wt-')))
+  try {
+    const main = join(dir, 'main'), wt = join(dir, 'wt')
+    mkdirSync(join(main, 'tools'), { recursive: true })
+    const git = (...a) => execFileSync('git', ['-C', main, '-c', 'user.email=a@b', '-c', 'user.name=t', ...a])
+    git('init', '-q')
+    copyFileSync(CARD, join(main, 'tools', 'card'))
+    git('add', '.'); git('commit', '-qm', 'x')
+    git('worktree', 'add', '-q', wt)
+    const r = await runCard(['create', 'T'], created, 200, { script: join(wt, 'tools', 'card'), repo: null })
+    assert.equal(r.code, 0, r.err)
+    assert.equal(r.requests[0].url, `/api/boards/${encodeURIComponent(main)}/tasks`)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
