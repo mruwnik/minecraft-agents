@@ -1,0 +1,328 @@
+(ns jobs.movement.go-to.walk
+  "One step of a go-to call's walk: the round toward the goal and what follows it (arrival, a look, a waypoint, torches, air, a
+  retry, the give-up or escalation)."
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.breath :as breath]
+            [jobs.lib.combat :as combat]
+            [jobs.lib.danger :as danger-q]
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
+            [jobs.lib.step-off :as step-off]
+            [jobs.lib.util :as u]
+            [jobs.lib.walk.search :as wsearch]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.lib.watch :as watch]
+            [jobs.movement.go-to.air :as air]
+            [jobs.movement.go-to.aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! sight-end see-cell]]
+            [jobs.movement.go-to.cut :refer [approach-recorder approaches explore-spent?]]
+            [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.faults :refer [note-fault! refused-hang shut-foreign]]
+            [jobs.movement.go-to.health :as health]
+            [jobs.movement.go-to.own-way :refer [dive-end dive-floor! own-way own-way-left! plan-check straight-from! walk-own-way!]]
+            [jobs.movement.go-to.result :as end :refer [known-frontier-result unloaded-end]]
+            [jobs.movement.go-to.settings :refer [dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain dry-radius max-blocked max-searching]]
+            [jobs.movement.go-to.torch :as torch :refer [dark-end fetch-torches! round-unknown]]
+            [jobs.movement.go-to.unstick :as unstick]
+            [jobs.movement.go-to.climb :as climb]))
+
+(defn ^:async arrived!
+  "Look round once if the place is risky (jobs.lib.watch), then finish: the next job starts facing along the walk.
+  A goal whose y go-to chose (goal-pos) adds :resolved, the cell it walked to, :why it (:surface, :nearest-level, :explicit), with :provisional true when that was a
+  column's estimated y, :stand-in true when no ground of it was known."
+  [c]
+  (when-not (false? (:look-round (:args c)))
+    (await (watch/watch! c {})))
+  (let [{:keys [aimed aimed-why column-open]} (ctx/mem c)]
+    (end/finish! c (cond-> {:arrived true}
+                     aimed (assoc :resolved aimed)
+                     (and aimed aimed-why) (assoc :why aimed-why)
+                     (= :guess column-open) (assoc :provisional true)
+                     (= :stand-in column-open) (assoc :stand-in true)
+                     (:in-water (ctx/mem c)) (assoc :in-water true)))))
+
+(defn forget-known-land!
+  "Forget the land earlier searches knew to their end (wsearch/known-land) at the go-to's first walking round and after each
+  escalation (:escalations, the world changed): a new go-to, or a dug way, may open a way through it."
+  [c]
+  (let [epoch (:escalations (ctx/mem c) 0)]
+    (when-not (= epoch (:known-epoch (ctx/mem c)))
+      (wsearch/forget-known! c)
+      (ctx/update-mem! c assoc :known-epoch epoch))))
+
+(defn ^:async walk-waypoint!
+  "Walk to way (guess-waypoint) on the way to pos: from there the body sees more of the land toward pos and goal-pos
+  aims again. The walk keeps the call's approach (approach-recorder, mem :closest and :last-dist), so a cut during it
+  sees the progress. A walk that brings it less than ::waypoint-gain nearer pos (across) is a miss (mem
+  :waypoint-misses); a walk refused or failed for a reason (needs-health, no torch, a dark drop, ...) is kept as mem
+  :waypoint-why (end/give-up-fields), which a give-up of the call names. :again."
+  [c pos way opts]
+  (let [across #(js/Math.hypot (- (:x pos) (:x %)) (- (:z pos) (:z %)))
+        before (across (u/self-pos c))
+        {:keys [result status]} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) way 1 (dissoc opts :progress)))
+        left (u/dist (u/self-pos c) pos)
+        why (when-not (#{"arrived" "partial" "searching"} status) (:why (end/give-up-fields result)))]
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :way-looks) (assoc :last-dist left :closest (min left (:closest % left))))
+                          (and why (not= :no-progress why)) (assoc :waypoint-why why)))
+    (when (> (across (u/self-pos c)) (- before (waypoint-gain)))
+      (ctx/update-mem! c update :waypoint-misses (fnil inc 0)))
+    :again))
+
+(defn walk-opts
+  "The near/walk-round! options of a go-to walk round with doors (the :doors arg as a keyword)."
+  [c doors]
+  (let [closed? (= :closed (some-> (:one-way (:args c)) keyword))]
+    {:doors doors :explore (not closed?)
+     :dangers (not (false? (:dangers (:args c))))
+     :dark (not (false? (:dark (:args c))))
+     :timeout-s (or (:leg-s (:args c)) near/walk-timeout-s)
+     :one-way (when-not closed? :open)
+     :shut-also (shut-foreign c)
+     :budget wsearch/round-budget
+     :avoid (set (:fault-cells (ctx/mem c)))
+     :tolls (:tolls (:args c))
+     :zone-tolls (:zone-tolls (:args c))
+     :keep-out (:keep-out (:args c))
+     :drop-cost (:drop-cost (:args c))
+     :costs (:costs (:args c))
+     :unknown (round-unknown c)}))
+
+(defn ^:async walk-dry!
+  "The walk on from an arrival in water to the dry stand dry: its own walk rounds, range 0, at most dry-walk-rounds
+  while its search goes on or it gets part of the way; the last round's status."
+  [c dry]
+  (let [opts (walk-opts c (some-> (:doors (:args c)) keyword))]
+    (loop [i 1]
+      (let [{:keys [status]} (await (near/walk-round! c dry 0 opts))]
+        (if (and (#{"searching" "partial"} status) (< i (dry-walk-rounds)))
+          (do (await (pace/pace!)) (recur (inc i)))
+          status)))))
+
+(defn ^:async leave-hang!
+  "The body hangs in a climbable at feet cell hang within range of pos: walk on to the nearest floor stand within range
+  (jobs.lib.step-off, range 0), :again; with none a hanging body is no arrival, the call ends :unreachable."
+  [c pos hang]
+  (let [p (:primitives c)
+        [x y z] hang
+        range (:range (:args c) 1)
+        stand (first (step-off/candidates p {:x x :y y :z z} {:reach 3 :ok? #(<= (u/dist % pos) range)}))]
+    (ctx/emit! c :go-to.hanging :info {:at hang :stand (some-> stand ((juxt :x :y :z))) :text (str "within range but hanging in a climbable at " hang)})
+    (if stand
+      (do (await (walk-dry! c stand)) :again)
+      (end/finish! c {:status :stopped :arrived false :reason :unreachable :why :hanging
+                      :text (str "the only stand within range is a climbable at " hang " with no floor under it")}))))
+
+(defn ^:async leave-water!
+  "An arrival within range of pos, in water: with :leave-water (default), once a call (mem :dry-tried), walk on to the
+  nearest seen dry stand within range (air/dry-stand, dry-radius of the body; walk-dry!). Out of water and in range:
+  arrived; out of range: :again (the call walks back); else it ends in water, an info go-to.in-water saying why."
+  [c pos]
+  (let [p (:primitives c)
+        r (:range (:args c) 1)
+        keep? (false? (:leave-water (:args c)))
+        tried? (:dry-tried (ctx/mem c))
+        dry (when-not (or keep? tried?) (air/dry-stand p pos r (u/self-pos c) (dry-radius)))
+        status (when dry
+                 (ctx/update-mem! c assoc :dry-tried true)
+                 (await (walk-dry! c dry)))]
+    (cond
+      (not (breath/in-water? p)) (if (here? c pos r) (arrived! c) :again)
+      (not (here? c pos r)) :again
+      :else
+      (do (ctx/update-mem! c assoc :in-water true)
+          (when-not keep?
+            (ctx/emit! c :go-to.in-water :info
+                       {:at (end/feet-cell c)
+                        :text (str "arrived within range but in water: "
+                                   (cond dry (str "the walk on to the dry stand at " [(:x dry) (:y dry) (:z dry)] " ended " status)
+                                         tried? "the walk on to a dry stand failed earlier in the call"
+                                         :else "no dry stand seen within range"))}))
+          (arrived! c)))))
+
+(defn ^:async arrive!
+  "Within range of pos: done, but for a column whose ground is only guessed (mem :column-open :guess) walked to within
+  column/approach-range of it: it looks at it (look-at-column!), its looks spent it walks on within the :range arg (mem
+  :column-near). In water, leave-water!."
+  [c pos]
+  (let [m (ctx/mem c)
+        p (:primitives c)
+        wet? (and (or (not= :guess (:column-open m)) (:column-near m)) (breath/in-water? p))
+        hang (refused-hang c pos)]
+    (cond
+      (:restore-pending m) (esc/restore-next! c)
+      hang (do (ctx/update-mem! c update :hang-walks (fnil inc 0))
+               (await (leave-hang! c pos hang)))
+      wet? (await (leave-water! c pos))
+      (or (not= :guess (:column-open m)) (:column-near m)) (arrived! c)
+      (await (look-at-column! c pos)) :again
+      :else (do (ctx/update-mem! c assoc :column-near true) :again))))
+
+(def seal-clear-radius 3)
+
+(defn ^:async clear-goal-seal!
+  "A goal the walk could not reach (:goal-enclosed, :goal-cut-off, or a search that ran out of land: :exhausted, :ladder-gap)
+  with blocks of the body's own ledger within seal-clear-radius of it (a dig-in's seal beside a gate, a plug in a stair
+  mouth): one jobs.access.cleanup child takes them back. True when it ran, so the walk is planned again."
+  [c pos result]
+  (let [near {:pos {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))} :radius seal-clear-radius}]
+    (when (and (:clear-seal (:args c)) (#{:goal-enclosed :goal-cut-off :exhausted :ladder-gap} (:reason result)) (not (:seal-cleared (ctx/mem c)))
+               (seq (ledger/near-of (ledger/open-entries (ctx/view c)) near)))
+      (ctx/update-mem! c assoc :seal-cleared true)
+      (await (ctx/call-child c :seal-cleanup 'jobs.access.cleanup {:job :all :near near}))
+      true)))
+
+(defn leg-alert?
+  "Whether :leg-alert-within is set and a close-range attacker is within it, or the body lost health since start-attempt!."
+  [c]
+  (let [{:keys [leg-alert-within leg-alert-s]} (:args c)
+        p (:primitives c)]
+    (boolean (and leg-alert-within leg-alert-s
+                  (or (< (.-health (.self p)) (:leg-hp (ctx/mem c) js/Infinity))
+                      (some #(not (or (combat/ranged? %) (combat/enderman? %)))
+                            (danger-q/known-hostiles p leg-alert-within {:ranged-radius 0})))))))
+
+(defn leg-search-spent?
+  "Whether a call with :leg-s has used its seconds since start-attempt!: a leg is bounded in search as in walking, by
+  :leg-alert-s while leg-alert? holds."
+  [c]
+  (let [{:keys [leg-s leg-alert-s]} (:args c)
+        bound (if (leg-alert? c) (min (or leg-s js/Infinity) leg-alert-s) leg-s)]
+    (boolean (and bound (:leg-t0 (ctx/mem c)) (>= (- (ctx/now c) (:leg-t0 (ctx/mem c))) (* 1000 bound))))))
+
+(defn retrying!
+  "A fruitless round that plans again: an info go-to.retrying says why (the result's reason, which try), so the gap before the
+  next plan is not silent."
+  [c result tries]
+  (let [reason (or (:why result) (:reason result) :no-path)]
+    (ctx/emit! c :go-to.retrying :info {:reason reason :try tries
+                                        :text (str "no way found (" (name reason) "), planning again (try " tries " of " max-blocked ")")})))
+
+(defn ^:async walk! [c0 pos range doors]
+  (let [way (own-way c0 pos (dive-floor! c0 pos))
+        _ (own-way-left! c0 way)
+        floor (dive-floor! c0 pos)
+        {:keys [own-way-top cave-ok]} (ctx/mem c0)
+        c (cond-> c0
+            (and own-way-top (not cave-ok)) (assoc :own-floor (- own-way-top (climb/cave-dip)))
+            (:over-budget (ctx/mem c0)) (assoc :over-budget true)
+            floor (assoc :dive-floor floor :dive-stair (climb-stair))
+            (and floor (not (:cave-ok (ctx/mem c0)))) (assoc :cave-floor (- (+ floor (climb-dip)) (climb/cave-dip))))
+        from (u/self-pos c)
+        d (u/dist from pos)
+        pw (wworld/path-world (:primitives c))]
+    (cond
+      (and (here? c pos range) (not (refused-hang c pos)))
+      (await (arrive! c pos))
+
+      (nil? pw)
+      (end/refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
+
+      way
+      (await (walk-own-way! c way (walk-opts c doors)))
+
+      :else
+      (let [_ (forget-known-land! c)
+            opts (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
+            stair-check (plan-check c pos (esc/stair-check c pos) (straight-from! c d))
+            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
+            _ (ctx/hold-still! c (when (= "searching" status) :searching))
+            fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
+            aided? (when (and (not fetched) (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
+            looked? (when (and (not aided?) (= :air (:reason walked))) (await (look-at-goal-air! c pos)))
+            surfaced? (when (and (not aided?) (not looked?) (= :air (:reason walked))) (await (air/surface! c (dissoc opts :progress) pos)))
+            way-looked? (when (and (not fetched) (= :goal-not-standable (:reason walked))) (await (look-along! c pos)))
+            way (when (and (not fetched) (not way-looked?) (= :goal-not-standable (:reason walked))) (guess-waypoint c pos))
+            col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not way) (not way-looked?) (not (#{"arrived" "searching"} status)))
+                          (await (look-at-column! c pos)))
+            result (known-frontier-result walked)
+            left (u/dist to pos)
+            best (:best (ctx/mem c) d)
+            frontier (:frontier result)
+            fcell (when frontier (zipmap [:x :y :z] frontier))
+            fbests (:frontier-best (ctx/mem c) {})
+            fbest (when frontier (get fbests frontier (u/dist from fcell)))
+            explored? (boolean (and frontier (< (u/dist to fcell) (dec fbest))))
+            target (:frontier-target result)
+            tbests (:target-best (ctx/mem c) {})
+            tdist (when target (u/dist to {:x (first target) :y (:y to) :z (second target)}))
+            nearer? (boolean (and target (< tdist (dec (get tbests target js/Infinity)))))]
+        (cond
+          (= "arrived" status)
+          (await (arrive! c pos))
+
+          (and (= "stair" status) (= :dives (:why walked)))
+          (esc/dive-refused! c pos)
+
+          (and (= "stair" status) (:detour (:why walked)))
+          (end/give-up! c pos (:blocked (ctx/mem c) 0) :detour {:status :no-path :reason :detour} (dissoc (:why walked) :detour))
+
+          (= "stair" status)
+          (do (ctx/update-mem! c assoc :stair-tried true :escalate-now true) :again)
+
+          (and (:leg-s (:args c)) (< left (dec d)))
+          (end/finish! c {:arrived false :leg true})
+
+          (explore-spent? c)
+          (end/give-up! c pos (:blocked (ctx/mem c) 0) status {:status :no-path :reason :explore-spent}
+                        {:explored (js/Math.round (:explored (get @approaches (:id c))))})
+
+          fetched fetched
+
+          way-looked? :again
+
+          way (await (walk-waypoint! c pos way opts))
+
+          ;; the planner proved no cell in range stands: aim at the column's ground once (goal-pos, mem :re-aim); under
+          ;; :unknown it proves nothing next to unseen cells, so a goal cell seen in the ground is re-aimed too
+          (and (not (:re-aim (ctx/mem c)))
+               (or (= :goal-not-standable (:reason walked)) (in-seen-ground? c pos))
+               (:resolved (aimed c pos)))
+          (do (ctx/update-mem! c assoc :re-aim true) :again)
+
+          aided? :again
+
+          looked? :again
+
+          surfaced? :again
+
+          col-looked? :again
+
+          (and (= "searching" status)
+               (await (air/surface-while-searching! c (dissoc opts :progress) pos (:fresh walked)
+                                                    {:surface-air (surface-air) :restarts (wet-restarts)})))
+          :again
+
+          (and (= "searching" status) (leg-search-spent? c))
+          (end/give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :leg-search-spent})
+
+          (= "searching" status)
+          (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]
+            (ctx/update-mem! c assoc :searching n)
+            (if (< n max-searching)
+              :again
+              (end/give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :moved-while-searching})))
+
+          :else
+          (let [handled (when (health/refused? c result) (await (health/heal-or-drop! c pos range)))]
+           (or (#{:continue :again} handled)
+          (let [result (cond-> result (:needs-health handled) (-> (assoc :reason :needs-health) (merge (select-keys handled [:heal :health :hp-cost :hp-budget]))))
+                _ (note-fault! c walked)
+                unstuck? (await (unstick/swim-out! c pos walked))
+                progress? (or (< left (dec best)) explored? nearer?)
+                tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
+            (ctx/update-mem! c assoc :blocked tries :searching 0 :best (if (< left (dec best)) left best)
+                             :closest (min left (:closest (ctx/mem c) left)) :last-dist left
+                             :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
+                             :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
+            (when (and progress? (:restore-pending (ctx/mem c))) (esc/restore-next! c))
+            (if (or unstuck?
+                    (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
+              (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))
+                  :again)
+              (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+                    result (dive-end c pos (dark-end c result))
+                    ended (cond-> (if (esc/escalate? c result) result (sight-end c pos (unloaded-end result unloaded?)))
+                            (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]
+                (if (await (clear-goal-seal! c pos ended))
+                  :again
+                  (await (esc/give-up-or-escalate! c pos tries status ended)))))))))))))

@@ -154,3 +154,22 @@
 (defn refuse! [c {:keys [reason message]}]
   (ctx/emit! c :refused (warn-level c) {:reason reason :text message})
   (finish! c {:status :stopped :arrived false :reason reason :text message}))
+
+(defn known-frontier-result
+  "A round's walk result as go-to judges it: a walk to a frontier in land earlier searches knew to their end
+  (:frontier-known: there was no other edge) explores nothing, so it is the search's own answer, :exhausted, and never
+  progress, unless it brings an edge seen earlier and now out of view nearer (:frontier-target)."
+  [result]
+  (if (:frontier-known result)
+    (cond-> {:status :no-path :reason :exhausted :frontier-known true}
+      (:frontier-target result) (assoc :frontier-target (:frontier-target result))
+      (:damage-refused result) (assoc :damage-refused true))
+    result))
+
+(defn unloaded-end
+  "A fruitless round's result as go-to gives it up when the goal cell reads unloaded: a search that ran out of loaded land
+  (:exhausted) or a partial plan walked to its end (:off-plan :partial) says :goal-unloaded, the far side was never seen."
+  [result unloaded?]
+  (if (and unloaded? (or (= :exhausted (:reason result)) (and (= :off-plan (:status result)) (:partial result))))
+    {:status :no-path :reason :goal-unloaded}
+    result))

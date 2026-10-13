@@ -2,9 +2,15 @@
   "go-to :unknown's off-hand torch: held in the dark to see the floors ahead, put back before a child runs and when the
   call ends. The hold is written to body memory, so the next call returns a torch a cut call left in the hand."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
+            [jobs.lib.access.zones :as zones]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
+            [jobs.lib.torch :as ltorch]
             [jobs.lib.util :as u]
-            [jobs.lib.walk.world :as wworld]))
+            [jobs.lib.walk.world :as wworld]
+            [jobs.movement.go-to.result :as end]))
 
 (def kind :go-to/off-hand-torch)
 
@@ -60,3 +66,50 @@
           (ctx/emit! c :go-to.off-hand-kept :info {:status (some-> r .-status) :text "the torch stays in the off hand: no room to put it back"}))))
     (when-not (off-hand-torch? c)
       (ctx/forget-where! c kind (constantly true)))))
+
+(def torch-need "The wait :place-torches fetches for when no torch is carried." {:reason :need :item "torch" :count 4})
+(def torch-fetch-key [:item ["torch"]])
+
+(defn torch-fetch-open?
+  "Whether :place-torches may still fetch torches this call: :fetch is on, none was fetched yet, none failed lately."
+  [c]
+  (boolean (and (fetch/opts c 'jobs.movement.go-to) (not (:torch-fetched (ctx/mem c))) (nil? (fetch/failure c torch-fetch-key)))))
+
+(defn light-ok
+  "The planner's lightOk: (fn [x y z]) true where a torch may go at a takeoff (x y z its feet): the feet or the head cell
+  in no other owner's zone or claim (none under :ignore-zones?); jobs.lib.walk/light! places it in the one allowed."
+  [c]
+  (let [in (access/zone-input c)
+        ok? (fn [cell] (true? (:ok (zones/verdict (assoc in :action :place :cell cell)))))]
+    (fn [x y z] (or (:ignore-zones? in) (ok? [x y z]) (ok? [x (inc y) z])))))
+
+(defn round-unknown
+  "The mask spec of this round (c's :unknown): with :place-torches and a torch carried or a fetch still open, torches on
+  (wworld/with-light), priced by :unknown's :light-cost or jobs.lib.cost/light-cost."
+  [c]
+  (let [u (:unknown c)
+        n (ltorch/torches-held (:primitives c))
+        arg (:unknown (:args c))]
+    (if (and u (:place-torches (:args c)) (or (pos? n) (torch-fetch-open? c)))
+      (wworld/with-light u (or (when (map? arg) (:light-cost arg)) (:cost (cost/light-cost {:carried n}))) (light-ok c))
+      u)))
+
+(defn ^:async fetch-torches!
+  "A walk that reached a floor to light with no torch carried: fetch torches once a call (jobs.lib.fetch), :continue while
+  the fetch child waits, else :again (the next round plans without torches when none came)."
+  [c]
+  (if (torch-fetch-open? c)
+    (do (ctx/update-mem! c assoc :torch-fetched true)
+        (or (await (fetch/step! c 'jobs.movement.go-to torch-need)) :again))
+    :again))
+
+(defn dark-end
+  "A fruitless round's result as go-to gives it up when a dark way was the better way (:dark-best, jobs.lib.near/dark-best):
+  :no-path :unseen-floor-dark with that cell (and :torches :none or :fetch-failed when :place-torches had no torch), unless the
+  round failed for a reason of its own (stuck, health, air, ...)."
+  [c result]
+  (if (end/dark-end? result)
+    (cond-> {:status :no-path :reason :unseen-floor-dark :dark-best (:dark-best result)}
+      (and (:place-torches (:args c)) (zero? (ltorch/torches-held (:primitives c))))
+      (assoc :torches (if (fetch/failure c torch-fetch-key) :fetch-failed :none)))
+    result))

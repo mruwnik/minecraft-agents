@@ -9,6 +9,9 @@
             [jobs.lib.near :as near]
             [jobs.lib.sense :as sense]
             [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.torch :as gtorch]
+            [jobs.movement.go-to.aim :as gaim]
+            [jobs.movement.go-to.walk :as gwalk]
             [jobs.movement.go-to.column :as column]))
 
 (def flat (floor -2 -3 40 3))
@@ -257,7 +260,7 @@
               walks (gt/moved eng)]
           (is (= {:arrived true :resolved {:x 30 :y 64 :z 0} :provisional true} @out) (pr-str @out))
           (is (= [30 64 0] (mapv #(js/Math.floor %) (at p))))
-          (is (= go-to/max-column-looks (count (filter #(= "look" (.-name %)) (.-calls (.-world p))))) "its looks spent")
+          (is (= gaim/max-column-looks (count (filter #(= "look" (.-name %)) (.-calls (.-world p))))) "its looks spent")
           (is (some #(< 2 (js/Math.hypot (- 30 (:x (:to %))) (:z (:to %))) (inc column/approach-range)) walks)
               (str "a walk stopped near the guess first: " (pr-str (mapv :to walks)))))))))
 
@@ -306,7 +309,7 @@
               c (stub-ctx p (atom {}) {:pos [10 40 0] :unknown true})
               looks (atom [])]
           (with-redefs [sense/look-at! (fn [_ cell] (swap! looks conj cell) (js/Promise.resolve true))]
-            (dotimes [_ go-to/max-column-looks] (await (go-to/look-at-column! c {:x 10 :y 40 :z 0}))))
+            (dotimes [_ gaim/max-column-looks] (await (gaim/look-at-column! c {:x 10 :y 40 :z 0}))))
           (is (= [10 40 0] (first @looks)) (pr-str @looks)))))))
 
 (deftest a-torch-fetch-continue-is-kept-when-the-goal-is-seen-in-the-ground
@@ -318,8 +321,8 @@
               c (stub-ctx p (atom {}) {:pos [10 63 0] :range 0 :unknown true :place-torches true})]
           (with-redefs [near/walk-round! (fn [_ _ _ _] (js/Promise.resolve {:result {:status :no-torch} :status "partial"
                                                                              :to {:x 2 :y 64 :z 0}}))
-                        go-to/fetch-torches! (fn [_] (js/Promise.resolve :continue))]
-            (is (= :continue (await (go-to/walk! c {:x 10 :y 63 :z 0} 0 nil))))))))))
+                        gtorch/fetch-torches! (fn [_] (js/Promise.resolve :continue))]
+            (is (= :continue (await (gwalk/walk! c {:x 10 :y 63 :z 0} 0 nil))))))))))
 
 ;; ---------------------------------------------------------------- a far unseen column 20 above or below the feet
 

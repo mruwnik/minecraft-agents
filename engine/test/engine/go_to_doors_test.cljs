@@ -12,7 +12,8 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pen :as pen]
             [jobs.lib.world-files :as world]
-            [jobs.movement.go-to :as go-to]))
+            [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.faults :as gfaults]))
 
 (defn dark-cells!
   "Perception's dark rule: the cells ([x y z] strings of the world spec) are never made out; sensedAt answers unknown."
@@ -416,7 +417,7 @@
 
 (deftest a-zone-of-another-owner-reaches-one-block-past-its-box
   (let [zone {:name "pen" :min [4 63 -3] :max [6 66 3] :owner "Other"}]
-    (are [zones cell expected] (= expected (go-to/foreign? zones "Fake" cell))
+    (are [zones cell expected] (= expected (gfaults/foreign? zones "Fake" cell))
       [zone] [5 64 0] true
       [zone] [7 64 0] true
       [zone] [8 64 0] false

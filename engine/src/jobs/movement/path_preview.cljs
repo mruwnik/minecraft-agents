@@ -7,6 +7,7 @@
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.result :as end]))
 
@@ -110,8 +111,8 @@
 (defn ^:async round [c]
   (let [c (go-to/with-body-food c)
         {:keys [doors range dangers dark tolls drop-cost costs one-way unknown]} (:args c)
-        refusal (go-to/args-refusal c)
-        pos (some->> (when-not refusal (:pos (go-to/target c))) (#(if (nil? (:y %)) (:pos (go-to/aimed c %)) %)) (wworld/stand-goal (wworld/path-world (:primitives c))))]
+        refusal (gaim/args-refusal c)
+        pos (some->> (when-not refusal (:pos (gaim/target c))) (#(if (nil? (:y %)) (:pos (gaim/aimed c %)) %)) (wworld/stand-goal (wworld/path-world (:primitives c))))]
     (cond
       refusal (refuse! c refusal)
       (nil? (wworld/path-world (:primitives c)))

@@ -13,7 +13,8 @@
             [jobs.lib.body :as body]
             [jobs.lib.child :as child]
             [jobs.lib.ledger :as ledger]
-            [jobs.movement.go-to :as go-to]))
+            [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.holds :as gholds]))
 
 (def pit
   (merge (into {} (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str dx "," y "," dz) "dirt"]))
@@ -40,7 +41,7 @@
   ([n self] (sealed n self nil))
   ([n self setup] (sealed n self setup 'walker))
   ([n self setup job]
-  (reset! go-to/plug-since {})
+  (reset! gholds/plug-since {})
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake (merge {:floor tu/walk-floor :time st/noon :self (merge {:pos {:x 0 :y 64 :z 0}} self) :blocks pit}))

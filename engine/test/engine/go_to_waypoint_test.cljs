@@ -8,6 +8,9 @@
             [engine.test-util :as tu :refer [box]]
             [jobs.lib.near :as near]
             [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.settings :as gts]
+            [jobs.movement.go-to.aim :as gaim]
+            [jobs.movement.go-to.walk :as gwalk]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.result :as end]))
 
@@ -54,7 +57,7 @@
           (is (< ticks 30) "the call ends")
           (is (<= 18 (:x (end-pos moved)) 20) "the waypoints led to the gap's edge")
           ;; from the walk to the edge on: it, a walk per way-look, the re-aim, the column looks, the blocked tries
-          (is (<= at-edge (+ 1 (count (go-to/way-looks)) 1 go-to/max-column-looks go-to/max-blocked))
+          (is (<= at-edge (+ 1 (count (gts/way-looks)) 1 gaim/max-column-looks gts/max-blocked))
               (pr-str (map (juxt (comp :x :to) :status) moved))))))))
 
 (defn ^:async waypoint-walk!
@@ -69,7 +72,7 @@
                                      (when-let [f (:on-pose c)] (f {:x 5 :y 64 :z 0}) (swap! poses conj 5))
                                      (swap! (fake/state p) assoc-in [:self :pos] [to 64 0.5])
                                      (js/Promise.resolve {:result result :status status :to {:x to :y 64 :z 0}}))]
-      (await (go-to/walk-waypoint! c {:x 60 :y 64 :z 0} {:x 20 :y 64 :z 0} {})))
+      (await (gwalk/walk-waypoint! c {:x 60 :y 64 :z 0} {:x 20 :y 64 :z 0} {})))
     {:mem @mem* :poses @poses}))
 
 (deftest a-waypoint-walk-keeps-the-approach-and-a-short-one-is-a-miss

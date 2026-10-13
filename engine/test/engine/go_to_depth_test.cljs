@@ -13,7 +13,8 @@
             [jobs.lib.near :as near]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.detour :as detour]
-            [jobs.movement.go-to :as go-to]))
+            [jobs.movement.go-to :as go-to]
+            [jobs.lib.pace :as pace]))
 
 ;; level ground x 0..6 (feet 64), a valley stepping down one block a column to feet 52 and up again, level ground to x 40
 (def valley
@@ -285,11 +286,11 @@
 
 ;; f's call may take n steps of go-to's loop (its pace! between them); the step after fails the job.
 (defn ^:async within-steps [n f]
-  (let [pace go-to/pace!
+  (let [pace pace/pace!
         left (atom n)]
-    (set! go-to/pace! #(if (neg? (swap! left dec)) (js/Promise.reject (js/Error. "step budget spent")) (pace)))
+    (set! pace/pace! #(if (neg? (swap! left dec)) (js/Promise.reject (js/Error. "step budget spent")) (pace)))
     (try (await (f))
-         (finally (set! go-to/pace! pace)))))
+         (finally (set! pace/pace! pace)))))
 
 (deftest an-own-stair-whose-top-floor-is-gone-does-not-hold-the-call-for-ever
   (async done

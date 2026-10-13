@@ -15,7 +15,9 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.sight :as ws]
             [jobs.lib.walk.world :as wworld]
-            [jobs.movement.go-to :as go-to]))
+            [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.torch :as gtorch]
+            [jobs.movement.go-to.cut :as gcut]))
 
 ;; ---------------------------------------------------------------- the gate hands a :light step to the walk
 
@@ -261,23 +263,23 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (gs/sensed-only (assoc shielded :inventory []))
-              mem* (atom {:fetched [go-to/torch-fetch-key go-to/torch-need]})
+              mem* (atom {:fetched [gtorch/torch-fetch-key gtorch/torch-need]})
               emitted (atom [])
               c (stub-ctx p mem* emitted {:place-torches true :unknown true :fetch true})]
-          (go-to/start-attempt! c {:x 9 :y 61 :z 0})
-          (is (= :continue (await (go-to/fetch-torches! c))) (pr-str @emitted))
+          (gcut/start-attempt! c {:x 9 :y 61 :z 0})
+          (is (= :continue (await (gtorch/fetch-torches! c))) (pr-str @emitted))
           (is (not-any? #{:fetch.failed} @emitted))
           (is (some #{:fetch.started} @emitted)))))))
 
 (deftest a-call-fetches-torches-once
   (let [{:keys [p]} (gs/sensed-only (assoc shielded :inventory []))
         c (stub-ctx p (atom {:torch-fetched true}) (atom []) {:place-torches true :unknown true :fetch true})]
-    (is (false? (go-to/torch-fetch-open? c)))
-    (is (true? (go-to/torch-fetch-open? (stub-ctx p (atom {}) (atom []) {:place-torches true :unknown true :fetch true}))))))
+    (is (false? (gtorch/torch-fetch-open? c)))
+    (is (true? (gtorch/torch-fetch-open? (stub-ctx p (atom {}) (atom []) {:place-torches true :unknown true :fetch true}))))))
 
 (deftest a-callers-light-cost-prices-the-torch
   (let [{:keys [p]} (gs/sensed-only shielded)
-        round (fn [args] (.-lightCost (go-to/round-unknown (assoc (stub-ctx p (atom {}) (atom []) (merge {:place-torches true :ignore-zones? true} args))
+        round (fn [args] (.-lightCost (gtorch/round-unknown (assoc (stub-ctx p (atom {}) (atom []) (merge {:place-torches true :ignore-zones? true} args))
                                                                   :unknown (wworld/unknown-spec nil)))))]
     (is (= 7 (round {:unknown {:light-cost 7}})))
     (is (= (:cost (cost/light-cost {:carried 4})) (round {:unknown true})))))
@@ -296,6 +298,6 @@
           (is (= 1 (count (filter #(= :fetch.started (:kind %)) seen))) (pr-str (map :kind seen)))
           (is (empty? (filter #(= :fetch.failed (:kind %)) seen)))
           (is (= 1 (count (torch-cells p))) "one torch on the takeoff")
-          (is (= 3 (torches-held p)) "go-to/torch-need (4) taken from the chest, one placed")
+          (is (= 3 (torches-held p)) "gtorch/torch-need (4) taken from the chest, one placed")
           (is (= 4 (get-in @(fake/state p) [:containers [-2 64 0] 0 :count])) "the other four stay in the chest")
           (is (= 1 (count (filter #(= :walk.torch-placed (:kind %)) seen)))))))))

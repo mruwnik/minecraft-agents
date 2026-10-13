@@ -23,6 +23,9 @@
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
             [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.cut :as gcut]
+            [jobs.movement.go-to.faults :as gfaults]
+            [jobs.lib.pace :as pace]
             [jobs.movement.go-to.result :as end]))
 
 (def start {:x 0 :y 64 :z 0})
@@ -602,15 +605,15 @@
   [paces f]
   (let [budget wsearch/round-budget
         chunk wplan/chunk-expansions
-        pace go-to/pace!]
+        pace pace/pace!]
     (reset! wsearch/searches {})
     (set! wsearch/round-budget 32)
     (set! wplan/chunk-expansions 16)
-    (set! go-to/pace! (fn [] (swap! paces inc) (pace)))
+    (set! pace/pace! (fn [] (swap! paces inc) (pace)))
     (try (await (f))
          (finally (set! wsearch/round-budget budget)
                   (set! wplan/chunk-expansions chunk)
-                  (set! go-to/pace! pace)))))
+                  (set! pace/pace! pace)))))
 
 (deftest one-go-to-call-searches-on-paced-until-its-search-ends
   (async done
@@ -694,7 +697,7 @@
 (defn cut-seed
   "Memory of an earlier call of this session left open at goal [10 64 0] after cuts, cut 3 blocks from it."
   [m]
-  (merge {:open go-to/session-id :goal {:x 10 :y 64 :z 0} :last-dist 3} m))
+  (merge {:open gcut/session-id :goal {:x 10 :y 64 :z 0} :last-dist 3} m))
 
 (deftest a-call-cut-again-sent-back-from-its-closest-approach-gives-up-after-three-cuts
   (async done
@@ -752,10 +755,10 @@
 
 (deftest cut-state-carries-the-reset-count-of-the-same-goal-only
   (let [goal {:x 10 :y 64 :z 0}
-        m {:open go-to/session-id :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4 :resets 2}]
-    (is (= 2 (:resets (go-to/cut-state m goal 4))))
-    (is (= 0 (:resets (go-to/cut-state (assoc m :goal {:x 30 :y 64 :z 0}) goal 4))))
-    (is (= 0 (:resets (go-to/cut-state (assoc m :open "old-run") goal 4))))))
+        m {:open gcut/session-id :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4 :resets 2}]
+    (is (= 2 (:resets (gcut/cut-state m goal 4))))
+    (is (= 0 (:resets (gcut/cut-state (assoc m :goal {:x 30 :y 64 :z 0}) goal 4))))
+    (is (= 0 (:resets (gcut/cut-state (assoc m :open "old-run") goal 4))))))
 
 (deftest a-trip-cut-four-times-in-place-still-arrives
   (async done
@@ -791,7 +794,7 @@
 
 (deftest cut-state-counts-only-a-restart-sent-back-from-where-the-cut-found-the-body
   (let [goal {:x 10 :y 64 :z 0}
-        m {:open go-to/session-id :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4}]
+        m {:open gcut/session-id :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4}]
     (doseq [[why m dist cuts] [["in place (a meal, a breath, a fight)" m 4 1]
                                ["knockback of half a block" m 4.5 1]
                                ["in place on a detour, far from the closest" (assoc m :last-dist 12) 12.3 1]
@@ -800,9 +803,9 @@
                                ["a new goal" (assoc m :goal {:x 30 :y 64 :z 0}) 14 0]
                                ["left open by another run of the engine" (assoc m :open "old-run") 14 0]
                                ["the last call returned" (dissoc m :open) 14 0]]]
-      (is (= cuts (:cuts (go-to/cut-state m goal dist))) why))
-    (is (= {:goal goal :closest 1 :ref 1 :cuts 1 :last-dist 11 :resets 0} (go-to/cut-state (assoc m :closest 1 :last-dist 1) goal 11)))
-    (is (= {:goal goal :closest 14 :ref 14 :cuts 0 :last-dist 14 :resets 0} (go-to/cut-state (dissoc m :open) goal 14)))))
+      (is (= cuts (:cuts (gcut/cut-state m goal dist))) why))
+    (is (= {:goal goal :closest 1 :ref 1 :cuts 1 :last-dist 11 :resets 0} (gcut/cut-state (assoc m :closest 1 :last-dist 1) goal 11)))
+    (is (= {:goal goal :closest 14 :ref 14 :cuts 0 :last-dist 14 :resets 0} (gcut/cut-state (dissoc m :open) goal 14)))))
 
 (deftest the-hostiles-near-the-way-are-the-known-ones-within-the-hostile-near-radius-of-it
   ;; the way runs from the start [0 64 0] to [20 64 0]; melee within 8 of it count, ranged within 16, nearest the way first
@@ -836,7 +839,7 @@
         armed (atom nil)
         eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent (returns-parent out returns args nil)))
         id (atom nil)
-        kid-mem (fn [] (merge (mem/job-mem (mem/view (:store eng)) @id [:kid]) (first (vals @go-to/approaches))))]
+        kid-mem (fn [] (merge (mem/job-mem (mem/view (:store eng)) @id [:kid]) (first (vals @gcut/approaches))))]
     (.override (.-world p) "steer"
                (fn [token ^js a impl]
                  (let [decide (.-decide a)
@@ -959,7 +962,7 @@
           (is (= 0 (count (events-of s :walker-fault))) "the partial plan's end is a normal end, no warn"))))))
 
 (deftest an-off-plan-walk-that-fell-also-avoids-the-cells-above-where-it-left-the-plan
-  (are [result hurt? expected] (= expected (go-to/fault-cells result hurt?))
+  (are [result hurt? expected] (= expected (gfaults/fault-cells result hurt?))
     {:status :off-plan :at [1 75 2]} false [[1 75 2]]
     {:status :off-plan :at [1 75 2]} true (mapv (fn [y] [1 y 2]) (range 75 82))
     {:status :off-plan :at [1 75 2] :partial true} true nil
