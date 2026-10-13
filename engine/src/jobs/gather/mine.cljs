@@ -972,28 +972,14 @@
                      (or (nil? way-y) (>= (:y (:pos %)) way-y))))
              (:ground (ctx/mem c)))))
 
-(defn filler
-  "The first carried block to fill with: dig-in's building blocks other than the
-  mined item, then the item itself when it is a block (the mend must not eat the count)."
+(defn fillers
+  "The blocks to fill with, in order: dig-in's building blocks other than the mined item, then the item itself
+  when it is a block (the mend must not eat the count)."
   [c]
   (let [{:keys [block] :as a} (:args c)
         item (blocks/item-name a)
         own (when (or (some #{item} blocks/building-blocks) (= item block)) [item])]
-    (blocks/pick c (concat (remove #{item} blocks/building-blocks) own))))
-
-(defn mend-target
-  "The owed cell to fill next: not the body's feet or head, lowest y first, then nearest."
-  [c cells]
-  (let [feet (cell-of (u/self-pos c))
-        head (update feet :y inc)
-        here (u/self-pos c)]
-    (->> cells
-         (map :pos)
-         (remove #(or (= % feet) (= % head)))
-         (sort-by (juxt :y #(u/dist here %)))
-         first)))
-
-(defn mend-fail! [c] (ctx/update-mem! c update :mend-failures (fnil inc 0)))
+    (vec (concat (remove #{item} blocks/building-blocks) own))))
 
 (defn mend-permitted
   "The owed cells ({:pos ..}) the job may place on (zones and claims; one mine.declined warn per job when refused)."
@@ -1001,28 +987,7 @@
   (let [ok (set (gate/allowed c :mine.declined "mine" :place (map :pos cells)))]
     (filterv #(ok (:pos %)) cells)))
 
-(defn ^:async place! [c pos item]
-  (let [walked (if (> (u/dist (u/self-pos c) pos) (mend-reach))
-                 (await (near/go-near! c pos (reach) {:zone-tolls true}))
-                 :there)]
-    (if (not= :there walked)
-      (do (when (= :blocked walked) (mend-fail! c)) (if (= :blocked walked) :again :continue))
-      (let [status (if (gate/allowed? c :mine.declined "mine" :place pos)
-                     (.-status (await (ctx/act c :place (clj->js {:pos pos :item item}))))
-                     "refused")]
-        (cond
-          (= "placed" status) (ctx/update-mem! c #(-> % (assoc :mend-failures 0) (update :mended (fnil inc 0))))
-          :else (mend-fail! c))
-        :again))))
-
-(defn ^:async raise! [c item]
-  (let [status (.-status (await (ctx/act c :jumpPlace (clj->js {:item item :count 1}))))]
-    (if (contains? #{"done" "partial"} status)
-      (ctx/update-mem! c update :mended (fnil inc 0))
-      (mend-fail! c))
-    :again))
-
-(defn cells-text [cells] (str/join " " (map #(str (:x (:pos %)) "," (:y (:pos %)) "," (:z (:pos %))) cells)))
+(defn cells-text [poss] (str/join " " (map #(str (:x %) "," (:y %) "," (:z %)) poss)))
 
 (defn spent-on-mend?
   "Whether the mend ate into what the dig brought, leaving fewer than the goal carried."
@@ -1044,27 +1009,34 @@
       (not (spent-on-mend? c)) (wrap-up! c)
       (not= looked (cell-of (u/self-pos c))) (do (await (look-around! c)) :again)
       (and more? (< (or resumes 0) (max-resumes)))
-      (do (ctx/update-mem! c #(-> % (assoc :phase :dig :failures 0 :dry 0 :last-carried (carried c) :mend-failures 0)
+      (do (ctx/update-mem! c #(-> % (assoc :phase :dig :failures 0 :dry 0 :last-carried (carried c))
                                   (dissoc :collecting)
                                   (update :resumes (fnil inc 0))))
           :again)
       :else (do (ctx/update-mem! c assoc :reason :spent-on-mend :dig-reason reason)
                 (wrap-up! c)))))
 
-(defn ^:async mend-round! [c]
-  (let [cells (mend-permitted c (owed c))
-        item (when (seq cells) (filler c))
-        pos (mend-target c cells)]
-    (cond
-      (empty? cells) (await (mended! c))
-      (>= (:mend-failures (ctx/mem c) 0) (max-mend-failures))
-      (do (ctx/emit! c :mine.mend-failed :warn {:owed (mapv :pos cells) :text (str "mine could not mend: " (cells-text cells))})
-          (wrap-up! c))
-      (nil? item)
-      (do (ctx/emit! c :mine.mend-short :warn {:owed (mapv :pos cells) :text (str "mine has nothing to mend with: " (cells-text cells))})
-          (wrap-up! c))
-      (some? pos) (await (place! c pos item))
-      :else (await (raise! c item)))))
+(defn ^:async mend-round!
+  "The permitted owed cells are filled by a blocks.fill-cells child; its end says whether the mend is done, short of
+  blocks or failed."
+  [c]
+  (let [cells (mend-permitted c (owed c))]
+    (if (empty? cells)
+      (await (mended! c))
+      (let [r (await (ctx/call-child c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :any-of (fillers c)
+                                                                      :reach (mend-reach) :max-failures (max-mend-failures)}))
+            {:keys [mended why left]} (ctx/child-result c :fill)]
+        (when (= :done r)
+          (ctx/update-mem! c update :mended (fnil + 0) (or mended 0)))
+        (cond
+          (not= :done r) r
+          (= :failed why)
+          (do (ctx/emit! c :mine.mend-failed :warn {:owed (vec left) :text (str "mine could not mend: " (cells-text left))})
+              (wrap-up! c))
+          (= :short why)
+          (do (ctx/emit! c :mine.mend-short :warn {:owed (vec left) :text (str "mine has nothing to mend with: " (cells-text left))})
+              (wrap-up! c))
+          :else :again)))))
 
 (defn no-tool!
   "End at once, before any dig: warn and hand over {:status :stopped :got 0 :reason :no-tool :tool <kind>}."

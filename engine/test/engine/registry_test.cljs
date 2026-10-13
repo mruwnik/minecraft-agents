@@ -28,7 +28,7 @@
      jobs.time.wait-for-day jobs.time.wait-for-dusk jobs.debug.notify jobs.debug.walk-plan jobs.debug.access-check
      jobs.access.stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy
      jobs.access.cleanup jobs.access.leave-tunnel jobs.access.clear-path jobs.strip.seal jobs.strip.corridor jobs.strip.site
-     jobs.blocks.dig jobs.blocks.place jobs.blocks.use-on jobs.items.interact
+     jobs.blocks.dig jobs.blocks.fill-cells jobs.blocks.place jobs.blocks.use-on jobs.items.interact
      jobs.memory.set-place jobs.memory.forget-place jobs.memory.remember})
 
 (deftest the-registry-holds-every-job-namespace
