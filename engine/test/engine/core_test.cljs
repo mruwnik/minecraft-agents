@@ -540,6 +540,35 @@
           (is (= {:n 2} (ctx/child-result c :x)) "only the done round hands over its result")
           (is (= {} (job-mem eng "j9" [:x])) "done clears the resumed child's memory"))))))
 
+(def contract-child
+  {:conditions [[:fn (fn [_] (when-not @flag {:fact :flag :why :down}))]]
+   :round (fn [c] (if-let [e (:end (:args c))] (apply ctx/end c e) :continue))})
+
+(deftest a-contract-child-answers-an-old-parent-as-an-old-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              ended #(select-keys (last (filter (comp #{:child_ended} :kind) @seen)) [:status :reason])]
+          (.setOwner (:primitives eng) "tx")
+          (reset! flag false)
+          (is (= :declined (await (ctx/call-child c :x contract-child {}))) "conditions fail before its first round")
+          (is (= {:status :declined :reason :flag} (ended)))
+          (reset! flag true)
+          (is (= :continue (await (ctx/call-child c :x contract-child {}))))
+          (reset! flag false)
+          (is (= :done (await (ctx/call-child c :x contract-child {}))) "started: a failing condition ends it")
+          (is (= {:status :stopped :reason :flag :ending {:kind :condition-failed :cause {:fact :flag :why :down}}}
+                 (update (ctx/child-result c :x) :ending dissoc :report)))
+          (is (= {:status :stopped :reason :flag} (ended)))
+          (is (= {} (job-mem eng "j9" [:x])) "an ended child's memory goes")
+          (reset! flag true)
+          (is (= :done (await (ctx/call-child c :x contract-child {:end [:nothing-possible :no-way {:seen 2}]}))))
+          (is (= {:status :stopped :reason :no-way :seen 2} (dissoc (ctx/child-result c :x) :ending)))
+          (is (= :done (await (ctx/call-child c :x contract-child {:end [:done nil {:got 3}]}))))
+          (is (= {:status :done :got 3} (ctx/child-result c :x))))))))
+
 (def stopping-child
   {:name :stopping-child :check always
    :round (fn [c] (ctx/result! c {:status :stopped :reason :no-way}) :done)})

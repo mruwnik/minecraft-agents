@@ -203,3 +203,49 @@
                  (mapv (juxt (comp :status :data) (comp :ending :data))
                        (filter #(= (str id "/leaf") (get-in % [:context :job-id] (:job %))) (job-ev seen :child_ended)))))
           (is (nil? (:because (:data (first (job-ev seen :stopped))))) "a child that went on is no because"))))))
+
+;; ---------------------------------------------------------------- old jobs (engine.core.legacy)
+
+(def old-kid
+  {:check (fn [c] (or (not (:need @world)) (ctx/wait c {:reason :need :what "thing"})))
+   :round (fn [c]
+            (swap! world update :old-rounds (fnil inc 0))
+            (let [r (:old @world)] (if (map? r) (do (ctx/result! c r) :done) r)))})
+
+(def calls-old
+  {:conditions [] :round (fn ^:async calls-old [c]
+                           (swap! world assoc :old-ending (await (ctx/call c :kid old-kid {})))
+                           :continue)})
+
+(deftest an-old-child-called-with-ctx-call-ends-with-an-ending
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'calls-old calls-old})
+              ending #(let [e (:old-ending @world)] (if (map? e) (dissoc e :report) e))]
+          (core/submit! eng '(calls-old) {})
+          (are [world-state want]
+               (do (reset! world world-state) (await (core/tick! eng)) (= want (ending)))
+            {:need true} {:kind :condition-failed :cause {:reason :need :what "thing"}}
+            {:old :continue} :continue
+            {:old :declined} {:kind :condition-failed :cause :declined}
+            {:old {:status :stopped :reason :timeout :text "slow"}} {:kind :limit-reached :cause :timeout :data {:text "slow"}}
+            {:old {:status :stopped :reason :no-way}} {:kind :nothing-possible :cause :no-way}
+            {:old {:status :stopped :reason :no-tool :need "stone_pickaxe"}}
+            {:kind :condition-failed :cause :no-tool :data {:need "stone_pickaxe"}}
+            {:old {:status :done :got 3}} {:kind :done :cause nil :data {:got 3}}
+            {:old :done} {:kind :done :cause nil})
+          (is (map? (:report (:old-ending @world))))
+          (is (= {:status :done :ending {:kind :done :cause nil}}
+                 (select-keys (:data (last (job-ev seen :child_ended))) [:status :ending]))))))))
+
+(def migrated
+  {:conditions [] :round (fn [c] (ctx/end c :done nil)) :args nil
+   :legacy-args (fn [{:keys [timeout-s] :as args}]
+                  (cond-> (dissoc args :timeout-s) timeout-s (assoc :spend {:time timeout-s})))})
+
+(deftest legacy-args-map-an-old-callers-options-to-call-keys
+  (let [reg {'migrated migrated}]
+    (is (nil? (expr/problem reg '(migrated {:timeout-s 30}))))
+    (is (= {:time 30} (:spend (second (expr/leaf reg 'migrated {:timeout-s 30})))))
+    (is (re-find #"migrated has no arg :bogus" (expr/problem reg '(migrated {:bogus 1}))))))

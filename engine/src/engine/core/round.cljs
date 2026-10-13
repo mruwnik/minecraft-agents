@@ -7,6 +7,7 @@
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
             [engine.core.list-edits :refer [submit!]]
             [engine.core.ending :as ending]
+            [engine.core.legacy :as legacy]
             [engine.core.tally :as tally]
             [engine.contract :as contract]
             [engine.chat :as chat]
@@ -163,10 +164,12 @@
   with the args when missing and cleared only when the child is :done.
   Resolves to :declined when the child's check or round declines, else :done or :continue.
   A :done child's result! data stays readable with child-result for the rest of the parent's round.
+  A contract child answers as an old one (engine.core.legacy): any ending is :done, with result-of it as the result.
   The child shares the parent's token, so a cut anywhere ends the whole chain's round.
   Each call emits a debug job.child_started and, unless cut, job.child_ended."
   [eng base slot def args]
-  (let [store (:store eng)
+  (let [def (ending/wrap def)
+        store (:store eng)
         slots (conj (:slots base) slot)
         child-id (mem/path->id (:root base) slots)
         chain (conj (:chain base) child-id)
@@ -174,7 +177,9 @@
                 :reflex (:reflex base)}
         ended! (fn [status result wait report]
                  (emit! eng (cond-> (merge fields {:kind :child_ended} (child-end-fields status result wait))
-                              report (assoc :report report))))
+                              report (assoc :report report)
+                              (:ending result)
+                              (assoc :ending (dissoc (contract/for-event (:ending result)) :report)))))
         clear! #(mem/update-job! store (:root base) (:slots base) update :children dissoc slot)]
     (when-not (owner? eng (:token base)) (throw (cut-error)))
     (emit! eng (assoc fields :kind :child_started))
@@ -191,12 +196,16 @@
           (ended! :declined nil w nil)
           :declined)
         (let [t0 (now eng)
-              {:keys [status error]} (try (normalize-result (await ((:round def) c)))
-                                          (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))
-              report (tally/report eng (:root base) slots)]
+              {:keys [status error ending]} (try (normalize-result (await ((:round def) c)))
+                                                 (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))
+              report (merge (tally/report eng (:root base) slots) (:report ending))
+              status (if ending :done status)]
           (when-not (owner? eng (:token base)) (throw (cut-error)))
           (when (= status :error) (ended! :error nil nil report) (throw error))
           (when-not (= status :declined) (reset! child-wait nil))
+          (when ending
+            (swap! (:results base) assoc child-id (legacy/result-of (assoc ending :report report)))
+            (ending/cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended))
           (ended! status (get @(:results base) child-id) @child-wait report)
           (if (= status :done)
             (do (tally/remember! eng (:sym def) (some->> (:target def) (select-keys args)) report)
@@ -204,11 +213,29 @@
             (swap! (:results base) dissoc child-id))
           status)))))
 
+(defn ^:async old-round
+  "One round of old job def as the ctx/call child c (its id child-id) under parent base: :continue or its ending
+  (engine.core.legacy). Its check runs every round, as under call-child."
+  [base c child-id def]
+  (let [wait (atom nil)
+        child-wait (:child-wait base)
+        results (:results base)]
+    (swap! results dissoc child-id)
+    (reset! child-wait nil)
+    (if-not ((:check def) (assoc c :wait wait))
+      (legacy/ending-of :declined nil (wait-reason @wait))
+      (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
+        (when (= status :error) (throw error))
+        (let [e (legacy/ending-of status (get @results child-id) (when (= :declined status) @child-wait))]
+          (swap! results dissoc child-id)
+          (reset! child-wait nil)
+          e)))))
+
 (defn ^:async call
-  "One round of contract job def as the child in slot under parent base (ctx/call): :continue, or its ending with the
-  :report; the child's memory goes with any ending, and an ending other than :done is kept in child-ending, the
-  parent round's. Shares the parent's token, like call-child; each call emits job.child_started and
-  job.child_ended (with :ending)."
+  "One round of job def as the child in slot under parent base (ctx/call): :continue, or its ending with the :report
+  (an old job's from engine.core.legacy); the child's memory goes with any ending, and an ending other than :done is
+  kept in child-ending, the parent round's. Shares the parent's token, like call-child; each call emits
+  job.child_started and job.child_ended (with :ending)."
   [eng base child-ending slot def args]
   (let [def (ending/wrap def)
         store (:store eng)
@@ -216,14 +243,13 @@
         child-id (mem/path->id (:root base) slots)
         fields {:source :job :level :debug :job child-id :slot slot :chain (conj (:chain base) child-id)
                 :round (:round base) :reflex (:reflex base)}]
-    (when-not (ending/contract-job? def)
-      (throw (ex-info (str "ctx/call takes a contract job (one that exports conditions), in slot " slot) {:slot slot})))
     (when-not (owner? eng (:token base)) (throw (cut-error)))
     (emit! eng (assoc fields :kind :child_started))
     (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
       (mem/update-job! store (:root base) slots assoc :args args :children {}))
     (let [t0 (now eng)
-          r (try (await ((:round def) (child-ctx eng base slot args)))
+          c (child-ctx eng base slot args)
+          r (try (await (if (ending/contract-job? def) ((:round def) c) (old-round base c child-id def)))
                  (catch :default e
                    (when-not (cut? e) (emit! eng (assoc fields :kind :child_ended :status :error)))
                    (throw e))

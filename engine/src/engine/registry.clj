@@ -133,7 +133,7 @@
 
 (defmacro job-registry
   "{ns-symbol {:check :round :doc :args :idle-ok}} for every job namespace under jobs/; a contract job's entry also
-  holds :conditions :target :ways :defaults :done? and its namespace's :settings."
+  holds :conditions :target :ways :defaults :done? :legacy-args and its namespace's :settings."
   []
   (into {}
         (map (fn [{:keys [ns defines]}]
@@ -142,7 +142,8 @@
                                             :doc (ref 'doc) :args (ref 'args) :idle-ok (ref 'idle-ok)}
                                      (defines 'conditions)
                                      (merge {:conditions (ref 'conditions) :target (ref 'target) :ways (ref 'ways)
-                                             :defaults (ref 'defaults) :done? (ref 'done?) :settings (ref 'settings)}))])))
+                                             :defaults (ref 'defaults) :done? (ref 'done?) :settings (ref 'settings)
+                                             :legacy-args (ref 'legacy-args)}))])))
         (job-namespaces)))
 
 ;; ------------------------------------------------------------------ triggers and hooks

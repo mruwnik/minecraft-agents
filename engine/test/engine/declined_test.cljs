@@ -11,43 +11,56 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]))
 
-(defn setup []
-  (let [clock (atom 1000000)
-        [seen sink] (tu/legacy-capture-sink)
-        need (atom true)
-        use-kid (atom true)
-        kid {:check (fn [c] (if @need (ctx/wait c {:reason :need :what "thing"}) true))
-             :round (fn ^:async kid-round [_] :done)}
-        parent {:check (fn [c] (declined/check c))
-                :round (fn ^:async parent-round [c]
-                         (declined/begin! c)
-                         (if-not @use-kid
-                           :continue
-                           (let [r (await (declined/call-child! c :kid 'kid {}))]
-                             (if (= :done r) :done r))))}
-        p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}}})
-        eng (core/create {:primitives p :jobs (assoc registry/jobs 'kid kid 'parent parent)
-                          :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(parent) {})
-    {:eng eng :clock clock :seen seen :need need :use-kid use-kid}))
+(defn old-kid [need]
+  {:check (fn [c] (if @need (ctx/wait c {:reason :need :what "thing"}) true))
+   :round (fn ^:async kid-round [_] :done)})
+
+(defn contract-kid [need]
+  {:conditions [[:fn (fn [_] (when @need {:reason :need :what "thing"}))]]
+   :round (fn ^:async kid-round [c] (ctx/end c :done nil))})
+
+(defn setup
+  ([] (setup old-kid))
+  ([kid-of]
+   (let [clock (atom 1000000)
+         [seen sink] (tu/legacy-capture-sink)
+         need (atom true)
+         use-kid (atom true)
+         kid (kid-of need)
+         parent {:check (fn [c] (declined/check c))
+                 :round (fn ^:async parent-round [c]
+                          (declined/begin! c)
+                          (if-not @use-kid
+                            :continue
+                            (let [r (await (declined/call-child! c :kid 'kid {}))]
+                              (if (= :done r) :done r))))}
+         p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}}})
+         eng (core/create {:primitives p :jobs (assoc registry/jobs 'kid kid 'parent parent)
+                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
+                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+     (core/submit! eng '(parent) {})
+     {:eng eng :clock clock :seen seen :need need :use-kid use-kid})))
 
 (defn ^:async tick-n! [{:keys [eng clock]} n]
   (dotimes [_ n] (swap! clock + 500) (await (core/tick! eng))))
 
 (defn rounds [{:keys [seen]}] (count (filter #(= :round_started (:kind %)) @seen)))
 
+(defn ^:async parked-then-done [kid-of]
+  (let [s (setup kid-of)]
+    (await (tick-n! s 12))
+    (is (= 1 (rounds s)) "one round meets the decline, then parked")
+    (is (= [:need] (map :reason (filter #(= :waiting (:kind %)) @(:seen s)))) "the wait is told once")
+    (reset! (:need s) false)
+    (await (tick-n! s 3))
+    (is (empty? (:list (core/state (:eng s)))) "done once the child's check passes")))
+
 (deftest a-parent-of-a-declining-child-runs-one-round-then-none-and-resumes
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (setup)]
-          (await (tick-n! s 12))
-          (is (= 1 (rounds s)) "one round meets the decline, then parked")
-          (is (= 1 (count (filter #(= :waiting (:kind %)) @(:seen s)))) "the wait is told once")
-          (reset! (:need s) false)
-          (await (tick-n! s 3))
-          (is (empty? (:list (core/state (:eng s)))) "done once the child's check passes"))))))
+        (await (parked-then-done old-kid))
+        (await (parked-then-done contract-kid))))))
 
 (deftest a-round-that-calls-no-child-drops-the-booking
   (async done
