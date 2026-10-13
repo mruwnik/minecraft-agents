@@ -359,8 +359,8 @@ read -r ins del < <(git show --no-renames --numstat --format= HEAD | awk '{i+=$1
 files="$(git show --no-renames --name-only --format= HEAD)"
 stat="$(git show --no-renames --stat --format= HEAD | tail -1 | sed 's/^ *//')"
 jq -nc --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg hash "$hash" --arg card "$card" \
-  --arg files "$files" --arg stat "$stat" --argjson ins "$ins" --argjson del "$del" --arg flags "$(printf '%s\n' "${flags[@]:-}")" \
-  '{time:$time,hash:$hash,card:$card,paths:($files|split("\n")|map(select(.!=""))),insertions:$ins,deletions:$del,stat:$stat,flags:($flags|split("\n")|map(select(.!="")))}' \
+  --arg branch "$(git symbolic-ref --short HEAD 2>/dev/null)" --arg files "$files" --arg stat "$stat" --argjson ins "$ins" --argjson del "$del" --arg flags "$(printf '%s\n' "${flags[@]:-}")" \
+  '{time:$time,branch:$branch,hash:$hash,card:$card,paths:($files|split("\n")|map(select(.!=""))),insertions:$ins,deletions:$del,stat:$stat,flags:($flags|split("\n")|map(select(.!="")))}' \
   >> "$LEDGER"
 # The lock is not needed past the ledger row: release it before the note, which may take its whole timeout.
 release_lock; lock_released=1

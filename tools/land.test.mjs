@@ -1,4 +1,4 @@
-// Why JavaScript: node --test file for tools/fixer-worktree.sh and tools/land.sh, run against a throwaway fake repo.
+// Why JavaScript: node --test file for tools/fixer-worktree.sh, tools/land.sh and tools/merge-master.sh, run against a throwaway fake repo.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -15,7 +15,7 @@ function fakeRepo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'land-test-'))
   const repo = path.join(root, 'repo')
   fs.mkdirSync(path.join(repo, 'tools'), { recursive: true })
-  for (const f of ['fixer-worktree.sh', 'land.sh']) fs.copyFileSync(path.join(tools, f), path.join(repo, 'tools', f))
+  for (const f of ['fixer-worktree.sh', 'land.sh', 'commit-lock.sh', 'merge-master.sh']) fs.copyFileSync(path.join(tools, f), path.join(repo, 'tools', f))
   for (const d of ['.', 'engine', 'dashboard']) fs.mkdirSync(path.join(repo, d, 'node_modules'), { recursive: true })
   fs.mkdirSync(path.join(repo, 'engine/test/fixtures/pathfinding'), { recursive: true })
   for (const d of ['worlds', 'state', 'textures']) fs.mkdirSync(path.join(repo, d))
@@ -23,7 +23,7 @@ function fakeRepo() {
   for (const d of ['engine', 'dashboard']) fs.writeFileSync(path.join(repo, d, 'keep'), '')
   fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n')
   fs.writeFileSync(path.join(repo, 'b.txt'), 'one\n')
-  git(repo, 'init', '-q', '-b', 'main')
+  git(repo, 'init', '-q', '-b', 'master')
   git(repo, 'add', '.')
   git(repo, 'commit', '-q', '-m', 'x')
   process.env.FIXER_WT_ROOT = path.join(root, 'wts')
@@ -187,5 +187,49 @@ test('a docs overlap needs no test run, a code commit rebased over still gets ex
     assert.equal(run(wt, 'land.sh').status, 3)
     const landed = run(wt, 'land.sh', '--rebased-ok')
     assert.equal(landed.status, 0, landed.stderr)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+function withJobContract() {
+  const f = fakeRepo()
+  git(f.repo, 'branch', 'job-contract')
+  f.jc = path.join(f.root, 'jc')
+  const r = run(f.repo, 'fixer-worktree.sh', '--checkout', 'job-contract', f.jc)
+  assert.equal(r.status, 0, r.stderr)
+  return f
+}
+
+test('a fix cut with --base job-contract lands on the job-contract checkout, not on master', () => {
+  const { root, repo, jc, wt } = withJobContract()
+  try {
+    assert.equal(fs.readlinkSync(path.join(jc, 'node_modules')), path.join(repo, 'node_modules'))
+    const cut = run(repo, 'fixer-worktree.sh', '--base', 'job-contract', CARD)
+    assert.equal(cut.status, 0, cut.stderr)
+    commitIn(wt, 'a.txt', 'fixed\n')
+    commitIn(repo, 'b.txt', 'master only\n')
+    const landed = run(wt, 'land.sh')
+    assert.equal(landed.status, 0, landed.stderr)
+    assert.equal(fs.readFileSync(path.join(jc, 'a.txt'), 'utf8'), 'fixed\n')
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'one\n')
+    assert.equal(fs.existsSync(wt), false)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('merge-master brings master into job-contract, and aborts cleanly on a conflict', () => {
+  const { root, repo, jc } = withJobContract()
+  try {
+    commitIn(repo, 'b.txt', 'master\n')
+    const merged = run(repo, 'merge-master.sh')
+    assert.equal(merged.status, 0, merged.stderr)
+    assert.equal(fs.readFileSync(path.join(jc, 'b.txt'), 'utf8'), 'master\n')
+    commitIn(jc, 'a.txt', 'jc\n')
+    commitIn(repo, 'a.txt', 'master\n')
+    const before = git(jc, 'rev-parse', 'HEAD').stdout
+    const conflict = run(repo, 'merge-master.sh')
+    assert.equal(conflict.status, 1)
+    assert.match(conflict.stderr, /a\.txt/)
+    assert.equal(git(jc, 'rev-parse', 'HEAD').stdout, before)
+    assert.equal(git(jc, 'status', '--porcelain', '--untracked-files=no').stdout, '')
+    assert.equal(fs.existsSync(path.join(repo, '.git/commit-lock')), false)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })

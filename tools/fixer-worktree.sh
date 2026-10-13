@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# A fixer's own worktree on branch fix/<card8>, cut from the main checkout's current branch.
-# Usage: tools/fixer-worktree.sh <card8> | --remove <card8>
+# A fixer's own worktree on branch fix/<card8>, cut from --base <branch> (default: the main checkout's current branch);
+# tools/land.sh lands it back on the checkout of that branch.
+# Usage: tools/fixer-worktree.sh [--base <branch>] <card8> | --remove <card8> | --checkout <existing-branch> <dir>
+# --checkout makes a long-lived checkout (e.g. ../minecraft-agents-jc on job-contract) with the same shared links.
 # Prints the worktree path (last line). Dir: $FIXER_WT_ROOT (default ~/.claude/jobs/worktrees)/fix-<card8>.
 # Shared with the main checkout by symlink, so tools and tests there write to the same place: node_modules, worlds/ (bodies, plans, zones),
 # state/, textures/ and the frozen pathfinding fixtures. Blueprints stay per checkout (tracked files): bodies started from the worktree
@@ -8,9 +10,10 @@
 # worktree's own shadow-cljs server (1-2 GB, stops itself when idle); --remove stops it by pid.
 set -euo pipefail
 
-repo=$(cd "$(dirname "$0")/.." && pwd)
+# The main checkout (source of the shared links), whichever checkout this script runs from.
+repo=$(dirname "$(cd "$(dirname "$0")" && git rev-parse --path-format=absolute --git-common-dir)")
 root=${FIXER_WT_ROOT:-$HOME/.claude/jobs/worktrees}
-valid() { [[ "${1-}" =~ ^[0-9a-f]{8}$ ]] || { echo "Usage: $0 <card8> | --remove <card8> (8 hex chars)" >&2; exit 1; }; }
+valid() { [[ "${1-}" =~ ^[0-9a-f]{8}$ ]] || { echo "Usage: $0 [--base <branch>] <card8> | --remove <card8> | --checkout <branch> <dir> (card8 = 8 hex chars)" >&2; exit 1; }; }
 
 if [ "${1-}" = --remove ]; then
   valid "${2-}"
@@ -21,10 +24,20 @@ if [ "${1-}" = --remove ]; then
   exit
 fi
 
-valid "${1-}"
-wt=$root/fix-$1
-mkdir -p "$root"
-git -C "$repo" worktree add -q -b "fix/$1" "$wt" "$(git -C "$repo" symbolic-ref --short HEAD)"
+base=
+if [ "${1-}" = --checkout ]; then
+  [ -n "${2-}" ] && [ -n "${3-}" ] || valid x
+  wt=$3
+  git -C "$repo" worktree add -q "$wt" "$2"
+else
+  [ "${1-}" != --base ] || { base=${2-}; shift 2; }
+  valid "${1-}"
+  wt=$root/fix-$1
+  mkdir -p "$root"
+  [ -n "$base" ] || base=$(git -C "$repo" symbolic-ref --short HEAD)
+  git -C "$repo" worktree add -q -b "fix/$1" "$wt" "$base"
+  git -C "$repo" config "branch.fix/$1.fixbase" "$base"
+fi
 
 ln -s "$repo/node_modules" "$wt/node_modules"
 for d in engine dashboard; do
@@ -37,7 +50,7 @@ mkdir -p "$wt/dashboard/.shadow-cljs" "$wt/engine/test/fixtures" "$wt/engine/out
 ln -s "$repo/engine/test/fixtures/pathfinding" "$wt/engine/test/fixtures/pathfinding"
 [ ! -f "$repo/engine/out/test-ns-ms.json" ] || cp "$repo/engine/out/test-ns-ms.json" "$wt/engine/out/"
 # .gitignore lists these as directories (trailing slash), which does not match the symlinks.
-exclude=$(git -C "$repo" rev-parse --git-path info/exclude)
+exclude=$(git -C "$repo" rev-parse --path-format=absolute --git-path info/exclude)
 for p in /node_modules /dashboard/node_modules /engine/node_modules /worlds /state /textures /engine/test/fixtures/pathfinding; do
   grep -qxF "$p" "$exclude" 2>/dev/null || echo "$p" >> "$exclude"
 done

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Land the current fix/<card8> worktree's commits on the main checkout's branch: rebase, then fast-forward, under the commit lock.
+# Land the current fix/<card8> worktree's commits on the checkout of the branch it was cut from (the main checkout's, unless --base was used): rebase, then fast-forward, under the commit lock.
 # Usage (from the worktree): tools/land.sh [--rebased-ok]
 # Exit 0: landed; the worktree and its branch are removed (cd out of it) and the new hashes are printed.
 # Docs (*.md) never count: a rebase over commits that changed only docs lands at once, and a docs overlap is no overlap.
@@ -7,7 +7,7 @@
 #         --rebased-ok lands the rebased branch anyway (use only when the upstream commits it printed touch none of your files).
 # Exit 5: the branch was rebased over commits that touch files it changes and no clean test run (a .claude/live-tests/*.log ending
 #         "0 failures, 0 errors") is newer than that rebase; the overlapping files are named. Rerun the tests, then land.sh again.
-# Exit 1: rebase conflict (aborted; branch unchanged), dirty worktree, or the main checkout is not on the branch you were cut from.
+# Exit 1: rebase conflict (aborted; branch unchanged), dirty worktree, or no checkout has the branch you were cut from.
 # A landing that changes the agent-tools bundle sources starts a detached rebuild of the main checkout bundle.
 # Exit 4: the main checkout has uncommitted edits to a file the landing changes (git refused; nothing moved): wait or ask the lead.
 set -euo pipefail
@@ -17,27 +17,13 @@ branch=$(git symbolic-ref --short HEAD)
 [[ "$branch" == fix/* ]] || { echo "land: not on a fix/* branch ($branch)" >&2; exit 1; }
 git diff --quiet HEAD -- || { echo "land: tracked changes not committed" >&2; exit 1; }
 common=$(cd "$(git rev-parse --git-common-dir)" && pwd)
-main=$(dirname "$common")
-target=$(git -C "$main" symbolic-ref --short HEAD)
-lock=$common/commit-lock
-
-release() { ( flock 8; rm -rf "$lock" ) 8>"$lock.guard"; }
-reclaim_dead() {
-  (
-    flock 8
-    owner=$(cat "$lock/pid" 2>/dev/null) || exit 1
-    [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null || exit 1
-    rm -rf "$lock"
-  ) 8>"$lock.guard"
-}
-start=$SECONDS
-until mkdir "$lock" 2>/dev/null; do
-  reclaim_dead && continue
-  [ $((SECONDS - start)) -lt "${COMMIT_LOCK_TIMEOUT:-600}" ] || { echo "land: could not take $lock" >&2; exit 1; }
-  sleep 1
-done
-echo $$ > "$lock/pid"
-trap release EXIT
+repo=$(dirname "$common")
+# The branch the fix branch was cut from (fixer-worktree.sh records it), landed on the checkout that has it checked out.
+target=$(git config "branch.$branch.fixbase" || git -C "$repo" symbolic-ref --short HEAD)
+source "$(dirname "$0")/commit-lock.sh"
+main=$(checkout_of "$target")
+[ -n "$main" ] || { echo "land: no checkout has $target checked out" >&2; exit 1; }
+take_lock
 
 marker=$(git rev-parse --absolute-git-dir)/land-overlap
 old=$(git rev-parse "$target")
@@ -65,7 +51,7 @@ git -C "$main" log --oneline "$old..$target"
 release; trap - EXIT
 card8=${branch#fix/}
 cd "$main"
-"$main/tools/fixer-worktree.sh" --remove "$card8"
+"$repo/tools/fixer-worktree.sh" --remove "$card8"
 # The agent tools run from the main checkout's compiled bundle: rebuild it (detached; the compile queues) when this landing
 # changed its sources (engine/tools/agent-tools-bundle-check.mjs bundleSources), so its stale-bundle warning stays true.
 if git diff --name-only "$old" "$target" | grep -qE '^(dashboard/src/agent_tools/|dashboard/src/dashboard/(agent_plan_tools|plan_compare)\.cljs$|engine/src/plan/|engine/src/engine/bodies\.cljs$)'; then
