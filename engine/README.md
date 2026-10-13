@@ -288,15 +288,13 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 (debug), calls the primitive, saves again. There is no commit: a cut loses at most the work since the last save, so write a
 debt or intent with `update-mem!` before the `act` it protects. After every `moveTo` it writes a `:moved` body-memory entry.
 
-**Tally.** Each act's uses and yields (bag and worn change, tool wear, hurt from fall, cactus, berry bush, drowning) go to
-every frame of its chain, in `:contract` of job memory (hidden from `ctx/mem`); a round's time to its own frame. Endings
-and a root's `completed`/`stopped`/`cancelled`/`reflex.ended` carry `:report`; a finished job's goes to body memory
-`:job-report` (cap 256).
+**Tally.** Each act's uses and yields go to every frame of its chain (`:contract` in job memory, hidden from `ctx/mem`),
+a round's time to its own frame. Endings and a root's `completed`/`stopped`/`cancelled`/`reflex.ended` carry `:report`;
+a finished job's goes to body memory `:job-report` (cap 256).
 
 **Contract jobs.** Export `conditions` and `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
-`defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` are frozen at the first round. A failing
-condition ends `:condition-failed`, `done?` ends `:done`. Endings: `{:kind :cause :because :report :data}`; a root's is
-`job.completed` (`:done`) or `job.stopped`; cancel, drop and death are `:cut-off`.
+`defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round. A failing
+condition ends `:condition-failed`, `done?` ends `:done`; endings are `{:kind :cause :because :report :data}`.
 
 **Old and contract jobs together (engine.core.legacy, until all jobs are contract jobs).** An old job through
 `ctx/call`: its check runs each round, failing → `:condition-failed` (cause its wait reason); round `:declined` →

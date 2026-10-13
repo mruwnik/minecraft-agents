@@ -10,7 +10,8 @@
 (defn without-tally
   "m, a job's memory map, without the engine's :contract tally, its children's included."
   [m]
-  (-> m (dissoc :contract) (update :children update-vals without-tally)))
+  (cond-> (dissoc m :contract)
+    (:children m) (update :children update-vals without-tally)))
 
 (defn mem
   "This job's memory map (its sub-map, for a child), without the engine's :contract tally."

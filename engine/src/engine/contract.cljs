@@ -40,7 +40,7 @@
         m))
 
 (defn act-delta
-  "What one act used and yielded, from body snapshots {:inventory :equipment :hurt {cause total}} before and after it,
+  "What one act used and yielded, from body snapshots {:inventory :equipment :hurt {cause total}} before and after it.
   Uses and yields are not netted."
   [before after]
   (if-not (and (:inventory before) (:inventory after))

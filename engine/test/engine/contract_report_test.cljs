@@ -122,6 +122,10 @@
                                                                                 :args {} :round 1})))))
               "nor the tally of a child"))))))
 
+(deftest without-tally-adds-no-children
+  (is (= {:ate true} (ctx/without-tally {:ate true :contract {:ran-ms 1}})))
+  (is (= {:children {:a {:n 1}}} (ctx/without-tally {:children {:a {:n 1 :contract {}}}}))))
+
 (deftest the-tally-survives-a-cut-and-is-on-disk
   (async done
     (tu/run-async done
