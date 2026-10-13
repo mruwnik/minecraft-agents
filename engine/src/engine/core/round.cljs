@@ -1,11 +1,12 @@
 (ns engine.core.round
   "One round: the ctx a round or check receives, the act wrapper (token check, memory saves, action
   events) and call-child."
-  (:require [engine.core.base :refer [cut-error cut? distance emit! job-of normalize-result offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
+  (:require [engine.core.base :refer [cut-error cut? distance emit! job-of normalize-result now offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
             [engine.core.list-edits :refer [submit!]]
+            [engine.core.tally :as tally]
             [engine.chat :as chat]
             [engine.memory :as mem]
             ["crypto" :as crypto]))
@@ -14,9 +15,9 @@
 
 (defn ^:async act!
   "Every acting primitive call from a job: check the ownership token, save
-  memory, emit action.started, call, save memory again, emit action.done.
-  A cut rejects here (stale token) or from the primitive."
-  [eng {:keys [root token chain round reflex]} id k args]
+  memory, emit action.started, call, count what it used and yielded on every frame of the chain (engine.core.tally),
+  save memory again, emit action.done. A cut rejects here (stale token) or from the primitive."
+  [eng {:keys [root slots token chain round reflex]} id k args]
   (when-not (owner? eng token) (throw (cut-error)))
   (act-started! eng token root k args)
   (save-memory! eng)
@@ -27,6 +28,7 @@
         p (:primitives eng)
         _ (emit! eng (merge fields {:source :action :kind :started :args (js->clj args)}))
         from (when (= :moveTo k) (self-pos p))
+        before (tally/snapshot eng)
         away-record (when (= :offline k) (log-out-record eng root id args ((:now eng))))
         _ (when away-record
             (reset! (:away eng) away-record)
@@ -41,6 +43,7 @@
                                                    :target (js->clj (.-pos args) :keywordize-keys true)}
                                             (= "noPath" (.-reason r)) (assoc :no-path true))
                       mem/moved-policy))
+        (tally/count-act! eng root slots before r)
         (save-memory! eng)
         (record-act! eng {:root root :reflex reflex} k r (distance from to))
         (emit! eng (cond-> (merge fields {:source :action :kind :done :status (.-status r)})
@@ -48,6 +51,8 @@
                      (number? (.-distance r)) (assoc :distance (/ (js/Math.round (* 100 (.-distance r))) 100))))
         r)
       (catch :default e
+        (tally/count-act! eng root slots before nil)
+        (save-memory! eng)
         (emit! eng (cond-> (merge fields {:source :action :kind :done
                                           :status (if (cut? e) :cut :failed)})
                      (not (cut? e)) (assoc :error (str e))))
@@ -78,7 +83,10 @@
      :view #(mem/view store)
      :update-mem (fn [f more]
                    (check!)
-                   (apply mem/update-job! store root slots f more)
+                   (apply mem/update-job! store root slots
+                          (fn [m & more]
+                            (cond-> (apply f (dissoc m :contract) more) (:contract m) (assoc :contract (:contract m))))
+                          more)
                    (wrote! (mem/job-kind root)))
      :remember (fn [kind data policy]
                  (check!)
@@ -159,8 +167,9 @@
         chain (conj (:chain base) child-id)
         fields {:source :job :level :debug :job child-id :slot slot :chain chain :round (:round base)
                 :reflex (:reflex base)}
-        ended! (fn [status result wait]
-                 (emit! eng (merge fields {:kind :child_ended} (child-end-fields status result wait))))
+        ended! (fn [status result wait report]
+                 (emit! eng (cond-> (merge fields {:kind :child_ended} (child-end-fields status result wait))
+                              report (assoc :report report))))
         clear! #(mem/update-job! store (:root base) (:slots base) update :children dissoc slot)]
     (when-not (owner? eng (:token base)) (throw (cut-error)))
     (emit! eng (assoc fields :kind :child_started))
@@ -174,15 +183,19 @@
       (if-not ((:check def) (assoc c :wait wait))
         (let [w (when @wait (wait-reason @wait))]
           (reset! child-wait w)
-          (ended! :declined nil w)
+          (ended! :declined nil w nil)
           :declined)
-        (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
+        (let [t0 (now eng)
+              {:keys [status error]} (try (normalize-result (await ((:round def) c)))
+                                          (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))
+              report (tally/report eng (:root base) slots)]
           (when-not (owner? eng (:token base)) (throw (cut-error)))
-          (when (= status :error) (ended! :error nil nil) (throw error))
+          (when (= status :error) (ended! :error nil nil report) (throw error))
           (when-not (= status :declined) (reset! child-wait nil))
-          (ended! status (get @(:results base) child-id) @child-wait)
+          (ended! status (get @(:results base) child-id) @child-wait report)
           (if (= status :done)
-            (clear!)
+            (do (tally/remember! eng (:sym def) (some->> (:target def) (select-keys args)) report)
+                (clear!))
             (swap! (:results base) dissoc child-id))
           status)))))
 
@@ -192,12 +205,15 @@
         child-wait (atom nil)
         c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
                          :args args :round (:round run) :reflex (:reflex run) :results results
-                         :child-wait child-wait})]
+                         :child-wait child-wait})
+        t0 (now eng)]
     (try
       (assoc (normalize-result (await ((:round def) c))) :result (get @results (:id run))
              :child-wait @child-wait)
       (catch :default e
-        (if (cut? e) {:status :cut :error e} {:status :error :error e})))))
+        (if (cut? e) {:status :cut :error e} {:status :error :error e}))
+      (finally
+        (tally/add-time! eng (:id run) [] (- (now eng) t0))))))
 
 (defn check-ctx
   "The ctx a listed job's check receives: memory and sensing, no token. wait is the atom ctx/wait notes a reason in."

@@ -138,7 +138,9 @@
                                       (let [r (await (ctx/call-child c :g gated-job {}))]
                                         (if (= :done r) :done :continue)))}
    'give-up {:check always :round (fn [c] (ctx/result! c {:status :stopped :reason :no-way}) :done)}
-   'no-check {:round count-round}})
+   'no-check {:round count-round}
+   'eat-parent {:check always :round (fn ^:async eat-parent-round [c]
+                                       (await (ctx/call-child c :e {:name :eats :check always :round eat-round} {})))}})
 
 (def triggers
   {:hurt {:name :hurt :job '(eat) :persistence :retry
@@ -569,6 +571,16 @@
                     {:kind :child_ended :job "j9/s" :slot :s :chain ["j9" "j9/s"] :status :stopped
                      :reason :no-way}]
                    (child-events seen)))))))))
+
+(deftest a-child-ended-carries-the-childs-report
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self (assoc fake/default-self :food 2) :inventory [{:name "bread" :count 2}]})]
+          (core/submit! eng '(eat-parent) {})
+          (await (core/tick! eng))
+          (is (= {:uses {:items {"bread" 1} :time 0}}
+                 (:report (first (filter #(= :child_ended (:kind %)) @seen))))))))))
 
 (deftest a-child-returning-a-bad-result-emits-child-ended-error-and-throws
   (async done

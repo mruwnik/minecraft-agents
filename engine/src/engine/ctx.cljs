@@ -6,9 +6,9 @@
 ;; ------------------------------------------------------------------ job memory
 
 (defn mem
-  "This job's memory map (its sub-map, for a child)."
+  "This job's memory map (its sub-map, for a child), without the engine's :contract tally."
   [ctx]
-  (mem/job-mem ((:view ctx)) (:root ctx) (:slots ctx)))
+  (dissoc (mem/job-mem ((:view ctx)) (:root ctx) (:slots ctx)) :contract))
 
 (defn update-mem!
   "Apply (f current & args) to this job's memory map. Throws a cut error if
@@ -53,7 +53,7 @@
   symbol looked up in the registry with args merged over its defaults."
   [ctx job args]
   (if (symbol? job)
-    (expr/leaf (:jobs (:engine ctx)) job args)
+    (update (expr/leaf (:jobs (:engine ctx)) job args) 0 assoc :sym job)
     [job args]))
 
 (defn call-child

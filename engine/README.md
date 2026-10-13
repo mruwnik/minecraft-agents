@@ -285,6 +285,13 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 (debug), calls the primitive, saves again. There is no commit: a cut loses at most the work since the last save, so write a
 debt or intent with `update-mem!` before the `act` it protects. After every `moveTo` it writes a `:moved` body-memory entry.
 
+**Tally (engine.contract, engine.core.tally).** Each act's uses and yields go to every frame of its chain, in job memory
+`:contract` (hidden from `ctx/mem`, kept by `update-mem!`): items as the bag and worn change over the act (a result's
+`inventoryChange` wins), wear as a tool's durability drop, health only for the hurt causes fall, cactus, berry bush,
+drowning. Each round's time goes to its own frame only. `job.child_ended` and a root job's `completed`/`stopped`/
+`cancelled`/`reflex.ended` carry `:report` (`{:uses {... :time s} :yields {:items}}`); a finished job's goes to body
+memory `:job-report` (cap 256) as `{:job sym :report}`.
+
 **call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
 it returns `:continue` or `:declined`; on `:done` the sub-map is cleared so the next call starts fresh. A cut anywhere ends
 the whole chain's round; cancel and done take the subtree. `submit!` is delegation (a peer on the list), not a child.

@@ -6,6 +6,7 @@
             [engine.core.fruitless :refer [book-round! note-fruitless!]]
             [engine.core.register :refer [trigger-holds?]]
             [engine.core.round :refer [run-round]]
+            [engine.core.tally :as tally]
             [engine.backoff :as backoff]
             [engine.memory :as mem]))
 
@@ -37,14 +38,15 @@
   :yielded for a round that returned :continue or :declined) plus the wait map w it gave, if any."
   [eng id reason w]
   (let [data (merge {:status :stopped :reason reason} (when w (dissoc w :reason)))
-        fields (job-fields eng id)]
+        fields (job-fields eng id)
+        report (tally/end-root! eng id true)]
     (resolve-job-attention! eng id :job-completed #(remove-listed % id))
     (swap! (:waiting eng) dissoc id)
     (swap! (:fruitless eng) dissoc id)
     (mem/delete-job! (:store eng) id)
     (emit! eng (merge fields
                       {:source :job :kind :stopped :level :warn :attention :notice
-                       :data data :text (stopped-text data)}))))
+                       :data data :text (stopped-text data) :report report}))))
 
 (defn fail-slot!
   "The slot job's round threw: it leaves the slot unlisted (not parked), one job.failed with attention as usual."
@@ -64,17 +66,18 @@
         fields (job-fields eng id)]
     (case status
       :done
-      (do (resolve-job-attention! eng id :job-completed
-                                  #(assoc (remove-listed % id) :cursor (max idx 0)))
-          (swap! (:fruitless eng) dissoc id)
-          (mem/delete-job! (:store eng) id)
-          (emit! eng (if (stopped-result? result)
-                       (merge fields {:source :job :kind :stopped :level :warn :attention :notice
-                                      :data (dissoc result :dug)
-                                      :text (stopped-text result)})
-                       (merge fields {:source :job :kind :completed :level :info
-                                      :attention :notice
-                                      :data {:status :completed}}))))
+      (let [report (tally/end-root! eng id true)]
+        (resolve-job-attention! eng id :job-completed
+                                #(assoc (remove-listed % id) :cursor (max idx 0)))
+        (swap! (:fruitless eng) dissoc id)
+        (mem/delete-job! (:store eng) id)
+        (emit! eng (if (stopped-result? result)
+                     (merge fields {:source :job :kind :stopped :level :warn :attention :notice
+                                    :data (dissoc result :dug)
+                                    :text (stopped-text result) :report report})
+                     (merge fields {:source :job :kind :completed :level :info
+                                    :attention :notice
+                                    :data {:status :completed} :report report}))))
 
       :cut
       (do (swap! (:state eng) assoc :resume id :current nil)
@@ -112,7 +115,7 @@
   "Classify a reflex end now and apply the entry's persistence when its trigger
   still holds, the cooldown counted from the end's :ended-at; emit its one
   reflex.ended with extra fields."
-  [eng {:keys [reflex job outcome reason ended-at text]} extra]
+  [eng {:keys [reflex job outcome reason ended-at text report]} extra]
   (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))
         still? (and entry (trigger-holds? eng entry (:primitives eng) (mem/view (:store eng))))]
     (when still?
@@ -125,6 +128,7 @@
                        :outcome outcome :text (str text ": " (name outcome))
                        :how (if still? :completed_not_cleared :cleared)}
                       (when reason {:reason reason})
+                      (when report {:report report})
                       extra))))
 
 (defn end-reflex!
@@ -134,7 +138,8 @@
   outcome carries the result's reason."
   [eng {:keys [id reflex]} outcome reason]
   (let [end (cond-> {:reflex reflex :job id :outcome outcome :ended-at (now eng)
-                     :text (reflex-text reflex (get-in (state eng) [:instances id :spec]))}
+                     :text (reflex-text reflex (get-in (state eng) [:instances id :spec]))
+                     :report (tally/end-root! eng id (#{:done :stopped} outcome))}
               reason (assoc :reason reason))]
     (drop-instance! eng id)
     (if (or (paused? eng) (manual? eng))
@@ -180,7 +185,7 @@
         (end-reflex! eng run (if (= :cut status) :cut :failed) nil))
     (if (stopped-result? result)
       (do (emit! eng {:source :job :kind :stopped :level :warn :job (:id run) :reflex (:reflex run)
-                      :data (dissoc result :dug) :text (stopped-text result)})
+                      :data (dissoc result :dug) :text (stopped-text result) :report (tally/report eng (:id run) [])})
           (end-reflex! eng run :stopped (:reason result)))
       (end-reflex! eng run :done nil))))
 

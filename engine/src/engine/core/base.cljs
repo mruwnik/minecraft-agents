@@ -188,8 +188,10 @@
 (defn save-memory! [eng]
   (save-file! eng (mem/file (:dir eng)) #(mem/save! (:store eng))))
 
-(defn job-memory [eng id]
-  (mem/job-mem (mem/view (:store eng)) id []))
+(defn job-memory
+  "Job id's memory, without the engine's :contract tally."
+  [eng id]
+  (dissoc (mem/job-mem (mem/view (:store eng)) id []) :contract))
 
 (defn drop-instance! [eng id]
   (swap! (:state eng) update :instances dissoc id)

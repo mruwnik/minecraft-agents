@@ -53,10 +53,17 @@
                 :text (str "hurt " amount " by " (if (seq causes) (str/join ", " causes) "an unknown cause")
                            " (health " (:health pending) ")")})))))
 
+(defn totals
+  "{cause health} lost since the engine started, by named cause: an act's share is the change over it."
+  [eng]
+  (:totals @(:hurt eng)))
+
 (defn record!
   "One raw hurt body event m (keyword map). The first hit of a window starts it; later hits add into it; at the
   window's end flush! emits one event with the total, the hit count, the causes and the last health."
   [eng emit! m]
+  (when-let [c (cause m)]
+    (swap! (:hurt eng) update-in [:totals c] (fnil + 0) (or (:amount m) 0)))
   (let [add (fn [p] (-> (or p {:amount 0 :hits 0 :causes []})
                         (update :amount + (or (:amount m) 0))
                         (update :hits inc)
