@@ -6,6 +6,7 @@
             [engine.seen-work-reads-test :refer [wrapped]]
             [jobs.build.from-plan.plan :as plan]
             [jobs.explore.search :as search]
+            [jobs.gather.mine.targets :as mine-targets]
             [jobs.gather.mine :as mine]))
 
 (def far {:x 0 :y 64 :z 4})
@@ -14,7 +15,7 @@
 
 (deftest mine-snapshot-skips-ground-behind-stone
   (let [blocks (merge (ground 3) (ground 4) (ground 5))
-        snap (fn [w] (mine/snapshot {:primitives w} {:x 0 :y 64 :z 4}))]
+        snap (fn [w] (mine-targets/snapshot {:primitives w} {:x 0 :y 64 :z 4}))]
     (is (= 15 (count (snap (wrapped blocks false)))) "in view: the top layer, the one under it is hidden")
     (is (empty? (snap (wrapped blocks true))) "behind a wall: unknown, not recorded")))
 

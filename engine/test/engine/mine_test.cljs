@@ -17,6 +17,9 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.gather.mine :as mine]
+            [jobs.gather.mine.descent :as mine-descent]
+            [jobs.gather.mine.end :as mine-end]
+            [jobs.gather.mine.targets :as mine-targets]
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]))
@@ -505,9 +508,9 @@
 (deftest drop-in-line-is-blocked-by-an-intact-block-between
   (let [p (tu/fake-on-floor {:blocks (cells "stone" [4 5] [64] [0]) :floor-block floor-block})
         c {:primitives p}]
-    (is (true? (mine/drop-in-line? c {:x 4 :y 64 :z 0})))
-    (is (false? (mine/drop-in-line? c {:x 5 :y 64 :z 0})))
-    (is (true? (mine/drop-in-line? c {:x 5 :y 64 :z 3})))))
+    (is (true? (mine-targets/drop-in-line? c {:x 4 :y 64 :z 0})))
+    (is (false? (mine-targets/drop-in-line? c {:x 5 :y 64 :z 0})))
+    (is (true? (mine-targets/drop-in-line? c {:x 5 :y 64 :z 3})))))
 
 ;; ------------------------------------------------------------------ the mend must not eat the count
 
@@ -937,17 +940,17 @@
    :inventory (into pickaxe [{:name "torch" :count 8}])})
 
 (deftest an-ore-has-a-tunnel-level-and-its-twin-kinds
-  (is (= 16 (mine/tunnel-level {:block "iron_ore"})))
-  (is (= 16 (mine/tunnel-level {:block "deepslate_iron_ore"})))
-  (is (= 30 (mine/tunnel-level {:block "iron_ore" :level 30})))
-  (is (= -10 (mine/tunnel-level {:block "sand" :level [5 -10 7]})) "a cell's y")
-  (is (= -10 (mine/tunnel-level {:block "sand" :level {:x 5 :y -10 :z 7}})))
-  (is (nil? (mine/tunnel-level {:block "iron_ore" :level false})) "false: the tunnel runs where the body stands")
-  (is (nil? (mine/tunnel-level {:block "sand"})))
-  (is (= #{"iron_ore" "deepslate_iron_ore"} (mine/kinds {:block "iron_ore" :variants true})))
-  (is (= #{"iron_ore" "deepslate_iron_ore"} (mine/kinds {:block "deepslate_iron_ore" :variants true})))
-  (is (= #{"iron_ore"} (mine/kinds {:block "iron_ore" :variants false})))
-  (is (= #{"sand"} (mine/kinds {:block "sand" :variants true}))))
+  (is (= 16 (mine-descent/tunnel-level {:block "iron_ore"})))
+  (is (= 16 (mine-descent/tunnel-level {:block "deepslate_iron_ore"})))
+  (is (= 30 (mine-descent/tunnel-level {:block "iron_ore" :level 30})))
+  (is (= -10 (mine-descent/tunnel-level {:block "sand" :level [5 -10 7]})) "a cell's y")
+  (is (= -10 (mine-descent/tunnel-level {:block "sand" :level {:x 5 :y -10 :z 7}})))
+  (is (nil? (mine-descent/tunnel-level {:block "iron_ore" :level false})) "false: the tunnel runs where the body stands")
+  (is (nil? (mine-descent/tunnel-level {:block "sand"})))
+  (is (= #{"iron_ore" "deepslate_iron_ore"} (mine-targets/kinds {:block "iron_ore" :variants true})))
+  (is (= #{"iron_ore" "deepslate_iron_ore"} (mine-targets/kinds {:block "deepslate_iron_ore" :variants true})))
+  (is (= #{"iron_ore"} (mine-targets/kinds {:block "iron_ore" :variants false})))
+  (is (= #{"sand"} (mine-targets/kinds {:block "sand" :variants true}))))
 
 (deftest a-seen-deepslate-twin-of-the-ore-is-dug-for-its-item
   (async done
@@ -2109,8 +2112,8 @@
           (is (empty? (events-of s :mine.not-home))))))))
 
 (deftest the-walk-home-bounds-its-search-only-near-under-the-start
-  (is (= {:y-margin 16} (mine/home-margin 6)) "a start near above: no way round through deep caves")
-  (is (nil? (mine/home-margin 16)) "from far below go-to's own climb rules hold, which an explicit :y-margin switches off"))
+  (is (= {:y-margin 16} (mine-end/home-margin 6)) "a start near above: no way round through deep caves")
+  (is (nil? (mine-end/home-margin 16)) "from far below go-to's own climb rules hold, which an explicit :y-margin switches off"))
 
 (deftest the-mend-leaves-the-stair-cells-below-the-start-level
   (async done
@@ -2149,10 +2152,10 @@
 ;; ------------------------------------------------------------------ unseen faces are no hazard
 
 (defn classify-in
-  "mine/classify of the sand at [0 64 3] (in view) with extra blocks, after the start's sight pass."
+  "mine-targets/classify of the sand at [0 64 3] (in view) with extra blocks, after the start's sight pass."
   [extra]
   (let [s (start {:world {:blocks (merge {"0,64,3" "sand"} extra)}})]
-    (mine/classify {:primitives (:p s)} false {:x 0 :y 64 :z 3})))
+    (mine-targets/classify {:primitives (:p s)} false {:x 0 :y 64 :z 3})))
 
 (deftest lava-behind-the-block-is-unseen-so-no-hazard
   (is (= :ok (classify-in {"0,63,3" "lava"})) "lava behind the block is not known")
@@ -2309,20 +2312,20 @@
 
 (deftest beside-counts-only-a-standable-cell-next-to-the-start-like-go-to-range-1
   (let [start {:x 0 :y 64 :z 0}]
-    (is (mine/beside? {:x 1 :y 64 :z 0} start))
-    (is (mine/beside? {:x 0 :y 64 :z -1} start))
-    (is (mine/beside? {:x 0 :y 65 :z 0} start) "above the start is standable")
-    (is (not (mine/beside? {:x 0 :y 63 :z 0} start)) "inside the dug hole is not home")
-    (is (not (mine/beside? {:x 1 :y 63 :z 0} start)))
-    (is (not (mine/beside? {:x 1 :y 64 :z 1} start)) "a diagonal is out of go-to's range 1")
-    (is (not (mine/beside? {:x 2 :y 64 :z 0} start)))))
+    (is (mine-end/beside? {:x 1 :y 64 :z 0} start))
+    (is (mine-end/beside? {:x 0 :y 64 :z -1} start))
+    (is (mine-end/beside? {:x 0 :y 65 :z 0} start) "above the start is standable")
+    (is (not (mine-end/beside? {:x 0 :y 63 :z 0} start)) "inside the dug hole is not home")
+    (is (not (mine-end/beside? {:x 1 :y 63 :z 0} start)))
+    (is (not (mine-end/beside? {:x 1 :y 64 :z 1} start)) "a diagonal is out of go-to's range 1")
+    (is (not (mine-end/beside? {:x 2 :y 64 :z 0} start)))))
 
 (deftest a-start-floor-felt-at-the-start-decides-when-it-is-not-seen-now
-  (is (mine/solid-floor? nil "dirt") "unseen now: the felt floor counts")
-  (is (not (mine/solid-floor? nil nil)) "never known: no place to aim at")
-  (is (not (mine/solid-floor? nil "air")))
-  (is (not (mine/solid-floor? "air" "dirt")) "seen open now wins over the felt floor")
-  (is (mine/solid-floor? "dirt" "air")))
+  (is (mine-end/solid-floor? nil "dirt") "unseen now: the felt floor counts")
+  (is (not (mine-end/solid-floor? nil nil)) "never known: no place to aim at")
+  (is (not (mine-end/solid-floor? nil "air")))
+  (is (not (mine-end/solid-floor? "air" "dirt")) "seen open now wins over the felt floor")
+  (is (mine-end/solid-floor? "dirt" "air")))
 
 (deftest the-tunnel-heading-arg-names-a-way-or-a-cell-to-run-toward
   (async done
@@ -2564,8 +2567,8 @@
 
 (deftest the-end-text-names-why-a-run-with-no-tunnel-blocks-stopped
   (is (= "; stair stopped: undercuts-way; tunnel stopped: way-out"
-         (mine/dug-text {:descent {:steps 0 :stop :undercuts-way} :tunnel {:steps 0 :stop :way-out}} :tunnel-stopped)))
+         (mine-end/dug-text {:descent {:steps 0 :stop :undercuts-way} :tunnel {:steps 0 :stop :way-out}} :tunnel-stopped)))
   (is (= "; tunnel 2 blocks east at y 5; tunnel stopped: lava"
-         (mine/dug-text {:tunnel {:steps 2 :heading "east" :origin {:y 5} :stop :lava}} :tunnel-stopped)))
+         (mine-end/dug-text {:tunnel {:steps 2 :heading "east" :origin {:y 5} :stop :lava}} :tunnel-stopped)))
   (is (= "; tunnel 2 blocks east at y 5"
-         (mine/dug-text {:tunnel {:steps 2 :heading "east" :origin {:y 5} :stop :tunnel-length}} :tunnel-length))))
+         (mine-end/dug-text {:tunnel {:steps 2 :heading "east" :origin {:y 5} :stop :tunnel-length}} :tunnel-length))))
