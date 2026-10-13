@@ -6,7 +6,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.doors :as doors]
+            [jobs.survival.retreat-doors :as retreat-doors]
             [jobs.lib.goal :as goal]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
@@ -246,7 +246,7 @@
         threats (flight/look! c)
         threat (first threats)
         hit? (cornered/hit-on-the-run! c)
-        door (when threat (doors/door-to-shut c (danger-q/mob-pos p threat)))
+        door (when threat (retreat-doors/door-to-shut c (danger-q/mob-pos p threat)))
         early (when (and threat (not hit?)) (await (early-refuge! c)))
         covered? (cover/cover-fn p threats)
         blast (filterv #(flight/blaster? p %) threats)
@@ -272,8 +272,8 @@
       (cornered/angry-enderman? c (cornered/near-hostiles c)) (await (cornered/cornered! c "an enderman cannot be outrun" inside?))
       hit? (await (cornered/cornered! c "a hostile keeps hitting the body as it flees" inside?))
       (some combat/flyer? (cornered/near-hostiles c)) (await (cornered/cornered! c "a phantom cannot be outrun" inside?))
-      door (await (doors/shut-door! c door))
-      (and inside? (doors/home-door c room)) (await (doors/shut-home-door! c (doors/home-door c room)))
+      door (await (retreat-doors/shut-door! c door))
+      (and inside? (retreat-doors/home-door c room)) (await (retreat-doors/shut-home-door! c (retreat-doors/home-door c room)))
       inside? (await (stuck "at home, the hostile still has a way in"))
       way (await (run-home! c room way))
       (not (cornered/outrun? c (cornered/near-hostiles c))) (await (cornered/cornered! c "the hostile outruns the body" inside?))
