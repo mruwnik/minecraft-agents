@@ -445,6 +445,8 @@
           (is (= :no-drops (:reason (done-event s))))
           (is (= [:no-drops] (mapv :reason warns)))
           (is (= :warn (:level (first warns))))
+          (is (= [[4 64 0] [5 64 0] [6 64 0]] (mapv :cell (events-of s :mine.drop-lost))) "each dig that brought nothing is told")
+          (is (= [[4 64 0] [5 64 0] [6 64 0]] (:lost (done-event s))))
           (is (= "dirt" (block-at s 0 63 0)) "the ground is intact")
           (is (finished? s)))))))
 
@@ -1394,33 +1396,59 @@
           (is (= [[{:pos [5 64 2] :count 1 :reason :unreachable}]] (map :items (events-of s :mine.left-behind))))
           (is (= [{:pos [5 64 2] :count 1}] (:left (done-event s)))))))))
 
+(defn hide-drop-until-beside!
+  "The fake's dug drops lie out of sight (in a pocket) until the body stands within 1 of cell [x y z]."
+  [p [cx cy cz]]
+  (let [beside? (fn [w] (let [[x y z] (fake/body-pos w)
+                              d (map - [(js/Math.floor x) y (js/Math.floor z)] [cx cy cz])]
+                          (<= (reduce + (map * d d)) 1)))]
+    (.override (.-world p) "dig"
+               (fn [token args impl]
+                 (.then (impl token args)
+                        (fn [r]
+                          (swap! (fake/state p) update :entities (fn [es] (mapv #(if (= "item" (:kind %)) (assoc % :visible false) %) es)))
+                          r))))
+    (doseq [walk ["moveTo" "steer"]]
+      (.override (.-world p) walk
+                 (fn [token args impl]
+                   (.then (impl token args)
+                          (fn [r]
+                            (when (beside? @(fake/state p))
+                              (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible true) es))))
+                            r)))))))
+
 (deftest a-drop-out-of-sight-from-where-it-was-dug-is-walked-to-and-collected
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})
-              p (:p s)
-              near-dug? (fn [w] (let [[x y z] (fake/body-pos w)] (<= (+ (* (- (js/Math.floor x) 3) (- (js/Math.floor x) 3)) (* (- y 64) (- y 64)) (* (js/Math.floor z) (js/Math.floor z))) 1)))]
-          ;; dug from where it stands (within reach), the drop lies out of sight in a pocket; beside the dug cell it is in sight
-          (.override (.-world p) "dig"
-                     (fn [token args impl]
-                       (.then (impl token args)
-                              (fn [r]
-                                (swap! (fake/state p) update :entities (fn [es] (mapv #(if (= "item" (:kind %)) (assoc % :visible false) %) es)))
-                                r))))
-          (doseq [walk ["moveTo" "steer"]]
-            (.override (.-world p) walk
-                       (fn [token args impl]
-                         (.then (impl token args)
-                                (fn [r]
-                                  (when (near-dug? @(fake/state p))
-                                    (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible true) es))))
-                                  r)))))
+        (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
+          (hide-drop-until-beside! (:p s) [3 64 0])
           (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})
           (await (run-ticks s 30))
           (is (= 1 (get (inv s) "raw_iron")) "the body walked beside the dug cell and picked the drop up")
           (is (= :count (:reason (done-event s))))
           (is (empty? (events-of s :mine.gave-up))))))))
+
+(def walled-ore
+  "Iron ore two cells east of the start behind a rock cell at feet height, its top seen over that cell; rock over the
+  start leaves no room to step up, so no walk gets beside the ore."
+  (-> (merge (cells floor-block [0 1 2 3] [63] [-1 0 1])
+             (cells "stone" [1 2 3] [64 65] [-1 0 1])
+             (cells "stone" [0] [66] [-1 0 1]))
+      (dissoc "1,65,0" "2,65,0")
+      (assoc "2,64,0" "iron_ore")))
+
+(deftest a-drop-of-ore-dug-over-a-wall-is-cut-to-and-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks walled-ore :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
+          (hide-drop-until-beside! (:p s) [2 64 0])
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :mend false}) {})
+          (await (run-ticks s 40))
+          (is (= [[2 64 0] [1 64 0]] (dug-cells s)) "dug from behind the wall, then the wall cell between")
+          (is (= 1 (get (inv s) "raw_iron")) "the body cut its way beside the dug cell and picked the drop up")
+          (is (= :count (:reason (done-event s)))))))))
 
 (deftest a-mine-that-ends-short-of-its-count-is-stopped-not-completed
   (async done

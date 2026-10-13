@@ -14,6 +14,7 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.tools :as tools]
             [jobs.lib.bridge :as bridge]
             [jobs.lib.access.rules :as rules]
@@ -69,9 +70,10 @@
 
   One call runs these steps in order, again and again until the job ends (it yields with :continue only while a child or
   a walk waits on the world, and after 400 steps):
-  1. Collecting: after a dig the body glances at the dug cell, the cell under it and unsensed cells further down (once per cell), then the collect-drops child gathers the item within :collect-radius; when none came in, the body walks within 1 of the dug cell once and collects again. The count is the
+  1. Collecting: after a dig the body glances at the dug cell, the cell under it and unsensed cells further down (once per cell), then the collect-drops child gathers the item within :collect-radius; when none came in, the body walks within 1 of the dug cell once (a dug cell no walk gets beside, dug from a distance over a wall, is first cut to: at most ::drop-cut-max cells, jobs.lib.dig-route; not with :stay-level), looks and collects again. The count is the
      inventory's, never the dig's report. Drops of the item still lying afterwards (out of reach) are reported
-     once each, info mine.left-behind {:items [{:pos :count}]}. The result's :left is re-checked after the walk
+     once each, info mine.left-behind {:items [{:pos :count}]}. A dig after which nothing came in and no drop is in
+     sight is told once, info mine.drop-lost {:cell}, and listed in the result's :lost. The result's :left is re-checked after the walk
      home and keeps only drops still lying then.
   2. Carrying the goal ends :count.
   3. :max-failures failures end :gave-up (warn mine.gave-up). :dry-digs digs in a row after which the carried
@@ -206,6 +208,7 @@
    ::mend-reach {:default 4 :doc "Reach while mending a cut, in blocks." :spec (a/int-in 0 nil)}
    ::max-mend-failures {:default 6 :doc "Failed mends before the job gives up." :spec (a/int-in 0 nil)}
    ::pickup-grace-ms {:default 400 :doc "How long the body waits for a drop to be picked up, in ms." :spec (a/int-in 0 nil)}
+   ::drop-cut-max {:default 4 :doc "The most cells dug to open a way beside a dug cell whose drop did not come in and that no walk gets beside; 0: no such cut." :spec (a/int-in 0 nil)}
    ::end-torch-gap {:default 4 :doc "A cut's end gets a torch when the last hangs this many steps back or more." :spec (a/int-in 0 nil)}
    ::branch-gap {:default 4 :doc "A dig this far from the tunnel line (and from any torch hung on a branch) gets a torch of its own." :spec (a/int-in 0 nil)}
    ::torch-min {:default 2 :doc "A torch round crafts more when fewer torches than this are carried." :spec (a/int-in 0 nil)}
@@ -418,7 +421,8 @@
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
               (seq (:legs m)) (assoc :legs (:legs m))
               (seq (ore-pick/picked c)) (assoc :ores (ore-pick/picked c))
-              (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
+              (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left))
+              (seq (:lost m)) (assoc :lost (:lost m)))]
     (ctx/emit! c :mine.done (if (= :not-home reason) :warn :info) (merge {:got got :reason reason :mended (or mended 0)
                                           :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0)
                                                      (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
@@ -522,7 +526,18 @@
       (ctx/emit! c :mine.left-behind :info {:items (mapv (fn [[pos n]] (cond-> {:pos pos :count n} (why pos) (assoc :reason (why pos)))) fresh)
                                             :text (str "mine left drops it could not pick up at "
                                                        (str/join " " (map (fn [[pos _]] (str/join "," pos)) fresh)))})
-      (ctx/update-mem! c update :left merge fresh))))
+      (ctx/update-mem! c update :left merge fresh))
+    fresh))
+
+(defn drop-lost!
+  "A dig after which the carried count did not rise and no drop of the item lies in sight: said once per dug cell, and
+  kept for the result's :lost."
+  [c]
+  (let [{:keys [dug-at lost]} (ctx/mem c)]
+    (when (and dug-at (not (some #{dug-at} lost)))
+      (ctx/emit! c :mine.drop-lost :info {:cell dug-at
+                                          :text (str "mine dug at " (str/join "," dug-at) ": nothing came in and no drop is in sight")})
+      (ctx/update-mem! c update :lost (fnil conj []) dug-at))))
 
 (defn ^:async look-for-drop!
   "Once per dug cell, glance at the dug cell and the cell under it, then down the column at each unsensed cell (jobs.lib.dig-look),
@@ -535,15 +550,64 @@
       (await (dig-look/look-at! c (update dug 1 dec)))
       (await (dig-look/look-unknown! c (map #(update dug 1 - %) [2 3 4]))))))
 
+(defn ^:async dig-cell!
+  "Dig pos with a jobs.blocks.dig child: this job's rules judged the cell, the hazards it accepts are the child's."
+  [c pos]
+  (book-ground! c pos)
+  (await (blocks/dig-cell! c pos {:accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+
+(defn drop-cut-max [] (settings/get settings ::drop-cut-max))
+
+(defn drop-cut
+  "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route, falls of 1 at most, a cell never seen
+  taken for stone) from the body's cell to a stand within 1 of the dug cell, at most max-digs of them; nil with no such way."
+  [c dug max-digs]
+  (let [p (:primitives c)
+        at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
+        from (u/cell-vec (u/self-pos c))]
+    (->> [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0] [0 1 0]]
+         (keep #(:dig (dig-route/route at from (mapv + dug %) {:max-digs max-digs :max-fall 1})))
+         (filter #(<= (count %) max-digs))
+         (sort-by count)
+         first)))
+
+(defn ^:async cut-to-drop!
+  "Open a way beside the dug cell (drop-cut), one dig child per cell, at most ::drop-cut-max tries per dug cell; the
+  way is planned again after each dig and a look at what it laid open. :cut (open: walk again), :partial (a dig waits on
+  the world) or nil (no way, or a dig failed)."
+  [c dug]
+  (loop []
+    (let [n (get-in (ctx/mem c) [:drop-cut dug] 0)
+          cells (drop-cut c dug (- (drop-cut-max) n))]
+      (cond
+        (nil? cells) nil
+        (empty? cells) :cut
+        :else (let [cell (first cells)
+                    o (await (dig-cell! c (zipmap [:x :y :z] cell)))]
+                (case o
+                  :continue :partial
+                  (:dug :missing) (do (ctx/update-mem! c assoc :drop-cut {dug (inc n)})
+                                      (await (dig-look/look-at! c cell))
+                                      (await (dig-look/look-at! c (update cell 1 dec)))
+                                      (recur))
+                  nil))))))
+
 (defn ^:async walk-to-drop!
   "A dig whose drop did not come in: once per dug cell, walk within 1 of it (near/go-near!, no escalation), where a drop
-  out of sight or out of reach from the dig spot is seen and picked up. :walked (collect again), :partial (go-to waits)
-  or nil (no walk: it came in, the cell was walked to already, or the walk was blocked)."
+  out of sight or out of reach from the dig spot is seen and picked up; a dug cell no walk gets beside (dug from a
+  distance over a wall) is cut to first (cut-to-drop!; not with :stay-level). :walked (look and collect again), :partial
+  (go-to or a dig waits) or nil (no walk: it came in, the cell was walked to already, or the walk was blocked)."
   [c]
   (let [{:keys [dug-at drop-walked last-carried]} (ctx/mem c)]
     (when (and dug-at (not= dug-at drop-walked) (<= (carried c) (or last-carried 0)))
-      (let [w (await (near/go-near! c (zipmap [:x :y :z] dug-at) 1 {:zone-tolls true :escalate false}))]
+      (let [pos (zipmap [:x :y :z] dug-at)
+            go! #(near/go-near! c pos 1 {:zone-tolls true :escalate false})
+            w (await (go!))
+            cut (when (and (= :blocked w) (not (:stay-level (:args c))) (let [res (ctx/child-result c :walk)] (or (result/unreachable-walk? res) (= :detour (:why res)))))
+                  (await (cut-to-drop! c dug-at)))
+            w (case cut :cut (await (go!)) :partial :partial w)]
         (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))
+        (when (= :there w) (ctx/update-mem! c dissoc :drop-looked))
         (case w :partial :partial :there :walked nil)))))
 
 (defn ^:async collect! [c]
@@ -554,7 +618,8 @@
         why (into {} (map (fn [{:keys [pos reason]}] [[(:x pos) (:y pos) (:z pos)] reason])) (:left (ctx/child-result c :collect)))
         w (when (not= :continue r) (await (walk-to-drop! c)))]
     (when (and (not= :continue r) (nil? w))
-      (await (note-left! c why))
+      (when (and (empty? (await (note-left! c why))) (<= (carried c) (:last-carried (ctx/mem c) 0)))
+        (drop-lost! c))
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]
                              (-> m
@@ -585,12 +650,6 @@
     (ctx/update-mem! c dissoc :digging)
     (when (air (u/seen-name (:primitives c) pos))
       (dug-booked! c pos))))
-
-(defn ^:async dig-cell!
-  "Dig pos with a jobs.blocks.dig child: this job's rules judged the cell, the hazards it accepts are the child's."
-  [c pos]
-  (book-ground! c pos)
-  (await (blocks/dig-cell! c pos {:accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
 (defn ^:async dig! [c pos]
   (await (tools/equip! c))
