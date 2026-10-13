@@ -63,7 +63,7 @@ Prints ledger rows (hash `--since` means commits after it on HEAD). `--flagged` 
     tools/card claim <id> <worker>
 
 Talks to the differ HTTP API (default `http://localhost:8576`, override with `DIFFER_URL`; board is the one
-whose repo path is this checkout, override with `CARD_REPO`). `CARD_AUTHOR` sets the note author (default
+whose repo path is the main checkout (also from a worktree), override with `CARD_REPO`). `CARD_AUTHOR` sets the note author (default
 `agent`). The HTTP API cannot set the worker field, so `claim` sets `in_progress` and adds a note
 "claimed by <worker>" authored by the worker. Needs `curl` and `jq`.
 

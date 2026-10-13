@@ -11,11 +11,13 @@
 #                                           new pending card (priority default 1) with the checklist
 #                                           unit, integration, review, live; prints "<id> <status> <title>"
 # Env: DIFFER_URL (default http://localhost:8576), CARD_AUTHOR (default: worker from claim, else "agent"),
-#      CARD_REPO (default: this repo's root).
+#      CARD_REPO (default: the main checkout of this repo).
 set -euo pipefail
 
 URL="${DIFFER_URL:-http://localhost:8576}"
-REPO="${CARD_REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
+# The board is keyed by the main checkout; a linked worktree resolves to it through the common git dir.
+here="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="${CARD_REPO:-$(cd "$here" && cd "$(git rev-parse --git-common-dir)/.." && pwd)}"
 AUTHOR="${CARD_AUTHOR:-agent}"
 UUID_RE='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 
