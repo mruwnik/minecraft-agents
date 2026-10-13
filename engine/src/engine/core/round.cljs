@@ -45,7 +45,7 @@
                                                    :target (js->clj (.-pos args) :keywordize-keys true)}
                                             (= "noPath" (.-reason r)) (assoc :no-path true))
                       mem/moved-policy))
-        (tally/count-act! eng root slots before r)
+        (tally/count-act! eng root slots before)
         (save-memory! eng)
         (record-act! eng {:root root :reflex reflex} k r (distance from to))
         (emit! eng (cond-> (merge fields {:source :action :kind :done :status (.-status r)})
@@ -53,7 +53,7 @@
                      (number? (.-distance r)) (assoc :distance (/ (js/Math.round (* 100 (.-distance r))) 100))))
         r)
       (catch :default e
-        (tally/count-act! eng root slots before nil)
+        (tally/count-act! eng root slots before)
         (save-memory! eng)
         (emit! eng (cond-> (merge fields {:source :action :kind :done
                                           :status (if (cut? e) :cut :failed)})

@@ -32,9 +32,10 @@
       (nil? entry) (throw (ex-info (str "unknown job " sym) {:job sym}))
       (not (and (or (fn? (:check entry)) (some? (:conditions entry))) (fn? (:round entry))))
       (throw (ex-info (str "job " sym " needs a round and a check or conditions") {:job sym}))
-      (contract/call-problem sym (:ways entry) args) (fail (contract/call-problem sym (:ways entry) args) args)
-      :else (try [entry (a/conform sym data (a/merge-args data (a/defaults data) args))]
-                 (catch :default e (fail (ex-message e) args))))))
+      :else (if-let [problem (contract/call-problem sym (:ways entry) args)]
+              (fail problem args)
+              (try [entry (a/conform sym data (a/merge-args data (a/defaults data) args))]
+                   (catch :default e (fail (ex-message e) args)))))))
 
 (defn unknown-keys-message
   "Why args holds keys the job does not declare (the call keys aside), at any level, or nil: each unknown key of the first level holding one

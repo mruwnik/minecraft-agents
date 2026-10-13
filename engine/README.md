@@ -288,25 +288,15 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 (debug), calls the primitive, saves again. There is no commit: a cut loses at most the work since the last save, so write a
 debt or intent with `update-mem!` before the `act` it protects. After every `moveTo` it writes a `:moved` body-memory entry.
 
-**Tally (engine.contract, engine.core.tally).** Each act's uses and yields go to every frame of its chain, in job memory
-`:contract` (hidden from `ctx/mem`, kept by `update-mem!`): items as the bag and worn change over the act (a result's
-`inventoryChange` wins), wear as a tool's durability drop, health only for the hurt causes fall, cactus, berry bush,
-drowning. Each round's time goes to its own frame only. `job.child_ended` and a root job's `completed`/`stopped`/
-`cancelled`/`reflex.ended` carry `:report` (`{:uses {... :time s} :yields {:items}}`); a finished job's goes to body
-memory `:job-report` (cap 256) as `{:job sym :report}` (and `:target`, the args its `target` names).
+**Tally.** Each act's uses and yields (bag and worn change, tool wear, hurt from fall, cactus, berry bush, drowning) go to
+every frame of its chain, in `:contract` of job memory (hidden from `ctx/mem`); a round's time to its own frame. Endings
+and a root's `completed`/`stopped`/`cancelled`/`reflex.ended` carry `:report`; a finished job's goes to body memory
+`:job-report` (cap 256).
 
-**Contract jobs (engine.contract, engine.core.ending).** Exports `conditions` (`[[:fn f] ...]`, `(f c)` a cause or
-nil), `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`, `defaults` (a qualified keyword value is a
-setting), `done?` (`{:done? :done :left :units}`). Every job takes the call keys `:use :ways :spend :floor :deadline
-:least` beside its args (specced at submit; `:ways` only the job's); they are frozen at the first round in `:contract
-:call` (defaults under them, `:least` 1, `:deadline` the caller's). Each round: a failing condition ends it
-`:condition-failed`, done? true ends it `:done`, else the round runs. A listed one waits while its conditions fail
-until it starts; then any ending ends it. An ending is `{:kind :cause :because :report :data}`, kinds `:done`,
-`:condition-failed`, `:limit-reached`, `:nothing-possible`, `:cut-off` (`contract/prevailing` orders them); one not
-`:done` gets the last child ending not `:done` of its round as `:because` (events carry 4 of a chain). A root ending
-`:done` is `job.completed` `{:kind :done}`, any other `job.stopped` `{:kind :cause :reason}` (`:reason` the cause key);
-`job.child_ended` carries `:ending`. Cancel, drop and death cut off: `job.cancelled` `{:kind :cut-off :cause by}`,
-`reflex.ended` `:ending`, and a `child_ended :cut-off` for each started frame under an ended or cancelled one.
+**Contract jobs.** Export `conditions` and `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
+`defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` are frozen at the first round. A failing
+condition ends `:condition-failed`, `done?` ends `:done`. Endings: `{:kind :cause :because :report :data}`; a root's is
+`job.completed` (`:done`) or `job.stopped`; cancel, drop and death are `:cut-off`.
 
 **call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
 it returns `:continue` or `:declined`; on `:done` the sub-map is cleared so the next call starts fresh. A cut anywhere ends

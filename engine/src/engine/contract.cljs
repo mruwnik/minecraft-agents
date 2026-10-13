@@ -41,15 +41,15 @@
 
 (defn act-delta
   "What one act used and yielded, from body snapshots {:inventory :equipment :hurt {cause total}} before and after it,
-  and change, the act's own {item delta} where its result gives one. Uses and yields are not netted."
-  [before after change]
+  Uses and yields are not netted."
+  [before after]
   (if-not (and (:inventory before) (:inventory after))
     {}
     (let [stacks-before (carried-stacks before)
           stacks-after (carried-stacks after)
           count-before (counts stacks-before)
           count-after (counts stacks-after)
-          items (or change (minus count-after count-before))
+          items (minus count-after count-before)
           kept? #(= (get count-after %) (get count-before %))
           wear (into {} (filter (comp kept? key))
                      (positive (minus (durabilities stacks-before) (durabilities stacks-after))))
@@ -86,11 +86,6 @@
     (throw (ex-info (str "an ending's kind is one of " (str/join ", " (sort all-kinds)) ", not " (pr-str kind))
                     {:kind kind})))
   (cond-> {:kind kind :cause cause} (seq data) (assoc :data data)))
-
-(defn prevailing
-  "The ending among endings whose kind comes first in kinds, :done last."
-  [endings]
-  (first (sort-by #(let [i (.indexOf kinds (:kind %))] (if (neg? i) (count kinds) i)) endings)))
 
 (defn cause-key
   "The keyword an ending's cause reads as (an event's :reason): the cause itself, a map's :reason, :fact or :line,

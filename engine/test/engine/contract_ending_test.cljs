@@ -10,13 +10,6 @@
             [engine.memory :as mem]
             [engine.test-util :as tu]))
 
-(deftest the-kind-order-decides-when-two-hold
-  (are [kinds winner] (= winner (:kind (contract/prevailing (map (fn [k] {:kind k}) kinds))))
-    [:nothing-possible :condition-failed] :condition-failed
-    [:condition-failed :limit-reached :nothing-possible] :limit-reached
-    [:done :limit-reached :cut-off] :cut-off
-    [:done] :done))
-
 (deftest an-ending-names-its-cause-keyword
   (are [e k] (= k (contract/cause-key e))
     {:kind :condition-failed :cause :free-slots} :free-slots

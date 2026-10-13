@@ -7,10 +7,15 @@
 
 ;; ------------------------------------------------------------------ job memory
 
+(defn without-tally
+  "m, a job's memory map, without the engine's :contract tally, its children's included."
+  [m]
+  (-> m (dissoc :contract) (update :children update-vals without-tally)))
+
 (defn mem
   "This job's memory map (its sub-map, for a child), without the engine's :contract tally."
   [ctx]
-  (dissoc (mem/job-mem ((:view ctx)) (:root ctx) (:slots ctx)) :contract))
+  (without-tally (mem/job-mem ((:view ctx)) (:root ctx) (:slots ctx))))
 
 (defn update-mem!
   "Apply (f current & args) to this job's memory map. Throws a cut error if

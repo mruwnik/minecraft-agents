@@ -30,11 +30,9 @@
                                        m paths))))))
 
 (defn count-act!
-  "Add what the act since before (a snapshot) used and yielded to every frame from root down to slots; result is the
-  act's JS result, nil when it threw."
-  [eng root slots before result]
-  (let [change (some-> result .-inventoryChange (js->clj))
-        delta (contract/act-delta before (snapshot eng) change)]
+  "Add what the act since before (a snapshot) used and yielded to every frame from root down to slots."
+  [eng root slots before]
+  (let [delta (contract/act-delta before (snapshot eng))]
     (when (seq delta)
       (update-frames! eng root (frame-paths slots) #(update % :tally contract/add delta)))))
 

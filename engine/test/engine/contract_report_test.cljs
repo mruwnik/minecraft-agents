@@ -17,40 +17,29 @@
   ([inventory equipment hurt] {:inventory inventory :equipment equipment :hurt hurt}))
 
 (deftest an-act-uses-what-left-the-bag-and-yields-what-came-in
-  (are [before after change expected] (= expected (contract/act-delta before after change))
+  (are [before after expected] (= expected (contract/act-delta before after))
     (snap [{:name "oak_log" :count 2 :slot 0}])
     (snap [{:name "oak_log" :count 1 :slot 0} {:name "oak_planks" :count 4 :slot 1}])
-    nil
     {:uses {:items {"oak_log" 1}} :yields {:items {"oak_planks" 4}}}
 
     (snap [{:name "stone_pickaxe" :count 1 :slot 0 :durability 131}])
     (snap [{:name "stone_pickaxe" :count 1 :slot 3 :durability 129}])
-    nil
     {:uses {:wear {"stone_pickaxe" 2}}}
 
     (snap [{:name "stone_pickaxe" :count 1 :slot 0 :durability 1}])
     (snap [])
-    nil
     {:uses {:items {"stone_pickaxe" 1}}}
 
     (snap [{:name "iron_helmet" :count 1 :slot 0}])
     (snap [] {:head {:name "iron_helmet" :count 1} :mainHand nil} {})
-    nil
     {}
-
-    (snap [{:name "emerald" :count 5 :slot 0}])
-    (snap [{:name "emerald" :count 5 :slot 0}])
-    {"emerald" -3 "bread" 6}
-    {:uses {:items {"emerald" 3}} :yields {:items {"bread" 6}}}
 
     (snap [] {} {"zombie" 4 "fall" 2})
     (snap [] {} {"zombie" 9 "fall" 5 "berry bush" 1 "drowning" 2 "lava" 4})
-    nil
     {:uses {:health 6}}
 
     {:inventory nil}
     (snap [{:name "dirt" :count 1 :slot 0}])
-    nil
     {}))
 
 (deftest the-report-adds-the-round-time-to-the-uses
@@ -125,7 +114,13 @@
           (is (= {:ate true} (dissoc (ctx/mem (core/make-ctx eng {:root id :slots [:a :b] :chain [] :token nil
                                                                   :args {} :round 1}))
                                      :args :children))
-              "a job does not see the tally in its memory"))))))
+              "a job does not see the tally in its memory")
+          (is (= #{:a} (set (keys (:children (ctx/mem (core/make-ctx eng {:root id :slots [] :chain [] :token nil
+                                                                           :args {} :round 1}))))))
+              "the root sees its child")
+          (is (not-any? :contract (vals (:children (ctx/mem (core/make-ctx eng {:root id :slots [] :chain [] :token nil
+                                                                                :args {} :round 1})))))
+              "nor the tally of a child"))))))
 
 (deftest the-tally-survives-a-cut-and-is-on-disk
   (async done
