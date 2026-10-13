@@ -49,7 +49,7 @@ test('memSlots: (available - 6 GB floor) / shard peak, at least 1, at most 3', (
 
 test('testNamespaces covers every file under engine/test that contains deftest', () => {
   const root = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'engine', 'test')
-  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)])
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : e.isFile() ? [path.join(d, e.name)] : [])
   const nss = testNamespaces()
   const missing = walk(root).filter((f) => /\(deftest\s/.test(fs.readFileSync(f, 'utf8')))
     .map((f) => [f, fs.readFileSync(f, 'utf8').match(/^\(ns\s+(?:\^\S+\s+)*([^\s()]+)[\s)]/m)?.[1]])

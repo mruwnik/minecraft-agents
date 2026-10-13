@@ -19,7 +19,7 @@ git diff --quiet HEAD -- || { echo "land: tracked changes not committed" >&2; ex
 common=$(cd "$(git rev-parse --git-common-dir)" && pwd)
 repo=$(dirname "$common")
 # The branch the fix branch was cut from (fixer-worktree.sh records it), landed on the checkout that has it checked out.
-target=$(git config "branch.$branch.fixbase" || git -C "$repo" symbolic-ref --short HEAD)
+target=$(git config "branch.$branch.fixbase") || { echo "land: no branch.$branch.fixbase recorded; cut the branch with tools/fixer-worktree.sh [--base <branch>]" >&2; exit 1; }
 source "$(dirname "$0")/commit-lock.sh"
 main=$(checkout_of "$target")
 [ -n "$main" ] || { echo "land: no checkout has $target checked out" >&2; exit 1; }
