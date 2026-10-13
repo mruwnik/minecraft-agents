@@ -98,21 +98,19 @@
 
 (defn make-world
   "Memoised reader over block-at: {:block f :cell f :unloaded volatile-of-set :head volatile-of-set}; both take x y z.
-  The cells in sealed ([x y z]) read as a wall two high. :head collects the unloaded cells clear? read as head room."
-  [block-at sealed]
-  (let [blocks (volatile! {})
-        cells (volatile! {})
+  The cells in sealed ([x y z]) read as a wall two high. :head collects the unloaded cells clear? read as head room.
+  blocks (a volatile map) holds the blocks read, shared by the fills of one check: block-at is asked once per cell."
+  [block-at sealed blocks]
+  (let [cells (volatile! {})
         unloaded (volatile! #{})
         head (volatile! #{})
         block (fn [x y z]
                 (let [k [x y z]
-                      known (get @blocks k absent)]
-                  (if-not (identical? known absent)
-                    known
-                    (let [b (block-at {:x x :y y :z z})]
-                      (vswap! blocks assoc k b)
-                      (when (nil? b) (vswap! unloaded conj k))
-                      b))))
+                      known (get @blocks k absent)
+                      b (if (identical? known absent) (block-at {:x x :y y :z z}) known)]
+                  (when (identical? known absent) (vswap! blocks assoc k b))
+                  (when (nil? b) (vswap! unloaded conj k))
+                  b))
         read (fn [x y z]
                (if-let [b (block x y z)]
                  (collision b)
@@ -412,13 +410,13 @@
 (defn analyse
   "One fill: {:world :fill :leaks} with the leaks found (the unloaded cells too); nil when there is no start and no
   unloaded cell was read looking for one."
-  [{:keys [block-at at box max-cells sealed near]}]
-  (let [scan (make-world block-at sealed)
+  [{:keys [block-at at box max-cells sealed near blocks]}]
+  (let [scan (make-world block-at sealed blocks)
         seeds (cond
                 at (seeds-at scan at)
                 box (seeds-in-box scan box))
         ;; the scan of a tall box reads every cell under the floors; only what the fill reads can leak
-        world (if (and box (seq seeds)) (make-world block-at sealed) scan)]
+        world (if (and box (seq seeds)) (make-world block-at sealed blocks) scan)]
     (when (or (seq seeds) (seq @(:unloaded world)))
       (let [{:keys [seen exits truncated?] end :last :as fill} (fill world seeds box max-cells)
             found (cond
@@ -456,7 +454,7 @@
   :leaks is [{:pos {:x :y :z} :why}], :why one of :open-gate :gap :climb :open :unloaded.
   :gate-drops is [{:gate :from :to :drop}]: a gate whose side of the pen is cut off from the rest by a drop of more than 1."
   [{:keys [max-cells] :or {max-cells default-max-cells} :as opts}]
-  (let [opts (assoc opts :max-cells max-cells :sealed #{})
+  (let [opts (assoc opts :max-cells max-cells :sealed #{} :blocks (volatile! {}))
         {:keys [world fill leaks]} (analyse opts)]
     (if (or (not world) (and (empty? (:order fill)) (empty? leaks)))
       (answer false :no-start #{} [] [])

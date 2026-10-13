@@ -62,6 +62,16 @@
       (look/see! c)
       (when (unknown? (:primitives c) cell) (recur (inc n))))))
 
+(defn ^:async look-at-unknown!
+  "look-at! each of cells that is still unknown when its turn comes (a look's sight pass shows its neighbours too), at
+  most n looks: [looks cells-passed]."
+  [c cells n]
+  (loop [[cell & more] cells looks 0 passed []]
+    (cond
+      (or (nil? cell) (>= looks n)) [looks passed]
+      (unknown? (:primitives c) cell) (do (await (look-at! c cell)) (recur more (inc looks) (conj passed cell)))
+      :else (recur more looks (conj passed cell)))))
+
 (defn step-ms
   "[total max] ms perception's sight steps have taken so far, nil without a perception."
   [p]
@@ -75,9 +85,10 @@
   (look/seen-entities) query with no cell left to look at gets one look round (look/survey-until!, per body cell),
   stopping at the first look that makes the decision positive. Unloaded cells are never looked at. k names the
   decision in the :sense.looked debug event, emitted when the call looked. opts: :retry? (default negative?),
-  :verify-guesses. Call it from a round only: it acts."
+  :verify-guesses, :batch (for a decision that is costly to make: look at the unknown cells it read, nearest first, while
+  still unknown and looks are left, before deciding again). Call it from a round only: it acts."
   ([c k decide-fn] (decide! c k decide-fn {}))
-  ([c k decide-fn {:keys [retry? verify-guesses] :or {retry? negative?}}]
+  ([c k decide-fn {:keys [retry? verify-guesses batch] :or {retry? negative?}}]
    (let [p (:primitives c)
          here (u/self-pos c)
          cell (look/cell-of here)
@@ -91,9 +102,14 @@
                  guessed (when (and verify-guesses (not (retry? v))) (seq (remove looked (:guessed reads))))]
              (if (or full? (and (not (retry? v)) (not guessed)))
                [v looked surveyed]
-               (let [target (first (targets p here (if guessed guessed (:cells reads)) looked))
+               (let [found (targets p here (if guessed guessed (:cells reads)) looked)
+                     target (first found)
                      ask (when (retry? v) (or (seq (:area reads)) (seq (:entities reads))))]
                  (cond
+                   (and target batch (< looks (max-looks)))
+                   (let [[n passed] (await (look-at-unknown! c found (- (max-looks) looks)))]
+                     (recur (+ looks (max n 1)) (into looked passed) surveyed))
+
                    (and target (< looks (max-looks)))
                    (do (await (look-at! c target))
                        (recur (inc looks) (conj looked target) surveyed))

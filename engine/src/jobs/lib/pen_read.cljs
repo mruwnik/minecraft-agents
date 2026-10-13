@@ -5,6 +5,7 @@
   from memory that stay out of view."
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [jobs.lib.look :as look]
             [jobs.lib.pen :as pen]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
@@ -27,21 +28,29 @@
         answer (pen/check (assoc opts :block-at (block-at-fn p stale)))]
     (assoc answer :remembered (vec @stale))))
 
+(defn remembered?
+  "True while the body knows cell [x y z] from memory only."
+  [p cell]
+  (let [s (u/sensed p (u/cell-pos cell))]
+    (not (or (nil? s) (true? (.-unknown s)) (true? (.-visible s)) (true? (.-felt s))))))
+
 (defn ^:async read!
-  "read, looking at the remembered cells within sight first (see the ns), and at unseen cells as sense/decide! does
-  while retry? (default: the pen is not closed) holds. Call it from a round only: it acts."
+  "read, looking at the remembered cells within sight first (see the ns); while retry? (default: the pen is not
+  closed) holds, after a look round (once per body cell) and at unseen cells as sense/decide! does. A read fills the
+  whole pen, so the looks come in batches (usually 3 reads a call). Call it from a round only: it acts."
   ([c opts] (read! c opts #(not (:closed? %))))
   ([c opts retry?]
    (let [p (:primitives c)
-         here (u/self-pos c)]
-     (loop [looked #{} n 0]
-       (let [answer (await (sense/decide! c ::pen #(read p opts) {:retry? retry?}))
-             target (when (< n (sense/max-looks))
-                      (first (sense/targets p here (:remembered answer) looked)))]
-         (if-not target
-           answer
-           (do (await (sense/look-at! c target))
-               (recur (conj looked target) (inc n)))))))))
+         answer (read p opts)
+         stale (take (sense/max-looks) (sense/targets p (u/self-pos c) (:remembered answer) #{}))]
+     (if (and (empty? stale) (not (retry? answer)))
+       answer
+       (do (when-not (and (retry? answer) (await (look/survey! c :cell)))
+             (loop [[cell & more] stale]
+               (when cell
+                 (when (remembered? p cell) (await (sense/look-at! c cell)))
+                 (recur more))))
+           (await (sense/decide! c ::pen #(read p opts) {:retry? retry? :batch true})))))))
 
 (defn listed
   "The :remembered cells of answer nearest to the body at here, as {:x :y :z}, at most pen/max-listed, plus

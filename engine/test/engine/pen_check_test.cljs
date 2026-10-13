@@ -181,3 +181,36 @@
               result (await (tu/child-outcome eng job {:plan "pen"} 300))]
           (is (= :leak (:reason result)))
           (is (= [{:pos {:x 4 :y 64 :z 3} :why :gap}] (:leaks result))))))))
+
+(def plain
+  "Open ground far past the sight radius round the fence ring."
+  (into {} (for [x (range -60 66) z (range -60 66)] [(str x ",63," z) "stone"])))
+
+(defn ^:async run-counting
+  "Run the job with args in world w on a seeing body until it ends: {:event :looks :fills}, a fill being one read of
+  the floor cell ([x y z]) under the start."
+  [args w floor]
+  (let [s (h/setup-seeing (assoc w :yaw 0) nil)
+        p (:p s)
+        orig (.-sensedAt p)
+        fills (atom 0)]
+    (set! (.-sensedAt p) (fn [pos]
+                           (when (= floor [(.-x pos) (.-y pos) (.-z pos)]) (swap! fills inc))
+                           (orig pos)))
+    (core/submit! (:eng s) (list job args) {})
+    (dotimes [_ 12]
+      (swap! (:clock s) + 700)
+      (await (core/tick! (:eng s))))
+    {:event (first (filter #(= :pen-check.done (:kind %)) @(:seen s)))
+     :looks (count (h/calls p "look"))
+     :fills @fills}))
+
+(deftest a-leaky-pen-in-open-ground-is-not-filled-again-after-every-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (assoc (world {}) :blocks (merge plain fence-ring {"2,64,-1" "air"}))
+              {:keys [event looks fills]} (await (run-counting {:at [2 64 2]} w [2 63 2]))]
+          (is (= :leak (:reason event)))
+          (is (some #{{:x 2 :y 64 :z -1}} (map :pos (:leaks event))))
+          (is (<= (* 2 fills) looks) (str fills " fills for " looks " looks")))))))
