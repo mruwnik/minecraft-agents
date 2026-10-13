@@ -14,6 +14,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.reach :as reach]
             [jobs.survival.retreat :as retreat]
+            [jobs.survival.retreat-cornered :as cornered]
             [jobs.survival.retreat-home :as retreat-home]))
 
 ;; The hut of hut-shelter-test: walls x 3..7, z -2..2, roof y 67, room x 4..6 z -1..1, a door at (5,64,2) facing south.
@@ -82,7 +83,7 @@
     20 0 true))
 
 (deftest cornered-at-home-the-body-never-digs-its-own-hut
-  (let [order (retreat/escape-order {:home? true})]
+  (let [order (cornered/escape-order {:home? true})]
     (is (not-any? #{:pit :pocket} order) (str order))
     (is (= :seal (first order)))))
 

@@ -21,6 +21,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.survival.retreat :as retreat]
+            [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.retreat-cover :as cover]
             [jobs.survival.retreat-flight :as retreat-flight]
             [jobs.lib.seal :as seal]
             [jobs.survival.retreat-goal :as retreat-goal]
@@ -257,7 +259,7 @@
             (await (run-job! s 'jobs.survival.retreat {})))
           (is (some? @first-attack) "the body hit back")
           (is (<= @searches-at-attack 1) "a hostile in reach bounds the leg to one search round, so the body does not stand taking hits")
-          (is (<= (- @first-attack t0) (* 1000 (+ 4 (retreat/close-leg-s)))) "after one short leg (and the calls to equip and look), not after standing searching"))))))
+          (is (<= (- @first-attack t0) (* 1000 (+ 4 (cornered/close-leg-s)))) "after one short leg (and the calls to equip and look), not after standing searching"))))))
 
 (deftest a-flee-leg-is-short-when-the-body-was-just-hurt-and-no-hostile-is-in-reach
   (async done
@@ -374,7 +376,7 @@
   {:check (constantly true)
    :round (fn ^:async sweeper-round [c]
             (loop [n 1]
-              (let [r (await (retreat/blocked! c "test"))]
+              (let [r (await (cornered/blocked! c "test"))]
                 (if (= :again r) (recur (inc n)) r))))})
 
 (deftest blocked-twice-in-a-row-stops-cannot-escape
@@ -393,7 +395,7 @@
   {:check (constantly true)
    :round (fn ^:async backer-round [c]
             (let [threat (first (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
-                  r (await (retreat/back-off! c threat))]
+                  r (await (cornered/back-off! c threat))]
               (reset! out {:r r :tried (retreat-flight/tried? c :back-off)})
               :done))})
 
@@ -614,12 +616,12 @@
     {:eng eng :p p :raw raw :seen seen :clock clock}))
 
 (defn targeter
-  "A job that picks one flight target (retreat/flight-target!) away from the hostiles it knows, kept in out."
+  "A job that picks one flight target (cover/flight-target!) away from the hostiles it knows, kept in out."
   [out]
   {:check (constantly true)
    :round (fn ^:async targeter-round [c]
             (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})]
-              (reset! out (await (retreat/flight-target! c threats)))
+              (reset! out (await (cover/flight-target! c threats)))
               :done))})
 
 (deftest a-flight-in-an-open-field-turns-to-see-its-way-and-flees-far
@@ -842,7 +844,7 @@
   (update (targeter out) :round (fn [round] (fn ^:async looking-round [c] (await (look/look-around! c)) (await (round c))))))
 
 (defn ^:async target-after
-  "The cell retreat/flight-target! picks for a zombie to the east, with the :died spots and settings given."
+  "The cell cover/flight-target! picks for a zombie to the east, with the :died spots and settings given."
   [{:keys [light light-default time]} died settings-map]
   (let [out (atom nil)
         s (assoc-in (setup-sensed (cond-> {:entities [(zombie 7 5 {})]} time (assoc :time time))) [:eng :jobs 'targeter] (looking-targeter out))]
@@ -1006,7 +1008,7 @@
                    :round (fn ^:async again [c]
                             (dotimes [_ 3]
                               (ctx/update-mem! c dissoc :tried)
-                              (await (retreat/dig-pocket! c)))
+                              (await (cover/dig-pocket! c)))
                             :done)}
               s (assoc-in s [:eng :jobs 'again] job)]
           (await (run-job! s 'again {:blocks ["cobblestone"]}))
@@ -1024,7 +1026,7 @@
                    :round (fn ^:async twice [c]
                             (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})]
                               (dotimes [_ 3]
-                                (await (retreat/flight-target! c threats))
+                                (await (cover/flight-target! c threats))
                                 (swap! counts conj (looks @raw-atom)))
                               :done))}
               s (setup-sensed {:blocks long-tunnel :entities [(zombie 7 8 {})]})

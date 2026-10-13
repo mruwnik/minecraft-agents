@@ -4,6 +4,7 @@
             [engine.memory :as mem]
             [jobs.lib.child :as child]
             [jobs.lib.dawn :as dawn]
+            [jobs.lib.doors :as doors]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
@@ -16,8 +17,7 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.hold :as hold]
-            [jobs.survival.night.sites :as sites]
-            [jobs.survival.retreat :as retreat]))
+            [jobs.survival.night.sites :as sites]))
 
 (def doc
   "The night: one round from the trigger until the night is over and the body is out of its shelter. The round repeats
@@ -40,7 +40,7 @@
     :bed-placed for the morning (info night.bed-placed {:pos :own-zone} says where). No room writes :bed-place-failed (10 minutes, or until the body is 6+ blocks away).
   - someone else asleep (sh/log-out-for-sleepers?): jobs.survival.log-out, a 30 s stint at most until morning, again
     while anyone sleeps or nothing is known. A log-out that is not ok or cut is not tried again tonight.
-  - a closed room around the body (roofed within :room-roof-height) with an open door: the door is shut (retreat/shut-home-door!,
+  - a closed room around the body (roofed within :room-roof-height) with an open door: the door is shut (doors/shut-home-door!,
     walking to it when out of reach); a door that stays open writes :night-door-failed (shelter.door-failed warn) and the
     night goes on as below.
   - a roof over a room with a hole (a fresh :bed-open entry within sh/breach-near and no closed room, sh/breached-home?): says so once
@@ -300,15 +300,15 @@
 
 
 (defn ^:async shut-room-door!
-  "Shut an open door of the closed room the body stands in (retreat/shut-home-door!: from where it stands within a hand's
+  "Shut an open door of the closed room the body stands in (doors/shut-home-door!: from where it stands within a hand's
   reach, else a step to the room cell inside it first). No zone rule applies: shutting a door changes no block. A door still
   open once tried (clicked, or no step got nearer) writes :night-door-failed for this door (shelter.door-failed warn), so the
   night does not call the body safe behind it. :again."
   [c door]
-  (await (retreat/shut-home-door! c door))
+  (await (doors/shut-home-door! c door))
   (when (and (some #(= (sh/door-key (:cell door)) (sh/door-key (:cell %))) (sh/open-doors (:primitives c) (ctx/view c)))
-             (contains? (:doors-clicked (ctx/mem c) #{}) (retreat/door-key (:cell door))))
-    (ctx/emit! c :shelter.door-failed :warn {:cell (retreat/door-key (:cell door))
+             (contains? (:doors-clicked (ctx/mem c) #{}) (doors/door-key (:cell door))))
+    (ctx/emit! c :shelter.door-failed :warn {:cell (doors/door-key (:cell door))
                                              :text "an open door of the room would not shut; the room is not safe"})
     (ctx/remember! c :night-door-failed {:door (sh/door-key (:cell door))} {:cap 1 :ttl (sh/door-failed-ms)}))
   :again)

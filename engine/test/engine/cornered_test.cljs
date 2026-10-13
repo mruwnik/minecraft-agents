@@ -15,6 +15,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.survival.retreat :as retreat]
+            [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.retreat-cover :as cover]
             [jobs.survival.retreat-walk :as retreat-walk]
             [jobs.lib.seal :as seal]
             [jobs.survival.retreat-refuge :as retreat-refuge]))
@@ -726,16 +728,16 @@
         p (tu/fake-on-floor {:self {:pos [0.5 64 0.5]} :blocks wall})
         skel #js {:name "skeleton" :visible true :pos #js {:x 6.5 :y 64 :z 0.5}}
         behind {:x 0 :y 64 :z 0}]
-    (is (true? ((retreat/cover-fn p [skel]) behind)) "a seen wall covers")
+    (is (true? ((cover/cover-fn p [skel]) behind)) "a seen wall covers")
     (aset p "sensedAt" (fn [pos] (if (= 3 (.-x pos)) #js {:unknown true} (.blockAt p pos))))
-    (is (false? ((retreat/cover-fn p [skel]) behind)) "an unseen one does not")
-    (is (nil? (retreat/cover-fn p [#js {:name "skeleton" :visible false :pos #js {:x 6.5 :y 64 :z 0.5}}]))
+    (is (false? ((cover/cover-fn p [skel]) behind)) "an unseen one does not")
+    (is (nil? (cover/cover-fn p [#js {:name "skeleton" :visible false :pos #js {:x 6.5 :y 64 :z 0.5}}]))
         "a heard-only skeleton gives no line of fire to judge")))
 
 (def enderman (fn [x y z] {:id 10 :name "enderman" :kind "hostile" :pos {:x x :y y :z z} :health 40}))
 
 (deftest an-angry-enderman-is-not-fled-on-foot-nor-fought-the-body-shelters
-  (is (= [:water :roof :seal :pit :pocket :fight] (retreat/escape-order {:enderman? true :win? true}))
+  (is (= [:water :roof :seal :pit :pocket :fight] (cornered/escape-order {:enderman? true :win? true}))
       "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds"))
 
 (deftest a-body-with-an-enderman-near-walls-itself-in-instead-of-walking
@@ -754,8 +756,8 @@
 (deftest water-cell-is-the-nearest-seen-water-within-reach
   (let [water #{[3 64 0] [-2 64 1] [9 64 0]}
         at (fn [{:keys [x y z]}] (if (water [x y z]) "water" "air"))]
-    (is (= {:x -2 :y 64 :z 1} (retreat/water-cell at {:x 0.5 :y 64 :z 0.5} 6)))
-    (is (nil? (retreat/water-cell at {:x 20.5 :y 64 :z 0.5} 6)) "none within reach")))
+    (is (= {:x -2 :y 64 :z 1} (cornered/water-cell at {:x 0.5 :y 64 :z 0.5} 6)))
+    (is (nil? (cornered/water-cell at {:x 20.5 :y 64 :z 0.5} 6)) "none within reach")))
 
 (deftest a-body-with-an-enderman-near-steps-into-water-nearby
   (async done
@@ -773,15 +775,15 @@
 (deftest roof-cell-is-the-nearest-seen-two-high-gap-under-a-roof
   (let [solid #{[0 63 0] [3 63 0] [3 66 0] [-2 63 1] [-2 65 1] [9 63 0] [9 66 0]}
         at (fn [{:keys [x y z]}] (if (solid [x y z]) "stone" "air"))]
-    (is (= {:x 3 :y 64 :z 0} (retreat/roof-cell at {:x 0.5 :y 64 :z 0.5} 8)) "a cell with a block at head height is no gap; one beyond reach is skipped")
-    (is (nil? (retreat/roof-cell at {:x 20.5 :y 64 :z 0.5} 8)) "none within reach")))
+    (is (= {:x 3 :y 64 :z 0} (cornered/roof-cell at {:x 0.5 :y 64 :z 0.5} 8)) "a cell with a block at head height is no gap; one beyond reach is skipped")
+    (is (nil? (cornered/roof-cell at {:x 20.5 :y 64 :z 0.5} 8)) "none within reach")))
 
 (deftest roof-cell-prefers-a-cell-no-enderman-can-stand-within-two-cells-of
   (let [roof (for [x (range 3 9) z (range -3 4)] [x 66 z])
         floor (for [x (range 0 9) z (range -3 4)] [x 63 z])
         solid (set (concat roof floor))
         at (fn [{:keys [x y z]}] (if (solid [x y z]) "stone" "air"))]
-    (is (= {:x 5 :y 64 :z 0} (retreat/roof-cell at {:x 0.5 :y 64 :z 0.5} 8))
+    (is (= {:x 5 :y 64 :z 0} (cornered/roof-cell at {:x 0.5 :y 64 :z 0.5} 8))
         "the edge cell x=3 is open to a 3-high stand at x=2: it takes the first cell 2 in")))
 
 (deftest a-body-with-an-enderman-near-and-no-water-walks-under-a-nearby-roof
@@ -808,7 +810,7 @@
     (is (= cells (retreat-refuge/nearest-first feet [] cells)) "no chaser: as given")))
 
 (deftest a-creeper-beside-an-enderman-keeps-the-creeper-order
-  (is (= :back-off (first (retreat/escape-order {:enderman? true :creeper? true})))))
+  (is (= :back-off (first (cornered/escape-order {:enderman? true :creeper? true})))))
 
 (deftest a-calm-enderman-is-walked-away-from-not-sealed-against
   (async done
@@ -840,25 +842,25 @@
           (is (not-any? #(re-find #"cannot_escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
 
 (deftest a-body-in-water-hunted-by-a-drowned-tries-to-swim-out-before-anything-else
-  (is (= [:swim-out :seal :pillar :back-off :pit :pocket :fight] (retreat/escape-order {:swim? true})))
-  (is (= [:fight] (retreat/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
-  (is (= :back-off (first (retreat/escape-order {:swim? true :creeper? true})))))
+  (is (= [:swim-out :seal :pillar :back-off :pit :pocket :fight] (cornered/escape-order {:swim? true})))
+  (is (= [:fight] (cornered/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
+  (is (= :back-off (first (cornered/escape-order {:swim? true :creeper? true})))))
 
 (deftest no-pillar-against-a-climber
-  (is (= [:seal :back-off :pit :pocket :fight] (retreat/escape-order {:climber? true}))
+  (is (= [:seal :back-off :pit :pocket :fight] (cornered/escape-order {:climber? true}))
       "a spider climbs the pillar's side to the body on top"))
 
 (deftest no-step-back-from-a-mob-that-outruns-the-body
-  (is (= [:seal :pit :pocket :fight] (retreat/escape-order {:climber? true :faster? true})))
-  (is (= [:seal :pillar :pit :pocket :fight] (retreat/escape-order {:faster? true})) "one that cannot climb is pillared against")
-  (is (= [:fight] (retreat/escape-order {:faster? true :win? true}))))
+  (is (= [:seal :pit :pocket :fight] (cornered/escape-order {:climber? true :faster? true})))
+  (is (= [:seal :pillar :pit :pocket :fight] (cornered/escape-order {:faster? true})) "one that cannot climb is pillared against")
+  (is (= [:fight] (cornered/escape-order {:faster? true :win? true}))))
 
 (deftest an-armed-body-with-a-hitter-at-it-fights-before-it-builds
-  (is (= [:fight :seal :pillar :back-off :pit :pocket] (retreat/escape-order {:pressed? true}))
+  (is (= [:fight :seal :pillar :back-off :pit :pocket] (cornered/escape-order {:pressed? true}))
       "four dirt placed beside a zombie that keeps hitting cost three hits")
-  (is (= [:fight :seal :pillar :pit :pocket] (retreat/escape-order {:pressed? true :faster? true})))
-  (is (= :back-off (first (retreat/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
-  (is (= :water (first (retreat/escape-order {:pressed? true :enderman? true})))))
+  (is (= [:fight :seal :pillar :pit :pocket] (cornered/escape-order {:pressed? true :faster? true})))
+  (is (= :back-off (first (cornered/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
+  (is (= :water (first (cornered/escape-order {:pressed? true :enderman? true})))))
 
 (defn ^:async beset-round
   "A retreat of an armed body that carries blocks, at 8 health with zombies about and every walk blocked ((on-walk
@@ -927,8 +929,8 @@
 
 (deftest under-fire-in-a-new-cell-the-covers-that-failed-elsewhere-are-tried-again
   (is (= {:tried #{:back-off} :fire-cell [1 64 0]}
-         (retreat/retry-covers {:tried #{:seal :pit :pocket :back-off} :fire-cell [0 64 0]} [1 64 0])))
-  (is (= {:tried #{:seal} :fire-cell [0 64 0]} (retreat/retry-covers {:tried #{:seal} :fire-cell [0 64 0]} [0 64 0]))
+         (cornered/retry-covers {:tried #{:seal :pit :pocket :back-off} :fire-cell [0 64 0]} [1 64 0])))
+  (is (= {:tried #{:seal} :fire-cell [0 64 0]} (cornered/retry-covers {:tried #{:seal} :fire-cell [0 64 0]} [0 64 0]))
       "the same cell: a failed seal stays failed"))
 
 (deftest an-unarmed-body-at-full-health-seals-in-against-a-spider-instead-of-running-or-punching
@@ -1019,7 +1021,7 @@
                      [{:armed? false :win? false :sweeps 0 :fist-sweeps 0} false]
                      [{:armed? true :win? false :sweeps 0 :fist-sweeps 1} false]
                      [{:armed? false :win? true :sweeps 0 :fist-sweeps 1} false]]]
-    (is (= held (retreat/fist-hold? in)) (pr-str in))))
+    (is (= held (cornered/fist-hold? in)) (pr-str in))))
 
 (deftest a-pillared-body-hurt-on-its-pillar-raises-it-instead-of-fighting
   (async done
