@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [clojure.string :as str]
             [jobs.lib.blocks :as b]
+            [jobs.lib.choose :as choose]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.fetch :as fetch]
@@ -104,18 +105,15 @@
             (do (done! c :deposited (assoc (select-keys p [:free :cost]) :result (ctx/child-result c child))) nil)))))))
 
 (defn spare-need
-  "The carried tool (map) that tool-ready! wants a spare for when digging block-name, or nil: the one digging it
-  (jobs.lib.tools/suited-item) is at or under ::spare-fraction of its durability and no other carried tool of that kind
-  that harvests it is above it. A tool with no known durability counts as whole."
-  [p block-name]
-  (let [harvest (some-> (.harvestTools p block-name) js->clj)
-        kind (tools/tool-kind block-name)
-        ok (set harvest)
-        worn? (fn [t] (and (:durability t) (:max t) (<= (:durability t) (* (spare-fraction) (:max t)))))
-        usable (filter #(and (tools/of-kind? (:name %) kind) (or (empty? ok) (ok (:name %)))) (u/inventory p))
-        best (tools/suited-item usable block-name harvest)]
-    (when (and best (every? worn? usable))
-      best)))
+  "The carried tool ({:item :uses-left :max}) that tool-ready! wants a spare for when digging block-name, or nil: the
+  tools the chooser (jobs.lib.choose/tools-for) lists for it, in all, have fewer uses left than ::spare-fraction of
+  the best one's durability. A tool with no known durability counts as whole."
+  [c block-name]
+  (let [uses (:list (choose/tools-for c [:dig block-name] 1))
+        best (first uses)
+        full (some #(when (= (:item best) (:name %)) (:max %)) (u/inventory (:primitives c)))]
+    (when (and best full (< (transduce (map :uses-left) + 0 uses) (inc (js/Math.floor (* (spare-fraction) full)))))
+      (assoc best :max full))))
 
 (defn spent-tool?
   "Whether every carried tool that digs block-name is down to ::spent-uses uses or fewer (a tool with no known durability counts as whole) and some is carried:
@@ -134,7 +132,7 @@
   (let [kind (tools/tool-kind block-name)
         harvest (filter #(tools/of-kind? % kind) (some-> (.harvestTools p block-name) js->clj))
         lasting (remove #(#{"wooden" "golden"} (weapon/material-of %)) harvest)]
-    (or (tools/cheapest-tool (seq lasting)) (tools/cheapest-tool harvest) (:name need))))
+    (or (tools/cheapest-tool (seq lasting)) (tools/cheapest-tool harvest) (:item need))))
 
 (defn in-spare?
   "Whether this job runs under a spare fetch (a /spare slot in its chain): the digging that fetch needs makes no spare of its own."
@@ -149,7 +147,7 @@
   tool). The job's :fetch off, or a set of kinds without :tool, skips it; so does a job under a spare fetch (no spare of a spare)."
   [c block-name]
   (let [p (:primitives c)
-        need (when (and block-name (not (in-spare? c)) (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need p block-name))
+        need (when (and block-name (not (in-spare? c)) (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need c block-name))
         tool-name (when need (spare-name p block-name need))]
     (when (and need (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
       (let [r (await (ctx/call-child c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false}))]
@@ -162,8 +160,8 @@
             (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)
             (if got?
               (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)})
-              (ctx/emit! c :tool.no-spare :warn {:tool tool-name :durability (:durability need) :reason (:reason res) :status (:status res) :tried (:tried res)
-                                                 :text (str "the last " tool-name " is worn (" (:durability need) " left) and no spare could be had"
+              (ctx/emit! c :tool.no-spare :warn {:tool tool-name :durability (:uses-left need) :reason (:reason res) :status (:status res) :tried (:tried res)
+                                                 :text (str "the last " tool-name " is worn (" (:uses-left need) " left) and no spare could be had"
                                                             (when-let [r (:reason res)] (str ": " (name r))))}))
             nil))))))
 
