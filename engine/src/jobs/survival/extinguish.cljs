@@ -1,5 +1,6 @@
 (ns jobs.survival.extinguish
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.choose :as choose]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -81,8 +82,6 @@
 (defn eat-below [] (settings/get settings ::eat-below))
 (def water-like ["water" "powder_snow"])
 (defn max-covers [] (settings/get settings ::max-covers))
-;; solid blocks that do not fall (sand, gravel and concrete powder would drop into the lava)
-(def cover-blocks ["cobblestone" "stone" "dirt" "netherrack" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite"])
 
 (defn max-return-distance [] (settings/get settings ::max-return-distance))
 (defn max-scoop-return-range [] (settings/get settings ::max-scoop-return-range))
@@ -197,7 +196,7 @@
                    (not (or (nil? above) (contains? passable above) (= "lava" above))))))
           scanned))
 
-(defn cover-item [p] (some (fn [n] (when (some #(= n (:name %)) (u/inventory p)) n)) cover-blocks))
+(defn cover-item [c] (choose/filler c :cover))
 
 (defn lava-refusals
   "Why each scanned lava cell is no cover candidate, as [{:pos :reason}]: a run-wide reason (:no-cover-item, :max-covers,
@@ -209,7 +208,7 @@
         run-wide (cond
                    (and lava? (not (:blocked (ctx/mem c)))) :in-lava
                    (<= (max-covers) (:covers (ctx/mem c) 0)) :max-covers
-                   (nil? (cover-item p)) :no-cover-item)]
+                   (nil? (cover-item c)) :no-cover-item)]
     (mapv (fn [{lava :pos}]
             {:pos lava
              :reason (cond
@@ -395,12 +394,12 @@
           water
           (do (await (move! c (:pos water))) :again)
 
-          (and (or (not lava?) (:blocked (ctx/mem c))) (< (:covers (ctx/mem c) 0) (max-covers)) (cover-item p)
+          (and (or (not lava?) (:blocked (ctx/mem c))) (< (:covers (ctx/mem c) 0) (max-covers)) (cover-item c)
                (let [lava (:pos (adjacent-lava pos (exposed-lava p pos scanned)))]
                  (and lava
                       (nil? (access/trespass-refusal c :place lava))
                       (do (ctx/hold-still! c nil)
-                          (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos lava :item (cover-item p)})))))))))
+                          (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos lava :item (cover-item c)})))))))))
           (do (ctx/update-mem! c update :covers (fnil inc 0))
               :again)
 

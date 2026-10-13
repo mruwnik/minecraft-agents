@@ -1,12 +1,9 @@
 (ns jobs.lib.seal
   "What a body sealing itself in shares: the cells a hostile's hitbox overlaps (no block goes there), centring the
-  body in its own cell, and the blocks a shelter may place."
+  body in its own cell."
   (:require [engine.ctx :as ctx]
-            [jobs.lib.blocks :as lb]
-            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]))
 
 (def mob-half-width
@@ -39,12 +36,3 @@
   (let [{:keys [x y z]} (sh/feet (:primitives c))]
     ;; raw moveTo kept: a step inside the body's own cell, range 0.15; the planner has no goal finer than a cell.
     (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0.15}))))
-
-(def shelter-blocks
-  "What dig-in places: the building blocks, then logs (jobs.lib.trees/log-names; worth more, a last resort)."
-  (into lb/building-blocks trees/log-names))
-
-(defn cheap-blocks
-  "The blocks worth at most max-value each by jobs.lib.cost/item-value."
-  [blocks max-value]
-  (filterv #(<= (:value (cost/item-value [{:name % :count 1}])) max-value) blocks))

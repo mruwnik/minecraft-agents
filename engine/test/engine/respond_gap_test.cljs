@@ -78,7 +78,7 @@
   [spec tried?]
   (let [{:keys [p]} (g/setup [] (merge {:entities [g/pit-skeleton] :blocks (merge g/ground g/pit g/shell)} spec))
         hs (danger-q/dangers p 16 {:ranged-radius 16} {})]
-    (respond/gap-wanted? {:primitives p} hs tried?)))
+    (respond/gap-wanted? {:primitives p :view (fn [] {:data mem/empty-data :now 1})} hs tried?)))
 
 (deftest the-gap-is-wanted-only-with-cover-blocks-a-digging-tool-and-ranged-mobs-alone
   (is (wanted? {:inventory [cobble8 pickaxe]} false))

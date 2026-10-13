@@ -1,5 +1,6 @@
 (ns jobs.access.leave-tunnel
-  (:require [engine.args :as a]
+  (:require [jobs.lib.choose :as choose]
+            [engine.args :as a]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
@@ -91,9 +92,9 @@
   (let [have? (set carried)
         spare? (set spare)
         drop (blocks/item-name {:block block})
-        placeable? #(or (= % block) (some #{%} blocks/building-blocks))]
+        placeable? #(or (= % block) (some #{%} (choose/fillers :build)))]
     (or (when (and (have? drop) (not (spare? drop)) (placeable? drop)) drop)
-        (first (filter #(and (have? %) (not (spare? %))) blocks/building-blocks))
+        (first (filter #(and (have? %) (not (spare? %))) (choose/fillers :build)))
         (first (filter #(and (have? %) (placeable? %)) spare)))))
 
 (defn cell-pos [[x y z]] {:x x :y y :z z})

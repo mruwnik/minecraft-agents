@@ -1,5 +1,6 @@
 (ns jobs.storage.make-room
-  (:require [engine.args :as a]
+  (:require [jobs.lib.choose :as choose]
+            [engine.args :as a]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
             [clojure.string :as str]
@@ -105,7 +106,7 @@
 
 ;; what shelter, mend, furnace and tool jobs spend
 (def shelter-blocks
-  (into #{"dirt" "cobblestone"} (filter #(str/ends-with? % "_planks")) lb/building-blocks))
+  (into #{"dirt" "cobblestone"} (filter #(str/ends-with? % "_planks")) (choose/fillers :build)))
 
 (defn shared-floors
   "Floors for names, in priority order, that share one budget: each keeps

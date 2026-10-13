@@ -1,5 +1,6 @@
 (ns jobs.survival.retreat
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.choose :as choose]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as lb]
@@ -123,7 +124,7 @@
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :spec (a/num-in 0 nil) :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
    :reserve {:doc "health a cornered fight must be expected to leave" :spec (a/num-in 0 nil) :default cost/default-reserve}
-   :blocks {:doc "names of the blocks a cornered body may seal itself in with" :spec (a/coll-of (a/or-of string? keyword?)) :default lb/building-blocks}
+   :blocks {:doc "names of the blocks a cornered body may seal itself in with" :spec (a/coll-of (a/or-of string? keyword?)) :default (choose/fillers :build)}
    :max-places {:doc "seal placements per step" :spec (a/int-in 1 nil) :default 4}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}
    :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :spec (a/num-in 0 nil) :default 4}

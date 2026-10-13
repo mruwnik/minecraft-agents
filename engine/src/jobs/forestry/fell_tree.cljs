@@ -1,5 +1,6 @@
 (ns jobs.forestry.fell-tree
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.choose :as choose]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -271,7 +272,7 @@
 
 ;; ------------------------------------------------------------------ the pillar
 
-(def pillar-items pl/default-items)
+(def pillar-items (choose/fillers :pillar))
 
 (defn log-cell [l] (let [{:keys [x y z]} (:pos l)] [x y z]))
 

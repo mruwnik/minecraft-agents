@@ -1,5 +1,6 @@
 (ns jobs.survival.breathe
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.choose :as choose]
+            [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
@@ -41,7 +42,7 @@
   - Surfaced and still in water: the ways out are read from what is seen; when none shows, the unseen cells that read touched are looked at (jobs.lib.sense/decide!, bounded) before the run gives up. Each pass takes the first way left: swim to the nearest shore cell (land with its
     rim at most one block above the water) within :shore-radius, another direction after each failed swim; a go-to
     child onto land within :search-radius (at most 3 targets per spot, a failed target excludes its direction);
-    then a step block: with a carried pillar block (jobs.lib.escape/pillar-items), one placed (jobs.blocks.place child,
+    then a step block: with a carried pillar block (jobs.lib.choose/fillers :climb), one placed (jobs.blocks.place child,
     zones respected) in the nearest top water cell within :shore-radius that has support and two air cells above,
     written to the scaffold ledger (purpose :breathe-step, for jobs.access.cleanup), at most 2 per spot; the next
     pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..:leg-length blocks out, outward from the run's
@@ -457,8 +458,8 @@
   (let [p (:primitives c)
         block-at (escape/block-at-of p)
         at [(:x cell) (:y cell) (:z cell)]
-        args {:pos at :any-of escape/pillar-items :fetch false}
-        item (blocks/chosen c escape/pillar-items)
+        args {:pos at :any-of (choose/fillers :climb) :fetch false}
+        item (blocks/chosen c (choose/fillers :climb))
         refused (= :not-allowed (:reason (blocks/child-wait c :step 'jobs.blocks.place args)))
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)]
     (if refused

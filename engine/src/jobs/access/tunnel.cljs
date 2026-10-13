@@ -1,5 +1,6 @@
 (ns jobs.access.tunnel
-  (:require [engine.args :as a]
+  (:require [jobs.lib.choose :as choose]
+            [engine.args :as a]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
@@ -176,7 +177,7 @@
         in (stair/rules-in c feet)
         base (ln/run-cells feet (:heading plan))
         {:keys [next cut] :as cells} (assoc base :bridged? (contains? (:bridged (ctx/mem c)) (:floor base))
-                                                 :filler? (some? (blocks/pick c blocks/building-blocks)))]
+                                                 :filler? (some? (choose/filler c :build)))]
     (await (stair/look-ahead! c feet next cut))
     (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet cut))
         (let [stop (await (stair/judge! c in cells accept))]
@@ -401,7 +402,7 @@
         feet (reach/standing-vec (:primitives c))]
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
-      (let [a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (stair/rules-in c feet) :feet) :filler? (some? (blocks/pick c blocks/building-blocks))) target feet max-length (set accept))
+      (let [a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (stair/rules-in c feet) :feet) :filler? (some? (choose/filler c :build))) target feet max-length (set accept))
                                     {:retry? #(not (:entry %))}))]
         (if-let [w (when (or (not (:entry a)) (ln/far-entry? a feet))
                      (when (or (:entry a) (#{:too-far :no-approach} (:reason a)))

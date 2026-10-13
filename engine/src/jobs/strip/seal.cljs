@@ -1,5 +1,6 @@
 (ns jobs.strip.seal
-  (:require [engine.args :as a]
+  (:require [jobs.lib.choose :as choose]
+            [engine.args :as a]
             [engine.ctx :as ctx]
                         [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
@@ -32,7 +33,7 @@
    :axis {:doc "the way the corridor runs" :spec #{:x :z} :default nil}
    :side {:doc "the side the body ends on: :from (lower coordinate) or :to" :spec #{:from :to} :default nil}
    :with {:doc "block items to close with, the first carried is used" :spec (a/coll-of a/item?)
-          :default ["cobblestone" "cobbled_deepslate" "deepslate" "stone" "dirt"]}
+          :default (choose/fillers :seal)}
    :width {:doc "cells across the corridor" :spec (a/int-in 1 9) :default 3}
    :height {:doc "cells up the corridor" :spec (a/int-in 1 9) :default 3}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})

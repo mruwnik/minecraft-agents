@@ -1,5 +1,6 @@
 (ns jobs.access.pillar
-  (:require [jobs.lib.submitted :as submitted]
+  (:require [jobs.lib.choose :as choose]
+            [jobs.lib.submitted :as submitted]
             [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.ledger :as ledger]
@@ -82,12 +83,12 @@
 (defn up [[x y z] n] [x (+ y n) z])
 
 (defn item-to-use
-  "The block to place next: item when carried, without one the first of items (default-items) carried; nil when none."
+  "The block to place next: item when carried, without one the first of items (default: choose/fillers :pillar) carried; nil when none."
   ([item carried] (item-to-use item carried nil))
   ([item carried items]
    (if item
      (when (pos? (get carried item 0)) item)
-     (first (filter #(pos? (get carried % 0)) (or items pl/default-items))))))
+     (first (filter #(pos? (get carried % 0)) (or items (choose/fillers :pillar)))))))
 
 (defn permission-refusal
   "The first refusal among cells for permission alone (zone, footprint, no zone list), as the rules' refusal with :at."
@@ -181,7 +182,7 @@
                                 :carried (pl/carried p) :item item :items items :ledger (ledger/cells l)}))]
     (cond
       (some? (submitted/away-wait c)) false
-      (= :too-few-blocks (:reason step)) (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item items pl/default-items)})
+      (= :too-few-blocks (:reason step)) (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item items (choose/fillers :pillar))})
       :else true)))
 
 (defn ^:async land!

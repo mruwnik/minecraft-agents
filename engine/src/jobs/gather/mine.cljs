@@ -1,5 +1,6 @@
 (ns jobs.gather.mine
-  (:require [jobs.lib.submitted :as submitted]
+  (:require [jobs.lib.choose :as choose]
+            [jobs.lib.submitted :as submitted]
             [jobs.lib.child :as child]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -740,7 +741,7 @@
   (let [feet [(:x next) (:y next) (:z next)]
         floor (update feet 1 dec)
         in (rules-in c)
-        item (blocks/pick c blocks/building-blocks)
+        item (choose/filler c :build)
         plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c))]
     (boolean (and item (seq plans)
                   (nil? (await (bridge/place-plans! c in item plans false)))))))
@@ -978,8 +979,8 @@
   [c]
   (let [{:keys [block] :as a} (:args c)
         item (blocks/item-name a)
-        own (when (or (some #{item} blocks/building-blocks) (= item block)) [item])]
-    (vec (concat (remove #{item} blocks/building-blocks) own))))
+        own (when (or (some #{item} (choose/fillers :build)) (= item block)) [item])]
+    (vec (concat (remove #{item} (choose/fillers :build)) own))))
 
 (defn mend-permitted
   "The owed cells ({:pos ..}) the job may place on (zones and claims; one mine.declined warn per job when refused)."

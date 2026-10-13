@@ -1,6 +1,7 @@
 (ns jobs.survival.night.flee
   "Fleeing: when no shelter can be dug here, walk to somewhere safer (a bed, a roofed place, a cave or overhang, or natural ground)."
-  (:require [clojure.set :as set]
+  (:require [jobs.lib.choose :as choose]
+            [clojure.set :as set]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
@@ -43,7 +44,7 @@
         solid? (into #{} (map (comp key-of :pos)) solids)
         seen-free? (fn [cell] (and (not (solid? (key-of cell)))
                                    (not (:unknown (look/seen-block p cell)))))
-        have (reduce + (map :count (lb/carried c (seal/cheap-blocks seal/shelter-blocks (:wall-value (:args c))))))
+        have (reduce + (map :count (lb/carried c (choose/cheap-blocks (choose/fillers :shelter) (:wall-value (:args c))))))
         up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
         sealed? (fn [cell] (and (solid? (key-of cell)) (dig-cells/sealed? p cell)))]
     (->> solids

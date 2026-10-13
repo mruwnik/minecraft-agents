@@ -2,7 +2,8 @@
   "Lava a dig laid open: which seen lava cells border a dug cell, sealing one with a building block from the rim (a
   jobs.blocks.place child), and stepping off when it cannot be sealed. Shared by jobs.blocks.dig and jobs.access.stair.
   Cells are [x y z]."
-  (:require [jobs.lib.child :as child]
+  (:require [jobs.lib.choose :as choose]
+            [jobs.lib.child :as child]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access :as access]
@@ -42,7 +43,7 @@
         (ctx/update-mem! c #(cond-> (assoc % :sealing cell)
                               (not= cell (:sealing %)) (update-in [:seals cell] (fnil inc 0))))
         (let [outcome (await (blocks/place-cell! c {:x x :y y :z z} nil
-                                                 {:any-of blocks/building-blocks :fetch fetch
+                                                 {:any-of (choose/fillers :build) :fetch fetch
                                                   :ignore-zones? (boolean ignore-zones?)}))]
           (if (= :continue outcome)
             :continue

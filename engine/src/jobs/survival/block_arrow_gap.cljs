@@ -1,5 +1,6 @@
 (ns jobs.survival.block-arrow-gap
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.choose :as choose]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.game :as game]
             [jobs.lib.blocks :as lb]
@@ -40,7 +41,7 @@
 (a/defargs args
   {:radius {:doc "ranged mobs within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :reach {:doc "open cells within this many blocks of the body's feet may be filled" :spec (a/num-in 0 nil) :default 3}
-   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default seal/shelter-blocks}
+   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default (choose/fillers :shelter)}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :fetch {:doc "get a missing block (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-blocks" :spec fetch/option? :default true}})
 

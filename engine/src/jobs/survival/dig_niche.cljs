@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-niche
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.choose :as choose]
+            [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string]
             [jobs.lib.blocks :as lb]
@@ -37,7 +38,7 @@
 
 (a/defargs args
   {:reach {:doc "how far from the body to look for a face, 1 to 32" :spec (a/int-in 1 32) :default 16}
-   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default seal/shelter-blocks}
+   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default (choose/fillers :shelter)}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :spec fetch/option? :default true}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :spec (a/int-in 1 32) :default sh/default-roof-height}})

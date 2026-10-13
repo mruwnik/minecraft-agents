@@ -1,5 +1,6 @@
 (ns jobs.survival.respond-to-hostile
-  (:require [engine.args :as a]
+  (:require [jobs.lib.choose :as choose]
+            [engine.args :as a]
             [jobs.lib.blocks :as lb]
             [jobs.lib.body :as body]
             [engine.ctx :as ctx]
@@ -216,7 +217,7 @@
     (boolean (and (not tried?)
                   (every? combat/ranged? hs)
                   (covered? p)
-                  (lb/pick c lb/building-blocks)
+                  (choose/filler c :build)
                   (tools/can-harvest? p "stone")))))
 
 (defn ^:async gap!

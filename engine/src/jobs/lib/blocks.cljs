@@ -36,11 +36,6 @@
   [{:keys [block item]}]
   (or item (get drop-item block) block))
 
-(def building-blocks
-  ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
-   "oak_planks" "spruce_planks" "birch_planks" "jungle_planks" "acacia_planks" "dark_oak_planks"
-   "mangrove_planks" "cherry_planks"])
-
 (defn room-for?
   "A free slot, or a carried stack of item with room."
   [p item]

@@ -1,5 +1,6 @@
 (ns jobs.access.stair
-  (:require [jobs.lib.submitted :as submitted]
+  (:require [jobs.lib.choose :as choose]
+            [jobs.lib.submitted :as submitted]
             [jobs.lib.child :as child]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -40,7 +41,7 @@
   then seen.
 
   A step's floor must be solid, the cell under it not a fluid, nor air when no building block is carried (:cave-below), and everything loaded.
-  A floor of air gets a carried building block (blocks/building-blocks, never an ore or valuable) after the
+  A floor of air gets a carried building block (jobs.lib.choose/fillers :build, never an ore or valuable) after the
   rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.lib.bridge/bridge-plans; a plan whose face was unseen air gives way to the next); a stair down also bridges back along its line, up to setting bridge-depth cells, from a solid cell (a cave under its last floor); a cave floor with nothing within that stops :no-support-floor (the underside of the block over it cannot be aimed at).
   The cell under a placed floor is not judged. With no such block: :no-floor with :filler :none; with no face to place
   against at any of them (a void pocket): :no-support-floor with :cell, :tried and :why. A stair down that stops so shuts the cut cell over the missing floor with a carried block (:sealed [cell]), else the stop names it (:open-to [cell]). A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
@@ -73,7 +74,7 @@
   with :plugged <cell>.
 
   Exposed lava (beside the feet, the head or an open cut cell, or in one) is filled with a building block
-  (blocks/building-blocks, a jobs.blocks.place child; it fetches one when :fetch allows), sources behind first, one
+  (jobs.lib.choose/fillers :build, a jobs.blocks.place child; it fetches one when :fetch allows), sources behind first, one
   stair.sealed info each; then the stair goes on. Before it steps into an open cut with an unseen cell beside it, it
   waits a lava flow delay since the last dig and looks at the cut once more. Lava seen beside a cell not yet dug is a hazard as below.
 
@@ -561,11 +562,11 @@
   "Place carried filler on the missing floor of the step (bridge/bridge-plans, a plan whose placing found no support gives way
   to the next). :again, or a stop map (:no-support-floor when no plan works), with the opening shut-opening! leaves."
   [c in {:keys [floor] :as cs}]
-  (let [item (blocks/pick c blocks/building-blocks)
+  (let [item (choose/filler c :build)
         plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c) (bridge-opts c))
         stop (cond
                (nil? item) {:reason :no-floor :cell floor :block ((:block-at in) floor) :filler :none
-                            :why (str "no floor and no filler block carried (" (str/join ", " (take 4 blocks/building-blocks)) " ...)")}
+                            :why (str "no floor and no filler block carried (" (str/join ", " (take 4 (choose/fillers :build))) " ...)")}
                (empty? plans) {:reason :no-support-floor :cell floor :tried [floor (update floor 1 dec)]
                                :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
                :else (await (bridge/place-plans! c in item plans (take-back-floor? c))))]
@@ -610,7 +611,7 @@
               (let [{:keys [next cut] :as cells} (-> (shape/step-cells feet dir heading)
                                                            (as-> cs (assoc cs :up? (= :up dir)
                                                                  :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs))
-                                                                 :filler? (some? (blocks/pick c blocks/building-blocks)))))
+                                                                 :filler? (some? (choose/filler c :build)))))
                     _ (await (look-ahead! c feet next cut))
                     stop (or (await (lava-step! c :stair.sealed (:block-at in) feet cut))
                              (await (water-step! c (:block-at in) accept cut))

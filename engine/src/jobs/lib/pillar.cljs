@@ -4,8 +4,6 @@
   (:require [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]))
 
-(def default-items ["dirt" "cobblestone"])
-
 (defn clear?
   "A cell the body's feet or head can move into: air or a non-fluid replaceable plant."
   [n]

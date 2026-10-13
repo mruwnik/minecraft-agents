@@ -2,7 +2,8 @@
   "The shelter plans (retreat's pit and pocket, dig-niche's niche) for a body that has seen only the surface (Q98): a cell
   inside rock reads stone when it lies behind seen solid faces, and the dig looks at what it laid open and stops on
   fluid or a hole that shows. The primitives are wrapped; nothing inside the rock is known."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [jobs.lib.choose :as choose]
+            [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -47,7 +48,7 @@
 (defn seen-world [extra]
   (see-surface! (sensing {:blocks (merge ground hill extra)})))
 
-(defn ctx-of [p] {:primitives p :args {:blocks seal/shelter-blocks}})
+(defn ctx-of [p] {:primitives p :args {:blocks (choose/fillers :shelter)}})
 
 (deftest a-pit-in-rock-the-body-has-not-looked-into-is-planned
   (async done

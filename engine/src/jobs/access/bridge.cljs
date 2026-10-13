@@ -1,5 +1,6 @@
 (ns jobs.access.bridge
-  (:require [jobs.lib.submitted :as submitted]
+  (:require [jobs.lib.choose :as choose]
+            [jobs.lib.submitted :as submitted]
             [engine.settings :as settings]
             [engine.args :as a]
             [jobs.access.pillar :as pillar]
@@ -162,7 +163,7 @@
     (let [item (:item (:args c))]
       (cond-> {:reason :need :count (:short step)}
         item (assoc :item item)
-        (not item) (assoc :any-of pl/default-items)))))
+        (not item) (assoc :any-of (choose/fillers :pillar))))))
 
 (defn check
   "True, or a wait for the blocks a bridge lacks at its start (fetched for unless :fetch is off); every other give-up
@@ -174,7 +175,7 @@
     (cond
       (some? (submitted/away-wait c)) false
       (not= :too-few-blocks (:reason step)) true
-      (nil? (fetch/opts c 'jobs.access.bridge)) (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or (:item (:args c)) pl/default-items)})
+      (nil? (fetch/opts c 'jobs.access.bridge)) (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or (:item (:args c)) (choose/fillers :pillar))})
       :else (fetch/check c 'jobs.access.bridge (need c step)))))
 
 (defn ^:async place!

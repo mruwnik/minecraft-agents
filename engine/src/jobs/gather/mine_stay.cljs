@@ -1,6 +1,7 @@
 (ns jobs.gather.mine-stay
   "The :stay-level option of jobs.gather.mine: ore only beside the body, and a cut that opens into a cave sealed again."
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.choose :as choose]
+            [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.bridge :as bridge]))
@@ -61,7 +62,7 @@
 (defn ^:async seal!
   "Place a carried building block in each of cells: true when they all stand, false with none carried or a failed place. in: the rules input."
   [c in cells]
-  (let [item (blocks/pick c blocks/building-blocks)
+  (let [item (choose/filler c :build)
         block-at (:block-at in)]
     (loop [[cell & more] cells]
       (cond

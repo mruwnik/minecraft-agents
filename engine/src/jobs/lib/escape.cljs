@@ -10,7 +10,8 @@
   - door-beside?: whether a door or gate borders the cells the body can walk to (a way out go-to handles).
   - choose: the escalation for a body here and a goal.
   Cells are [x y z]. block-at maps a cell to its block name (nil when not loaded)."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.choose :as choose]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -34,11 +35,6 @@
 (def cardinals [[1 0] [-1 0] [0 1] [0 -1]])
 
 (def heading-names {[1 0] :east [-1 0] :west [0 1] :south [0 -1] :north})
-
-(def pillar-items
-  "Blocks worth pillaring with, most common first. No sand or gravel: they fall."
-  ["dirt" "cobblestone" "cobbled_deepslate" "stone" "deepslate" "netherrack" "andesite" "diorite" "granite"
-   "oak_planks" "spruce_planks" "birch_planks"])
 
 (def protected
   "Blocks a way out never digs: doors, gates, trapdoors, beds, containers, signs, and what cannot be broken."
@@ -234,7 +230,7 @@
   "{:item :count}: the carried pillar block with the largest count, or nil."
   [p]
   (let [have (->> (u/inventory p)
-                  (filter #(some #{(:name %)} pillar-items))
+                  (filter #(some #{(:name %)} (choose/fillers :climb)))
                   (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {}))]
     (when (seq have)
       (let [[item n] (apply max-key val have)] {:item item :count n}))))

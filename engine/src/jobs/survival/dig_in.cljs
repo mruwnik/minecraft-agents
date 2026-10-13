@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-in
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.choose :as choose]
+            [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
             [jobs.lib.pen-gate :as pen-gate]
@@ -73,7 +74,7 @@
 
 (a/defargs args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
-   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default seal/shelter-blocks}
+   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default (choose/fillers :shelter)}
    :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) walls the body in only when no pit can be dug" :spec (a/num-in 0 nil) :default 3}
    :take-back-value {:doc "a placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day" :spec (a/num-in 0 nil) :default 0.5}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
@@ -429,7 +430,7 @@
     (when (or moved (not mode))
       (let [cells (dig-cells/open-cells p start)
             have (reduce + (map :count (lb/carried c (:blocks (:args c)))))
-            cheap (reduce + (map :count (lb/carried c (seal/cheap-blocks (:blocks (:args c)) (:wall-value (:args c))))))
+            cheap (reduce + (map :count (lb/carried c (choose/cheap-blocks (:blocks (:args c)) (:wall-value (:args c))))))
             enclose (:enclose (:args c))
             plan (when-not enclose (await (sense/decide! c ::dig-plan #(dig-cells/dig-plan p start))))
             shape (when plan (await (find-shape! c start plan)))
@@ -574,7 +575,7 @@
         door (when (= :walls (:mode (ctx/mem c))) (dig-cells/door placed feet))
         start (when (#{:dig :walls} (:mode (ctx/mem c))) (:start (ctx/mem c)))
         spent (:spent (ctx/mem c) {})
-        cheap (set (seal/cheap-blocks (keys spent) (:take-back-value (:args c))))
+        cheap (set (choose/cheap-blocks (keys spent) (:take-back-value (:args c))))
         prev (:data (ctx/latest c :shelter))
         resealed (= feet (:pos prev))
         take-back (->> (concat (when resealed (:take-back prev))
