@@ -271,6 +271,8 @@
    ["hurt is opt-in" (event :body :hurt) defaults nil]
    ["disconnection is opt-in" (event :body :disconnected) defaults nil]
    ["danger wakes when asked" (event :body :hurt) (assoc defaults :danger true) :danger]
+   ["a hit above the threshold stays quiet" (event :body :hurt {:health 17}) (assoc defaults :danger true :danger-below 10) nil]
+   ["a hit at the threshold wakes" (event :body :hurt {:health 10}) (assoc defaults :danger true :danger-below 10) :danger]
    ["disconnection wakes when asked" (event :body :disconnected) (assoc defaults :disconnect true) :disconnected]
    ["a death always wakes" (event :body :died {:cause "skeleton"}) defaults :died]
    ["a death wakes under danger as a death" (event :body :died {:cause "skeleton"}) (assoc defaults :danger true) :died]
@@ -651,7 +653,9 @@
 (deftest waits-wake-on-hurt-unless-told-not-to
   (is (true? (get-in (request "--world" "w" "Probe" "--wait") [:wait-options :danger])))
   (is (false? (get-in (request "--world" "w" "Probe" "--wait" "--no-danger") [:wait-options :danger])))
-  (is (string? (:error (request "--world" "w" "Probe" "--no-danger")))))
+  (is (string? (:error (request "--world" "w" "Probe" "--no-danger"))))
+  (is (= 12 (get-in (request "--world" "w" "Probe" "--wait" "--danger-below" "12") [:wait-options :danger-below])))
+  (is (string? (:error (request "--world" "w" "Probe" "--wait" "--danger-below" "0")))))
 
 (deftest watchers-accept-repeated-and-comma-separated-options
   (let [r (request "--world" "w" "Probe" "--wait" "--watch" "j1,j2" "--watch" "j3")]
@@ -1413,3 +1417,16 @@
                  (.then (fn [{:keys [view]}]
                           (is (= (range 20 40) (map :seq (:events view))) "20 newest, oldest first")
                           (is (= 20 (:next-before view)))))))))
+
+(deftest a-timed-out-read-is-tried-once-more
+  (async done
+    (let [calls (atom 0)
+          timeout (fn [] (js/Promise.reject (observe-status/coded "ETIMEDOUT" "slow")))
+          attempt (fn [] (if (= 1 (swap! calls inc)) (timeout) (js/Promise.resolve :ok)))]
+      (finish! done
+        (-> (observe/retry-timeout attempt)
+            (.then (fn [v] (is (= :ok v)) (is (= 2 @calls)))
+                   )
+            (.then (fn [_] (reset! calls 0) (observe/retry-timeout (fn [] (swap! calls inc) (timeout)))))
+            (.then (fn [_] (is false "second timeout must reject"))
+                   (fn [e] (is (= "ETIMEDOUT" (observe-status/code-of e))) (is (= 2 @calls)))))))))

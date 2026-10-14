@@ -323,14 +323,22 @@
 
 ;; Transport and the command
 
+(defn ^:async retry-timeout
+  "Run attempt (a promise thunk); once more when it timed out (plain reads only; the body is busy, e.g. right after a death)."
+  [attempt]
+  (try (await (attempt))
+       (catch :default error
+         (if (= "ETIMEDOUT" (code-of error)) (await (attempt)) (throw error)))))
+
 (defn get!
   "GET over the body's events socket: a promise of {:status :content-type :text}. Options :timeout-ms :max-bytes
   :signal :request-fn, and :method with an EDN :body for a POST."
-  [socket-path request-path {:keys [timeout-ms max-bytes signal request-fn method body] :or {timeout-ms request-timeout-ms max-bytes max-response-bytes}}]
-  (http/request (cond-> {:socket-path socket-path :path request-path :label "observe" :timeout-ms timeout-ms
-                         :max-bytes max-bytes :signal signal}
-                  request-fn (assoc :request-fn request-fn)
-                  method (assoc :method method :body body :headers {"content-type" "application/edn"}))))
+  [socket-path request-path {:keys [timeout-ms max-bytes signal request-fn method body] :or {timeout-ms request-timeout-ms max-bytes max-response-bytes} :as options}]
+  (let [send #(http/request (cond-> {:socket-path socket-path :path request-path :label "observe" :timeout-ms timeout-ms
+                                     :max-bytes max-bytes :signal signal}
+                              request-fn (assoc :request-fn request-fn)
+                              method (assoc :method method :body body :headers {"content-type" "application/edn"})))]
+    (if (or method (:timeout-ms options)) (send) (retry-timeout send))))
 
 (defn settings-view
   "The /settings answer as printed: the rates and every key's value and layer (docs only with --raw), only the

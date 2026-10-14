@@ -248,15 +248,26 @@
     (is (str/starts-with? text "HURT: lost 6 health"))
     (is (str/includes? text "NOW health 14 food 18"))))
 
-(defn hurt-wake [danger]
-  (with-fixture working-status {:wait-ms 400 :stall-ms 3600000 :danger danger}
+(defn hurt-wake [danger & [{:keys [below health] :or {health 14}}]]
+  (with-fixture working-status {:wait-ms 400 :stall-ms 3600000 :danger danger :danger-below (or below 21)}
     (fn [f]
-      (js/setTimeout #((:push! f) (ev :body :hurt {:health 14})) 60)
+      (js/setTimeout #((:push! f) (ev :body :hurt {:health health})) 60)
       (-> (wait! f)
-          (.then (fn [result] (is (= (if danger {:wake :needs-you :text "hit: health 14"} {:wake :timeout :text "no news"}) (select-keys result [:wake :text])) (pr-str (dissoc result :view)))))))))
+          (.then (fn [result] (is (= (if (and danger (<= health (or below 21))) {:wake :needs-you :text (str "hit: health " health)} {:wake :timeout :text "no news"}) (select-keys result [:wake :text])) (pr-str (dissoc result :view)))))))))
 
 (deftest a-hit-wakes-the-wait
   (hurt-wake true))
 
 (deftest no-danger-lets-a-hit-pass
   (hurt-wake false))
+
+(deftest a-small-hit-passes-under-the-health-threshold
+  (hurt-wake true {:below 10 :health 17}))
+
+(deftest a-hit-below-the-threshold-wakes
+  (hurt-wake true {:below 10 :health 9}))
+
+(deftest the-hit-threshold-defaults-to-ten-and-is-settable
+  (is (= 10 (:danger-below (request "Probe" "--world" "w" "--wait" "1m"))))
+  (is (= 15 (:danger-below (request "Probe" "--world" "w" "--wait" "1m" "--danger-below" "15"))))
+  (is (string? (:error (request "Probe" "--world" "w" "--wait" "1m" "--danger-below" "40")))))

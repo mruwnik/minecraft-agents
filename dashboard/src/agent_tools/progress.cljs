@@ -19,9 +19,9 @@
             ["node:path" :as path]))
 
 (def usage
-  (str "usage: progress.mjs <agent> --world <world> [--goal <jN|none>] [--want <item[:n],...|none>] [--wait <60m> [--stall <10m>] [--no-danger]] [--worlds <dir>] [--state <legacy-parent>]\n"
-       "One line: hp, food, the goal job, counts toward --want (worn items count), queue size and needs-you (attention, a job waiting for something only you can fix, failures, a recent death, idle, manual, offline). "
-       "--goal and --want are kept for later calls. --wait <dur> (10s-24h) blocks until the goal job ends, the body dies, a job gives up, the body idles for a reason you must clear, new attention, addressed chat, the body goes offline, or no progress for --stall (default 10m; job, position, inventory unchanged); then prints a WAKE line, the line and up to 3 recent items. Run it in the background."))
+  (str "usage: progress.mjs <agent> --world <world> [--goal <jN|none>] [--want <item[:n],...|none>] [--wait <60m> [--stall <10m>] [--no-danger | --danger-below <hp>]] [--worlds <dir>] [--state <legacy-parent>]\n"
+       "One line: hp, food, the goal job, counts toward --want (carried and worn items only, not chest stock), queue size and needs-you (attention, a job waiting for something only you can fix, failures, a recent death, idle, manual, offline). "
+       "--goal and --want are kept for later calls. --wait <dur> (10s-24h) blocks until the goal job ends, the body dies, a hit leaves health at or below --danger-below (default 10; --no-danger: never), a job gives up, the body idles for a reason you must clear, new attention, addressed chat, the body goes offline, or no progress for --stall (default 10m; job, position, inventory unchanged); then prints a WAKE line, the line and up to 3 recent items. Run it in the background."))
 
 (def routine-reasons
   "Wait reasons that clear by themselves (time, healing, a furnace, the night handler) or mean nothing is wrong: no
@@ -33,6 +33,8 @@
 
 (def recent-death-s 600)
 (def default-stall-ms (* 10 60 1000))
+
+(def default-danger-below 10)
 (def default-slice-ms 60000)
 (def unreachable-ms 120000)
 (def max-line 300)
@@ -73,13 +75,14 @@
     (let [{:keys [positionals values]} (map-tool/parse-options (vec argv)
                                           {:state {:type "string"} :worlds {:type "string"} :world {:type "string"}
                                            :goal {:type "string"} :want {:type "string"} :wait {:type "string"}
-                                           :stall {:type "string"} :no-danger {:type "boolean" :default false}})
+                                           :stall {:type "string"} :no-danger {:type "boolean" :default false} :danger-below {:type "string"}})
           [agent & extra] positionals
-          {:keys [world goal want wait stall no-danger]} values]
+          {:keys [world goal want wait stall no-danger danger-below]} values]
       (when-not (and (string? agent) (re-matches observe-request/body-name agent)) (throw (js/Error. "agent must be a body name")))
       (when-not (and (string? world) (re-matches observe-request/world-name world)) (throw (js/Error. "missing or invalid --world <world>")))
       (when (seq extra) (throw (js/Error. "progress takes one body name")))
       (when (and goal (not (re-matches #"j[0-9]+|none" goal))) (throw (js/Error. "--goal needs a job ID such as j14, or none")))
+      (when (and danger-below (not (<= 1 (js/Number danger-below) 21))) (throw (js/Error. "--danger-below must be 1-21")))
       (when (and stall (not wait)) (throw (js/Error. "--stall needs --wait")))
       (let [state (bodies/storage-root values map-tool/default-state-dir)]
         (cond-> {:base {:agent agent :world world :state state
@@ -89,7 +92,8 @@
           want (assoc :want (if (= "none" want) "none" (parse-want want)))
           wait (assoc :wait-ms (duration-ms "--wait" wait)
                       :stall-ms (if stall (duration-ms "--stall" stall) default-stall-ms)
-                      :danger (not no-danger)))))
+                      :danger (not no-danger)
+                      :danger-below (if danger-below (js/Number danger-below) default-danger-below)))))
     (catch :default error {:error (.-message error)})))
 
 (defn remember-plan!
@@ -275,10 +279,11 @@
 
 (defn ^:async inner-wait!
   "One slice of observe's wait under the observer `progress`, watching ids."
-  [{:keys [base danger]} ids ms get! signal]
+  [{:keys [base danger danger-below]} ids ms get! signal]
   (await (observe/wait-observe
           (assoc base :wait-options (observe-request/wait-options {:timeout (str (js/Math.round ms) "ms") :observer "progress"
-                                                                  :watch (clj->js ids) :chatter "addressed" :no-danger (not danger)}))
+                                                                  :watch (clj->js ids) :chatter "addressed" :no-danger (not danger)
+                                                                  :danger-below danger-below}))
           get! signal identity)))
 
 (defn fatal? [error] (contains? #{"ABORT_ERR" "EOBSERVERBUSY" "EOBSERVERLIMIT"} (code-of error)))

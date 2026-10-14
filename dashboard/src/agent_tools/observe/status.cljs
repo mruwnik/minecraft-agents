@@ -217,7 +217,8 @@
       (and (= :body source) (= :died kind))
       (clean-pairs :wake :died :cause (clip (:cause d) 80) :at (position (:pos d)))
 
-      (and (= :body source) (:danger opts) (= :hurt kind))
+      (and (= :body source) (:danger opts) (= :hurt kind)
+           (let [h (:health d) below (:danger-below opts)] (or (nil? below) (not (number? h)) (<= h below))))
       (clean-pairs :wake :danger :event (:kind e) :health (:health d))
 
       (and (= :body source) (:disconnect opts) (= :disconnected kind))
