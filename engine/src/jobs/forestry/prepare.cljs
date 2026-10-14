@@ -1,5 +1,6 @@
 (ns jobs.forestry.prepare
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.trees :as forestry]
@@ -55,7 +56,7 @@
   is carried. A started job runs on to finish.
   Condition-failed {:reason :plan-trouble :why text} (one prepare.declined warn) while the plan is missing,
   unreadable or has no tree cells (in :part), and while no zone list is loaded. With a planned cell never seen, the
-  first round looks around once first.
+  body looks around once from where it stands (again after moving over 3 blocks) before the check decides.
   Ends :done with data {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped
   :wet :refused} (info prepare.done) when it cleared, soiled, planted or dammed a cell. With none of those, it ends
   nothing-possible :refused when cells were skipped, else condition-failed with the worst blocked state.
@@ -137,8 +138,9 @@
           (when (empty? (field/todo c states))
             (if-let [due (seq (vals (:recede (ctx/mem c))))]
               {:reason :receding :ready-at (apply min due)}
-              (when (or (look/surveyed? c) (not (look/unseen? (:primitives c) cells)))
-                (or (blocked-reason states) {:reason :nothing-to-do})))))))))
+              (cond-> (or (blocked-reason states) {:reason :nothing-to-do})
+                (and (or (some #(= :unloaded (:state %)) (vals states)) (look/unseen? (:primitives c) cells))
+                     (not (look/surveyed? c :near))) contract/look-first))))))))
 
 ;; ------------------------------------------------------------------ steps
 

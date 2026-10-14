@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [engine.farm-tidy-test :as ft]
             [engine.forest-maintain-test :as fm :refer [ground]]
             [engine.forest-prepare-test :as fp]
@@ -126,3 +127,26 @@
           (let [e (await (ending-of eng prepare {:plan "forest"} 40))]
             (is (= [:condition-failed :cells-unloaded] [(:kind e) (contract/cause-key e)]))
             (is (= [] (fm/digs p)))))))))
+
+(deftest a-queued-prepare-with-unseen-headroom-looks-once-and-stays-unstarted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec (fp/world {"3,64,0" "cobblestone"} (fm/item "iron_pickaxe" 1) (fm/item "oak_sapling" 1))
+              p (tu/fake-on-floor spec)
+              {:keys [eng]} (fm/start spec {"forest" fp/one-cell} (tu/tmp-dir) p)
+              hidden? #(= 65 (.-y %))
+              seen-at (.-seenBlockAt p)
+              sensed-at (.-sensedAt p)
+              looks #(count (filter (fn [c] (= "look" (.-name c))) (.-calls (.-world p))))
+              id (core/submit! eng '(jobs.forestry.prepare {:plan "forest"}) {})]
+          (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (seen-at pos))))
+          (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (sensed-at pos))))
+          (await (tu/run-until-empty eng 6))
+          (let [n (looks)]
+            (is (pos? n) "it looked round")
+            (await (tu/run-until-empty eng 6))
+            (is (= n (looks)) "once from this place"))
+          (is (= [id] (:list (core/state eng))) "stays queued")
+          (is (nil? (:call (:contract (mem/job-mem (mem/view (:store eng)) id [])))) "never started")
+          (is (= [] (fm/digs p))))))))
