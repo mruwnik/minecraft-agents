@@ -62,9 +62,11 @@
 (defn add [a b] (merge-with (fn [x y] (if (map? x) (add x y) (+ x y))) a b))
 
 (defn report
-  "The report of a frame's :contract state: its tally with the time its rounds ran, in seconds, among the uses."
-  [{:keys [tally ran-ms]}]
-  (assoc-in tally [:uses :time] (/ (or ran-ms 0) 1000)))
+  "The report of a frame's :contract state: its tally with the time its rounds ran (plus extra-ms), in seconds, among
+  the uses."
+  ([state] (report state 0))
+  ([{:keys [tally ran-ms]} extra-ms]
+   (assoc-in tally [:uses :time] (/ (+ (or ran-ms 0) extra-ms) 1000))))
 
 ;; ------------------------------------------------------------------ endings
 
@@ -202,20 +204,27 @@
                     [k (if (map? v) (into {} (map (fn [[n x]] [n (left (get-in u [k n]) x)])) v) (left (get u k) v))]))
           (get-in state [:call :spend]))))
 
-(defn crossed
-  "The first line of a frame's :contract state that is crossed, as a limit cause, or nil. levels is the body's
-  {:health :food}, now the wall clock, extra-ms as for used. A spend is crossed past it, a floor below it."
+(defn crossings
+  "Each line of a frame's :contract state that is crossed, as [limit cause, amount]: {:used n}, the body's {:health n}
+  or {:food n}, or {:now t}. levels is the body's {:health :food}, now the wall clock, extra-ms as for used. A spend is
+  crossed past it, a floor below it."
   [{:keys [call] :as state} levels now extra-ms]
   (let [{:keys [spend floor deadline]} call
         u (used state extra-ms)]
-    (or (when (and deadline (> now deadline)) {:line :deadline :deadline deadline})
-        (some (fn [k] (let [f (get floor k) l (get levels k)]
-                        (when (and f (number? l) (< l f)) {:line k :floor f})))
-              [:health :food])
-        (some (fn [k] (let [s (get spend k)] (when (and s (> (get u k 0) s)) {:line k :spend s})))
-              [:time :health :food])
-        (some (fn [[k what]] (some (fn [[n s]] (when (> (get-in u [k n] 0) s) {:line k what n :spend s})) (get spend k)))
-              [[:items :item] [:wear :tool]]))))
+    (concat (when (and deadline (> now deadline)) [[{:line :deadline :deadline deadline} {:now now}]])
+            (for [k [:health :food]
+                  :let [f (get floor k) l (get levels k)]
+                  :when (and f (number? l) (< l f))]
+              [{:line k :floor f} {k l}])
+            (for [k [:time :health :food]
+                  :let [s (get spend k) x (get u k 0)]
+                  :when (and s (> x s))]
+              [{:line k :spend s} {:used x}])
+            (for [[k what] [[:items :item] [:wear :tool]]
+                  [n s] (get spend k)
+                  :let [x (get-in u [k n] 0)]
+                  :when (> x s)]
+              [{:line k what n :spend s} {:used x}]))))
 
 (defn below-floor
   "The cause {:floor line :min f} of the first floor of call the body's levels are below, or nil."

@@ -255,3 +255,68 @@
                 thrown (await (js/Promise.all (clj->js runs)))]
             (is (every? #(identical? e %) thrown))
             (is (nil? (:booked @world)) "not booked as a failed step")))))))
+
+(defn told [seen]
+  (mapv #(select-keys (:data %) [:name :cause :used :health]) (job-ev seen :limit_would_end)))
+
+(deftest shadow-mode-tells-every-crossed-frame-and-line-with-its-amount
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [jobs {'top (merge (caller (kid (fn [c] (swap! clock + 6000) (hurt! c 12))) {:spend {:time 5}})
+                                {:defaults {:spend {:time 10} :floor {:health 15}}})}
+              {:keys [eng seen]} (setup jobs)]
+          (core/submit! eng '(top) {})
+          (await (core/tick! eng))
+          (is (= [{:name "top" :cause {:line :health :floor 15} :health 12}
+                  {:cause {:line :health :floor 15} :health 12}
+                  {:cause {:line :time :spend 5} :used 6}]
+                 (told seen))
+              "the caller's floor, the child's floor and its time, the round in flight counted")
+          (is (= 6 (get-in (:data (last (job-ev seen :limit_would_end))) [:report :uses :time])))
+          (await (core/tick! eng))
+          (is (= {:name "top" :cause {:line :time :spend 10} :used 12} (last (told seen))))
+          (is (= 4 (count (told seen))) "each frame and line once"))))))
+
+(deftest shadow-mode-holds-no-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [careful {:conditions [] :defaults {:floor {:health 10}}
+                       :round (fn [_] (swap! world update :careful-rounds (fnil inc 0)) :continue)}
+              {:keys [eng seen p]} (setup {'top (caller (kid (fn [_] nil)) {:floor {:health 15}}) 'careful careful})]
+          (fake/swap-self! p assoc :health 8)
+          (core/submit! eng '(top) {})
+          (core/submit! eng '(careful) {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (pos? (:kid-acts @world 0)) "a child called below its floor runs")
+          (is (= :continue (:kid-ending @world)))
+          (is (pos? (:careful-rounds @world 0)) "a listed job below its floor runs")
+          (is (empty? (job-ev seen :waiting))))))))
+
+(def cleans-up-old-call
+  {:conditions [] :defaults {:floor {:health 12}}
+   :round (fn ^:async cleans-up-old-round [c]
+            (hurt! c 11)
+            (try
+              (await (look! c))
+              (catch :default e
+                (try (await (ctx/call-child c :old {:check (constantly true)
+                                                    :round (fn [_] (swap! world assoc :old-kid-ran true) :done)} {}))
+                     (catch :default e2 (swap! world assoc :call-refused (contract/passes-through? e2))))
+                (throw e)))
+            :continue)})
+
+(deftest an-unwinding-frame-may-not-call-an-old-child-either
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (enforced
+                (fn ^:async enforced-old-call []
+                  (let [{:keys [eng seen]} (setup {'cleans-up cleans-up-old-call})]
+                    (core/submit! eng '(cleans-up) {})
+                    (await (core/tick! eng))
+                    (is (true? (:call-refused @world)))
+                    (is (nil? (:old-kid-ran @world)))
+                    (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen)))))))))))

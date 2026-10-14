@@ -188,6 +188,7 @@
                               (assoc :ending (dissoc (contract/for-event (:ending result)) :report)))))
         clear! #(mem/update-job! store (:root base) (:slots base) update :children dissoc slot)]
     (when-not (owner? eng (:token base)) (throw (cut-error)))
+    (limits/refuse! eng base)
     (emit! eng (assoc fields :kind :child_started))
     (swap! (:results base) dissoc child-id)
     (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
@@ -220,6 +221,7 @@
             (do (tally/remember! eng (:sym def) (some->> (:target def) (select-keys args)) report)
                 (clear!))
             (swap! (:results base) dissoc child-id))
+          (limits/check! eng base)
           status)))))
 
 (defn ^:async old-round

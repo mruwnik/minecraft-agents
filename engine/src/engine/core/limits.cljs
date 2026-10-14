@@ -3,7 +3,7 @@
   boundary, over the started contract frames of the chain. The outermost crossed frame is the one a crossing ends.
   With :engine.contract/enforce-limits on it is tagged (its :contract :limit) and a limit error unwinds to its call
   boundary, which ends it :limit-reached; on the way frames may act but not call, and a crossing inside ctx/atomic is
-  held until the section closes. Off, job.limit_would_end is told once per frame and line, and the job goes on."
+  held until the section closes. Off, job.limit_would_end is told once per crossed frame and line, and the job goes on."
   (:require [engine.contract :as contract]
             [engine.core.base :refer [emit! now]]
             [engine.expr :as expr]
@@ -28,16 +28,16 @@
                 (when (:call state) [s state])))
             (range (inc (count slots)))))))
 
-(defn outermost
-  "{:slots :cause :state} of the outermost of frames that is over a line, or nil. t0s: when each frame's round in
-  flight started."
+(defn crossings
+  "{:slots :cause :amount :state :extra-ms} of each line frames cross, outermost frame first (engine.contract/crossings).
+  t0s: when each frame's round in flight started."
   [eng frames t0s]
   (let [lv (levels (:primitives eng))
         t (now eng)]
-    (some (fn [[s state]]
-            (when-let [cause (contract/crossed state lv t (- t (nth t0s (count s) t)))]
-              {:slots s :cause cause :state state}))
-          frames)))
+    (for [[s state] frames
+          :let [extra-ms (- t (nth t0s (count s) t))]
+          [cause amount] (contract/crossings state lv t extra-ms)]
+      {:slots s :cause cause :amount amount :state state :extra-ms extra-ms})))
 
 (defn tag!
   "Tag the frame at slots of root with cause; the limit error that ends it."
@@ -50,13 +50,15 @@
 
 (defn would-end!
   "Tell job.limit_would_end for the crossing x, once per frame and line."
-  [eng root {:keys [slots cause state]}]
-  (when-not (contains? (:would-end state) (:line cause))
-    (mem/update-job! (:store eng) root slots update-in [:contract :would-end] (fnil conj #{}) (:line cause))
-    (emit! eng {:source :job :kind :limit_would_end :level :info :job (mem/path->id root slots)
-                :chain (chain-of root slots)
-                :name (or (:job state) (some-> (get-in @(:state eng) [:instances root :spec]) expr/label))
-                :cause cause :call (:call state) :report (contract/report state)})))
+  [eng root {:keys [slots cause amount state extra-ms]}]
+  (when-not (contains? (:would-end state) cause)
+    (mem/update-job! (:store eng) root slots update-in [:contract :would-end] (fnil conj #{}) cause)
+    (emit! eng (merge {:source :job :kind :limit_would_end :level :info :job (mem/path->id root slots)
+                       :chain (chain-of root slots)
+                       :name (or (:job state)
+                                 (when (empty? slots) (some-> (get-in @(:state eng) [:instances root :spec]) expr/label)))
+                       :cause cause :call (:call state) :report (contract/report state extra-ms)}
+                      amount))))
 
 (defn refuse!
   "Throw the limit error of the frame of base's chain that is unwinding, when enforced: no new call in an unwinding
@@ -71,14 +73,14 @@
   limit error that ends a frame; returns nil."
   [eng {:keys [root slots t0s section-depth held]}]
   (let [fs (frames eng root slots)]
-    (when (seq fs)
-      (let [enforce (enforce?)]
-        (when-not (and enforce (some (comp :limit second) fs))
-          (when-let [x (outermost eng fs t0s)]
-            (cond
-              (not enforce) (would-end! eng root x)
-              (and section-depth (pos? @section-depth)) (swap! held #(or % x))
-              :else (throw (tag! eng root x)))))))
+    (cond
+      (empty? fs) nil
+      (not (enforce?)) (run! #(would-end! eng root %) (crossings eng fs t0s))
+      (some (comp :limit second) fs) nil
+      :else (when-let [x (first (crossings eng fs t0s))]
+              (if (and section-depth (pos? @section-depth))
+                (swap! held #(or % x))
+                (throw (tag! eng root x)))))
     nil))
 
 (defn section-closed!
