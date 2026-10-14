@@ -22,11 +22,6 @@
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:time 60}} :view (fn [] {:data {} :now 0})}))) (str sym))))
 
-(deftest seals-old-with-becomes-the-call-s-blocks
-  (is (= {:at [0 64 0] :use {:blocks ["dirt"]}} (seal/legacy-args {:at [0 64 0] :with ["dirt"]})))
-  (is (= {:use {:blocks ["stone"]}} (seal/legacy-args {:with ["dirt"] :use {:blocks ["stone"]}})))
-  (is (= {:at [0 64 0]} (seal/legacy-args {:at [0 64 0]})) "no :with: the chooser's :seal list"))
-
 (defn ^:async seal-ending [env args]
   (:ending (await (ss/run! env args))))
 

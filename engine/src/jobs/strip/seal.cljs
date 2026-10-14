@@ -1,6 +1,5 @@
 (ns jobs.strip.seal
-  (:require [jobs.lib.choose :as choose]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as b]
@@ -20,7 +19,7 @@
   body must end on (:from the lower coordinate, :to the higher). The body works from the stand cell, one step back from
   :at on that side. A body on the far side first walks to it (go-to child); no way there ends :wrong-side.
 
-  Every cell of the section that is not a solid block is closed with a carried block of the call's :use {:blocks} (default the :seal fillers; old :with maps to it; a
+  Every cell of the section that is not a solid block is closed with a carried block of the call's :use {:blocks} (default the :seal fillers; a
   jobs.blocks.place child).
   Loose things in it (rails, cobwebs, torches, fences, ladders ...) are dug first (jobs.blocks.dig child, no fetch) and
   the drops picked up (torches come back). The rows go up from the bottom, the centre bottom cell last, so the body
@@ -38,12 +37,6 @@
 (def target [:at :axis :side])
 
 (def defaults {:spend {:time ::time-s} :use {:blocks :seal}})
-
-(defn legacy-args
-  "An old caller's :with as the call's :use {:blocks}."
-  [{:keys [with] :as args}]
-  (cond-> (dissoc args :with)
-    (seq with) (update :use #(merge {:blocks (vec with)} %))))
 
 (a/defargs args
   {:at {:doc "the bottom centre cell of the section, [x y z]" :spec ::a/pos :default nil}
@@ -103,7 +96,7 @@
                   (when (:short result) (str ", " (:short result) " cells short"))
                   (when (:cell result) (str " at " (pr-str (:cell result)))))]
     (ctx/emit! c (if (= :done kind) :strip.seal.done :strip.seal.stopped) (if (= :done kind) :info :warn)
-               (assoc result :status (if (= :done kind) :done :stopped) :reason (or reason :sealed) :text text))
+               (assoc result :kind kind :cause (or reason :sealed) :text text))
     (ctx/end c kind reason result)))
 
 (defn stop! [c reason detail] (finish! c (kinds reason) reason detail))
@@ -138,9 +131,9 @@
       (stop! c :unreachable {:cell cell :why o}))))
 
 (defn blocks
-  "The block names the call closes with: its :use {:blocks}, else the carried fillers."
+  "The block names the call closes with: its :use {:blocks} (the engine fills the :seal fillers carried when the caller gives none)."
   [c]
-  (or (ctx/use c :blocks) (get-in c [:args :use :blocks]) (choose/default-use c :blocks (get-in defaults [:use :blocks]))))
+  (ctx/use c :blocks))
 
 (defn ^:async place! [c cell open]
   (let [{:keys [ignore-zones?]} (:args c)

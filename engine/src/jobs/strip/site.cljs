@@ -312,7 +312,7 @@
   (let [seg (get (:segments s) id)
         {:keys [at side]} (mouth s t seg)
         f (await (run-all! c [[:seal 'jobs.strip.seal (cond-> {:at at :axis (:axis seg) :side side :ignore-zones? (:ignore-zones? (:args c))}
-                                                        (:seal-with (:args c)) (assoc :with (:seal-with (:args c))))]]))]
+                                                        (:seal-with (:args c)) (assoc :use {:blocks (:seal-with (:args c))}))]]))]
     (cond (= :continue f) :continue
           f (child-stop! c f)
           :else (do (save! c assoc-in [:segments id :state] :sealed) :again))))
