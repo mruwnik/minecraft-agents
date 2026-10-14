@@ -23,7 +23,8 @@
   {:name "expired-spawn-set-alone-warns"
    :memory [{:kind :spawn-set :data {:pos #xyz [10 0 12]} :age-s 7200}]
    :expect [{:event {:kind :spawn_not_set} :within-s 90}]}
+;; The server may confirm the spawn (spawn-set) instead of staying silent; either proves the durable bed was not trusted.
   {:name "newer-spawn-reset-invalidates-the-durable-bed"
    :memory [{:kind :spawn-bed :data {:pos #xyz [10 0 12]} :age-s 7200 :policy {:cap 1 :ttl :forever}}
             {:kind :spawn-reset :data {:pos #xyz [10 0 12]} :age-s 600}]
-   :expect [{:event {:kind :spawn_not_set} :within-s 90}]}]}
+   :expect [{:event {:kind #{:spawn_not_set :spawn-set}} :within-s 90}]}]}

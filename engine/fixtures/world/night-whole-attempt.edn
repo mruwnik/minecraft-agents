@@ -1,6 +1,6 @@
 ;; Night as one whole attempt (cards 3df7476d, 65b99a04): one round from the start to the morning leave, every hold
-;; declared (job.holding), a site where dig-in stops is left for another pit site 9+ blocks away, and a night with no
-;; site holds exposed and ends stopped :exposed at day. Dirt pad y -6..-1 (the plot floor is over void); the wet-site case
+;; declared (job.holding while exposed), a body that digs in ends the night at once (the morning trigger lets it out), a site
+;; where dig-in stops is left for another pit site 9+ blocks away, and a night with no site holds exposed and ends stopped :exposed at day. Dirt pad y -6..-1 (the plot floor is over void); the wet-site case
 ;; covers the whole plot, since sites 9+ away are judged from the surface and dig-in finds the void.
 ;; jobs.survival.night is submitted in :act. Needs night: --allow-time --time-log <the shared time log>, one case per call.
 {:defaults
@@ -11,14 +11,13 @@
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
- [{:name "dug-in-holds-declared-then-leaves-by-day-in-one-round"
+ [{:name "dug-in-ends-the-night-in-one-round"
    :time :night-exclusive
    :act [[:job (jobs.survival.night)]
-         [:await {:source :job :kind :holding :data {:reason :sheltered}} 60]
-         [:wait-s 10]
-         [:time-set 1000]]
+         [:await {:source :job :kind :dig-in.sealed} 60]
+         [:wait-s 10]]
    :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
-            {:event {:source :job :kind :holding :data {:reason :sheltered}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :holding :data {:reason :sheltered}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:no-event {:source :job :kind :idle} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 120 :of-job true}]
    :limit-s 140}
@@ -39,7 +38,7 @@
          [:wait-s 15]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 60}
-            {:event {:source :job :kind :holding :data {:reason :exposed}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 120 :of-job true}]
    :limit-s 140}
   ;; Card 97fac480 (fix 57d67d3b). Night 1 relocates off a wet start site (a :night-site entry) and ends roofed; the entries are
@@ -48,9 +47,7 @@
    :time :night-exclusive
    :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"] [:set [17 -1 16] "water"]]
    :act [[:job (jobs.survival.night)]
-         [:await {:source :job :kind :holding :data {:reason :sheltered}} 150]
-         [:wait-s 5]
-         [:time-set 1000]
+         [:await {:source :job :kind :dig-in.sealed} 150]
          [:await {:source :job :kind :completed :data {:name "jobs.survival.night"}} 120]
          [:rcon "execute positioned $X $Y $Z run setblock ~17 ~-1 ~16 minecraft:dirt"]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~16.5"]
@@ -62,20 +59,18 @@
    :after [[:not-block [16 -1 16] "dirt"]]
    :limit-s 330}
   ;; A hostile reflex cuts the night: a NoAI zombie 6 away fires hostile-near as the night starts, the reflex fights it, and the
-  ;; night job resumes, digs in, holds sheltered and leaves at day.
+  ;; night job resumes, digs in and ends the night.
   {:name "reflex-cut-night-resumes-and-holds"
    :time :night-exclusive
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.night)]
-         [:await {:source :job :kind :holding :data {:reason :sheltered}} 120]
-         [:wait-s 5]
-         [:time-set 1000]]
+         [:await {:source :job :kind :dig-in.sealed} 120]
+         [:wait-s 5]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 90}
             {:event {:source :job :kind :dig-in.sealed} :within-s 120}
-            {:event {:source :job :kind :holding :data {:reason :sheltered}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
    :limit-s 230}
