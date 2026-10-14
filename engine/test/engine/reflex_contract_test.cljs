@@ -12,12 +12,14 @@
             [engine.test-util :as tu]
             [jobs.survival.block-arrow-gap :as gap]
             [jobs.survival.extinguish :as extinguish]
-            [jobs.survival.fight-back :as fight-back]))
+            [engine.settings :as settings]
+            [jobs.survival.fight-back :as fight-back]
+            [jobs.survival.respond-to-hostile :as respond]))
 
 (defn job [sym] (get registry/jobs sym))
 
 (deftest each-job-exports-the-contract-and-quotes-validly
-  (doseq [sym ['jobs.survival.fight-back 'jobs.survival.block-arrow-gap 'jobs.survival.extinguish]]
+  (doseq [sym ['jobs.survival.fight-back 'jobs.survival.block-arrow-gap 'jobs.survival.extinguish 'jobs.survival.respond-to-hostile]]
     (is (some? (:conditions (job sym))) (str sym " has conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
@@ -26,7 +28,8 @@
 (deftest old-options-map-to-the-call
   (is (= {:range 4 :use {:tools ["_sword"]}} (fight-back/legacy-args {:range 4 :weapons ["_sword"]})))
   (is (= {:range 4 :use {:tools ["iron_sword"]}} (fight-back/legacy-args {:range 4 :use {:tools ["iron_sword"]}})))
-  (is (= {:radius 8 :use {:blocks ["dirt"]}} (gap/legacy-args {:radius 8 :blocks ["dirt"]}))))
+  (is (= {:radius 8 :use {:blocks ["dirt"]}} (gap/legacy-args {:radius 8 :blocks ["dirt"]})))
+  (is (= {:radius 8 :use {:tools ["_sword"]}} (respond/legacy-args {:radius 8 :weapons ["_sword"]}))))
 
 (deftest an-empty-weapons-list-means-no-weapons
   (is (= {:use {:tools []}} (fight-back/legacy-args {:weapons []}))))
@@ -54,6 +57,32 @@
       (fn ^:async t []
         (is (= {:event :stopped :kind :nothing-possible :reason :given-up}
                (await (fight {} {:inventory h/sword :entities [(assoc (h/zombie 7 3 0) :invulnerable true)]}))))))))
+
+;; ------------------------------------------------------------------ respond-to-hostile
+
+(deftest the-hits-a-fight-landed-are-kept-as-long-as-the-settings-say
+  (is (= {:cap 8 :ttl 30000} (respond/struck-policy)))
+  (is (= {:cap 2 :ttl 5000} (settings/with-settings {::respond/struck-s 5 ::respond/struck-cap 2} respond/struck-policy))))
+
+(deftest respond-fights-with-the-weapon-the-call-names
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (h/flight-round '(jobs.survival.respond-to-hostile {:use {:tools ["stone_sword"]}})
+                                                 {:inventory [{:name "iron_sword" :count 1} {:name "stone_sword" :count 1}]
+                                                  :entities [(h/zombie 3 0)]}))]
+          (is (= #{"stone_sword"} (set (map #(.-item (.-args %)) (h/calls p "equip"))))))))))
+
+(deftest respond-with-no-danger-near-waits-and-a-cleared-one-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :waiting :reason :no-hostile}
+               (select-keys (await (sc/ending-of #(tu/fake-on-floor {:floor h/flight-floor}) '(jobs.survival.respond-to-hostile)))
+                            [:event :reason])))
+        (is (= :completed (:event (await (sc/ending-of #(tu/fake-on-floor {:floor h/flight-floor :inventory h/sword
+                                                                            :entities [(h/zombie 7 3 0)]})
+                                                       '(jobs.survival.respond-to-hostile))))))))))
 
 ;; ------------------------------------------------------------------ block-arrow-gap
 

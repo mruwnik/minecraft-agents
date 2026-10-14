@@ -575,7 +575,21 @@
               s (assoc-in s [:eng :jobs 'jobs.survival.retreat] declining)
               {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= [:done] calls))
-          (is (= {:status :stopped :reason :no_response} (select-keys out [:status :reason]))))))))
+          (is (= {:status :stopped :reason :no_response} (select-keys out [:status :reason])))
+          (is (= :nothing-possible (get-in out [:ending :kind]))))))))
+
+(deftest respond-to-hostile-stops-with-the-cause-of-a-retreat-that-cannot-escape
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
+              cornered {:check (constantly true)
+                        :round (fn ^:async no-escape [c] (r/stop! c :cannot_escape "every way failed"))}
+              s (assoc-in s [:eng :jobs 'jobs.survival.retreat] cornered)
+              {:keys [out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
+          (is (= {:status :stopped :reason :cannot_escape} (select-keys out [:status :reason])))
+          (is (= :nothing-possible (get-in out [:ending :kind])))
+          (is (= :cannot_escape (get-in out [:ending :because :cause])) "the retreat's ending is the because"))))))
 
 (deftest respond-to-hostile-is-done-when-the-danger-is-gone-after-a-long-hide
   (async done
