@@ -13,7 +13,8 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.access.stair :as stair]
+            [jobs.access.stair.cells :as sc]
+            [jobs.access.stair.cells :as sc]
             [jobs.access.tunnel :as tunnel]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
@@ -240,9 +241,9 @@
   (let [cut [[1 65 0] [1 64 0]]
         in {:unseen? #{[1 63 0]} :ignore-zones? true :block-at #(if (some #{%} cut) "air" "stone")}
         cells {:cut cut :floor [1 63 0] :under [1 62 0]}]
-    (is (= {:reason :floor-unseen :cell [1 63 0]} (stair/stop-of in cells #{})))
-    (is (nil? (stair/stop-of (assoc in :unseen? #{}) cells #{})) "a seen floor")
-    (is (not= :floor-unseen (:reason (stair/stop-of (assoc in :block-at (constantly "stone")) cells #{})))
+    (is (= {:reason :floor-unseen :cell [1 63 0]} (sc/stop-of in cells #{})))
+    (is (nil? (sc/stop-of (assoc in :unseen? #{}) cells #{})) "a seen floor")
+    (is (not= :floor-unseen (:reason (sc/stop-of (assoc in :block-at (constantly "stone")) cells #{})))
         "judged once the cut is open: it is dug to see first")))
 
 (defn floor-seen-after-cut!

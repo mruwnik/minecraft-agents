@@ -17,6 +17,9 @@
             [jobs.lib.bridge :as bridge]
             [jobs.lib.ledger :as ledger]
             [engine.settings :as settings]
+            [engine.contract :as contract]
+            [jobs.access.stair.cells :as sc]
+            [jobs.access.stair.limits :as sset]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
             [plan.shape :as shape]))
@@ -70,7 +73,7 @@
     (is (= [[[4 59 0] floor] [floor]] (bridge/bridge-plans unseen-east floor 70.0)))))
 
 (deftest stair-index-finds-the-step-on-the-line-only
-  (are [feet dir heading i] (= i (stair/stair-index [0 65 0] feet dir heading 8))
+  (are [feet dir heading i] (= i (sc/stair-index [0 65 0] feet dir heading 8))
     [0 65 0] :down :east 0
     [3 62 0] :down :east 3
     [0 62 -3] :down :north 3
@@ -89,7 +92,7 @@
 
 (defn stop [named accept & {:keys [zones dir filler?] :or {zones [] dir :down}}]
   (let [in {:block-at (world-fn named) :feet [0 65 0] :zones zones :footprints #{} :ledger #{}}]
-    (stair/stop-of in (assoc (stair/step-cells [0 65 0] dir :east) :up? (not= :down dir) :filler? filler?) accept)))
+    (sc/stop-of in (assoc (sc/step-cells [0 65 0] dir :east) :up? (not= :down dir) :filler? filler?) accept)))
 
 (deftest the-stop-rules-of-one-step
   (are [named accept zones reason] (= reason (:reason (stop named accept :zones zones)))
@@ -115,26 +118,26 @@
   (let [in {:block-at (world-fn {}) :feet [0 65 0] :zones [] :footprints #{} :ledger #{}}
         cells (shape/step-cells [0 65 0] :down :east)]
     (is (= {:reason :undercuts-way :cell [1 64 0] :block "stone"}
-           (select-keys (stair/stop-of in (assoc cells :ways #{[1 64 0]}) #{}) [:reason :cell :block])))
-    (is (nil? (stair/stop-of in (assoc cells :ways #{[5 60 0]}) #{})) "an unrelated floor")
-    (is (nil? (stair/stop-of in cells #{})) "no known way")
-    (is (= :undercuts-way (:reason (stair/stop-of (assoc in :ways #{[1 64 0]}) cells #{}))) "ways in the rules input")
-    (is (nil? (stair/stop-of (assoc in :block-at (world-fn {[1 64 0] "air"})) (assoc cells :ways #{[1 64 0]}) #{}))
+           (select-keys (sc/stop-of in (assoc cells :ways #{[1 64 0]}) #{}) [:reason :cell :block])))
+    (is (nil? (sc/stop-of in (assoc cells :ways #{[5 60 0]}) #{})) "an unrelated floor")
+    (is (nil? (sc/stop-of in cells #{})) "no known way")
+    (is (= :undercuts-way (:reason (sc/stop-of (assoc in :ways #{[1 64 0]}) cells #{}))) "ways in the rules input")
+    (is (nil? (sc/stop-of (assoc in :block-at (world-fn {[1 64 0] "air"})) (assoc cells :ways #{[1 64 0]}) #{}))
         "a floor that is air now is no way")))
 
 (deftest way-floors-are-the-floors-of-the-steps-walked
-  (is (= [[1 63 0] [2 62 0]] (stair/way-floors [0 65 0] :down :east 2)))
-  (is (= [[0 65 -1]] (stair/way-floors [0 65 0] :up :north 1)))
-  (is (= [] (stair/way-floors [0 65 0] :down :east 0))))
+  (is (= [[1 63 0] [2 62 0]] (sc/way-floors [0 65 0] :down :east 2)))
+  (is (= [[0 65 -1]] (sc/way-floors [0 65 0] :up :north 1)))
+  (is (= [] (sc/way-floors [0 65 0] :down :east 0))))
 
 (deftest a-stair-that-goes-on-from-an-earlier-one-is-joined-to-it
   (is (= {:floors [[1 64 0] [2 65 0] [3 66 0] [4 67 0]] :gone #{[[1 64 0] [2 65 0]]}}
-         (stair/joined-way [[[1 64 0] [2 65 0]] [[9 60 9]]] [2 65 0] [[3 66 0] [4 67 0]]))
+         (sc/joined-way [[[1 64 0] [2 65 0]] [[9 60 9]]] [2 65 0] [[3 66 0] [4 67 0]]))
       "it began on the last floor of the first")
   (is (= {:floors [[3 66 0] [4 67 0]] :gone #{[[4 67 0]]}}
-         (stair/joined-way [[[4 67 0]] [[9 60 9]]] [2 65 0] [[3 66 0] [4 67 0]]))
+         (sc/joined-way [[[4 67 0]] [[9 60 9]]] [2 65 0] [[3 66 0] [4 67 0]]))
       "a way wholly inside the new one is dropped")
-  (is (= {:floors [[3 66 0]] :gone #{}} (stair/joined-way [[[9 60 9]]] [2 65 0] [[3 66 0]]))))
+  (is (= {:floors [[3 66 0]] :gone #{}} (sc/joined-way [[[9 60 9]]] [2 65 0] [[3 66 0]]))))
 
 (declare block-at stair! east ground setup tick-out!)
 
@@ -227,12 +230,12 @@
         "gravel over the next column falls into the cut")))
 
 (deftest target-steps-from-args
-  (are [args steps] (= steps (stair/target-steps args [0 65 0]))
+  (are [args steps] (= steps (sc/target-steps args [0 65 0]))
     {:dir :down :heading :east :steps 4} 4
     {:dir :down :heading :east :y 57} 8
     {:dir :up :heading :east :y 71} 6
     {:dir :level :heading :east :steps 2} 2)
-  (are [args] (:error (stair/target-steps args [0 65 0]))
+  (are [args] (:error (sc/target-steps args [0 65 0]))
     {:dir :level :heading :east :y 65}
     {:dir :down :heading :east}
     {:dir :down :heading :east :y 70}
@@ -257,14 +260,17 @@
   [spec args prep]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans :wrap-rounds)))
+        p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans :wrap-rounds :call)))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job (if (satisfies? IDeref args) @args args)))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+                         (let [call (:call spec ctx/call-child)
+                               r (await (call c :kid job (if (satisfies? IDeref args) @args args)))]
+                           (cond
+                             (= :continue r) r
+                             (= call ctx/call-child) (do (when (= :done r) (reset! out (ctx/child-result c :kid))) r)
+                             :else (do (reset! out r) :done))))}
         jobs (reduce-kv (fn [m k wrap] (update-in m [k :round] wrap)) (assoc registry/jobs 'recording-parent parent) (:wrap-rounds spec))
         eng (core/create {:primitives p :jobs jobs
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world w
@@ -461,7 +467,7 @@
           (is (= 1 (count (events-of s :tool.broke))))
           (is (= 1 (count (events-of s :tool.none)))))))))
 
-(deftest a-pickaxe-lost-mid-stair-waits-no-tool-instead-of-stopping
+(deftest a-pickaxe-lost-mid-stair-ends-no-tool-with-no-fetch
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -475,9 +481,8 @@
                                         (swap! (.. world -state) assoc :inventory []))
                                       r)))))
               s (await (stair! {:blocks ground} (assoc east :fetch false) prep))]
-          (is (= :not-done @(:out s)) "the child declines: its parent waits")
-          (is (= :no-tool (:reason (waiting s))))
-          (is (empty? (events-of s :stair.stopped))))))))
+          (is (= [:stopped :no-tool "pickaxe"] ((juxt :status :reason :tool) @(:out s))))
+          (is (nil? (waiting s))))))))
 
 (deftest lava-two-ahead-stops-before-opening-it
   (async done
@@ -763,7 +768,7 @@
               {:keys [out p] :as s} (await (stair! {:blocks ground :zones [zone]} (assoc east :steps 5) (fn [_])))]
           (is (= :not-done @out) "no result: the parent waits")
           (is (= :refused (:reason (waiting s))))
-          (is (= ["garden"] (:zones (waiting s))))
+          (is (= ["garden"] (:zones (:cause (waiting s)))))
           (is (empty? (digs p))))))))
 
 (deftest no-zone-list-stops-before-any-dig
@@ -787,14 +792,14 @@
           (is (seq (events-of s :make-room.tossed)) "dirt was tossed to make room")
           (is (nil? (waiting s))))))))
 
-(deftest a-full-pack-with-nothing-to-toss-stops-before-a-lost-drop
+(deftest a-full-pack-with-nothing-to-toss-ends-before-a-lost-drop
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [full (into pick (repeat 35 {:name "diamond" :count 64}))
               {:keys [out p] :as s} (await (stair! {:blocks ground :inventory full} east (fn [_])))]
-          (is (= :not-done @out) "the child declines: its parent waits")
-          (is (= :no-free-slot (:reason (waiting s))))
+          (is (= [:stopped :no-free-slot] ((juxt :status :reason) @out)) "make-room found nothing to toss")
+          (is (= :nothing-possible (:kind (:because (:ending @out)))) "the make-room ending is its because")
           (is (empty? (digs p))))))))
 
 (deftest a-stack-with-room-is-room
@@ -812,16 +817,16 @@
         (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} (assoc east :fetch false) (fn [_])))]
           (is (= :not-done @out) "the child declines: its parent waits")
           (is (= :no-tool (:reason (waiting s))))
-          (is (= "pickaxe" (:tool (waiting s))))
+          (is (= "pickaxe" (:tool (:cause (waiting s)))))
           (is (empty? (digs p))))))))
 
 (deftest bad-args-end-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (stair! {:blocks ground} {:dir :down} (fn [_])))]
-          (is (= :bad-args (:reason @out)))
-          (is (string? (:why @out))))))))
+        (let [{:keys [out]} (await (stair! {:blocks ground :call ctx/call} {:dir :down} (fn [_])))]
+          (is (= [:condition-failed :bad-args] [(:kind @out) (contract/cause-key @out)]))
+          (is (string? (:why (:cause @out)))))))))
 
 (defn ^:async dig-reached!
   "Resolves once the job's dig call is waiting on the world."
@@ -950,7 +955,7 @@
                                       r)))))
               {:keys [out p]} (await (stair! {:blocks ground} east prep))]
           (is (= :refills (:reason @out)))
-          (is (= (stair/max-fall-digs) (count (digs p))) "a falling block gets more digs than other refills")
+          (is (= (sset/max-fall-digs) (count (digs p))) "a falling block gets more digs than other refills")
           (is (= [{:cell [1 64 0] :block "stone"}] (:dug @out)) "a dig that left the same block is not recorded"))))))
 
 (deftest gravel-that-falls-into-the-cut-a-few-times-is-dug-until-clear
@@ -1105,7 +1110,6 @@
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} east (fn [_])))]
           (is (= :done (:status @out)) (pr-str @out))
-          (is (seq (events-of s :fetch.failed)))
           (is (seq (digs p)) "dug bare-handed"))))))
 
 (deftest a-stair-digs-an-exposed-ore-beside-the-way-unless-told-not-to-or-lava-touches-it
@@ -1137,8 +1141,8 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[uses args dug? status reason] [[3 east false :stopped :tool-spent]
-                                                [4 east true :done :done]
-                                                [3 (assoc east :spent-ok true) true :done :done]]]
+                                                [4 east true :done nil]
+                                                [3 (assoc east :spent-ok true) true :done nil]]]
           (let [{:keys [out p]} (await (stair! {:blocks ground :inventory [{:name "stone_pickaxe" :count 1 :durability uses}]} args (fn [_])))]
             (is (= dug? (boolean (seq (digs p)))) (pr-str uses args))
             (is (= [status reason] [(:status @out) (:reason @out)]) (pr-str uses args))))))))
@@ -1155,7 +1159,7 @@
                 w (waiting s)]
             (is (= dug? (boolean (seq (digs p)))) (pr-str extra))
             (is (= reason (:reason w)) (pr-str extra))
-            (is (= (when reason 80) (some-> w :distance)) (pr-str extra))))))))
+            (is (= (when reason 80) (some-> w :cause :distance)) (pr-str extra))))))))
 
 (deftest a-stair-never-digs-the-floor-under-a-door
   (async done
@@ -1165,3 +1169,86 @@
               {:keys [out p]} (await (stair! {:blocks blocks} east (fn [_])))]
           (is (= [:stopped :base-block] [(:status @out) (:reason @out)]) (pr-str @out))
           (is (not-any? #(= {:x 2 :y 65 :z 0} %) (digs p)) "the block the door stands on is kept"))))))
+
+;; ------------------------------------------------------------------ the contract
+
+(deftest the-job-exports-the-contract-and-quotes-validly
+  (let [def (get registry/jobs job)
+        c {:primitives (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :blocks ground :inventory pick}) :args east}
+        q ((:quote-of def) c)]
+    (is (= [:dir :heading :y] (:target def)))
+    (is (seq (:conditions def)))
+    (is (nil? (:check def)))
+    (is (nil? (contract/quote-problem q)) (pr-str q))
+    (is (= [3 62 0] (:moves-to q)))
+    (is (< (js/Math.abs (- (* 3 (nth (get-in ((:quote-of def) (assoc-in c [:args :dir] :level)) [:uses :time]) 1))
+                           (* 2 (nth (get-in q [:uses :time]) 1))))
+           1e-9)
+        "a level step cuts 2 cells, a stair step 3: the mean time is 2/3 of it")))
+
+(defn ^:async ending-of
+  "The ending of a stair run as a contract parent's ctx/call child reads it, as [kind cause-key]."
+  [spec args prep]
+  (let [e (:out (await (stair! (assoc spec :call ctx/call) args prep)))]
+    [(:kind @e) (contract/cause-key @e)]))
+
+(deftest a-stair-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [refill (fn [p] (let [world (.-world p)]
+                               (.override world "dig" (fn ^:async f [token a impl]
+                                                        (let [r (await (impl token a))]
+                                                          (swap! (.. world -state) assoc-in [:blocks [1 64 0]] "gravel")
+                                                          r)))))
+              lose-floor (fn [p] (let [world (.-world p)]
+                                   (.override world "steer" (fn ^:async f [token a impl]
+                                                              (let [r (await (impl token a))]
+                                                                (swap! (.. world -state) assoc-in [:blocks [0 66 0]] "stone")
+                                                                r)))))
+              strand (fn [p] (let [world (.-world p)]
+                               (.override world "steer" (fn ^:async f [token a impl]
+                                                          (let [r (await (impl token a))]
+                                                            (swap! (.. world -state) assoc-in [:self :pos] [1 64 1])
+                                                            r)))))
+              run (fn ^:async run1 [spec args prep] (await (ending-of spec args prep)))]
+          (is (= [:done :done] (await (run {:blocks ground} east (fn [_])))))
+          (is (= [:condition-failed :crop] (await (run {:blocks (assoc ground "1,64,0" "wheat")} east (fn [_])))))
+          (is (= [:condition-failed :base-block] (await (run {:blocks (assoc ground "1,65,0" "chest")} east (fn [_])))))
+          (is (= [:condition-failed :no-zones] (await (run {:blocks ground :zones nil} east (fn [_])))))
+          (is (= [:condition-failed :bad-args] (await (run {:blocks ground} {:dir :down} (fn [_])))))
+          (is (= [:condition-failed :no-tool] (await (run {:blocks ground :inventory []} (assoc east :fetch false) (fn [_])))))
+          (is (= [:condition-failed :no-free-slot]
+                 (await (run {:blocks ground :inventory (into pick (repeat 35 {:name "dirt" :count 64}))} (assoc east :make-room false) (fn [_])))))
+          (is (= [:condition-failed :refused]
+                 (await (run {:blocks ground :zones [{:name "garden" :min [1 50 -2] :max [6 70 2]}]} east (fn [_])))))
+          (is (= [:condition-failed :moved-since-submit]
+                 (await (run {:blocks ground} (assoc east :from {:x 80 :y 65 :z 0}) (fn [_])))))
+          (is (= [:limit-reached :tool-spent]
+                 (await (run {:blocks ground :inventory [{:name "stone_pickaxe" :count 1 :durability 3}]} east (fn [_])))))
+          (is (= [:nothing-possible :refills] (await (run {:blocks ground} east refill))))
+          (is (= [:condition-failed :no-way-back] (await (run {:blocks ground} east lose-floor))))
+          (is (= [:nothing-possible :step-failed] (await (run {:blocks (dissoc ground "1,64,1")} east strand)))))))))
+
+(deftest a-stopped-stair-hands-over-what-it-did-as-data
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lose-floor (fn [p] (let [world (.-world p)]
+                                   (.override world "steer" (fn ^:async f [token a impl]
+                                                              (let [r (await (impl token a))]
+                                                                (swap! (.. world -state) assoc-in [:blocks [0 66 0]] "stone")
+                                                                r)))))
+              e @(:out (await (stair! {:blocks ground :call ctx/call} east lose-floor)))]
+          (is (= 1 (:steps (:data e))))
+          (is (= [1 64 0] (:at (:data e))))
+          (is (= 1 (count (:dug (:data e))))))))))
+
+(deftest a-pickaxe-fetch-failing-leaves-a-bare-handed-stair-and-a-note-to-skip-the-next-try
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (stair! {:blocks ground :inventory []} east (fn [_])))]
+          (is (= :done (:status @(:out s))))
+          (is (seq (digs (:p s))) "dug bare-handed")
+          (is (= 1 (count (mem/entries (mem/view (:store (:eng s))) :stair-tool-failed)))))))))

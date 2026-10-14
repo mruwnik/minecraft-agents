@@ -1,6 +1,6 @@
 (ns jobs.access.tunnel.line
   "The geometry of a tunnel line: choosing it (approach), its cells and its torch sites. Reads no settings, memory or ctx."
-  (:require [jobs.access.stair :as stair]
+  (:require [jobs.access.stair.cells :as geo]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.pillar :as pillar]
             [plan.shape :as shape]))
@@ -38,7 +38,7 @@
         end (last stair-feet)
         run-feet (take (inc run) (iterate #(ahead % heading 1) end))]
     {:steps (concat (map (fn [f] [f (shape/step-cells f dir heading)]) (butlast stair-feet))
-                    (map (fn [f] [f (stair/step-cells f :level heading)]) (butlast run-feet)))
+                    (map (fn [f] [f (geo/step-cells f :level heading)]) (butlast run-feet)))
      :end end
      :stand (last run-feet)}))
 
@@ -74,11 +74,11 @@
           (if (and (dark? sites) nxt) (recur (conj sites nxt)) sites))))))
 
 (defn step-stop
-  "stair/stop-of for a step of the line. With a building block carried (in :filler?) air under or in the floor is no stop:
+  "jobs.access.stair.cells/stop-of for a step of the line. With a building block carried (in :filler?) air under or in the floor is no stop:
   the walk bridges it."
   [in feet cells accept]
   (let [filler? (:filler? in)
-        stop (stair/stop-of (assoc in :feet feet) (assoc cells :filler? filler?) accept)]
+        stop (geo/stop-of (assoc in :feet feet) (assoc cells :filler? filler?) accept)]
     (when-not (and filler? (= :no-floor (:reason stop)) (rules/air (:block stop)))
       stop)))
 
@@ -87,7 +87,7 @@
   [in plan accept]
   (let [{:keys [steps stand]} (line plan)]
     (or (some (fn [[feet cells]] (step-stop in feet cells accept)) steps)
-        (step-stop in stand (stair/step-cells stand :level (:heading plan)) accept))))
+        (step-stop in stand (geo/step-cells stand :level (:heading plan)) accept))))
 
 (defn standable?
   "Whether the body can stand at feet: it and the head cell open, a solid floor under."

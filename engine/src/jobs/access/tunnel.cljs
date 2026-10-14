@@ -15,6 +15,8 @@
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
             [jobs.access.stair :as stair]
+            [jobs.access.stair.cells :as geo]
+            [jobs.access.stair.step :as sstep]
             [jobs.lib.reach :as reach]
             [jobs.lib.child :as child]
             [jobs.lib.walk :as walk]
@@ -70,7 +72,7 @@
   A target off the body's row and column, with the body underground and no line entered within 24 blocks, is
   reached in two legs: a kept tunnel child along the shorter axis to a waypoint one past the target's column, then
   the line above from the body's own cell. That first leg stays open even in a dead end (:keep false). A leg that stops is tried once on the other axis; a
-  floor of air is bridged with a carried building block (stair/bridge!), as the stair does. A target on the body's
+  floor of air is bridged with a carried building block (jobs.access.stair.step/bridge!), as the stair does. A target on the body's
   row or column farther than :max-length is cut the same way in legs of :max-length from the body's cell.
 
   The body's cell is the progress. On the stair line the stair child goes on, on the run line the run, at the
@@ -164,9 +166,9 @@
   (first (filter #(= feet (ln/ahead end heading %)) (range 0 (inc run)))))
 
 (defn ^:async dig-cell!
-  "stair/dig! with :again for a dug cell (more to do), else a stop map."
+  "jobs.access.stair.step/dig! with :again for a dug cell (more to do), else a stop map."
   [c in cell cut accept]
-  (let [r (await (stair/dig! c in cell cut accept))]
+  (let [r (await (sstep/dig! c in cell cut accept))]
     (if (= :continue r) :again r)))
 
 (defn ^:async run-step!
@@ -175,17 +177,17 @@
   (let [{:keys [plan]} (ctx/mem c)
         accept (set (:accept (:args c)))
         in (stair/rules-in c feet)
-        base (stair/step-cells feet :level (:heading plan))
+        base (geo/step-cells feet :level (:heading plan))
         {:keys [next cut] :as cells} (assoc base :bridged? (contains? (:bridged (ctx/mem c)) (:floor base))
                                                  :filler? (some? (choose/filler c :build)))]
-    (await (stair/look-ahead! c feet next cut))
-    (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet cut))
-        (let [stop (await (stair/judge! c in cells accept))]
+    (await (sstep/look-ahead! c feet next cut))
+    (or (await (sstep/lava-step! c :tunnel.sealed (:block-at in) feet cut))
+        (let [stop (await (sstep/judge! c in cells accept))]
           (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
-            (await (stair/bridge! c in cells))
+            (await (sstep/bridge! c in cells))
             stop))
         (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
-          (or (await (stair/peek! c cell)) (await (dig-cell! c in cell cut accept)))
+          (or (await (sstep/peek! c cell)) (await (dig-cell! c in cell cut accept)))
           (or (await (look/settle! c cut))
               (let [r (await (child/walk-into! c :walk next))]
                 (cond
@@ -199,14 +201,14 @@
   [c feet]
   (let [accept (set (:accept (:args c)))
         in (stair/rules-in c feet)
-        {:keys [next cut] :as cells} (stair/step-cells feet :level (:heading (:plan (ctx/mem c))))
+        {:keys [next cut] :as cells} (geo/step-cells feet :level (:heading (:plan (ctx/mem c))))
         over (first cut)]
-    (await (stair/look-ahead! c feet next cut))
-    (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet [over]))
-        (await (stair/judge! c in cells accept))
+    (await (sstep/look-ahead! c feet next cut))
+    (or (await (sstep/lava-step! c :tunnel.sealed (:block-at in) feet [over]))
+        (await (sstep/judge! c in cells accept))
         (if (rules/air ((:block-at in) over))
           (or (await (look/settle! c [over])) :reached)
-          (or (await (stair/peek! c over)) (await (dig-cell! c in over cut accept)))))))
+          (or (await (sstep/peek! c over)) (await (dig-cell! c in over cut accept)))))))
 
 (defn line-index
   "The index of feet on the line of cells (0..n), or nil."
@@ -319,8 +321,8 @@
         feet (reach/standing-vec (:primitives c))
         k (line-index cells feet)
         j (run-index end feet heading run)
-        i (when (pos? steps) (stair/stair-index entry feet dir heading steps))]
-    (ctx/update-mem! c stair/record-dug (:block-at (stair/rules-in c feet)))
+        i (when (pos? steps) (geo/stair-index entry feet dir heading steps))]
+    (ctx/update-mem! c geo/record-dug (:block-at (stair/rules-in c feet)))
     (or (when k (await (torch-step! c k)))
         (when (and j (= :continue (await (ore-pick/pick! c {:except #{(target-of c)}})))) :continue)
         (cond

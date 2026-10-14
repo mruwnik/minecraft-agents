@@ -1,34 +1,33 @@
 (ns jobs.access.stair
-  (:require [jobs.lib.choose :as choose]
-            [jobs.lib.submitted :as submitted]
-            [jobs.lib.child :as child]
-            [engine.settings :as settings]
-            [engine.args :as a]
-            [clojure.string :as str]
-            [plan.shape :as shape]
-            [jobs.lib.access.rules :as rules]
+  (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
+            [jobs.access.stair.cells :as geo]
+            [jobs.access.stair.memory :as smem]
+            [jobs.access.stair.step :as sstep]
             [jobs.lib.access :as access]
-            [jobs.lib.escape :as escape]
+            [jobs.lib.access.rules :as rules]
+            [jobs.lib.blocks :as blocks]
+            [jobs.lib.child :as child]
+            [jobs.lib.choose :as choose]
+            [jobs.lib.dig-look :refer [unknown? settle!]]
             [jobs.lib.fetch :as fetch]
-            [jobs.lib.lava :as lava]
-            [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
+            [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
-            [jobs.lib.blocks :as blocks]
-            [jobs.lib.bridge :as bridge]
-            [jobs.lib.look :as look]
-            [jobs.lib.dig-look :refer [unknown? look-at! settle! see-round!]]
+            [jobs.lib.submitted :as submitted]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk :as walk]
+            [plan.shape :as shape]))
 
 (def doc
   "Dig a 1-wide stair :down or :up (or a flat run, :level) along :heading (nil: the way the body faces) from where the body stands, :steps steps or to feet height :y.
-  The check waits (:no-tool, :no-free-slot) when the next dig lacks a pickaxe or room for the drop; with :make-room (default) a
-  pack without room is first made room in (jobs.storage.make-room child, once per pack content), so it waits :no-free-slot only when nothing may be tossed.
   A stair down first stocks torches when under 8 are carried (jobs.lib.trip/torches-ready!; :stock-torches false skips it, as does :fetch off).
 
   A step cuts three cells, top first, so the body can walk one block forward and one down (or up) with full
@@ -46,6 +45,10 @@
   The cell under a placed floor is not judged. With no such block: :no-floor with :filler :none; with no face to place
   against at any of them (a void pocket): :no-support-floor with :cell, :tried and :why. A stair down that stops so shuts the cut cell over the missing floor with a carried block (:sealed [cell]), else the stop names it (:open-to [cell]). A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
   (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
+
+  Needs a pickaxe for the blocks it cuts and room for the drops. A call starts only when the first step is not refused by a zone, claim or plan, the args give a length (:steps or :y), the next dig lacks nothing this call cannot get, and, when it was submitted with a :from, the body is still near it (conditions :refused, :bad-args, :no-tool, :no-free-slot, :moved-since-submit; start only). Quote: steps x cells of the step x the time of a cell, ending at the last step.
+  - A pack without room is made room in (jobs.storage.make-room child, once per pack content; :make-room), else it ends :no-free-slot.
+  - A missing pickaxe is got with jobs.items.get-tool (:fetch, jobs.lib.need), then the body walks back to the cell it stood on and goes on; a fetch that fails, or that changes nothing, is remembered for its :fail-minutes (memory :stair-tool-failed) and the block is dug bare-handed. With :fetch off it ends :no-tool.
 
   Each step is judged when chosen and each cell again right before its dig. Stops:
   - Access refusals with their reason: :zone :claim :footprint :not-loaded :no-zones. :ignore-zones? skips all
@@ -90,12 +93,12 @@
 
   Before each step it digs the exposed ores within reach (:pick-up-ores, jobs.lib.ore-pick) and returns to its place.
 
-  Hands over {:status :done|:stopped :reason kw :steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell
+  Ends :done, or with a cause {:reason r ...detail}: :condition-failed for the facts that bar the next cell (the access
+  refusals, :fluid-in-cut :crop :base-block :undercuts-way :unbreakable :no-tool :inventory-full :hazard :lava-exposed :plugged :floor-unseen
+  :no-floor :cave-below :off-stair :no-way-back :bad-args), :limit-reached for :tool-spent (line :wear), :nothing-possible for the attempts that
+  failed (:refills :dig-failed :step-failed :no-support-floor :lava-unsealed :water-unplugged). Data {:steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell
   :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
 
-  :fetch (default true; jobs.lib.fetch; false waits :no-tool): the :no-tool wait is not waited out; the call runs jobs.items.get-tool
-  for the block (child :fetch) first, then walks back to the cell it stood on (child :fetch-back) and goes on. A
-  parent's stair child does not fetch.
   :spent-ok (default false): a dig whose every carried tool is down to 3 uses (jobs.lib.trip/spent-tool?) stops {:reason :tool-spent :tool <kind>}
   before the last tool breaks deep down, after a spare was tried once (jobs.lib.trip/tool-ready!); true digs on.
   :by-hand (default false): a block no carried tool clears is dug bare-handed anyway (slow, its drop lost): go-to's
@@ -124,189 +127,24 @@
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 
 (a/defargs settings
-  {::max-cell-digs {:default 3 :doc "Digs of one cell before the stair stops :refills." :spec (a/int-in 0 nil)}
-   ::max-fall-digs {:default 12 :doc "Digs of one cell a falling block (gravel, sand) keeps refilling before the stair stops :refills." :spec (a/int-in 0 nil)}
-   ::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::bridge-depth {:default 2 :doc "How many cells back along a stair down a missing floor may be bridged from a solid cell (the cave under its last floor)." :spec (a/int-in 0 nil)}
-   ::take-back-floors? {:default true :doc "A floor block a go-to stair (:note) places goes into the scaffold ledger for jobs.access.cleanup to take back; false keeps it." :spec boolean?}})
-(defn max-cell-digs [] (settings/get settings ::max-cell-digs))
-(defn max-fall-digs [] (settings/get settings ::max-fall-digs))
+  {::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::cell-s {:default 1.2 :doc "Mean seconds one cut cell of a step takes (look, dig, walk), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
-(def rises (assoc shape/rises :level 0))
+(def target [:dir :heading :y])
 
-(defn delta
-  "One step's move [dx dy dz]."
-  [dir heading]
-  (let [[dx dz] (shape/headings heading)] [dx (rises dir) dz]))
-
-(defn step-cells
-  "plan.shape/step-cells, and for :level the run step: {:next :cut (head first) :floor :under}."
-  [feet dir heading]
-  (if (= :level dir)
-    (let [n (shape/add feet (delta dir heading))]
-      {:next n :cut [(shape/add n [0 1 0]) n] :floor (shape/add n [0 -1 0]) :under (shape/add n [0 -2 0])})
-    (shape/step-cells feet dir heading)))
-
-(defn stair-index
-  "i when feet is the stair's cell after i steps from origin, 0 <= i <= steps; else nil."
-  [origin feet dir heading steps]
-  (let [[dx dy dz] (delta dir heading)
-        i (+ (* dx (- (feet 0) (origin 0))) (* dz (- (feet 2) (origin 2))))]
-    (when (and (<= 0 i steps) (= feet (shape/add origin [(* i dx) (* i dy) (* i dz)])))
-      i)))
-
-(def crop-names
-  "Blocks a stair never cuts: a farm's crops, stems and the farmland they stand on (the farm is another's work even
-  when no zone says so)."
-  #{"wheat" "carrots" "potatoes" "beetroots" "melon_stem" "pumpkin_stem" "attached_melon_stem" "attached_pumpkin_stem"
-    "nether_wart" "sweet_berry_bush" "torchflower_crop" "pitcher_crop" "farmland"})
-
-(defn stair-hazards
-  "The hazard the stair adds to the rules' for cell: a falling block over it, unless that cell is cut too (the rules
-  see one only over the body's own column; the body walks into the next one)."
-  [block-at cell cut]
-  (let [above (shape/add cell [0 1 0])
-        n (block-at above)]
-    (when (and (rules/falling? n) (not (some #{above} cut)))
-      [{:reason :falling-block :block n :at above}])))
-
-(defn cell-verdict
-  "The dig verdict of cell: the rules' refusal, else {:ok true :hazards [...]} with the stair's hazards added."
-  [in cut]
-  (let [v (rules/may-dig? in)]
-    (if-not (:ok v)
-      v
-      (let [[fx _ fz] (:feet in)
-            hs (vec (for [h (distinct (concat (:hazards v) (stair-hazards (:block-at in) (:cell in) cut)))
-                          :let [[x _ z] (:at h)]]
-                      (cond-> h (and (= :falling-block (:reason h)) (= [x z] [fx fz])) (assoc :on-body true))))]
-        (cond-> {:ok true} (seq hs) (assoc :hazards hs))))))
-
-(def way-policy {:cap 200 :ttl :forever})
-
-(def plug-policy {:cap 60 :ttl :forever})
-
-(defn plugs-of
-  "The set of cells this body plugged against water in its current dimension (memory :stair-plug), whatever job did."
+(defn heading-of
+  "The call's heading, else the way the body faces."
   [c]
-  (let [dim (.-dimension (.self (:primitives c)))]
-    (set (keep #(when (= dim (:dim (:data %))) (:cell (:data %))) (ctx/entries c :stair-plug)))))
+  (or (:heading (:args c)) (keyword (look/facing (:primitives c)))))
 
-(defn plug!
-  "Remember cell as filled against water, so a later stair keeps it shut."
-  [c cell]
-  (ctx/remember! c :stair-plug {:dim (.-dimension (.self (:primitives c))) :cell cell} plug-policy))
-
-(defn way-floors
-  "The floors of the steps a stair walked (not the start's own ground), from its origin, direction and steps reached."
-  [origin dir heading steps]
-  (let [d (delta dir heading)]
-    (vec (for [i (range 1 (inc (or steps 0)))] (shape/add (shape/add origin (mapv #(* i %) d)) [0 -1 0])))))
-
-(defn joined-way
-  "floors (of a run that began standing on the cell ground) as one way with the earlier ways (olds, the floors of each)
-  it goes on from or covers, those that hold ground or one of floors: {:floors [theirs, then floors] :gone #{the olds
-  taken in}}."
-  [olds ground floors]
-  (let [touched (conj (set floors) ground)
-        gone (set (filter #(some touched %) olds))]
-    {:floors (vec (concat (remove (set floors) (distinct (mapcat identity gone))) floors)) :gone gone}))
-
-(defn record-way!
-  "Remember the steps walked (memory :stair-way, one entry a connected way: joined-way), so a climb cut in many runs
-  does not push the body's other stairs out of the memory."
-  [c origin dir heading steps]
-  (let [dim (.-dimension (.self (:primitives c)))
-        olds (keep #(when (= dim (:dim (:data %))) (:floors (:data %))) (ctx/entries c :stair-way))
-        {:keys [floors gone]} (joined-way olds (shape/add origin [0 -1 0]) (way-floors origin dir heading steps))]
-    (when (seq gone) (ctx/forget-where! c :stair-way #(and (= dim (:dim %)) (contains? gone (:floors %)))))
-    (ctx/remember! c :stair-way {:dim dim :floors floors} way-policy)))
-
-(defn hazards-why
-  "The hazards in words: \"falling-block gravel at [x y z]; ...\"."
-  [hazards]
-  (str/join "; " (map (fn [h] (str (name (:reason h)) (some->> (:block h) (str " ")) (some->> (:at h) pr-str (str " at ")))) hazards)))
-
-(defn known-floor
-  "The first cut cell that is a floor of a stair the body made earlier (ways: the set of those floors) and is still
-  solid as the body sees it now (a floor dug away since, or put back as air, no longer carries a way)."
-  [block-at cut ways]
-  (first (filter #(and (contains? ways %) (rules/solid-floor? block-at %)) cut)))
-
-(defn stop-of
-  "Why the step cannot go on, as {:reason ...detail}, or nil when every cell may be cut.
-  in: the rules' input without :cell; its :unseen? (fn cell -> true when never sensed) makes a floor the body has not
-  seen a stop :floor-unseen once the cut is open, not a guess. cells :bridged? true: the floor was placed by the stair, what is under it is not judged; :filler? true: air under a solid floor is no stop (the next floor is bridged); :up? true (a stair up or level): it never is (those dig no floor)."
-  [{:keys [block-at plugs] :as in} {:keys [cut floor under bridged? up? filler? ways]} accept]
-  (let [plug-cell (first (filter #(and (contains? plugs %) (not (rules/air (block-at %)))) cut))
-        floor-cell (known-floor block-at cut (into (set (:ways in)) ways))
-        fluid-cell (first (filter #(rules/fluids (block-at %)) cut))
-        crop-cell (first (filter #(crop-names (block-at %)) cut))
-        unseen-cell (when-let [unseen? (:unseen? in)]
-                      (when (and (every? #(rules/air (block-at %)) cut) (unseen? floor)) floor))]
-    (cond
-      (some #(nil? (block-at %)) (conj cut floor under))
-      {:reason :not-loaded :cell (first (filter #(nil? (block-at %)) (conj cut floor under)))}
-      fluid-cell {:reason :fluid-in-cut :cell fluid-cell :fluid (block-at fluid-cell)}
-      crop-cell {:reason :crop :cell crop-cell :block (block-at crop-cell)}
-      plug-cell {:reason :plugged :cell plug-cell :block (block-at plug-cell)
-                 :why "the cell was filled against water by this body; the water is behind it (:dig-plugs true digs it)"}
-      floor-cell {:reason :undercuts-way :cell floor-cell :block (block-at floor-cell)
-                  :why "the cell is the floor of a stair this body cut earlier; cutting it breaks the way"}
-      unseen-cell {:reason :floor-unseen :cell unseen-cell}
-      (not (rules/solid-floor? block-at floor)) {:reason :no-floor :cell floor :block (block-at floor)}
-      (and (not bridged?) (not up?) (let [n (block-at under)] (or (and (rules/air n) (not filler?)) (rules/fluids n))))
-      {:reason :cave-below :cell under :block (block-at under)}
-      :else
-      (some (fn [cell]
-              (when-not (rules/air (block-at cell))
-                (let [v (cell-verdict (assoc in :cell cell) cut)]
-                  (cond
-                    (not (:ok v)) (assoc (dissoc v :ok) :cell cell)
-                    (not-every? (comp accept access/stair-hazard-key) (:hazards v))
-                    {:reason :hazard :cell cell :hazards (:hazards v) :why (hazards-why (:hazards v))}))))
-            cut))))
-
-(defn by-hand?
-  "Whether block is dug bare-handed: :by-hand asks for it, or the fetch of a tool for it failed (the way out must open
-  even with no pickaxe to be had)."
-  [c block]
-  (and (tools/needs-tool-to-clear? (:primitives c) block)
-       (or (:by-hand (:args c))
-           (fetch/failed? c 'jobs.access.stair {:reason :no-tool :block block}))))
-
-(defn lacks-tool?
-  "A tool is needed and not carried, and the block is not dug by hand (by-hand?)."
-  [c block]
-  (and (not (by-hand? c block)) (tools/needs-tool-to-clear? (:primitives c) block)))
-
-(defn drop-room?
-  "Room for block's drop, or no drop to keep: a :by-hand dig with no tool that harvests it loses it."
-  [c block]
-  (or (by-hand? c block)
-      (blocks/room-for? (:primitives c) (blocks/item-name {:block block}))))
-
-(declare need)
-
-(defn room-due?
-  "Whether lack (from need) is a full pack that a make-room child may cure: :make-room is on and the pack has not
-  changed since make-room last stopped short."
-  [c lack]
-  (and (= :no-free-slot (:reason lack))
-       (:make-room (:args c))
-       (not= (u/inventory (:primitives c)) (:room-failed (ctx/mem c)))))
-
-(defn ^:async make-room!
-  "Run make-room as child :room (no walk away: the stair is one tunnel wide). :continue while it waits, else :again; a
-  stop short of the room is remembered with the pack it saw, so the wait is not retried until the pack changes."
+(defn with-heading
+  "c with the :heading arg filled when the call gave none: the heading the first round chose (job memory), else the way
+  the body faces."
   [c]
-  (let [r (await (ctx/call-child c :room 'jobs.storage.make-room {:away 0 :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-    (if (= :continue r)
-      :continue
-      (do (when (= :no-free-slot (:reason (need c)))
-            (ctx/update-mem! c assoc :room-failed (u/inventory (:primitives c))))
-          :again))))
+  (if (:heading (:args c))
+    c
+    (assoc-in c [:args :heading] (keyword (or (:heading (ctx/mem c)) (look/facing (:primitives c)))))))
 
 (defn access-world
   "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and
@@ -320,130 +158,27 @@
   [c feet]
   (merge {:floor-at (access/seen-at (:primitives c)) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :column-at (access/sensed-at (:primitives c) "air")
           :feet feet :ledger #{} :ways (ledger/ways-of c) :keep-base? true
-          :plugs (if (:dig-plugs (:args c)) #{} (plugs-of c))}
+          :plugs (if (:dig-plugs (:args c)) #{} (smem/plugs-of c))}
          (access-world c)))
 
-(defn judged-in
-  "in for the step about to be taken: a floor the body has not seen stops it (:floor-unseen)."
-  [c in]
-  (assoc in :unseen? #(unknown? (:primitives c) %)))
+(defn fetch-limits
+  "The limits map of :fetch when it allows a tool, else nil."
+  [c]
+  (let [o (fetch/opts c 'jobs.access.stair)]
+    (when (and o (contains? (:what o) :tool)) o)))
 
-(defn ^:async look-ahead!
-  "Once per step from feet (memory :looked): look at the next cell and the floor under it, at each cut cell and the cell
-  over the top one (lava or a falling block there is a hazard) still unknown, and at the unknown neighbours of the feet and head, so what a player would see of the step is seen when it is judged."
-  [c feet next cut]
-  (when-not (= [feet next] (:looked (ctx/mem c)))
-    (ctx/update-mem! c assoc :looked [feet next])
-    (await (look-at! c next))
-    (loop [cells (concat cut [(shape/add (first cut) [0 1 0])] (map #(shape/add next [0 % 0]) [-1 -2])
-                         (for [b [feet (shape/add feet [0 1 0])] d rules/neighbour-deltas] (shape/add b d)))]
-      (when-let [cell (first cells)]
-        (when (unknown? (:primitives c) cell) (await (look-at! c cell)))
-        (recur (rest cells))))))
+(defn room-due?
+  "Whether lack (from need) is a full pack that a make-room child may cure: :make-room is on and the pack has not
+  changed since make-room last stopped short."
+  [c lack]
+  (and (= :no-free-slot (:reason lack))
+       (:make-room (:args c))
+       (not= (u/inventory (:primitives c)) (:room-failed (ctx/mem c)))))
 
-(defn ^:async judge!
-  "stop-of for the step about to be taken. A floor still unseen once the cut is open gets one more look (memory
-  :floor-looked) and is judged again, so a glance that missed is not a final stop."
-  [c in cells accept]
-  (let [stop (stop-of (judged-in c in) cells accept)
-        cell (:cell stop)]
-    (if (and (= :floor-unseen (:reason stop)) (not= cell (:floor-looked (ctx/mem c))))
-      (do (ctx/update-mem! c assoc :floor-looked cell)
-          (await (look-at! c cell))
-          (stop-of (judged-in c in) cells accept))
-      stop)))
-
-(defn ^:async peek!
-  "Before digging cell: when it is still unknown, look at it once (memory :peeked) and give :again so the step is
-  judged on what shows; else nil."
-  [c cell]
-  (when (and (unknown? (:primitives c) cell) (not= cell (:peeked (ctx/mem c))))
-    (ctx/update-mem! c assoc :peeked cell)
-    (await (look-at! c cell))
-    :again))
-
-(defn exposed-lava
-  "The lava cells a step lays open: lava beside the feet, the head or a cut cell that is open (air or fluid) now,
-  then lava in one of those; sources behind first."
-  [block-at feet cut]
-  (let [open (into [feet (shape/add feet [0 1 0])] (filter #(let [n (block-at %)] (or (rules/air n) (rules/fluids n))) cut))
-        open? (set open)
-        lava? #(= "lava" (block-at %))
-        beside (for [o open d rules/neighbour-deltas :let [n (shape/add o d)] :when (and (not (open? n)) (lava? n))] n)]
-    (distinct (concat beside (filter lava? open)))))
-
-(defn ^:async lava-step!
-  "Exposed lava by the job's :on-lava: nil when there is none; :stop gives the stop :lava-exposed, else the first is
-  sealed (jobs.lib.lava/seal!, event kind)."
-  [c kind block-at feet cut]
-  (when-let [cell (first (exposed-lava block-at feet cut))]
-    (if (= :stop (:on-lava (:args c)))
-      {:reason :lava-exposed :cell cell :fluid "lava"}
-      (await (lava/seal! c kind block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))})))))
-
-(defn exposed-water
-  "The cells this stair dug (memory :dug) among the cut that are open now and touch seen water, each with the water
-  cell: [cell water], water in the cell itself counted. Empty when :water is accepted."
-  [block-at dug accept cut]
-  (if (accept :water)
-    []
-    (let [dug? (set (map :cell dug))]
-      (vec (for [cell cut :when (dug? cell)
-                 :let [n (block-at cell)]
-                 :when (or (rules/air n) (rules/fluids n))
-                 w (cons cell (map #(shape/add cell %) rules/neighbour-deltas))
-                 :when (= "water" (block-at w))]
-             [cell w])))))
-
-(defn ^:async water-step!
-  "Water a dig laid open: a cell the stair dug that now touches seen water is filled with a building block at once
-  (jobs.lib.lava/seal!, event stair.plugged), before the water pours in. nil when there is none; :continue while the
-  place child waits; the stop {:reason :hazard :cell :plugged :hazards} once plugged, else {:reason :water-unplugged}."
-  [c block-at accept cut]
-  (when-let [[cell w] (first (exposed-water block-at (:dug (ctx/mem c)) accept cut))]
-    (let [r (await (lava/seal! c :stair.plugged block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))]
-      (cond
-        (= :continue r) :continue
-        (= :again r) (do (plug! c cell) {:reason :hazard :cell cell :plugged cell :hazards [{:reason :fluid-adjacent :fluid "water" :at w}]})
-        :else (assoc r :reason :water-unplugged)))))
-
-(defn target-steps
-  "Steps to cut from the args and the start feet, or {:error text}."
-  [{:keys [dir heading steps y]} [_ fy _]]
-  (cond
-    (not (rises dir)) {:error "dir must be :down, :up or :level"}
-    (not (shape/headings heading)) {:error "heading must be :north :east :south or :west"}
-    (and (int? steps) (pos? steps)) steps
-    (and (int? y) (pos? (* (rises dir) (- y fy)))) (js/Math.abs (- y fy))
-    :else {:error "give :steps > 0, or :y beyond the feet in :dir"}))
-
-(defn finish!
-  "Hand over the result and end: :done with reason :done, else :stopped (warn)."
-  [c reason detail]
-  (let [m (ctx/mem c)
-        steps (or (:at-step m) 0)
-        result (merge {:status (if (= :done reason) :done :stopped) :reason reason :steps steps
-                       :at (reach/standing-vec (:primitives c)) :dug (:dug m []) :ores (vec (ore-pick/picked c))}
-                      detail)]
-    (ctx/result! c result)
-    (let [{:keys [dir heading]} (:args c)]
-      (when (and (pos? steps) (not= :level dir))
-        (record-way! c (:origin m) dir heading steps)))
-    (if (= :done reason)
-      (ctx/emit! c :stair.done :info (assoc result :text (str "stair " (name (:dir (:args c))) " done, " steps " steps")))
-      (ctx/emit! c :stair.stopped :warn
-                 (assoc result :text (str "stair stopped after " steps " steps: " (name reason)
-                                          (some->> (:cell detail) pr-str (str " at "))
-                                          (some->> (:why detail) (str ": "))))))
-    :done))
-
-(defn record-dug
-  "Memory after a dig intent: the cell is recorded as dug when it no longer holds its block."
-  [m block-at]
-  (if-let [{:keys [cell block]} (:digging m)]
-    (cond-> (dissoc m :digging)
-      (not= block (block-at cell)) (update :dug (fnil conj []) {:cell cell :block block}))
-    m))
+(defn fetchable?
+  "Whether lack is a missing pickaxe that :fetch lets the call get."
+  [c lack]
+  (and (= :no-tool (:reason lack)) (some? (fetch-limits c))))
 
 (defn need
   "What the next cell to dig lacks, as a reason map for ctx/wait, or nil: :no-tool (a pickaxe), :no-free-slot (no room
@@ -454,15 +189,22 @@
         p (:primitives c)
         feet (reach/standing-vec (:primitives c))
         {:keys [origin target]} (ctx/mem c)
-        on-stair? (or (nil? origin) (some? (stair-index origin feet dir heading target)))]
-    (when (and on-stair? (rises dir) (shape/headings heading))
+        on-stair? (or (nil? origin) (some? (geo/stair-index origin feet dir heading target)))]
+    (when (and on-stair? (geo/rises dir) (shape/headings heading))
       (let [block-at (:block-at (rules-in c feet))
-            {:keys [cut]} (step-cells feet dir heading)
+            {:keys [cut]} (geo/step-cells feet dir heading)
             block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (rules/air n)) (not (rules/unbreakable n))) n)) cut)]
         (cond
           (nil? block) nil
-          (lacks-tool? c block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
-          (not (drop-room? c block)) {:reason :no-free-slot :block block})))))
+          (sstep/lacks-tool? c block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
+          (not (sstep/drop-room? c block)) {:reason :no-free-slot :block block})))))
+
+(defn unmet
+  "What the next dig lacks that this call cannot make good (no room made, no tool fetched), or nil."
+  [c]
+  (when-not (:backoff (ctx/mem c))
+    (when-let [lack (need c)]
+      (when-not (or (room-due? c lack) (fetchable? c lack)) lack))))
 
 (defn refusal
   "Before anything is cut: the stop of the first step when a zone, claim or plan refuses its cut, else nil."
@@ -471,130 +213,123 @@
         {:keys [origin target]} (ctx/mem c)
         feet (reach/standing-vec (:primitives c))]
     (when (and (or (nil? origin) (and (= feet origin) (empty? (:dug (ctx/mem c)))))
-               (rises dir) (shape/headings heading))
+               (geo/rises dir) (shape/headings heading))
       (let [in (rules-in c feet)
-            cells (-> (step-cells feet dir heading) (assoc :up? (not= :down dir)))
-            stop (stop-of in cells (set (:accept (:args c))))]
+            stepc (-> (geo/step-cells feet dir heading) (assoc :up? (not= :down dir)))
+            stop (geo/stop-of in stepc (set (:accept (:args c))))]
         (when (#{:zone :claim :footprint} (:reason stop)) stop)))))
 
-(defn with-heading
-  "c with the :heading arg filled when the call gave none: the heading the first round chose (job memory), else the way
-  the body faces."
+;; ------------------------------------------------------------------ the contract
+
+(defn away
+  "The cause of a call submitted with a :from the body has since left (jobs.lib.submitted/away-wait), or nil."
   [c]
-  (if (:heading (:args c))
-    c
-    (assoc-in c [:args :heading] (keyword (or (:heading (ctx/mem c)) (look/facing (:primitives c)))))))
+  (let [w (atom nil)]
+    (when (false? (submitted/away-wait (assoc c :wait w))) @w)))
 
-(defn check
-  "True, or a wait for what the next dig lacks (see need), or :refused when a zone, claim or plan refuses the first
-  step. As a child (leave-tunnel, tunnel, dig-in) it runs and stops with the same reason in its result, which its
-  parent reads."
-  [c0]
-  (let [c (with-heading c0)
-        stop (refusal c)]
-    (cond
-      (some? (submitted/away-wait c)) false
-      stop (access/decline! c :stair.declined "stair" (assoc (access/refusal-fields [stop]) :reason :refused))
-      :else (if-let [lack (need c)]
-              (or (room-due? c lack) (fetch/check c 'jobs.access.stair lack))
-              true))))
+(defn at-start
+  "f of the call with its heading, at the call's start only; nil once it began."
+  [f]
+  (fn [c] (when-not (ctx/frozen-call c) (f (with-heading c)))))
 
-(defn ^:async dig!
-  "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."
-  [c in cell cut accept]
-  (let [p (:primitives c)
-        block ((:block-at in) cell)
-        tries (get-in (ctx/mem c) [:tries cell] 0)]
-    (cond
-      (>= tries (if (rules/falling? block) (max-fall-digs) (max-cell-digs))) (cond-> {:reason :refills :cell cell :block block}
-                                   (not (rules/falling? block))
-                                   (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
-      (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
-      (lacks-tool? c block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
-      (and (not (:spent-ok (:args c))) (trip/spent-tool? p block))
-      (if (= :continue (await (trip/tool-ready! c block)))
-        :yield
-        (if (trip/spent-tool? p block)
-          {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}
-          :continue))
-      (not (drop-room? c block)) {:reason :inventory-full :cell cell :block block}
-      :else
-      (do
-        (await (tools/equip! c block))
-        (let [v (cell-verdict (assoc in :cell cell) cut)
-              block ((:block-at in) cell)]
-          (cond
-            (not (:ok v)) (assoc (dissoc v :ok) :cell cell)
-            (not-every? (comp accept access/stair-hazard-key) (:hazards v)) {:reason :hazard :cell cell :hazards (:hazards v) :why (hazards-why (:hazards v))}
-            (rules/air block) :continue
-            :else
-            (do
-              ;; a waiting child is resumed on the same cell: only the first round of a dig counts a try
-              (ctx/update-mem! c #(cond-> (assoc % :digging {:cell cell :block block} :counted cell)
-                                    (not= cell (:counted %)) (update-in [:tries cell] (fnil inc 0))))
-              (let [[x y z] cell
-                    outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :lava-adjacent :falling-block}
-                                                                         :on-lava :leave :ignore-zones? true}))]
-                (if (= :continue outcome)
-                  :yield
-                  (do
-                    (ctx/update-mem! c #(-> % (dissoc :counted) (record-dug (:block-at in))))
-                    (when-let [tag (when (= :dug outcome) (:note (:args c)))] (escape/note-hole! c tag cell block))
-                    (when (#{:dug :missing} outcome)
-                      (ctx/update-mem! c assoc :dug-at (ctx/now c))
-                      (await (see-round! c cell)))
-                    (case outcome
-                      (:dug :missing) :continue
-                      {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))
+(def conditions
+  [[:fn (at-start away)]
+   [:fn (at-start (fn [c]
+                    (let [t (geo/target-steps (:args c) (reach/standing-vec (:primitives c)))]
+                      (when (map? t) {:reason :bad-args :why (:error t)}))))]
+   [:fn (at-start (fn [c] (when-let [stop (refusal c)] (assoc (access/refusal-fields [stop]) :reason :refused))))]
+   [:fn (at-start unmet)]])
 
-(defn take-back-floor?
-  "Whether a floor this stair places goes into the scaffold ledger: a go-to stair (:note), unless the setting keeps it."
+(defn done?
+  "The steps cut against the steps asked. Never :done? itself: the round ends the stair with its event and way."
   [c]
-  (boolean (and (:note (:args c)) (settings/get settings ::take-back-floors?))))
+  (let [m (ctx/mem c)
+        n (or (:at-step m) 0)]
+    {:done? false :units :steps :done n :left (max 0 (- (or (:target m) n) n))}))
 
-(defn bridge-opts
-  "The bridge/bridge-plans opts of the stair: a stair down may bridge back along its line (a stair up would place into its own cut)."
+(defn quote-of [c]
+  (let [{:keys [dir]} (:args c)
+        heading (heading-of c)
+        feet (reach/standing-vec (:primitives c))
+        t (geo/target-steps (assoc (:args c) :heading heading) feet)
+        n (if (map? t) 0 t)
+        s (* n (if (= :level dir) 2 3) (settings/get settings ::cell-s))]
+    {:uses {:time [(* 0.5 s) s (* 4 s)]} :done [0 n n]
+     :moves-to (mapv + feet (map #(* n %) (geo/delta dir heading)))}))
+
+(def facts
+  "The stops that name a fact barring the next cell (condition-failed); the others are attempts that failed."
+  #{:bad-args :refused :zone :claim :footprint :no-zones :not-loaded :fluid-in-cut :crop :base-block :undercuts-way :unbreakable
+    :no-tool :no-free-slot :inventory-full :hazard :lava-exposed :plugged :floor-unseen :no-floor :cave-below :off-stair :no-way-back})
+
+(defn finish!
+  "End the stair: its event, its way remembered, and the ending: :done, else by reason a kind (facts, :tool-spent a
+  wear limit, the rest nothing possible) with the detail in the cause and, with what the stair did, in the data."
+  [c reason detail]
+  (let [m (ctx/mem c)
+        steps (or (:at-step m) 0)
+        data (merge {:steps steps :at (reach/standing-vec (:primitives c)) :dug (:dug m []) :ores (vec (ore-pick/picked c))} detail)
+        {:keys [dir heading]} (:args c)]
+    (when (and (pos? steps) (not= :level dir))
+      (smem/record-way! c (:origin m) dir heading steps))
+    (if (= :done reason)
+      (do (ctx/emit! c :stair.done :info (assoc data :status :done :reason :done :text (str "stair " (name dir) " done, " steps " steps")))
+          (ctx/end c :done nil data))
+      (do (ctx/emit! c :stair.stopped :warn
+                     (assoc data :status :stopped :reason reason
+                            :text (str "stair stopped after " steps " steps: " (name reason)
+                                       (some->> (:cell detail) pr-str (str " at "))
+                                       (some->> (:why detail) (str ": ")))))
+          (if (= :tool-spent reason)
+            (ctx/end c :limit-reached (assoc detail :line :wear :reason reason) data)
+            (ctx/end c (if (facts reason) :condition-failed :nothing-possible) (assoc detail :reason reason) data))))))
+
+(defn ^:async make-room!
+  "Run make-room as child :room (no walk away: the stair is one tunnel wide). :continue while it waits, else :again; a
+  stop short of the room is remembered with the pack it saw, so the wait is not retried until the pack changes."
   [c]
-  (let [{:keys [dir heading]} (:args c)
-        [dx _ dz] (delta dir heading)]
-    (when (= :down dir) {:back [(- dx) (- dz)] :depth (settings/get settings ::bridge-depth)})))
+  (let [e (await (ctx/call c :room 'jobs.storage.make-room {:away 0 :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (if (= :continue e)
+      :continue
+      (do (when (= :no-free-slot (:reason (need c)))
+            (ctx/update-mem! c assoc :room-failed (u/inventory (:primitives c))))
+          :again))))
 
-(defn ^:async shut-opening!
-  "A stair down that cannot floor the cave it broke into shuts the cut cell over the missing floor with carried filler, so
-  the way into the cave is closed behind the body: the stop with :sealed [cell], or with :open-to [cell] when it stays open."
-  [c in stop {:keys [floor]} item]
-  (let [cell (update floor 1 inc)
-        open (assoc stop :open-to [cell])]
-    (cond
-      (not (and (= :down (:dir (:args c))) (#{:no-support-floor :no-floor} (:reason stop)))) stop
-      (or (nil? item) (not (rules/air ((:block-at in) cell)))) open
-      (await (bridge/place-floor! c in item cell (take-back-floor? c))) open
-      :else (assoc stop :sealed [cell]))))
+(defn give-up-fetch!
+  "The fetch of a tool for block failed or changed nothing: remember it (smem/tool-failed!), so the block is dug by hand and no
+  call asks again for a while. :again."
+  [c block limits e]
+  (smem/tool-failed! c block (:fail-minutes limits 10))
+  (ctx/update-mem! c dissoc :need/return :fetched-for)
+  (ctx/emit! c :stair.fetch-failed :warn {:block block :why (some-> e contract/cause-key)
+                                         :text (str "stair could not get a tool for " block ": digging it bare-handed")})
+  :again)
 
-(defn ^:async bridge!
-  "Place carried filler on the missing floor of the step (bridge/bridge-plans, a plan whose placing found no support gives way
-  to the next). :again, or a stop map (:no-support-floor when no plan works), with the opening shut-opening! leaves."
-  [c in {:keys [floor] :as cs}]
-  (let [item (choose/filler c :build)
-        plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c) (bridge-opts c))
-        stop (cond
-               (nil? item) {:reason :no-floor :cell floor :block ((:block-at in) floor) :filler :none
-                            :why (str "no floor and no filler block carried (" (str/join ", " (take 4 (choose/fillers :build))) " ...)")}
-               (empty? plans) {:reason :no-support-floor :cell floor :tried [floor (update floor 1 dec)]
-                               :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
-               :else (await (bridge/place-plans! c in item plans (take-back-floor? c))))]
-    (if stop (await (shut-opening! c in stop cs item)) :again)))
+(defn ^:async fetch-tool!
+  "Get the pickaxe for lack's block (jobs.lib.need, then walk back to where the body stood): :continue while it works,
+  :again once it ended. A tool asked for already for this block and still missing is a failed fetch."
+  [c {:keys [block]}]
+  (let [limits (fetch-limits c)]
+    (if (= block (:fetched-for (ctx/mem c)))
+      (give-up-fetch! c block limits nil)
+      (let [e (await (need/tool! c {:block block} (assoc (select-keys limits [:how :depth :explore]) :return? true)))]
+        (cond
+          (= :continue e) :continue
+          (= :done (:kind e)) (do (ctx/update-mem! c assoc :fetched-for block) :again)
+          :else (give-up-fetch! c block limits e))))))
 
 (defn ^:async step!
   "Walk into the cut step. :again, :continue while the walk waits, or a stop map."
   [c next-feet]
-  (let [r (await (child/walk-into! c :walk next-feet))]
+  (let [r (await (child/walk-into!* c :walk next-feet))]
     (cond
       (= :continue r) :continue
-      (and (:arrived r) (= next-feet (reach/standing-vec (:primitives c))))
+      (and (:arrived (:data r)) (= next-feet (reach/standing-vec (:primitives c))))
       (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
           :again)
-      :else {:reason :step-failed :cell next-feet :walk r})))
+      :else {:reason :step-failed :cell next-feet
+             :walk (merge (select-keys (:data r) [:why :arrived])
+                          {:status (if (= :done (:kind r)) :done :stopped) :reason (contract/cause-key r)})})))
 
 (defn ^:async work!
   "One bounded piece of the stair from the body's place on it: check the way back, dig one cell or take the step."
@@ -604,8 +339,8 @@
         {:keys [origin target checked]} (ctx/mem c)
         feet (reach/standing-vec (:primitives c))
         in (rules-in c feet)
-        i (stair-index origin feet dir heading target)]
-    (ctx/update-mem! c record-dug (:block-at in))
+        i (geo/stair-index origin feet dir heading target)]
+    (ctx/update-mem! c geo/record-dug (:block-at in))
     (cond
       (nil? i) {:reason :off-stair :cell feet :origin origin
                 :offset (mapv - feet origin)
@@ -620,21 +355,21 @@
           (do
             (ctx/update-mem! c assoc :checked i)
             (if (= i target)
-              (or (await (lava-step! c :stair.sealed (:block-at in) feet [])) :finished)
-              (let [{:keys [next cut] :as cells} (-> (step-cells feet dir heading)
+              (or (await (sstep/lava-step! c :stair.sealed (:block-at in) feet [])) :finished)
+              (let [{:keys [next cut] :as step-cells} (-> (geo/step-cells feet dir heading)
                                                            (as-> cs (assoc cs :up? (not= :down dir)
                                                                  :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs))
                                                                  :filler? (some? (choose/filler c :build)))))
-                    _ (await (look-ahead! c feet next cut))
-                    stop (or (await (lava-step! c :stair.sealed (:block-at in) feet cut))
-                             (await (water-step! c (:block-at in) accept cut))
-                             (await (judge! c in cells accept)))]
+                    _ (await (sstep/look-ahead! c feet next cut))
+                    stop (or (await (sstep/lava-step! c :stair.sealed (:block-at in) feet cut))
+                             (await (sstep/water-step! c (:block-at in) accept cut))
+                             (await (sstep/judge! c in step-cells accept)))]
                 (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
-                  (await (bridge! c in cells))
+                  (await (sstep/bridge! c in step-cells))
                   (or stop
                     (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
-                      (or (await (peek! c cell))
-                          (let [r (await (dig! c in cell cut accept))] (case r :continue :again :yield :continue r)))
+                      (or (await (sstep/peek! c cell))
+                          (let [r (await (sstep/dig! c in cell cut accept))] (case r :continue :again :yield :continue r)))
                       (or (await (settle! c cut)) (if (:cut-only (:args c)) :finished (await (step! c next)))))))))))))))
 
 (defn back-cell
@@ -642,50 +377,57 @@
   [c]
   (let [{:keys [dir heading]} (:args c)
         {:keys [origin target]} (ctx/mem c)
-        i (when origin (stair-index origin (reach/standing-vec (:primitives c)) dir heading target))]
+        i (when origin (geo/stair-index origin (reach/standing-vec (:primitives c)) dir heading target))]
     (when (and i (pos? i))
-      (shape/add origin (mapv #(* (dec i) %) (delta dir heading))))))
+      (shape/add origin (mapv #(* (dec i) %) (geo/delta dir heading))))))
 
 (defn ^:async back-off!
   "After a failed seal: walk one step back up the stair (a go-to child), then finish with the stop, :backed-off true
   when the body got there."
   [c]
   (let [{:keys [stop cell]} (:backoff (ctx/mem c))
-        r (when cell (await (child/walk-into! c :back cell)))]
+        r (when cell (await (child/walk-into!* c :back cell)))]
     (if (= :continue r)
       :continue
       (finish! c (:reason stop) (assoc (dissoc stop :reason) :backed-off (boolean (and cell (= cell (reach/standing-vec (:primitives c))))))))))
 
-(defn ^:async next!
-  "One piece of the stair: a fetch round, the start, a dig, a bridge, a seal or a step. :again, :continue (a child
-  waits, or the next cell lacks a tool or room with nothing to fetch: the check waits) or :done."
+(defn ^:async start!
+  "The first piece: the steps to cut, torches and a spare pickaxe in hand, the body on its start cell. :again, :continue
+  while a child waits, or the :bad-args ending."
   [c]
   (let [m (ctx/mem c)
-        lack (when-not (:backoff m) (need c))
-        r (cond
-            (:backoff m) nil
-            (room-due? c lack) (await (make-room! c))
-            :else (await (fetch/step! c 'jobs.access.stair lack {:return? true})))]
+        feet (or (some-> (:start m) vec) (reach/standing-vec (:primitives c)))
+        target (geo/target-steps (:args c) feet)]
+    (if (map? target)
+      (finish! c :bad-args {:why (:error target)})
+      ;; stone stands for the cells to dig: unseen cells are taken for stone (see the ns doc)
+      (do
+        ;; the spare's fetch may walk the body off: the stair starts where it was asked, not where the fetch ended
+        (ctx/update-mem! c assoc :start feet)
+        (if (= :continue (or (await (when (and (= :down (:dir (:args c))) (:stock-torches (:args c))) (trip/torches-ready! c)))
+                             (await (trip/tool-ready! c "stone"))))
+          :continue
+          (if (and (not= feet (reach/standing-vec (:primitives c))) (= :continue (await (child/walk-into!* c :start feet))))
+            :continue
+            (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
+                :again)))))))
+
+(defn ^:async next!
+  "One piece of the stair: walk back after a fetch, a fetch round, the start, a dig, a bridge, a seal or a step. :again,
+  :continue (a child waits) or the ending."
+  [c]
+  (let [m (ctx/mem c)
+        back (when-not (:backoff m) (await (need/return! c)))
+        lack (when-not (or (:backoff m) back) (need c))]
+    (when (and (:fetched-for m) (not lack))
+      (ctx/update-mem! c dissoc :fetched-for))
     (cond
       (:backoff m) (await (back-off! c))
-      r r
-      (and (:origin m) (need c)) :continue
-      (nil? (:origin m))
-      (let [feet (or (some-> (:start m) vec) (reach/standing-vec (:primitives c)))
-            target (target-steps (:args c) feet)]
-        (if (map? target)
-          (finish! c :bad-args {:why (:error target)})
-          ;; stone stands for the cells to dig: unseen cells are taken for stone (see the ns doc)
-          (do
-            ;; the spare's fetch may walk the body off: the stair starts where it was asked, not where the fetch ended
-            (ctx/update-mem! c assoc :start feet)
-            (if (= :continue (or (await (when (and (= :down (:dir (:args c))) (:stock-torches (:args c))) (trip/torches-ready! c)))
-                                   (await (trip/tool-ready! c "stone"))))
-              :continue
-              (if (and (not= feet (reach/standing-vec (:primitives c))) (= :continue (await (child/walk-into! c :start feet))))
-                :continue
-                (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
-                    :again))))))
+      back back
+      (and lack (room-due? c lack)) (await (make-room! c))
+      (and lack (fetchable? c lack)) (await (fetch-tool! c lack))
+      lack (finish! c (:reason lack) (dissoc lack :reason))
+      (nil? (:origin m)) (await (start! c))
       :else
       (let [r (await (work! c))]
         (cond

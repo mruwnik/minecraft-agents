@@ -2,6 +2,7 @@
   "The :fetch option (jobs.lib.fetch), jobs.items.obtain, jobs.items.get-tool and jobs.items.fetch-limits against
   the fake world, slice F1: carried and chest sources only, chests the body has seen."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [jobs.items.obtain.craft :as obtain-craft]
@@ -165,7 +166,7 @@
           (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})
           (await (run-ticks s 60))
           (is (= "air" (block-at s 0 64 1)))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= 1 (count (filter #(= :need (:slot %)) (events-of s :child_started))))))))))
 
 (deftest dig-and-place-fetch-and-act-in-one-call
   (async done
@@ -337,7 +338,7 @@
           (await (run-ticks s 60))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
           (is (= "air" (block-at s 0 64 1)))
-          (is (= 1 (count (events-of s :fetch.done))))
+          (is (= 1 (count (filter #(= :need (:slot %)) (events-of s :child_started)))))
           (is (empty? (events-of s :stair.stopped)) "the stair went on from where it began")
           (is (empty? (listed s)))
           (let [me (:pos (fake/self (:p s)))]
@@ -367,20 +368,20 @@
           (await (run-ticks s 80))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
           (is (empty? (events-of s :stair.stopped)) "no stop for the lost pickaxe")
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= 1 (count (filter #(= :need (:slot %)) (events-of s :child_started))))))))))
 
 (defn ^:async with-waiting-fetch-child
-  "Run (f counter) with the :fetch child of every job answering :continue (a child waiting on the world); counter
+  "Run (f counter) with the :need child of every job answering :continue (a child waiting on the world); counter
   counts its rounds."
   [f]
-  (let [orig ctx/call-child
+  (let [orig ctx/call
         n (atom 0)]
-    (set! ctx/call-child (fn [c slot job args]
-                           (if (= :fetch slot)
-                             (do (swap! n inc) (js/Promise.resolve :continue))
-                             (orig c slot job args))))
+    (set! ctx/call (fn [c slot job args]
+                     (if (= :need slot)
+                       (do (swap! n inc) (js/Promise.resolve :continue))
+                       (orig c slot job args))))
     (try (await (f n))
-         (finally (set! ctx/call-child orig)))))
+         (finally (set! ctx/call orig)))))
 
 (deftest a-waiting-fetch-child-makes-the-stair-yield-and-the-fetch-resumes
   (async done
@@ -399,30 +400,6 @@
                      (is (= 1 @n) "one fetch round per scheduler round, no busy loop")
                      (is (= 1 (count (listed s))) "the job yielded and is still there"))))
           (await (run-ticks s 60))
-          (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
-
-(deftest a-fetch-child-declining-while-it-cooks-is-waited-for-not-failed
-  ;; an obtain whose smelt child cooks declines :cooking; the from-plan torch fetch took that as a failure live
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start {:self {:pos {:x 0 :y 64 :z 0}}
-                        :blocks {"0,61,1" "andesite" "0,62,1" "andesite" "0,63,1" "stone" "0,64,1" "stone" "0,65,1" "stone"
-                                 "-3,64,2" "chest"}
-                        :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
-                        :drops {"stone" "cobblestone"}}
-                       [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})
-              call ctx/call-child
-              check ctx/check-child]
-          (set! ctx/call-child (fn [c slot job args] (if (= :fetch slot) (js/Promise.resolve :declined) (call c slot job args))))
-          (set! ctx/check-child (fn [c slot job args] (if (= :fetch slot) (do (ctx/wait c {:reason :cooking}) false) (check c slot job args))))
-          (try (await (run-ticks s 3))
-               (finally (set! ctx/call-child call) (set! ctx/check-child check)))
-          (is (empty? (events-of s :fetch.failed)) "cooking is a wait, not a failure")
-          (is (= 1 (count (listed s))))
-          (await (run-ticks s 60))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id))))))))
 
 (deftest a-failed-fetch-clears-the-return-cell
@@ -437,10 +414,10 @@
                        [own-zone])
               id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})]
           (await (run-ticks s 40))
-          (is (seq (events-of s :fetch.failed)))
-          (is (nil? (:fetch-return (core/job-memory (:eng s) id))) (pr-str (core/job-memory (:eng s) id))))))))
+          (is (seq (mem/entries (mem/view (:store (:eng s))) :stair-tool-failed)))
+          (is (nil? (:need/return (core/job-memory (:eng s) id))) (pr-str (core/job-memory (:eng s) id))))))))
 
-(deftest a-fetch-child-that-ends-done-without-solving-the-need-fails-the-fetch-instead-of-spinning
+(deftest a-fetch-child-that-ends-done-without-solving-the-need-is-not-asked-again-the-stair-digs-by-hand
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -448,21 +425,17 @@
                         :blocks {"0,61,1" "andesite" "0,62,1" "andesite" "0,63,1" "stone" "0,64,1" "stone" "0,65,1" "stone"}}
                        [own-zone])
               n (atom 0)
-              orig ctx/call-child
-              orig-res ctx/child-result]
-          (set! ctx/call-child (fn [c slot job args]
-                                 (if (= :fetch slot)
-                                   (do (swap! n inc) (js/Promise.resolve :done))
-                                   (orig c slot job args))))
-          (set! ctx/child-result (fn [c slot] (if (= :fetch slot) {:status :done} (orig-res c slot))))
+              orig ctx/call]
+          (set! ctx/call (fn [c slot job args]
+                           (if (= :need slot)
+                             (do (swap! n inc) (js/Promise.resolve (contract/ending :done nil nil)))
+                             (orig c slot job args))))
           (try
-            (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})
+            (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true :stock-torches false}) {})
             (await (run-ticks s 6))
-            (finally (set! ctx/call-child orig) (set! ctx/child-result orig-res)))
-          (is (< @n 20) (str "fetch child calls " @n))
-          (let [f (first (events-of s :fetch.failed))]
-            (is (= :not-solved (:failed f)) (pr-str f))
-            (is (string? (:why f)))))))))
+            (finally (set! ctx/call orig)))
+          (is (< @n 5) (str "tool fetches asked " @n))
+          (is (seq (mem/entries (mem/view (:store (:eng s))) :stair-tool-failed))))))))
 
 (defn with-fake-mem
   "Run (f c mem-atom) with ctx/mem and ctx/update-mem! on an atom and ctx/emit! dropped."

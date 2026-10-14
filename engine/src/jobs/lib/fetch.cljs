@@ -105,7 +105,8 @@
   "The fetch for wait reason w under limits o: {:kind :job :args :key}, or nil when w is not fetchable or its kind
   is not in (:what o). A :no-tool wait names :block, :needs (an item) or :kind (a tool kind such as \"hoe\"). A :need wait's :count is how many obtain gets (default 1)."
   [w o]
-  (let [{:keys [reason item any-of block needs]} w
+  (let [w (merge (when (map? (:cause w)) (:cause w)) w)
+        {:keys [reason item any-of block needs]} w
         explore (or (:explore o) false)
         with-explore #(assoc % :explore explore)
         pl (case reason
