@@ -243,10 +243,16 @@
       (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max))) y [(:y min) (inc (:y min))]]
         {:x x :y y :z z}))))
 
+(defn needs-look?
+  "Whether a field cell was never seen, or (plan) a crop cell is remembered unripe and out of view."
+  [c]
+  (boolean (or (look/unseen? (:primitives c) (field-cells c))
+               (and (:plan (:args c)) (fld/unwatched? (:primitives c) (:crops (tend-plan/planned c)))))))
+
 (defn check-facts
   "The facts the check decides from: read once per check-cache window, and fresh while a cell was never seen."
   [c]
-  (if (look/unseen? (:primitives c) (field-cells c))
+  (if (needs-look? c)
     (facts c)
     (check-cache/cached c [:facts (:part (:args c))] #(facts c))))
 
@@ -268,7 +274,7 @@
       (let [f (check-facts c)]
         (when-not (would-run? c f)
           (cond-> (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f))
-            (and (look/unseen? (:primitives c) (field-cells c)) (not (look/surveyed? c :near))) contract/look-first))))))
+            (and (needs-look? c) (not (look/surveyed? c :near))) contract/look-first))))))
 
 (def job-sym 'jobs.farm.tend)
 (defn key-of [part] (or part "*"))
@@ -457,7 +463,7 @@
   (cond
     (and (:plan (:args c)) (:trouble (tend-plan/planned c)))
     (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble (tend-plan/planned c))})
-    (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (look/unseen? (:primitives c) (field-cells c)))
+    (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (needs-look? c))
     (await (look/survey! c))
     :else (await (work c))))
 

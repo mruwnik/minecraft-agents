@@ -165,3 +165,27 @@
                 {:keys [eng p]} (start mixed-field {"field" (field-plan [2]) "extra" extra})]
             (await (h/child-outcome eng h/job {:plan "field"} 200))
             (is (= seeded (contains? (placed p) [4 2 "wheat_seeds"])) author)))))))
+
+(deftest a-radius-harvest-cuts-crops-in-the-bodys-own-plan-but-not-in-anothers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[author cut] [["Fake" #{[2 2] [5 2] [6 2]}] ["Miles" #{[6 2]}]]]
+          (let [{:keys [eng p]} (start mixed-field {"field" (shape/with-author (field-plan [2]) author)})]
+            (await (h/child-outcome eng h/job {:center {:x 3 :y 64 :z 2} :radius 4} 200))
+            (is (= cut (dug p)) author)))))))
+
+(deftest a-planned-crop-remembered-unripe-is-looked-at-before-nothing-to-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:blocks (h/field "wheat" 7 [2 3] [2]) :ages (h/ages 7 [2 3] [2]) :drops h/wheat-drops}
+                                     {"field" (field-plan [2])})
+              looked? #(seq (h/calls p "look"))]
+          (aset p "sensedAt" (fn [pos] (let [b (.blockAt p pos)]
+                                         (if (looked?)
+                                           b
+                                           (js/Object.assign #js {} b #js {:age 3 :ageMs 60000 :visible false})))))
+          (let [result (await (h/child-outcome eng h/job {:plan "field"} 200))]
+            (is (= #{[2 2] [3 2]} (dug p)))
+            (is (= 2 (:cut result)))))))))

@@ -22,7 +22,7 @@
      After :give-up such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
   3. Collect the drops (a jobs.forestry.collect-drops child).
   4. Finish.
-  With no crop seen at all (ripe or not) it looks around once from where it stands first; if still none it ends
+  With no crop seen at all (ripe or not), or with :plan and no ripe crop known while a planned crop is remembered out of view, it looks around once from where it stands first; if still none it ends
   condition-failed :no-crop-seen (warn harvest.no-crop-seen).
   Each cell it cuts is written to memory with its seed before the dig, because bare farmland does not show
   which seed was there. A restart or reflex in between loses nothing.
@@ -30,7 +30,7 @@
   The plan is read again every step. A cell is cut only when ripe and holding the crop the plan wants there.
   Crops outside the plan are left standing. A planned cell standing bare is sown unless :replant-bare is false,
   food seeds only above the food reserve. A cell it cut is always replanted.
-  Zones: a crop or bare cell in another owner's zone or claim, or in another plan's footprint, is left alone (one
+  Zones: a crop or bare cell in another owner's zone or claim, or in another's plan footprint (never the body's own plan), is left alone (one
   harvest.declined warn, :reason :refused); :ignore-zones? true skips the check.
   Refused before it starts, as failed conditions: {:reason :no-zones} (no zone list read, unless :ignore-zones?),
   {:reason :plan-trouble :why} (the plan is missing, unreadable or has no crop cells), :refused (every ripe crop is
@@ -152,9 +152,9 @@
 
 (defn permitted
   "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see jobs.lib.gate).
-  Sowing is also allowed in a plan this body made; cutting is not (it would undo that plan)."
+  A plan this body made never refuses its own work."
   [c action poss]
-  (gate/allowed c :harvest.declined "harvest" action poss {:except (:plan (:args c)) :own-plans-ok? (= :sow action)}))
+  (gate/allowed c :harvest.declined "harvest" action poss {:except (:plan (:args c)) :own-plans-ok? true}))
 
 (defn cut-action
   "The zone action asked for cutting a crop: :harvest in box mode; with :plan :dig, the action the plan jobs (farm.tend)
@@ -230,9 +230,13 @@
     (boolean (seq (crops/seen-crops (:primitives c) (or crops (keys ripe-age)) (+ radius (u/dist (u/self-pos c) (center-of c))) 1)))))
 
 (defn blind?
-  "Box mode with no crop seen yet and no look from this cell: the round must look around before it can tell."
+  "No crop seen yet (box mode), or planned crops remembered but not in view and none known ripe, and no look from this
+  cell: the round must look around before it can tell."
   [c]
-  (and (cutting? c) (not (:plan-cells c)) (not (look/surveyed? c :cell)) (not (crop-seen? c))))
+  (and (cutting? c) (not (look/surveyed? c :cell))
+       (if-let [cells (:plan-cells c)]
+         (and (fld/unwatched? (:primitives c) cells) (empty? (ripe-raw c nil)))
+         (not (crop-seen? c)))))
 
 (def target [:center :radius :plan :part])
 (def defaults {:least 1})
@@ -252,7 +256,7 @@
               (if field (or (seq (sowable c)) (seq (:replant m))) (seq (:replant m)))
               (:collect m)
               (and (cutting? c) (seq (ripe-of c (:skipped m))))
-              (and (not field) (blind? c))) nil
+              (blind? c)) nil
           (and (cutting? c) (seq (ripe-raw c (:skipped m)))) {:reason :refused}
           :else {:reason :nothing-to-do}))))
 

@@ -32,6 +32,16 @@
   (let [b (u/seen-block p pos)]
     (boolean (and b (= crop (.-name b)) (some-> (.-age b) (>= (ripe-age crop)))))))
 
+(defn unwatched?
+  "Whether a planned crop cell (cells {pos crop}) is remembered, not in view, and not known ripe: it may have ripened
+  since the body last looked."
+  [p cells]
+  (boolean (and (some? (.-sensedAt p))
+                (some (fn [[pos crop]]
+                        (let [b (u/sensed p pos)]
+                          (and b (false? (.-visible b)) (not (ripe-at? p pos crop)))))
+                      cells))))
+
 (defn planned-ripe
   "The planned cells (cells {pos crop}) ripe with the crop the plan wants there, of a wanted crop, not in skipped,
   nearest to the body first."
