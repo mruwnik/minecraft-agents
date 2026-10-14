@@ -51,7 +51,7 @@
       (core/shutdown! eng)
       r)))
 
-(deftest a-leaf-call-with-bad-args-waits-instead-of-starting
+(deftest a-leaf-call-with-bad-args-is-impossible-instead-of-starting
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -60,7 +60,7 @@
                                ['(jobs.memory.set-place {:name :home :pos [2 999 3]}) :bad-pos]
                                ['(jobs.memory.forget-place {:name "Bad Name"}) :bad-name]
                                ['(jobs.explore.look {:block-names ["no_such_block"]}) :bad-args]]]
-          (is (= {:listed 1 :causes [reason] :started 0} (await (waits-with spec))) (pr-str spec)))))))
+          (is (= {:event :stopped :kind :impossible :reason reason} (await (stopped-data spec))) (pr-str spec)))))))
 
 (deftest a-refused-leaf-call-is-a-failed-condition-not-a-done-result
   (async done

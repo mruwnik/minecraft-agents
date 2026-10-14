@@ -1,6 +1,7 @@
 (ns jobs.items.equip
   (:require [engine.args :as a]
             ["minecraft-data" :as minecraft-data]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.settings :as settings]
@@ -11,8 +12,7 @@
 (def doc
   "Hold a carried item in the main hand (:hand \"main\", default) or the off-hand (:hand \"off\"). Needs the item
   carried; a missing one is fetched (jobs.lib.need) unless :fetch is false. done? holds when it is held there.
-  Ends :done {:item :hand}. Conditions (a listed root job waits): :bad-args (no :item), :unknown-item (no such item for
-  the body's version), :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
+  Ends :done {:item :hand}. Impossible: :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :bad-args (no :item), :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
   the :because. Nothing-possible :failed (the server did not take it, data :equip the primitive's status; warn
   equip.refused). Quote: A, a fixed time.")
 
@@ -48,7 +48,7 @@
   [c]
   (let [item (:item (:args c))]
     (when (and item (not (known-item? (:primitives c) item)))
-      {:reason :unknown-item :item item})))
+      (contract/impossible {:reason :unknown-item :item item}))))
 
 (defn lacking
   "The cause :no-item when the item is neither carried nor held and nothing fetches it."

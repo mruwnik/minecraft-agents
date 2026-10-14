@@ -32,6 +32,8 @@
 
 (defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
 
+(defn stopped-reasons [seen] (mapv #(or (:reason %) (get-in % [:data :reason])) (events-of seen :stopped)))
+
 (defn view [eng] (mem/view (:store eng)))
 
 (defn entries [eng kind] (mapv :data (mem/entries (view eng) kind)))
@@ -113,9 +115,9 @@
                                [{:kind :shelter-trapped} :reserved-kind]]]
           (let [{:keys [eng seen]} (setup)]
             (await (run-job eng (list remember args)))
-            (is (= [reason] (mapv :reason (events-of seen :waiting))) (pr-str args))
+            (is (= [reason] (stopped-reasons seen)) (pr-str args))
             (is (empty? (events-of seen :memory.remembered)) (pr-str args))
-            (is (= 1 (count (:list (core/state eng)))) "the listed job waits, not started")))))))
+            (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")))))))
 
 (deftest remember-will-not-take-the-name-of-a-recorded-place
   (async done

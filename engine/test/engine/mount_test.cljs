@@ -1,6 +1,7 @@
 (ns engine.mount-test
   "jobs.movement.mount against the fake world: every mount status maps to a job status."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core.legacy :as legacy]
             [engine.test-util :as tu]
             [engine.registry :as registry]
@@ -144,7 +145,7 @@
 
 (defn condition-with [spec args]
   (let [c {:primitives (tu/fake spec) :args args :view (fn [] {:data {:entries {}} :now 0}) :root "j1" :slots []}]
-    (or (mount/bad-args c) (mount/no-vehicle c))))
+    (or (some-> (mount/bad-args c) contract/impossible-cause) (mount/no-vehicle c))))
 
 (deftest conditions-refuse-when-no-vehicle-is-in-sight
   (is (= :no-vehicle (condition-with {:entities []} {:id 9})) "by id")

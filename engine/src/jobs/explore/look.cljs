@@ -1,6 +1,6 @@
 (ns jobs.explore.look
   (:require [engine.args :as a] [engine.entity-observations :as obs] [jobs.lib.util :as u]
-            ["minecraft-data" :as minecraft-data] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
+            ["minecraft-data" :as minecraft-data] [engine.contract :as contract] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
 (def doc
   "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. Emits
   look.observed, available through observe --wait --watch or observe result after completion. :at inspects one exact
@@ -104,7 +104,7 @@
   "The cause {:reason :bad-args :text why} when the call's args are refused."
   [c]
   (when-let [error (:error (options (:args c) (block-name-checker (:primitives c))))]
-    {:reason :bad-args :text error}))
+    (contract/impossible {:reason :bad-args :text error})))
 (def conditions [[:fn bad-args]])
 (defn round [c]
   (let [a (options (:args c) (block-name-checker (:primitives c)))]

@@ -76,12 +76,13 @@
           (is (nil? (held p)))
           (is (some #{"job.waiting"} (tu/kinds seen))))))))
 
-(deftest an-unknown-item-name-waits-as-a-failed-condition
+(deftest an-unknown-item-name-is-impossible
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (equip (stacks "dirt") {:item "iron_pickaxx"}))]
-          (is (= :not-done @out)))))))
+        (let [{:keys [out eng]} (await (equip (stacks "dirt") {:item "iron_pickaxx"}))]
+          (is (= :impossible (get-in @out [:ending :kind])))
+          (is (empty? (:list (core/state eng))) "impossible: it leaves the queue"))))))
 
 (deftest no-item-given-is-refused-with-a-clear-text
   (async done

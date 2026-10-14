@@ -1,6 +1,7 @@
 (ns engine.boat-drive-test
   "jobs.movement.boat-drive against the fake world: steer the boat the body is in to a water cell."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.library-test :as lt]
@@ -100,3 +101,7 @@
           (is (empty? (filterv #(= :stopped (:kind %)) @seen)) (pr-str (mapv #(select-keys % [:kind :reason :data]) @seen)))
           (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
           (is (some #(= :boat.driven (:kind %)) @seen)))))))
+
+(deftest a-call-naming-no-cell-is-impossible
+  (is (= :bad-args (contract/impossible-cause (boat-drive/bad-args {:args {}}))))
+  (is (nil? (boat-drive/bad-args {:args {:pos [10 63 2]}}))))

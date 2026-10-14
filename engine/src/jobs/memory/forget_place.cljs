@@ -1,5 +1,6 @@
 (ns jobs.memory.forget-place
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.places :as places]))
 
@@ -23,7 +24,7 @@
   [c]
   (let [r (places/resolve-forget (ctx/view c) (:name (:args c)))]
     (when (arg-refusals (:reason r))
-      {:reason (:reason r) :text (:message r)})))
+      (cond-> {:reason (:reason r) :text (:message r)} (not= :not-a-place (:reason r)) contract/impossible))))
 
 (def conditions [[:fn bad-args]])
 

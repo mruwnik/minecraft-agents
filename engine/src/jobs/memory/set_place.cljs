@@ -1,5 +1,6 @@
 (ns jobs.memory.set-place
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
@@ -40,7 +41,7 @@
   [c]
   (let [r (places/resolve-set (ctx/view c) (constantly nil) (standing c) (:args c))]
     (when (arg-refusals (:reason r))
-      {:reason (:reason r) :text (:message r)})))
+      (cond-> {:reason (:reason r) :text (:message r)} (not= :not-a-place (:reason r)) contract/impossible))))
 
 (def conditions [[:fn bad-args]])
 

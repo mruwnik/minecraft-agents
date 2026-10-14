@@ -50,7 +50,7 @@
         (is (= {:kind :done} (select-keys (await (ending-of (assoc (stacks "iron_pickaxe") :self {:held "iron_pickaxe"})
                                                              'jobs.items.equip {:item "iron_pickaxe"})) [:kind]))
             "held already")
-        (is (= {:kind :condition-failed :cause :unknown-item}
+        (is (= {:kind :impossible :cause :unknown-item}
                (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxx"})))))
         (is (= {:kind :condition-failed :cause :no-item}
                (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxe" :hand "main" :fetch false})))))))))
@@ -118,6 +118,6 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (true? (await (waits? (stacks "dirt") 'jobs.items.wear {:item "dirt"}))) "no armour piece")
+        (is (false? (await (waits? (stacks "dirt") 'jobs.items.wear {:item "dirt"}))) "no armour piece is impossible, not waiting")
         (is (true? (await (waits? (stacks "dirt") 'jobs.items.wear {:item "iron_helmet"}))) "not carried")
         (is (true? (await (waits? {} 'jobs.items.pick-up-loose {}))) "no loose item in sight")))))

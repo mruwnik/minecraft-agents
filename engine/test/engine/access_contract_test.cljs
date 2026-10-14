@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
+            [jobs.access.bridge :as bridge]
             [jobs.lib.world-files :as world]))
 
 (def quote-args
@@ -128,6 +129,10 @@
                 [["zone" '(jobs.access.bridge {:heading :east :length 3}) bridge-world [{:name "keep-out" :min [2 60 -2] :max [2 70 2]}] :zone]
                  ["not on solid" '(jobs.access.bridge {:heading :east :length 3 :ignore-zones? true}) (assoc bridge-world :blocks {}) [] :not-on-solid]]]
           (is (= {:reasons [reason] :rounds 0 :listed? true} (await (waiting-on spec world zones))) label))))))
+
+(deftest a-bridge-bad-args-start-fact-is-impossible
+  (is (= {:reason :bad-args :text "t"} (contract/impossible-cause (bridge/answer {:reason :bad-args :text "t"}))))
+  (is (= {:reason :zone} (bridge/answer {:reason :zone}))))
 
 (deftest clear-path-with-no-wall-waits-no-door-before-a-round
   (async done

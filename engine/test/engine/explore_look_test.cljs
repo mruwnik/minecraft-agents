@@ -26,11 +26,12 @@
           (core/submit! eng '(jobs.explore.look {:block-names ["no_such_block"]}) {})
           (await (core/tick! eng))
           (await (core/tick! eng))
-          (let [event (first (filter #(= :waiting (:kind %)) @seen))]
-            (is (= :bad-args (get-in event [:data :cause :reason])))
-            (is (re-find #"no_such_block" (get-in event [:data :cause :text])))
+          (let [event (first (filter #(= :stopped (:kind %)) @seen))]
+            (is (= :bad-args (get-in event [:data :reason])))
+            (is (re-find #"no_such_block" (pr-str (:data event))))
             (is (empty? (filter #(= :look.observed (:kind %)) @seen)))
-            (is (= 1 (count (:list (core/state eng)))) "the listed job waits, not started")))))))
+            (is (= :impossible (get-in event [:data :kind])))
+            (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")))))))
 (deftest loaded-air-unloaded-cell-and-exact-properties-have-distinct-evidence
   (let [p (tu/seeing-all (tu/fake {:blocks {"1,64,0" "wheat"} :ages {"1,64,0" 7} :states {"1,64,0" {:age 7}} :unloaded ["4,64,0"]}))]
     (is (= {:name "wheat" :pos [1 64 0] :properties {:age 7} :seen? true}

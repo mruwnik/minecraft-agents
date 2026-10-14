@@ -1,6 +1,7 @@
 (ns jobs.items.wear
   (:require [engine.args :as a]
             [jobs.lib.armour :as armour]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.util :as u]))
@@ -10,8 +11,8 @@
   the pockets. Without it, the best carried piece goes into each slot that is empty or worn with a weaker one
   (leather < golden < turtle helmet < chainmail < iron < diamond < netherite).
   Needs nothing; done? holds when nothing carried is better than what is worn.
-  Ends :done with {:worn [{:item :slot}]}, info wear.done. A named item that is no armour piece or not carried is a condition (a listed call waits); a started call ends
-  condition-failed :not-armour or :no-item with warn wear.refused. A piece the server does not take ends
+  Ends :done with {:worn [{:item :slot}]}, info wear.done. A named item that is no armour piece is impossible :not-armour; one not carried is a condition (a listed call waits); a started call ends
+  condition-failed :no-item with warn wear.refused. A piece the server does not take ends
   nothing-possible :failed with the pieces worn so far and :server-status, warn wear.failed.
   Quote: time per piece to put on.")
 
@@ -33,7 +34,9 @@
   "The cause :not-armour or :no-item when the named :item cannot be put on."
   [c]
   (let [{:keys [ok reason]} (plan-of c)]
-    (when-not ok reason)))
+    (cond ok nil
+          (= :not-armour reason) (contract/impossible reason)
+          :else reason)))
 
 (def conditions [[:fn refused]])
 

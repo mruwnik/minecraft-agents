@@ -1,5 +1,6 @@
 (ns jobs.memory.remember
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.places :as places]))
@@ -53,8 +54,11 @@
 (defn bad-args
   "The refusal cause when the call's :kind is not one a job may write."
   [c]
-  (let [r (resolve-args (ctx/view c) (:args c))]
-    (when (:reason r) r)))
+  (let [{:keys [reason] :as r} (resolve-args (ctx/view c) (:args c))]
+    (cond
+      (nil? reason) nil
+      (or (= :bad-kind reason) (contains? places/owned-kinds (:kind (:args c)))) (contract/impossible r)
+      :else r)))
 
 (def conditions [[:fn bad-args]])
 

@@ -107,6 +107,8 @@
 
 (defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
 
+(defn stopped-reasons [seen] (mapv #(or (:reason %) (get-in % [:data :reason])) (events-of seen :stopped)))
+
 (defn place [eng kind] (mem/place (mem/view (:store eng)) kind))
 
 (defn entries [eng kind] (mapv :data (mem/entries (mem/view (:store eng)) kind)))
@@ -193,7 +195,8 @@
   (let [{:keys [eng seen]} (setup {})]
     (prepare! eng)
     (await (run-job eng (list job args)))
-    {:eng eng :seen seen :reasons (into (mapv :reason (events-of seen :place.refused)) (mapv :reason (events-of seen :waiting)))}))
+    {:eng eng :seen seen :reasons (-> (into (mapv :reason (events-of seen :place.refused)) (mapv :reason (events-of seen :waiting)))
+                                 (into (stopped-reasons seen)) distinct vec)}))
 
 (deftest set-place-refuses-bad-arguments-as-data-and-writes-nothing
   (async done
@@ -206,7 +209,7 @@
           (let [{:keys [eng seen reasons]} (await (try-job identity set-place args))]
             (is (nil? (place eng :home)) (pr-str args))
             (is (= [reason] reasons) (pr-str args))
-            (is (= 1 (count (:list (core/state eng)))) "the listed job waits, not started")))))))
+            (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")))))))
 
 (deftest set-place-refuses-a-block-that-is-no-name-at-submit
   (doseq [block [5 ""]]
@@ -291,7 +294,7 @@
           (is (false? (:ok (submit "set-junk" '(jobs.memory.set-place {:name :home :pos [2 3]})))) "a malformed position is refused at submit")
           (is (= true (:ok (submit "set-bad" '(jobs.memory.set-place {:name :home :pos [2 999 3]})))) "an impossible one comes as an event")
           (await (run-until-empty eng 8))
-          (is (= [:bad-pos] (mapv :reason (events-of seen :waiting))))
+          (is (= [:bad-pos] (stopped-reasons seen)))
           (is (= {:x 2 :y 64 :z 3} (place eng :home)))
           (is (= true (:ok (submit "forget-home" '(jobs.memory.forget-place {:name :home})))))
           (await (run-until-empty eng 8))

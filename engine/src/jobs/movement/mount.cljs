@@ -12,7 +12,7 @@
   Holds the vehicle (jobs.lib.vehicle) while the job lives, so the :mounted trigger does not step the body off:
   the body stays aboard only in manual mode, otherwise the hold ends with the job and the trigger steps it off ~30 s later.
   By :name it prefers a vehicle with no rider.
-  Conditions: :bad-args, and at the start :no-vehicle while none is in sight and :aboard-other while on another vehicle (a listed call waits). The round yields :continue only when the walk waits on the world.
+  Impossible: :bad-args. Conditions: at the start :no-vehicle while none is in sight and :aboard-other while on another vehicle (a listed call waits). The round yields :continue only when the walk waits on the world.
 
   Ends done (data {:id :vehicle name}, plus :already true when aboard it already), info vehicle.mounted, or
   condition-failed: :gone (no such entity in sight), :not-mountable, :occupied, :hand-full
@@ -43,7 +43,7 @@
   "The cause :bad-args unless an :id or a :name is given."
   [c]
   (let [{:keys [id name]} (:args c)]
-    (when-not (or (and (integer? id) (pos? id)) (string? name)) :bad-args)))
+    (when-not (or (and (integer? id) (pos? id)) (string? name)) (contract/impossible :bad-args))))
 
 (defn no-vehicle
   "At the call's start: the cause :no-vehicle while no entity of that :id or :name is in sight."

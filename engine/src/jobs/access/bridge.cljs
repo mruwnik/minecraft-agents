@@ -1,5 +1,6 @@
 (ns jobs.access.bridge
-  (:require [jobs.lib.choose :as choose]
+  (:require [engine.contract :as contract]
+            [jobs.lib.choose :as choose]
             [jobs.lib.need :as need]
             [jobs.lib.submitted :as submitted]
             [engine.settings :as settings]
@@ -182,13 +183,18 @@
   "Give-up reasons known from the args and the map under the feet, before any look: the call's own mistakes and what permission refuses."
   #{:bad-args :zone :footprint :no-zones :claim :not-on-solid})
 
+(defn answer
+  "A start fact as a condition's answer: the call's own mistake is impossible, the rest only skips."
+  [fact]
+  (if (= :bad-args (:reason fact)) (contract/impossible fact) fact))
+
 (defn start-fact
   "At the call's start only: the first step's give-up as a cause when it is one of start-facts, else nil."
   [c]
   (when-not (ctx/frozen-call c)
     (let [step (next-step (inputs c (ledger/open-entries (ctx/view c)) (pl/feet-cell c)))]
       (when (and (= :give-up (:step step)) (start-facts (:reason step)))
-        (dissoc step :step)))))
+        (answer (dissoc step :step))))))
 
 (def conditions [[:fn away] [:fn start-fact]])
 
