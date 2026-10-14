@@ -22,7 +22,7 @@
 
 (def doc
   "After a death, go back for the drops when they are worth it.
-  Serves one :died entry no :recovered covers (its :death-t): the one a trip is keyed to, else the pile inside its window with the best value net of the walk, so an older open pile is not lost to a newer death. Once every death is decided (a skip too) the check waits :no-drops and the wait names the decision. The check holds while a death is unrecovered, however old,
+  Serves one :died entry no :recovered covers (its :death-t): the one a trip is keyed to, else the pile inside its window with the best value net of the walk, so an older open pile is not lost to a newer death. A death whose window has closed while a newer one is open is closed :abandoned :superseded without a trip. Once every death is decided (a skip too) the check waits :no-drops and the wait names the decision. The check holds while a death is unrecovered, however old,
   so an expired trip still gets to write :abandoned.
   One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
   the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
@@ -48,7 +48,7 @@
   A kit fetch waiting on the world is waited for (declared hold :fetching-kit); a fetch that ended the job drops the kit (warn recover-drops.kit-dropped).
   Fetch: walks to the death point (jobs.movement.go-to, in legs of :leg-s seconds; after each leg a danger within :danger-radius ends the run :declined and the value and cost are weighed again, a pile gone dear with danger being retried later), then collects (passes, up to 3) the pile's items it can see within :collect-radius
   (jobs.forestry.collect-drops; only the carried item names, never items out of sight). Drops that went out of sight
-  (down a shaft) get one walk to the cell the first was last seen in and a look again before the trip ends :partial.
+  (down a shaft) get one walk to the cell the first was last seen in and a look again before the trip ends :partial, and so do drops never in sight at the pile: once, a walk to four cells 3 blocks round it.
   The pile out of reach (go-to :goal-enclosed, or no item in sight at it) with blocks this body placed within ::seal-radius of it (the scaffold ledger, a flee
   seal): once per trip they are taken back (jobs.access.cleanup, event recover-drops.seal) and the walk goes on.
   Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
@@ -157,13 +157,25 @@
                (< (game/ticks-since died view) game/despawn-ticks))
       [died])))
 
+(defn stale-deaths
+  "The open deaths whose despawn window has closed while a newer death is open: their pile is gone and the newer one
+  is the one to serve."
+  [c]
+  (let [view (ctx/view c)
+        open (body/open-deaths view)]
+    (filterv (fn [d] (and (>= (game/ticks-since d view) game/despawn-ticks)
+                          (some #(> (:t %) (:t d)) open)))
+             open)))
+
 (defn open-deaths
   "The open deaths to serve: body/actionable-deaths (with :retry every open one, a remembered danger too), plus the
-  death :retry takes up again."
+  death :retry takes up again; none whose pile is gone while a newer death is open (stale-deaths)."
   [c]
-  (let [view (ctx/view c)]
-    (vec (sort-by :t (concat (retried-deaths c)
-                             (if (:retry (:args c)) (body/open-deaths view) (body/actionable-deaths view)))))))
+  (let [view (ctx/view c)
+        stale (set (map :t (stale-deaths c)))]
+    (vec (remove #(stale (:t %))
+                 (sort-by :t (concat (retried-deaths c)
+                                     (if (:retry (:args c)) (body/open-deaths view) (body/actionable-deaths view))))))))
 
 (defn danger-wait
   "The wait reason while the only open deaths are ones declined for a remembered danger, else nil."
@@ -417,6 +429,16 @@
       (do (ctx/update-mem! c update :passes (fnil inc 0)) (save-trip! c) :next)
       (finish-collect! c pile again))))
 
+(defn ^:async search-round!
+  "Once: items of the pile are nowhere in sight at the pile (behind a corner, in a hollow). Walk to cells around it
+  (go-to, range 1, 3 blocks out) until some are in sight. True when some are."
+  [c [x y z] pos names radius]
+  (ctx/update-mem! c assoc :searched true)
+  (loop [cells (map-indexed (fn [i [dx dz]] [i {:x (+ x dx) :y y :z (+ z dz)}]) [[3 0] [0 3] [-3 0] [0 -3]])]
+    (when-let [[i cell] (first cells)]
+      (await (child/run! c (keyword (str "search" i)) 'jobs.movement.go-to {:pos cell :range 1 :escalate false}))
+      (or (seq (pile-ids c pos names radius)) (recur (rest cells))))))
+
 (defn ^:async collect!
   "One collect pass over the pile's visible items: :next after a pass that left some in sight (walk back, at most
   max-collect-passes), else the job's end."
@@ -427,7 +449,11 @@
       (finish-collect! c pile [])
       (let [ids (pile-ids c pos names radius)]
         (if (empty? ids)
-          (or (await (clear-seal! c pos)) (finish-collect! c pile ids))
+          (or (await (clear-seal! c pos))
+              (when-not (:searched (ctx/mem c))
+                (when (await (search-round! c (mapv pos [:x :y :z]) pos names radius))
+                  :next))
+              (finish-collect! c pile ids))
           (do
             (await (child/run! c :collect 'jobs.forestry.collect-drops
                                {:radius (+ radius (stray-range) 4) :ids ids :filter names}))
@@ -441,6 +467,9 @@
 
                   (and (empty? again) (not (:looked (ctx/mem c))) (look-cell c))
                   (await (look-round! c (look-cell c) pos names radius pile))
+
+                  (and (empty? again) (not (:searched (ctx/mem c))) (await (search-round! c (mapv pos [:x :y :z]) pos names radius)))
+                  :next
 
                   :else (finish-collect! c pile again))))))))))
 
@@ -711,6 +740,8 @@
   :declined when a danger is within :danger-radius (the hostile reflex acts, the trigger fires again) or the walk
   did not arrive."
   [c]
+  (doseq [d (stale-deaths c)]
+    (ctx/remember! c :recovered {:decision :abandoned :death-t (:t d) :reason :superseded} recovered-policy))
   (let [entry (current-death c)]
     (when entry (key-to-death! c entry))
     (if (nil? entry)

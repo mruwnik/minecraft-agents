@@ -306,6 +306,53 @@
           (is (= {:decision :partial :items 1 :left {"diamond_sword" 1} :reason :not-visible}
                  (select-keys (recovered eng) [:decision :items :left :reason]))))))))
 
+(deftest recover-drops-searches-around-the-pile-for-drops-not-in-sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [(drop-item 1 20 "diamond_pickaxe") (assoc (drop-item 2 22 "diamond_sword") :visible false)]})
+              collected (atom false)
+              show! (fn [v] (swap! (fake/state p) update :entities (fn [es] (mapv #(cond-> % (= 2 (:id %)) (assoc :visible v)) es))))]
+          (.override (.-world p) "collect"
+                     (fn [token a impl] (reset! collected true) (impl token a)))
+          (.override (.-world p) "steer"
+                     (fn [token a impl] (when @collected (show! true)) (impl token a)))
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:collect-radius 8}) {})
+          (is (< (await (run-until-empty eng 40)) 40))
+          (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)) "a short walk round the pile brought it into sight")
+          (is (= :collected (:decision (recovered eng)))))))))
+
+(defn die-twice!
+  "A death 310 s ago (its pile gone) and one 5 s ago with a pile of diamonds; the newer declined for a danger that is remembered."
+  [eng]
+  (die! eng {:pos {:x 200 :y 64 :z 0} :inventory diamonds} 310000)
+  (die! eng {:pos death-pos :inventory diamonds})
+  (mem/write! (:store eng) :recover-danger {:death-t (:t (mem/latest (mem/view (:store eng)) :died)) :until (+ ((:now @(:store eng))) 60000) :text "creeper"}
+              {:cap 5 :ttl 86400000}))
+
+(deftest recover-drops-does-not-spend-a-run-on-an-expired-pile-while-a-newer-one-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities drops})]
+          (die-twice! eng)
+          (core/submit! eng job {})
+          (await (run-until-empty eng 10))
+          (is (nil? (:reason (recovered eng))) (pr-str (recovered eng))))))))
+
+(deftest recover-drops-retry-serves-the-newest-pile-and-drops-the-expired-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})]
+          (die-twice! eng)
+          (core/submit! eng '(jobs.survival.recover-drops {:retry true}) {})
+          (await (run-until-empty eng 40))
+          (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)))
+          (is (= [:superseded :collected]
+                 (mapv #(or (:reason (:data %)) (:decision (:data %))) (mem/entries (mem/view (:store eng)) :recovered)))))))))
+
 (deftest recover-drops-looks-round-once-for-a-drop-that-went-out-of-sight-down-a-shaft
   (async done
     (tu/run-async done
