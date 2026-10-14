@@ -29,7 +29,8 @@
       (let [r (wait-reason reason)]
         (when (not= before r)
           (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
-          (mem/update-job! (:store eng) id [] update :tries (fnil inc 0))
+          (when (not= (:reason before) (:reason r))
+            (mem/update-job! (:store eng) id [] update :tries (fnil inc 0)))
           (emit! eng (merge (job-fields eng id)
                             {:source :job :kind :waiting :level :info :data r :text (waiting-text r)})))))))
 

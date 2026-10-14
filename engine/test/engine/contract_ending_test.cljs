@@ -283,6 +283,21 @@
           (is (= {:kind :impossible :cause {:reason :tries :tries 2 :cause :c}}
                  (select-keys (:data (first (job-ev seen :stopped))) [:kind :cause]))))))))
 
+(deftest a-reason-whose-detail-changes-is-one-try
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'tried tried})
+              step! (fn ^:async step [cause] (swap! world assoc :cause cause) (await (core/tick! eng)))]
+          (core/submit! eng '(tried) {})
+          (await (step! {:reason :far :distance 9}))
+          (await (step! {:reason :far :distance 7}))
+          (await (step! {:reason :far :distance 5}))
+          (is (= 1 (:tries (raw-mem eng "j1" []))) "same reason kind, detail changing")
+          (is (seq (:list (core/state eng))))
+          (await (step! {:reason :dark}))
+          (is (= 2 (:tries (raw-mem eng "j1" []))) "a new reason kind is a try"))))))
+
 (deftest a-condition-that-needs-a-look-looks-once-then-the-job-waits-unstarted
   (async done
     (tu/run-async done

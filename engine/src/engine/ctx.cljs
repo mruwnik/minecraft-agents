@@ -25,7 +25,7 @@
   ((:update-mem ctx) f args))
 
 (defn tries
-  "How often this job has been held up (a wait that began or changed its reason), kept across restarts."
+  "How often this job has been held up (a wait that began or changed its reason kind), kept across restarts."
   [ctx]
   (or (:tries (mem ctx)) 0))
 
