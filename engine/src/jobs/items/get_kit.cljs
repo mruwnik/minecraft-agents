@@ -128,7 +128,7 @@
     (case r
       :continue :continue
       :declined (let [w (b/child-wait c slot 'jobs.items.obtain oargs)]
-                  (if (= :cooking (:reason w)) :continue {:reason (:reason w) :why (:why w)}))
+                  {:reason (:reason w) :why (:why w)})
       (let [res (ctx/child-result c slot)]
         (when-not (= :done (:status res)) {:reason (:reason res :failed) :why (:why res)})))))
 

@@ -29,7 +29,7 @@
 
 (defn ^:async smelt-step!
   "Run a smelt step of the plan as a jobs.items.smelt child (it fetches its own fuel and furnace) until it ends.
-  While it cooks the child declines (:cooking): the round ends :declined and the check waits with its reason.
+  While it cooks the child yields :continue.
   Charcoal burns wood (planks) as fuel: coal or charcoal as its fuel would ask for charcoal again."
   [c step]
   (ctx/update-mem! c assoc-in [:craft :step] step)

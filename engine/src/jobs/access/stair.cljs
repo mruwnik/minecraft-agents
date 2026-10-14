@@ -497,7 +497,7 @@
       stop (access/decline! c :stair.declined "stair" (assoc (access/refusal-fields [stop]) :reason :refused))
       :else (if-let [lack (need c)]
               (or (room-due? c lack) (fetch/check c 'jobs.access.stair lack))
-              (trip/torches-check c)))))
+              true))))
 
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."

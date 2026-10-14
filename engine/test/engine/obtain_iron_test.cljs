@@ -162,7 +162,7 @@
         (let [s (f/start (ore-world {"1,64,2" "furnace"} [{:name "raw_iron" :count 3} {:name "coal" :count 1}]) [f/own-zone])]
           (await (obtain! s {:item "iron_ingot" :count 3 :how #{:craft :gather}} 6))
           (is (seq (f/calls s "furnace")) "the furnace was used")
-          (is (seq (f/listed s)) "obtain yields while it cooks")
+          (is (and (zero? (get (f/inv s) "iron_ingot" 0)) (zero? (get (f/inv s) "raw_iron" 0))) "the raw iron is in the furnace, no ingot yet")
           (.advance (.-world (:p s)) 2000)
           (await (f/run-ticks s 200))
           (is (= 3 (get (f/inv s) "iron_ingot")))

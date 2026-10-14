@@ -7,7 +7,6 @@
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.items.obtain.table :refer [gather-need]]
-            [jobs.lib.blocks :as b]
             [jobs.lib.body :as body]
             [jobs.lib.declined :as declined]))
 
@@ -44,14 +43,13 @@
      :explore (:explore a)}))
 
 (defn ^:async pickaxe-step!
-  "Get the cheapest tool that harvests the need's block (a jobs.items.obtain child): :again once it is carried, :declined
-  while the tool's smelt cooks, else the gather source fails."
+  "Get the cheapest tool that harvests the need's block (a jobs.items.obtain child): :again once it is carried, :continue
+  while it runs, else the gather source fails."
   [c names need]
   (let [args (pickaxe-args c names need)
         r (await (declined/call-child! c :pickaxe 'jobs.items.obtain args))]
     (cond
       (= :continue r) :continue
-      (and (= :declined r) (= :cooking (:reason (b/child-wait c :pickaxe 'jobs.items.obtain args)))) :declined
       (pickaxe-first? c names need)
       (tried! c :gather {:pickaxe (or (:reason (ctx/child-result c :pickaxe)) r)})
       :else :again)))

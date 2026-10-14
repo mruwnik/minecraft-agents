@@ -391,7 +391,7 @@
     (access/decline! c :tunnel.declined "tunnel" {:reason :no-zones})
     (if-let [a (refusal c)]
       (access/decline! c :tunnel.declined "tunnel" (assoc (access/refusal-fields [a]) :reason :refused))
-      (and (trip/torches-check c) (fetch/declined-check c 'jobs.access.tunnel)))))
+      (fetch/declined-check c 'jobs.access.tunnel))))
 
 (defn ^:async choose!
   "Judge the lines and keep the best, or finish with why there is none. A refusal that read cells the body has not
