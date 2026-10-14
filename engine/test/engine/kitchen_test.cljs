@@ -7,7 +7,8 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [engine.withdraw-test :as wt]))
 
 (def job 'jobs.items.kitchen)
 (def furnace {:x 1 :y 64 :z 0})
@@ -175,3 +176,12 @@
           (core/submit! eng (list 'repeat (list job (assoc args :chest other-far-chest))) {})
           (dotimes [_ 6] (await (core/tick! eng)) (swap! clock + 1000))
           (is (seq (events-of s :round_started))))))))
+
+(deftest a-pass-where-every-step-stopped-does-not-end-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory [(item "beef" 3) (item "coal" 1)] :containers {"10,64,0" []}})
+              e (await (wt/ending-of eng job (assoc args :furnace {:x 30 :y 64 :z 0}) 40))]
+          (is (contains? #{:condition-failed :nothing-possible} (:kind e)) (pr-str e))
+          (is (contains? (:data e) :steps)))))))

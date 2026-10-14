@@ -9,6 +9,9 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
             [jobs.lib.fetch :as fetch]
+            [jobs.items.craft :as craft]
+            [jobs.lib.need :as getting]
+            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.storage :as storage]
@@ -23,7 +26,7 @@
   any name in the eat table.
   One call is the whole kit: it yields :continue only while a child waits on the world. Each step works out the needs from the inventory and the plan from the inspected chest, and hands the plan to
   jobs.storage.withdraw as carry-at-least targets.
-  Needs (condition): a known chest, else :no-chest. Ends done with data {:gave-up false :short {}} when the kit is
+  Needs (condition, at the start only): a known chest unless the kit is complete, else :no-chest. Ends done with data {:gave-up false :short {}} when the kit is
   complete. Every other ending has :short, what is still lacking keyed by the kind string or :food, and :gave-up:
   - condition-failed :chest-lacks {:gave-up false}: the chest could not supply it (and :missing {kind text} when the craft
     phase found no way);
@@ -38,6 +41,8 @@
     that, a stick or planks is crafted as a sub-step (at most two deep). Failing that, the tier is ruled out and
     the next is tried.
   - Food is made as bread from wheat (chest or body), in batches of 3.
+  A craft that finds no crafting table in reach first gets one (jobs.lib.need, unless :fetch is false) and the craft puts
+  it down; a table that cannot be had is \"no-table\".
   The result gets :missing {kind text} for what could not be made (only when non-empty). \"no-table\" and
   \"full\" end the phase for every short kind.
   A craft phase that ends with a non-empty :missing is remembered as :no-craft in body memory for 10 minutes.
@@ -51,6 +56,7 @@
    :food {:doc "how many food items to carry; enough to hold the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default nil}
    :chest {:doc "chest position; the known :chest place when nil" :spec ::a/pos :default nil}
    :craft {:doc "craft what the chest cannot supply" :spec boolean? :default true}
+   :fetch {:doc "get a crafting table (jobs.lib.need) when a craft finds none; false ends no-table" :spec boolean? :default true}
    :craft-tiers {:doc "tool tiers to craft, in order; iron or diamond only when listed" :spec (a/coll-of (a/or-of string? keyword?)) :default ["stone" "wooden"]}
    :radius {:doc "how far to look for a crafting table" :spec (a/num-in 0 nil) :default 32}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
@@ -140,12 +146,21 @@
      needs)))
 
 (defn no-chest
-  "A chest is known. A complete kit passes: its first round then ends at once without walking or inspecting."
+  "A chest is known, or nothing is needed: a complete kit then ends at once without walking or inspecting."
   [c]
-  (when-not (storage/chest-of (ctx/view c) (:args c))
+  (when (and (not (storage/chest-of (ctx/view c) (:args c)))
+             (seq (needs (u/inventory (:primitives c)) (:args c))))
     {:reason :no-chest}))
 
-(def conditions [[:fn no-chest]])
+(def conditions [[:fn (started/at-start no-chest)]])
+
+(defn chest-of!
+  "The chest of this call, kept in memory at the first look so a place forgotten meanwhile does not lose it."
+  [c]
+  (or (:chest (ctx/mem c))
+      (when-let [chest (storage/chest-of (ctx/view c) (:args c))]
+        (ctx/update-mem! c assoc :chest chest)
+        chest)))
 
 (defn done?
   "The kinds of the kit (tools and food) that are complete (the round ends the call with the short)."
@@ -377,7 +392,7 @@
   "One bounded craft-phase round: one child call, then fold its result into memory."
   [c]
   (let [a (:args c)
-        chest (storage/chest-of (ctx/view c) a)
+        chest (chest-of! c)
         still (needs (u/inventory (:primitives c)) a)]
     (if (empty? still)
       (finish-craft! c still nil)
@@ -390,9 +405,15 @@
             (ctx/update-mem! c merge (select-keys mem craft-keys))
             (if (nil? call)
               (finish-craft! c need nil)
-              (let [e (await (ctx/call c (:slot call) (:job call) (:args call)))]
-                (if (= :continue e)
-                  :continue
+              (let [t (when (and (= :craft (:slot call)) (:fetch a) (not (:table-fetched (ctx/mem c))))
+                        (await (getting/table! c (some? (craft/nearest-table (:primitives c) (:radius a))))))
+                    _ (when (= :done (:kind t)) (ctx/update-mem! c assoc :table-fetched true))
+                    e (when-not t (await (ctx/call c (:slot call) (:job call) (:args call))))]
+                (cond
+                  (= :continue (or t e)) :continue
+                  (and t (not= :done (:kind t))) (finish-craft! c need "no-table")
+                  t :again
+                  :else
                   (let [{:keys [mem end fail]} (absorb mem call (result-of e) stacks inv)]
                     (ctx/update-mem! c merge (select-keys mem craft-keys))
                     (cond
@@ -406,7 +427,7 @@
   :again, :continue (a child waits) or :done."
   [c]
   (let [a (:args c)
-        chest (storage/chest-of (ctx/view c) a)
+        chest (chest-of! c)
         still (needs (u/inventory (:primitives c)) a)]
     (cond
       (= :craft (:phase (ctx/mem c))) (await (craft-round c))

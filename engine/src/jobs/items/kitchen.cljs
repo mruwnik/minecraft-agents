@@ -26,8 +26,10 @@
   (:away). A pass that leaves such work (no furnace, no fuel) rests the kitchen 10 minutes (jobs.lib.standing; a rest
   after bake found no table ends once a table is seen near the chest): the wait is {:reason :nothing-to-do :backed-off
   [\"kitchen\"]}, so the job can stand in the queue under repeat without starving other jobs.
-  Ends done after every pass, with info kitchen.done and data {:steps {step summary}}; smelt summaries are keyed by
-  food. A pass is the goal, so a step that failed does not make it fail: the rest keeps the standing job from looping.
+  Every pass books info kitchen.done and data {:steps {step summary}}; smelt summaries are keyed by food. It ends done
+  when something was cooked, baked or stored; otherwise with the ending of the first step that stopped (its kind and
+  cause), or nothing-possible {:reason :nothing-to-do} when every step was skipped; a standing kitchen (under repeat) that
+  rests ends done instead, as any other ending would stop the repeat.
   Quote: a smelt of each raw food carried.")
 
 (def raw-foods ["beef" "porkchop" "chicken" "mutton" "rabbit" "cod" "salmon"])
@@ -140,17 +142,37 @@
       :bake (select-keys r [:baked :deposited :reason])
       :deposit (select-keys r [:gave-up :reason]))))
 
-(defn finish! [c report]
-  (when (would-run? c (assoc (facts c) :tried nil))
-    (standing/rest! c job-sym rest-key (if (= :no-table (get-in report [:bake :reason])) :no-table :undone)))
-  (ctx/emit! c :kitchen.done :info {:steps report :text (str "kitchen done: " (count report) " steps")})
-  (ctx/end c :done nil {:steps report}))
+(defn progressed?
+  "Whether a pass booked report cooked, baked or stored something: a step that was skipped or stopped is none."
+  [report]
+  (let [done? (fn [b] (and (map? b) (not (:skipped b)) (not (:reason b))))]
+    (boolean (or (some #(pos? (:smelted % 0)) (vals (:smelt report)))
+                 (pos? (:baked (:bake report) 0))
+                 (pos? (:deposited (:bake report) 0))
+                 (done? (:deposit report))))))
+
+(defn finish!
+  "End the pass: done when it cooked, baked or stored something, or when it is a standing job (under repeat) that now
+  rests (any other ending would stop the repeat for good); else the ending of the first step that stopped (its kind and
+  cause), or nothing-possible when every step was skipped."
+  [c report]
+  (let [rested? (would-run? c (assoc (facts c) :tried nil))
+        failed (:failed (ctx/mem c))]
+    (when rested?
+      (standing/rest! c job-sym rest-key (if (= :no-table (get-in report [:bake :reason])) :no-table :undone)))
+    (ctx/emit! c :kitchen.done :info {:steps report :text (str "kitchen done: " (count report) " steps")})
+    (cond
+      (progressed? report) (ctx/end c :done nil {:steps report})
+      (and rested? (contains? (standing/standing-ids c) (standing/root-id c))) (ctx/end c :done nil {:steps report})
+      failed (ctx/end c (:kind failed) (:cause failed) {:steps report})
+      :else (ctx/end c :nothing-possible {:reason :nothing-to-do} {:steps report}))))
 
 (defn after-child
   "Memory after the child of step ended with the summary booked: a smelt marks its food tried and stays; the
   other steps move on."
-  [m step food booked]
+  [m step food booked e]
   (-> m
+      (cond-> (and (not= :done (:kind e)) (not (:failed m))) (assoc :failed (select-keys e [:kind :cause])))
       (dissoc :call-args :food)
       (cond-> (= :smelt step) (-> (update :tried (fnil conj #{}) food) (assoc-in [:report :smelt food] booked))
               (not= :smelt step) (-> (update :todo rest) (assoc-in [:report step] booked)))))
@@ -159,7 +181,7 @@
   "One child call after another until the pass is over; :continue only while a child waits on the world."
   [c]
   (when-not (:todo (ctx/mem c))
-    (ctx/update-mem! c assoc :todo steps :report {} :tried #{}))
+    (ctx/update-mem! c assoc :todo steps :report {} :tried #{} :failed nil))
   (loop []
     (let [m (ctx/mem c)
           running (when-let [call-args (:call-args m)]
@@ -176,5 +198,5 @@
               e (await (ctx/call c slot (:job call) (:args call)))]
           (if (= :continue e)
             :continue
-            (do (ctx/update-mem! c after-child step (:food call) (summary step e))
+            (do (ctx/update-mem! c after-child step (:food call) (summary step e) e)
                 (recur))))))))

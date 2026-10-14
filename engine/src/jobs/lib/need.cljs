@@ -89,6 +89,13 @@
   ([c item n opts]
    (fetch! c 'jobs.items.obtain {:item item :count n} :need {:item item :count n} opts)))
 
+(defn ^:async table!
+  "A crafting table to craft at: nil when one is in reach (in-reach?) or carried, else item! of one (:continue or its
+  ending); a crafting job then puts the carried table down."
+  [c in-reach?]
+  (when-not (or in-reach? (pos? (get (counts c ["crafting_table"]) "crafting_table")))
+    (await (item! c "crafting_table" 1 {:slot :need-table}))))
+
 (defn blocks!
   "Get n of any of the names (building blocks) with jobs.items.obtain."
   ([c names n] (blocks! c names n nil))

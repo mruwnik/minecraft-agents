@@ -128,9 +128,22 @@
             (is (some #(= :withdraw.gave-up (:kind %)) @seen))
             (is (= [] (:list (core/state eng))))))))))
 
-(deftest kit-needs-a-known-chest-as-a-condition
+(defn chestless-problem
+  "The kit's first condition for a body with inventory and no known chest; started? makes the ctx a begun call."
+  [inventory args started?]
   (let [problem (second (first (:conditions (get registry/jobs job))))]
-    (is (= {:reason :no-chest} (problem {:args {} :view (fn [] {:data {} :now 0})})))))
+    (problem (cond-> {:args args :primitives (tu/fake {:inventory inventory}) :root "j1" :slots []
+                      :view (fn [] {:data {} :now 0})}
+               started? (assoc :quote-call {})))))
+
+(deftest kit-needs-a-known-chest-as-a-condition
+  (is (= {:reason :no-chest} (chestless-problem [] {} false))))
+
+(deftest a-kit-already-complete-needs-no-chest
+  (is (nil? (chestless-problem [{:name "stone_hoe" :count 2} {:name "bread" :count 12}] kit-args false))))
+
+(deftest a-begun-kit-is-not-ended-by-a-forgotten-chest
+  (is (nil? (chestless-problem [] {} true))))
 
 (deftest kit-needs-a-known-chest
   (async done
@@ -294,3 +307,20 @@
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))))
           (is (= 2 (reduce + (for [[k n] (inv p) :when (= "stone_hoe" k)] n)))))))))
+
+(defn ^:async fetched-tables
+  "The items asked of jobs.items.obtain while a hoe is crafted from the chest's cobblestone and sticks without a table."
+  [args]
+  (let [asked (atom [])
+        {:keys [eng]} (setup {:containers {"10,64,0" stone-chest} :blocks {} :recipes hoe-recipes})
+        eng (assoc-in eng [:jobs 'jobs.items.obtain]
+                      {:conditions [] :args {} :round (fn [c] (swap! asked conj (:item (:args c))) (ctx/end c :done nil))})]
+    (await (child-outcome eng job args 60))
+    @asked))
+
+(deftest a-craft-with-no-table-fetches-one-unless-fetch-is-false
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= ["crafting_table"] (await (fetched-tables hoe-args))))
+        (is (= [] (await (fetched-tables (assoc hoe-args :fetch false)))))))))

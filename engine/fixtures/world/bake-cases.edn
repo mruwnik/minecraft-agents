@@ -19,7 +19,7 @@
   {:name "table-walled-in-ends-with-a-warning"
    :blocks [[:fill [17 0 19] [19 2 21] "stone" :hollow] [:set [18 1 20] "crafting_table"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
-         [:job (jobs.items.bake {:chest #xyz [14 0 20] :keep 3})]]
+         [:job (jobs.items.bake {:chest #xyz [14 0 20] :keep 3 :fetch false})]]
    :expect [{:event {:source :job :kind #{:bake.gave-up :bake.no-table :bake.craft-failed}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :bake.done :data {:baked [:>= 1]}} :for-s 100 :until {:source :job :kind #{:bake.gave-up :bake.no-table :bake.craft-failed}}}]
    :after [[:item "bread" 0]]}]}

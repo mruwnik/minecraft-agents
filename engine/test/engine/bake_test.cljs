@@ -10,7 +10,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.withdraw-test :as wt]
-            [jobs.items.bake :as bake]))
+            [jobs.items.bake :as bake]
+            [jobs.lib.need :as need]))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -45,7 +46,7 @@
   ([world args prepare]
    (let [{:keys [eng p seen]} (setup world)
          _ (prepare p)
-         result (await (child-outcome eng job (merge {:chest chest :keep 4} args) 60))]
+         result (await (child-outcome eng job (merge {:chest chest :keep 4 :fetch false} args) 60))]
      [result p seen])))
 
 (defn kinds [seen] (set (map :kind @seen)))
@@ -114,7 +115,7 @@
                 [0 2]
                 (fn ^:async one [n]
                   (let [[result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count n}]} :blocks beside} {}))]
-                    (is (= {:kind :done :baked 0 :deposited 0} result) (str n))
+                    (is (= {:kind :nothing-possible :baked 0 :deposited 0 :reason :no-wheat} result) (str n))
                     (is (empty? (calls p "craft")) (str n))
                     (is (contains? (kinds seen) :bake.nothing))))))))))
 
@@ -324,3 +325,46 @@
               [result] (await (bake-with-craft short-world (short-craft 0 n)))]
           (is (= 1 @n))
           (is (= {:kind :condition-failed :reason :need} (select-keys result [:kind :reason]))))))))
+
+(deftest bread-already-carried-or-in-the-chest-is-not-an-empty-bake
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[carried] (await (bake {:inventory [{:name "bread" :count 4}] :containers {"10,64,0" []} :blocks beside} {}))
+              [topped p] (await (bake {:containers {"10,64,0" [{:name "bread" :count 8}]} :blocks beside} {}))]
+          (is (= {:kind :done :baked 0 :deposited 0} carried))
+          (is (= {:kind :done :baked 0 :deposited 0} topped))
+          (is (= {"bread" 4} (inv p))))))))
+
+(deftest a-call-that-began-is-not-ended-by-a-forgotten-chest
+  (let [problem (second (first (:conditions (get registry/jobs job))))
+        c {:args {:chest nil} :root "j1" :slots [] :view (fn [] {:data {} :now 0})}]
+    (is (= {:reason :no-chest} (problem c)))
+    (is (nil? (problem (assoc c :quote-call {}))))))
+
+(deftest a-table-broken-between-steps-is-noticed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [looks (atom 0)
+              real bake/nearest-table
+              [result] (with-redefs [bake/nearest-table (fn [p c r] (when (= 1 (swap! looks inc)) (real p c r)))]
+                         (await (bake {:inventory [{:name "wheat" :count 3}] :containers {"10,64,0" []} :blocks beside} {})))]
+          (is (= {:kind :condition-failed :baked 1 :deposited 0 :reason :no-table} result)))))))
+
+(defn asking
+  "A stand-in for jobs.items.obtain that records the item asked and ends done, bringing nothing."
+  [asked]
+  {:conditions [] :args {} :round (fn [c] (swap! asked conj (:item (:args c))) (ctx/end c :done nil))})
+
+(deftest a-bake-with-no-table-fetches-one-unless-fetch-is-false
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[fetch expected] [[true ["crafting_table"]] [false []]]]
+          (let [asked (atom [])
+                {:keys [eng]} (setup {:inventory [{:name "wheat" :count 3}] :containers {"10,64,0" []}})
+                eng (assoc-in eng [:jobs 'jobs.items.obtain] (asking asked))
+                result (await (child-outcome eng job {:chest chest :keep 4 :fetch fetch} 60))]
+            (is (= expected @asked) (str fetch))
+            (is (= :no-table (:reason result)) "the stand-in brought no table, so the bake says so")))))))

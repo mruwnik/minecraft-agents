@@ -17,7 +17,7 @@
    :after [[:item "bread" [:>= 3]]]}
   {:name "bake-without-a-table-stops-no-table"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"]]
-   :act [[:job (jobs.items.bake {:chest #xyz [20 0 16]})]]
+   :act [[:job (jobs.items.bake {:chest #xyz [20 0 16] :fetch false})]]
    :expect [{:event {:source :job :kind :bake.no-table :data {:reason "no-table"}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :bake.done} :for-s 20}]
    :after [[:item "bread" 0] [:item "wheat" 0]]}
