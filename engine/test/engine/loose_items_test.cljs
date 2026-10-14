@@ -3,6 +3,7 @@
   ones thrown, owed to a live job, in another's zone or not worth it are left."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.event-api :as event-api]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
@@ -167,7 +168,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (world dirt-down))
               r (await (tu/child-outcome eng 'jobs.items.pick-up-loose {} 20))]
-          (is (= {:status :stopped :reason :nothing-worth-it :collected 0} (dissoc r :text)))
+          (is (= {:status :stopped :reason :nothing-worth-it :collected 0} (dissoc r :text :ending)))
+          (is (= :condition-failed (get-in r [:ending :kind])))
           (is (= 0 (carried p "dirt"))))))))
 
 (deftest the-stop-text-says-why-nothing-was-taken
@@ -230,3 +232,15 @@
           (await (tu/run-until-empty eng 20))
           (is (= [[{:x 1 :y 64 :z 0} 6]] @holds) "held while it collects")
           (is (= [] (held)) "released at the end"))))))
+
+(deftest the-job-is-a-contract-job-quoting-the-items-it-would-take
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (world log-near dirt-down))
+              entry (get (:jobs eng) 'jobs.items.pick-up-loose)
+              {:keys [ok quote]} (await (event-api/quote-view eng "jobs.items.pick-up-loose" "{}"))]
+          (is (some? (:conditions entry)))
+          (is (true? ok))
+          (is (= {"oak_log" [0 1 1]} (get-in quote [:yields :items])) "the dirt is not worth the detour")
+          (is (= [0 1 1] (:done quote))))))))

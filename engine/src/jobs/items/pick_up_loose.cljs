@@ -12,9 +12,10 @@
   One jobs.forestry.collect-drops child takes them by entity id; its go-to leaves what it cannot reach. Items not
   picked up are remembered (:loose-left) for :left-s; so are the seen items when it finds none worth it, so a
   reflex that judged otherwise cannot fire it again for them. One info event loose-items.picked {:collected :items :left}.
-  Result {:collected n :items [names] :left [ids]}. :declined when none came in, or (the reflex) nothing is worth it;
-  run by the agent with nothing worth it, it ends stopped :nothing-worth-it at once (a held run never blocks the queue), the text
-  naming the radius, what within it was left and why, and the nearest item seen beyond it.")
+  Ends :done with data {:collected n :items [names] :left [ids]}. With nothing worth it it ends condition-failed
+  :nothing-worth-it at once (a held run never blocks the queue), the text naming the radius, what within it was left
+  and why, and the nearest item seen beyond it; with items picked at but none taken, nothing-possible :none-taken.
+  Quote: the items worth it in sight, a second of walking each.")
 
 (a/defargs args
   {:radius {:doc "blocks from the body; nil: the jobs.lib.loose setting" :spec (a/num-in 0 32) :default nil}
@@ -24,10 +25,18 @@
    :value {:doc "jobs.lib.cost item-value options (:overrides :prices ...)" :spec map? :default nil}
    :cost {:doc "jobs.lib.cost detour-cost options (:per-block :per-climb)" :spec map? :default nil}})
 
-(defn check
-  "Always: with nothing worth it the round ends the job, so a held run never blocks the queue."
-  [_c]
-  true)
+(def target [])
+
+(def defaults {:least 1})
+
+(def conditions [])
+
+(def s-per-item "Seconds a quote counts to fetch one item." 2)
+
+(defn done?
+  "Never done before the round has run: the items are not known to be worth it."
+  [c]
+  {:done? false :units :items :done (:collected (ctx/mem c) 0)})
 
 (defn names-of [items] (vec (distinct (keep #(some-> (.-item %) .-name) items))))
 
@@ -41,6 +50,15 @@
          (str "no loose item in sight within " radius " blocks"))
        (when beyond (str "; nearest beyond: " (:name beyond) " " (:distance beyond) " blocks away (a larger :radius takes it)"))))
 
+(defn quote-of
+  [c]
+  (let [items (loose/candidates (:primitives c) (ctx/view c) (:world (:engine c)) (:args c) (:root c))
+        n (count items)
+        t (* s-per-item n)]
+    {:uses {:time [0 t (* 3 t)]}
+     :yields {:items (update-vals (frequencies (keep #(some-> (.-item %) .-name) items)) (fn [k] [0 k k]))}
+     :done [0 n n]}))
+
 (defn ^:async round
   [c]
   (let [p (:primitives c)
@@ -50,14 +68,10 @@
         ids (mapv #(.-id %) items)]
     (if (empty? ids)
       (do (loose/left! c (into [] (comp (map #(.-id %)) (remove (loose/left-ids view))) (loose/seen p o)) o)
-          (if (:reflex c)
-            (do (ctx/result! c {:collected 0 :reason :nothing-worth-it})
-                :declined)
-            (do (ctx/result! c {:status :stopped :reason :nothing-worth-it :collected 0
-                                :text (stop-text (loose/explain p view (:world (:engine c)) (:args c) (:root c)))})
-                :done)))
-      (let [r (await (child/run! c :collect 'jobs.forestry.collect-drops {:ids ids :radius (+ (:radius o) (:collect-pad o))}))
-            n (or (:collected (ctx/child-result c :collect)) 0)
+          (ctx/end c :condition-failed :nothing-worth-it
+                   {:collected 0 :text (stop-text (loose/explain p view (:world (:engine c)) (:args c) (:root c)))}))
+      (let [r (await (child/run!* c :collect 'jobs.forestry.collect-drops {:ids ids :radius (+ (:radius o) (:collect-pad o))}))
+            n (or (:collected (:data r)) 0)
             still (set (map #(.-id %) (look/seen-items p {:radius (:check-radius o) :ids ids})))
             left (filterv still ids)
             out {:collected n :items (names-of items) :left left}]
@@ -65,5 +79,6 @@
         (ctx/emit! c :loose-items.picked :info
                    (assoc out :text (str "picked up " n " loose item" (when (not= 1 n) "s") " (" (str/join ", " (:items out)) ")"
                                          (when (seq left) (str "; left " (count left))))))
-        (ctx/result! c (cond-> out (= :continue r) (assoc :reason :walk-waiting)))
-        (if (pos? n) :done :declined)))))
+        (if (pos? n)
+          (ctx/end c :done nil (cond-> out (= :continue r) (assoc :reason :walk-waiting)))
+          (ctx/end c :nothing-possible (if (= :continue r) :walk-waiting :none-taken) out))))))

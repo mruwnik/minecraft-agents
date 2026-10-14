@@ -32,7 +32,10 @@
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
-  Result: {:collected n}, the number of items that entered the inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them).")
+  Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
+  inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them), also
+  when nothing came in; :nothing-possible :search-waited when the search was held up; :cut-off :cut when cut.
+  Quote: what is in sight within :radius (yields by name), time to walk to each, unbounded with :search or :dig.")
 
 (a/defargs args
   {:radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
@@ -46,15 +49,20 @@
    :holes {:doc "cells the caller dug: an item lower than the feet at or under one of them, or one column beside, is in that hole"
            :spec (a/coll-of a/position?) :default nil}})
 
+(def target [:ids :near])
+
+(def defaults {:least 1})
+
+(def conditions [])
+
 (a/defargs settings
-  {::dig-max-cells {:default 16 :doc "The most cells :dig digs to reach one drop; a dearer route leaves it." :spec (a/int-in 0 nil)}
+  {::walk-s-per-block {:default 0.4 :doc "Seconds a quote counts to walk one block to a drop." :spec (a/num-in 0 nil)}
+   ::dig-max-cells {:default 16 :doc "The most cells :dig digs to reach one drop; a dearer route leaves it." :spec (a/int-in 0 nil)}
    ::dig-margin {:default 3 :doc "How far outside the box round the body and the drop the dig route may wander, in blocks." :spec (a/int-in 0 nil)}
    ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}
    ::search-waits {:default 5 :doc "How many calls in a row a :search walk may wait on go-to (the night, a danger) before the search is given up." :spec (a/int-in 1 nil)}})
 
 (defn search-waits [] (settings/get settings ::search-waits))
-
-(defn check [_c] true)
 
 (defn walk-args
   "go-to args for a walk of this job: underground it goes on at night (:at-night :go), like the digs that made the hole."
@@ -150,13 +158,13 @@
   (await (sense/decide! c :collect-drops.hole #(hole-problem c item) {:retry? some?})))
 
 (defn ^:async walk-down!
-  "Walk within a block of item, more than a block lower than the feet: one go-to call (child/run!, slot :walk).
+  "Walk within a block of item, more than a block lower than the feet: one go-to call (child/run!*, slot :walk).
   :arrived, :continue (go-to waits on the world) or :unreachable."
   [c item]
-  (let [r (await (child/run! c :walk 'jobs.movement.go-to (walk-args c {:pos (item-cell item) :range 1 :escalate false})))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to (walk-args c {:pos (item-cell item) :range 1 :escalate false})))]
     (cond
       (= :continue r) :continue
-      (and (= :done r) (:arrived (ctx/child-result c :walk))) :arrived
+      (and (= :done (:kind r)) (:arrived (:data r))) :arrived
       :else :unreachable)))
 
 (defn ^:async dig-to!
@@ -236,7 +244,7 @@
   (let [queue (or (:search-queue (ctx/mem c))
                   (let [q (vec (search-cells c anchor))] (ctx/update-mem! c assoc :search-queue q) q))]
     (when-let [cell (first queue)]
-      (let [r (await (child/run! c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range 0 :escalate false})))]
+      (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range 0 :escalate false})))]
         (if (= :continue r)
           (if (>= (:search-waited (ctx/mem c) 0) (search-waits))
             :waited
@@ -244,6 +252,24 @@
                 :continue))
           (do (ctx/update-mem! c #(-> % (update :search-queue (comp vec rest)) (dissoc :search-waited)))
               :walked))))))
+
+(defn done?
+  "Never done before the sweep has run its course: a drop may still be found."
+  [c]
+  {:done? false :units :items :done (:collected (ctx/mem c) 0)})
+
+(defn quote-of
+  "What is in sight within :radius of the anchor: yields by name, time to walk to each (unbounded when a :search or a :dig may go on)."
+  [c]
+  (let [{:keys [near search dig]} (:args c)
+        items (candidates c (or near (u/self-pos c)))
+        n (count items)
+        mean (* (settings/get settings ::walk-s-per-block)
+                (reduce + 0 (map #(u/dist (u/self-pos c) (u/pos-of (.-pos %))) (filter #(.-pos %) items))))
+        names (frequencies (keep #(some-> (.-item %) .-name) items))]
+    {:uses {:time [0 mean (if (or (pos? search) dig) ##Inf (* 3 mean))]}
+     :yields {:items (update-vals names (fn [k] [0 k k]))}
+     :done [0 n n]}))
 
 (defn ^:async round
   "One whole attempt: collects the nearest matching dropped item again and again until none is left in radius.
@@ -256,7 +282,9 @@
                      (ctx/update-mem! c assoc :anchor a)
                      (loose/hold! c a (:radius (:args c)))
                      a))
-        done! (fn [result] (loose/release! c) (ctx/result! c result) :done)]
+        done! (fn [kind cause data] (loose/release! c) (ctx/end c kind cause data))
+        data (fn [] (cond-> {:collected (:collected (ctx/mem c) 0)}
+                      (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))))]
     (loop []
       (let [items (when (ctx/alive? c) (candidates c anchor))
             _ (note-last-cells! c items)
@@ -268,13 +296,13 @@
               :continue
               (if (and r (not= :waited r))
                 (recur)
-                (done! (cond-> {:collected (:collected (ctx/mem c) 0)}
-                         (= :waited r) (assoc :reason :search-waited)
-                         (not (ctx/alive? c)) (assoc :reason :cut))))))
+                (cond
+                  (not (ctx/alive? c)) (done! :cut-off :cut (data))
+                  (= :waited r) (done! :nothing-possible :search-waited (data))
+                  :else (done! :done nil (data))))))
           (if-not item
-          (done! (cond-> (do (when (ctx/alive? c) (leave-unseen! c)) {:collected (:collected (ctx/mem c) 0)})
-                   (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))
-                   (not (ctx/alive? c)) (assoc :reason :cut)))
+          (do (when (ctx/alive? c) (leave-unseen! c))
+              (if (ctx/alive? c) (done! :done nil (data)) (done! :cut-off :cut (data))))
           (let [hole? (in-hole? c item)
                 moving? (and hole? (settling? c item))
                 why (when (and hole? (not moving?)) (await (hole-problem! c item)))

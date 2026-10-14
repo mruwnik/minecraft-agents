@@ -3,6 +3,7 @@
   caller dug only from a seen solid safe floor."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.event-api :as event-api]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [jobs.lib.shelter :as sh]))
@@ -32,6 +33,7 @@
           (seen-from-above! p)
           (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["porkchop"]} 30))]
             (is (= 1 (:collected result)))
+            (is (= :done (:status result)))
             (is (= 1 (bd/carried p "porkchop")))
             (is (empty? (bd/left-drops seen)))
             (is (some #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "a go-to walk took it down the slope")
@@ -179,6 +181,7 @@
           (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
             (is (= 0 (:collected result)))
             (is (= :search-waited (:reason result)))
+            (is (= :nothing-possible (get-in result [:ending :kind])) "a search that waited too long found nothing it could do")
             (is (some #(= :go-to.night-sheltered (:kind %)) @seen) "the hold was the night's")))))))
 
 (deftest only-the-want-items-count-towards-want
@@ -269,3 +272,26 @@
             (is (= 1 (bd/carried p "dirt")))
             (is (empty? (:left result)))
             (is (empty? (bd/left-drops seen)))))))))
+
+(deftest the-job-is-a-contract-job-naming-what-it-collects
+  (let [{:keys [eng]} (bd/setup {:self body})
+        entry (get (:jobs eng) job)]
+    (is (some? (:conditions entry)))
+    (is (= [:ids :near] (:target entry)))
+    (is (fn? (:quote-of entry)))
+    (is (nil? (:ways entry)) "one method: no ways")))
+
+(deftest a-quote-yields-the-drops-in-sight-and-spends-time-to-walk-to-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body})]
+          (drop! p [3 64 0] "porkchop")
+          (drop! p [4 64 0] "porkchop")
+          (drop! p [90 64 0] "dirt")
+          (let [{:keys [ok quote]} (await (event-api/quote-view eng (str job) "{:radius 6}"))
+                [least mean most] (get-in quote [:uses :time])]
+            (is (true? ok))
+            (is (= {"porkchop" [0 2 2]} (get-in quote [:yields :items])) "only what is in the radius")
+            (is (= [0 2 2] (:done quote)))
+            (is (and (zero? least) (pos? mean) (<= mean most)))))))))
