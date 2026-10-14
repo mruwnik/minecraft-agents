@@ -388,8 +388,7 @@
   (let [go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
         stub (fn ^:async failing-walk [c]
                (swap! walks inc)
-               (ctx/result! c {:arrived false :why :no-path})
-               :done)]
+               (ctx/end c :done nil {:arrived false :why :no-path}))]
     (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))))
 
 (deftest a-walk-that-fails-twice-in-one-call-waits-unreachable
@@ -818,7 +817,7 @@
               round (:round go-to)
               first-fails (fn ^:async first-walk-fails [c]
                             (if (and (= "air" (block-at (:p env) under-feet)) (= 1 (swap! walks inc)))
-                              (do (ctx/result! c {:arrived false :why :no-path}) :done)
+                              (ctx/end c :done nil {:arrived false :why :no-path})
                               (await (round c))))
               env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round first-fails))]
           (hiding (:p env) #(= [0 62 0] %))
@@ -838,8 +837,7 @@
                                  (if (= "air" (block-at (:p env) under-feet))
                                    (do (swap! walks inc)
                                        (swap! (fake/state (:p env)) assoc-in [:self :pos] [3 64 0])
-                                       (ctx/result! c {:arrived false :why :no-path})
-                                       :done)
+                                       (ctx/end c :done nil {:arrived false :why :no-path}))
                                    (await (round c))))
               env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round moves-then-fails))]
           (hiding (:p env) #(= [0 62 0] %))
@@ -891,15 +889,15 @@
           (is (= 2 @walks) "a cell beside that came free is tried"))))))
 
 (defn failing-step-offs
-  "env whose go-to walks fail (why :no-path) once the cell under the feet is dug; escalations holds each failed walk's :escalate."
+  "env whose go-to walks fail (why :no-path) once the cell under the feet is dug; escalations holds whether each failed
+  walk may escalate (its :ways more than :walk)."
   [env escalations]
   (let [go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
         round (:round go-to)
         stub (fn ^:async failing-step-off [c]
                (if (= "air" (block-at (:p env) under-feet))
-                 (do (swap! escalations conj (boolean (:escalate (:args c))))
-                     (ctx/result! c {:arrived false :why :no-path})
-                     :done)
+                 (do (swap! escalations conj (not= #{:walk} (:ways (:args c))))
+                     (ctx/end c :done nil {:arrived false :why :no-path}))
                  (await (round c))))]
     (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))))
 

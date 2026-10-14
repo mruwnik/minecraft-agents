@@ -14,6 +14,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.result :as r]
+            [jobs.movement.go-to.result :as end]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.near :as near]
@@ -136,7 +137,7 @@
               {:keys [p out]} (await (run-job! s 'jobs.survival.retreat {}))]
           (is (= :far (:ended out)))
           (is (pos? (count @args)) "every flight step is a go-to call")
-          (is (every? #(false? (:escalate %)) @args) "a flee never digs or pillars")
+          (is (every? #(= #{:walk} (:ways %)) @args) "a flee never digs or pillars")
           (is (every? #(= 16 (:y-margin %)) @args) "a flee plans no route far below or above itself and its goal")
           (is (every? #(and (false? (:retry %)) (false? (:look-round %))) @args)
               "a step that gains nothing ends at once and never looks round")
@@ -701,7 +702,7 @@
     (assoc-in s [:eng :jobs 'jobs.movement.go-to]
               (assoc real :round (fn ^:async stub [c]
                                    (swap! calls conj (:args c))
-                                   (r/finish! c (script st (count @calls))))))))
+                                   (end/finish! c (script st (count @calls))))))))
 
 (defn stub-go-to
   "scripted-go-to of one step: (move state-atom) runs, the hostiles vanish (so the flight ends after one step) and the

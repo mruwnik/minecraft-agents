@@ -287,9 +287,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:arrived true}
+        (is (= {:arrived true :status :done}
                (await (child-outcome (:eng (setup {:floor tu/walk-floor})) 'jobs.movement.go-to {:pos {:x 5 :y 64 :z 0}} 3))))
-        (is (= {:arrived true}
+        (is (= {:arrived true :status :done}
                (await (child-outcome (:eng (setup {})) 'jobs.movement.go-to {:pos {:x 0 :y 64 :z 0}} 3)))
             "already there")
         (is (= {:arrived false :reason :unreachable}
@@ -316,13 +316,13 @@
               bare (fn ^:async b [args] (let [r (await (go-to-with args))]
                                           (is (= :stopped (get-in r [:outcome :status])))
                                           (is (string? (get-in r [:outcome :text])))
-                                          (update r :outcome dissoc :status :text)))]
+                                          (update r :outcome dissoc :status :text :ending)))]
           ;; wrong shapes (a string, two numbers, a non-number) never get here: the ::a/pos spec refuses them at submit and call-child
           (is (= refused (await (bare {:pos [9 9999 9]}))) "above the world")
           (is (= refused (await (bare {:pos {:x 1e12 :y 64 :z 9}}))) "far outside the world")
           (is (= refused (await (bare {:pos [9 64 js/Infinity]}))) "not finite")
           (is (= refused (await (bare {}))) "no pos at all")
-          (is (= {:outcome {:arrived true} :refusals [] :walks 1}
+          (is (= {:outcome {:arrived true :status :done} :refusals [] :walks 1}
                  (await (go-to-with {:pos [5 64 0]})))
               "the vector form of a position walks"))))))
 

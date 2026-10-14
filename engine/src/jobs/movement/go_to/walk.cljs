@@ -168,7 +168,7 @@
     (when (and (:clear-seal (:args c)) (#{:goal-enclosed :goal-cut-off :exhausted :ladder-gap} (:reason result)) (not (:seal-cleared (ctx/mem c)))
                (seq (ledger/near-of (ledger/open-entries (ctx/view c)) near)))
       (ctx/update-mem! c assoc :seal-cleared true)
-      (await (ctx/call-child c :seal-cleanup 'jobs.access.cleanup {:job :all :near near}))
+      (await (ctx/call c :seal-cleanup 'jobs.access.cleanup {:job :all :near near}))
       true)))
 
 (defn leg-alert?

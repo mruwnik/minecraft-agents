@@ -9,7 +9,7 @@
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.air :as air]
-            [jobs.movement.go-to.aim :refer [args-refusal goal-danger goal-pos pre-aim! target]]
+            [jobs.movement.go-to.aim :as aim :refer [args-refusal goal-danger goal-pos pre-aim!]]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.cut :refer [approaches cut-loop? nearest-hostile note-restart! start-attempt! way-hostiles]]
             [jobs.movement.go-to.escalation :as esc]
@@ -17,7 +17,8 @@
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.settings :refer [max-cut-resets night-wait-ms]]
             [jobs.movement.go-to.torch :as torch]
-            [jobs.movement.go-to.walk :as walk]))
+            [jobs.movement.go-to.walk :as walk]
+            [jobs.movement.go-to.way-steps :as ways]))
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
@@ -29,8 +30,15 @@
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
   - Refused at submit (or the caller's call-child throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :landing that is not a map of block names to numbers, a :gait that is not :auto, :walk or :sneak, a :min-health outside 1-20, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}}.
-  - Refused at once, before any walk: a :pos outside the world (:bad-pos), a :place that is not a valid name (:bad-name)
-    or has no recorded position (:unknown-place), a body with no pathWorld sensing (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
+  - Ends condition-failed at once, before any walk, with the cause :bad-pos (a :pos outside the world), :bad-name (a
+    :place that is not a valid name), :unknown-place (no recorded position) or :unsupported (a body with no pathWorld
+    sensing), after a :refused warn; data {:arrived false :text}. A call whose :ways leave out :walk ends
+    nothing-possible :no-way.
+  - Ways (:ways, all by default): :walk, and the escalations that change the world: :pillar (a pillar, a gap filled
+    with a block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out
+    (out of its own shelter). An old caller's :escalate false is :ways #{:walk} (legacy-args).
+  - A listed go-to waits (its condition, before it starts) while it would wait on the night or a retreat plug (below);
+    once started such a wait is a :continue yield, kept in its memory as :hold for a parent's jobs.lib.child walk.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
     to, or not at all while it goes on; every iteration awaits a pace-ms timer. A goal in unloaded land is walked
@@ -59,7 +67,7 @@
     (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground; a walk down to open air leaves a roofed hut) waits for day: a listed
     go-to declines {:reason :night-sheltered :shelter :goal}, a child call waits 1 s and yields :continue (info
     go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
-  - A walk without :escalate from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not beyond the near band, 8 blocks, nor while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min, in all across the go-to children of one root job) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
+  - A walk with no escalating way from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not beyond the near band, 8 blocks, nor while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min, in all across the go-to children of one root job) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
     walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
@@ -80,31 +88,33 @@
   - A walk stuck or off its plan at a cell is a go-to.walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
     A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck).
-  - :escalate (default true): a body sealed in its own shelter (a :shelter entry) by day, when the walk finds no way, leaves it first (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); never at night.
-  - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
+  - :dig-out: a body sealed in its own shelter (a :shelter entry) by day, when the walk finds no way, leaves it first (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); never at night.
+  - With an escalating way: a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
     search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off), or any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), makes a way instead of giving up, one child job
-    each (jobs.lib.escape/choose), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation): standing on a stair of its own under the goal, that stair cut again (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else jobs.access.pillar up out of a pit when it carries enough blocks; else
+    each (jobs.lib.escape/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation): standing on a stair of its own under the goal, that stair cut again (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else jobs.access.pillar up out of a pit when it carries enough blocks; else
     jobs.access.clear-path through a wall up to 3 thick toward the goal; else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
     followed by the next escalation at once); else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
     through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;
     its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
     go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
-    left to jobs.access.cleanup. Its children's walks never escalate. Jobs that must not change the world on the way pass
-    :escalate false: a shut-in body then gives up with :shut-in true and says so in the text.
-  - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
+    left to jobs.access.cleanup. Its children (ctx/call) walk with :ways #{:walk}. Jobs that must not change the world
+    on the way pass :ways #{:walk}: a shut-in body then gives up with :shut-in true and says so in the text.
+  - Gives up with an :unreachable warn and the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
+    words ...}: limit-reached for :needs-health (:line :health), :leg-search-spent (:line :time) and :explore-spent;
+    condition-failed for :goal-dangerous and :goal-unloaded; else nothing-possible. :why is the planner's
     reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :goal-on-magma, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
     (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back by 3 cuts, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach in between (in-place cuts do not count or break it); a restart that knows of no hostile within the hostile-near radius of the way ahead clears the count instead; an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause, :nearest-hostile-at its cell, or {:direction :band} when only heard) or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Under water with no way to the goal in the air left (:air), it first walks to the nearest air it sees or finds by
     looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call) and plans again.
-  - Success is {:arrived true}, with :resolved the cell when go-to chose the y, plus :provisional true (a column's
+  - Success is :done with data {:arrived true}, with :resolved the cell when go-to chose the y, plus :provisional true (a column's
     estimated y) or :stand-in true (a column with no ground known: the feet y). The result is also a :result info event.
   - A body under ground (jobs.lib.shelter/buried?) whose goal lies ::climb-rise blocks or more above it plans no route
     deeper than ::climb-dip blocks below where the call first found it so (it does not dive through deep caves to come
     up under the goal). With no other way it cuts a stair up toward the goal instead (setting ::climb-stair, with
-    :escalate: the escalation's stair, a go-to.escalated {:step :stair :why :way-dives}), stair after stair with no walk
+    :stair: the escalation's stair, a go-to.escalated {:step :stair :why :way-dives}), stair after stair with no walk
     in between while it is under ground below the goal; else, or when no stair can be cut, it gives up :why :way-dives
     with :dip and :rise. Such a body (jobs.movement.go-to.climb):
     - first walks its own way up, once a call (setting ::climb/own-way): over its stairs and tunnels (memory :stair-way,
@@ -114,7 +124,7 @@
       is not taken; a hop it cannot walk, standing on such a stair, has the stair cut again from
       there (a go-to.escalated {:step :stair :why :own-way-blocked}; these holes stay open);
     - walks no plan (first or re-plan inside a walk) that goes more than ::climb/cave-dip below where the call began over cells that are no stair of
-      its own, while a stair up can be cut there (with :escalate and ::climb-stair): it climbs as from a dive
+      its own, while a stair up can be cut there (with :stair and ::climb-stair): it climbs as from a dive
       (:why :way-dives); when no stair can be cut it walks the plan after all. Likewise, once at the end of its own
       way (memory :own-way-top), a plan that goes more than ::climb/cave-dip below it back down a stair of its own.
     An explicit :y-margin switches all of this off.
@@ -137,8 +147,6 @@
    :y-slack {:doc "blocks a :pos y with no standable cell within :range may be re-aimed up or down its column to the ground; 0: never" :spec (a/int-in 0 nil) :default 4}
    :doors {:doc "what to do at shut doors, gates and trapdoors: :shut (open, pass, shut again what the walk opened), :leave-open (open and pass), :never (walls)"
            :spec #{:shut :leave-open :never} :default :shut}
-   :escalate {:doc "when shut in with no way out, pillar, stair or dig a door to get out (and put back what was dug); false: give up"
-              :spec boolean? :default true}
    :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :spec boolean? :default true}
    :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth overrides their prices and depths (jobs.lib.cost/unknown-prices), :light-cost the seconds of a torch :place-torches places; false: plan over the world as it is" :spec (a/valid-by "true, false or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth :light-cost to numbers >= 0" wworld/unknown-problem) :default false}
    :place-torches {:doc "with :unknown: light a dark floor it cannot see with a torch from the inventory, placed at the takeoff (priced by jobs.lib.cost/light-cost, or :unknown's :light-cost), fetching torches when none is carried (:fetch); false: never place one" :spec boolean? :default false}
@@ -205,13 +213,27 @@
                                     :else (:range (:args c)))
                               (some-> (:doors (:args c)) keyword)))))))
 
-(defn check
-  "A listed go-to waits while wait-reason holds (a child's round yields instead: its parent goes on, and asks with
-  :report-wait, jobs.lib.child/call-walk, to name the wait)."
-  [c]
-  (if-let [w (and (or (empty? (:slots c)) (:report-wait c)) (wait-reason c))]
-    (ctx/wait c w)
-    true))
+(def target [:pos :place])
+
+(def ways ways/ways)
+
+(def defaults {:least :all})
+
+(defn legacy-args
+  "An old caller's :escalate false as the call's :ways #{:walk}; ways it gives win."
+  [{:keys [escalate] :as args}]
+  (cond-> (dissoc args :escalate)
+    (and (false? escalate) (nil? (:ways args))) (assoc :ways #{:walk})))
+
+(def conditions
+  "A listed go-to not yet started waits while wait-reason holds; a started call, or a child, yields instead (attempt)."
+  [[:fn (fn [c] (when (and (empty? (:slots c)) (nil? (ctx/frozen-call c))) (wait-reason c)))]])
+
+(defn hold!
+  "Keep in memory what the call waits on (:hold, nil when it walks), for a parent's jobs.lib.child walk to read."
+  [c reason]
+  (when-not (= reason (:hold (ctx/mem c)))
+    (ctx/update-mem! c assoc :hold reason)))
 
 (defn ^:async run-steps!
   "step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps; goal aimed again each
@@ -234,10 +256,12 @@
         refusal (args-refusal c)
         night (when-not refusal (night-wait c))
         plug (when-not (or refusal night) (plug-wait c))
-        goal (when-not (or refusal night plug) (:pos (target c)))
+        goal (when-not (or refusal night plug) (:pos (aim/target c)))
         pos (goal-pos c goal)]
+    (hold! c (or (:reason night) (:reason plug)))
     (cond
       refusal (end/refuse! c refusal)
+      (not (ways/way? c :walk)) (end/refuse! c {:reason :no-way :message "the call's :ways leave out :walk"})
       night (do (when-not (:night-said (ctx/mem c))
                   (ctx/update-mem! c assoc :night-said true)
                   (ctx/emit! c :go-to.night-sheltered :info

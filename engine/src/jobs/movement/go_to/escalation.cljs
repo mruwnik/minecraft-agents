@@ -1,7 +1,8 @@
 (ns jobs.movement.go-to.escalation
   "go-to's way out of a shut-in body: choose pillar, stair, clear-path or a walk to the wall, run the child, note the
   holes it dug, put them back once the walk is on past them."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
@@ -17,9 +18,16 @@
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.torch :as torch]))
+            [jobs.movement.go-to.torch :as torch]
+            [jobs.movement.go-to.way-steps :as ways]))
 
 (def max-escalations 3)
+
+(defn skips
+  "The escalation steps this call does not take: those that failed (memory :skipped-steps) and those of the ways it
+  does not allow."
+  [c]
+  (into (:skipped-steps (ctx/mem c) #{}) (ways/barred-steps c)))
 
 (def escalate-reasons
   "Planner reasons that prove the way needs the world changed. A stuck or off-plan walk is the walker's fault and
@@ -47,14 +55,13 @@
   "Whether a give-up with result is a way that dives (:way-dives) that go-to may climb out of by a stair (c :dive-stair,
   the setting)."
   [c result]
-  (boolean (and (:dive-stair c) (= :way-dives (some-> (:reason result) keyword)))))
+  (boolean (and (:dive-stair c) (ways/way? c :stair) (= :way-dives (some-> (:reason result) keyword)))))
 
 (defn shelter-exit?
   "Whether a give-up with result may leave the body's own shelter instead: the walk proved the way needs the world
   changed, the body is shut in its shelter and it is not night (dig-in-leave/leave-unsafe)."
   [c result]
-  (boolean (and (:escalate (:args c))
-                (not (contains? (:skipped-steps (ctx/mem c) #{}) :leave-shelter))
+  (boolean (and (not (contains? (skips c) :leave-shelter))
                 (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
                 (sh/sheltered-in c)
                 (nil? (dig-leave/leave-unsafe (:primitives c))))))
@@ -68,14 +75,23 @@
     :pillar ['jobs.access.pillar {:height (:height e) :item (:item e) :ignore-zones? ignore-zones?}]
     :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :accept #{:falling-block} :fetch false :spent-ok true :ignore-zones? ignore-zones? :by-hand by-hand? :spare-own-builds spare-own?}]
     :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones? :by-hand by-hand? :spare-own-builds spare-own?}]
-    :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :escalate false}]
+    :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :any-of [(:item e)] :fetch false :ignore-zones? ignore-zones?}]))
 
-(defn succeeded? [{:keys [step]} result]
-  (case step
-    :approach (true? (:arrived result))
-    :fill-gap (boolean (:placed result))
-    (= :done (:status result))))
+(defn succeeded? [{:keys [step]} e]
+  (and (= :done (:kind e))
+       (case step
+         :approach (true? (:arrived (:data e)))
+         :fill-gap (boolean (:placed (:data e)))
+         true)))
+
+(defn stop-detail
+  "What a child's ending e says of why it stopped, as an escalation detail: the cause's fields, its :reason (the
+  cause's key) and the child's own result fields that name the place or the wait."
+  [e]
+  (merge (when (map? (:cause e)) (:cause e))
+         (select-keys (:data e) [:why :cell :block :at :short :detail :wait])
+         {:reason (contract/cause-key e)}))
 
 (defn spare-own?
   "Whether go-to keeps off the plans this body made (arg :spare-own-builds, default true)."
@@ -209,7 +225,7 @@
   walk space (a cap the body put there) is cleared before any other way is cut, its floors are not. nil once it failed
   this call (memory :own-way-done) and on a climb away from a dive (climb/own-route chose the way there)."
   [c feet goal]
-  (when (and (> (second goal) (second feet)) (not-any? (ctx/mem c) [:own-way-done :dive-climb]))
+  (when (and (> (second goal) (second feet)) (ways/way? c :stair) (not-any? (ctx/mem c) [:own-way-done :dive-climb]))
     (climb/recut feet (ledger/ways-of c))))
 
 (defn ^:async escalate!
@@ -226,7 +242,7 @@
         n (:fruitless counted)
         _ (when (<= n max-escalations) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        opts {:own? (own-placed-fn c) :skip (:skipped-steps (ctx/mem c) #{})}
+        opts {:own? (own-placed-fn c) :skip (skips c)}
         e (or (when (shelter-exit? c result) {:step :leave-shelter})
               (gap-fill c result (:skip opts))
               (own-stair c feet goal)
@@ -275,9 +291,9 @@
         cave (when (:dive-stair c) (:cave-floor c))
         back (:own-floor c)
         cheaper? (and (not (:stair-tried m)) (>= (- (second goal) (second feet)) stair-first-rise))
-        stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (:skipped-steps m #{})})]
+        stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c)})]
                        (when (= :stair (:step e)) e)))]
-    (when (and (:escalate (:args c)) (not (sh/sheltered-in c)) (or cave cheaper? back))
+    (when (and (ways/way? c :stair) (not (sh/sheltered-in c)) (or cave cheaper? back))
       (fn [{:keys [status steps ^js r]} first?]
         (let [seconds (some-> r .-path .-cost .-priced)]
           (cond
@@ -300,7 +316,7 @@
   a go-to.escalated {:step :stair :why :own-way-blocked}: :again, nil when no stair of its own leads up from there."
   [c]
   (let [feet (end/feet-cell c)]
-    (when-let [e (and (:escalate (:args c)) (climb/recut feet (ledger/ways-of c)))]
+    (when-let [e (and (ways/way? c :stair) (climb/recut feet (ledger/ways-of c)))]
       (ctx/emit! c :go-to.escalated :info {:step :stair :why :own-way-blocked :at feet :heading (:heading e) :steps (:steps e)
                                            :text "its own stair up is blocked: cutting it again"})
       (ctx/update-mem! c assoc :escalation e :escalation-from feet :planned [] :holes-before (count (own-holes c)))
@@ -321,10 +337,10 @@
   is a wall). Never out of
   the body's own shelter: it is shut in on purpose."
   [c result]
-  (and (:escalate (:args c))
+  (and (ways/escalating? c)
        (or (shelter-exit? c result) (not (sh/sheltered-in c)))
        (or (shelter-exit? c result)
-           (some? (gap-fill c result (:skipped-steps (ctx/mem c) #{})))
+           (some? (gap-fill c result (skips c)))
            (sprint-only? result)
            (dive? c result)
            (and (escalate-reason? result (some-> (:doors (:args c)) keyword))
@@ -448,23 +464,19 @@
       :else (escalation-failed! c pos {:step :leave-shelter :reason (:reason r) :why (:why r)}))))
 
 (defn ^:async escalation-child-round!
-  "One call of the escalation child: the whole pillar, stair or door. After it, every planned cell now dug is in the
-  ledger (note-holes!). Its wait or its failure gives up, with the child's reason, unless it got part of the way."
+  "One call of the escalation child (ctx/call): the whole pillar, stair or door. After it, every planned cell now dug
+  is in the ledger (note-holes!). A child that ends other than done gives up, with its cause, unless it got part of
+  the way."
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
-        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (spare-own? c))]
-    (if-let [wait (b/child-wait c :escalation job args)]
-      (escalation-failed! c pos (merge {:step step} wait))
-      (let [_ (await (torch/return-torch! c))
-            r (await (ctx/call-child c :escalation job args))
-            res (ctx/child-result c :escalation)]
-        (when-not (:own e) (note-holes! c (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug res)))))
-        (cond
-          (= :continue r) :continue
-          (= :declined r) (escalation-failed! c pos {:step step :reason :not-ready})
-          (succeeded? e res) (escalated! c pos e true)
-          :else (escalation-failed! c pos (merge {:step step}
-                                                 (select-keys res [:reason :why :cell :block :at :short :detail :wait]))))))))
+        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (spare-own? c))
+        _ (await (torch/return-torch! c))
+        r (await (ctx/call c :escalation job args))]
+    (when-not (:own e) (note-holes! c (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug (:data r))))))
+    (cond
+      (= :continue r) :continue
+      (succeeded? e r) (escalated! c pos e true)
+      :else (escalation-failed! c pos (merge {:step step} (stop-detail r))))))
 
 (defn ^:async escalation-round!
   "One round of the escalation: leaving the shelter, or the child's call (escalation-child-round!)."
@@ -511,8 +523,8 @@
 (defn ^:async restore-round!
   "Put back the next hole this job's escalations dug (own-holes, each in another's zone, claim or plan: undoing the
   trespass, so the place ignores zones), lowest first, with jobs.blocks.place (the dug block or what it drops), one
-  child call each. It runs once the body got on past the escalation (restore-next!). A hole
-  skip-why refuses, or the place child would wait on (nothing to place), stays in the ledger for restore-broken (a
+  child call each (ctx/call). It runs once the body got on past the escalation (restore-next!). A hole skip-why
+  refuses, or the place child ends without placing (nothing to place), stays in the ledger for restore-broken (a
   :changed one is forgotten). A placed one is forgotten."
   [c]
   (let [p (:primitives c)
@@ -531,16 +543,12 @@
                       (done! :skipped {:cell cell :block was :why why})))]
         (if-let [why (skip-why c e)]
           (skip! why)
-          (if-let [wait (b/child-wait c :restore 'jobs.blocks.place args)]
-            (skip! (:reason wait))
-            (let [_ (await (torch/return-torch! c))
-                  r (await (ctx/call-child c :restore 'jobs.blocks.place args))
-                  res (ctx/child-result c :restore)]
-              (cond
-                (= :continue r) :continue
-                (= :declined r) (skip! (:reason (b/child-wait c :restore 'jobs.blocks.place args) :declined))
-                (:placed res) (do (tidy/forget-cell! c cell) (note-placed! c cell) (done! :restored cell))
-                :else (skip! (:reason res))))))))))
+          (let [_ (await (torch/return-torch! c))
+                r (await (ctx/call c :restore 'jobs.blocks.place args))]
+            (cond
+              (= :continue r) :continue
+              (:placed (:data r)) (do (tidy/forget-cell! c cell) (note-placed! c cell) (done! :restored cell))
+              :else (skip! (contract/cause-key r)))))))))
 
 (defn restore-next!
   "The body got on past an escalation (a walk round that arrived or made progress): put back its holes next round

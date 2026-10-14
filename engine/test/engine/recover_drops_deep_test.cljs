@@ -8,7 +8,7 @@
             [engine.library-test :refer [setup]]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [run-until-empty]]
-            [jobs.lib.result :as r]))
+            [jobs.movement.go-to.result :as end]))
 
 (def pile-pos {:x 20 :y 50 :z 0})
 
@@ -128,7 +128,7 @@
                                                (await ((:round real) c))
                                                (do (swap! calls conj (:args c))
                                                    (swap! (fake/state p) assoc-in [:self :pos] (get at (dec (count @calls))))
-                                                   (r/finish! c {:arrived false :leg true}))))))]
+                                                   (end/finish! c {:arrived false :leg true}))))))]
       (die! eng {:pos pile-at :inventory pile} 5000)
       (core/submit! eng job {})
       (await (run-until-empty eng 40))

@@ -1,5 +1,5 @@
 (ns jobs.movement.go-to.result
-  "How a go-to call ends: hand the result over, give up with the planner's reason in words, refuse."
+  "How a go-to call ends: its ending, a give-up with the planner's reason in words, a refusal."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.movement.go-to.headroom :as headroom]
@@ -19,15 +19,37 @@
          (or (and (= :no-path status) (contains? #{nil :exhausted :goal-unloaded :start-enclosed} (some-> reason keyword)))
              (and (= :off-plan status) partial)))))
 
+(def why-kinds
+  "The ending kind of a give-up by its :why, when not :nothing-possible: a fact about the goal, or a bound of the call."
+  {:goal-dangerous :condition-failed :goal-unloaded :condition-failed
+   :needs-health :limit-reached :leg-search-spent :limit-reached :explore-spent :limit-reached})
+
+(def why-lines "The limit line of a limit-reached give-up." {:needs-health :health :leg-search-spent :time})
+
+(def refusal-kinds "The ending kind of a refusal other than :condition-failed." {:no-way :nothing-possible})
+
+(defn ending
+  "The ending of result, the call's result map: arrived (or a leg walked) is :done; a give-up (:reason :unreachable) is
+  of the kind its :why maps to (why-kinds, else :nothing-possible) with the cause {:reason :unreachable :why ..} (and
+  :line for a limit); a refusal is :condition-failed (refusal-kinds aside) with its reason as the cause. The result
+  less :status and :reason is the ending's data, so an old caller (child-result) reads what it read before."
+  [c {:keys [status reason why] :as result}]
+  (let [data (dissoc result :status :reason)]
+    (cond
+      (not= :stopped status) (ctx/end c :done nil data)
+      (not= :unreachable reason) (ctx/end c (refusal-kinds reason :condition-failed) reason data)
+      :else (ctx/end c (why-kinds why :nothing-possible)
+                     (cond-> {:reason :unreachable :why why} (why-lines why) (assoc :line (why-lines why)))
+                     data))))
+
 (defn finish!
-  "Hand result over (ctx/result!), emit it as a :result info event (its :kind is the event's :refused-kind: an event's own
-  :kind is what it is), end the job. What the walk placed (torches) is added as :spent and :spent-at."
+  "Emit result as a :result info event (its :kind is the event's :refused-kind: an event's own :kind is what it is) and
+  end the call with its ending. What the walk placed (torches) is added as :spent and :spent-at."
   [c result]
   (let [result (merge result (some-> (spent/log c) spent/summary))]
-    (ctx/result! c result)
     (ctx/emit! c :result :info (cond-> (dissoc result :kind)
                                  (:kind result) (assoc :refused-kind (:kind result))))
-    :done))
+    (ending c result)))
 
 (defn feet-cell [c]
   (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]

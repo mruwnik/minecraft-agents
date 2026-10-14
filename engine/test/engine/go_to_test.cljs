@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.expr :as expr]
@@ -48,14 +49,24 @@
                            shared (assoc :world shared)))]
     {:eng eng :p p :seen seen})))
 
+(defn result-of
+  "go-to's ending e as the result map it handed over before the contract: its data, and for a stop :status :stopped
+  and the cause's :reason. The ending is its meta :ending."
+  [e]
+  (with-meta (if (= :done (:kind e))
+               (:data e)
+               (assoc (:data e) :status :stopped :reason (contract/cause-key e)))
+    {:ending e}))
+
 (defn recording-parent
-  "A parent that runs go-to with args as its child and keeps the child's result in out."
+  "A parent that runs go-to with args as its child (ctx/call) and keeps the child's result (result-of) in out."
   [out args]
   {:check (constantly true)
    :round (fn ^:async recording-round [c]
-            (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to args))]
-              (when (= :done r) (reset! out (ctx/child-result c :kid)))
-              r))})
+            (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
+              (if (= :continue e)
+                :continue
+                (do (reset! out (result-of e)) :done))))})
 
 (defn ^:async tick-out!
   "Tick until the list is empty, at most n ticks; the ticks used."
@@ -152,6 +163,25 @@
                  (mapv #(select-keys % [:tries :why :refused-kind]) (events-of s :unreachable))))
           (is (= [{:status :stopped :arrived false :reason :unreachable :why :abilities :refused-kind :gap-up}]
                  (mapv #(select-keys % [:status :arrived :reason :why :refused-kind]) (events-of s :result)))))))))
+
+(deftest an-old-caller-reads-the-result-it-read-before
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[world args want] [[{:blocks flat} {:pos [10 64 0]} {:status :done :arrived true}]
+                                   [(assoc gap-up-world :self {:pos {:x 0 :y 64 :z 1}}) {:pos [10 65 1]}
+                                    {:status :stopped :arrived false :reason :unreachable :why :abilities :kind :gap-up}]]]
+          (let [{:keys [eng]} (setup world)
+                out (atom :not-done)
+                parent {:check (constantly true)
+                        :round (fn ^:async old-round [c]
+                                 (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to args))]
+                                   (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                   r))}
+                eng (assoc eng :jobs (assoc (:jobs eng) 'old-parent parent))]
+            (core/submit! eng '(old-parent) {})
+            (await (tick-out! eng 30))
+            (is (= want (select-keys @out (keys want))) (pr-str @out))))))))
 
 (deftest a-top-level-go-to-that-gives-up-or-refuses-is-stopped-not-completed
   (async done
@@ -558,9 +588,10 @@
    :round (fn ^:async returns-round [c]
             (when (and seed (empty? @returns) (nil? (get-in (ctx/mem c) [:children :kid])))
               (ctx/update-mem! c assoc-in [:children :kid] (merge {:args args :children {}} seed)))
-            (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to args))]
+            (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))
+                  r (if (= :continue e) :continue :done)]
               (swap! returns conj r)
-              (when (= :done r) (reset! out (ctx/child-result c :kid)))
+              (when (= :done r) (reset! out (result-of e)))
               r))})
 
 (defn ^:async go-returns!

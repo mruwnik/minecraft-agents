@@ -5,6 +5,7 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.go-to-test :as gt]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [box floor]]
@@ -49,9 +50,8 @@
          out (atom :not-done)
          parent {:check (constantly true)
                  :round (fn ^:async recording-round [c]
-                          (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to args))]
-                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                            r))}
+                          (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
+                            (if (= :continue e) :continue (do (reset! out (gt/result-of e)) :done))))}
          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
      (core/submit! eng '(recording-parent) {})
      (await (tick-out! eng clock 40))
@@ -603,9 +603,8 @@
                 out (atom :not-done)
                 parent {:check (constantly true)
                         :round (fn ^:async sealed-round [c]
-                                 (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :escalate false}))]
-                                   (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                   r))}
+                                 (let [e (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :escalate false}))]
+                                   (if (= :continue e) :continue (do (reset! out (gt/result-of e)) :done))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
             (ledger/write! (:store eng) entries)
             (core/submit! eng '(recording-parent) {})
@@ -625,9 +624,8 @@
                 out (atom :not-done)
                 parent {:check (constantly true)
                         :round (fn ^:async plug-round [c]
-                                 (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :escalate false}))]
-                                   (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                   r))}
+                                 (let [e (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :escalate false}))]
+                                   (if (= :continue e) :continue (do (reset! out (gt/result-of e)) :done))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
             (ledger/write! (:store eng) entries)
             (core/submit! eng '(recording-parent) {})

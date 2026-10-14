@@ -22,7 +22,7 @@
    :jobs.movement.go-to.settings/dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}
    :jobs.movement.go-to.settings/climb-rise {:default 16 :doc "Blocks a goal must lie above a body under ground for its go-to to plan no dive (:jobs.movement.go-to.settings/climb-dip)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.settings/climb-dip {:default 24 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (:jobs.movement.go-to.settings/climb-rise) may plan; a way that dives deeper is not walked (:way-dives)." :spec (a/num-in 0 nil)}
-   :jobs.movement.go-to.settings/climb-stair {:default true :doc "Whether a go-to that would give up :way-dives cuts a stair up instead (its escalation, when :escalate allows)." :spec boolean?}
+   :jobs.movement.go-to.settings/climb-stair {:default true :doc "Whether a go-to that would give up :way-dives cuts a stair up instead (its escalation, when the call allows :stair)." :spec boolean?}
    :jobs.movement.go-to.settings/night-wait-ms {:default 1000 :doc "Milliseconds a go-to waits before it yields :continue while it holds for day inside a shelter." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.settings/plug-wait-ms {:default 180000 :doc "Milliseconds a go-to shut in by its retreat plug holds for a known hostile (:sealed-hostile-near) before it walks on as without the hold." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.settings/plug-wait-min-food {:default 6 :doc "Food at or under which a go-to shut in by its retreat plug no longer holds for a hostile: starving beats waiting." :spec (a/num-in 0 20)}

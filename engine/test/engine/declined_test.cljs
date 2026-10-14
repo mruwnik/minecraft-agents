@@ -170,8 +170,8 @@
           (is (nil? (await (wait))) "a passing check waits on nothing"))))))
 
 (def night-walker
-  {:check (fn [c] (if (:report-wait c) (ctx/wait c {:reason :night-sheltered}) true))
-   :round (fn ^:async w [_] :continue)})
+  {:check (constantly true)
+   :round (fn ^:async w [c] (ctx/update-mem! c assoc :hold :night-sheltered) :continue)})
 
 (deftest a-walk-that-waits-on-the-world-holds-still-with-its-reason
   (async done

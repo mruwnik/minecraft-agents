@@ -18,14 +18,13 @@
   (js/Promise. (fn [resolve] (js/setTimeout resolve pace-ms))))
 
 (defn ^:async walk-reason
-  "call-walk-reason with the child call fn (ctx/call-child, or ctx/call for the ending-returning versions)."
+  "call-walk-reason with the child call fn (ctx/call-child, or ctx/call for the ending-returning versions): the reason
+  is the :hold the go-to child keeps in its memory while it yields."
   [call c slot args]
   (let [r (await (call c slot 'jobs.movement.go-to args))
-        w (atom nil)]
-    (when (= :continue r)
-      (ctx/check-child (assoc c :wait w :report-wait true) slot 'jobs.movement.go-to args)
-      (when-let [reason (some-> @w :reason)] (ctx/hold-still! c reason)))
-    [r (some-> @w :reason)]))
+        reason (when (= :continue r) (get-in (ctx/mem c) [:children slot :hold]))]
+    (when reason (ctx/hold-still! c reason))
+    [r reason]))
 
 (defn call-walk-reason
   "call-walk, resolving to [result reason]: reason is what go-to waits on (:night-sheltered) when it yielded :continue, else nil."

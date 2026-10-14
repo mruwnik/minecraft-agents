@@ -72,7 +72,7 @@
               id (core/submit! eng (list 'jobs.movement.go-to {:pos [15 64 0]}) {})]
           (await (ticks eng 6))
           (is (= inside (st/pos-of p)) "the body stays in")
-          (is (= {:reason :night-sheltered :shelter :room} (select-keys (waiting-of eng id) [:reason :shelter])))
+          (is (= {:reason :night-sheltered :shelter :room} (let [w (waiting-of eng id)] {:reason (:reason w) :shelter (:shelter (:cause w))})))
           (is (seq (:list (core/state eng))) "the go-to is still listed")
           (.setTime (.-world p) st/noon)
           (await (tu/run-until-empty eng 40))

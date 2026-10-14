@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.go-to-test :as gt]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
@@ -35,9 +36,8 @@
   [out job args]
   {:check (constantly true)
    :round (fn ^:async recording-round [c]
-            (let [r (await (ctx/call-child c :kid job args))]
-              (when (= :done r) (reset! out (ctx/child-result c :kid)))
-              r))})
+            (let [e (await (ctx/call c :kid job args))]
+              (if (= :continue e) :continue (do (reset! out (gt/result-of e)) :done))))})
 
 (defn ^:async tick-out! [eng n]
   (loop [i 0]
@@ -338,6 +338,21 @@
           (is (re-find #"shut in" (:text @out)) "and so does the text, not 'no walkable way'")
           (is (empty? (events-of seen :go-to.escalated))))))))
 
+(deftest go-to-escalates-only-by-the-ways-its-call-allows
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]})
+                                                  {:pos [10 64 0] :range 1 :ways #{:walk :stair}}))]
+          (is (true? (:arrived @out)))
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))) "no pillar, though it carries the blocks"))
+        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
+                                                    {:pos [10 64 0] :range 1 :ways #{:walk :pillar}}))]
+          (is (= false (:arrived @out)))
+          (is (re-find #"shut in" (:text @out)) "too few blocks to pillar and no stair allowed")
+          (is (empty? (calls p "dig")))
+          (is (empty? (events-of seen :go-to.escalated))))))))
+
 (deftest a-walk-on-open-ground-is-not-called-shut-in
   (async done
     (tu/run-async done
@@ -355,7 +370,7 @@
         (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "10,64,0" "dirt")
                                                                :inventory [{:name "dirt" :count 5}]})
                                                 'jobs.blocks.dig {:pos [10 64 0]}))]
-          (is (= :not-done @out) "the dig waits: it cannot reach the cell")
+          (is (= {:status :stopped :reason :unreachable} (select-keys @out [:status :reason])) "the dig cannot reach the cell")
           (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :escalate false")
           (is (empty? (calls p "jumpPlace"))))))))
 
@@ -845,20 +860,18 @@
 
 ;; ------------------------------------------------------------------ rounds follow-ups (card be8f7a88)
 
-(deftest a-put-back-that-declines-at-the-call-is-skipped-and-stays-in-the-ledger
+(deftest a-put-back-whose-place-fails-its-condition-is-skipped-and-stays-in-the-ledger
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [calls* (atom 0)
-              place (get registry/jobs 'jobs.blocks.place)
-              ;; the wait pre-check passes (odd calls), the child's own check declines (even calls)
-              flaky (assoc place :conditions [[:fn (fn [_] (when-not (odd? (swap! calls* inc)) :flaky))]])
+        (let [place (get registry/jobs 'jobs.blocks.place)
+              flaky (assoc place :conditions [[:fn (constantly :flaky)]])
               {:keys [out p seen eng]} (with-redefs [registry/jobs (assoc registry/jobs 'jobs.blocks.place flaky)]
                                          (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
                                                           'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign)))
               skipped (:cells (first (events-of seen :go-to.restore-skipped)))]
           (is (= {:arrived true} @out))
-          (is (some #{:declined} (map :why skipped)) "a declined child is a skip with the reason :declined")
+          (is (= #{:flaky} (set (map :why skipped))) "a skip with the place's cause")
           (is (= [[1 62 0] [1 63 0] [2 63 0]] (sort (mapv :cell skipped))) "every hole is left for restore-broken")
           (is (= "air" (block p [1 62 0])) "nothing was put back"))))))
 

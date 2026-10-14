@@ -1,6 +1,6 @@
 (ns engine.movement-contract-test
-  "movement.follow, linger-near, mount, leave-vehicle and boat-drive as contract jobs: they export the contract, quote
-  validly, and end with a kind and a cause."
+  "movement.go-to, follow, linger-near, mount, leave-vehicle and boat-drive as contract jobs: they export the contract,
+  quote validly, and end with a kind and a cause."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -9,7 +9,8 @@
             [engine.test-util :as tu]
             [jobs.lib.world-files :as world]
             [jobs.movement.boat-drive :as boat-drive]
-            [jobs.movement.follow :as follow]))
+            [jobs.movement.follow :as follow]
+            [jobs.movement.go-to :as go-to]))
 
 (defn job [sym] (get registry/jobs sym))
 
@@ -36,8 +37,10 @@
   (is (= {:pos [1 63 1] :spend {:time 9}} (boat-drive/legacy-args {:pos [1 63 1] :max-s 9}))))
 
 (defn ^:async ending-of
-  "Submit spec over a fake world and tick until the job ends: {:event :completed|:stopped :kind :reason}."
-  [world spec]
+  "Submit spec over a fake world and tick until the job ends: {:event :completed|:stopped :kind :reason}, plus the
+  event's data keys ks."
+  ([world spec] (ending-of world spec []))
+  ([world spec ks]
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
         p (tu/seeing-all (tu/fake-on-floor world))
@@ -53,7 +56,7 @@
         (recur (inc i))))
     (let [e (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
       (core/shutdown! eng)
-      (assoc (select-keys (:data e) [:kind :reason]) :event (:kind e)))))
+      (assoc (select-keys (:data e) (into [:kind :reason] ks)) :event (:kind e))))))
 
 (def steve {:id 5 :name "Steve" :kind "player" :pos {:x 1 :y 64 :z 0}})
 (def boat {:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 1.5 :y 64 :z 0.5}})
@@ -107,3 +110,32 @@
                  ["out of strokes" {:blocks lake :entities [(assoc boat :pos {:x 2.5 :y 63.5 :z 2.5})] :self {:vehicle 9}} {:pos [18 63 18] :max-strokes 2} :nothing-possible :strokes]]]
           (is (= {:event :stopped :kind kind :reason reason}
                  (await (ending-of world (list 'jobs.movement.boat-drive args)))) label))))))
+
+(deftest go-to-exports-the-contract
+  (let [j (job 'jobs.movement.go-to)]
+    (is (some? (:conditions j)))
+    (is (nil? (:check j)) "no old check")
+    (is (= [:pos :place] (:target j)) "a go-to may call go-to to another place")
+    (is (= [:walk :clear-path :pillar :stair :dig-out] (:ways j)))))
+
+(deftest go-to-old-escalate-becomes-the-ways
+  (is (= {:pos [1 64 1] :ways #{:walk}} (go-to/legacy-args {:pos [1 64 1] :escalate false})))
+  (is (= {:pos [1 64 1]} (go-to/legacy-args {:pos [1 64 1] :escalate true})))
+  (is (= {:pos [1 64 1] :ways #{:walk :stair}} (go-to/legacy-args {:pos [1 64 1] :escalate false :ways #{:walk :stair}}))
+      "ways given win"))
+
+(deftest go-to-endings
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :completed}
+               (select-keys (await (ending-of {} '(jobs.movement.go-to {:pos [5 64 0]}))) [:event])))
+        (is (= {:event :stopped :kind :condition-failed :reason :unknown-place}
+               (await (ending-of {} '(jobs.movement.go-to {:place :nowhere})))))
+        (is (= {:event :stopped :kind :nothing-possible :reason :no-way}
+               (await (ending-of {} '(jobs.movement.go-to {:pos [5 64 0] :ways #{:stair}}))))
+            "a call that may not walk")
+        (let [e (await (ending-of {:unreachable ["5,64,0"]} '(jobs.movement.go-to {:pos [5 64 0] :range 0}) [:cause]))]
+          (is (= {:event :stopped :kind :nothing-possible :reason :unreachable} (dissoc e :cause)))
+          (is (= :unreachable (:reason (:cause e))) (pr-str e))
+          (is (keyword? (:why (:cause e))) "the planner's reason"))))))
