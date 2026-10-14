@@ -23,7 +23,7 @@
   {:name "on-foot-is-not-aboard"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-drive {:pos #at [23 -1 16]})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :not-aboard}} :within-s 30 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :not-aboard}} :within-s 30 :of-job true}]}
   {:name "target-is-not-water"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]

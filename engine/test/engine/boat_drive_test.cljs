@@ -61,13 +61,13 @@
           (let [{:keys [res]} (await (run world args))]
             (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
 
-(deftest on-foot-or-without-a-cell-the-call-is-refused
-  (let [c (fn [p args] {:primitives p :args args :view (fn [] {:data {:entries {}} :now 0})})
-        foot (tu/fake {:blocks lake :entities [(boat-at 2.5 2.5)]})
-        aboard (tu/fake {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}})]
-    (is (= :not-aboard (boat-drive/not-aboard (c foot {:pos [10 63 2]}))))
-    (is (nil? (boat-drive/not-aboard (c aboard {:pos [10 63 2]}))))
-    (is (= :bad-args (boat-drive/bad-args (c aboard {}))))))
+(deftest on-foot-ends-not-aboard-at-once-and-never-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res seen]} (await (run {:blocks lake :entities [(boat-at 2.5 2.5)]} {:pos [10 63 2]}))]
+          (is (= {:status :stopped :reason :not-aboard} (select-keys res [:status :reason])) (pr-str res))
+          (is (empty? (filterv #(= :waiting (:kind %)) @seen))))))))
 
 (deftest blocked-boat-stays-on-the-water
   (async done

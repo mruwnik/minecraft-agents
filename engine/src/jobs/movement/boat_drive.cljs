@@ -15,9 +15,9 @@
   A cell the body has not sensed is looked at first; one it still cannot make out is steered toward all the same, looked at again from each
   new cell on the way, and judged once it is made out (a boat that gets there on a cell never made out is done). Every key is released at the end of a stroke and by a cut.
 
-  Conditions: :bad-args, and at the start :not-aboard (on foot: jobs.movement.boat-launch puts the body in a boat).
+  Conditions: :bad-args. On foot it ends at once (never waits): jobs.movement.boat-launch puts the body in a boat.
   Ends done (data {:pos {:x :y :z} :strokes n}), info boat.driven, or
-  condition-failed: :not-aboard (got out on the way), :not-a-boat (another vehicle), :not-water (the cell is not water), or
+  condition-failed: :not-aboard (on foot at the start, or got out on the way), :not-a-boat (another vehicle), :not-water (the cell is not water), or
   nothing-possible: :blocked (land in the way: two forward strokes in a row that could not move), :strokes (:max-strokes used up),
   :failed (any other paddle status, data :primitive); limit-reached :time (the call's :spend :time used up, data the distance left).
 
@@ -58,12 +58,7 @@
   [c]
   (when-not (cell-of-call c) :bad-args))
 
-(defn not-aboard
-  "At the call's start: the cause :not-aboard when the body is on foot."
-  [c]
-  (when-not (or (ctx/frozen-call c) (vehicle/mounted? (:primitives c))) :not-aboard))
-
-(def conditions [[:fn bad-args] [:fn not-aboard]])
+(def conditions [[:fn bad-args]])
 
 (defn left-of
   "Blocks (horizontally) from the vehicle to the middle of the cell, or nil when not aboard."
@@ -120,7 +115,7 @@
         stop! (fn [kind reason & [data]] (ctx/end c kind reason data))]
     (cond
       (nil? cell) (stop! :condition-failed :bad-args)
-      (not (vehicle/mounted? p)) (stop! :condition-failed :not-aboard)
+      (not (vehicle/mounted? p)) (stop! :condition-failed {:reason :not-aboard :hint "board a boat first, e.g. mount"})
       :else
       (do
         (vehicle/hold! c)
