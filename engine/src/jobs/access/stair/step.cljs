@@ -104,7 +104,7 @@
   [c in cell cut accept]
   (let [p (:primitives c)
         block ((:block-at in) cell)
-        tries (get-in (ctx/mem c) [:tries cell] 0)]
+        tries (get-in (ctx/mem c) [:cell-tries cell] 0)]
     (cond
       (>= tries (if (rules/falling? block) (sset/max-fall-digs) (sset/max-cell-digs))) (cond-> {:reason :refills :cell cell :block block}
                                    (not (rules/falling? block))
@@ -131,7 +131,7 @@
             (do
               ;; a waiting child is resumed on the same cell: only the first round of a dig counts a try
               (ctx/update-mem! c #(cond-> (assoc % :digging {:cell cell :block block} :counted cell)
-                                    (not= cell (:counted %)) (update-in [:tries cell] (fnil inc 0))))
+                                    (not= cell (:counted %)) (update-in [:cell-tries cell] (fnil inc 0))))
               (let [[x y z] cell
                     outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :lava-adjacent :falling-block}
                                                                          :on-lava :leave :ignore-zones? true}))]

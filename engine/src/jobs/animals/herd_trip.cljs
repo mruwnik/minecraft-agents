@@ -47,13 +47,13 @@
         pen-keys (into #{} (comp (filter in-pen?) (map animals/key-of)) near)]
     (-> (vec (keys (:given-up (ctx/mem c))))
         (into (comp (filter skip?) (map animals/key-of)) near)
-        (into (tired-keys (:tries (ctx/mem c)) pen-keys)))))
+        (into (tired-keys (:animal-tries (ctx/mem c)) pen-keys)))))
 
 (defn start-trip!
   "The animal k is with the body (on its lead, or following its food): its trip to the gate starts."
   [c k]
   (set-phase! c :approach {:animal k :led [k] :animal-started (ctx/now c)
-                           :tries (update (:tries (ctx/mem c)) k (fnil inc 0))
+                           :animal-tries (update (:animal-tries (ctx/mem c)) k (fnil inc 0))
                            :pos-index 0 :backs 0 :retried false :deepest-tried false}))
 
 (defn ^:async lead-next!

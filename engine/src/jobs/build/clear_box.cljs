@@ -111,7 +111,7 @@
 (defn started?
   "Whether a round has left anything in memory (dug, skipped, tried or started on a cell)."
   [c]
-  (boolean (some #(contains? (ctx/mem c) %) [:dug :skipped :tries :target])))
+  (boolean (some #(contains? (ctx/mem c) %) [:dug :skipped :cell-tries :target])))
 
 (defn decline-box!
   "Warn once clear-box.declined {:reason :bad-args} naming the box's problem; waits with it."
@@ -149,10 +149,10 @@
                                                  :text (str "left " (count refused) " cells: " (access/refusal-text fields))))))
 
 (defn bump! [c pos reason]
-  (let [n (inc (get-in (ctx/mem c) [:tries pos] 0))]
+  (let [n (inc (get-in (ctx/mem c) [:cell-tries pos] 0))]
     (if (>= n (max-tries))
       (skip! c pos reason)
-      (ctx/update-mem! c assoc-in [:tries pos] n))))
+      (ctx/update-mem! c assoc-in [:cell-tries pos] n))))
 
 (defn under-foot
   "The set of cells the body stands on or in: the cell below its feet, and its
@@ -228,8 +228,8 @@
       (let [res (ctx/child-result c :dig)]
         (ctx/update-mem! c dissoc :target)
         (case (:reason res)
-          :dug (ctx/update-mem! c #(-> % (update :tries dissoc t) (update :dug (fnil inc 0))))
-          :already-clear (ctx/update-mem! c update :tries dissoc t)
+          :dug (ctx/update-mem! c #(-> % (update :cell-tries dissoc t) (update :dug (fnil inc 0))))
+          :already-clear (ctx/update-mem! c update :cell-tries dissoc t)
           (:cannot :fluid) (skip! c t :cannot)
           :unreachable (skip! c t :unreachable)
           (bump! c t :refused))

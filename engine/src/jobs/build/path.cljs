@@ -86,7 +86,7 @@
   (gate/allowed? c :path.declined "path" action pos {}))
 
 (defn started? [c]
-  (boolean (some #(contains? (ctx/mem c) %) [:pathed :skipped :tries])))
+  (boolean (some #(contains? (ctx/mem c) %) [:pathed :skipped :cell-tries])))
 
 (defn refused-all
   "The refusals when every pathable pending cell is refused by a zone, claim or plan, else nil."
@@ -128,10 +128,10 @@
 (defn bump!
   "Count a failed try on pos; at max-tries skip it with reason."
   [c pos reason]
-  (let [n (inc (get-in (ctx/mem c) [:tries pos] 0))]
+  (let [n (inc (get-in (ctx/mem c) [:cell-tries pos] 0))]
     (if (>= n (max-tries))
       (skip! c [pos] reason)
-      (ctx/update-mem! c assoc-in [:tries pos] n))))
+      (ctx/update-mem! c assoc-in [:cell-tries pos] n))))
 
 (defn cover-args
   "The jobs.blocks.dig args for the ground cover at pos: no tool needed, the drop left."
@@ -165,7 +165,7 @@
         status (.-status r)]
     (cond
       (and (= "used" status) (= "dirt_path" (some-> (.-after r) .-name)))
-      (ctx/update-mem! c #(-> % (update :pathed (fnil conj #{}) target) (update :tries dissoc target)))
+      (ctx/update-mem! c #(-> % (update :pathed (fnil conj #{}) target) (update :cell-tries dissoc target)))
 
       (= "missing" status) (skip! c [target] :gone)
       (= "no-item" status) (bump! c target :no-shovel)

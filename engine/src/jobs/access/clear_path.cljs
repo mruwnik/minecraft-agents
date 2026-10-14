@@ -148,12 +148,12 @@
       (escape/protected? block) (finish! c :protected {:cell cell :block block})
       (own-build c cell) (finish! c :footprint {:cell cell :block block :plan (:plan (own-build c cell))})
       (and (not (:started (:digging (ctx/mem c))))
-           (>= (get-in (ctx/mem c) [:tries cell] 0) (max-cell-digs)))
+           (>= (get-in (ctx/mem c) [:cell-tries cell] 0) (max-cell-digs)))
       (finish! c :refills {:cell cell :block block})
       :else
       (let [resumed? (:started (:digging (ctx/mem c)))
             _ (ctx/update-mem! c #(cond-> (assoc-in % [:digging :started] true)
-                                    (not resumed?) (update-in [:tries cell] (fnil inc 0))))
+                                    (not resumed?) (update-in [:cell-tries cell] (fnil inc 0))))
             e (await (ctx/call c :dig 'jobs.blocks.dig args))]
         (cond
           (= :continue e) :continue

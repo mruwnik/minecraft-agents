@@ -126,7 +126,7 @@
 (defn started?
   "Whether a round has left anything in memory (tilled, skipped or tried a cell)."
   [c]
-  (boolean (some #(contains? (ctx/mem c) %) [:tilled :skipped :tries])))
+  (boolean (some #(contains? (ctx/mem c) %) [:tilled :skipped :cell-tries])))
 
 (defn survey
   "Walks cs in order, reading each cell once, and stops at the first cell the job may work. {:todo? any cell not
@@ -201,10 +201,10 @@
 (defn bump!
   "Count a failed try on pos; at max-tries skip it with reason."
   [c pos reason]
-  (let [n (inc (get-in (ctx/mem c) [:tries pos] 0))]
+  (let [n (inc (get-in (ctx/mem c) [:cell-tries pos] 0))]
     (if (>= n (max-tries))
       (skip! c [pos] reason)
-      (ctx/update-mem! c assoc-in [:tries pos] n))))
+      (ctx/update-mem! c assoc-in [:cell-tries pos] n))))
 
 (defn cover-args
   "The jobs.blocks.dig args for the ground cover at pos: no tool needed, the drop left, every dig hazard taken (a
@@ -298,7 +298,7 @@
                       status (.-status r)]
                   (cond
                     (and (= "used" status) (= "farmland" (some-> (.-after r) .-name)))
-                    (ctx/update-mem! c #(-> % (update :tilled (fnil conj #{}) target) (update :tries dissoc target)))
+                    (ctx/update-mem! c #(-> % (update :tilled (fnil conj #{}) target) (update :cell-tries dissoc target)))
 
                     (= "missing" status) (skip! c [target] :gone)
                     (= "no-item" status) (bump! c target :no-hoe)
