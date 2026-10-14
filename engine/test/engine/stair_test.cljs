@@ -250,6 +250,15 @@
   [x0 x1 y0 y1]
   (into {} (for [x (range x0 (inc x1)) y (range y0 (inc y1)) z (range -2 3)] [(str x "," y "," z) "stone"])))
 
+(deftest target-steps-y-behind-the-feet-depends-on-the-feet
+  (are [args here?] (= here? (boolean (:here (sc/target-steps args [0 65 0]))))
+    {:dir :down :heading :east :y 70} true
+    {:dir :up :heading :east :y 60} true
+    {:dir :down :heading :east :y 65} true
+    {:dir :down :heading :east} false
+    {:dir :level :heading :east :y 65} false
+    {:dir :sideways :heading :east :steps 2} false))
+
 (def ground (stone -3 12 50 64))
 (def pick [{:name "iron_pickaxe" :count 1}])
 (def east {:dir :down :heading :east :steps 3})
@@ -827,6 +836,15 @@
         (let [{:keys [out]} (await (stair! {:blocks ground :call ctx/call} {:dir :down} (fn [_])))]
           (is (= [:impossible :bad-args] [(:kind @out) (contract/cause-key @out)]))
           (is (string? (:why (:cause @out)))))))))
+
+(deftest y-behind-the-feet-waits-instead-of-ending-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (stair! {:blocks ground} {:dir :down :heading :east :y 70} (fn [_])))]
+          (is (= :not-done @out) "the parent keeps waiting")
+          (is (= :y-not-beyond-feet (:reason (waiting s))))
+          (is (empty? (digs p))))))))
 
 (defn ^:async dig-reached!
   "Resolves once the job's dig call is waiting on the world."

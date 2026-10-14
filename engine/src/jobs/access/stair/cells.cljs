@@ -141,13 +141,14 @@
              [cell w])))))
 
 (defn target-steps
-  "Steps to cut from the args and the start feet, or {:error text}."
+  "Steps to cut from the args and the start feet, or {:error text}; :here marks an error only the feet cause."
   [{:keys [dir heading steps y]} [_ fy _]]
   (cond
     (not (rises dir)) {:error "dir must be :down, :up or :level"}
     (not (shape/headings heading)) {:error "heading must be :north :east :south or :west"}
     (and (int? steps) (pos? steps)) steps
     (and (int? y) (pos? (* (rises dir) (- y fy)))) (js/Math.abs (- y fy))
+    (and (int? y) (not (zero? (rises dir)))) {:error "give :steps > 0, or :y beyond the feet in :dir" :here true}
     :else {:error "give :steps > 0, or :y beyond the feet in :dir"}))
 
 (defn record-dug

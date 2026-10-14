@@ -95,7 +95,7 @@
 
   Ends :done, or with a cause {:reason r ...detail}: :condition-failed for the facts that bar the next cell (the access
   refusals, :fluid-in-cut :crop :base-block :undercuts-way :unbreakable :no-tool :inventory-full :hazard :lava-exposed :plugged :floor-unseen
-  :no-floor :cave-below :off-stair :no-way-back :tool-spent), :impossible for :bad-args, :nothing-possible for the attempts that
+  :no-floor :cave-below :off-stair :no-way-back :tool-spent :y-not-beyond-feet), :impossible for :bad-args, :nothing-possible for the attempts that
   failed (:refills :dig-failed :step-failed :no-support-floor :lava-unsealed :water-unplugged). Data {:steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell
   :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
 
@@ -236,7 +236,10 @@
   [[:fn (at-start away)]
    [:fn (at-start (fn [c]
                     (let [t (geo/target-steps (:args c) (reach/standing-vec (:primitives c)))]
-                      (when (map? t) (contract/impossible {:reason :bad-args :why (:error t)})))))]
+                      (when (map? t)
+                        (if (:here t)
+                          {:reason :y-not-beyond-feet :why (:error t)}
+                          (contract/impossible {:reason :bad-args :why (:error t)}))))))]
    [:fn (at-start (fn [c] (when-let [stop (refusal c)] (assoc (access/refusal-fields [stop]) :reason :refused))))]
    [:fn (at-start unmet)]])
 
@@ -260,7 +263,7 @@
 (def facts
   "The stops that name a fact barring the next cell (condition-failed); the others are attempts that failed."
   #{:refused :zone :claim :footprint :no-zones :not-loaded :fluid-in-cut :crop :base-block :undercuts-way :unbreakable
-    :no-tool :tool-spent :no-free-slot :inventory-full :hazard :lava-exposed :plugged :floor-unseen :no-floor :cave-below :off-stair :no-way-back})
+    :no-tool :tool-spent :no-free-slot :inventory-full :hazard :lava-exposed :plugged :floor-unseen :no-floor :cave-below :off-stair :no-way-back :y-not-beyond-feet})
 
 (defn finish!
   "End the stair: its event, its way remembered, and the ending: :done, else by reason a kind (facts, the rest
@@ -397,7 +400,7 @@
         feet (or (some-> (:start m) vec) (reach/standing-vec (:primitives c)))
         target (geo/target-steps (:args c) feet)]
     (if (map? target)
-      (finish! c :bad-args {:why (:error target)})
+      (finish! c (if (:here target) :y-not-beyond-feet :bad-args) {:why (:error target)})
       ;; stone stands for the cells to dig: unseen cells are taken for stone (see the ns doc)
       (do
         ;; the spare's fetch may walk the body off: the stair starts where it was asked, not where the fetch ended
