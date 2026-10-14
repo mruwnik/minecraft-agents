@@ -6,7 +6,7 @@
   look.observed, available through observe --wait --watch or observe result after completion. :at inspects one exact
   block as last seen, with properties (a cell never seen is :unknown). Nearby samples are nearest first and bounded;
   :more-blocks?/:more-entities? report extra matches. Nothing is sensed through walls (players are always listed).
-  This is sight evidence, not a terrain map. A refused argument ends {:status :stopped :reason :bad-args :text why}.")
+  This is sight evidence, not a terrain map. A refused argument ends :condition-failed with cause {:reason :bad-args :text why}. On success ends :done with the observation as its data.")
 (a/defargs args
   {:radius {:doc "nearby sample radius, 1..32 blocks" :spec (a/num-in 1 32) :default 16}
    :block-names {:doc "nil, one block name or a vector/set of up to 16 names" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
@@ -16,7 +16,9 @@
    :useful? {:doc "list the workstations, storage, beds and ores seen (each with its :distance); excludes :block-names" :spec boolean? :default false}
    :properties? {:doc "include nearby block state properties" :spec boolean? :default false}
    :at {:doc "optional exact block position [x y z] or {:x :y :z}" :spec ::a/pos :default nil}})
-(defn check [_] true)
+(def target [:at])
+(def conditions [])
+(defn quote-of [_c] {:uses {:time [0 0 1]}})
 (def useful-names #{"crafting_table" "furnace" "blast_furnace" "smoker" "chest" "trapped_chest" "barrel" "ender_chest"
                     "enchanting_table" "anvil" "brewing_stand" "ancient_debris"})
 (defn useful-block?
@@ -103,8 +105,7 @@
   (let [a (options (:args c) (block-name-checker (:primitives c)))]
     (if-let [error (:error a)]
       (do (ctx/emit! c :look.refused :warn {:reason :bad-args :text error})
-          (ctx/result! c {:status :stopped :observed false :reason :bad-args :text error}))
+          (ctx/end c :condition-failed {:reason :bad-args :text error} {:observed false}))
       (let [result (observe (:primitives c) a)]
         (ctx/emit! c :look.observed :info result)
-        (ctx/result! c result)))
-    :done))
+        (ctx/end c :done nil result)))))

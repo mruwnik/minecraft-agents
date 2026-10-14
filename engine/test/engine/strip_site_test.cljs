@@ -33,7 +33,7 @@
 (defn xyz [[x y z]] {:x x :y y :z z})
 
 (defn stub-of [real round-fn]
-  (assoc real :check (constantly true)
+  (assoc (dissoc real :conditions :target :quote-of) :check (constantly true)
          :round (fn ^:async stub-round [c] (round-fn c) :done)))
 
 (defn done [result] (fn [_] result))

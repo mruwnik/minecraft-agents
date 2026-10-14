@@ -1,7 +1,8 @@
 (ns jobs.movement.look-around
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.primitive :as primitive]))
 
 (def idle-ok true)
 
@@ -17,7 +18,18 @@
 
 (def looked-policy {:cap 1 :ttl :forever})
 
-(defn check [_c] true)
+(def target [])
+
+(def conditions [])
+
+(defn quote-of
+  "The quotes of its two acts, the look and the wait, added."
+  [c]
+  (let [p (:primitives c)
+        quote-act #(let [{:keys [quote-of]} (get primitive/table %)] (quote-of p %2))
+        [l m x] (get-in (quote-act :look {}) [:uses :time])
+        [wl wm wx] (get-in (quote-act :wait {:ms (:every-ms (:args c))}) [:uses :time])]
+    {:uses {:time [(+ l wl) (+ m wm) (+ x wx)]}}))
 
 (defn look-point
   "The point look-ahead blocks from pos horizontally at yaw 2*pi*u, and
@@ -33,4 +45,4 @@
     (await (ctx/act c :look (clj->js {:pos pos})))
     (ctx/remember! c :looked {} looked-policy)
     (await (ctx/act c :wait (clj->js {:ms (:every-ms (:args c))})))
-    :done))
+    (ctx/end c :done nil)))

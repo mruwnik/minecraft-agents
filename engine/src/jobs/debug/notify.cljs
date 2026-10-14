@@ -36,7 +36,14 @@
          ", pos " (js/Math.round (.-x pos)) " " (js/Math.round (.-y pos)) " " (js/Math.round (.-z pos))
          ", time " (.-timeOfDay s) ", hostiles " hostiles)))
 
-(defn check [_c] true)
+(def target [])
+
+(def conditions [])
+
+(defn quote-of
+  "Time of the chat, when it will be sent (the chat act's own bound is 3 s)."
+  [c]
+  {:uses {:time [0 0 (if (:chat? (:args c)) 3 1)]}})
 
 (defn ^:async round [c]
   (let [{:keys [text chat? to]} (:args c)
@@ -50,4 +57,4 @@
           (ctx/emit! c :notify.chat-failed :info {:text (str "chat " status (when reason (str ": " reason)))
                                                   :status status :reason reason
                                                   :attention :notice}))))
-    :done))
+    (ctx/end c :done nil)))

@@ -24,9 +24,6 @@
 
 (defn notes [eng] (mapv :data (mem/entries (mem/view (:store eng)) :notify)))
 
-(deftest check-is-always-true
-  (is (true? ((:check (get registry/jobs 'jobs.debug.notify)) {}))))
-
 (deftest args-default-text-and-chat
   (let [args (:args (get registry/jobs 'jobs.debug.notify))]
     (is (= "notify" (get-in args [:text :default])))

@@ -14,10 +14,10 @@
   policy keeps it). After the hour the entry is gone and (since :kind) is unknown again. A job that wants \"every
   3 days\" passes :ttl-s 259200. :ttl-s is in seconds and must be positive, or :forever. :cap is the number of newest entries
   kept, a positive whole number.
-  Refused (warn memory.refused with :reason and :text, result {:ok false :reason}, and the job still ends):
+  Refused (warn memory.refused with :reason and :text; ends :condition-failed with cause {:reason :text}):
   :bad-kind (not a keyword, or namespaced), :reserved-kind (a kind the engine or another job writes, such as
   :hurt, :slept, :scaffold, or the name of a recorded place).
-  Success: info memory.remembered with :memory-kind, :entry and :policy. Result {:ok true :kind}.")
+  Success: info memory.remembered with :memory-kind, :entry and :policy; ends :done with data {:kind}.")
 
 (a/defargs args
   {:kind {:doc "the memory kind to write: an unnamespaced keyword no engine job writes, e.g. :bred-cows" :spec keyword? :default nil}
@@ -25,7 +25,11 @@
    :ttl-s {:doc "seconds the entry is kept (or :forever); nil: the kind's own policy, or the default hour" :spec (a/or-of #{:forever} a/pos-num?) :default nil}
    :cap {:doc "entries of the kind kept, the newest; nil: the kind's own policy, or the default 50" :spec (a/int-in 1 nil) :default nil}})
 
-(defn check [_c] true)
+(def target [:kind])
+
+(def conditions [])
+
+(defn quote-of [_c] {:uses {:time [0 0 1]}})
 
 (defn refusal [reason text] {:reason reason :text text})
 
@@ -52,10 +56,9 @@
   (let [r (resolve-args (ctx/view c) (:args c))]
     (if (:reason r)
       (do (ctx/emit! c :memory.refused :warn r)
-          (ctx/result! c {:ok false :reason (:reason r)}))
+          (ctx/end c :condition-failed r))
       (let [{:keys [kind data policy]} r]
         (ctx/remember! c kind data policy)
         (ctx/emit! c :memory.remembered :info {:memory-kind kind :entry data :policy policy
                                                :text (str (name kind) " remembered")})
-        (ctx/result! c {:ok true :kind kind})))
-    :done))
+        (ctx/end c :done nil {:kind kind})))))
