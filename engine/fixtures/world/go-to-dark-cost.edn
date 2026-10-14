@@ -36,7 +36,8 @@
          [:job (jobs.movement.go-to {:pos #at [28 0 20] :range 0})]
          [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0})]
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:> 35]}}}] 110]]
-   :expect [{:no-event {:level :error} :for-s 2}]
+   :expect [{:count-event {:source :job :kind :result :data {:arrived true}} :for-s 90 :at-least 3 :at-most 3 :of-job true}
+            {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "night-unseen-lit-detour-counts-dark-takes-the-direct-corridor"
    :time :night
