@@ -5,7 +5,8 @@
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.village.maintain :as maintain]))
 
 (def job 'jobs.village.maintain)
 (def children {:repair 'jobs.build.from-plan :breed 'jobs.village.breed :roll 'jobs.village.roll})
@@ -26,9 +27,9 @@
                                      (swap! calls conj [j (:args c)])
                                      (let [r (if (fn? e) (e c (count (filter #(= j (first %)) @calls))) e)]
                                        (when (= :boom r) (throw (js/Error. "boom")))
-                                       (if (= :continue r)
-                                         :continue
-                                         (do (ctx/result! c r) :done))))})))
+                                       (cond
+                                         (= :continue r) :continue
+                                         :else (do (ctx/result! c r) :done))))})))
             jobs (vals children))))
 
 (defn ^:async scenario
@@ -46,6 +47,11 @@
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 (defn done-event [s] (first (events-of s :maintain.done)))
 (defn step [s k] (get-in (done-event s) [:steps k]))
+(defn ending
+  "[kind reason] of the root's last completed or stopped event."
+  [{:keys [seen]}]
+  (when-let [e (last (filter #(#{:completed :stopped} (:kind %)) @seen))]
+    [(:kind e) (:reason e)]))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn ran [s j] (filterv #(= j (first %)) @(:calls s)))
 (defn world [& vs] {:self {:pos {:x 0 :y 64 :z 0}} :entities (vec vs)})
@@ -132,8 +138,33 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:plan "p"} (world) {'jobs.build.from-plan {:status :stopped :reason :incomplete :missing [[1 2 3]]}}))]
-          (is (= :stopped (:status (step s :repair))))
-          (is (= "incomplete" (:reason (done-event s)))))))))
+          (is (some? (:stopped (step s :repair))))
+          (is (= "incomplete" (:reason (done-event s))))
+          (is (= [:stopped :incomplete] (ending s))))))))
+
+(deftest a-pass-where-no-step-ran-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [leave! (fn [c _] (swap! (fake/state (:primitives c)) assoc :entities []) :continue)
+              s (await (scenario {:roles [librarian]} (world (villager 1 3 {:profession "none"})) {'jobs.village.roll leave!}))]
+          (is (= [:stopped :nothing-to-do] (ending s))))))))
+
+(deftest a-child-that-reaches-a-limit-ends-the-pass-with-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:plan "p" :target 4} (apply world pair)
+                                 {'jobs.build.from-plan {:status :stopped :reason :timeout}}))]
+          (is (empty? (ran s 'jobs.village.breed)) "no later step is called")
+          (is (= [:stopped :timeout] (ending s))))))))
+
+(deftest it-is-a-contract-job
+  (is (= [:plan :roles] maintain/target))
+  (is (= {:spend {:time ::maintain/time-s}} maintain/defaults))
+  (is (seq maintain/conditions))
+  (is (fn? maintain/done?))
+  (is (fn? maintain/quote-of)))
 
 (deftest a-clean-pass-has-no-stop-reason
   (async done
@@ -141,6 +172,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:plan "p"} (world) {}))]
           (is (nil? (:reason (done-event s))))
+          (is (= [:completed nil] (ending s)))
           (is (true? (finished? s))))))))
 
 (deftest a-role-without-a-workstation-cell-stops-the-pass-with-its-reason

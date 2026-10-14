@@ -4,7 +4,8 @@
             [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.pace :as pace]))
+            [jobs.lib.pace :as pace]
+            [jobs.lib.started :as started]))
 
 (def doc
   "Keep one village in order. One call is one pass over its steps in a fixed order. Each is a child job, called until
@@ -22,10 +23,12 @@
   Villagers are those the body sees within :radius. Every call re-reads the villagers: a step the world no longer needs is skipped.
   A step whose child declines is booked {:skipped :declined :reason why} (the child's wait reason), one that
   throws {:skipped :failed :error text}; the pass goes on either way.
-  The job declines (does nothing) unless some step would run. A started run always continues.
-  It ends :done with {:villagers n :target :steps {step summary}} (info maintain.done, also when every step was
-  skipped). A summary is the child's :status, :reason, :placed, :missing, :fed, :rolled, :born and :count. A child that
-  ended stopped, declined or failed, or a role without :pos, makes the pass :stopped with :reason \"incomplete\" (warn maintain.done).
+  The job does not start (condition-failed :nothing-to-do) unless some step would run. A started run always continues.
+  It ends :done with {:villagers n :target :steps {step summary}} (info maintain.done) when some step ran to its end
+  and none was incomplete. A summary is the child's :reason, :placed, :missing, :fed, :rolled, :born and :count (a
+  child that ended other than :done carries :stopped kind). A child that ended other than :done, declined or failed,
+  or a role without :pos, ends the pass nothing-possible :incomplete (warn maintain.done); a pass where no step ran
+  ends condition-failed :nothing-to-do; a child that reached a limit ends the pass limit-reached with it.
   The job names of breed and roll are used, not their internals: their args are as listed above.
   :ignore-zones? is passed to the repair.")
 
@@ -98,57 +101,69 @@
           (recur (rest todo) (assoc report (first todo) {:skipped skip}))
           {:todo (vec todo) :report report :call call})))))
 
-(defn check [c]
-  (or (boolean (or (:todo (ctx/mem c))
-                   (let [f (facts c)]
-                     (some #(let [d (decide % (:args c) f)] (or (:call d) (= :no-pos (:skip d)))) (slots (:args c))))))
-      (ctx/wait c {:reason :nothing-to-do})))
+(defn nothing-to-do
+  "{:reason :nothing-to-do} when no step would call a child (or flag a role without a cell), at the start only."
+  [c]
+  (let [f (facts c)]
+    (when-not (some #(let [d (decide % (:args c) f)] (or (:call d) (= :no-pos (:skip d)))) (slots (:args c)))
+      {:reason :nothing-to-do})))
 
 ;; ------------------------------------------------------------------ the run
 
 (defn summary
   "What the report keeps of a child's result."
   [r]
-  (select-keys r [:status :reason :placed :missing :fed :rolled :born :count]))
+  (select-keys r [:reason :placed :missing :fed :rolled :born :count]))
+
+(defn ran?
+  "Whether a step's report entry is one that ran to its end."
+  [entry]
+  (not (or (:skipped entry) (:stopped entry))))
 
 (defn incomplete?
   [entry]
-  (or (= :stopped (:status entry)) (contains? #{:failed :declined :no-pos} (:skipped entry))))
+  (or (some? (:stopped entry)) (contains? #{:failed :declined :no-pos} (:skipped entry))))
 
 (defn finish!
+  "End the pass: nothing-possible :incomplete when a step was incomplete, done when some step ran, else
+  condition-failed :nothing-to-do."
   [c report]
   (let [bad (filterv #(incomplete? (report %)) (slots (:args c)))
-        out (cond-> {:villagers (count (:villagers (facts c))) :target (:target (:args c)) :steps report}
-              (seq bad) (assoc :status :stopped :reason "incomplete"))
+        out {:villagers (count (:villagers (facts c))) :target (:target (:args c)) :steps report}
         text (if (seq bad)
                (str "maintain done, incomplete: "
                     (str/join ", " (map #(str (name %) (some->> (or (some-> (:reason (report %)) name) (when (= :no-pos (:skipped (report %))) "no-pos")) (str " "))) bad)))
                (str "maintain done: " (count (filter :skipped (vals report))) " steps skipped"))]
-    (ctx/emit! c :maintain.done (if (seq bad) :warn :info) (assoc out :text text))
-    (ctx/result! c out)
-    :done))
+    (ctx/emit! c :maintain.done (if (seq bad) :warn :info)
+               (cond-> (assoc out :text text) (seq bad) (assoc :status :stopped :reason "incomplete")))
+    (cond
+      (seq bad) (ctx/end c :nothing-possible :incomplete out)
+      (some ran? (vals report)) (ctx/end c :done nil out)
+      :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
 
 (defn booked
   "Memory after the step's child ended: the step leaves todo, its summary goes in the report."
   [m slot entry]
   (-> m (update :todo rest) (dissoc :call-args) (assoc-in [:report slot] entry)))
 
+(defn entry-of
+  "The report entry of a child's ending e: its summary; a child that did not start (no data) is {:skipped :declined
+  :reason cause}, one that stopped carries :stopped kind."
+  [e]
+  (cond
+    (= :done (:kind e)) (summary (:data e))
+    (empty? (:data e)) {:skipped :declined :reason (contract/cause-key e)}
+    :else (assoc (summary (merge {:reason (contract/cause-key e)} (:data e))) :stopped (:kind e))))
+
 (defn ^:async run-child!
   "One round of the child in slot. A child that throws is booked failed instead of failing the pass; a cut or a limit passes through."
   [c slot call-args]
   (try
-    (await (ctx/call-child c slot (job-of slot) call-args))
+    (await (ctx/call c slot (job-of slot) call-args))
     (catch :default e
       (when (contract/passes-through? e) (throw e))
       (ctx/update-mem! c booked slot {:skipped :failed :error (str e)})
       :failed)))
-
-(defn declined-reason
-  "Why the child of slot declines: the reason of its check's wait, nil when its check passes."
-  [c slot call-args]
-  (let [w (atom nil)]
-    (ctx/check-child (assoc c :wait w) slot (job-of slot) call-args)
-    (if (map? @w) (:reason @w) @w)))
 
 (defn roll? [slot] (str/starts-with? (name slot) "roll-"))
 
@@ -179,13 +194,32 @@
         (case r
           :continue :continue
           :failed :again
-          :done (do (ctx/update-mem! c booked slot (summary (ctx/child-result c slot))) :again)
-          (do (ctx/update-mem! c booked slot {:skipped :declined :reason (declined-reason c slot call)}) :again))))))
+          (do (ctx/update-mem! c booked slot (entry-of r))
+              (if (= :limit-reached (:kind r))
+                (ctx/end c :limit-reached (:cause r) {:steps (:report (ctx/mem c))})
+                :again)))))))
 
 (a/defargs settings
-  {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+  {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::time-s {:default 1800 :doc "Seconds a maintain pass may take: all its steps." :spec (a/num-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async round [c]
   (let [n (atom 0)]
     (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def target [:plan :roles])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions [[:fn (started/at-start nothing-to-do)]])
+
+(defn done?
+  "Never done before the round says so: the steps left are decided from the facts at each step."
+  [c]
+  {:done? false :units :steps :done (count (filter ran? (vals (:report (ctx/mem c))))) :left (count (:todo (ctx/mem c)))})
+
+(defn quote-of [_c]
+  {:uses {:time [1 60 (settings/get settings ::time-s)]}})
