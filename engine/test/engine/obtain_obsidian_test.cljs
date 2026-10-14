@@ -2,7 +2,8 @@
   "Obsidian as a gathered need of items.obtain: mined where seen (diamond pickaxe), else made by pouring water on a
   seen lava source from a side stand, mined, and the bucket scooped back; else a refusal naming what is missing."
   (:require [cljs.test :refer [deftest is async]]
-            [engine.core :as core]
+            [engine.contract :as contract]
+            [engine.farm-contract-test :refer [ending-of]]
             [engine.library-test :as lt]
             [engine.test-util :as tu]))
 
@@ -37,18 +38,18 @@
           (is (= 1 (carried p "obsidian")))
           (is (= 1 (carried p "water_bucket")) "the bucket is full again"))))))
 
-(defn ^:async waiting [w]
-  (let [{:keys [eng]} (lt/setup w)
-        id (core/submit! eng '(jobs.items.obtain {:item "obsidian" :count 1 :explore false}) {})]
-    (await (tu/run-until-empty eng 30))
-    (core/waiting eng id)))
+(defn ^:async refused
+  "{:reason :why} of an obsidian obtain that ends before it gets anywhere."
+  [w]
+  (let [e (await (ending-of (lt/setup w) 'jobs.items.obtain {:item "obsidian" :count 1 :explore false} 30))]
+    {:reason (contract/cause-key e) :why (get-in e [:cause :why])}))
 
 (deftest nothing-seen-or-no-bucket-says-what-is-missing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [none (await (waiting (world ground [pick])))
-              no-bucket (await (waiting (world lava-lake [pick])))]
+        (let [none (await (refused (world ground [pick])))
+              no-bucket (await (refused (world lava-lake [pick])))]
           (is (= :no-source (:reason none)))
           (is (re-find #"obsidian" (:why none)))
           (is (= :no-bucket (:reason no-bucket)) "make-obsidian's start condition is the wait reason"))))))

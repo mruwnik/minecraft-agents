@@ -1,11 +1,11 @@
 (ns jobs.items.obtain.craft
   "The craft source: the steps of a craft chain, run as children."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [jobs.items.craft :as craft]
-            [jobs.items.obtain.base :refer [carried-of limits max-fruitless tried!]]
+            [jobs.items.obtain.base :refer [carried-of max-fruitless old-how tried!]]
             [jobs.items.obtain.plan :refer [craft-plan]]
             [jobs.items.smelt :as smelt]
-            [jobs.lib.declined :as declined]
             [jobs.lib.util :as u]))
 
 (defn fruitless! [c why]
@@ -14,19 +14,18 @@
   :again)
 
 (defn stop-why
-  "What a craft that made nothing says for tried-text: the short ingredients (and alternatives) of a :need stop, else its reason."
-  [res]
-  (if (:short res)
-    (select-keys res [:short :alternatives])
-    (or (:reason res) :declined)))
+  "What a craft ending e that made nothing says for tried-text: the short ingredients (and alternatives) of a :need
+  stop, else its cause."
+  [e]
+  (if (get-in e [:data :short])
+    (select-keys (:data e) [:short :alternatives])
+    (contract/cause-key e)))
 
 (defn smelt-fetch
-  "The :fetch limits of a smelt child (its fuel and furnace): this obtain's, one level deeper."
+  "The :fetch limits of a smelt child (its fuel and furnace): this obtain's sources."
   [c]
-  (let [o (limits c)]
-    (into {} (remove (comp nil? val))
-          {:depth (max 0 (dec (:depth o))) :how (:how o) :minutes (:minutes o) :fail-minutes (:fail-minutes o)
-           :explore (:explore (:args c))})))
+  (into {} (remove (comp nil? val))
+        {:how (old-how c) :fail-minutes (:fail-minutes (:args c)) :explore (:explore (:args c))}))
 
 (defn wood-fuel
   "The planks kind to burn: the first of the smelt's wood fuels carried, else the first."
@@ -40,17 +39,17 @@
   Charcoal burns wood (planks) as fuel: coal or charcoal as its fuel would ask for charcoal again."
   [c step]
   (ctx/update-mem! c assoc-in [:craft :step] step)
-  (let [r (await (declined/call-child! c :smelt 'jobs.items.smelt
-                                                 (cond-> {:item (:item step) :count (:count step) :fetch (smelt-fetch c)}
-                                                   (= "charcoal" (:item step)) (assoc :fuel (wood-fuel (u/inventory (:primitives c)))))))]
-    (if (#{:continue :declined} r)
-      r
-      (let [res (ctx/child-result c :smelt)]
-        (ctx/update-mem! c update :craft dissoc :step)
-        (if (and (= :done r) (pos? (:smelted res 0)))
-          :again
-          (do (when (:why res) (ctx/update-mem! c assoc-in [:craft :detail] (:why res)))
-              (fruitless! c (or (:reason res) :declined))))))))
+  (let [e (await (ctx/call c :smelt 'jobs.items.smelt
+                           (cond-> {:item (:item step) :count (:count step) :fetch (smelt-fetch c)}
+                             (= "charcoal" (:item step)) (assoc :fuel (wood-fuel (u/inventory (:primitives c)))))))]
+    (if (= :continue e)
+      :continue
+      (do (ctx/update-mem! c update :craft dissoc :step)
+          (if (and (= :done (:kind e)) (pos? (get-in e [:data :smelted] 0)))
+            :again
+            (do (when-let [why (or (get-in e [:data :why]) (get-in e [:cause :why]))]
+                  (ctx/update-mem! c assoc-in [:craft :detail] why))
+                (fruitless! c (contract/cause-key e))))))))
 
 (defn ^:async craft-step!
   "One round of the craft source: run the current step of the plan as a child, until it ends."
@@ -78,39 +77,36 @@
           :else
           (do (ctx/update-mem! c assoc-in [:craft :step] step)
               (ctx/update-mem! c assoc-in [:craft :spot] spot)
-              (let [place #(ctx/call-child c :place 'jobs.blocks.place {:item (:item step) :pos spot :fetch false})
-                    r (await (if (= "crafting_table" (:item step))
+              (let [place #(ctx/call c :place 'jobs.blocks.place {:item (:item step) :pos spot :fetch false})
+                    e (await (if (= "crafting_table" (:item step))
                                (ctx/atomic c :urgent :place-table (fn ^:async place-table [] (await (place))))
                                (place)))]
-                (if (= :continue r)
+                (if (= :continue e)
                   :continue
-                  (let [res (ctx/child-result c :place)]
-                    (ctx/update-mem! c update :craft dissoc :step :spot)
-                    (if (and (= :done r) (:placed res))
-                      (do (ctx/update-mem! c assoc :table spot)
-                          (ctx/update-mem! c update :craft dissoc :table-unreachable)
-                          :again)
-                      (fruitless! c (or (:reason res) :place-declined)))))))))
+                  (do (ctx/update-mem! c update :craft dissoc :step :spot)
+                      (if (and (= :done (:kind e)) (get-in e [:data :placed]))
+                        (do (ctx/update-mem! c assoc :table spot)
+                            (ctx/update-mem! c update :craft dissoc :table-unreachable)
+                            :again)
+                        (fruitless! c (contract/cause-key e)))))))))
 
       (= :smelt (:op step))
       (await (smelt-step! c step))
 
       :else
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
-          (let [r (await (ctx/call-child c :craft 'jobs.items.craft (cond-> {:item (:item step) :count (:count step) :fetch false :avoid (:avoid (:args c))}
-                                                                        (and (:table? step) (:table (ctx/mem c))) (assoc :table (:table (ctx/mem c))))))]
-            (if (= :continue r)
+          (let [e (await (ctx/call c :craft 'jobs.items.craft (cond-> {:item (:item step) :count (:count step) :fetch false :avoid (:avoid (:args c))}
+                                                                (and (:table? step) (:table (ctx/mem c))) (assoc :table (:table (ctx/mem c))))))]
+            (if (= :continue e)
               :continue
-              (let [res (ctx/child-result c :craft)]
+              (do
                 (ctx/update-mem! c update :craft dissoc :step)
                 (cond
-                  (and (= :done r) (pos? (:made res 0))) :again
+                  (and (= :done (:kind e)) (pos? (get-in e [:data :made] 0))) :again
 
                   ;; the seen table cannot be reached: plan again without it, so a carried or new table is put down
-                  (and (#{:unreachable :no-table} (:reason res)) (not (:table-unreachable mem)))
+                  (and (#{:unreachable :no-table} (contract/cause-key e)) (not (:table-unreachable mem)))
                   (do (ctx/update-mem! c assoc-in [:craft :table-unreachable] true) :again)
 
                   ;; the craft child ran its own rounds and made nothing: another child of the same step would repeat them
-                  :else
-                  (let [why (stop-why res)]
-                    (if (= :declined r) (fruitless! c why) (tried! c :craft why)))))))))))
+                  :else (tried! c :craft (stop-why e))))))))))

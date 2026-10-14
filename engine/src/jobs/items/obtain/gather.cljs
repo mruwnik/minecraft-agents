@@ -1,26 +1,31 @@
 (ns jobs.items.obtain.gather
   "The gather source: the child for a raw need, its tool, and the search for what is not seen."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [limits max-fruitless sheep-radius tried!]]
+            [jobs.items.obtain.base :refer [max-fruitless sheep-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.items.obtain.table :refer [gather-need]]
-            [jobs.lib.body :as body]
-            [jobs.lib.declined :as declined]))
+            [jobs.lib.body :as body]))
+
+(defn declined?
+  "Whether child ending e is a refusal before it ran: a failed condition with no result of its own."
+  [e]
+  (and (= :condition-failed (:kind e)) (empty? (:data e))))
 
 (defn fruitless-limit
   "Fruitless runs that end the gather source: the need's :max-runs, but only for a run that happened; a child that
-  was declined (:declined: it could not start) broke nothing and counts against the default."
-  [need r]
-  (if (= :declined r) (max-fruitless) (:max-runs need (max-fruitless))))
+  was declined (it could not start) broke nothing and counts against the default."
+  [need e]
+  (if (declined? e) (max-fruitless) (:max-runs need (max-fruitless))))
 
 (defn gather-failed!
   "A gather run that brought nothing. Trees seen but unreachable (:no-tree) with :explore on send the body to look
   elsewhere (bounded by [:explored key]); a mine that lost its pickaxe (:no-tool) that the pickaxe step can replace
   goes to that step; neither counts as a fruitless run."
-  [c names need why r]
+  [c names need why e]
   (cond
     (and (= :no-tree why) (explore-opts c) (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
     (do (ctx/update-mem! c assoc-in [:gather :unreachable (:key need)] true) :again)
@@ -30,28 +35,25 @@
     :else
     (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
       (ctx/update-mem! c assoc-in [:gather :fruitless] k)
-      (when (>= k (fruitless-limit need r)) (tried! c :gather (or why :failed)))
+      (when (>= k (fruitless-limit need e)) (tried! c :gather (or why :failed)))
       :again)))
 
 (defn pickaxe-args
   "The args of the obtain child that gets a tool for need."
   [c names need]
-  (let [a (:args c)
-        o (limits c)]
-    {:any-of (tools-wanted c names need) :count 1 :how (:how o) :depth (max 0 (dec (:depth o)))
-     :minutes (:minutes o) :fail-minutes (:fail-minutes o) :chain (into (vec (:chain a)) names)
-     :explore (:explore a)}))
+  (let [a (:args c)]
+    (into {} (remove (comp nil? val))
+          {:any-of (tools-wanted c names need) :count 1 :ways (ways-of c) :fail-minutes (:fail-minutes a) :explore (:explore a)})))
 
 (defn ^:async pickaxe-step!
   "Get the cheapest tool that harvests the need's block (a jobs.items.obtain child): :again once it is carried, :continue
   while it runs, else the gather source fails."
   [c names need]
   (let [args (pickaxe-args c names need)
-        r (await (declined/call-child! c :pickaxe 'jobs.items.obtain args))]
+        e (await (ctx/call c :pickaxe 'jobs.items.obtain args))]
     (cond
-      (= :continue r) :continue
-      (pickaxe-first? c names need)
-      (tried! c :gather {:pickaxe (or (:reason (ctx/child-result c :pickaxe)) r)})
+      (= :continue e) :continue
+      (pickaxe-first? c names need) (tried! c :gather {:pickaxe (contract/cause-key e)})
       :else :again)))
 
 (defn ^:async explore-walk!
@@ -68,17 +70,17 @@
                       :attention :notice
                       :for targets :max-distance (:max-distance o) :max-legs (:max-legs o)
                       :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])})
-        r (await (ctx/call-child c :explore 'jobs.explore.search
-                                 (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))})))]
-    (if (= :continue r)
+        e (await (ctx/call c :explore 'jobs.explore.search
+                           (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))})))]
+    (if (= :continue e)
       :continue
-      (let [res (ctx/child-result c :explore)
+      (let [res (:data e)
             k (inc (get-in (ctx/mem c) [:explored (:key need)] 0))]
         (ctx/update-mem! c assoc-in [:explored (:key need)] k)
         (ctx/update-mem! c update :gather update :unreachable dissoc (:key need))
         (if (and (= :found (:reason res)) (seen-of c need))
           :again
-          (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) r)}
+          (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) (contract/cause-key e))}
                               (:why res) (assoc :why (:why res))
                               (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res))))))))))
 
@@ -127,17 +129,17 @@
               (ctx/emit! c :obtain.wool-colour :info
                          {:message (str "no " wanted " sheep within " (sheep-radius) " blocks; taking " taking " wool instead")
                           :wanted wanted :taking taking})))
-          (let [r (await (ctx/call-child c (gather-slot need) (:job need) (:args need)))]
-            (if (= :continue r)
+          (let [e (await (ctx/call c (gather-slot need) (:job need) (:args need)))]
+            (if (= :continue e)
               :continue
-              (let [res (ctx/child-result c (gather-slot need))
+              (let [res (merge (when (map? (:cause e)) (:cause e)) (:data e))
                     before (get-in (ctx/mem c) [:gather :before])]
                 (ctx/update-mem! c update :gather dissoc :before :item :tree)
                 (if (> (gather-carried p need) before)
                   (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :again)
                   (do (when-let [w (:why res)] (ctx/update-mem! c assoc-in [:gather :why] w))
                       (when-let [cols (seq (:columns res))] (ctx/update-mem! c update :cut-off (fnil into #{}) (map vec) cols))
-                      (gather-failed! c names need (or (:reason res) :nothing-gathered) r))))))))))
+                      (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e))))))))))
 
 (defn ^:async finish-tree!
   "The log child of an earlier round was cut before it ended: runs it to its end even when the logs carried are enough
@@ -145,7 +147,7 @@
   [c]
   (let [{:keys [key job args]} (get-in (ctx/mem c) [:gather :tree])
         slot (gather-slot {:key key})
-        r (if (ctx/check-child c slot job args) (await (ctx/call-child c slot job args)) :done)]
+        r (await (ctx/call c slot job args))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c update :gather dissoc :before :item :tree) :again))))

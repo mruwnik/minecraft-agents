@@ -21,6 +21,6 @@
       (fn ^:async t []
         (let [s (f/start (oi/ore-world birch-trees []) [])]
           (await (oi/obtain! s {:item "oak_log" :explore false} 40))
-          (let [w (first (filter #(= :waiting (:kind %)) (deref (:seen s))))]
-            (is (= :no-source (:reason w)))
-            (is (re-find #"birch_log" (:why w)) (:why w))))))))
+          (let [e (first (f/events-of s :stopped))]
+            (is (= :no-source (:reason e)) "it looked around and found no source")
+            (is (re-find #"birch_log" (get-in e [:cause :why])) (pr-str e))))))))

@@ -160,7 +160,7 @@
           (let [res (if (= :declined r)
                       (b/child-wait c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false})
                       (ctx/child-result c :spare))
-                got? (and (not= :declined r) (= :done (:status res)) (pos? (:got res 0)))]
+                got? (and (not= :declined r) (= :done (:status res)))]
             (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)
             (if got?
               (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)})

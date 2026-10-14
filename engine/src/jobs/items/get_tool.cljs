@@ -1,11 +1,10 @@
 (ns jobs.items.get-tool
   (:require [engine.args :as a]
             ["minecraft-data" :as minecraft-data]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.lib.blocks :as b]
             [jobs.lib.cost.weapon :as weapon]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -13,24 +12,25 @@
   "Get a tool: one that harvests :block (minecraft-data harvestTools), the tool :item, or a tool of :kind (\"pickaxe\",
   \"axe\", \"shovel\", \"hoe\", \"sword\": any tier; any other kind such as \"shears\" is that item). Any one carried
   is enough: done at once. Else a jobs.items.obtain child (slot :obtain) gets one of the tools, cheapest material
-  first (wooden, stone, copper, iron, diamond, netherite, golden), with :depth one less and :explore (default on: logs or
-  stone not seen are walked to and looked for, bounded by the search options).
+  first (wooden, stone, copper, iron, diamond, netherite, golden), with :explore (default on: logs or stone not seen
+  are walked to and looked for, bounded by the search options).
+  Ways: :chest, :craft (the obtain's craft and smelt ways) and :gather; a fetch for a mine leaves :gather out, so a
+  mine never starts another gather.
 
-  The check passes when a tool is carried, the obtain has begun, or the obtain's check passes; else it waits with the
-  obtain's reason ({:reason :no-source :any-of [..]}: nothing seen to get one from, with :explore false).
-  Ends {:status :done :tool name} ({:status :done :needed false} for a block the hand harvests) or {:status :stopped
-  :reason r ...} with the obtain's reason and :tried, or :bad-args (also an unknown :block).")
+  Bad args (also an unknown :block) end condition-failed :bad-args {:why} (warn get-tool.declined).
+  Conditions (before it starts): the obtain's failed condition (no source:
+  {:reason :no-source :any-of [..]}, nothing seen to get one from, with :explore false).
+  Ends :done {:tool name} only with the tool carried ({:needed false} for a block the hand harvests); else the
+  obtain's ending kind and cause (its ending as :because), data {:any-of :tried :got}; an obtain done with no tool
+  carried after is nothing-possible :lost.
+  Quote: the obtain's.")
 
 (a/defargs args
   {:block {:doc "a block name: get a tool that harvests it" :spec a/name? :default nil}
    :item {:doc "a tool item name" :spec a/item? :default nil}
    :kind {:doc "a tool kind, e.g. \"pickaxe\" or \"shears\"" :spec a/name? :default nil}
-   :how {:doc "sources, a subset of #{:chest :craft :gather}; nil: all" :spec (a/coll-of #{:chest :craft :gather}) :default nil}
-   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :spec (a/int-in 0 nil) :default nil}
-   :minutes {:doc "time budget; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
-   :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
-   :chain {:doc "items being fetched above this one" :spec (a/coll-of a/item?) :default []}
-   :explore {:doc "passed to the obtain: walk and look for raw material not seen (false: wait instead; a map: jobs.explore.search options)" :spec (a/or-of boolean? map?) :default true}})
+   :fail-minutes {:doc "passed on to the obtain; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
+   :explore {:doc "passed to the obtain: walk and look for raw material not seen (false: fail instead; a map: jobs.explore.search options)" :spec (a/or-of boolean? map?) :default true}})
 
 (def tiered #{"pickaxe" "axe" "shovel" "hoe" "sword"})
 
@@ -54,44 +54,77 @@
   (let [held (set (map :name (u/inventory p)))]
     (first (filter held names))))
 
-(defn obtain-args [c names]
-  (let [a (:args c)
-        o (fetch/merge-limits nil a)]
-    {:any-of names :count 1 :depth (max 0 (dec (:depth o))) :how (:how o) :minutes (:minutes o)
-     :fail-minutes (:fail-minutes o) :chain (vec (:chain a)) :explore (:explore a)}))
+(def target [:block :item :kind])
 
-(defn check [c]
+(def ways [:chest :craft :gather])
+
+(def defaults {:ways (set ways)})
+
+(def how-ways {:chest :chest :craft :craft :gather :gather})
+
+(defn legacy-args
+  "An old caller's :how as :ways, :minutes as :spend {:time}; :chain and
+  :depth go (a nested call for the same tool is the engine's :duplicate-call). A :how that is not a list of sources
+  stays, refused."
+  [{:keys [how minutes] :as args}]
+  (cond-> (dissoc args :minutes :chain :depth)
+    (or (nil? how) (and (coll? how) (every? how-ways how))) (dissoc :how)
+    (and (coll? how) (every? how-ways how) (nil? (:ways args))) (assoc :ways (set (map how-ways how)))
+    (and minutes (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] (* 60 minutes))))
+
+(defn ways-of [c] (set (or (:ways (ctx/frozen-call c)) (:ways (:args c)) (:ways defaults))))
+
+(defn obtain-args [c names]
+  (let [ways (ways-of c)
+        a (:args c)]
+    (into {} (remove (comp nil? val))
+          {:any-of names :count 1 :fail-minutes (:fail-minutes a) :explore (:explore a)
+           :ways (cond-> (disj ways :craft) (ways :craft) (into [:craft :smelt]))})))
+
+(defn bad-args [c]
+  (let [names (tools-for (:primitives c) (:args c))]
+    (when (map? names) {:reason :bad-args :why (:error names)})))
+
+(defn no-source
+  "Before it starts, with no tool that will do carried: the obtain's failed condition."
+  [c]
   (let [p (:primitives c)
         names (tools-for p (:args c))]
-    (cond
-      (map? names) true
-      (empty? names) true
-      (carried-tool p names) true
-      (:begun (ctx/mem c)) true
-      :else (boolean (ctx/check-child c :obtain 'jobs.items.obtain (obtain-args c names))))))
+    (when-not (or (ctx/frozen-call c) (map? names) (empty? names) (carried-tool p names))
+      (let [w (atom nil)]
+        (when-not (ctx/check-child (assoc c :wait w) :obtain 'jobs.items.obtain (obtain-args c names))
+          (or (:cause @w) (:reason @w) :no-source))))))
+
+(def conditions [[:fn no-source]])
+
+(defn done?
+  "Never done before its round: the round's ending names the tool, which a caller's repeat check reads."
+  [_c]
+  {:done? false :units :tools :done 0 :left 1})
+
+(defn ^:async quote-of
+  "Nothing for a tool carried or none needed, else the obtain's quote (too expensive when the obtain would be refused)."
+  [c]
+  (let [names (tools-for (:primitives c) (:args c))]
+    (if (or (map? names) (empty? names) (carried-tool (:primitives c) names))
+      {:uses {:time [0 0 0]}}
+      (let [q (await (ctx/quote c 'jobs.items.obtain (obtain-args c names)))]
+        (if (contract/ending? q) contract/too-expensive q)))))
 
 (defn ^:async round [c]
   (let [p (:primitives c)
         names (tools-for p (:args c))]
     (cond
       (map? names) (do (ctx/emit! c :get-tool.declined :warn {:reason :bad-args :text (str "items.get-tool " (:error names))})
-                       (ctx/result! c {:status :stopped :reason :bad-args :why (:error names) :text (str "items.get-tool " (:error names))})
-                       :done)
-      (empty? names) (do (ctx/result! c {:status :done :needed false}) :done)
-      (carried-tool p names) (do (ctx/result! c {:status :done :tool (carried-tool p names)}) :done)
+                       (ctx/end c :condition-failed (bad-args c) {:text (str "items.get-tool " (:error names))}))
+      (empty? names) (ctx/end c :done nil {:needed false})
+      (carried-tool p names) (ctx/end c :done nil {:tool (carried-tool p names)})
       :else
-      (let [oargs (obtain-args c names)
-            r (await (ctx/call-child c :obtain 'jobs.items.obtain oargs))]
-        (case r
-          :continue (do (when (get-in (ctx/mem c) [:children :obtain :start]) (ctx/update-mem! c assoc :begun true))
-                        :continue)
-          :declined (let [w (b/child-wait c :obtain 'jobs.items.obtain oargs)]
-                      (ctx/result! c (merge {:status :stopped :any-of names} (select-keys w [:reason])))
-                      :done)
-          (let [res (ctx/child-result c :obtain)
-                tool (carried-tool p names)]
-            (ctx/result! c (if tool
-                             {:status :done :tool tool}
-                             (merge {:status :stopped :reason (if (= :done (:status res)) :lost (:reason res)) :any-of names}
-                                    (select-keys res [:tried :chain :got]))))
-            :done))))))
+      (let [e (await (ctx/call c :obtain 'jobs.items.obtain (obtain-args c names)))
+            tool (carried-tool p names)
+            data (merge {:any-of names} (select-keys (:data e) [:tried :got :why]))]
+        (cond
+          (= :continue e) :continue
+          tool (ctx/end c :done nil {:tool tool})
+          (= :done (:kind e)) (ctx/end c :nothing-possible :lost data)
+          :else (ctx/end c (:kind e) (:cause e) data))))))

@@ -3,7 +3,7 @@
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.craft :as craft]
-            [jobs.items.obtain.base :refer [craft-radius seen-radius]]
+            [jobs.items.obtain.base :refer [craft-radius plan-allowed? seen-radius]]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source wool-keep]]
             [jobs.items.obtain.table :refer [dirt-blocks gather-needs grass-seeds leaves-of material-blocks source-opts wool-color wool?]]
             [jobs.items.recipes :as recipes]
@@ -18,7 +18,8 @@
   (or (first (remove (fn [pl] (some #(= :smelt (:op %)) (:steps pl))) plans)) (first plans)))
 
 (defn craft-plan
-  "{:item name :steps [..]} for the first of names a craft chain makes n more of from what is carried, else nil."
+  "{:item name :steps [..]} for the first of names a craft chain of allowed steps (a smelt step needs the :smelt way,
+  any other :craft) makes n more of from what is carried, else nil."
   [c names n]
   (let [p (:primitives c)
         have (storage/carried-totals (u/inventory p))
@@ -29,7 +30,7 @@
     (furnace-free
      (keep (fn [name]
              (when-let [pl (recipes/plan version have name n (assoc (source-opts) :table? table?))]
-               (assoc pl :item name)))
+               (when (plan-allowed? c pl) (assoc pl :item name))))
            names))))
 
 (defn pick-plan
@@ -90,9 +91,10 @@
                                       {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p (craft-radius))))
                                        :gather? true :materials materials})]
                       (when-let [pl (recipes/plan version have name n opts)]
-                        (-> pl
-                            (update :gather any-log version have name n opts)
-                            (assoc :item name))))))]
+                        (when (plan-allowed? c pl)
+                          (-> pl
+                              (update :gather any-log version have name n opts)
+                              (assoc :item name)))))))]
     (if (= 1 (count names))
       (plan-of (first names))
       (let [plans (keep plan-of names)]

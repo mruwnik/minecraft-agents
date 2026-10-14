@@ -18,7 +18,7 @@
   {:name "walled-table-no-logs-waits-for-material"
    :body {:inventory [["dirt" 20]]}
    :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}
-            {:no-event {:source :job :kind :waiting :data {:table [:any]}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}
+            {:no-event {:source :job :kind :waiting :data {:table [:any]}} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "wooden_pickaxe" 0] [:block [18 0 16] "stone"]]}]}

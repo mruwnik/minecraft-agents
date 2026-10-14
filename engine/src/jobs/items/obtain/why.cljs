@@ -1,7 +1,7 @@
 (ns jobs.items.obtain.why
   "The texts of a source that has nothing: why no source, what a failed try adds."
   (:require [engine.game :as game]
-            [jobs.items.obtain.base :refer [limits sheep-radius seen-radius]]
+            [jobs.items.obtain.base :refer [makes? sheep-radius seen-radius way?]]
             [jobs.items.obtain.need :refer [explore-opts]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
@@ -53,15 +53,14 @@
 (defn no-source-why
   "Text for the no-source wait: what each allowed source lacks."
   [c names n]
-  (let [how (:how (limits c))
-        have (storage/carried-totals (u/inventory (:primitives c)))
+  (let [have (storage/carried-totals (u/inventory (:primitives c)))
         version (game/version-of (:primitives c))]
     (clojure.string/join
      "; "
-     (concat (when (contains? how :chest) [(str "no seen chest that may hold " (clojure.string/join "/" names))])
-             (when (contains? how :craft) [(recipes/lacking version have (first names) n)])
-             (when (contains? how :gather) [(unseen-why c names n)])
-             (when-let [w (and (contains? how :gather) (pickaxe-why version have names))] [w])))))
+     (concat (when (way? c :chest) [(str "no seen chest that may hold " (clojure.string/join "/" names))])
+             (when (makes? c) [(recipes/lacking version have (first names) n)])
+             (when (way? c :gather) [(unseen-why c names n)])
+             (when-let [w (and (way? c :gather) (pickaxe-why version have names))] [w])))))
 
 (defn tried-text
   "What a gather that was tried and failed adds to the no-source text (\"; gathering was tried and ended ..\", with the

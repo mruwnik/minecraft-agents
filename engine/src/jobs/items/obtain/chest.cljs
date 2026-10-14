@@ -22,11 +22,12 @@
 (defn ^:async withdraw! [c pos items names have]
   (let [name (holds items names)
         need (- (:target (:start (ctx/mem c))) have)
-        r (await (ctx/call-child c :take 'jobs.storage.withdraw
-                                 {:chest pos :items {name (+ (storage/carried (u/inventory (:primitives c)) name) need)}}))]
-    (when (#{:done :declined} r)
-      (ctx/update-mem! c update :done-chests (fnil conj #{}) (fetch/cell-of pos)))
-    (if (= :continue r) :continue :again)))
+        e (await (ctx/call c :take 'jobs.storage.withdraw
+                           {:chest pos :items {name (+ (storage/carried (u/inventory (:primitives c)) name) need)}}))]
+    (if (= :continue e)
+      :continue
+      (do (ctx/update-mem! c update :done-chests (fnil conj #{}) (fetch/cell-of pos))
+          :again))))
 
 (defn ^:async inspect!
   "Walk to within 3 of the chest (a go-to child), look into it and book its stock. :continue while go-to waits, else :again."
@@ -34,10 +35,10 @@
   (let [cell (fetch/cell-of pos)
         mark! #(ctx/update-mem! c (fn [m] (-> m (update :done-chests (fnil conj #{}) cell) (update :inspected (fnil inc 0)))))
         w (when-not (u/within? (u/self-pos c) pos 3)
-            (await (child/call-walk c :walk {:pos pos :range 3 :escalate false :warn false :retry false :zone-tolls true})))]
+            (await (child/call-walk* c :walk {:pos pos :range 3 :escalate false :warn false :retry false :zone-tolls true})))]
     (cond
       (= :continue w) :continue
-      (and w (not (:arrived (ctx/child-result c :walk)))) (do (mark!) :again)
+      (and w (not (:arrived (:data w)))) (do (mark!) :again)
       :else
       (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos pos})))]
         (if (= "ok" (.-status seen))

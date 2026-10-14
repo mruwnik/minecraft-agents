@@ -1,15 +1,15 @@
 (ns jobs.items.obtain
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.items.obtain.base :refer [args-error carried-of holds limits max-gap-ms max-inspections names-of tried! wanted-fields]]
+            [engine.settings :as settings]
+            [jobs.items.obtain.base :refer [args-error carried-of holds makes? max-gap-ms max-inspections names-of tried! wanted-fields way?]]
             [jobs.items.obtain.chest :refer [candidates inspect! withdraw!]]
             [jobs.items.obtain.craft :refer [craft-step!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
-            [jobs.items.obtain.need :refer [explorable? gather-held? gather-viable?]]
-            [jobs.items.obtain.plan :refer [craft-plan]]
+            [jobs.items.obtain.need :refer [explorable? gather-held gather-viable?]]
+            [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
             [jobs.items.obtain.why :refer [no-source-why tried-text]]
             [jobs.lib.body :as body]
-            [jobs.lib.declined :as declined]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.storage :as storage]
@@ -20,20 +20,20 @@
   "Get :count more of :item (or of any of :any-of, in that order of preference) than were carried at the first round.
   The target is booked once, so a cut or restart goes on toward the same count. One call is the whole attempt: it yields (:continue) only while a child waits on the world.
 
-  Sources, in order (carried, chests, crafting, gathering):
-  - Carried: the target is met, done.
-  - :chest (in :how): the containers the body has seen (perception's seenBlocks, never x-ray) within 32 blocks,
+  Ways, in order (:ways, default all; the target met is done):
+  - :chest: the containers the body has seen (perception's seenBlocks, never x-ray) within 32 blocks,
     still there, whose zone or claim allows :take (an open, unzoned chest does; jobs.lib.access). A chest known
     to hold a wanted name (body memory :fetch/stock) is withdrawn from (jobs.storage.withdraw child :take); one of
     unknown stock is walked to and looked into, nearest first, at most 4 per obtain; one known not to hold any is
     skipped. Each chest is withdrawn from once. With none usable seen at the first round, one look around first.
-  - :craft (in :how): a chain of crafts planned from the recipes (jobs.items.recipes) over what is carried: logs to
+  - :craft and :smelt: a chain of crafts planned from the recipes (jobs.items.recipes) over what is carried: logs to
     planks to sticks to the tool, and a crafting table when the chain needs one and none is seen (crafted, then put
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child; a
     furnace product (iron_ingot from raw_iron, charcoal from a log, cooked food; jobs.items.smelt.plan/made-from) is a step
-    run by a jobs.items.smelt child, which fetches its own fuel and furnace one :depth deeper. The names are tried in
+    run by a jobs.items.smelt child, which fetches its own fuel and furnace; a chain with a smelt step needs :smelt, any
+    other step :craft. The names are tried in
     order; the first with a plan is made, but one with no smelt step before one with. Three fruitless steps stop it (:tried :craft); a craft child that ran and made nothing stops it at once.
-  - :gather (in :how): coal comes from a plain or deepslate ore seen; dirt is dug from seen dirt or grass; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
+  - :gather: coal comes from a plain or deepslate ore seen; dirt is dug from seen dirt or grass; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
     jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood (of any species, but one only its species makes, oak_log for oak_planks, from that species' trees),
     raw fish (cod, salmon: also the input of a cooked fish's smelt step) by jobs.food.fish from water seen (its rod from a chest or a craft; string has no source, so no rod ends :no-source),
@@ -44,43 +44,110 @@
     :pickaxe: wooden_pickaxe for stone and coal, stone_pickaxe for iron); a mine that ends :no-tool (its pickaxe broke) does not count as a nothing run, that tool is got again the same way.
     With :explore, an unseen stone material or ore other than coal is left to the mine child (it tunnels for ore); any other unseen raw need is searched for (jobs.explore.search child, slot :explore, at most 3 per need;
     a notice :obtain.exploring says so); none found stops it (:tried {:gather {:searched ..}}).
-  - Nothing else: stopped :no-source with :tried.
+  - Nothing else: nothing-possible :no-source.
 
-  The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks; an unseen oak_log names other species of log seen) before the first round (once the round has looked around, when chests are allowed) when nothing is carried enough, no
-  usable chest that might hold it is seen and no craft chain makes it from what is carried, and nothing seen to gather what a chain lacks (with :explore, a chain whose raw needs are unseen passes: the search child solves it; when every raw need is seen and the gather child's own check waits (night in a shelter), that wait stands instead). Ends {:status :done :got n :item name} or {:status :stopped
-  :reason r :got n :tried {..}}, r :no-source, :cycle (a wanted name is on :chain), :timeout (:minutes without what is
-  carried changing) or :bad-args. :depth is the nesting left for sources that need fetches of their own (not used yet: crafting
-  plans its whole chain; a gather child fetches its own tools).")
+  Bad args end condition-failed :bad-args {:why} (warn obtain.declined).
+  Conditions (before it starts): no source {:reason :no-source :why text :item|:any-of} (:why: what
+  each way lacks; an unseen oak_log names other species of log seen) when no usable chest that might hold it is seen
+  (with chests allowed, checked once the round has looked around), no craft chain makes it from what is carried, and
+  nothing seen to gather what a chain lacks (with :explore, a chain whose raw needs are unseen passes: the search child
+  solves it; then a body too hurt to walk off fails :low-health); when every raw need is seen and the gather child's
+  own check declines (night in a shelter), that cause stands instead.
+  Ends :done {:got n :item name} only with the count carried. Nothing-possible {:reason :no-source :why} or
+  :table-unreachable when every allowed way was tried, data {:got n :tried {way why} :why}. Limit-reached {:line :time
+  :reason :timeout} after :spend :time seconds (default ::time-s) without a change in what is carried. A nested call
+  for the same item is the engine's :duplicate-call.
+  Quote: the plan's figures; yields the count, time a guess per step, no most for a gather.")
 
 (a/defargs args
   {:item {:doc "the item to get" :spec a/item? :default nil}
    :any-of {:doc "items, any one will do, the first preferred (instead of :item)" :spec (a/coll-of a/item?) :default nil}
    :count {:doc "how many more than carried at the start (counts above 64 are taken as 64)" :spec (a/int-in 1 nil) :default 1}
-   :how {:doc "sources to use, a subset of #{:chest :craft :gather}; nil: all" :spec (a/coll-of #{:chest :craft :gather}) :default nil}
-   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :spec (a/int-in 0 nil) :default nil}
-   :minutes {:doc "minutes without a change in what is carried before it stops :timeout (a long chain keeps going while it makes progress); nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
-   :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
-   :chain {:doc "items being fetched above this one (a cycle stops)" :spec (a/coll-of a/item?) :default []}
+   :fail-minutes {:doc "passed on to the smelt child's fetch; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
    :explore {:doc "walk and look for a raw need not seen: false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}})
 
-(defn check [c]
-  (let [a (:args c)
-        names (names-of a)]
+(a/defargs settings
+  {::time-s {:default 600 :doc "Seconds without a change in what is carried before an obtain ends (a long chain goes on while it makes progress)." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
+
+(def target [:item :any-of])
+
+(def ways [:chest :craft :smelt :gather])
+
+(def defaults {:ways (set ways) :spend {:time ::time-s}})
+
+(def how-ways {:chest [:chest] :craft [:craft :smelt] :gather [:gather]})
+
+(defn legacy-args
+  "An old caller's :how as :ways (:craft brings :smelt), :minutes as :spend {:time}; :chain and :depth go (a nested
+  call for the same item is the engine's :duplicate-call). A :how that is not a list of sources stays, refused."
+  [{:keys [how minutes] :as args}]
+  (cond-> (dissoc args :minutes :chain :depth)
+    (or (nil? how) (and (coll? how) (every? how-ways how))) (dissoc :how)
+    (and (coll? how) (every? how-ways how) (nil? (:ways args))) (assoc :ways (set (mapcat how-ways how)))
+    (and minutes (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] (* 60 minutes))))
+
+(defn source-cause
+  "nil when a way would start: a usable seen chest that might hold one of the names, a chain made from what is
+  carried, a gather of seen raw needs, or a search for unseen ones. Else the cause: the gather child's own decline,
+  :low-health for a search the body is too hurt for, or {:reason :no-source :why ..}."
+  [c]
+  (let [c (assoc c :wait (atom nil))
+        a (:args c)
+        names (names-of a)
+        n (:count a)]
     (cond
-      (args-error a) true
-      (declined/key* (ctx/mem c)) (declined/check c)
-      (:start (ctx/mem c)) true
-      (and (contains? (:how (limits c)) :chest) (seq (candidates c names))) true
-      (and (contains? (:how (limits c)) :craft) (craft-plan c names (:count a))) true
-      (and (contains? (:how (limits c)) :gather) (gather-viable? c names (:count a))) true
-      (and (contains? (:how (limits c)) :gather) (explorable? c names (:count a)))
-      (if-let [hurt (body/too-hurt (:primitives c))] (ctx/wait c hurt) true)
-      (and (contains? (:how (limits c)) :gather) (gather-held? c names (:count a))) false
-      :else (let [reason (merge {:reason :no-source :why (no-source-why c names (:count a))} (wanted-fields a))]
-              (if (contains? (:how (limits c)) :chest)
-                (look/wait-unless-surveyed c reason)
-                (ctx/wait c reason))))))
+      (and (way? c :chest) (seq (candidates c names))) nil
+      (and (makes? c) (craft-plan c names n)) nil
+      (and (way? c :gather) (gather-viable? c names n)) nil
+      (and (way? c :gather) (explorable? c names n)) (body/too-hurt (:primitives c))
+      :else (or (when (way? c :gather) (gather-held c names n))
+                (merge {:reason :no-source :why (no-source-why c names n)} (wanted-fields a))))))
+
+(defn bad-args [c]
+  (when-let [e (args-error (:args c))]
+    {:reason :bad-args :why e}))
+
+(defn no-source
+  "Before the call starts, source-cause; a plain no-source waits for the round's look around when chests are allowed.
+  Bad args are the round's to end."
+  [c]
+  (when-not (or (ctx/frozen-call c) (:start (ctx/mem c)) (args-error (:args c)))
+    (let [cause (source-cause c)]
+      (when-not (and (= :no-source (:reason cause)) (way? c :chest) (not (look/surveyed? c)))
+        cause))))
+
+(def conditions [[:fn no-source]])
+
+(defn done?
+  "The count carried, and no tree a cut left half felled (the round fells it whole first)."
+  [c]
+  (let [{:keys [start] :as m} (ctx/mem c)
+        have (carried-of (u/inventory (:primitives c)) (names-of (:args c)))
+        n (:count (:args c))]
+    (if start
+      {:done? (and (>= have (:target start)) (not (get-in m [:gather :tree]))) :units :items :done (max 0 (- have (:have start))) :left (max 0 (- (:target start) have))}
+      {:done? false :units :items :done 0 :left n})))
+
+(def step-s "A guess of the seconds one craft step takes, walks included." 5)
+(def smelt-s "A guess of the seconds one smelt step takes per item, the furnace's 10 s and its fetches." 15)
+(def gather-s "A guess of the seconds one raw need takes to gather: a walk, a fell or a dig." 60)
+
+(defn quote-of
+  "The plan's figures: the count as yield; time guessed per craft and smelt step, a gather's most open."
+  [c]
+  (let [a (:args c)
+        names (names-of a)
+        n (min 64 (:count a 1))
+        pl (or (craft-plan c names n) (gather-plan c names n))
+        steps (:steps pl)
+        smelts (reduce + 0 (map :count (filter #(= :smelt (:op %)) steps)))
+        gathers (count (:gather pl))
+        mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (* smelt-s smelts) (* gather-s gathers))
+        item (or (:item pl) (first names))]
+    {:uses {:time [0 (max step-s mean) (if (or (nil? pl) (pos? gathers)) ##Inf (* 3 (max step-s mean)))]}
+     :yields {:items {item [0 n n]}}}))
 
 (defn survey-first?
   "Before the first round, with chests allowed, none usable seen that might hold one of names and no look around yet:
@@ -88,14 +155,8 @@
   [c names]
   (and (not (:start (ctx/mem c)))
        (not (look/surveyed? c))
-       (contains? (:how (limits c)) :chest)
+       (way? c :chest)
        (empty? (candidates c names))))
-
-(defn stop! [c reason extra]
-  (let [a (:args c)
-        res (merge {:status :stopped :reason reason :got (:got extra 0)} (wanted-fields a) extra)]
-    (ctx/result! c res)
-    :done))
 
 (defn progress
   "The stall clock: prev ({:inv carried-counts :t ms :at ms of the last look}) kept while what is carried is the same, else
@@ -105,59 +166,70 @@
     {:inv inv :at now :t (+ (:t prev) (max 0 (- now (:at prev) max-gap)))}
     {:inv inv :t now :at now}))
 
+(defn stall-s
+  "Seconds without a change in what is carried that end the call: its :spend :time."
+  [c]
+  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+
 (defn ^:async step! [c]
   (let [a (:args c)
         names (names-of a)
         inv (u/inventory (:primitives c))
         have (carried-of inv names)
         now (ctx/now c)]
-    (if-let [e (args-error a)]
-      (do (ctx/emit! c :obtain.declined :warn {:reason :bad-args :text (str "items.obtain " e)})
-          (stop! c :bad-args {:why e}))
-      (if (survey-first? c names)
-        (do (await (look/survey! c)) (if (check c) :again :continue))
-        (let [_ (when-not (:start (ctx/mem c))
-                  (ctx/update-mem! c update :craft dissoc :table-unreachable)
-                  (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a)))}))
-              {:keys [target] :as start} (:start (ctx/mem c))
-              seen-inv (storage/carried-totals (u/inventory (:primitives c)))
-              prog (progress (:progress (ctx/mem c)) seen-inv now (max-gap-ms))
-              _ (when (not= prog (:progress (ctx/mem c))) (ctx/update-mem! c assoc :progress prog))
-              t (:t prog)
-              got (max 0 (- have (:have start)))
-              o (limits c)
-              m (ctx/mem c)]
-          (cond
-            (some (set (:chain a)) names) (stop! c :cycle {:chain (:chain a)})
-            (get-in m [:gather :tree]) (await (finish-tree! c))
-            (>= have target) (do (ctx/result! c {:status :done :got got :item (or (holds (into {} (map (juxt :name :count)) inv) names) (first names))})
-                                 :done)
-            (> (- now t) (* 60000 (:minutes o))) (stop! c :timeout {:got got :tried (:tried m)})
-            (and (contains? (:how o) :chest) (not (get-in m [:tried :chest])))
-            (let [cs (candidates c names)
-                  known (first (filter :stock cs))
-                  unknown (first (remove :stock cs))]
-              (cond
-                known (await (withdraw! c (:pos known) (:stock known) names have))
-                (and unknown (< (:inspected m 0) (max-inspections))) (await (inspect! c (:pos unknown)))
-                :else (tried! c :chest (if (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :none-seen))))
-            (and (contains? (:how o) :craft) (not (get-in m [:tried :craft]))
-                 (or (not (contains? (:how o) :gather)) (get-in m [:craft :step]) (get-in m [:craft :table-unreachable]) (craft-plan c names (- target have))))
-            (await (craft-step! c names have target))
-            (and (contains? (:how o) :gather) (not (get-in m [:tried :gather])))
-            (await (gather-step! c names have target))
-            :else (let [unreachable (= :table-unreachable (get-in m [:tried :craft]))]
-                    (stop! c (if unreachable :table-unreachable :no-source)
-                           (cond-> {:got got :tried (:tried m)}
-                             (not unreachable) (assoc :why (str "no source for " (clojure.string/join "/" names) ": "
-                                                                (no-source-why c names (:count a))
-                                                                (tried-text (:tried m) (get-in m [:gather :why]) (get-in m [:craft :detail])))))))))))))
+    (cond
+      (bad-args c)
+      (let [cause (bad-args c)]
+        (ctx/emit! c :obtain.declined :warn {:reason :bad-args :text (str "items.obtain " (:why cause))})
+        (ctx/end c :condition-failed cause (assoc (wanted-fields a) :text (str "items.obtain " (:why cause)))))
+
+      (survey-first? c names)
+      (do (await (look/survey! c))
+          (if-let [cause (source-cause c)]
+            (ctx/end c :condition-failed cause (merge {:got 0} (wanted-fields a) (when (map? cause) (select-keys cause [:why]))))
+            :again))
+
+      :else
+      (let [_ (when-not (:start (ctx/mem c))
+                (ctx/update-mem! c update :craft dissoc :table-unreachable)
+                (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a)))}))
+            {:keys [target] :as start} (:start (ctx/mem c))
+            seen-inv (storage/carried-totals (u/inventory (:primitives c)))
+            prog (progress (:progress (ctx/mem c)) seen-inv now (max-gap-ms))
+            _ (when (not= prog (:progress (ctx/mem c))) (ctx/update-mem! c assoc :progress prog))
+            t (:t prog)
+            got (max 0 (- have (:have start)))
+            m (ctx/mem c)
+            data (merge {:got got} (wanted-fields a))]
+        (cond
+          (get-in m [:gather :tree]) (await (finish-tree! c))
+          (>= have target) (ctx/end c :done nil {:got got :item (or (holds (into {} (map (juxt :name :count)) inv) names) (first names))})
+          (> (- now t) (* 1000 (stall-s c))) (ctx/end c :limit-reached {:line :time :reason :timeout} (assoc data :tried (:tried m)))
+          (and (way? c :chest) (not (get-in m [:tried :chest])))
+          (let [cs (candidates c names)
+                known (first (filter :stock cs))
+                unknown (first (remove :stock cs))]
+            (cond
+              known (await (withdraw! c (:pos known) (:stock known) names have))
+              (and unknown (< (:inspected m 0) (max-inspections))) (await (inspect! c (:pos unknown)))
+              :else (tried! c :chest (if (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :none-seen))))
+          (and (makes? c) (not (get-in m [:tried :craft]))
+               (or (not (way? c :gather)) (get-in m [:craft :step]) (get-in m [:craft :table-unreachable]) (craft-plan c names (- target have))))
+          (await (craft-step! c names have target))
+          (and (way? c :gather) (not (get-in m [:tried :gather])))
+          (await (gather-step! c names have target))
+          (= :table-unreachable (get-in m [:tried :craft]))
+          (ctx/end c :nothing-possible :table-unreachable (assoc data :tried (:tried m)))
+          :else
+          (let [why (str "no source for " (clojure.string/join "/" names) ": " (no-source-why c names (:count a))
+                         (tried-text (:tried m) (get-in m [:gather :why]) (get-in m [:craft :detail])))]
+            (ctx/end c :nothing-possible (merge {:reason :no-source :why why} (wanted-fields a))
+                     (assoc data :tried (:tried m) :why why))))))))
 
 (defn ^:async round
-  "The whole attempt in one call: step! again until the count is carried or it stops; :continue only while a child waits on the world, :declined while a smelt child cooks."
+  "The whole attempt in one call: step! again until the count is carried or it ends; :continue only while a child waits on the world."
   [c]
-  (declined/begin! c)
   (await (pace/steps! c (fn ^:async obtain-step []
-                                      (let [r (await (step! c))]
-                                        (when (:progress (ctx/mem c)) (ctx/update-mem! c assoc-in [:progress :at] (ctx/now c)))
-                                        r)))))
+                          (let [r (await (step! c))]
+                            (when (:progress (ctx/mem c)) (ctx/update-mem! c assoc-in [:progress :at] (ctx/now c)))
+                            r)))))

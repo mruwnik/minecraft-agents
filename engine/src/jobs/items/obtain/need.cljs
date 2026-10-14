@@ -3,7 +3,7 @@
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.get-tool :as get-tool]
-            [jobs.items.obtain.base :refer [explore-setting limits]]
+            [jobs.items.obtain.base :refer [explore-setting makes? way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
             [jobs.items.obtain.seen :refer [gather-slot seen-of with-block]]
@@ -17,11 +17,10 @@
   "Whether a source of the obtain child that gets a tool for need would start: a usable seen chest, a craft plan, or a
   gather of its own (recursion ends at the wooden pickaxe, whose logs need no tool)."
   [c names need]
-  (let [tools (tools-wanted c names need)
-        how (:how (limits c))]
-    (boolean (or (and (contains? how :chest) (seq (candidates c tools)))
-                 (and (contains? how :craft) (craft-plan c tools 1))
-                 (and (contains? how :gather) (or (gather-viable? c tools 1) (explorable? c tools 1)))))))
+  (let [tools (tools-wanted c names need)]
+    (boolean (or (and (way? c :chest) (seq (candidates c tools)))
+                 (and (makes? c) (craft-plan c tools 1))
+                 (and (way? c :gather) (or (gather-viable? c tools 1) (explorable? c tools 1)))))))
 
 (defn gather-viable?
   "Whether a chain is craftable once raw items are gathered, and a block for every raw need has been seen and
@@ -57,21 +56,23 @@
 
 (defn tools-wanted
   "For a mined need (dirt is dug by hand) whose block the carried tools do not harvest, with :craft allowed: the tools
-  that do, cheapest first (wooden_pickaxe for stone, stone_pickaxe for iron_ore), less those being fetched above; else nil."
+  that do, cheapest first (wooden_pickaxe for stone, stone_pickaxe for iron_ore), less those wanted; else nil."
   [c names need]
   (let [p (:primitives c)
         block (:block (:args need))
         tools (when (and (= 'jobs.gather.mine (:job need)) (not= "dirt" (:key need)) block
-                         (contains? (:how (limits c)) :craft) (not (tools/can-harvest? p block)))
+                         (way? c :craft) (not (tools/can-harvest? p block)))
                 (get-tool/tools-for p {:block block}))]
     (when (vector? tools)
-      (not-empty (vec (remove (set (concat names (:chain (:args c)))) tools))))))
+      (not-empty (vec (remove (set names) tools))))))
 
 (defn pickaxe-first? [c names need] (boolean (tools-wanted c names need)))
 
-(defn gather-held?
-  "Whether every raw need of the chain is seen and the first one's child declined with a wait reason of its own
-  (night in a shelter ..), left standing as the job's: the source is there, only not now."
+(defn gather-held
+  "When every raw need of the chain is seen and the first one's child declined with a wait reason of its own (night in
+  a shelter ..; gather-viable? left it in c's :wait atom): that reason as a cause, the source there, only not now; else nil."
   [c names n]
-  (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) seq)]
-    (boolean (and needs (every? #(seen-of c %) needs) (some-> (:wait c) deref)))))
+  (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) seq)
+        w (some-> (:wait c) deref)]
+    (when (and needs (every? #(seen-of c %) needs) w)
+      (if (= [:reason] (keys w)) (:reason w) w))))
