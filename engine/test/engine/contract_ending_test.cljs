@@ -55,11 +55,11 @@
 
 (def world (atom {}))
 
-(defn setup [jobs]
+(defn setup [jobs & [triggers]]
   (reset! world {})
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
-        eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers {}
+        eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers (or triggers {})
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :seen seen :clock clock}))
 
@@ -204,6 +204,118 @@
                  (mapv (juxt (comp :status :data) (comp :ending :data))
                        (filter #(= (str id "/leaf") (get-in % [:context :job-id] (:job %))) (job-ev seen :child_ended)))))
           (is (nil? (:because (:data (first (job-ev seen :stopped))))) "a child that went on is no because"))))))
+
+;; ---------------------------------------------------------------- started frames left behind
+
+(defn cut-offs
+  "[job-id cause] of each child_ended :cut-off in seen."
+  [seen]
+  (->> (job-ev seen :child_ended)
+       (filter #(= :cut-off (:status (:data %))))
+       (mapv (juxt #(get-in % [:context :job-id] (:job %)) #(get-in % [:data :ending :cause])))))
+
+(def calls-leaf
+  "An old job whose round starts the contract leaf (it goes on) and ends :done, or stopped with the world's :old-result."
+  {:check (constantly true)
+   :round (fn ^:async calls-leaf [c]
+            (await (ctx/call c :leaf leaf {}))
+            (when-let [r (:old-result @world)] (ctx/result! c r))
+            :done)})
+
+(deftest an-old-root-that-ends-cuts-off-its-started-contract-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'calls-leaf calls-leaf
+                                         'calls-kid {:check (constantly true)
+                                                     :round (fn ^:async calls-kid [c]
+                                                              (await (ctx/call-child c :kid calls-leaf {}))
+                                                              :continue)}})
+              a (core/submit! eng '(calls-leaf) {})]
+          (swap! world assoc :leaf-ok true)
+          (await (core/tick! eng))
+          (swap! world assoc :leaf-ok true :old-result {:status :stopped :reason :no-way})
+          (let [b (core/submit! eng '(calls-leaf) {})]
+            (await (core/tick! eng))
+            (is (= [[(str a "/leaf") :ended] [(str b "/leaf") :ended]] (cut-offs seen))))
+          (swap! world dissoc :old-result)
+          (let [k (core/submit! eng '(calls-kid) {})]
+            (await (core/tick! eng))
+            (is (= [(str k "/kid/leaf") :ended] (last (cut-offs seen))) "so does an old child called with call-child")))))))
+
+(defn ^:async next-turn [] (await (js/Promise. (fn [r] (js/setTimeout r 0)))))
+
+(def reflex-jobs
+  {'abandons (get jobs 'abandons)
+   'holds {:conditions [] :round (fn ^:async holds [c]
+                                   (await (ctx/call c :leaf leaf {}))
+                                   (await (js/Promise. (fn [r] (swap! world assoc :release r))))
+                                   (ctx/end c :done nil))}
+   'old-done {:check (constantly true) :round (fn ^:async old-done [c] (await (ctx/call c :leaf leaf {})) :done)}})
+
+(def reflex-triggers
+  (into {} (for [k [:abandons :holds :old-done]]
+             [k {:name k :job (list (symbol (name k))) :persistence :retry :when (fn [_ _ _] (= k (:fire @world)))}])))
+
+(deftest a-reflex-root-that-ends-cuts-off-its-started-contract-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup reflex-jobs reflex-triggers)]
+          (core/register-reflex! eng {:trigger :abandons})
+          (core/register-reflex! eng {:trigger :old-done})
+          (swap! world assoc :leaf-ok true :fire :abandons)
+          (await (core/tick! eng))
+          (let [[stopped] (job-ev seen :stopped)
+                [ended] (ev seen :reflex :ended)
+                id (get-in ended [:context :job-id] (:job ended))]
+            (is (= {:kind :nothing-possible :cause :gave-up :reason :gave-up}
+                   (select-keys (:data stopped) [:kind :cause :reason]))
+                "a contract reflex's ending is told as job.stopped")
+            (is (= [:stopped :gave-up] [(get-in ended [:data :outcome]) (get-in ended [:data :reason])]))
+            (is (map? (get-in ended [:data :report])))
+            (is (= [[(str id "/leaf") :ended]] (cut-offs seen))))
+          (swap! world assoc :fire :old-done)
+          (await (core/tick! eng))
+          (is (= 2 (count (cut-offs seen))) "an old reflex ending :done cuts off its started child too"))))))
+
+(deftest a-reflex-dropped-cuts-off-its-started-contract-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[by drop!] [[:death #(core/record-body-event! % #js {:kind "died"})] [:shutdown core/shutdown!]]]
+          (let [{:keys [eng seen]} (setup reflex-jobs reflex-triggers)]
+            (core/register-reflex! eng {:trigger :holds})
+            (swap! world assoc :leaf-ok true :fire :holds)
+            (let [round (core/tick! eng)]
+              (await (next-turn))
+              (drop! eng)
+              ((:release @world))
+              (await round))
+            (let [[ended] (ev seen :reflex :ended)
+                  id (get-in ended [:context :job-id] (:job ended))]
+              (is (= [:dropped {:kind :cut-off :cause by}]
+                     [(get-in ended [:data :outcome]) (get-in ended [:data :ending])]))
+              (is (map? (get-in ended [:data :report])))
+              (is (= [[(str id "/leaf") by]] (cut-offs seen))))))))))
+
+(deftest an-abandoned-slot-is-cut-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'drops {:conditions []
+                                                 :round (fn ^:async drops [c]
+                                                          (if (:drop @world)
+                                                            (ctx/update-mem! c update :children dissoc :leaf)
+                                                            (await (ctx/call c :leaf leaf {})))
+                                                          :continue)}})
+              id (core/submit! eng '(drops) {})]
+          (swap! world assoc :leaf-ok true)
+          (await (core/tick! eng))
+          (is (empty? (cut-offs seen)))
+          (swap! world assoc :drop true)
+          (await (core/tick! eng))
+          (is (= [[(str id "/leaf") :abandoned]] (cut-offs seen))))))))
 
 ;; ---------------------------------------------------------------- old jobs (engine.core.legacy)
 

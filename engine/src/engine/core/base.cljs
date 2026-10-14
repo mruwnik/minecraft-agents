@@ -199,10 +199,39 @@
   [eng id]
   (dissoc (mem/job-mem (mem/view (:store eng)) id []) :contract))
 
-(defn drop-instance! [eng id]
+(defn cut-off!
+  "Emit job.child_ended :cut-off for every started contract frame among the children of the frame m (job memory)
+  at slots of root, deepest last; cause says why (the frame ended, the job was cancelled)."
+  [eng root slots m cause]
+  (doseq [[slot child] (:children m)
+          :let [slots (conj slots slot)
+                id (mem/path->id root slots)]]
+    (when (get-in child [:contract :call])
+      (emit! eng {:source :job :kind :child_ended :level :debug :job id :slot slot
+                  :chain (mapv #(mem/path->id root (subvec slots 0 %)) (range (inc (count slots))))
+                  :status :cut-off :ending {:kind :cut-off :cause cause}
+                  :report (contract/report (:contract child))}))
+    (cut-off! eng root slots child cause)))
+
+(defn cut-off-dropped!
+  "Cut off, with cause, the frames below slots of root that the frame's memory had (before) and no longer has (after)."
+  [eng root slots before after cause]
+  (doseq [[slot child] (:children before)
+          :let [kept (get-in after [:children slot])]]
+    (if kept
+      (cut-off-dropped! eng root (conj slots slot) child kept cause)
+      (cut-off! eng root slots {:children {slot child}} cause))))
+
+(defn delete-root!
+  "Delete root job id's memory, its started contract frames cut off by cause first."
+  [eng id cause]
+  (cut-off! eng id [] (mem/job-mem (mem/view (:store eng)) id []) cause)
+  (mem/delete-job! (:store eng) id))
+
+(defn drop-instance! [eng id cause]
   (swap! (:state eng) update :instances dissoc id)
   (swap! (:rounds eng) dissoc id)
-  (mem/delete-job! (:store eng) id)
+  (delete-root! eng id cause)
   (save-memory! eng))
 
 (defn distance
@@ -264,7 +293,7 @@
   [eng id reflex outcome extra]
   (let [text (reflex-text reflex (get-in (state eng) [:instances id :spec]))
         report (tally/report eng id [])]
-    (drop-instance! eng id)
+    (drop-instance! eng id (if (#{:dropped :cancelled} outcome) (:by extra) :ended))
     (emit! eng (merge {:source :reflex :kind :ended :level :info :reflex reflex :job id
                        :outcome outcome :text (str text ": " (name outcome)) :report report}
                       (when (#{:dropped :cancelled} outcome) {:ending {:kind :cut-off :cause (:by extra)}})

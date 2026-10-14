@@ -3,7 +3,7 @@
   (a listed job waits while its conditions fail, until it starts) and a round that checks the conditions, freezes the
   call keys at the first round, asks done? and adds :because to the ending the job's round returns."
   (:require [engine.contract :as contract]
-            [engine.core.base :refer [cut-error emit! owner?]]
+            [engine.core.base :refer [cut-error owner?]]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]))
@@ -76,17 +76,3 @@
         (assoc def ::wrapped true :check #(check def %) :round #(run def %)))))
 
 (defn registry "jobs with every contract job wrapped." [jobs] (some-> jobs (update-vals wrap)))
-
-(defn cut-off!
-  "Emit job.child_ended :cut-off for every started contract frame among the children of the frame m (job memory)
-  at slots of root, deepest last; cause says why (the frame ended, the job was cancelled)."
-  [eng root slots m cause]
-  (doseq [[slot child] (:children m)
-          :let [slots (conj slots slot)
-                id (mem/path->id root slots)]]
-    (when (get-in child [:contract :call])
-      (emit! eng {:source :job :kind :child_ended :level :debug :job id :slot slot
-                  :chain (mapv #(mem/path->id root (subvec slots 0 %)) (range (inc (count slots))))
-                  :status :cut-off :ending {:kind :cut-off :cause cause}
-                  :report (contract/report (:contract child))}))
-    (cut-off! eng root slots child cause)))

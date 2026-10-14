@@ -295,16 +295,12 @@ a finished job's goes to body memory `:job-report` (cap 256).
 
 **Contract jobs.** Export `conditions` and `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
 `defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round. A failing
-condition ends `:condition-failed`, `done?` ends `:done`; endings are `{:kind :cause :because :report :data}`.
+condition ends `:condition-failed`, `done?` ends `:done`; endings are `{:kind :cause :because :report :data}`. A
+started frame left without an ending (its root ends or is dropped, its parent clears its slot) gets `:cut-off`.
 
-**Old and contract jobs together (engine.core.legacy, until all jobs are contract jobs).** An old job through
-`ctx/call`: its check runs each round, failing → `:condition-failed` (cause its wait reason); round `:declined` →
-`:condition-failed`; `:done` with a `:stopped` result → the kind `legacy/reason-kinds` gives its `:reason` (else
-`:nothing-possible`), cause the reason, `:data` the rest; other `:done` → `:done` with the result as `:data`. A
-contract job through `call-child`: `:declined` while its conditions fail before its first round; any ending is `:done`
-with child-result `{:status :stopped :reason cause-key :ending e}` (`{:status :done}` for `:done`) plus its `:data`.
-A contract job's `legacy-args` export, `(fn [args] args)`, maps an old caller's options to call keys before the args
-are checked.
+**Old and contract jobs together (engine.core.legacy).** An old job through `ctx/call` ends with the ending its
+check, round and result map to; a contract job through `call-child` answers `:declined` or `:done` with its ending in
+the child-result. A `legacy-args` export maps an old caller's options to call keys.
 
 **call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
 it returns `:continue` or `:declined`; on `:done` the sub-map is cleared so the next call starts fresh. A cut anywhere ends

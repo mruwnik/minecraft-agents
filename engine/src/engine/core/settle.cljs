@@ -1,12 +1,11 @@
 (ns engine.core.settle
   "Settling a round: booking a listed job's or a reflex job's outcome, judging reflex ends against the
   entry's persistence, and starting a round."
-  (:require [engine.core.base :refer [drop-instance! drop-reflex-job! emit! free-owner! job-fields manual-job manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
+  (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! job-fields manual-job manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
             [engine.core.fruitless :refer [book-round! note-fruitless!]]
             [engine.core.register :refer [trigger-holds?]]
             [engine.core.round :refer [run-round]]
-            [engine.core.ending :as ending]
             [engine.core.tally :as tally]
             [engine.contract :as contract]
             [engine.backoff :as backoff]
@@ -45,7 +44,7 @@
     (resolve-job-attention! eng id :job-completed #(remove-listed % id))
     (swap! (:waiting eng) dissoc id)
     (swap! (:fruitless eng) dissoc id)
-    (mem/delete-job! (:store eng) id)
+    (delete-root! eng id :ended)
     (emit! eng (merge fields
                       {:source :job :kind :stopped :level :warn :attention :notice
                        :data data :text (stopped-text data) :report report}))))
@@ -55,7 +54,7 @@
   [eng id error]
   (swap! (:waiting eng) dissoc id)
   (swap! (:fruitless eng) dissoc id)
-  (mem/delete-job! (:store eng) id)
+  (delete-root! eng id :ended)
   (request-attention! eng {:job-id id :reason :round-failed :kind :failed
                            :context (select-keys (job-fields eng id) [:round :chain])
                            :data {:error (str error)}
@@ -87,8 +86,7 @@
         (resolve-job-attention! eng id :job-completed
                                 #(assoc (remove-listed % id) :cursor (max idx 0)))
         (swap! (:fruitless eng) dissoc id)
-        (ending/cut-off! eng id [] (mem/job-mem (mem/view (:store eng)) id []) :ended)
-        (mem/delete-job! (:store eng) id)
+        (delete-root! eng id :ended)
         (emit! eng (if (= :done (:kind ending))
                      (merge fields {:source :job :kind :completed :level :info :attention :notice
                                     :data data :report report})
@@ -100,7 +98,7 @@
         (resolve-job-attention! eng id :job-completed
                                 #(assoc (remove-listed % id) :cursor (max idx 0)))
         (swap! (:fruitless eng) dissoc id)
-        (mem/delete-job! (:store eng) id)
+        (delete-root! eng id :ended)
         (emit! eng (if (stopped-result? result)
                      (merge fields {:source :job :kind :stopped :level :warn :attention :notice
                                     :data (dissoc result :dug)
@@ -171,7 +169,7 @@
                      :text (reflex-text reflex (get-in (state eng) [:instances id :spec]))
                      :report (tally/end-root! eng id (#{:done :stopped} outcome))}
               reason (assoc :reason reason))]
-    (drop-instance! eng id)
+    (drop-instance! eng id :ended)
     (if (or (paused? eng) (manual? eng))
       (swap! (:state eng) update :deferred-ends conj end)
       (judge-end! eng end {}))))

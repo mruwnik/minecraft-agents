@@ -97,8 +97,8 @@
 
 (defn call
   "Run one round of job (a definition map, or a job namespace symbol; an old job through engine.core.legacy) as the
-  child in slot, with args (its own and the call keys). A promise of :continue, or the child's ending with its :report; an ending other than
-  :done becomes this round's :because unless the job says its own."
+  child in slot, with args (its own and the call keys). A promise of :continue, or the child's ending with its
+  :report; an ending other than :done becomes this round's :because unless the job says its own."
   [ctx slot job args]
   (let [[def args] (child-job ctx job args)]
     ((:call ctx) slot def args)))

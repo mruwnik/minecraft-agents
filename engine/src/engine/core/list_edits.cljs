@@ -1,8 +1,7 @@
 (ns engine.core.list-edits
   "Edits of the job list: submit! (at the end, next or now), cancel! and retry!."
-  (:require [engine.core.base :refer [add-instance driver? drop-reflex-job! emit! free-owner! job-fields job-of manual-job new-id! remove-listed running save-memory! state]]
+  (:require [engine.core.base :refer [add-instance delete-root! driver? drop-reflex-job! emit! free-owner! job-fields job-of manual-job new-id! remove-listed running save-memory! state]]
             [engine.core.attention :refer [resolve-job-attention!]]
-            [engine.core.ending :as ending]
             [engine.core.tally :as tally]
             [engine.expr :as expr]
             [engine.memory :as mem]))
@@ -46,10 +45,9 @@
    (if-let [reflex (get-in (state eng) [:instances id :reflex])]
      (drop-reflex-job! eng id reflex :cancelled {:how :cancelled :by by})
      (do (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
-         (ending/cut-off! eng id [] (mem/job-mem (mem/view (:store eng)) id []) by)
          (swap! (:fruitless eng) dissoc id)
          (swap! (:rounds eng) dissoc id)
-         (mem/delete-job! (:store eng) id)
+         (delete-root! eng id by)
          (save-memory! eng)))
    (emit! eng (merge (into {} (filter val) (select-keys fields [:name :reflex]))
                      {:source :job :kind :cancelled :level :info :job id :chain [id] :by by :report report

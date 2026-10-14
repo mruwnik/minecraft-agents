@@ -1,7 +1,7 @@
 (ns engine.core.round
   "One round: the ctx a round or check receives, the act wrapper (token check, memory saves, action
   events) and call-child."
-  (:require [engine.core.base :refer [cut-error cut? distance emit! job-of normalize-result now offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
+  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of normalize-result now offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
@@ -87,10 +87,12 @@
      :view #(mem/view store)
      :update-mem (fn [f more]
                    (check!)
-                   (apply mem/update-job! store root slots
-                          (fn [m & more]
-                            (cond-> (apply f (dissoc m :contract) more) (:contract m) (assoc :contract (:contract m))))
-                          more)
+                   (let [before (mem/job-mem (mem/view store) root slots)]
+                     (apply mem/update-job! store root slots
+                            (fn [m & more]
+                              (cond-> (apply f (dissoc m :contract) more) (:contract m) (assoc :contract (:contract m))))
+                            more)
+                     (cut-off-dropped! eng root slots before (mem/job-mem (mem/view store) root slots) :abandoned))
                    (wrote! (mem/job-kind root)))
      :remember (fn [kind data policy]
                  (check!)
@@ -203,9 +205,8 @@
           (when-not (owner? eng (:token base)) (throw (cut-error)))
           (when (= status :error) (ended! :error nil nil report) (throw error))
           (when-not (= status :declined) (reset! child-wait nil))
-          (when ending
-            (swap! (:results base) assoc child-id (legacy/result-of (assoc ending :report report)))
-            (ending/cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended))
+          (when ending (swap! (:results base) assoc child-id (legacy/result-of (assoc ending :report report))))
+          (when (= status :done) (cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended))
           (ended! status (get @(:results base) child-id) @child-wait report)
           (if (= status :done)
             (do (tally/remember! eng (:sym def) (some->> (:target def) (select-keys args)) report)
@@ -263,7 +264,7 @@
                                     :report (:report e)}
                             (when-not done? {:reason (contract/cause-key e)})))
           (tally/remember! eng (:sym def) (some->> (:target def) (select-keys args)) (:report e))
-          (ending/cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended)
+          (cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended)
           (mem/update-job! store (:root base) (:slots base) update :children dissoc slot)
           (when-not done? (reset! child-ending e))
           e)))))
