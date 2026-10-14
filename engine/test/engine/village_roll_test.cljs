@@ -7,6 +7,8 @@
             [engine.registry :as registry]
             [engine.fake :as fake]
             [engine.village-trade-test :as vt]
+            [engine.contract :as contract]
+            [jobs.lib.look :as look]
             [engine.test-util :as tu]
             [jobs.village.roll :as roll]))
 
@@ -87,6 +89,16 @@
     {:villager "v-1" :pos nil :item "lectern" :want "enchanted_book"} false
     {:villager "v-1" :pos [2 64 0] :item nil :want "enchanted_book"} false
     {:villager "v-1" :pos [2 64 0] :item "lectern" :want nil} false))
+
+(deftest an-unseen-workstation-cell-asks-for-a-look-then-the-round-walks-there
+  (let [args {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book"}
+        world {:blocks {ws-key "lectern"}}
+        cause (fn [p surveyed?]
+                (with-redefs [ctx/frozen-call (constantly nil) look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))]
+                  (roll/cell-unseen {:primitives p :args args})))]
+    (is (= :cell-unseen (:reason (contract/look-cause (cause (tu/blind (tu/fake world)) false)))))
+    (is (nil? (cause (tu/blind (tu/fake world)) true)) "after a look the round goes to the cell")
+    (is (nil? (cause (tu/fake world) false)))))
 
 (deftest rolls-until-an-offer-gives-the-wanted-item
   (async done
@@ -207,7 +219,7 @@
       (assoc-in env [:eng :jobs job-sym] (assoc j :round (fn ^:async stubbed [c]
                                                            (if (= :stopped (:status result))
                                                              (ctx/end c :nothing-possible (:reason result))
-                                                             (do (ctx/result! c result) :done))))))))
+                                                             (ctx/end c :done nil result))))))))
 
 (def stopped {:status :stopped :reason :no-tool})
 

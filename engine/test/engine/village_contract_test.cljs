@@ -22,6 +22,7 @@
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
+    (is (some? (get-in (job sym) [:defaults :spend :time])) (str sym " has a time default"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:time 60}}}))) (str sym))))
 
 (def bread [{:name "bread" :count 5}])
@@ -43,7 +44,7 @@
                (await (ends '(jobs.village.feed {:villager "v-1"}) {:inventory bread}))))
         (is (= {:event :waiting :reason :need}
                (await (ends '(jobs.village.feed {:villager "v-1" :fetch false}) {:entities [(villager [])]}))))
-        (is (= {:event :waiting :reason :bad-args}
+        (is (= {:event :stopped :kind :impossible :reason :bad-args}
                (await (ends '(jobs.village.feed {:villager "v-1" :item "diamond"}) {:inventory bread}))))))))
 
 (deftest breed-start-facts-are-conditions
@@ -85,7 +86,7 @@
                             [:event])))
         (is (= {:event :stopped :kind :nothing-possible :reason :no-offer}
                (await (ends '(jobs.village.trade {:villager "v-1" :buy "apple"}) {:entities [(villager [bread-offer])]}))))
-        (is (= {:event :waiting :reason :bad-args}
+        (is (= {:event :stopped :kind :impossible :reason :bad-args}
                (await (ends '(jobs.village.trade {:villager "v-1"}) {}))))))))
 
 (def roll-args {:villager "v-1" :pos [2 64 0] :item "lectern" :want "enchanted_book"})
@@ -109,9 +110,9 @@
         (is (= {:event :stopped :kind :condition-failed :reason :gone}
                (await (ends (list 'jobs.village.roll roll-args) lectern-world))))))))
 
-(deftest roll-waits-on-bad-args
+(deftest roll-bad-args-are-impossible
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :waiting :reason :bad-args}
+        (is (= {:event :stopped :kind :impossible :reason :bad-args}
                (await (ends '(jobs.village.roll {:villager "v-1" :pos [2 64 0] :want "enchanted_book"}) {}))))))))

@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
+            [jobs.lib.started :as started]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -33,11 +34,12 @@
   {:target {:doc "villagers wanted in sight (adults and babies)" :spec (a/int-in 2 64) :default nil}
    :radius {:doc "how far to look for villagers" :spec (a/int-in 1 96) :default 48}
    :wait-s {:doc "seconds to stay near a fed pair for a birth" :spec (a/int-in 1 600) :default default-wait-s}
-   :fetch {:doc "get food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}})
+   :fetch {:doc "get food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}})
 
 (a/defargs settings
   {::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}
    ::wait-range {:default 6 :doc "Blocks within which the body waits for a pair to breed." :spec (a/int-in 0 nil)}
+   ::time-s {:default 3600 :doc "Seconds one breeding may take." :spec (a/int-in 1 nil)}
    ::feed-s {:default 30 :doc "Seconds one pair's feeding takes, for the quote." :spec (a/num-in 0 nil)}})
 (defn max-fruitless [] (settings/get settings ::max-fruitless))
 (defn wait-range [] (settings/get settings ::wait-range))
@@ -70,6 +72,8 @@
 
 (def target [:target])
 
+(def defaults {:spend {:time ::time-s}})
+
 (defn bad-args
   "Impossible: no :target of at least 2."
   [c]
@@ -77,34 +81,36 @@
     (when-not (and (number? t) (>= t 2))
       (contract/impossible {:reason :bad-args :why "needs a :target of at least 2"}))))
 
-(defn no-pair
+(def no-pair
   "At the start: the cause :no-pair while the target is not met and fewer than two adult villagers are in sight."
-  [c]
-  (when-not (ctx/frozen-call c)
+  (started/at-start
+   (fn [c]
     (let [vs (villagers (:primitives c) (:radius (:args c)))]
       (when (and (< (:pop (sight vs)) (:target (:args c))) (< (count (filter adult? vs)) 2))
         (cond-> {:reason :no-pair :text "fewer than two adult villagers in sight"}
-          (not (look/surveyed? c :near)) contract/look-first)))))
+          (not (look/surveyed? c :near)) contract/look-first))))))
 
-(defn no-food
-  "At the start: the cause :no-food while the meal is not carried and a fetch for it is off or failed lately."
-  [c]
-  (when-not (ctx/frozen-call c)
-    (let [[item n] (meal c)
-          need {:reason :need :item item :count (- n (held c item))}]
-      (when (and (pos? (:count need)) (not (fetch/check c job need)))
-        {:reason :no-food :need need :text "no food carried and no fetch for it"}))))
+(def no-food
+  "At the start: the cause :no-food while the meal is not carried and :fetch is off."
+  (started/at-start
+   (fn [c]
+     (let [[item n] (meal c)
+           need {:reason :need :item item :count (- n (held c item))}]
+       (when (and (pos? (:count need)) (not (fetch/opts c job)))
+         {:reason :no-food :need need :text "no food carried and no fetch for it"})))))
 
 (def conditions [[:fn bad-args] [:fn no-pair] [:fn no-food]])
 
 (defn done?
-  "The villagers in sight against :target. Never :done? itself: the job ends with its event and data."
+  "The villagers in sight against :target; done before the job began when it is met with no pair being fed or waited
+  for (births of a pair under way are reported by the round)."
   [c]
-  (let [pop (:pop (sight (villagers (:primitives c) (:radius (:args c)))))]
-    {:done? false :units :villagers :done pop :left (max 0 (- (:target (:args c)) pop))}))
+  (let [pop (:pop (sight (villagers (:primitives c) (:radius (:args c)))))
+        m (ctx/mem c)]
+    {:done? (and (>= pop (:target (:args c))) (not (:pair m)) (not (:waiting m))) :units :villagers :done pop :left (max 0 (- (:target (:args c)) pop))}))
 
 (defn quote-of [c]
-  (let [left (:left (done? c))
+  (let [left (max 0 (- (:target (:args c)) (:pop (sight (villagers (:primitives c) (:radius (:args c)))))))
         w (:wait-s (:args c) default-wait-s)]
     {:uses {:time [(if (pos? left) w 0) (* left (+ w (feed-s))) ##Inf]}}))
 

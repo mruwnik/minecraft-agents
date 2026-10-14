@@ -82,8 +82,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out]} (await (breed {:entities (conj pair (villager 3 6 {:baby true})) :inventory bread} args 20 identity))]
-          (is (= {:population 3 :target 3 :births 0} (select-keys @out [:population :target :births])))
-          (is (= :done (:status @out)))
+          (is (= :done (:status @out)) "already met: done with no data, before any round")
           (is (empty? (tosses p))))))))
 
 (deftest two-adults-are-fed-three-bread-each-and-a-birth-completes-it

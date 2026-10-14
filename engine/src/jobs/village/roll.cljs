@@ -5,6 +5,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.blocks :as b]
+            [jobs.lib.look :as look]
+            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
@@ -25,11 +27,13 @@
   - condition-failed: :gone (not seen within :radius), :baby (takes no job yet), :locked (an offer was already used:
     breaking the workstation changes nothing), :occupied (another block stands at :pos). :baby, :occupied and a named
     :villager's :gone are checked at the start and then wait (a skipped job); a nitwit takes no job ever: impossible,
-    :nitwit, also checked at the start.
+    :nitwit, also checked at the start and found mid-run (impossible).
   - nothing-possible: :still-employed (it kept its job), :no-claim (the villager took no profession within :claim-s after the workstation was placed: night, no path, a
     taken workstation), :no-match (:tries rolls without a match), :unreachable, :window (offers could not be read
     three times), :dig-failed, :place-failed (a child stopped, with its reason).
-  A workstation item, wanted item or cell that is missing or bad is a condition that waits (:bad-args).
+  A workstation item, wanted item or cell that is missing or bad is impossible (:bad-args). A cell the body has not seen
+  asks for a look at the start; the round then walks to it (go-to child) and ends condition-failed :cell-unseen when it
+  still cannot be seen there.
   Every step re-reads the world and the saved count: a restart that finds the workstation missing places it first, so a cut
   between the break and the placing leaves nothing behind. The workstation stands at :pos when the job ends, except after
   :place-failed or :dig-failed (a child stopped).")
@@ -55,6 +59,7 @@
 (a/defargs settings
   {::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
+   ::time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}
    ::unemploy-s {:default 20 :doc "Seconds to wait for the villager to lose its job after the break, then place anyway." :spec (a/int-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn leg-s [] (settings/get settings ::leg-s))
@@ -69,15 +74,17 @@
 
 (def target [:villager :pos])
 
+(def defaults {:spend {:time ::time-s}})
+
 (defn bad-args
-  "The cause :bad-args when a cell, a workstation item (or profession) and a wanted item (or trade) are not given."
+  "Impossible :bad-args when a cell, a workstation item (or profession) and a wanted item (or trade) are not given."
   [c]
   (let [{:keys [villager]} (:args c)
         {:keys [error]} (b/parse (:args c))]
     (cond
       (not (and (or (nil? villager) (string? villager)) (string? (item-of (:args c))) (string? (want-of (:args c)))))
-      {:reason :bad-args :why "needs a workstation item (or profession) and a wanted item"}
-      error {:reason :bad-args :why error})))
+      (contract/impossible {:reason :bad-args :why "needs a workstation item (or profession) and a wanted item"})
+      error (contract/impossible {:reason :bad-args :why error}))))
 
 (defn start-facts
   "At the call's start, with a named villager in view: impossible for a nitwit (never a job), the cause :baby for a baby
@@ -94,12 +101,21 @@
       (.-baby e) {:reason :baby}
       (and block (not (b/air block)) (not= item block)) {:reason :occupied :block block})))
 
-(def conditions [[:fn bad-args] [:fn start-facts]])
+(def cell-unseen
+  "At the start, the cause :cell-unseen (after a look still unseen is the round's to find out) while the workstation
+  cell is not in view or memory."
+  (started/at-start
+   (fn [c]
+     (let [pos (:pos (b/parse (:args c)))]
+       (when (and pos (nil? (u/seen-name (:primitives c) pos)) (not (look/surveyed? c :near)))
+         (contract/look-first {:reason :cell-unseen}))))))
+
+(def conditions [[:fn bad-args] [:fn start-facts] [:fn cell-unseen]])
 
 (defn rolls [c] (:rolls (ctx/mem c) 0))
 
 (defn done?
-  "The rolls against :tries. Never :done? itself: the job ends when an offer matches or it gives up."
+  "The rolls against :tries (searching an offer has no state to be done before it runs)."
   [c]
   {:done? false :units :rolls :done (rolls c) :left (max 0 (- (:tries (:args c)) (rolls c)))})
 
@@ -110,13 +126,14 @@
   (merge {:found false :rolls (rolls c) :item (item-of (:args c))} extra))
 
 (def failed-conditions "Causes that end condition-failed: the villager or the cell is not right now. The rest are nothing-possible."
-  #{:gone :baby :locked :occupied})
+  #{:gone :baby :locked :occupied :cell-unseen})
 
 (defn stop!
   "Warn and end with reason (a keyword) as the cause: condition-failed for those in failed-conditions, else nothing-possible."
   [c reason text]
   (ctx/emit! c :roll.gave-up :warn {:reason reason :text text :rolls (rolls c)})
-  (ctx/end c (if (failed-conditions reason) :condition-failed :nothing-possible) reason (data-of c nil)))
+  (ctx/end c (cond (= :nitwit reason) :impossible (failed-conditions reason) :condition-failed :else :nothing-possible)
+           reason (data-of c nil)))
 
 (defn found!
   [c offer]
@@ -144,12 +161,24 @@
 (defn ^:async walk!
   "One go-to leg toward the villager at pos. :again, :continue or the stop."
   [c pos]
-  (let [r (await (child/call-walk c :walk
-                                 {:pos pos :range (reach) :leg-s (leg-s) :escalate false :warn false}))]
+  (let [r (await (child/call-walk* c :walk
+                                  {:pos pos :range (reach) :leg-s (leg-s) :escalate false :warn false}))]
     (cond
       (= :continue r) :continue
-      (let [res (ctx/child-result c :walk)] (and (= :done r) (or (:arrived res) (:leg res)))) :again
+      (let [res (:data r)] (or (:arrived res) (:leg res))) :again
       :else (stop! c :unreachable "cannot reach the villager"))))
+
+(defn ^:async approach!
+  "The workstation cell is not in view or memory: walk to it (go-to child, slot :cell) once; if it is still unseen
+  there, end :cell-unseen. :again, :continue or the stop."
+  [c pos]
+  (if (:approached (ctx/mem c))
+    (stop! c :cell-unseen "the workstation cell cannot be seen")
+    (let [r (await (child/call-walk* c :cell {:pos pos :range (reach) :escalate false :warn false}))]
+      (cond
+        (= :continue r) :continue
+        (:arrived (:data r)) (do (ctx/update-mem! c assoc :approached true) :again)
+        :else (stop! c :unreachable "cannot reach the workstation cell")))))
 
 (defn ^:async read-offers!
   "In reach of the villager: read its offers and decide. :found, :locked, :miss (no match), or :again/:continue/stop."
@@ -181,14 +210,11 @@
 (defn ^:async child!
   "Run a dig or place child in a slot of its own per roll; its result when done, :continue, or a stop."
   [c slot job cargs failed]
-  (let [r (await (ctx/call-child c slot job cargs))]
+  (let [r (await (ctx/call c slot job cargs))]
     (cond
       (= :continue r) :continue
-      (= :done r) (let [res (ctx/child-result c slot)]
-                    (if (= :stopped (:status res))
-                      (stop! c failed (str (name slot) " stopped: " (name (:reason res :unknown))))
-                      res))
-      :else (stop! c failed (str (name slot) " declined")))))
+      (= :done (:kind r)) (:data r)
+      :else (stop! c failed (str (name slot) " ended " (name (:kind r)) ": " (name (contract/cause-key r)))))))
 
 (defn ^:async dig!
   "Break the workstation; the break is booked with its time."
@@ -240,7 +266,7 @@
         profession (when e (.-profession e))
         out-of-tries? (>= (rolls c) tries)]
     (cond
-      (nil? block) :continue
+      (nil? block) (await (approach! c pos))
       (b/air block)
       (cond
         (not (:broken (ctx/mem c))) (do (stamp! c :broken) :again)

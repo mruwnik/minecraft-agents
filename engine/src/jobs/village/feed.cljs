@@ -1,9 +1,11 @@
 (ns jobs.village.feed
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]))
@@ -15,8 +17,8 @@
   uuid). Only what that villager collected counts as fed; the rest of the drop lying near the toss is collected back,
   never left as litter.
   :item is the food to give (carried), nil for the first carried of bread, carrot, potato, beetroot. Villagers pick
-  up only bread, potato, carrot, wheat, beetroot and seeds: any other :item is refused at the check (:bad-args).
-  When none is carried it is fetched (jobs.lib.fetch, :fetch true; a need wait when :fetch is off or failed).
+  up only bread, potato, carrot, wheat, beetroot and seeds: any other :item is impossible (:bad-args).
+  When none is carried it is fetched (jobs.lib.need, :fetch true; condition-failed :no-food when :fetch is off or the fetch ended).
   Ends with the data {:fed n :item name}. :done when the villager took :count (info feed.done), or the call's :least
   (default :all) when it gave up after that many. Otherwise, with warn feed.gave-up and the cause:
   - condition-failed :no-food: none carried and none fetched (a listed call with :fetch off waits for food).
@@ -25,7 +27,7 @@
   - nothing-possible :not-taken: three tosses in a row that the villager did not collect (full inventory, not
     wanted), or the toss status as a keyword when the toss is refused three times, or :litter when the drop
     cannot be collected back.
-  A :villager that is no uuid, or an :item villagers do not pick up, is a condition that waits (:bad-args). What was fed is booked after each toss, so a cut and restart does not feed twice; a
+  A :villager that is no uuid, or an :item villagers do not pick up, is impossible (:bad-args). What was fed is booked after each toss, so a cut and restart does not feed twice; a
   toss cut before its receipt is settled on restart, back at its spot (what left the inventory, was not eaten and
   does not lie there counts as taken; none taken counts as refused) and its drop is collected back. Drops lying near
   before the toss are never collected.
@@ -45,6 +47,7 @@
    ::leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-refused {:default 3 :doc "Refusals before the job gives up on the animal." :spec (a/int-in 0 nil)}
    ::max-walks {:default 8 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
+   ::time-s {:default 120 :doc "Seconds one feeding may take." :spec (a/int-in 1 nil)}
    ::watch-s {:default 4 :doc "Seconds the body watches the animal after acting." :spec (a/int-in 0 nil)}
    ::foot-height {:default 0.3 :doc "Height of an animal's feet above its position, in blocks." :spec (a/num-in 0 nil)}
    ::settle-reach {:default 4 :doc "Reach once the animal has settled, in blocks." :spec (a/int-in 0 nil)}})
@@ -78,21 +81,21 @@
 
 (def target [:villager])
 
-(def defaults {:least :all})
+(def defaults {:least :all :spend {:time ::time-s}})
 
 (defn bad-args
-  "The cause :bad-args when no villager uuid is given or :item is not food a villager picks up."
+  "Impossible :bad-args when no villager uuid is given or :item is not food a villager picks up."
   [c]
   (let [{:keys [villager item]} (:args c)]
     (cond
-      (not (string? villager)) {:reason :bad-args :why "needs a villager uuid"}
-      (and item (not (contains? wanted item))) {:reason :bad-args :why (str "villagers do not pick up " item)})))
+      (not (string? villager)) (contract/impossible {:reason :bad-args :why "needs a villager uuid"})
+      (and item (not (contains? wanted item))) (contract/impossible {:reason :bad-args :why (str "villagers do not pick up " item)}))))
 
 (defn no-food
-  "The need as the cause when none is carried and the call will not fetch it (or a fetch for it failed lately)."
+  "The need as the cause when none is carried and the call will not fetch it."
   [c]
   (when-let [w (problem c)]
-    (when-not (fetch/check c job w) (assoc w :why "no food carried and no fetch for it"))))
+    (when-not (fetch/opts c job) (assoc w :why "no food carried and no fetch for it"))))
 
 (def conditions [[:fn bad-args] [:fn no-food]])
 
@@ -137,25 +140,27 @@
        first))
 
 (defn ^:async fetch-food!
-  "No food carried: fetch it when :fetch allows, else end no-food. :again once it arrived, :continue, or :done."
+  "No food carried: fetch it when :fetch allows, else end no-food. :again once it arrived, :continue, or the stop."
   [c]
-  (if-not (and (fetch/opts c job) (problem c))
-    (stop! c :no-food "no food to give")
-    (let [r (await (fetch/fetch-untimed! c job problem))]
-      (cond
-        r r
-        (problem c) (stop! c :no-food "no food to give")
-        :else :again))))
+  (let [opts (fetch/opts c job)
+        {:keys [item count any-of] :as w} (problem c)]
+    (if-not (and opts w)
+      (stop! c :no-food "no food to give")
+      (let [e (await (if item (need/item! c item count opts) (need/blocks! c any-of count opts)))]
+        (cond
+          (= :continue e) :continue
+          (and (= :done (:kind e)) (not (problem c))) :again
+          :else (stop! c :no-food "no food to give"))))))
 
 (defn ^:async walk!
   "One go-to leg to the villager at pos. A leg or arrival resets the blocked count, anything else counts (the third in a
   row ends unreachable); the legs since the last toss are bounded by max-walks. :again, :continue or :done."
   [c pos]
-  (let [r (await (child/call-walk c :walk {:pos pos :range (reach) :leg-s (leg-s) :doors :shut
-                                                               :escalate false :warn false :retry false :zone-tolls true}))]
+  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach) :leg-s (leg-s) :doors :shut
+                                            :escalate false :warn false :retry false :zone-tolls true}))]
     (if (= :continue r)
       :continue
-      (let [res (ctx/child-result c :walk)
+      (let [res (:data r)
             ok? (or (:arrived res) (:leg res))
             _ (ctx/update-mem! c #(-> % (assoc :blocked (if ok? 0 (inc (:blocked % 0)))) (update :walks (fnil inc 0))))
             m (ctx/mem c)]

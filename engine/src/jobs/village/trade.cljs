@@ -1,6 +1,7 @@
 (ns jobs.village.trade
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
@@ -16,8 +17,8 @@
   and may overshoot a little.
   Ends with the data {:bought n :paid {item n} :item :buy} (n counts the items actually gained; success is info trade.done): :done when :count (or the call's :least, default :all)
   was bought, else with warn trade.gave-up and the cause, condition-failed for :gone, :not-villager, :payment-short and :no-room, else
-  nothing-possible. A partial purchase stays bought and paid. A missing villager uuid or item name is a condition that
-  waits (:bad-args). The causes:
+  nothing-possible. A partial purchase stays bought and paid. A missing villager uuid or item name is impossible (:bad-args).
+  Already done when the remembered count reaches :count. The causes:
   - :gone (not listed within 48, also a non-villager entity under the uuid), :not-villager.
   - :unreachable (walk blocked, or still out of reach after three tries in the call).
   - :no-offers (unemployed, nitwit, baby, or an empty window), :window (did not open three times: busy
@@ -35,6 +36,7 @@
 
 (a/defargs settings
   {::search-radius {:default 48 :doc "Blocks within which a trader is looked for." :spec (a/int-in 0 nil)}
+   ::time-s {:default 120 :doc "Seconds one purchase may take." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}})
 (defn search-radius [] (settings/get settings ::search-radius))
 (defn reach [] (settings/get settings ::reach))
@@ -45,23 +47,23 @@
 
 (def target [:villager :buy])
 
-(def defaults {:least :all})
+(def defaults {:least :all :spend {:time ::time-s}})
 
 (defn bad-args
-  "The cause :bad-args when no villager uuid or no item name is given."
+  "Impossible :bad-args when no villager uuid or no item name is given."
   [c]
   (let [{:keys [villager buy]} (:args c)]
     (when-not (and (string? villager) (string? buy))
-      {:reason :bad-args :why "needs a villager uuid and an item name"})))
+      (contract/impossible {:reason :bad-args :why "needs a villager uuid and an item name"}))))
 
 (def conditions [[:fn bad-args]])
 
 (defn bought [c] (:bought (ctx/mem c) 0))
 
 (defn done?
-  "The items bought against :count. Never :done? itself: the job ends with its event and data."
+  "The items bought (kept in memory) against :count."
   [c]
-  {:done? false :units :items :done (bought c) :left (max 0 (- (:count (:args c)) (bought c)))})
+  {:done? (>= (bought c) (:count (:args c))) :units :items :done (bought c) :left (max 0 (- (:count (:args c)) (bought c)))})
 
 (defn quote-of [c]
   {:uses {:time [0 (* 5 (:count (:args c) 1)) ##Inf]}})
@@ -199,11 +201,11 @@
       (nil? e) (give-up! c :gone "the villager is not here")
       (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach)) (await (trade! c))
       :else
-      (let [r (await (child/call-walk c :walk
-                                     {:pos (u/pos-of (.-pos e)) :range (reach) :leg-s chase-timeout-s :escalate false :warn false}))]
+      (let [r (await (child/call-walk* c :walk
+                                      {:pos (u/pos-of (.-pos e)) :range (reach) :leg-s chase-timeout-s :escalate false :warn false}))]
         (cond
           (= :continue r) :continue
-          (let [res (ctx/child-result c :walk)] (and (= :done r) (or (:arrived res) (:leg res)))) :again
+          (let [res (:data r)] (or (:arrived res) (:leg res))) :again
           :else (give-up! c :unreachable "cannot reach the villager"))))))
 
 (defn ^:async round
