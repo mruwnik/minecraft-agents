@@ -314,6 +314,7 @@
         (doseq [args [{:floor {:health 21}} {:min-health 21} {:spend {:time 0}} {:spend {:time 0.05}} {:spend {:time 121}} {:leg-s 0}]]
           (let [{:keys [out p]} (await (go! {:blocks flat} (assoc args :pos [6 64 0])))]
             (is (= {:status :stopped :arrived false :reason :bad-args} (select-keys @out [:status :arrived :reason])) (pr-str args))
+            (is (= :impossible (:kind (:ending (meta @out)))) (pr-str args))
             (is (= [0 64 0] (at p)) (pr-str args))))
         (doseq [args [{:floor {:health 20}} {:spend {:time 0.1}} {:spend {:time 120}}]]
           (let [{:keys [out]} (await (go! {:blocks flat} (assoc args :pos [6 64 0])))]
@@ -341,6 +342,7 @@
           (core/submit! eng '(recording-parent) {})
           (await (tick-out! eng 10))
           (is (= {:status :stopped :arrived false :reason :unsupported} (select-keys @out [:status :arrived :reason])))
+          (is (= :impossible (:kind (:ending (meta @out)))))
           (is (= [0 64 0] (at p)))
           (is (= [:unsupported] (mapv :reason (events-of s :refused)))))))))
 

@@ -342,6 +342,6 @@
           (let [{:keys [eng seen]} (make)]
             (is (= [] (:list (core/state eng))) "the slot job is not listed after the restart")
             (is (empty? (:instances (core/state eng))))
-            (is (= [:restart] (mapv :reason (filter #(= "j1" (:job %)) (kinds seen :stopped)))))
+            (is (= [[:restart :restart]] (mapv (juxt :by :cause) (filter #(= "j1" (:job %)) (kinds seen :cancelled)))))
             (core/tick! eng)
             (is (= [] (ran seen)) "it never runs again")))))))

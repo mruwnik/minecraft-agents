@@ -33,10 +33,10 @@
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
   - Refused at submit (or the caller's call-child throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :landing that is not a map of block names to numbers, a :gait that is not :auto, :walk or :sneak, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}}.
-  - Ends condition-failed at once, before any walk, with the cause :bad-pos (a :pos outside the world), :bad-name (a
-    :place that is not a valid name), :unknown-place (no recorded position), :unsupported (a body with no pathWorld
-    sensing) or :bad-args (a given :floor :health over 20, a :spend :time outside 0.1-120), after a :refused warn; data {:arrived false :text}. A call whose :ways leave out :walk ends
-    nothing-possible :no-way.
+  - Ends at once, before any walk, after a :refused warn, data {:arrived false :text}: impossible :bad-pos (a :pos
+    outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)
+    or :bad-args (a given :floor :health over 20, a :spend :time outside 0.1-120); condition-failed :unknown-place (no
+    recorded position). A call whose :ways leave out :walk ends nothing-possible :no-way.
   - Ways (:ways, all by default): :walk, and those that change the world: :clear-seal (its own ledger blocks round a
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
     block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of

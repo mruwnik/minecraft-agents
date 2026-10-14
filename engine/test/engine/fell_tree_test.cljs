@@ -538,8 +538,9 @@
       (fn ^:async t []
         (let [s (fm/start (assoc tall :self {:food 2}) {})
               _ (mem/write! (:store (:eng s)) :hungry {:food 2} {:cap 10 :ttl 3600000})
-              out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 50))]
+              out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 50))]
           (is (= :hungry (:reason out)))
+          (is (= [:limit-reached {:line :food :reason :hungry}] ((juxt :kind :cause) (:ending out))))
           (is (empty? (dug-ys (:p s))) "dug nothing"))))))
 
 (defn ^:async fell-far-unseen

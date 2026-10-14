@@ -127,7 +127,7 @@
         (let [walk #(in-parent %1 (fn ^:async f [c] (await (child/call-walk* c :walk {:pos [1 65 0]}))))]
           (is (= {:kind :done :data {:arrived true}} (select-keys (await (walk old-walker)) [:kind :data])))
           (let [e (await (walk old-stranded))]
-            (is (= [:condition-failed :unreachable] ((juxt :kind :cause) e)) "an old job's stopped reason is the cause")
+            (is (= [:nothing-possible :unreachable] ((juxt :kind :cause) e)) "an old job's stopped reason is the cause")
             (is (= :no-route (get-in e [:data :why]))))
           (is (= [:nothing-possible :tree-unreachable {:tried 2}]
                  ((juxt :kind :cause :data) (await (walk contract-gave-up))))))))))
@@ -155,7 +155,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= :arrived (await (in-parent old-walker (fn ^:async f [c] (await (b/walk!* c [1 65 0])))))))
-        (is (= [:condition-failed :unreachable] ((juxt :kind :cause) (await (in-parent old-stranded (fn ^:async f [c] (await (b/walk!* c [1 65 0]))))))))
+        (is (= [:nothing-possible :unreachable] ((juxt :kind :cause) (await (in-parent old-stranded (fn ^:async f [c] (await (b/walk!* c [1 65 0]))))))))
         (is (= [:nothing-possible :out-of-reach]
                ((juxt :kind :cause) (await (in-parent old-walker (fn ^:async f [c] (await (b/walk!* c [4 65 4]))))))) "arrived, still out of reach")))))
 
@@ -193,7 +193,7 @@
               gate {:x 5 :y 64 :z 0}
               go-to (assoc old-stranded :round (fn ^:async w [c] (reset! args (:args c)) (ctx/result! c {:status :stopped :reason :unreachable}) :done))]
           (with-redefs [pen-entry/pens (fn [_] [{:gates [gate] :animals 2}])]
-            (is (= :condition-failed (:kind (await (in-parent go-to (fn ^:async g [c] (await (b/walk!* c [9 64 0]))) seen))))))
+            (is (= :nothing-possible (:kind (await (in-parent go-to (fn ^:async g [c] (await (b/walk!* c [9 64 0]))) seen))))))
           (is (= [gate] (:keep-out @args)))
           (is (some #(= :blocks.pen-kept-out (:kind %)) @seen)))))))
 

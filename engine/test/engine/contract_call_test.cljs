@@ -1,5 +1,5 @@
 (ns engine.contract-call-test
-  "A call equal to one of its ancestors' (same job, same target args) is refused: condition-failed :duplicate-call,
+  "A call equal to one of its ancestors' (same job, same target args) is refused: impossible :duplicate-call,
   booked nowhere as a failure."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
@@ -43,7 +43,7 @@
           (core/submit! eng '(ping {:pos 1 :again [1 2]}) {})
           (await (core/tick! eng))
           (let [[[_ _ dup] [_ _ fine] [_ _ pong-e]] @endings]
-            (is (= :condition-failed (:kind dup)))
+            (is (= :impossible (:kind dup)))
             (is (= :duplicate-call (contract/cause-key dup)))
             (is (string? (get-in dup [:cause :of])) "names the ancestor's frame")
             (is (= :done (:kind fine)) "the same job on another target runs")

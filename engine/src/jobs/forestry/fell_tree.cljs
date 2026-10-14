@@ -56,8 +56,8 @@
   :species; a listed job waits) and
   :night-sheltered (shut in a shelter at night: the trees are outside).
   Ends :done with {:base pos :logs n :axe why} of the tree it felled: n logs dug; :axe is :carried, :skipped-fetch-off,
-  :skipped-small-tree or :none-found (fetch failed: chopped by hand). Condition-failed :no-tree when the look found none, :hungry
-  (no food carried and get-food found none); nothing-possible :tree-unreachable when every tree in sight proved out of
+  :skipped-small-tree or :none-found (fetch failed: chopped by hand). Condition-failed :no-tree when the look found none;
+  limit-reached {:line :food :reason :hungry} when no food is carried and get-food found none; nothing-possible :tree-unreachable when every tree in sight proved out of
   reach (data {:unreachable n :columns :why}) and :tree-blocked when a log cannot be dug or the pillar not taken back; the
   pillar's fetch ending when its blocks cannot be had.
   Quote: time by the walk to the nearest tree and the logs standing.")
@@ -346,7 +346,7 @@
 
       (and fresh? chosen (trip/food-short? c))
       (do (ctx/emit! c :tree.hungry :warn {:text "felling stopped: hungry, no food carried and get-food found none"})
-          (ctx/end c :condition-failed :hungry {:logs (:dug (ctx/mem c) 0)}))
+          (ctx/end c :limit-reached {:line :food :reason :hungry} {:logs (:dug (ctx/mem c) 0)}))
 
       (and (not chosen) (seq (:unreachable (ctx/mem c))))
       (let [why (:unreachable-why (ctx/mem c))

@@ -888,7 +888,7 @@
           (is (= [:condition-failed :no-zones] (await (run {:blocks eight-down :zones nil} target (fn [_])))))
           (is (= [:condition-failed :no-tool] (await (run {:blocks eight-down :inventory []} (assoc target :fetch false) (fn [_])))))
           (is (= [:condition-failed :hazard] (await (run {:blocks eight-down :inventory with-cobble} target lava-ahead))))
-          (is (= [:limit-reached :tool-spent]
+          (is (= [:condition-failed :tool-spent]
                  (await (run {:blocks eight-down :inventory [{:name "iron_pickaxe" :count 1 :durability 3}]} target (fn [_]))))))))))
 
 (deftest a-stopped-tunnel-hands-over-what-it-did-as-data

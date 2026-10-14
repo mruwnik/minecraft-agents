@@ -518,7 +518,7 @@
   (are [reason kind cause]
        (= {:kind kind :cause cause} (legacy/ending-of :done {:status :stopped :reason reason} nil))
     :no-tool :condition-failed :no-tool
-    :hungry :condition-failed :hungry
+    :hungry :limit-reached {:line :food :reason :hungry}
     :danger :condition-failed :danger
     :hostile-near :condition-failed :hostile-near
     :gone :condition-failed :gone
@@ -532,7 +532,17 @@
     :not-found :condition-failed :not-found
     :timeout :limit-reached {:line :time :reason :timeout}
     :low-health :limit-reached {:line :health :reason :low-health}
-    :tool-spent :limit-reached {:line :wear :reason :tool-spent}
+    :tool-spent :condition-failed :tool-spent
+    :bad-args :impossible :bad-args
+    :bad-pos :impossible :bad-pos
+    :unsupported :impossible :unsupported
+    :no-pen :impossible :no-pen
+    :unreachable :nothing-possible :unreachable
+    :cannot :nothing-possible :cannot
+    :no-stone-found :nothing-possible :no-stone-found
+    :no-drops :nothing-possible :no-drops
+    :not-mounted :done nil
+    :no-hostile :done nil
     :no-way :nothing-possible :no-way))
 
 (deftest a-limit-reason-survives-the-round-trip-to-an-old-parent

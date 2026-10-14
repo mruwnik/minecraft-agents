@@ -500,6 +500,14 @@
     {:time night} true '(jobs.survival.log-out)
     {:time night} false '(jobs.survival.log-out {:offline-allowed false})))
 
+(deftest a-log-out-the-server-cannot-do-is-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night})]
+          (.override (.-world p) "offline" (fn [_ _ _] #js {:status "unsupported"}))
+          (is (= :impossible (:kind (:ending (await (tu/child-outcome eng 'jobs.survival.log-out {} 3)))))))))))
+
 ;; ------------------------------------------------------------------ dig-in
 
 (deftest dig-in-walls-the-body-in-from-carried-blocks

@@ -1224,7 +1224,7 @@
                  (await (run {:blocks ground :zones [{:name "garden" :min [1 50 -2] :max [6 70 2]}]} east (fn [_])))))
           (is (= [:condition-failed :moved-since-submit]
                  (await (run {:blocks ground} (assoc east :from {:x 80 :y 65 :z 0}) (fn [_])))))
-          (is (= [:limit-reached :tool-spent]
+          (is (= [:condition-failed :tool-spent]
                  (await (run {:blocks ground :inventory [{:name "stone_pickaxe" :count 1 :durability 3}]} east (fn [_])))))
           (is (= [:nothing-possible :refills] (await (run {:blocks ground} east refill))))
           (is (= [:condition-failed :no-way-back] (await (run {:blocks ground} east lose-floor))))

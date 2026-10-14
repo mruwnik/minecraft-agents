@@ -77,14 +77,14 @@
   (when (:sym def) {:job (:sym def) :target (select-keys args (:target def))}))
 
 (defn duplicate-ending
-  "The condition-failed ending of a call or quote of def with args from base, when a frame on base's chain (base
+  "The impossible ending of a call or quote of def with args from base, when a frame on base's chain (base
   itself down to the root) or a quote base's quote is asked under ((:quoting base), [[ident id] ...]) has the same
   job and target, else nil. Booked nowhere: it is no failure of the way."
   [eng base def args]
   (when-let [ident (frame-identity def args)]
     (let [view (mem/view (:store eng))
           m (mem/job-mem view (:root base) [])
-          dup #(contract/ending :condition-failed {:reason :duplicate-call :of %} nil)]
+          dup #(contract/ending :impossible {:reason :duplicate-call :of %} nil)]
       (or (some (fn [[q id]] (when (= ident q) (dup id))) (rseq (or (:quoting base) [])))
           (some (fn [i]
                   (let [s (subvec (:slots base) 0 i)]

@@ -24,12 +24,13 @@
         (update :instances #(apply dissoc % (concat reflex-ids slot-ids))))))
 
 (defn drop-leftover-slot-jobs!
-  "After a restore: end the manual slot job saved held (restore unlisted it) with one stopped event, reason :restart."
+  "After a restore: end the manual slot job saved held (restore unlisted it) with one cancelled event, cut off by :restart."
   [eng saved]
   (doseq [[id inst] (:instances saved)
           :when (:slot? inst)]
     (mem/delete-job! (:store eng) id)
-    (emit! eng {:source :job :kind :stopped :level :warn :job id :chain [id] :reason :restart
+    (emit! eng {:source :job :kind :cancelled :level :warn :job id :chain [id] :by :restart
+                :data {:kind :cut-off :cause :restart}
                 :text "stopped: restart (manual jobs end with the lease)"})))
 
 (defn unknown-job

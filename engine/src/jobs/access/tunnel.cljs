@@ -97,7 +97,7 @@
 
   Ends :done {:reason :reached}; a stop is condition-failed for a fact (the reasons above, :no-tool, :no-way-back, the
   stair's) and nothing-possible for a failed attempt (:walk-in-failed, :step-failed, :dig-failed, :refills);
-  :tool-spent is limit-reached on the wear line. Data of every ending: {:reason :target :entry :heading :stand :at
+  :tool-spent is a fact (no tool left above its reserve). Data of every ending: {:reason :target :entry :heading :stand :at
   [x y z] :dug [{:cell :block}] :ores :inside bool :keep bool :line {:entry :heading :dir :steps :run :stand :target}
   :torches [{:cell :site :block}] :unlit [{:cell :site :reason}]} plus detail (:out true once it walked out, :leave
   the way-out's data). :torches are those standing now, read from the world. :inside is true when the body is off
@@ -182,8 +182,8 @@
 (def cause-keys [:cell :hazards :zone :zones :claim :plan :fluid :block :tool :why :headings :in :fetch])
 
 (defn finish!
-  "End the tunnel: its event, and the ending: :done when reached, else by reason a kind (facts, :tool-spent a wear
-  limit, the rest nothing possible) with the detail in the cause and the whole result as data."
+  "End the tunnel: its event, and the ending: :done when reached, else by reason a kind (facts, the rest nothing
+  possible) with the detail in the cause and the whole result as data."
   [c reason detail]
   (let [{:keys [plan dug unlit ores]} (ctx/mem c)
         feet (reach/standing-vec (:primitives c))
@@ -202,7 +202,6 @@
                  (assoc result :status :stopped :text (str "tunnel stopped: " (name reason) (some->> (:cell detail) pr-str (str " at "))))))
     (cond
       reached? (ctx/end c :done nil result)
-      (= :tool-spent reason) (ctx/end c :limit-reached (assoc cause :line :wear) result)
       :else (ctx/end c (if (facts reason) :condition-failed :nothing-possible) cause result))))
 
 (defn ending-result

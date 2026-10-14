@@ -115,7 +115,7 @@
           (cond
             (not (ctx/alive? c)) (ctx/end c :cut-off :cut {:ate bites})
             (or (>= (food-of c) until) (and max-bites (>= bites max-bites))) (ctx/end c :done nil {:ate bites})
-            (nil? best) (if (pos? bites) (ctx/end c :done nil {:ate bites}) (ctx/end c :nothing-possible :no-food {:ate 0}))
+            (nil? best) (if (pos? bites) (ctx/end c :done nil {:ate bites}) (ctx/end c :condition-failed :no-food {:ate 0}))
             :else
             (let [_ (await (ctx/act c :equip #js {:item best}))
                   r (await (ctx/act c :eat #js {:item best}))]

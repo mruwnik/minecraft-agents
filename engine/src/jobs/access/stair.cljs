@@ -95,7 +95,7 @@
 
   Ends :done, or with a cause {:reason r ...detail}: :condition-failed for the facts that bar the next cell (the access
   refusals, :fluid-in-cut :crop :base-block :undercuts-way :unbreakable :no-tool :inventory-full :hazard :lava-exposed :plugged :floor-unseen
-  :no-floor :cave-below :off-stair :no-way-back :bad-args), :limit-reached for :tool-spent (line :wear), :nothing-possible for the attempts that
+  :no-floor :cave-below :off-stair :no-way-back :bad-args :tool-spent), :nothing-possible for the attempts that
   failed (:refills :dig-failed :step-failed :no-support-floor :lava-unsealed :water-unplugged). Data {:steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell
   :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
 
@@ -260,11 +260,11 @@
 (def facts
   "The stops that name a fact barring the next cell (condition-failed); the others are attempts that failed."
   #{:bad-args :refused :zone :claim :footprint :no-zones :not-loaded :fluid-in-cut :crop :base-block :undercuts-way :unbreakable
-    :no-tool :no-free-slot :inventory-full :hazard :lava-exposed :plugged :floor-unseen :no-floor :cave-below :off-stair :no-way-back})
+    :no-tool :tool-spent :no-free-slot :inventory-full :hazard :lava-exposed :plugged :floor-unseen :no-floor :cave-below :off-stair :no-way-back})
 
 (defn finish!
-  "End the stair: its event, its way remembered, and the ending: :done, else by reason a kind (facts, :tool-spent a
-  wear limit, the rest nothing possible) with the detail in the cause and, with what the stair did, in the data."
+  "End the stair: its event, its way remembered, and the ending: :done, else by reason a kind (facts, the rest
+  nothing possible) with the detail in the cause and, with what the stair did, in the data."
   [c reason detail]
   (let [m (ctx/mem c)
         steps (or (:at-step m) 0)
@@ -280,9 +280,7 @@
                             :text (str "stair stopped after " steps " steps: " (name reason)
                                        (some->> (:cell detail) pr-str (str " at "))
                                        (some->> (:why detail) (str ": ")))))
-          (if (= :tool-spent reason)
-            (ctx/end c :limit-reached (assoc detail :line :wear :reason reason) data)
-            (ctx/end c (if (facts reason) :condition-failed :nothing-possible) (assoc detail :reason reason) data))))))
+          (ctx/end c (if (facts reason) :condition-failed :nothing-possible) (assoc detail :reason reason) data)))))
 
 (defn ^:async make-room!
   "Run make-room as child :room (no walk away: the stair is one tunnel wide). :continue while it waits, else :again; a

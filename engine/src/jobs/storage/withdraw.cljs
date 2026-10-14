@@ -17,7 +17,7 @@
   Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (condition).
   Ends done when everything is carried (also at once when it already is). The data of every other ending has :gave-up and
   :short {name n}, what is still missing; the report counts the items carried toward the wanted ones.
-  - nothing-possible :chest-lacks {:gave-up false :held {name n} :short}: the chest, and the next ones of the group, hold
+  - condition-failed :chest-lacks {:gave-up false :held {name n} :short}: the chest, and the next ones of the group, hold
     none of what is short (info withdraw.short says so in words); some of the names may have been taken.
   - condition-failed :refused {:zones [..] :claims [..]}: a chest in another owner's zone or claim that does not allow
     :take, checked before the walk and again before the transfer (one withdraw.refused warn, nothing taken).
@@ -143,7 +143,7 @@
                         (if (seq others)
                           :again
                           (do (ctx/emit! c :withdraw.short :info {:short lacking :held held :text (lacks-text (map first short) held)})
-                              (ctx/end c :nothing-possible :chest-lacks {:gave-up false :held held :short lacking}))))
+                              (ctx/end c :condition-failed :chest-lacks {:gave-up false :held held :short lacking}))))
           (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
           :else
           (let [[name n] pick

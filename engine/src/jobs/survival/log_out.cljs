@@ -70,7 +70,7 @@
     (ctx/remember! c :log-out {:ms (.-ms r) :status how} log-out-policy)
     (case how
       ("ok" "cut") (ctx/end c :done nil out)
-      "unsupported" (ctx/end c :condition-failed :unsupported out)
+      "unsupported" (ctx/end c :impossible :unsupported out)
       (ctx/end c :nothing-possible (keyword how) out))))
 
 (defn ^:async round [c] (await (log-out! c)))

@@ -26,7 +26,9 @@
 
 (def why-lines "The limit line of a limit-reached give-up." {:needs-health :health :leg-search-spent :time})
 
-(def refusal-kinds "The ending kind of a refusal other than :condition-failed." {:no-way :nothing-possible})
+(def refusal-kinds
+  "The ending kind of a refusal other than :condition-failed: args or a body that can never do it are impossible."
+  {:no-way :nothing-possible :bad-args :impossible :bad-pos :impossible :bad-name :impossible :unsupported :impossible})
 
 (defn ending
   "The ending of result, the call's result map: arrived is :done; a leg walked (:leg) is limit-reached {:reason :leg
