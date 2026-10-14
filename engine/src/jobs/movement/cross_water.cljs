@@ -1,5 +1,6 @@
 (ns jobs.movement.cross-water
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
@@ -86,10 +87,22 @@
   [c land]
   (<= (u/dist (u/self-pos c) (vehicle/centre land)) 1.5))
 
+(defn chain
+  "result/cause-of for a stopped result res of a contract child: its ending's cause key, nested with the endings it was :because of."
+  [slot res]
+  (letfn [(nest [slot e]
+            (cond-> {:child slot :reason (contract/cause-key e)}
+              (:because e) (assoc :cause (nest :because (:because e)))))]
+    (if-let [e (:ending res)]
+      (nest slot e)
+      (result/cause-of slot res))))
+
 (defn ^:async land! [c land]
   (let [{:keys [recover]} (:args c)
-        r (await (ctx/call-child c :land 'jobs.movement.boat-land {:pos land :recover recover}))
-        res (ctx/child-result c :land)]
+        args {:pos land :recover recover}
+        r (await (ctx/call-child c :land 'jobs.movement.boat-land args))
+        res (or (ctx/child-result c :land)
+                (when (= :declined r) (some-> (b/child-wait c :land 'jobs.movement.boat-land args) (assoc :status :stopped))))]
     (cond
       (= :continue r) :continue
       (and (= :done r) (not= :stopped (:status res)))
@@ -102,11 +115,11 @@
       (and (crossing c) (= :not-aboard (:reason res)))
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
           (result/stop! c :not-landed "on foot, but not on the far shore"
-                        :cause (result/cause-of :land res)))
+                        :cause (chain :land res)))
       :else
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
-          (result/stop! c (or (:reason res) :failed) (or (:text res) "could not land on the far shore")
-                        :cause (when res (result/cause-of :land res)))))))
+          (result/stop! c (or (:reason res) :failed) (or (:text res) (get-in res [:ending :cause :hint]) "could not land on the far shore")
+                        :cause (when res (chain :land res)))))))
 
 (defn ^:async launch! [c spot]
   (let [{:keys [item]} (:args c)
@@ -120,7 +133,7 @@
       :else
       (result/stop! c (get launch-stops (:reason res) (or (:reason res) :failed))
                     (or (:text res) "could not launch a boat")
-                    :cause (when res (result/cause-of :launch res))))))
+                    :cause (when res (chain :launch res))))))
 
 (defn ^:async round [c]
   (let [p (:primitives c)

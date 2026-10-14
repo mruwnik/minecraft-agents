@@ -1,6 +1,6 @@
 ;; Card b6f9629c: jobs.movement.boat-land brings the boat the body is in to a shore it has seen and steps off.
 ;; Should-succeed: launch, land on the nearest shore (boat.landed); land and take the boat back (:recover true, boat.landed :recovered true).
-;; Should-fail: on foot (:not-aboard); no shore within :radius (:no-shore); a given land cell that is no shore (:no-shore); a given shore across land (:blocked).
+;; Should-fail: on foot (waits :not-aboard); no shore within :radius (waits :no-shore); a given land cell that is no shore (:no-shore); a given shore across land (:blocked).
 ;; The dismount exit is chosen by the server from the faced cell: a body left in water would stop :not-landed.
 {:defaults
  {:tags [:boats :movement :boat-land] :time :any
@@ -22,13 +22,13 @@
   {:name "on-foot-is-not-aboard"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-land {})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :not-aboard}} :within-s 30 :of-job true}]}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :not-aboard}} :within-s 30 :of-job true}]}
   {:name "no-shore-within-radius"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos #at [18 -1 16]})]
          [:job (jobs.movement.boat-land {:radius 1})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-shore}} :within-s 100 :of-job true}]}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-shore}} :within-s 100 :of-job true}]}
   {:name "given-cell-is-not-a-shore"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]

@@ -19,7 +19,10 @@
                       ['jobs.movement.linger-near {:pos [0 64 0] :wait-s 5}]
                       ['jobs.movement.mount {:id 9}]
                       ['jobs.movement.leave-vehicle {}]
-                      ['jobs.movement.boat-drive {:pos [10 63 2]}]]]
+                      ['jobs.movement.boat-drive {:pos [10 63 2]}]
+                      ['jobs.movement.boat-launch {}]
+                      ['jobs.movement.boat-launch {:action :recover}]
+                      ['jobs.movement.boat-land {:recover true}]]]
     (is (some? (:conditions (job sym))) (str sym " has conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
@@ -29,6 +32,8 @@
   (is (= [:player] (:target (job 'jobs.movement.follow))))
   (is (= [:pos] (:target (job 'jobs.movement.linger-near))))
   (is (= [:pos] (:target (job 'jobs.movement.boat-drive))))
+  (is (= [:action :pos :id] (:target (job 'jobs.movement.boat-launch))))
+  (is (= [:pos] (:target (job 'jobs.movement.boat-land))))
   (is (= [10.5 63 2.5] (:moves-to ((:quote-of (job 'jobs.movement.boat-drive))
                                    {:primitives (tu/fake {}) :args {:pos [10 63 2]} :quote-call {}})))))
 

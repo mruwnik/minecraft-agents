@@ -103,7 +103,7 @@
           (unseen-beyond! p [21 64 12] 0)
           (let [res (await (tu/child-outcome eng 'jobs.movement.boat-land {:pos [21 64 12]} 120))]
             (is (= :no-shore (:reason res)) (pr-str res))
-            (is (re-find #"make out" (str (:text res))) (pr-str res))
+            (is (re-find #"make out" (str (get-in res [:ending :cause :hint]))) (pr-str res))
             (is (empty? (waiting-events seen)))))))))
 
 (def cw-lake

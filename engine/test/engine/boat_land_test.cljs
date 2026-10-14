@@ -1,12 +1,14 @@
 (ns engine.boat-land-test
   "jobs.movement.boat-land against the fake world: bring the boat to a shore and step off."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.library-test :as lt]
             [engine.memory :as mem]
             [jobs.movement.boat-land :as boat-land]
             [engine.test-util :as tu]
+            [engine.sense-test :as st]
             [jobs.lib.shore :as shore]))
 
 (defn pond
@@ -58,14 +60,22 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label w args reason]
-                [["on foot" (dissoc world :self) {} :not-aboard]
-                 ["no shore in sight" world {:radius 1} :no-shore]
+                [["no shore in sight, guessed spots looked at" world {:radius 1} :no-shore]
                  ["the given cell is not a shore" world {:pos [10 64 10]} :no-shore]
                  ["the given shore is across land"
                   (update world :blocks merge (pond 0 10 30 34) (into {} (for [x (range 0 11)] [(str x ",63,35") "stone"])))
                   {:pos [5 64 35]} :blocked]]]
           (let [{:keys [res]} (await (run w args))]
             (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
+
+(deftest on-foot-waits-for-a-boat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[w args reason] [[(dissoc world :self) {} :not-aboard]]]
+          (let [{:keys [res seen]} (await (run w args))]
+            (is (= :not-done res))
+            (is (= [reason] (distinct (map :reason (filterv #(= :waiting (:kind %)) @seen)))))))))))
 
 (deftest shore-needs-seen-cells
   (let [{:keys [p]} (lt/setup (assoc world :unloaded ["21,64,3"]))]
@@ -122,7 +132,7 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run (assoc blocked-world :blocks (merge lake (island-pond))) {:max-spots 2}))]
           (is (= :blocked (:reason res)) (pr-str res))
-          (is (= :blocked (:reason (:cause res))) (pr-str res)))))))
+          (is (= :blocked (contract/cause-key (:because (:ending res)))) (pr-str res)))))))
 
 (deftest a-failed-dismount-is-not-landed
   (async done
@@ -130,7 +140,7 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run (assoc world :dismountFails true) {}))]
           (is (= :not-landed (:reason res)) (pr-str res))
-          (is (= :dismount-failed (:reason (:cause res))) (pr-str res)))
+          (is (= :dismount-failed (contract/cause-key (:because (:ending res)))) (pr-str res)))
         (let [{:keys [res]} (await (run (world-with 18.5 10.5 {:x 10 :y 63 :z 10}) {}))]
           (is (= :not-landed (:reason res)) "the dismount left the body in water"))))))
 
@@ -140,7 +150,7 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run (assoc-in world [:entities 0 :name] "minecart") {}))]
           (is (= :drive-failed (:reason res)) (pr-str res))
-          (is (= :not-a-boat (:reason (:cause res))) (pr-str res)))))))
+          (is (= :not-a-boat (contract/cause-key (:because (:ending res)))) (pr-str res)))))))
 
 (deftest bad-pos-is-bad-args
   (async done
@@ -157,14 +167,13 @@
           (is (= :recover-failed (:reason res)) (pr-str res))
           (is (= {:x 21 :y 64 :z 10} (:land res)))
           (is (= 1 (kinds seen :boat.landed)) "the body did land")
-          (is (some? (:cause res))))))))
+          (is (some? (:because (:ending res)))))))))
 
 (deftest drive-failure-is-blocked-only-when-every-spot-was-blocked
-  (let [blocked {:status :stopped :reason :blocked}
-        other {:status :stopped :reason :not-a-boat}]
+  (let [blocked {:kind :nothing-possible :cause :blocked}
+        other {:kind :condition-failed :cause :not-a-boat}]
     (is (= [:blocked blocked] (boat-land/drive-failure [blocked blocked])))
-    (is (= [:drive-failed other] (boat-land/drive-failure [blocked other blocked])) "one other failure among blocked ones")
-    (is (= [:drive-failed {}] (boat-land/drive-failure [blocked {}])) "a drive that ended without a result")))
+    (is (= [:drive-failed other] (boat-land/drive-failure [blocked other blocked])) "one other failure among blocked ones")))
 
 (deftest a-drive-that-is-not-done-passes-its-cause-up
   (async done
@@ -172,7 +181,7 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run (assoc-in world [:entities 0 :name] "minecart") {:max-spots 3}))]
           (is (= :drive-failed (:reason res)) (pr-str res))
-          (is (some? (:cause res))))))))
+          (is (some? (:because (:ending res)))))))))
 
 (deftest recover-lands-once
   (async done
@@ -195,3 +204,13 @@
           (is (empty? (:list (core/state eng))))
           (is (= 0 (kinds seen :boat.driven)) "no second drive")
           (is (= [true] (mapv :recovered (filter #(= :boat.landed (:kind %)) @seen))) "the one landing is the recovered one"))))))
+
+(deftest conditions-name-the-start-facts
+  (let [c (fn [w args] (assoc (st/stub-ctx (:p (lt/setup w))) :args args))]
+    (is (= :bad-args (contract/impossible-cause (boat-land/bad-args (c world {:pos [5 -9999 5]})))))
+    (is (nil? (boat-land/bad-args (c world {}))))
+    (is (= :not-aboard (:reason (boat-land/not-aboard (c (dissoc world :self) {})))))
+    (is (nil? (boat-land/not-aboard (c world {}))))
+    (is (= :no-shore (:reason (contract/look-cause (boat-land/no-shore (c world {:radius 1}))))))
+    (is (nil? (boat-land/no-shore (c world {}))))
+    (is (nil? (boat-land/no-shore (c world {:pos [10 64 10]}))) "a given cell is judged by the round, which may drive nearer")))

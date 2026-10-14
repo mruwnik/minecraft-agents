@@ -1,6 +1,7 @@
 (ns engine.boat-launch-test
   "jobs.movement.boat-launch against the fake world: put a boat on water and board it, and take it back."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.library-test :as lt]
@@ -79,13 +80,14 @@
         (let [{:keys [res]} (await (run {:blocks pond :inventory [{:name "stick" :count 1}]} {:item "stick"}))]
           (is (= {:status :stopped :reason :bad-args} (select-keys res [:status :reason]))))))))
 
-(deftest already-aboard-stops
+(deftest already-aboard-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [other {:id 5 :name "minecart" :uuid "u-5" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}}
-              {:keys [res]} (await (run {:blocks pond :inventory [boat-item] :self {:vehicle 5} :entities [other]} {}))]
-          (is (= :aboard (:reason res))))))))
+              {:keys [res seen]} (await (run {:blocks pond :inventory [boat-item] :self {:vehicle 5} :entities [other]} {}))]
+          (is (= :not-done res))
+          (is (= [:aboard] (distinct (map :reason (filterv #(= :waiting (:kind %)) @seen))))))))))
 
 (deftest recovers-a-boat-and-picks-up-the-item
   (async done
@@ -155,7 +157,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run {:blocks pond :entities [(boat-at 9 1.5 :invulnerable true)]} {:action :recover :max-s 0.3}))]
+        (let [{:keys [res]} (await (run {:blocks pond :entities [(boat-at 9 1.5 :invulnerable true)]} {:action :recover :spend {:time 0.3}}))]
           (is (= {:status :stopped :reason :not-broken} (select-keys res [:status :reason]))))))))
 
 (deftest recover-without-a-drop-is-not-collected
@@ -205,3 +207,20 @@
               cell (await (bl/launch-pos! c))]
           (is (some? cell))
           (is (some #(= :sense.looked (:kind %)) @(:events c)) "it looked at what it had not seen"))))))
+
+(deftest a-non-boat-item-is-impossible
+  (is (= :bad-args (contract/impossible-cause (bl/bad-args {:args {:item "stick"}}))))
+  (is (nil? (bl/bad-args {:args {:item "oak_boat"}})))
+  (is (nil? (bl/bad-args {:args {}}))))
+
+(deftest aboard-is-a-start-condition-for-a-launch-only
+  (let [other {:id 5 :name "minecart" :uuid "u-5" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}}
+        c (fn [args] (assoc (st/stub-ctx (:p (lt/setup {:blocks pond :entities [other] :self {:vehicle 5}}))) :args args))]
+    (is (= :aboard (:reason (bl/aboard (c {:action :launch})))))
+    (is (nil? (bl/aboard (c {:action :recover}))))))
+
+(deftest no-water-is-a-condition-that-asks-for-a-look
+  (let [c (fn [world] (assoc (st/stub-ctx (:p (lt/setup world))) :args {:radius 12 :action :launch}))]
+    (is (nil? (bl/no-water (c {:blocks pond}))))
+    (is (= :no-water (:reason (contract/look-cause (bl/no-water (c {}))))))
+    (is (= :no-room (:reason (contract/look-cause (bl/no-water (c {:blocks channel}))))))))
