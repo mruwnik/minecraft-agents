@@ -19,6 +19,8 @@
 (defn field-name [x]
   (cond (keyword? x) (name x) (string? x) x :else (str x)))
 
+(def ending-kinds #{"completed" "stopped" "cancelled" "child-ended" "ended"})
+
 (defn canonical-event
   "Projects an EDN event onto the small legacy-shaped view used by dashboard summaries.
   The canonical event remains intact for the event log and attention UI."
@@ -30,7 +32,9 @@
           source (field-name (:source e))
           kind (field-name (:kind e))
           job-id (or (:job-id context) (:job-id data))
-          reflex-id (or (:reflex-id context) (:reflex-id data))]
+          reflex-id (or (:reflex-id context) (:reflex-id data))
+          ending (when (contains? ending-kinds (str/replace kind "_" "-"))
+                   (or (:ending data) data))]
       {:seq (:seq e) :t (:time-ms e)
        :source source :kind kind
        :job job-id :chain (:chain context) :round (:round context)
@@ -42,7 +46,7 @@
        :text (:message e)
        :error (or (:error data) (:reason data))
        :reason (:reason data) :since (:since data)
-       :ending (some-> (:kind data) field-name) :cause (:cause data)
+       :ending (some-> ending :kind field-name) :cause (:cause ending)
        :attention (field-name (or (:attention e) :none))
        :request-id (:request-id e)})))
 

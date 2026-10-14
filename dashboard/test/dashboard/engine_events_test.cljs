@@ -375,3 +375,14 @@
     (is (= "condition-failed" (:ending e)))
     (is (= :no-site (:cause e)))
     (is (= :no-site (:reason e)))))
+
+(deftest canonical-event-reads-the-nested-and-only-terminal-endings
+  (let [ended (ee/canonical-event {:seq 1 :time-ms 5 :source :reflex :kind :ended
+                                   :data {:ending {:kind :cut-off :cause :hostile}}})
+        child (ee/canonical-event {:seq 2 :time-ms 5 :source :job :kind :child_ended
+                                   :data {:ending {:kind :cut-off :cause :by-parent}}})
+        hurt (ee/canonical-event {:seq 3 :time-ms 5 :source :body :kind :hurt
+                                  :data {:kind :damage :cause "lava"}})]
+    (is (= ["cut-off" :hostile] ((juxt :ending :cause) ended)))
+    (is (= ["cut-off" :by-parent] ((juxt :ending :cause) child)))
+    (is (= [nil nil] ((juxt :ending :cause) hurt)))))
