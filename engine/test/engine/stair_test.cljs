@@ -88,7 +88,7 @@
 
 (defn stop [named accept & {:keys [zones dir filler?] :or {zones [] dir :down}}]
   (let [in {:block-at (world-fn named) :feet [0 65 0] :zones zones :footprints #{} :ledger #{}}]
-    (stair/stop-of in (assoc (shape/step-cells [0 65 0] dir :east) :up? (= :up dir) :filler? filler?) accept)))
+    (stair/stop-of in (assoc (stair/step-cells [0 65 0] dir :east) :up? (not= :down dir) :filler? filler?) accept)))
 
 (deftest the-stop-rules-of-one-step
   (are [named accept zones reason] (= reason (:reason (stop named accept :zones zones)))
@@ -1073,6 +1073,11 @@
 (deftest an-up-stair-ignores-air-under-its-solid-floor
   (is (nil? (:reason (stop {[1 65 0] "stone" [1 64 0] "cave_air"} #{:water} :dir :up))))
   (is (= :cave-below (:reason (stop {[1 62 0] "cave_air"} #{:water}))) "going down still refuses"))
+
+(deftest a-level-step-ignores-what-is-under-its-floor
+  (are [named] (nil? (:reason (stop named #{:water} :dir :level)))
+    {[1 63 0] "cave_air"}
+    {[1 63 0] "water"}))
 
 (deftest leaves-need-no-pickaxe
   (async done

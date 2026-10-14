@@ -1,0 +1,15 @@
+;; Card 806e51f6: go-to's escalation stair accepts a falling block over its next column: gravel over the first step's head
+;; cell falls into the cut and is dug again, the stair goes on and the body arrives. One :stair escalation.
+;; Stone mass x 10..22, z 10..22, y 0..3 (top feet y 4), a 1x1 shaft at x 16, z 16, y 1..3; goal east on top.
+{:defaults
+ {:tags [:movement :access]
+  :plot {:height 14}
+  :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 1 16] [16 3 16] "air"] [:set [17 4 16] "gravel"]]
+  :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 200 :time :any}
+ :cases
+ [{:name "gravel-over-the-next-column-is-dug-through"
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [20.5 4 16.5] 2]]}]}

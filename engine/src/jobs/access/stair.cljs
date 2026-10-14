@@ -40,7 +40,7 @@
   see): the stair looks at each step before judging it and at each cell it dug, and the stops below fire on what is
   then seen.
 
-  A step's floor must be solid, the cell under it not a fluid, nor air when no building block is carried (:cave-below), and everything loaded.
+  A step's floor must be solid, and for a stair down the cell under it not a fluid, nor air when no building block is carried (:cave-below), and everything loaded.
   A floor of air gets a carried building block (jobs.lib.choose/fillers :build, never an ore or valuable) after the
   rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.lib.bridge/bridge-plans; a plan whose face was unseen air gives way to the next); a stair down also bridges back along its line, up to setting bridge-depth cells, from a solid cell (a cave under its last floor); a cave floor with nothing within that stops :no-support-floor (the underside of the block over it cannot be aimed at).
   The cell under a placed floor is not judged. With no such block: :no-floor with :filler :none; with no face to place
@@ -245,8 +245,7 @@
 (defn stop-of
   "Why the step cannot go on, as {:reason ...detail}, or nil when every cell may be cut.
   in: the rules' input without :cell; its :unseen? (fn cell -> true when never sensed) makes a floor the body has not
-  seen a stop :floor-unseen once the cut is open, not a guess. cells :bridged? true: the floor was placed by the stair, what is under it is not judged; :filler? true: air under a solid floor is no stop (the next floor is bridged); :up? true: it never is (a stair up
-  digs no floor)."
+  seen a stop :floor-unseen once the cut is open, not a guess. cells :bridged? true: the floor was placed by the stair, what is under it is not judged; :filler? true: air under a solid floor is no stop (the next floor is bridged); :up? true (a stair up or level): it never is (those dig no floor)."
   [{:keys [block-at plugs] :as in} {:keys [cut floor under bridged? up? filler? ways]} accept]
   (let [plug-cell (first (filter #(and (contains? plugs %) (not (rules/air (block-at %)))) cut))
         floor-cell (known-floor block-at cut (into (set (:ways in)) ways))
@@ -482,7 +481,7 @@
     (when (and (or (nil? origin) (and (= feet origin) (empty? (:dug (ctx/mem c)))))
                (rises dir) (shape/headings heading))
       (let [in (rules-in c feet)
-            cells (-> (step-cells feet dir heading) (assoc :up? (= :up dir)))
+            cells (-> (step-cells feet dir heading) (assoc :up? (not= :down dir)))
             stop (stop-of in cells (set (:accept (:args c))))]
         (when (#{:zone :claim :footprint} (:reason stop)) stop)))))
 
@@ -631,7 +630,7 @@
             (if (= i target)
               (or (await (lava-step! c :stair.sealed (:block-at in) feet [])) :finished)
               (let [{:keys [next cut] :as cells} (-> (step-cells feet dir heading)
-                                                           (as-> cs (assoc cs :up? (= :up dir)
+                                                           (as-> cs (assoc cs :up? (not= :down dir)
                                                                  :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs))
                                                                  :filler? (some? (choose/filler c :build)))))
                     _ (await (look-ahead! c feet next cut))

@@ -1022,7 +1022,7 @@
           (is (= 4 (:length (second legs))))
           (is (some #(< (nth % 2) 0) (dug-cells s)) "it went on north"))))))
 
-(deftest a-cave-under-the-tunnel-turns-the-run-to-another-heading
+(deftest a-cave-under-the-tunnel-floor-is-no-stop
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1033,8 +1033,7 @@
           (aset p "sensedAt" (fn [pos] (if (= [-1 62 0] [(.-x pos) (.-y pos) (.-z pos)]) (.blockAt p pos) (orig pos))))
           (core/submit! (:eng s) (spec {:block "iron_ore" :count 30 :tunnel-length 4 :level false :mend false}) {})
           (await (run-ticks s 250))
-          (is (= {:heading "west" :length 0 :stop :cave-below} (first (:legs (done-event s)))) (pr-str (:legs (done-event s))))
-          (is (some #(< (nth % 2) 0) (dug-cells s)) "it went on north"))))))
+          (is (= {:heading "west" :length 4 :stop :tunnel-length} (first (:legs (done-event s)))) (pr-str (:legs (done-event s)))))))))
 
 (deftest stay-level-turns-from-the-last-safe-cell-after-a-sealed-breach
   (async done

@@ -1,0 +1,19 @@
+;; jobs.gather.mine, a tunnel at the start height east (:level false) with a cave cell two under its second cell
+;; ([18 -2 16], under the floor): a level step does not judge the cell under its floor, so the tunnel runs its length
+;; and the run does not turn (no :cave-below stop).
+;; Stone mass x 2..30, z 8..24, y -6..6; body in a 1x2 cell at [16 0 16] facing east.
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 -6 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [18 -2 16] "air"]]
+  :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 4})]]
+  :limit-s 110}
+ :cases
+ [{:name "cave-two-under-the-tunnel-floor-is-no-stop"
+   :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :mine.turned} :for-s 90 :of-job true
+             :until {:source :job :kind :mine.done}}
+            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason :cave-below}} :for-s 90 :of-job true
+             :until {:source :job :kind :mine.done}}]
+   :after [[:block [18 -2 16] "air"] [:not-block [20 0 16] "stone"]]}]}
