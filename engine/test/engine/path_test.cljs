@@ -204,3 +204,7 @@
                 {:keys [eng p]} (setup {:inventory shovel :blocks four} (ew/of-data {"hut" plan} {} []))]
             (await (child-outcome eng job box 4))
             (is (empty? (calls p "useOn")) author)))))))
+
+(deftest shovel-wanted-asks-for-any-shovel-when-the-listed-set-is-empty
+  (is (= {:kind "shovel"} (path/shovel-wanted {:args {:use {:tools []}}})))
+  (is (= {:item "iron_shovel"} (path/shovel-wanted {:args {:use {:tools ["iron_shovel" "stone_shovel"]}}}))))

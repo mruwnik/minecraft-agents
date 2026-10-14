@@ -93,7 +93,7 @@
 (defn shovel-wanted
   "What the fetch gets: a listed shovel by name, else any shovel."
   [c]
-  (if-let [l (listed c)] {:item (first (sort l))} {:kind "shovel"}))
+  (if-let [item (first (sort (listed c)))] {:item item} {:kind "shovel"}))
 
 (defn pending
   "[[pos block-name-or-nil] ...] of the cells not skipped and not already a path."

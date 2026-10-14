@@ -13,9 +13,8 @@
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1]]}
    :zones [{:name "z" :min [10 2 10] :max [22 11 22] :owner "SomeoneElse"}]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :stair.declined :data {:reason :refused}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :stair.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :refused}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :stair.done} :for-s 30 :until {:source :job :kind :stopped :data {:kind :condition-failed :reason :refused}}}]
    :after [[:block [17 9 16] "stone"]]}
   {:name "stair-free-outside-the-plan"
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
@@ -43,9 +42,8 @@
    :body {:at [10.5 0 10.5] :inventory [["iron_hoe" 1]]}
    :zones [{:name "z" :min [13 -1 13] :max [17 0 17] :owner "SomeoneElse"}]
    :act [[:job (jobs.farm.till {:from #at [14 -1 14] :to #at [15 -1 15] :fetch false})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :till.declined :data {:reason :refused}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :till.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :refused}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :till.done} :for-s 30 :until {:source :job :kind :stopped :data {:kind :condition-failed :reason :refused}}}]
    :after [[:block [14 -1 14] "grass_block"] [:block [15 -1 15] "grass_block"]]}
   {:name "till-free-outside-the-plan"
    :body {:at [10.5 0 10.5] :inventory [["iron_hoe" 1]]}
@@ -57,9 +55,8 @@
    :blocks [[:fill [18 0 18] [19 1 19] "dirt"]]
    :zones [{:name "z" :min [17 0 17] :max [20 2 20] :owner "SomeoneElse"}]
    :act [[:job (jobs.build.clear-box {:from #at [18 0 18] :to #at [19 1 19]})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :clear-box.declined :data {:reason :refused}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :clear-box.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :refused}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :clear-box.done} :for-s 30 :until {:source :job :kind :stopped :data {:kind :condition-failed :reason :refused}}}]
    :after [[:block [18 0 18] "dirt"] [:block [19 1 19] "dirt"]]}
   {:name "clear-box-free-outside-the-plan"
    :blocks [[:fill [18 0 18] [19 1 19] "dirt"]]
