@@ -591,6 +591,18 @@
           (is (= :nothing-possible (get-in out [:ending :kind])))
           (is (= :cannot_escape (get-in out [:ending :because :cause])) "the retreat's ending is the because"))))))
 
+(deftest respond-to-hostile-passes-the-kind-of-a-retreat-that-ends-impossible-or-limit-reached
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [kind [:impossible :limit-reached]]
+          (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
+                ending {:conditions []
+                        :round (fn ^:async ends [c] (ctx/end c kind :stub))}
+                s (assoc-in s [:eng :jobs 'jobs.survival.retreat] ending)
+                {:keys [out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
+            (is (= kind (get-in out [:ending :kind])))))))))
+
 (deftest respond-to-hostile-is-done-when-the-danger-is-gone-after-a-long-hide
   (async done
     (tu/run-async done

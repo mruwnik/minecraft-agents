@@ -775,7 +775,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword :blocks wall :entities [(zombie 5 0)]})]
           (core/submit! eng respond {})
-          (is (nil? (core/tick! eng)) "only a zombie behind the wall: nothing to respond to")
+          (await (core/tick! eng))
+          (is (empty? (:list (core/state eng))) "only a zombie behind the wall: nothing to respond to, done")
           (is (zero? (count (tu/walked-to eng)))))))))
 
 (deftest fight-back-goes-for-a-visible-hostile-first

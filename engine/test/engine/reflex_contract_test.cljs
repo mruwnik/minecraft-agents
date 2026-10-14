@@ -73,13 +73,11 @@
                                                   :entities [(h/zombie 3 0)]}))]
           (is (= #{"stone_sword"} (set (map #(.-item (.-args %)) (h/calls p "equip"))))))))))
 
-(deftest respond-with-no-danger-near-waits-and-a-cleared-one-is-done
+(deftest respond-with-no-danger-near-is-done-already
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :waiting :reason :no-hostile}
-               (select-keys (await (sc/ending-of #(tu/fake-on-floor {:floor h/flight-floor}) '(jobs.survival.respond-to-hostile)))
-                            [:event :reason])))
+        (is (= :completed (:event (await (sc/ending-of #(tu/fake-on-floor {:floor h/flight-floor}) '(jobs.survival.respond-to-hostile))))))
         (is (= :completed (:event (await (sc/ending-of #(tu/fake-on-floor {:floor h/flight-floor :inventory h/sword
                                                                             :entities [(h/zombie 7 3 0)]})
                                                        '(jobs.survival.respond-to-hostile))))))))))

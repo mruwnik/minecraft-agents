@@ -99,7 +99,6 @@
     'jobs.survival.get-food {} :not-hungry
     'jobs.survival.night {} :not-night
     'jobs.survival.recover-drops {} :no-drops
-    'jobs.survival.respond-to-hostile {} :no-hostile
     'jobs.survival.restore-broken {} :nothing-to-restore
     'jobs.survival.unwedge {} :not-wedged))
 

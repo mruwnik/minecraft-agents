@@ -12,7 +12,6 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.goal :as goal]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.started :as started]
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -38,9 +37,9 @@
   fetch), once per call; when that places nothing it decides as above.
   Done once no real danger (as the hostile-near trigger, jobs.lib.danger, in sight) is within :radius
   (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
-  Not started with no real danger near (condition :no-hostile). The weapons are the call's :use :tools (default the
+  Done at once (0 hostiles) with no real danger near. The weapons are the call's :use :tools (default the
   weapons carried; the old :weapons substrings map in legacy-args), handed to both children as their :use :tools.
-  Ends :done when the danger is gone or left heard-only; :nothing-possible with the retreat's cause (:cannot_escape)
+  Ends :done when the danger is gone or left heard-only; :nothing-possible with the retreat's own kind and cause (:cannot_escape)
   when the retreat ends otherwise, or :no_response after ::max-unchanged (3) calls in a row that change
   neither the body's cell, its health, the dangers near nor the fight's hits; never :continue. No time limit by default.
   Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter,
@@ -282,12 +281,7 @@
   [c]
   (some? (get-in (ctx/mem c) [:children :flee :refuge])))
 
-(defn no-hostile
-  "Why it cannot start: :no-hostile with no real danger near; nil when one is."
-  [c]
-  (when (empty? (near c)) :no-hostile))
-
-(def conditions [[:fn (started/at-start no-hostile)]])
+(def conditions [])
 
 (defn done?
   "Done once no real danger is near and the retreat is not hiding."
@@ -335,7 +329,7 @@
           after (near c)]
       (if (contract/ending? outcome)
         (do (mute-heard! c hs)
-            (ctx/end c :nothing-possible (:cause outcome) (some->> (:text (:data outcome)) (hash-map :text))))
+            (ctx/end c (:kind outcome) (:cause outcome) (some->> (:text (:data outcome)) (hash-map :text))))
         (cond
           (= :left-heard outcome) (ctx/end c :done nil)
           (and (empty? after) (not (hiding? c)) (not (and (not looked?) (fight-unsettled? c outcome)))) (ctx/end c :done nil)
