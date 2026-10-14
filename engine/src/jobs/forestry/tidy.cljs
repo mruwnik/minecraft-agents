@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.trees :as trees :refer [default-radius trees-near seen-name drop-filter replant-kind]]))
 
@@ -23,7 +24,7 @@
   it ends condition-failed :nothing-to-tidy. A fell child that ends for want of a tool, blocks or food (a need, a limit,
   :hungry, :night-sheltered) ends the job with that ending (:tidied n in its data), done when trunks were tidied first;
   a trunk it cannot reach is left. A missing axe, a pillar's blocks or a sapling are fetched by the children (:fetch).
-  The conditions are empty: a one-off job that finds nothing ends itself instead of staying queued.
+  Nothing to tidy is a condition, true once the first round has looked round.
   Quote: time by the trunks to fell, at most :max-trees.")
 
 (a/defargs settings
@@ -109,12 +110,10 @@
 (defn limit [c] (or (:max-trees (:args c)) (settings/get settings ::max-trees)))
 
 (defn finish!
-  "The ending when no trunk is left to take: done with the count, condition-failed :nothing-to-tidy when none was."
+  "The ending when no trunk is left to take: done with the count."
   [c]
   (let [n (:tidied (ctx/mem c) 0)]
-    (if (zero? n)
-      (ctx/end c :condition-failed :nothing-to-tidy {:tidied 0})
-      (ctx/end c :done nil (cond-> {:tidied n} (pos? (:owed (ctx/mem c) 0)) (assoc :replant-owed (:owed (ctx/mem c))))))))
+    (ctx/end c :done nil (cond-> {:tidied n} (pos? (:owed (ctx/mem c) 0)) (assoc :replant-owed (:owed (ctx/mem c)))))))
 
 (defn next-tree!
   "Choose the next trunk into memory; false when none is left or the limit is reached."
@@ -161,7 +160,7 @@
   [c]
   (let [tree (or (:tree (ctx/mem c)) (next-tree! c))]
     (if-not tree
-      (finish! c)
+      (or (and (zero? (:tidied (ctx/mem c) 0)) (await (look/survey! c))) (finish! c))
       (let [phase (:phase (ctx/mem c))
             [_ job cargs] (some #(when (= phase (first %)) %) (phases (:args c) tree))
             e (await (ctx/call c phase job cargs))]
@@ -184,7 +183,14 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(def conditions [])
+(defn nothing-to-tidy
+  "The cause :nothing-to-tidy while none is tidied or chosen, no trunk is in sight and the body has looked round."
+  [c]
+  (let [m (ctx/mem c)]
+    (when (and (zero? (:tidied m 0)) (not (:tree m)) (look/surveyed? c) (empty? (leftovers c)))
+      {:reason :nothing-to-tidy})))
+
+(def conditions [[:fn nothing-to-tidy]])
 
 (defn done?
   "Never done before the round says so: the trunks left are read at each step."

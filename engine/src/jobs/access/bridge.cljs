@@ -25,7 +25,8 @@
   its place and confirmed when the cell is seen holding it, so a cleanup can take the row back after a cut or restart.
   Each (re)start reads the row from the cells: a cell ahead that is already solid floor is stepped onto, not placed.
 
-  Waits (condition): :moved-since-submit, when the body stands over jobs.lib.submitted/limit from :from at the start.
+  Conditions, checked at the start: :moved-since-submit, when the body stands over jobs.lib.submitted/limit from :from;
+  the first step's :bad-args, permission refusal (:zone :footprint :no-zones) and :not-on-solid.
 
   Before each step it checks:
   - the whole rest of the row is permitted (no zone that bars :place, no other plan's footprint, a zone list loaded)
@@ -177,7 +178,19 @@
     (submitted/away-wait (assoc c :wait w))
     @w))
 
-(def conditions [[:fn away]])
+(def start-facts
+  "Give-up reasons known from the args and the map under the feet, before any look: the call's own mistakes and what permission refuses."
+  #{:bad-args :zone :footprint :no-zones :claim :not-on-solid})
+
+(defn start-fact
+  "At the call's start only: the first step's give-up as a cause when it is one of start-facts, else nil."
+  [c]
+  (when-not (ctx/frozen-call c)
+    (let [step (next-step (inputs c (ledger/open-entries (ctx/view c)) (pl/feet-cell c)))]
+      (when (and (= :give-up (:step step)) (start-facts (:reason step)))
+        (dissoc step :step)))))
+
+(def conditions [[:fn away] [:fn start-fact]])
 
 (defn done?
   "Progress only: the row is finished by a round that sees the body at its end."

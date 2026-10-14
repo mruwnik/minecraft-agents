@@ -100,3 +100,39 @@
       (fn ^:async t []
         (is (= {:event :stopped :reason :bad-args}
                (select-keys (await (ending-of '(jobs.access.leave-tunnel {:tunnel {} :ignore-zones? true}) {})) [:event :reason])))))))
+
+(defn ^:async waiting-on
+  "Submit spec as a root job over a fake world (zones as given) and tick: {:reasons [..] :rounds n :listed? bool}."
+  [spec world zones]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/capture-sink)
+        eng (core/create {:primitives (tu/fake world) :jobs registry/jobs :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (world/of-data {} {} zones)
+                          :events (events/make {:sinks [sink] :now #(deref clock)})})]
+    (core/submit! eng spec {})
+    (dotimes [_ 3] (swap! clock + 500) (await (core/tick! eng)))
+    (let [of (fn [k] (filterv #(= [:job k] [(:source %) (:kind %)]) @seen))
+          out {:reasons (vec (distinct (map #(get-in % [:data :reason]) (of :waiting))))
+               :rounds (count (of :round_started))
+               :listed? (boolean (seq (:list (core/state eng))))}]
+      (core/shutdown! eng)
+      out)))
+
+(def bridge-world {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks {"0,63,0" "stone"} :inventory [{:name "dirt" :count 8}]})
+
+(deftest a-bridge-start-fact-is-a-condition-not-a-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label spec world zones reason]
+                [["zone" '(jobs.access.bridge {:heading :east :length 3}) bridge-world [{:name "keep-out" :min [2 60 -2] :max [2 70 2]}] :zone]
+                 ["not on solid" '(jobs.access.bridge {:heading :east :length 3 :ignore-zones? true}) (assoc bridge-world :blocks {}) [] :not-on-solid]]]
+          (is (= {:reasons [reason] :rounds 0 :listed? true} (await (waiting-on spec world zones))) label))))))
+
+(deftest clear-path-with-no-wall-waits-no-door-before-a-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:reasons [:no-door] :rounds 0 :listed? true}
+               (await (waiting-on '(jobs.access.clear-path {:heading :east :max-thick 3})
+                                  {:self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,63,0" "stone"}} []))))))))

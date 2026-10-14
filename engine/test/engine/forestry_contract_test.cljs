@@ -100,7 +100,8 @@
           (is (= {:tidied 1} (:data e))))
         (let [s (lt/setup {:blocks (fm/ground [[6 0]])})
               e (await (ending-of s tidy {:radius 12} 150))]
-          (is (= {:kind :condition-failed :cause :nothing-to-tidy} (kc e))))))))
+          (is (= {:kind :condition-failed :cause :nothing-to-tidy} (kc e)))
+          (is (nil? (:data e)) "a failed condition, not a round's ending"))))))
 
 (deftest tidy-with-no-axe-and-no-fetch-ends-with-the-fell-ending-not-forever
   (async done

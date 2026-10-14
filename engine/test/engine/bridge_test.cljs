@@ -186,17 +186,17 @@
           (is (= [:too-few-blocks] (mapv :reason (of-kind seen :stopped))) "the job ends stopped with the reason, not completed")
           (is (empty? (of-kind seen :completed))))))))
 
-(deftest a-zone-refuses-before-any-placement
+(deftest a-zone-holds-the-call-before-any-placement
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:zones [{:name "keep-out" :min [4 60 -2] :max [4 70 2]}]})]
           (core/submit! eng (list job {:heading :east :length 5}) {})
           (await (ticks s eng 5))
-          (is (finished? eng))
+          (is (not (finished? eng)) "a listed call waits on its condition")
           (is (empty? (calls p "place")))
           (is (empty? (the-ledger eng)))
-          (is (= [:zone "keep-out"] ((juxt :reason :zone) (first (of-kind seen :bridge.gave-up))))))))))
+          (is (= [:zone "keep-out"] ((juxt :reason :zone) (:cause (first (of-kind seen :waiting)))))))))))
 
 (deftest a-ceiling-ahead-refuses-before-any-placement
   (async done

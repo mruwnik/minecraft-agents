@@ -116,26 +116,11 @@
         (let [asked (atom nil)
               go-to (fn ^:async refusing-go-to [c]
                       (reset! asked (:args c))
-                      (ctx/result! c {:arrived false :status :stopped :reason :unreachable})
-                      :done)
+                      (ctx/end c :nothing-possible :unreachable {:arrived false}))
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) nil
-                                 {:heading :east :max-thick 3} {'jobs.movement.go-to go-to}))]
-          (is (= [:stopped :step-failed] [(:status r) (:reason r)]) (pr-str r))
-          (is (= [[3 64 0] 0 false] ((juxt :pos :range :escalate) @asked)) (pr-str @asked)))))))
-
-(deftest open-ground-ahead-is-no-door
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [r (await (run-door (dissoc wall :blocks) nil))]
-          (is (= [:stopped :no-door] [(:status r) (:reason r)]) (pr-str r)))))))
-
-(deftest a-wall-thicker-than-max-thick-is-no-door
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [r (await (run-door wall nil {:heading :east :max-thick 1}))]
-          (is (= [:stopped :no-door] [(:status r) (:reason r)]) (pr-str r)))))))
+                                 {:heading :east :max-thick 3} {'jobs.movement.go-to go-to} ctx/call))]
+          (is (= [:nothing-possible :step-failed] [(:kind r) (contract/cause-key r)]) (pr-str r))
+          (is (= [[3 64 0] 0 #{:walk :clear-seal}] ((juxt :pos :range :ways) @asked)) (pr-str @asked)))))))
 
 (deftest a-missing-heading-is-bad-args
   (async done
@@ -168,6 +153,7 @@
           (is (= [:nothing-possible :refills nil] (await (end (merge wall pick) refilling east))))
           (is (= [:nothing-possible :dig-failed :nothing-possible] (await (end (merge wall pick) failing east))))
           (is (= [:condition-failed :no-door nil] (await (end (dissoc wall :blocks) nil east))))
+          (is (= [:condition-failed :no-door nil] (await (end wall nil {:heading :east :max-thick 1}))) "a wall thicker than :max-thick")
           (is (= [:condition-failed :footprint nil]
                  (await (end (assoc (merge wall pick) :plans {"hut" (shape/with-author {:id "hut" :parts [{:id "w" :cells [[1 64 0]] :want "stone"}]} "Fake")})
                              nil east)))))))))
