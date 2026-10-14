@@ -372,7 +372,7 @@
           (is (= 1 (count (st/calls p "sleep"))))
           (is (= [] (st/calls p "offline"))))))))
 
-(deftest a-queued-log-out-waits-without-acting-when-another-job-logged-out-meanwhile
+(deftest a-queued-log-out-ends-done-without-acting-when-another-job-logged-out-meanwhile
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -383,7 +383,7 @@
           (mem/write! (:store eng) :log-out {:ms 30000 :status "ok"} nil)
           (await (tu/run-until-empty eng 3))
           (is (= [] (st/calls p "offline")) "the body was not logged out again")
-          (is (= 1 (count (:list (core/state eng)))) "the job waits"))))))
+          (is (= 0 (count (:list (core/state eng)))) "the job ended, it does not wait"))))))
 
 (deftest a-log-out-before-the-submit-does-not-end-it
   (async done
