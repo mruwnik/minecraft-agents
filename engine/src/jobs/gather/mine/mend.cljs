@@ -84,20 +84,18 @@
   (let [cells (mend-permitted c (owed c))]
     (if (empty? cells)
       (await (mended! c))
-      (let [e (await (ctx/call c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :any-of (fillers c)
+      (let [e (await (ctx/call c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :use {:blocks (fillers c)}
                                                               :reach (mend-reach) :max-failures (max-mend-failures)}))
-            {:keys [mended why left]} (when (map? e) (:data e))]
+            {:keys [mended left]} (when (map? e) (:data e))
+            left (or left (map :pos cells))]
         (when (map? e)
           (ctx/update-mem! c update :mended (fnil + 0) (or mended 0)))
         (cond
           (= :continue e) :continue
-          (not= :done (:kind e))
-          (do (ctx/emit! c :mine.mend-failed :warn {:owed (mapv :pos cells) :text (str "mine could not mend: " (cells-text (map :pos cells)))})
-              (wrap-up! c))
-          (= :failed why)
-          (do (ctx/emit! c :mine.mend-failed :warn {:owed (vec left) :text (str "mine could not mend: " (cells-text left))})
-              (wrap-up! c))
-          (= :short why)
+          (= :done (:kind e)) :again
+          (and (= :condition-failed (:kind e)) (= :need (get-in e [:cause :reason])))
           (do (ctx/emit! c :mine.mend-short :warn {:owed (vec left) :text (str "mine has nothing to mend with: " (cells-text left))})
               (wrap-up! c))
-          :else :again)))))
+          :else
+          (do (ctx/emit! c :mine.mend-failed :warn {:owed (vec left) :text (str "mine could not mend: " (cells-text left))})
+              (wrap-up! c)))))))
