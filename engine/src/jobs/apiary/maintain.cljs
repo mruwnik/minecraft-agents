@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.steps :as steps]
@@ -27,14 +28,14 @@
     carried. Only produce is deposited; tools, bottles, carpet, campfires and flowers stay carried.
   A step whose conditions do not hold is booked {:skipped reason} (:safe, :no-fire, :no-carpet, :no-campfire,
   :not-ripe, :no-tool, :unsafe-fire, :not-smoked, :open-fire, :no-target, :at-target, :night, :raining,
-  :too-few-adults, :no-food, :no-chest, :nothing-to-store). One that declines is booked {:skipped :declined}
+  :too-few-adults, :no-food, :no-chest, :nothing-to-store). One that declines is booked {:skipped :declined :reason why} (the child's wait)
   and one that throws {:skipped :failed :error text}. The pass goes on either way.
   The job declines (does nothing) unless some step would run, after one look around per run when part of the area was never seen. A started run always
   continues.
   It ends :done with {:target :bees :steps {step summary}} (info maintain.done), also when every step was
   skipped. Summaries: guard {:sunk :carpeted :reason :left}, harvest {:harvested :reason :declined}, breed {:fed
   :reason}, deposit {:gave-up :reason}.
-  :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs).")
+  :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs); they run with :fetch false, a missing item skips the step.")
 
 (a/defargs args
   {:box {:doc "the apiary: {:from pos :to pos}; overrides :center and :radius" :spec (a/map-with {:from a/position? :to a/position?}) :default nil}
@@ -160,7 +161,7 @@
   "The args a child gets: the area for guard and harvest, as decided for the rest."
   [c step center decided]
   (case step
-    (:guard :harvest) (merge (area c center) (when (= :harvest step) {:with (:with (:args c))})
+    (:guard :harvest) (merge (area c center) {:fetch false} (when (= :harvest step) {:with (:with (:args c))})
                              (when (:ignore-zones? (:args c)) {:ignore-zones? true}))
     (:args decided)))
 
@@ -226,7 +227,7 @@
             :continue :continue
             :failed :again
             :done (do (ctx/update-mem! c booked step (summary step (ctx/child-result c step))) :again)
-            (do (ctx/update-mem! c booked step {:skipped :declined}) :again)))))))
+            (do (ctx/update-mem! c booked step {:skipped :declined :reason (:reason (blocks/child-wait c step (jobs step) call-args))}) :again)))))))
 
 (defn ^:async step
   "One piece of the pass: :again after a step ended, :continue while its child waits on the world, :done. With

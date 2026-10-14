@@ -5,8 +5,10 @@
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -22,11 +24,13 @@
   One call works every fire (:continue only while a walk or the carpet pick-up waits on the world). Fires are
   worked nearest first, at most :max actions in a run. A fire that cannot be reached or refuses is
   skipped for the rest of the run. The body never stands in a fire's cell.
+  A carpet or campfire the work needs and the body lacks is fetched (jobs.lib.need) unless :fetch is false; a
+  failed fetch ends nothing-possible or condition-failed with :reason :need.
   Start facts, found after a quiet look around, make it wait (a skipped job): :nothing-to-guard (no fire needs
-  work), :no-carpet or :no-campfire (the body carries what the work needs), :refused or :no-zones (the zone rules
-  refuse every fire).
+  work), :no-carpet or :no-campfire (the body carries what the work needs, :fetch false), :refused or :no-zones
+  (the zone rules refuse every fire).
   Result: {:sunk n :carpeted n :reason r :left {pos reason} :skipped {pos reason} :fires n}. :reason is
-  :guarded (work done, nothing left), :limit (:max reached), :safe, :no-fire, :no-carpet, :no-campfire, a skip
+  :guarded (work done, nothing left), :limit (:max reached), :safe, :no-fire, :no-carpet, :no-campfire, :need, a skip
   reason (:unreachable, :on-fire, :occupied, :cannot, :place-failed, :refused) or :gave-up (3 fruitless fires
   in a row). Every end but :guarded and :limit also warns apiary.guard-gave-up.
   The ending: :done for :guarded, :limit, :safe, and any other reason when the call's :least (default 1) actions
@@ -42,7 +46,8 @@
    :center {:doc "centre of the search; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
    :radius {:doc "fires within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 16}
    :max {:doc "actions (sinks and carpets) in one run, at most" :spec (a/int-in 1 nil) :default 12}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :fetch {:doc "get a carpet or campfire that is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits with :no-carpet / :no-campfire" :spec fetch/option? :default true}})
 
 (defn permitted?
   "Whether the job may do action (:dig or :place) at pos (one warn per job when refused)."
@@ -313,7 +318,8 @@
           seen (survey c center true)
           cause (cond
                   (seq (:todo seen)) nil
-                  (seq (:left seen)) {:reason (first (vals (:left seen)))}
+                  (and (seq (:left seen)) (nil? (fetch/parse-arg (:fetch (:args c))))) {:reason (first (vals (:left seen)))}
+                  (seq (:left seen)) nil
                   (and (seq fires) (zero? (:fires seen))) {:reason (:refusal (gate/look c :dig (map :pos fires) {}))}
                   :else {:reason :nothing-to-guard})]
       (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first))))
@@ -328,6 +334,24 @@
 
 (defn quote-of [c]
   {:uses {:time [0 (* 10 (or (:max (:args c)) 12)) ##Inf]}})
+
+(def lacked-item {:no-carpet "white_carpet" :no-campfire "campfire"})
+
+(defn ^:async supply!
+  "Fetch what the fires left lack when :fetch allows: :again once fetched, :continue while the fetch waits, else the
+  ending of the run (reason :need, the fetch's ending as its cause); nil when nothing is lacking or :fetch is off."
+  [c seen]
+  (let [opts (fetch/opts c 'jobs.apiary.guard)
+        lacks (some lacked-item (vals (:left seen)))]
+    (when (and opts lacks)
+      (let [e (await (need/item! c lacks 1 opts))]
+        (cond
+          (= :continue e) :continue
+          (= :done (:kind e)) :again
+          :else (let [m (ctx/mem c)]
+                  (ctx/emit! c :apiary.guard-gave-up :warn {:reason :need :text "apiary guard stopped: need"})
+                  (ctx/end c (:kind e) (:cause e) {:sunk (:sunk m 0) :carpeted (:carpeted m 0) :reason :need
+                                                   :left (:left seen {}) :skipped (:skipped m {}) :fires (:fires seen 0)})))))))
 
 (defn ^:async step
   "One piece of the guarding: resume a sink; else survey the fires and finish when the budget is spent, three fires
@@ -348,7 +372,7 @@
         (cond
           (>= (actions m) (:max (:args c))) (finish! c :limit seen)
           (>= (:strikes m 0) (max-strikes)) (finish! c :gave-up seen)
-          (nil? target) (finish! c (end-reason m seen) seen)
+          (nil? target) (or (await (supply! c seen)) (finish! c (end-reason m seen) seen))
           :else (await (work! c target)))))))
 
 (defn max-steps [] (settings/get settings ::max-steps))

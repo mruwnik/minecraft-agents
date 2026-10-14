@@ -2,6 +2,7 @@
   "jobs.apiary.maintain against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
             [engine.fake :as fake]
@@ -251,3 +252,30 @@
             (await (core/tick! (:eng s))))
           (is (empty? (calls s "look")) "every cell of the area is already seen")
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting))))))))))
+
+(deftest a-waiting-child-is-booked-declined-with-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [waits (fn [jobs] (assoc jobs 'jobs.apiary.harvest {:check (fn [c] (ctx/wait c {:reason :boom})) :round (fn [_c] :done)}))
+              s (await (scenario {} (world {:inventory kit}) 30 waits))]
+          (is (= {:skipped :declined :reason :boom} (step s :harvest))))))))
+
+(def harvest-worlds
+  "Worlds and args where harvest could be chosen, or looks it could."
+  [[{} (world {:inventory kit})]
+   [{} (world {:inventory (inv "white_carpet" 1)})]
+   [{} (world {:inventory kit :level 2})]
+   [{} (world {:inventory kit :raised? true})]
+   [{:with :bottle} (world {:inventory (inv "shears" 1 "white_carpet" 1)})]
+   [{:with :bottle} (world {:inventory (inv "glass_bottle" 1 "white_carpet" 1)})]
+   [{:ignore-zones? true} (assoc (world {:inventory kit}) :zones [{:name "bees" :min [2 60 0] :max [2 70 0] :owner "Miles"}])]
+   [{} (assoc (world {:inventory kit}) :zones [{:name "bees" :min [2 60 0] :max [2 70 0] :owner "Miles"}])]])
+
+(deftest maintain-never-calls-a-harvest-that-would-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args w] harvest-worlds]
+          (let [s (await (scenario args w 30))]
+            (is (not= :declined (:skipped (step s :harvest))) (pr-str args))))))))

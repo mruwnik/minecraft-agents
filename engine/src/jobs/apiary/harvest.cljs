@@ -5,8 +5,10 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]))
@@ -22,12 +24,14 @@
   - A smoked hive over an open lit fire (nothing with a collision box on it; a non-moss carpet counts) burns
     the bees that land, so it is declined too (:open-fire).
   - A hive the body cannot walk to, or that refuses the item, is skipped for the rest of the run.
+  A tool of :with that is not carried is fetched (jobs.lib.need) unless :fetch is false; a failed fetch ends
+  nothing-possible or condition-failed with :reason :need.
   Start facts, found after a quiet look around, make it wait (a skipped job): :no-hive, :not-ripe, :not-smoked,
-  :open-fire (no hive can be worked), :no-tool (none of :with is carried), :refused or :no-zones (the zone rules
-  refuse every hive).
+  :open-fire (no hive can be worked), :no-tool (none of :with is carried, :fetch false), :refused or :no-zones (the
+  zone rules refuse every hive).
   Result: {:harvested n :reason r :with item :declined {pos reason} :skipped {pos reason} :collected n}. :reason is
   :harvested (some taken, nothing more to do), :limit (:max reached), :no-tool, :no-hive, :not-ripe,
-  :not-smoked, :open-fire, :unreachable or :gave-up (3 fruitless hives in a row). Declines and give-ups also warn
+  :not-smoked, :open-fire, :need, :unreachable or :gave-up (3 fruitless hives in a row). Declines and give-ups also warn
   apiary.gave-up.
   The ending: :done for :harvested, :limit and any other reason when the call's :least (default 1) hives were
   taken; else condition-failed for :no-hive, :not-ripe, :not-smoked, :open-fire, :no-tool, :refused and :no-zones,
@@ -42,7 +46,8 @@
    :center {:doc "centre of the search; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
    :radius {:doc "hives within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 12}
    :max {:doc "hives to harvest in one run, at most" :spec (a/int-in 1 nil) :default 8}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :fetch {:doc "get a tool that is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits with :no-tool" :spec fetch/option? :default true}})
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
@@ -96,6 +101,11 @@
                  :bottle [:bottle]
                  [:shears :bottle])]
     (some #(when (carried? (tool-item %)) (tool-item %)) wanted)))
+
+(defn wanted-tool
+  "The item name to fetch for :with: shears unless only :bottle."
+  [with]
+  (tool-item (if (= :bottle (keyword with)) :bottle :shears)))
 
 (defn classify
   "The hives as {:todo [pos] :declined {key reason} :ripe n :hives n}: ripe hives not skipped, sorted by the verdict."
@@ -236,7 +246,8 @@
           cause (cond
                   refusal {:reason refusal}
                   (empty? (:todo seen)) {:reason (idle-reason {} seen)}
-                  (nil? (tool-for (:with (:args c)) (u/inventory (:primitives c)))) {:reason :no-tool})]
+                  (and (nil? (tool-for (:with (:args c)) (u/inventory (:primitives c))))
+                       (nil? (fetch/parse-arg (:fetch (:args c))))) {:reason :no-tool})]
       (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first))))
 
 (def conditions "Wait on a start fact (start-fact)." [[:fn start-fact]])
@@ -249,6 +260,20 @@
 
 (defn quote-of [c]
   {:uses {:time [0 (* 15 (or (:max (:args c)) 8)) ##Inf]}})
+
+(defn ^:async supply!
+  "Fetch the tool when :fetch allows: :again once it is carried, :continue while the fetch waits, else the ending of
+  the run (reason :need, the fetch's ending as its cause); nil when :fetch is off."
+  [c seen]
+  (when-let [opts (fetch/opts c 'jobs.apiary.harvest)]
+    (let [e (await (need/item! c (wanted-tool (:with (:args c))) 1 opts))]
+      (cond
+        (= :continue e) :continue
+        (= :done (:kind e)) :again
+        :else (do (ctx/emit! c :apiary.gave-up :warn {:reason :need :text "apiary harvest stopped: need"})
+                  (ctx/end c (:kind e) (:cause e) {:harvested (:harvested (ctx/mem c) 0) :reason :need
+                                                   :with (:tool (ctx/mem c)) :declined (:declined seen {})
+                                                   :skipped (:skipped (ctx/mem c) {}) :collected (:collected (ctx/mem c) 0)}))))))
 
 (defn ^:async step
   "One piece of the harvest: collect after a shears harvest; else classify the hives and finish when none can be
@@ -270,7 +295,7 @@
           (>= (:harvested m 0) (:max (:args c))) (finish! c :limit seen)
           (>= (:strikes m 0) (max-strikes)) (finish! c :gave-up seen)
           (nil? pos) (finish! c (idle-reason m seen) seen)
-          (nil? tool) (finish! c :no-tool seen)
+          (nil? tool) (or (await (supply! c seen)) (finish! c :no-tool seen))
           :else (do (ctx/update-mem! c assoc :tool tool)
                     (await (harvest! c pos tool))))))))
 

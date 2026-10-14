@@ -45,6 +45,7 @@
         {:event (when wt :waiting) :reason (:reason (:data wt))}))))
 
 (def guard '(jobs.apiary.guard {}))
+(def no-fetch-guard '(jobs.apiary.guard {:fetch false}))
 (def carpet (g/inv "white_carpet" 2))
 (def safe-fire (assoc-in (g/fire-world {}) [:blocks "2,65,0"] "white_carpet"))
 
@@ -53,9 +54,9 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :waiting :reason :no-carpet}
-               (await (ends guard (g/fire-world {:inventory (g/inv "moss_carpet" 3)})))))
+               (await (ends no-fetch-guard (g/fire-world {:inventory (g/inv "moss_carpet" 3)})))))
         (is (= {:event :waiting :reason :no-campfire}
-               (await (ends guard (-> (g/fire-world {:inventory (g/inv "stick" 1)}) (g/open-side "3,64,0")
+               (await (ends no-fetch-guard (-> (g/fire-world {:inventory (g/inv "stick" 1)}) (g/open-side "3,64,0")
                                       (assoc-in [:blocks "2,65,0"] "white_carpet"))))))
         (is (= {:event :waiting :reason :nothing-to-guard} (await (ends guard safe-fire))))
         (is (= {:event :waiting :reason :nothing-to-guard} (await (ends guard {}))))
@@ -75,13 +76,14 @@
                             (assoc (g/fire-world {:inventory carpet}) :self {:pos {:x 20 :y 64 :z 0}} :unreachable ["2,64,0"])))))))))
 
 (def harvest '(jobs.apiary.harvest {}))
+(def no-fetch-harvest '(jobs.apiary.harvest {:fetch false}))
 (def shears (h/inv "shears" 1))
 
 (deftest harvest-waits-on-its-start-facts
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :waiting :reason :no-tool} (await (ends harvest (h/world {:inventory (h/inv "stick" 1)})))))
+        (is (= {:event :waiting :reason :no-tool} (await (ends no-fetch-harvest (h/world {:inventory (h/inv "stick" 1)})))))
         (is (= {:event :waiting :reason :no-hive} (await (ends harvest {:inventory shears}))))
         (is (= {:event :waiting :reason :not-ripe} (await (ends harvest (h/world {:inventory shears :level 2})))))
         (is (= {:event :waiting :reason :not-smoked} (await (ends harvest (h/world {:inventory shears :smoke? false})))))
@@ -91,7 +93,7 @@
                (await (ends harvest (-> (h/world {:inventory shears})
                                         (update :blocks #(-> % (dissoc h/under) (assoc "2,62,0" "campfire")))
                                         (update :states #(-> % (dissoc h/under) (assoc "2,62,0" {:lit true}))))))))
-        (is (= {:event :waiting :reason :no-tool} (await (ends '(jobs.apiary.harvest {:with :bottle}) (h/world {:inventory shears})))))
+        (is (= {:event :waiting :reason :no-tool} (await (ends '(jobs.apiary.harvest {:with :bottle :fetch false}) (h/world {:inventory shears})))))
         (is (= {:event :waiting :reason :no-zones} (await (ends harvest (assoc (h/world {:inventory shears}) :zones nil)))))
         (is (= {:event :waiting :reason :refused}
                (await (ends harvest (assoc (h/world {:inventory shears}) :zones [{:name "bees" :min [2 60 0] :max [2 70 0] :owner "Miles"}])))))))))
@@ -104,3 +106,13 @@
         (is (= {:event :stopped :kind :nothing-possible :reason :unreachable}
                (await (ends '(jobs.apiary.harvest {:radius 30})
                             (assoc (h/world {:inventory shears}) :self {:pos {:x 20 :y 64 :z 0}} :unreachable ["2,64,0"])))))))))
+
+(deftest a-missing-item-is-fetched-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :reason :need} (select-keys (await (ends harvest (h/world {:inventory (h/inv "stick" 1)}))) [:event :reason])))
+        (is (= {:event :stopped :reason :need} (select-keys (await (ends guard (g/fire-world {:inventory (g/inv "moss_carpet" 3)}))) [:event :reason])))
+        (is (= {:event :stopped :reason :need}
+               (select-keys (await (ends guard (-> (g/fire-world {:inventory (g/inv "stick" 1)}) (g/open-side "3,64,0")
+                                                   (assoc-in [:blocks "2,65,0"] "white_carpet")))) [:event :reason])))))))
