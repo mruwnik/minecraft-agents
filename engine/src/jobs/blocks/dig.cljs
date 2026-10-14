@@ -76,11 +76,22 @@
    ::min-health {:default 6 :doc "Health below which a call stops, when the caller sets no :floor :health." :spec (a/num-in 0 nil)}})
 (defn collect-radius [] (settings/get settings ::collect-radius))
 
+(defn use-tools
+  "The tool names the call lists (:use {:tools [..]}), or nil when it names none. The default {:tools :dig} is every
+  carried tool that digs, so only a call-given list narrows."
+  [c]
+  (when (vector? (get-in (:args c) [:use :tools])) (seq (ctx/use c :tools))))
+
+(defn carried-names [c]
+  (let [only (use-tools c)]
+    (cond->> (map :name (u/inventory (:primitives c))) only (filter (set only)))))
+
 (defn needs
   "What the body lacks to dig block-name with these args: {:tool item} or nil."
   [c block-name]
-  (when (and (:need-drop (:args c)) (not (tools/can-harvest? (:primitives c) block-name)))
-    {:tool (tools/harvest-need (map :name (u/inventory (:primitives c)))
+  (when (and (:need-drop (:args c))
+             (some? (tools/harvest-need (carried-names c) (some-> (.harvestTools (:primitives c) block-name) js->clj))))
+    {:tool (tools/harvest-need (carried-names c)
                                (some-> (.harvestTools (:primitives c) block-name) js->clj))}))
 
 (defn room?
@@ -252,7 +263,7 @@
   "Hold the best tool and dig; book the outcome. Resolves to :done (finished), :collect (dug: lava to seal, drops to
   pick up) or :unreachable (the primitive says out of reach)."
   [c pos block]
-  (await (tools/equip! c block))
+  (await (tools/equip! c block {:only (use-tools c)}))
   (let [before (u/inventory (:primitives c))
         r (await (tidy/dig! c pos))
         status (.-status r)

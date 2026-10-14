@@ -87,6 +87,15 @@
           (is (= 1 (carried p "cobblestone")))
           (is (= 1 (count (filter #(= :blocks.dig.done (:kind %)) @seen)))))))))
 
+(deftest a-call-given-use-list-picks-the-tool-the-default-would-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "stone"}
+                                      :inventory [{:name "iron_pickaxe" :count 1} {:name "diamond_pickaxe" :count 1}]})]
+          (await (child-outcome eng job {:pos [2 64 0] :use {:tools ["diamond_pickaxe"]}} 10))
+          (is (= ["diamond_pickaxe"] (mapv #(.-item (.-args %)) (calls p "equip")))))))))
+
 (deftest leaves-are-never-dug-with-a-pickaxe
   (async done
     (tu/run-async done

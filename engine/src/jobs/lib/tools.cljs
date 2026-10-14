@@ -96,12 +96,13 @@
 
 (defn ^:async equip-tool!
   "Hold the tool for digging block-name: the first jobs.lib.choose/tools-for lists (cheapest that harvests, or with
-  {:fast true} the best carried). Emits :tool.low / :tool.broke / :tool.none for the tool held last time (note-wear!). Does nothing
+  {:fast true} the best carried; with {:only [names]} the first of those carried that fits). Emits :tool.low / :tool.broke / :tool.none for the tool held last time (note-wear!). Does nothing
   when none is carried or it is already held. Resolves to the equip result, or nil."
   [c block-name opts]
   (let [p (:primitives c)
          _ (await (note-wear! c))
-         tool (when block-name (:item (first (:list (choose/tools-for c [:dig block-name] 1 opts)))))
+         fits (when block-name (map :item (:list (choose/tools-for c [:dig block-name] 1 opts))))
+         tool (if-let [only (seq (:only opts))] (first (filter (set fits) only)) (first fits))
          item {:name tool}]
      (when tool
        (ctx/update-mem! c assoc :tool-wear
@@ -165,7 +166,8 @@
 (defn ^:async equip!
   "Hold the best carried tool for block (the mined block when not given)."
   ([c] (equip! c (:block (:args c))))
-  ([c block]
-   (await (equip-for! c block))
+  ([c block] (equip! c block nil))
+  ([c block opts]
+   (await (equip-for! c block opts))
    (when (hand-better? c block)
      (await (ctx/act c :unequip #js {})))))
