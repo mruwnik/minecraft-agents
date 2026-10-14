@@ -79,7 +79,7 @@
   waits a lava flow delay since the last dig and looks at the cut once more. Lava seen beside a cell not yet dug is a hazard as below.
 
   Hazards are the rules' (one per fluid beside) plus a falling block over the top cut of the next column.
-  :accept is a set of :water :lava :falling-block, default #{}. Water beside the cut is not taken
+  :accept is a set of :water :lava :falling-block, default #{}; a falling block over the body's own column is never taken. Water beside the cut is not taken
   by default (it can flow into the cut and onto the body's cell, which the walker cannot leave). Lava never is
   in practice, and a falling block would land on the body or refill the cut. The stair never digs the block it
   stands on.
@@ -107,6 +107,7 @@
    :dir {:doc ":down, :up or :level (a flat run, :steps only)" :spec #{:down :up :level} :default :down}
    :heading {:doc ":north :east :south or :west; nil: the way the body faces" :spec #{:north :east :south :west} :default nil}
    :steps {:doc "steps to cut; or give :y" :spec (a/int-in 1 nil) :default nil}
+   :cut-only {:doc "true: end :done (:steps 0) once the first step is cut and settled, without stepping in" :spec boolean? :default false}
    :y {:doc "feet height to end at, instead of :steps" :spec (a/num-in nil nil) :default nil}
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :spec (a/coll-of #{:water :lava :falling-block}) :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
@@ -162,9 +163,12 @@
     "nether_wart" "sweet_berry_bush" "torchflower_crop" "pitcher_crop" "farmland"})
 
 (defn hazard-key
-  "The :accept key of a hazard: a fluid beside is :lava or :water (bubble columns are water)."
-  [{:keys [reason fluid]}]
-  (if (= :fluid-adjacent reason) (if (= "lava" fluid) :lava :water) reason))
+  "The :accept key of a hazard: a fluid beside is :lava or :water (bubble columns are water); a falling block over the
+  body's own column is :on-body, which no :accept takes (it would land on the body)."
+  [{:keys [reason fluid on-body]}]
+  (cond on-body :on-body
+        (= :fluid-adjacent reason) (if (= "lava" fluid) :lava :water)
+        :else reason))
 
 (defn stair-hazards
   "The hazard the stair adds to the rules' for cell: a falling block over it, unless that cell is cut too (the rules
@@ -181,7 +185,10 @@
   (let [v (rules/may-dig? in)]
     (if-not (:ok v)
       v
-      (let [hs (vec (distinct (concat (:hazards v) (stair-hazards (:block-at in) (:cell in) cut))))]
+      (let [[fx _ fz] (:feet in)
+            hs (vec (for [h (distinct (concat (:hazards v) (stair-hazards (:block-at in) (:cell in) cut)))
+                          :let [[x _ z] (:at h)]]
+                      (cond-> h (and (= :falling-block (:reason h)) (= [x z] [fx fz])) (assoc :on-body true))))]
         (cond-> {:ok true} (seq hs) (assoc :hazards hs))))))
 
 (def way-policy {:cap 200 :ttl :forever})
@@ -637,7 +644,7 @@
                     (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
                       (or (await (peek! c cell))
                           (let [r (await (dig! c in cell cut accept))] (case r :continue :again :yield :continue r)))
-                      (or (await (settle! c cut)) (await (step! c next))))))))))))))
+                      (or (await (settle! c cut)) (if (:cut-only (:args c)) :finished (await (step! c next)))))))))))))))
 
 (defn back-cell
   "The stair's cell one step back toward its origin from where the body stands, or nil at the origin or off the line."

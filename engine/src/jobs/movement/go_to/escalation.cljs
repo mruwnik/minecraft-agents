@@ -66,7 +66,7 @@
   [{:keys [step] :as e} tag ignore-zones? by-hand? spare-own?]
   (case step
     :pillar ['jobs.access.pillar {:height (:height e) :item (:item e) :ignore-zones? ignore-zones?}]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :fetch false :spent-ok true :ignore-zones? ignore-zones? :by-hand by-hand? :spare-own-builds spare-own?}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :accept #{:falling-block} :fetch false :spent-ok true :ignore-zones? ignore-zones? :by-hand by-hand? :spare-own-builds spare-own?}]
     :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones? :by-hand by-hand? :spare-own-builds spare-own?}]
     :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :escalate false}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :any-of [(:item e)] :fetch false :ignore-zones? ignore-zones?}]))

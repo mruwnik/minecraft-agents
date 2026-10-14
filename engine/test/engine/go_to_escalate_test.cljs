@@ -291,6 +291,16 @@
           (is (= [:stair] (mapv :step (events-of seen :go-to.by-hand))) "said once")
           (is (seq (calls p "dig"))))))))
 
+(deftest go-to-stairs-out-of-a-pit-under-gravel-beside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; gravel over the stair's next column falls into the cut, not onto the body: the stair digs on
+        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "1,64,0" "gravel")}) {:pos [10 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))))
+          (is (contains? (dug-cells p) [1 63 0])))))))
+
 (def stone-room
   "The sealed room with stone walls and roof (a pickaxe block)."
   (merge (box -6 63 -6 12 63 6 "stone")

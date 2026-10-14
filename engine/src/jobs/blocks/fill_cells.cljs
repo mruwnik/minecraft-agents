@@ -15,7 +15,7 @@
   :max-steps steps yields :continue and resumes.
 
   Needs nothing: a step with no block of :any-of carried ends :short. Six failed steps in a row end :failed (:max-failures);
-  a refused place, a walk that is blocked and a refused jump-place each count one.
+  a refused place, a walk that is blocked and a refused jump-place each count one, and only a place clears the count.
 
   Ends :done with {:mended n :left [cells still unfilled] :why nil|:short|:failed}: :why nil when every cell is filled.")
 
@@ -92,5 +92,5 @@
         (let [r (if pos (await (place! c pos item)) (await (raise! c item)))]
           (case r
             :partial :continue
-            :placed (do (ctx/update-mem! c #(-> % (assoc :failures 0) (update :mended (fnil inc 0)))) (recur (inc steps)))
+            :placed (do (ctx/update-mem! c #(cond-> (update % :mended (fnil inc 0)) pos (assoc :failures 0))) (recur (inc steps)))
             (do (bump! c :failures) (recur (inc steps)))))))))

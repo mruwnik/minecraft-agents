@@ -1000,7 +1000,8 @@
           (is (= :breach-sealed (:reason (first (tunnel-ends s)))) (pr-str (map :text (tunnel-ends s))))
           (is (= "cobblestone" (block-at s 2 64 0)))
           (is (= "cobblestone" (block-at s 2 65 0)))
-          (is (not-any? #(> (first %) 2) (dug-cells s))))))))
+          (is (not-any? #(> (first %) 2) (dug-cells s)))
+          (is (not-any? #(= 2 (if (map? %) (:x %) (first %))) (tu/walked-to (:eng s))) "sealed from the line before stepping in"))))))
 
 (defn ^:async facing-west-run
   "A stay-level mine with no heading argument, the body facing west, over rock-world extra with cobblestone carried."
@@ -1019,6 +1020,20 @@
           (is (= {:heading "west" :length 0 :stop :fluid-in-cut} (first legs)))
           (is (= 2 (count legs)) (pr-str legs))
           (is (= 4 (:length (second legs))))
+          (is (some #(< (nth % 2) 0) (dug-cells s)) "it went on north"))))))
+
+(deftest a-cave-under-the-tunnel-turns-the-run-to-another-heading
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world (assoc (rock-world {"-1,62,0" "air"}) :yaw 90)})
+              p (:p s)
+              orig (aget p "sensedAt")]
+          ;; seen before: a cell two under the tunnel floor is out of sight from the tunnel
+          (aset p "sensedAt" (fn [pos] (if (= [-1 62 0] [(.-x pos) (.-y pos) (.-z pos)]) (.blockAt p pos) (orig pos))))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 30 :tunnel-length 4 :level false :mend false}) {})
+          (await (run-ticks s 250))
+          (is (= {:heading "west" :length 0 :stop :cave-below} (first (:legs (done-event s)))) (pr-str (:legs (done-event s))))
           (is (some #(< (nth % 2) 0) (dug-cells s)) "it went on north"))))))
 
 (deftest stay-level-turns-from-the-last-safe-cell-after-a-sealed-breach
@@ -1106,6 +1121,62 @@
         (let [s (await (side-ore-run 2))]
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)) (dug-cells s) (feet s)))
           (is (= "cobblestone" (block-at s 1 64 -1)) "the side cut is shut behind"))))))
+
+(defn shutdown-at-cell!
+  "On the first dig of one of cells, the engine shuts down (the round is cut), as tu/shutdown-at!; the atom that says so."
+  [{:keys [p eng]} cells]
+  (let [done? (atom false)]
+    (.override (.-world p) "dig"
+               (fn [token a impl]
+                 (let [pos (.-pos a)]
+                   (if (and (not @done?) (contains? cells [(.-x pos) (.-y pos) (.-z pos)]))
+                     (do (reset! done? true)
+                         (core/shutdown! eng)
+                         (js/Promise.reject (core/cut-error)))
+                     (impl token a)))))
+    done?))
+
+(defn ^:async run-until!
+  "run-ticks one at a time until the atom cut? is true, at most n ticks."
+  [s cut? n]
+  (loop [i 0]
+    (when (and (< i n) (not @cut?))
+      (await (run-ticks s 1))
+      (recur (inc i)))))
+
+(deftest a-side-cut-under-way-goes-on-after-a-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              s (start {:world (update (rock-world {"0,65,-1" "air" "0,65,-2" "air" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])
+                        :dir dir})]
+          (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
+          (let [cut? (shutdown-at-cell! s #{[1 64 -1] [1 65 -1]})]
+            (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2 :mend false}) {})
+            (await (run-until! s cut? 500)))
+          (let [again (start {:p (:p s) :dir dir})]
+            (is (:side-cut (core/job-memory (:eng again) "j1")) "cut in the side cut")
+            (await (run-ticks again 500))
+            (is (= 1 (get (inv again) "raw_iron")) (pr-str (keep :text @(:seen again))))
+            (is (= "cobblestone" (block-at again 1 64 -1)) "the side cut is shut behind")))))))
+
+(deftest a-tunnel-step-under-way-goes-on-after-a-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [stay [false true]]
+          (let [dir (tu/tmp-dir)
+                s (start {:world (rock-world {}) :dir dir})]
+            (let [cut? (shutdown-at-cell! s #{[2 65 0]})]
+              (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :mend false :stay-level stay}) {})
+              (await (run-until! s cut? 40)))
+            (let [again (start {:p (:p s) :dir dir})]
+              (is (:stepping (core/job-memory (:eng again) "j1")) "cut while the stair child dug")
+              (await (run-ticks again 150))
+              (is (finished? again) (pr-str stay))
+              (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends again))) (pr-str stay))
+              (is (= (set (for [x [1 2 3 4] y [64 65]] [x y 0])) (set (dug-cells again))) (pr-str stay)))))))))
 
 (deftest stay-level-leaves-ore-beyond-its-ore-reach
   (async done
@@ -2330,7 +2401,8 @@
           (is (= :step-failed (:reason e)))
           (is (= [1 64 0] (:at e)))
           (is (= {:status :stopped :reason :unreachable} (select-keys (:walk e) [:status :reason])))
-          (is (re-find #"walk stopped unreachable" (:text e))))))))
+          (is (= {:cell "air" :floor "stone"} (select-keys (:walk e) [:cell :floor])))
+          (is (re-find #"walk stopped unreachable, cell air, floor stone" (:text e))))))))
 
 ;; ------------------------------------------------------------------ low health
 

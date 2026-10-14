@@ -37,3 +37,14 @@
                                               (fn ^:async f [_ _ _] #js {:status "no-support"})))]
           (is (= {:mended 0 :why :failed} (select-keys r [:mended :why])))
           (is (= 3 (count (bd/calls p "place")))))))))
+
+(deftest a-jump-place-does-not-clear-the-failures-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              env (bd/setup {:self body :inventory [{:name "dirt" :count 9}]})
+              _ (.override (.-world (:p env)) "jumpPlace" (fn [_ _ _] #js {:status (if (= 2 (swap! n inc)) "done" "failed")}))
+              r (await (bd/child-outcome (:eng env) job {:cells [(:pos body)] :any-of ["dirt"] :max-failures 3} 20))]
+          (is (= :failed (:why r)))
+          (is (= 4 (count (bd/calls (:p env) "jumpPlace")))))))))

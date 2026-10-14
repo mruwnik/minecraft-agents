@@ -112,18 +112,18 @@
   mine.tunnel-skipped, also down a stair to a floor) and never digs a torch. 0 means no tunnel: then no
   target ends :wet when a seen block was rejected only for water, else :none. Each step walks back onto the last
   cell of the run (a go-to child; failing: :walk-failed) and cuts the next by a jobs.access.stair child of one :level
-  step: its stops and its handling of exposed lava (sealed), laid-open water (plugged, a stop), a missing floor
+  step (:cut-only with :stay-level, which then walks in itself): its stops and its handling of exposed lava (sealed), laid-open water (plugged, a stop), a missing floor
   (bridged) and refilled cells (:refills) are the stair's. Water beside the cut is taken with :wet, a falling block
   when :accept has it, lava never. A cut of :block is collected like a target. Ore that comes into view is dug before the next step.
 
   The run used up ends the dig phase :tunnel-length, any stop ends it :tunnel-stopped. Either way one warn
   mine.tunnel-end {:y (the tunnel's feet height) :reason :heading :length :at :next :walk}: the reason is
   :tunnel-length, :own-zone, :walk-failed, :breach-sealed, :breach-open, :refused (the stair declined), a hazard by
-  its key (:lava :water :falling-block, :at the hazard's cell) or the stair's stop. :at is the offending cell, :next the line cell it stopped before, :walk (walk-failed) the go-to's status, reason and the names seen at the cell and its floor.
+  its key (:lava :water :falling-block, :at the hazard's cell) or the stair's stop. :at is the offending cell, :next the line cell it stopped before, :walk (walk-failed, step-failed) the go-to's status, reason and the names seen at the cell and its floor.
 
   :stay-level true is the cave-safe mode: the tunnel runs at the start height (no stair down, no :level, no descent through soil), only
   seen ore within one column of the body counts, and a cut that opens into air beyond the tunnel is refilled with a carried building
-  block, ending the tunnel :breach-sealed (:breach-open when it cannot seal). Seen ore 2 to :ore-reach blocks straight out from the body
+  block from the line cell before the body steps in, ending the tunnel :breach-sealed (:breach-open when it cannot seal). Seen ore 2 to :ore-reach blocks straight out from the body
   (feet or head height, through rock seen solid) is taken by a child mine run: a stay-level side cut that digs it and walks back, its
   mouth then shut with a carried block (info mine.side); the ore is skipped afterwards. Seen ore one column round the feet from one cell below to one over the head is dug from the stand; the hole it leaves is
   shut with a carried block once the drop is collected (the body steps back to the tunnel line first; warn mine.hole-open and
@@ -205,7 +205,7 @@
 
 (a/defargs settings
   {::mend-reach {:default 4 :doc "Reach while mending a cut, in blocks." :spec (a/int-in 0 nil)}
-   ::max-mend-failures {:default 6 :doc "Failed mends before the job gives up." :spec (a/int-in 0 nil)}
+   ::max-mend-failures {:default 6 :doc "Failed mends before the job gives up." :spec (a/int-in 1 nil)}
    ::pickup-grace-ms {:default 400 :doc "How long the body waits for a drop to be picked up, in ms." :spec (a/int-in 0 nil)}
    ::drop-cut-max {:default 4 :doc "The most cells dug to open a way beside a dug cell whose drop did not come in and that no walk gets beside; 0: no such cut." :spec (a/int-in 0 nil)}
    ::end-torch-gap {:default 4 :doc "A cut's end gets a torch when the last hangs this many steps back or more." :spec (a/int-in 0 nil)}
@@ -424,7 +424,7 @@
 
 (def heading-stops
   "Stops that say only this heading is blocked: the stair or tunnel at 0 steps tries the next heading."
-  #{:breach-sealed :undercuts-way :own-zone :floor-unseen :not-loaded :base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :walk-failed :step-failed :refused})
+  #{:breach-sealed :undercuts-way :own-zone :floor-unseen :not-loaded :base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :cave-below :walk-failed :step-failed :refused})
 
 (def leg-stops
   "Stops after which a stay-level run goes on along another heading from the cell it stands in."
@@ -450,7 +450,7 @@
       (ctx/emit! c :mine.turned :info {:from (:heading m) :to to :stop stop :length (or steps 0)
                                        :text (str "mine's " (name stop) " blocks its heading " (:heading m) (when mid? (str " after " steps " blocks")) "; it turns " to)})
       (when mid? (stay/record-tunnel! c tunnel (headings (:heading m))))
-      (ctx/update-mem! c #(cond-> (-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel :behind :breach :torch-at :glanced :looked) (update :descent dissoc :stop))
+      (ctx/update-mem! c #(cond-> (-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel :behind :torch-at :glanced :looked) (update :descent dissoc :stop))
                             tunnel (-> (update :legs (fnil conj []) (cond-> {:heading (:heading m) :length (or steps 0) :stop stop} (:behind m) (assoc :behind (:behind m))))
                                        (update :spent (fnil + 0) (or steps 0)))))
       true)))
@@ -686,22 +686,27 @@
   (when-let [cell (last (keep #(when (contains? (kinds (:args c)) (:block %)) (:cell %)) dug))]
     (ctx/update-mem! c assoc :collecting true :dug-at cell)))
 
+(defn walk-of
+  "What stopped a walk into pos: the go-to result r's status and reason, and the names the body sees at pos and under it."
+  [c pos r]
+  (let [name-at #(u/seen-name (:primitives c) %)]
+    {:status (:status r) :reason (:reason r) :cell (name-at pos) :floor (name-at (update pos :y dec))}))
+
 (defn ^:async back-on-line!
   "Walk into the tunnel's cell pos (a go-to child) unless there: nil when there, :continue while it walks, else what
-  stopped the walk {:status :reason :cell :floor} (the go-to's, and the names the body sees at pos and under it)."
+  stopped the walk (walk-of)."
   [c pos]
   (when-not (= (cell-of (u/self-pos c)) pos)
-    (let [r (await (child/walk-into! c :walk (access/cell pos)))
-          name-at #(u/seen-name (:primitives c) %)]
+    (let [r (await (child/walk-into! c :walk (access/cell pos)))]
       (cond
         (= :continue r) :continue
         (= pos (cell-of (u/self-pos c))) nil
-        :else {:status (:status r) :reason (:reason r) :cell (name-at pos) :floor (name-at (update pos :y dec))}))))
+        :else (walk-of c pos r)))))
 
 (defn ^:async stair-step!
   "The next cells by a jobs.access.stair child, one :level step (it judges, digs, seals exposed lava, plugs laid-open
-  water, bridges a missing floor and steps in). With :stay-level a cut that opened into air beyond the tunnel is kept
-  as :breach (the body walks back and seals it next round), the step not counted."
+  water, bridges a missing floor and steps in). With :stay-level the stair only cuts: a cut that opened into air beyond
+  the tunnel is sealed from the line cell, else the body walks in (a go-to child)."
   [c from next cut]
   (let [{:keys [heading]} (ctx/mem c)
         args (:args c)
@@ -711,24 +716,28 @@
         r (await (ctx/call-child c :step 'jobs.access.stair
                                  {:dir :level :heading (keyword heading) :steps 1 :accept (step-accept args) :fetch (:fetch args)
                                   :stock-torches false :pick-up-ores false :ignore-zones? (:ignore-zones? args)
-                                  :spare-own-builds (:spare-own-builds args)}))
+                                  :spare-own-builds (:spare-own-builds args) :cut-only (boolean (:stay-level args))}))
         res (ctx/child-result c :step)]
     (when-not (= :continue r) (ctx/update-mem! c dissoc :stepping))
     (book-cut! c (:dug res))
     (cond
       (= :continue r) :continue
-      (not= :done (:status res)) (let [{:keys [reason at]} (step-stop res)] (end! c reason at next (:walk res)))
+      (not= :done (:status res)) (let [{:keys [reason at]} (step-stop res)]
+                                   (end! c reason at next (some->> (:walk res) (walk-of c next))))
       :else
       (let [own (ledger/own-cells c)
             open (when (:stay-level args) (seq (stay/breaches name-at from cut own)))]
         (if open
           (let [b (stay/behind name-at from cut own open)]
             (stay/remember-behind! c (access/cell (first open)) b)
-            (ctx/update-mem! c assoc :behind b :breach (vec open))
-            :again)
+            (ctx/update-mem! c assoc :behind b)
+            (end! c (if (await (stay/seal! c (rules-in c) open)) :breach-sealed :breach-open) (first open) next))
           (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next)))
-              (await (glance! c [(headings heading)]))
-              :again))))))
+              (let [w (await (back-on-line! c next))]
+                (cond
+                  (= :continue w) :continue
+                  w (end! c :walk-failed next nil w)
+                  :else (do (await (glance! c [(headings heading)])) :again)))))))))
 
 (defn ^:async tunnel-round!
   "One step of the strip tunnel: back onto its last cell (a go-to child), a torch when due, then the stair step (a step
@@ -755,10 +764,7 @@
       (some #(within-own-zone c 0 (access/cell %)) cut) (end! c :own-zone next)
       (>= (+ steps (:spent m 0)) (:tunnel-length (:args c))) (end! c :tunnel-length nil)
       (do (reset! walk (await (back-on-line! c from))) (= :continue @walk)) :continue
-      (and @walk (not (:breach m))) (end! c :walk-failed from nil @walk)
-      (:breach m) (let [sealed (and (nil? @walk) (await (stay/seal! c (rules-in c) (:breach m))))]
-                    (ctx/update-mem! c dissoc :breach)
-                    (end! c (if sealed :breach-sealed :breach-open) (first (:breach m)) next))
+      @walk (end! c :walk-failed from nil @walk)
       (and (look/unseen? (:primitives c) cut) (not= next (:glanced m)))
       (do (ctx/update-mem! c assoc :glanced next)
           (await (glance! c [(headings heading)]))
