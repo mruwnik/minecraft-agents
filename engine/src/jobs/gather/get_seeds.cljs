@@ -173,7 +173,7 @@
   the round's own."
   [c]
   (let [m (mode (:args c))]
-    (when-not (or (= :chest m) (:goal (ctx/mem c)) (seq (source-blocks c)))
+    (when-not (or (#{:chest :unknown} m) (:goal (ctx/mem c)) (seq (source-blocks c)))
       (cond
         (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
         (look/surveyed? c) :nothing-in-range))))
