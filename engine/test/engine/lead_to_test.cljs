@@ -353,14 +353,21 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label args world reason]
-                [["no cow" {} {:inventory lead :entities []} :none]
-                 ["no fence at the named cell" {:fence {:x 5 :y 64 :z 0}} {:inventory lead :entities [(cow 1 3)]} :no-fence]
-                 ["a block that is not a fence" {:fence {:x 5 :y 64 :z 0}} {:inventory lead :blocks {"5,64,0" "stone"} :entities [(cow 1 3)]} :no-fence]]]
+                [["no cow" {} {:inventory lead :entities []} :none]]]
           (let [s (await (scenario args world 5))]
             (is (finished? s) label)
             (is (= reason (:reason (done-event s))) label)
             (is (empty? (tu/walk-calls (:p s))) label)
             (is (= [:lead-to.gave-up] (mapv :kind (events-of s :lead-to.gave-up))) label)))))))
+
+(deftest a-fence-cell-seen-as-another-block-waits-and-touches-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:fence {:x 5 :y 64 :z 0}} {:inventory lead :blocks {"5,64,0" "stone"} :entities [(cow 1 3)]} 5))]
+          (is (not (finished? s)) "the job stays queued")
+          (is (= [:no-fence] (distinct (map :reason (events-of s :waiting)))))
+          (is (empty? (tu/walk-calls (:p s)))))))))
 
 (deftest a-lead-that-breaks-on-the-way-is-reported-not-succeeded
   (async done
@@ -646,7 +653,7 @@
           (is (= 2 (get (fetch-test/inv s) "lead")) "the crafted pair is carried, the cow let go")
           (is (empty? (fetch-test/events-of s :lead-to.gave-up))))))))
 
-(deftest a-lead-fetch-longer-than-timeout-s-does-not-end-timeout
+(deftest a-lead-fetch-longer-than-the-time-spend-ends-timeout
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -657,11 +664,10 @@
                                   [])]
           (.override (.-world (:p s)) "craft"
                      (fn [token a impl] (swap! (:clock s) + 10000) (impl token a)))
-          (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal :timeout-s 3}) {})
+          (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal :spend {:time 3}}) {})
           (await (fetch-test/run-ticks s 60))
           (is (empty? (fetch-test/listed s)))
-          (is (empty? (filter #(= :timeout (:reason %)) (fetch-test/events-of s :lead-to.gave-up))))
-          (is (= 2 (get (fetch-test/inv s) "lead"))))))))
+          (is (= [:timeout] (mapv :reason (fetch-test/events-of s :lead-to.gave-up)))))))))
 
 (deftest no-lead-and-no-way-to-get-one-stops-no-lead-at-once
   (async done

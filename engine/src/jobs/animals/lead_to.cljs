@@ -1,6 +1,7 @@
 (ns jobs.animals.lead-to
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.blocks :as b]
@@ -12,7 +13,8 @@
 
 (def doc
   "Put a lead on one animal of type :mob, walk to :pos with it following, then tie it to the fence post :fence
-  or let it go. A one-shot order that starts and ends itself. Declines (waits) with :no-mob or :no-destination until both are given; a started job always passes. A body that carries no
+  or let it go. A one-shot order that starts and ends itself. Without :mob or a destination (:pos or :fence) it can never start
+  (impossible :no-mob, :no-destination); with a :fence cell seen and not a fence it waits :no-fence. A body that carries no
   lead first gets one (phase :get-lead, a jobs.items.obtain child: withdrawn from a chest it has seen or crafted); when none
   can be got the job ends :no-lead at once, it never waits for one.
 
@@ -46,17 +48,19 @@
   jobs.maintenance.shut-doors child shuts the ones the legs opened.
 
   Ends with info lead-to.done and a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
-  {:reason :animal key :still-led bool :at pos :gathered bool}. Reasons:
-  - :tied, :unleashed: success.
+  {:reason :animal key :still-led bool :at pos :gathered bool :text}. Reasons and endings:
+  - :tied, :unleashed: done.
   - :none (no animal seen within :radius), :lead-broke, :lost, :animal-stalled (the animal is still on the lead): as above.
-  Every reason but :tied and :unleashed ends the job :stopped with a :text.
   - :unreachable: the walk gave up (the animal is still on the lead).
   - :tie-failed: the post did not take the animal (still on the lead).
-  - :timeout: :timeout-s from the first round, not counting the lead fetch (a cut walk leaves the animal on the lead).
-  - :no-fence.
+  - :timeout: limit-reached; the call's :spend :time (default ::timeout-s) from the first round, the lead fetch and
+    the children included (a cut walk leaves the animal on the lead).
+  - :no-fence: condition-failed, the post turned out not to be a fence on arrival.
   - :no-lead: no lead carried and obtain could not get one (the :text says why).
-  - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :refused, :all-leashed, :timeout) when no
-    animal got on the lead, or of jobs.animals.unleash (:refused, :unreachable, :none, :timeout) when the lead would not come off.
+  - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :all-leashed) when no animal got on the lead, or
+    of jobs.animals.unleash (:unreachable, :none) when the lead would not come off; :refused and :no-zones are
+    condition-failed.
+  All but done, condition-failed and the timeout end nothing-possible with the reason as the cause.
 
   Zones: the leash child refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
   :ignore-zones? true is passed to it.")
@@ -70,25 +74,15 @@
    :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :spec (a/num-in 0 nil) :default 3}
    :gather-tries {:doc "without :fence how many times the body walks on to pull a trailing animal nearer" :spec (a/int-in 0 nil) :default 3}
    :watch-radius {:doc "how far from the body the led animal is looked for" :spec (a/num-in 0 nil) :default 64}
-   :timeout-s {:doc "seconds from the first round (not the lead fetch) before the job gives up" :spec (a/num-in 0 nil) :default 180}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
-  {::max-ties {:default 2 :doc "Ties tried before the job gives up." :spec (a/int-in 0 nil)}
+  {::timeout-s {:default 180 :doc "Seconds from the first round before the leading gives up." :spec (a/num-in 0 nil)}
+   ::max-ties {:default 2 :doc "Ties tried before the job gives up." :spec (a/int-in 0 nil)}
    ::tie-settle-ms {:default 250 :doc "How long to wait between looks at the animal after the click on the post." :spec (a/int-in 0 nil)}
    ::tie-settle-tries {:default 6 :doc "How often the animal is looked at again after the click before the tie counts as not taken." :spec (a/int-in 0 nil)}})
+(defn timeout-s [] (settings/get settings ::timeout-s))
 (defn max-ties [] (settings/get settings ::max-ties))
-
-(defn check
-  "A started job passes. Else :mob and a destination (:pos or :fence) are needed: a missing one waits with that reason.
-  A missing lead is fetched, never waited for."
-  [c]
-  (let [{:keys [mob pos fence]} (:args c)]
-    (cond
-      (:started (ctx/mem c)) true
-      (nil? mob) (ctx/wait c :no-mob)
-      (not (or pos fence)) (ctx/wait c :no-destination)
-      :else true)))
 
 (defn stop-text
   "The words for a leading that ended without success."
@@ -98,6 +92,21 @@
       :none (str "no " mob " seen within " radius " blocks to lead")
       :no-lead (str "no lead carried and none could be got" (some->> (:lead-why (ctx/mem c)) (str ": ")))
       (str "leading stopped: " (name reason)))))
+
+(def ending-of
+  "The kind and cause of a leading that ended for reason, else nothing-possible with the reason as the cause."
+  {:tied [:done nil]
+   :unleashed [:done nil]
+   :no-fence [:condition-failed :no-fence]
+   :refused [:condition-failed :refused]
+   :no-zones [:condition-failed :no-zones]
+   :timeout [:limit-reached {:line :time :reason :timeout}]})
+
+(defn end!
+  "End the call with the ending of reason (ending-of) and data."
+  [c reason data]
+  (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
+    (ctx/end c kind cause data)))
 
 (defn conclude!
   "Emit the outcome, hand it to the parent and end the job."
@@ -112,8 +121,7 @@
     (ctx/emit! c :lead-to.done :info (assoc result :text (str "lead-to done: " (name reason))))
     (when-not ok?
       (ctx/emit! c :lead-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
-    (ctx/result! c (cond-> result (not ok?) (assoc :status :stopped :text (stop-text c reason))))
-    :done))
+    (end! c reason (cond-> result (not ok?) (assoc :text (stop-text c reason))))))
 
 (defn finish!
   "End the leading with reason: the gates its walks left open are shut first (close-up!), then conclude!. Any reason but
@@ -135,6 +143,34 @@
   "True when the post is seen and no fence. A post never seen (far off) is not judged: it is checked on arrival."
   [c]
   (false? (fence-block? c)))
+
+(def target [:mob :pos :fence])
+
+(def defaults {:spend {:time ::timeout-s}})
+
+(defn start-fact
+  "Impossible without :mob or a destination; a wait :no-fence while the :fence cell is seen and no fence. A missing lead
+  is fetched, never waited for."
+  [c]
+  (let [{:keys [mob pos fence]} (:args c)]
+    (cond
+      (nil? mob) (contract/impossible :no-mob)
+      (not (or pos fence)) (contract/impossible :no-destination)
+      (and fence (not-fence? c)) {:reason :no-fence :text "lead-to waits: the named cell is not a fence"})))
+
+(def conditions "Starts while the order is complete and the post is no seen non-fence (start-fact)." [[:fn start-fact]])
+
+(defn time-limit "Seconds the leading may take." [c]
+  (or (get-in (ctx/frozen-call c) [:spend :time]) (timeout-s)))
+
+(defn quote-of [c]
+  (let [most (time-limit c)]
+    {:uses {:time [0 (min most 60) most]}}))
+
+(defn done?
+  "Whether the animal is tied or let go. Never :done? itself: the run ends with its event and data."
+  [c]
+  {:done? false :units :animals :done (if (#{:tied :unleashed} (:ending (ctx/mem c))) 1 0) :left 1})
 
 (defn set-phase! [c phase]
   (ctx/update-mem! c assoc :phase phase))
@@ -339,7 +375,7 @@
 
 (defn ^:async step [c]
   (let [now (ctx/now c)
-        {:keys [timeout-s fence]} (:args c)]
+        {:keys [fence]} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
     (let [{:keys [phase started animal]} (ctx/mem c)
           a (when animal (escort/animal-now c))]
@@ -347,10 +383,10 @@
       (cond
         (:ending (ctx/mem c)) (await (escort/close-up! c conclude!))
         (and fence (contains? #{nil :arrive} phase) (not-fence? c)) (finish! c :no-fence)
-        (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
+        (>= (- now started) (* 1000 (time-limit c))) (finish! c :timeout)
         (nil? phase) (do (ctx/update-mem! c assoc :origin (u/self-pos c))
                          (set-phase! c (if (animals/lead-carried? c) :leash :get-lead)) :again)
-        (= :get-lead phase) (await (u/untimed! c #(get-lead! c)))
+        (= :get-lead phase) (await (get-lead! c))
         (= :leash phase) (await (leash! c))
         (and (#{:gather :arrive} phase) (nil? a)) (if (= :lost (escort/escort-problem c escort/safe-gap))
                                                     (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))

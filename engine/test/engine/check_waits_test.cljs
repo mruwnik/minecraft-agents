@@ -102,14 +102,11 @@
 (defn ^:async reason-of [spec world]
   (:reason (:waiting (await (waiting-after spec world)))))
 
-(deftest lead-to-says-what-it-lacks
+(deftest lead-to-fetches-a-lacking-lead-and-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [no-mob (await (reason-of '(jobs.animals.lead-to {:pos {:x 3 :y 64 :z 0}}) {:inventory lead-item}))
-              no-dest (await (reason-of '(jobs.animals.lead-to {:mob "cow"}) {:inventory lead-item}))
-              no-lead (await (waiting-after '(jobs.animals.lead-to {:mob "cow" :pos {:x 3 :y 64 :z 0}}) {:inventory []}))
+        (let [no-lead (await (waiting-after '(jobs.animals.lead-to {:mob "cow" :pos {:x 3 :y 64 :z 0}}) {:inventory []}))
               ready (await (waiting-after '(jobs.animals.lead-to {:mob "cow" :pos {:x 3 :y 64 :z 0}}) {:inventory lead-item}))]
-          (is (= [:no-mob :no-destination] [no-mob no-dest]))
           (is (nil? (:waiting no-lead)) "no lead carried: the job runs and fetches one")
           (is (nil? (:waiting ready)) "mob, destination and lead given: it runs"))))))

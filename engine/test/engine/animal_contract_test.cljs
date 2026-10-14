@@ -28,7 +28,9 @@
                       ['jobs.animals.breed {:mob "cow" :count 2}]
                       ['jobs.animals.pen-check {:at [2 64 2]}]
                       ['jobs.animals.cull {:mob "cow" :keep 1}]
-                      ['jobs.animals.shut-gate {}]]]
+                      ['jobs.animals.shut-gate {}]
+                      ['jobs.animals.tend {:box {:min {:x 0 :y 60 :z 0} :max {:x 4 :y 70 :z 4}}}]
+                      ['jobs.animals.lead-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]]]
     (is (some? (:conditions (job sym))) (str sym " has conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
@@ -210,3 +212,35 @@
         (is (= {:event :stopped :kind :nothing-possible :reason :unreachable}
                (await (hunting-cull {:keep 0} {:inventory h/sword :entities [(assoc (cow 1 3) :invulnerable true)]})))
             "an animal that cannot be hurt: 0 killed is not done")))))
+
+;; ------------------------------------------------------------------ tend, lead-to
+
+(def pen {:min {:x 0 :y 60 :z -5} :max {:x 8 :y 70 :z 5}})
+(def far-pos {:x 30 :y 64 :z 0})
+
+(deftest tend-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :completed} (select-keys (await (ending (list 'jobs.animals.tend {:box pen :target 4}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
+        (is (= {:event :stopped :kind :impossible :reason :no-box}
+               (await (ending '(jobs.animals.tend {}) {:entities [(cow-at 1 2)]}))) "no box and no plan: it can never start")
+        (is (= {:event :waiting :reason :nothing-to-do}
+               (await (ending (list 'jobs.animals.tend {:box pen :target 2}) {:entities [(cow-at 1 2) (cow-at 2 3)]}))))))))
+
+(deftest lead-to-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:floor tu/walk-floor :inventory lead :entities [(cow-at 1 3)]}]
+          (is (= {:event :completed} (select-keys (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos}) world)) [:event])))
+          (is (= {:event :stopped :kind :impossible :reason :no-mob} (await (ending (list 'jobs.animals.lead-to {:pos far-pos}) world))))
+          (is (= {:event :stopped :kind :impossible :reason :no-destination} (await (ending '(jobs.animals.lead-to {:mob "cow"}) world))))
+          (is (= {:event :waiting :reason :no-fence}
+                 (await (ending (list 'jobs.animals.lead-to {:mob "cow" :fence {:x 5 :y 64 :z 0}}) (assoc world :blocks {"5,64,0" "stone"})))))
+          (is (= {:event :stopped :kind :nothing-possible :reason :none}
+                 (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos}) (assoc world :entities [])))))
+          (is (= {:event :stopped :kind :nothing-possible :reason :animal-stalled}
+                 (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos}) (assoc world :entities [(cow-at 1 3 {:trail 9})])))))
+          (is (= {:event :stopped :kind :limit-reached :reason :timeout}
+                 (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos :spend {:time 0}}) world)))))))))

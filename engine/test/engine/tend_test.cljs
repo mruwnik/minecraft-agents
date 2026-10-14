@@ -204,7 +204,6 @@
 (deftest the-check-declines-when-nothing-needs-doing
   (is (declines? {:box box :target 4} four-cows) "at target")
   (is (declines? {:box box :target 4} []) "nothing around, one adult too few to breed")
-  (is (declines? {:target 4} [(cow 1 2)]) "no box")
   (is (declines? {:box box :target 2} [(animal 1 "pig" 2) (animal 2 "pig" 3) (animal 3 "pig" 4)]) "other kinds only")
   (is (declines? {:box box :target 4} (conj four-cows (cow 5 20) (cow 6 30) (cow 7 40))) "cows outside the box are not counted"))
 
@@ -243,7 +242,7 @@
   (let [{:keys [eng seen]} (h/setup {:inventory [(wheat 4)] :entities entities})]
     (core/submit! eng (list 'jobs.animals.tend args) {})
     (core/tick! eng)
-    (first (events-of {:seen seen} :waiting))))
+    (:cause (first (events-of {:seen seen} :waiting)))))
 
 (deftest nothing-to-do-says-the-census-and-why-each-step-is-skipped
   (let [w (waiting-fields {:box box :target 2} [(cow 1 2) (cow 2 3) (calf 3 4)])]
@@ -324,7 +323,7 @@
         (let [s (await (plan-scenario (list 'repeat (list 'jobs.animals.tend {:plan "pen" :part "cows"})) {"pen" pen-plan}
                                       {:inventory [(wheat 8)] :entities [(cow 1 2) (cow 2 3)]} 60))]
           (is (= 1 (count (events-of s :tend.done))) "one pass, then the pen rests")
-          (is (some #(= ["pen/cows"] (:backed-off %)) (events-of s :waiting)) "the wait names the pen")
+          (is (some #(= ["pen/cows"] (get-in % [:cause :backed-off])) (events-of s :waiting)) "the wait names the pen")
           (swap! (:clock s) + 660000)
           (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
           (is (= 2 (count (events-of s :tend.done))) "after the back-off it tries again"))))))
