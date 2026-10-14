@@ -19,7 +19,7 @@
   Before the first tree it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
   with :count, :pos, :reason (:no-sapling or :not-planted) and :text. The status stays :completed (the wood is
-  the goal); the result is {:replant-owed n} then. With :count, the three phases repeat on the next tree until that many logs are carried; when no tree is left to fell it ends :stopped :no-tree with :got (and :replant-owed, the warnings as at a normal end; waiting for a tree only before the first is felled). With no axe carried, fell-tree fetches one for a big tree (:fetch). A missing sapling is fetched by plant-sapling (a seen chest, or breaking the seen leaves of its tree); when none can be got it stays owed.")
+  the goal); the result is {:replant-owed n} then. With :count, the three phases repeat on the next tree until that many logs are carried; when no tree is left to fell it ends :stopped :no-tree with :got (and :replant-owed, the warnings as at a normal end; with none in range at all it ends the same, :got 0). With no axe carried, fell-tree fetches one for a big tree (:fetch); a fell that ends :need (no pillar blocks) ends the job :stopped with that reason. A missing sapling is fetched by plant-sapling (a seen chest, or breaking the seen leaves of its tree); when none can be got it stays owed.")
 
 (a/defargs args
   {:species {:doc "log species; any when nil" :spec a/name? :default nil}
@@ -107,6 +107,10 @@
   (let [n (:count (:args c))]
     (and n (< (logs-carried c) n))))
 
+(def fell-needs
+  "The reasons a fell child ends for when it lacks what a tree needs (an axe, pillar blocks, room): the job ends with them."
+  #{:need :tool :free-slots})
+
 (defn ^:async step
   "Calls the current phase's child once; when the child is done the phase
   advances (:again). Done when the :plant child is done. A child that is not done is :continue (it waits on the
@@ -132,10 +136,14 @@
         gained (when (and (= :collect phase) (= :done r)) (- (carried-count c) (:carried-before (ctx/mem c))))
         next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil nil))))]
     (cond
-      (or no-more-trees? (and (= :fell phase) (= :done r) (:count (:args c)) (not (:tree (ctx/mem c)))))
+      (and (= :fell phase) (= :done r) (fell-needs (:reason (ctx/child-result c :fell))))
+      (let [reason (:reason (ctx/child-result c :fell))]
+        (warn-owed! c)
+        (result/stop! c reason (str "felling stopped: " (name reason)) :got (logs-carried c) :replant-owed (warn-replant-owed! c)))
+      (or no-more-trees? (and (= :fell phase) (= :done r) (or (:count (:args c)) (= :no-tree (:reason (ctx/child-result c :fell)))) (not (:tree (ctx/mem c)))))
       (let [why (:why (ctx/child-result c :fell))]
         (warn-owed! c)
-        (result/stop! c :no-tree (str "no tree left to fell: " (logs-carried c) " of " (:count (:args c)) " logs carried"
+        (result/stop! c :no-tree (str (if (:count (:args c)) (str "no tree left to fell: " (logs-carried c) " of " (:count (:args c)) " logs carried") "no tree in range")
                                       (when why (str "; the trees seen could not be reached (" why ")")))
                       :got (logs-carried c) :why why :columns (:columns (ctx/child-result c :fell)) :replant-owed (warn-replant-owed! c)))
       (not= :done r) :continue

@@ -21,6 +21,12 @@
 
 (def tall {:blocks (lt/tree 6 0 "oak" 8) :inventory [{:name "dirt" :count 20}]})
 
+(defn ^:async child-outcome
+  "tu/child-outcome without the ending the adapter adds, and without :status when it is :done."
+  [eng job args n]
+  (let [r (await (tu/child-outcome eng job args n))]
+    (if (map? r) (cond-> (dissoc r :ending) (= :done (:status r)) (dissoc :status)) r)))
+
 (defn dug-ys
   "The heights of the digs in the trunk's column."
   [p]
@@ -55,7 +61,7 @@
 (defn ^:async fell [spec args n]
   (let [s (fm/start spec {})
         _ (eye-reach! (:p s) (:lose-logs? spec))
-        out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n))]
+        out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree args n))]
     (assoc s :out out)))
 
 (deftest a-tall-trunk-is-felled-from-a-pillar-and-the-pillar-is-taken-back
@@ -97,12 +103,12 @@
           (is (= [] (ledger/open-entries (mem/view (:store eng)))) "ledger empty")
           (is (= [] (log-pillar-cells p)) "no pillar log left"))))))
 
-(deftest no-logs-or-blocks-carried-with-fetch-false-waits-and-places-nothing
+(deftest no-logs-or-blocks-carried-with-fetch-false-ends-need-and-places-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out]} (await (fell (assoc tall :inventory [] :lose-logs? true) {:radius 10 :fetch false} 60))]
-          (is (= :not-done out))
+          (is (= [:stopped :need] ((juxt :status :reason) out)))
           (is (= [] (h/calls p "jumpPlace")))
           (is (= [] (pillar-cells p))))))))
 
@@ -163,7 +169,7 @@
         omniscient (.-sensedAt p)]
     (eye-reach! p)
     (aset p "sensedAt" (fn [pos] (if (or (> (.-y pos) 63) (seen-now? p)) (omniscient pos) #js {:unknown true})))
-    (assoc s :out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
+    (assoc s :out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
 
 (deftest an-unseen-floor-by-the-trunk-is-looked-at-before-the-pillar-is-planned
   (async done
@@ -184,7 +190,7 @@
         outside? (fn [pos] (not (and (<= 3 (.-x pos) 9) (<= -3 (.-z pos) 3))))]
     (eye-reach! p)
     (aset p "sensedAt" (fn [pos] (if (or (> (.-y pos) 63) (not (outside? pos)) (looked-low? p)) (omniscient pos) #js {:unknown true})))
-    (assoc s :out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
+    (assoc s :out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
 
 (deftest an-unseen-floor-beyond-a-zone-ring-is-looked-at-before-the-pillar-is-declined
   (async done
@@ -269,7 +275,7 @@
                            :inventory [{:name "cobblestone" :count 2}]} {})
               p (:p s)]
           (bd/hiding p #(= [6 63 0] %))
-          (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 200))
+          (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 200))
           (is (= "air" (h/block-at p 6 64 0)) "the bottom log is dug")
           (is (= "cobblestone" (h/block-at p 6 63 0)) "the lava under it is sealed"))))))
 
@@ -286,7 +292,7 @@
     (eye-reach! p)
     (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (.call sensed p pos))))
     (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (.call block-at p pos))))
-    (assoc s :out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
+    (assoc s :out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
 
 (deftest a-top-log-never-seen-is-looked-at-before-the-tree-counts-as-felled
   (async done
@@ -309,7 +315,7 @@
                          (reset! shown true)
                          (fake/set-block! p [6 64 0] "oak_log"))
                        (await (impl token args))))
-          (let [out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))]
+          (let [out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))]
             (is (= {:base {:x 6 :y 64 :z 0} :logs 3 :axe :skipped-small-tree} out) "the stump log is the base")
             (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts (:eng s))) "the replant is on the ground, not on the log above it")))))))
 
@@ -327,7 +333,7 @@
                          (when (= 3 (swap! n inc))
                            (swap! (fake/state p) assoc-in [:self :pos] [5.5 70 0.5]))
                          r)))
-          (let [out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))
+          (let [out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))
                 y (get-in @(fake/state p) [:self :pos 1])]
             (is (= 3 (:logs out)))
             (is (<= y 65) "the body ends on the ground, not up on the leaves")))))))
@@ -532,7 +538,7 @@
       (fn ^:async t []
         (let [s (fm/start (assoc tall :self {:food 2}) {})
               _ (mem/write! (:store (:eng s)) :hungry {:food 2} {:cap 10 :ttl 3600000})
-              out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 50))]
+              out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 50))]
           (is (= :hungry (:reason out)))
           (is (empty? (dug-ys (:p s))) "dug nothing"))))))
 
@@ -547,7 +553,7 @@
     (eye-reach! p)
     (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (.call sensed p pos))))
     (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (.call block-at p pos))))
-    (assoc s :out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
+    (assoc s :out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
 
 (deftest an-at-column-not-in-sight-is-walked-to-and-felled
   (async done

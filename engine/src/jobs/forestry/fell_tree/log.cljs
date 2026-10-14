@@ -1,0 +1,120 @@
+(ns jobs.forestry.fell-tree.log
+  "What fell-tree and fell-from-pillar share: the zone rule for a log, the logs of the chosen column, the walk within
+  reach of a log and one dig round of it."
+  (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
+            [jobs.lib.gate :as gate]
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.places :as places]
+            [jobs.lib.trees :refer [scan-logs logs-at debts replant-kind dig-reach log-name?]]
+            [jobs.lib.util :as u]))
+
+(defn gate-opts [c]
+  {:except (:for-plan (:args c)) :own-plans-ok? (false? (:spare-own-builds (:args c)))})
+
+(defn log-allowed?
+  "Whether the job may dig the log at pos (one warn per job when refused)."
+  [c pos]
+  (gate/allowed? c :fell-tree.declined "fell-tree" :dig pos (gate-opts c)))
+
+(defn column-logs
+  "Logs standing in the chosen column, lowest first."
+  [p radius {:keys [column species]}]
+  (->> (scan-logs p radius species)
+       (filter #(and (= (:x column) (get-in % [:pos :x])) (= (:z column) (get-in % [:pos :z]))))
+       (sort-by #(get-in % [:pos :y]))))
+
+(defn tree-logs
+  "The logs of the tree {:column :species} : read from :at up when the call has one, else those in radius."
+  [c radius {:keys [species] :as tree}]
+  (if-let [at (:at (:args c))]
+    (logs-at (:primitives c) at species)
+    (column-logs (:primitives c) radius tree)))
+
+(defn record-debt!
+  "Write the replant debt for the tree of base and species, once. True when it wrote one."
+  [c base species]
+  (when-not (some #(= base (:pos %)) (debts c))
+    (ctx/remember! c replant-kind {:pos base :species species} {:cap 50 :ttl :forever})
+    true))
+
+(defn open-scaffold?
+  "Whether this job's scaffold ledger entries (its own or a child's) are still open: a pillar left by a cut or a restart."
+  [c]
+  (boolean (some #(ledger/of-instance? (:id c) %) (ledger/open-entries (ctx/view c)))))
+
+(defn ^:async walk-near!
+  "Walk until the body's cell is within range of pos with a go-to child (slot :walk, no retry): :there, :partial (go-to
+  waits on the world, or a leg got nearer: call again) or :blocked (it gave up, or pos is no cell)."
+  ([c pos range] (walk-near! c pos range true))
+  ([c pos range zone-tolls]
+   (let [cell (:pos (places/parse-pos pos))]
+     (cond
+       (nil? cell) :blocked
+       (u/within? (u/self-pos c) cell range) :there
+       :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut :dangers true :zone-tolls zone-tolls
+                                                       :escalate true :look-round true :one-way :closed :see false
+                                                       :warn false :retry false
+                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+               (cond
+                 (= :continue e) :partial
+                 (and (= :done (:kind e)) (:arrived (:data e))) :there
+                 (and (= :done (:kind e)) (:leg (:data e))) :partial
+                 :else (do (ctx/update-mem! c assoc :walk-why (some-> (:why (:data e)) name))
+                           :blocked)))))))
+
+(defn ^:async approach!
+  "Get the log at pos within reach to dig: nothing when its centre is within eye reach already, else walk to within 2
+  of the column's foot (3 when that has no path: the foot may be the trunk itself). :there, :partial or :blocked."
+  [c pos base-y]
+  (if (<= (u/eye-dist (u/self-pos c) pos) dig-reach)
+    :there
+    (let [foot (assoc pos :y base-y)
+          w (await (walk-near! c foot 2 true))]
+      (if (= :blocked w)
+        (await (walk-near! c foot 3 true))
+        w))))
+
+(defn log-dig-args
+  "The jobs.blocks.dig args for the log at pos: no tool needed (an axe is held when carried), the drop left on the
+  ground, the dig hazards of :accept taken."
+  [c pos]
+  (merge (select-keys (:args c) [:for-plan :ignore-zones? :accept])
+         {:pos pos :collect false :need-drop false}))
+
+(defn outcome
+  "What one round of the dig child (its return e: :continue or its ending) means for the tree: :ok (dug, gone, or still
+  under way), :refused, :cannot, :unreachable (a condition that refused the call), or the failed dig's cause as a keyword."
+  [e]
+  (if (or (= :continue e) (= :done (:kind e)))
+    :ok
+    (let [k (contract/cause-key e)]
+      (cond
+        (#{:not-allowed :hazard} k) :refused
+        (#{:cannot :fluid} k) :cannot
+        (= :condition-failed (:kind e)) :unreachable
+        :else (keyword (name k))))))
+
+(defn ^:async dig-log!
+  "Dig the log l of the tree at base (one blocks.dig child round), walking in reach first. Commits the replant debt
+  before the base log is dug (write-ahead; withdrawn when the log is still standing after the round). Resolves to :ok,
+  :partial (the walk made progress but is not in reach yet; call again), :high (the log is out of reach from the ground
+  and a pillar is allowed) or a non-ok outcome for the round to count as a failure (:unreachable, :cannot, :refused and
+  :out-of-reach mean the tree cannot be dug from here)."
+  [c l {:keys [base species]}]
+  (let [pos (:pos l)
+        w (await (approach! c pos (:y base)))]
+    (case w
+      :blocked :blocked
+      :partial :partial
+      (cond
+        (not (log-allowed? c pos)) :refused
+        (and (:pillar? (:args c)) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
+        :else
+        (let [wrote? (and (= pos base) (record-debt! c base species))
+              e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos)))]
+          (when (:dug (:data e)) (ctx/update-mem! c update :dug (fnil inc 0)))
+          (when (and wrote? (some-> (u/seen-name (:primitives c) pos) log-name?))
+            (ctx/forget-where! c replant-kind #(= pos (:pos %))))
+          (outcome e))))))

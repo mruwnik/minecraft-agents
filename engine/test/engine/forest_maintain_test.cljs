@@ -11,7 +11,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
-            [jobs.forestry.fell-tree :as fell-tree]
+            [jobs.forestry.fell-tree.log :as fell-log]
             [jobs.forestry.maintain :as maintain]
             [jobs.lib.trees :as trees]
             [jobs.lib.pace :as pace]
@@ -561,8 +561,8 @@
 ;; ------------------------------------------------------------------ :accept reaches the fell child
 
 (deftest fell-tree-digs-with-the-accept-it-was-given
-  (is (= #{} (:accept (fell-tree/log-dig-args {:args {:accept #{}}} {:x 0 :y 64 :z 0}))))
-  (is (= #{:fluid-adjacent} (:accept (fell-tree/log-dig-args {:args {:accept #{:fluid-adjacent}}} {:x 0 :y 64 :z 0})))))
+  (is (= #{} (:accept (fell-log/log-dig-args {:args {:accept #{}}} {:x 0 :y 64 :z 0}))))
+  (is (= #{:fluid-adjacent} (:accept (fell-log/log-dig-args {:args {:accept #{:fluid-adjacent}}} {:x 0 :y 64 :z 0})))))
 
 (deftest maintain-hands-its-accept-to-the-fell-child
   (is (= #{:falling-block}
@@ -575,12 +575,16 @@
   (are [on] (= on (:pillar? (maintain/fell-args {:args {:pillar? on}} {:x 3 :y 64 :z 0} "oak")))
     true false))
 
-(deftest a-declined-dig-hazard-is-refused-not-unreachable
-  (are [waits out] (= out (fell-tree/outcome :declined nil waits))
-    {:reason :not-allowed} :refused
-    {:reason :hazard} :refused
-    {:reason :unreachable} :unreachable
-    {:reason :no-tool} :unreachable))
+(deftest a-dig-hazard-is-refused-not-unreachable
+  (are [e out] (= out (fell-log/outcome e))
+    {:kind :condition-failed :cause {:reason :not-allowed}} :refused
+    {:kind :condition-failed :cause {:reason :hazard}} :refused
+    {:kind :condition-failed :cause :unreachable} :unreachable
+    {:kind :condition-failed :cause {:reason :no-tool}} :unreachable
+    {:kind :condition-failed :cause :cannot} :cannot
+    {:kind :nothing-possible :cause :unreachable} :unreachable
+    {:kind :done} :ok
+    :continue :ok))
 
 (deftest a-planned-tree-never-seen-is-looked-at-before-nothing-to-do
   (async done

@@ -1,0 +1,101 @@
+(ns engine.fell-contract-test
+  "jobs.forestry.fell-tree and jobs.forestry.fell-from-pillar as contract jobs: they export the contract and end with a
+  kind and a cause (0 of N is never done); the pillar is a child of the felling."
+  (:require [cljs.test :refer [deftest is are async]]
+            [engine.contract :as contract]
+            [engine.farm-contract-test :refer [ending-of]]
+            [engine.fell-tree-test :as ft]
+            [engine.forest-maintain-test :as fm]
+            [engine.library-test :as lt]
+            [engine.registry :as registry]
+            [engine.test-util :as tu]
+            [jobs.lib.access.approach :as approach]
+            [jobs.lib.ledger :as ledger]
+            [engine.memory :as mem]))
+
+(def jobs '[jobs.forestry.fell-tree jobs.forestry.fell-from-pillar])
+
+(deftest both-jobs-export-the-contract-and-quote-validly
+  (let [s (fm/start ft/tall {})
+        args {'jobs.forestry.fell-tree {:radius 10}
+              'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}}]
+    (doseq [sym jobs
+            :let [job (get registry/jobs sym)]]
+      (is (vector? (:conditions job)) (str sym " has conditions"))
+      (is (nil? (:check job)) (str sym " has no old check"))
+      (is (vector? (:target job)) (str sym " has a target"))
+      (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (:p s) :args (get args sym)}))) (str sym)))))
+
+(defn ^:async fell-ending
+  "The ending of job with args on a fresh world of spec, in at most n ticks (nil when it does not end)."
+  ([spec job args n] (fell-ending spec job args n nil))
+  ([spec job args n after-start]
+   (let [s (fm/start spec {})]
+     (ft/eye-reach! (:p s) (:lose-logs? spec))
+     (when after-start (after-start s))
+     (assoc (select-keys s [:p :seen :eng]) :end (await (ending-of s job args n))))))
+
+(defn kc [e] {:kind (:kind e) :cause (contract/cause-key e)})
+
+(deftest a-felled-tree-is-done-and-a-missing-one-is-condition-failed-no-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [end]} (await (fell-ending ft/tall 'jobs.forestry.fell-tree {:radius 10} 200))]
+          (is (= :done (:kind end)))
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} (:data end))))
+        (let [{:keys [end]} (await (fell-ending {:blocks {}} 'jobs.forestry.fell-tree {:radius 10} 40))]
+          (is (= {:kind :condition-failed :cause :no-tree} (kc end)))
+          (is (= 10 (get-in end [:cause :radius]))))))))
+
+(deftest every-tree-out-of-reach-is-nothing-possible-tree-unreachable-with-the-columns
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [end]} (await (fell-ending {:blocks (lt/tree 8 0 "oak" 3) :unreachable ["8,64,0"]}
+                                                'jobs.forestry.fell-tree {:radius 20} 100))]
+          (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end)))
+          (is (= 1 (get-in end [:data :unreachable])))
+          (is (= [[8 0]] (get-in end [:data :columns]))))))))
+
+(deftest a-pillar-that-cannot-be-had-ends-with-the-fetch-ending-and-fetch-false-with-the-need
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [end p]} (await (fell-ending (assoc ft/tall :inventory [] :lose-logs? true) 'jobs.forestry.fell-tree {:radius 10 :fetch false} 100))]
+          (is (= {:kind :condition-failed :cause :need} (kc end)))
+          (is (= ["dirt" "cobblestone"] (get-in end [:cause :any-of])))
+          (is (pos? (get-in end [:cause :count])))
+          (is (= [] (filter #(= "jumpPlace" (.-name %)) (.-calls (.-world p))))))))))
+
+(deftest a-refused-pillar-leaves-the-tree-and-the-call-ends-tree-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "grove" :min [-6 64 -9] :max [16 80 9] :allow #{:dig}}]
+              {:keys [end]} (await (fm/with-zones zones #(fell-ending ft/tall 'jobs.forestry.fell-tree {:radius 10} 120)))]
+          (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end))))))))
+
+(deftest fell-from-pillar-ends-done-with-its-logs-and-a-refused-one-condition-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}
+              {:keys [end eng]} (await (fell-ending ft/tall 'jobs.forestry.fell-from-pillar args 200))]
+          (is (= :done (:kind end)))
+          (is (pos? (get-in end [:data :logs])))
+          (is (= [] (ledger/open-entries (mem/view (:store eng)))) "the pillar is taken back"))
+        (let [zones [{:name "grove" :min [-6 64 -9] :max [16 80 9] :allow #{:dig}}]
+              {:keys [end]} (await (fm/with-zones zones #(fell-ending ft/tall 'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10} 120)))]
+          (is (= {:kind :condition-failed :cause :refused} (kc end))))
+        (let [{:keys [end]} (await (fell-ending ft/tall 'jobs.forestry.fell-from-pillar {} 20))]
+          (is (= {:kind :condition-failed :cause :bad-args} (kc end))))))))
+
+(deftest a-pillar-with-no-log-in-reach-is-taken-back-and-the-tree-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [end eng]} (with-redefs [approach/plan (fn [_] {:stand [[5 64 0]]})]
+                                  (await (fell-ending ft/tall 'jobs.forestry.fell-tree {:radius 10} 200)))]
+          (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end)))
+          (is (= [] (ledger/open-entries (mem/view (:store eng))))))))))

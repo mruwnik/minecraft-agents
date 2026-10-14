@@ -47,17 +47,13 @@
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))))
           (is (= [] (lt/debts eng))))))))
 
-(deftest no-tree-in-range-waits-and-says-so
+(deftest no-tree-in-range-ends-no-tree
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 9 0 "oak" 3)})]
-          (core/submit! eng '(jobs.forestry.harvest-wood {:radius 2}) {})
-          (await (tu/run-until-empty eng 4))
-          (is (= 1 (count (:list (core/state eng)))) "still queued")
-          (is (= [{:reason :no-tree :radius 2}]
-                 (mapv #(select-keys % [:reason :radius :species]) (filterv #(= :waiting (:kind %)) @seen)))
-              "one job.waiting naming the reason"))))))
+        (let [{:keys [eng]} (lt/setup {:blocks (lt/tree 9 0 "oak" 3)})
+              r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:radius 2} 10))]
+          (is (= {:status :stopped :reason :no-tree :got 0} (select-keys r [:status :reason :got]))))))))
 
 (deftest any-species-wide-radius-no-sapling-ends-with-the-debt-owed
   (async done
@@ -257,23 +253,21 @@
               "one tree felled, none left: ends with what it got, not waiting for ever")
           (is (= 3 (get (lt/inv p) "oak_log"))))))))
 
-(deftest count-no-tree-after-a-fell-needs-the-fell-check-to-say-no-tree
+(deftest a-fell-that-ends-need-ends-the-job-need-not-no-tree
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"})})
               felled? (atom false)
               fell (get-in eng [:jobs 'jobs.forestry.fell-tree])
-              eng (-> eng
-                      (assoc-in [:jobs 'jobs.forestry.fell-tree :round]
-                                (fn ^:async f [c] (let [r (await ((:round fell) c))] (when (= :done r) (reset! felled? true)) r)))
-                      (assoc-in [:jobs 'jobs.forestry.fell-tree :check]
-                                (fn [c] (if @felled?
-                                          (do (ctx/wait c {:reason :need :any-of ["dirt"] :count 4}) false)
-                                          ((:check fell) c)))))
+              eng (assoc-in eng [:jobs 'jobs.forestry.fell-tree :round]
+                            (fn ^:async f [c]
+                              (if @felled?
+                                (ctx/end c :condition-failed {:reason :need :any-of ["dirt"] :count 4} nil)
+                                (let [r (await ((:round fell) c))] (when (= :done (:kind r)) (reset! felled? true)) r))))
               r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
-          (is (= :not-done r) "the job has not ended: a fetch wait is not an empty forest")
-          (is (some #(and (= :child_ended (:kind %)) (= :need (:reason %))) @seen) "the fell child ended :need, the job kept waiting")
+          (is (= {:status :stopped :reason :need :got 3} (select-keys r [:status :reason :got]))
+              "a fetch that failed is not an empty forest")
           (is (not-any? #(= :no-tree (:reason %)) @seen)))))))
 
 (deftest count-no-tree-after-a-fell-still-reports-the-replant-owed

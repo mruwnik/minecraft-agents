@@ -14,6 +14,7 @@
             [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]
             [jobs.lib.cost :as cost]
+            [jobs.forestry.fell-tree.log :as fell-log]
             [jobs.lib.near :as near]
             [jobs.lib.world-files :as ew]
             [jobs.movement.look-around :as look-around]
@@ -163,17 +164,17 @@
           (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
 
 (defn ^:async with-partial-walks
-  "Run the async f with the first n go-near! calls (all when n is nil) resolving :partial, as a walk that waits on the world; later ones walk."
+  "Run the async f with the first n fell-tree walks (all when n is nil) resolving :partial, as a walk that waits on the world; later ones walk."
   [n f]
   (let [k "cljs$core$IFn$_invoke$arity$4"
-        orig (aget near/go-near! k)
+        orig (aget fell-log/walk-near! k)
         calls* (atom 0)]
-    (aset near/go-near! k (fn ^:async partial-first [c pos range opts]
-                            (if (or (nil? n) (< (dec (swap! calls* inc)) n))
-                              :partial
-                              (await (orig c pos range opts)))))
+    (aset fell-log/walk-near! k (fn ^:async partial-first [c pos range tolls]
+                                  (if (or (nil? n) (< (dec (swap! calls* inc)) n))
+                                    :partial
+                                    (await (orig c pos range tolls)))))
     (try (await (f))
-         (finally (aset near/go-near! k orig)))))
+         (finally (aset fell-log/walk-near! k orig)))))
 
 (deftest fell-tree-gives-up-on-a-tree-after-three-partials-in-a-row
   (async done
