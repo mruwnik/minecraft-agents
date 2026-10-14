@@ -7,22 +7,22 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [jobs.survival.eat :as eat]
-            [jobs.survival.get-food :as get-food]))
+            [jobs.survival.get-food.cook :as cook]))
 
 (def hold-ms
   "How long one hold waits before the night looks again (the wait primitive does not wake a sleeping body)."
   5000)
 
 (defn ^:async cooking-in-shelter?
-  "Raw food carried and a furnace or smoker seen within get-food's ::shelter-cook-reach, or a cook under way, and the
-  cook not rushed (get-food/rushed?) nor failed lately: run it (get-food/cook!). True while it goes on (do not eat
+  "Raw food carried and a furnace or smoker seen within cook's ::shelter-cook-reach, or a cook under way, and the
+  cook not rushed (cook/rushed?) nor failed lately: run it (cook/cook!). True while it goes on (do not eat
   raw), nil when it ended (the cooked food is eaten next) or none is possible."
   [c]
-  (let [cooker (when (and (seq (get-food/raw-carried c))
-                          (zero? (ctx/count-in c :no-cook get-food/no-bake-ms)))
-                 (get-food/seen-cooker c (get-food/shelter-cook-reach)))]
-    (when (and (or cooker (:cooking (ctx/mem c))) (not (get-food/rushed? c)))
-      (= :continue (await (get-food/cook! c cooker))))))
+  (let [cooker (when (and (seq (cook/raw-carried c))
+                          (zero? (ctx/count-in c :no-cook cook/no-bake-ms)))
+                 (cook/seen-cooker c (cook/shelter-cook-reach)))]
+    (when (and (or cooker (:cooking (ctx/mem c))) (not (cook/rushed? c)))
+      (= :continue (await (cook/cook! c cooker))))))
 
 (defn ^:async eat-if-hungry!
   "The hungry reflex (below night in the shipped registers) cannot reach a held body, so a hold eats one carried

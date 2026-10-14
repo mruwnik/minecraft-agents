@@ -1,0 +1,186 @@
+(ns jobs.survival.get-food.sources
+  "Where get-food finds food it knows of: remembered farms and chests, ripe crops in sight."
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
+            [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
+            [jobs.lib.child :as child]
+            [jobs.lib.crops :as crops]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.foods :as foods]
+            [jobs.lib.look :as look]
+            [jobs.lib.storage :as storage]
+            [jobs.lib.util :as u]))
+
+(a/defargs settings
+  {::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
+   ::stock-radius {:default 256 :doc "Blocks within which a chest the body booked food in (memory :fetch/stock, what it saw when it opened it) counts as a food source." :spec (a/int-in 0 nil)}})
+
+(defn reach [] (settings/get settings ::reach))
+
+(def ripe-age
+  "The growth stage at which each crop block can be harvested. Wheat is left
+  out: it is not harvested here."
+  {"carrots" 7 "potatoes" 7 "beetroots" 3})
+
+(def berry-bush {"sweet_berry_bush" 2})
+
+(def melon-block "A melon has no growth stage: it is always ripe." {"melon" 0})
+
+(def wild-food "Blocks dug for food besides the crops." (merge berry-bush melon-block))
+
+(defn carried-count [c name] (storage/carried (u/inventory (:primitives c)) name))
+
+(defn foreign-chest?
+  "A chest source in another's zone or claim: survival jobs never take other people's stuff, in any mode and even
+  starving, so it is skipped (one get-food.skipped warn per chest). :ignore-zones? lifts it."
+  [c {:keys [pos kind]}]
+  (let [v (when (= :chest kind) (access/container-refusal c :take pos))]
+    (when v
+      (let [fields (access/refusal-fields [v])]
+        (ctx/warn-once! c [:skipped pos] :get-food.skipped
+                        (assoc fields :pos pos :text (str "skipped the chest at " (pr-str pos) ": " (access/refusal-text fields))))))
+    (boolean v)))
+
+(defn stock-entries
+  "The chests the body booked food in (memory :fetch/stock, latest per chest) within ::stock-radius, as :food-source-shaped
+  entries {:t :data {:pos {:x :y :z} :kind :chest}}: its own stores count as sources though nothing wrote a :food-source."
+  [c]
+  (let [here (u/self-pos c)]
+    (->> (ctx/entries c fetch/stock-kind)
+         (reduce (fn [m e] (assoc m (:pos (:data e)) e)) {})
+         vals
+         (filter (fn [{:keys [data]}] (and (some foods/edible? (keys (:items data))) (<= (u/dist here (zipmap [:x :y :z] (:pos data))) (settings/get settings ::stock-radius)))))
+         (map (fn [{:keys [t data]}] {:t t :data {:pos (zipmap [:x :y :z] (:pos data)) :kind :chest}})))))
+
+(defn usable-entries
+  "The :food-source entries within :source-radius and the chests booked with food within ::stock-radius, newest first,
+  not tried in this job and not another's chest."
+  [c]
+  (let [tried (set (:tried-sources (ctx/mem c)))
+        noted (filter (fn [{:keys [data]}] (<= (u/dist (u/self-pos c) (:pos data)) (:source-radius (:args c)))) (ctx/entries c :food-source))
+        known (set (map (comp :pos :data) noted))]
+    (->> (concat noted (remove #(known (:pos (:data %))) (stock-entries c)))
+         (sort-by :t >)
+         (filter (fn [{:keys [data]}]
+                   (and (not (tried (:pos data)))
+                        (not (foreign-chest? c data))))))))
+
+(defn known-source
+  "The newest usable :food-source entry's data (see usable-entries)."
+  [c]
+  (:data (first (usable-entries c))))
+
+(defn fresh-source
+  "known-source, when its entry is strictly newer than the latest :hungry
+  entry: a source the last fruitless search never had in front of it."
+  [c]
+  (let [{source :data learned :t} (first (usable-entries c))
+        gave-up (:t (ctx/latest c :hungry))]
+    (when (and source learned gave-up (> learned gave-up))
+      source)))
+
+(defn pass-over!
+  "Not try the source at pos again in this job."
+  [c pos]
+  (ctx/update-mem! c update :tried-sources (fnil conj []) pos))
+
+(defn bury-source!
+  "Give up on the source at pos: not tried again this job, and forgotten. :again, for the next way."
+  [c pos]
+  (pass-over! c pos)
+  (ctx/forget-where! c :food-source #(= pos (:pos %)))
+  :again)
+
+(defn ^:async go-near!
+  "Walk within reach of pos by one go-to call: :there, :far (it gave up) or :continue (go-to waits on the world)."
+  [c pos]
+  (let [r (await (child/run! c :goto 'jobs.movement.go-to {:pos pos :range (reach)} {:max-calls 1}))]
+    (cond
+      (= :continue r) :continue
+      (<= (u/dist (u/self-pos c) pos) (inc (reach))) :there
+      :else :far)))
+
+(defn ripe-blocks
+  "The ripe blocks named in ripe-ages within radius of center, nearest to the
+  body first, minus the ones that proved undiggable (a lazy seq)."
+  [c ripe-ages center radius]
+  (let [skipped (set (:skipped-blocks (ctx/mem c)))]
+    (->> (crops/seen-crops (:primitives c) (keys ripe-ages) radius 64)
+         (filter #(let [need (ripe-ages (:name %))] (or (zero? need) (some-> (:age %) (>= need)))))
+         (map :pos)
+         (filter #(<= (u/dist % center) radius))
+         (remove skipped))))
+
+(defn ^:async dig-ripe!
+  "Dig the nearest ripe block, permitted ones first (blocks.dig walks there and collects the drops): :again, or nil
+  when there is none. A block not dug is skipped from then on."
+  [c ripe-ages center radius]
+  (when (empty? (ripe-blocks c ripe-ages center radius))
+    (await (look/survey! c :cell)))
+  (let [{pos :option trespass :trespass} (access/choose c :dig (ripe-blocks c ripe-ages center radius) vector)]
+    (when pos
+      (access/trespass! c "get-food" trespass)
+      ;; access/choose made the zone call (a missing zone list never blocks survival); the dig notes a trespass for restore-broken
+      (let [st (await (child/run! c :dig 'jobs.blocks.dig {:pos pos :ignore-zones? true}))]
+        (cond
+          (= :continue st) :continue
+          (and (= :done st) (:dug (ctx/child-result c :dig))) :again
+          :else (do (ctx/update-mem! c update :skipped-blocks (fnil conj []) pos) :again))))))
+
+(defn ^:async farm!
+  [c {:keys [pos]}]
+  (case (await (go-near! c pos))
+    :continue :continue
+    :far (bury-source! c pos)
+    (or (await (dig-ripe! c ripe-age pos (:farm-radius (:args c))))
+        (do (pass-over! c pos) nil))))
+
+(defn loaves-wanted
+  "How many loaves fill the body to full."
+  [c]
+  (int (js/Math.ceil (/ (- 20 (.-food (.self (:primitives c)))) 5))))
+
+(defn best-in-chest [items]
+  (->> items
+       (filter #(foods/edible? (.-name %)))
+       (sort-by #(- (foods/points (.-name %))))
+       first))
+
+(defn wheat-to-take
+  "How much wheat to withdraw: the loaves wanted worth, no more than the chest
+  holds or :take allows, all in multiples of 3; 0 when under 3."
+  [c wheat]
+  (let [down3 #(* 3 (quot % 3))]
+    (min (* 3 (loaves-wanted c)) (down3 wheat) (down3 (:take (:args c))))))
+
+(defn chest-wheat [items]
+  (transduce (comp (filter #(= "wheat" (.-name %))) (map #(.-count %))) + 0 items))
+
+(defn ^:async withdraw!
+  "Withdraw n of item from the chest at pos (storage.withdraw): :again; a chest that gave nothing is forgotten."
+  [c pos item n]
+  (let [before (carried-count c item)
+        st (await (child/run! c :withdraw 'jobs.storage.withdraw
+                              {:chest pos :items {item (+ before n)} :ignore-zones? (:ignore-zones? (:args c))}))]
+    (cond
+      (= :continue st) :continue
+      (> (carried-count c item) before) :again
+      :else (bury-source! c pos))))
+
+(defn ^:async chest!
+  "Look in the chest (the inventory may have changed since it was learned) and withdraw its best food, or wheat."
+  [c {:keys [pos]}]
+  (case (await (go-near! c pos))
+    :continue :continue
+    :far (bury-source! c pos)
+    (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos pos})))
+          status (.-status seen)
+          items (when (= "ok" status) (array-seq (.-items seen)))
+          best (best-in-chest items)
+          wheat (wheat-to-take c (chest-wheat items))]
+      (cond
+        (not (#{"ok" "missing"} status)) (do (pass-over! c pos) :again)
+        best (await (withdraw! c pos (.-name best) (min (.-count best) (:take (:args c)))))
+        (pos? wheat) (await (withdraw! c pos "wheat" wheat))
+        :else (bury-source! c pos)))))

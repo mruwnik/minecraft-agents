@@ -493,6 +493,7 @@
           (await (one-round! eng {:explore false}))
           (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
           (await (core/tick! eng))
+          (await (core/tick! eng))
           (is (= [:no-food-found] (distinct (map :reason (events-of seen :waiting))))))))))
 
 (deftest a-body-above-the-hungry-line-waits-not-hungry-and-says-the-line
@@ -504,7 +505,7 @@
           (await (core/tick! eng))
           (let [w (first (events-of seen :waiting))]
             (is (= :not-hungry (:reason w)))
-            (is (re-find #"food 8 .*hungry below 7$" (str (:why w))) (pr-str w))))))))
+            (is (re-find #"food 8 .*hungry below 7$" (str (:why (:cause w)))) (pr-str w))))))))
 
 (deftest rotten-flesh-above-the-eat-bad-line-is-nothing-to-try
   (async done
@@ -514,6 +515,7 @@
               {:keys [eng seen]} (setup {:self {:food 11 :health 6} :inventory [{:name "rotten_flesh" :count 3}]} :step-ms 5)]
           (await (one-round! eng args))
           (core/submit! eng (list 'jobs.survival.get-food args) {})
+          (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= [:no-food-found] (distinct (map :reason (events-of seen :waiting))))))))))
 
