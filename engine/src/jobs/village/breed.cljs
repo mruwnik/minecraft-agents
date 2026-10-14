@@ -3,6 +3,7 @@
             [engine.args :as a] [jobs.lib.fetch :as fetch]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
 
@@ -15,7 +16,7 @@
   Needs adult villagers in sight and beds the villagers can claim (the body cannot see which are free): it only counts
   what it sees, so a villager out of sight is not counted. Zones are the walks' (go-to tolls), never claimed here.
   Conditions at the start (a listed call waits on them): :no-pair (below :target, fewer than two adult villagers in
-  sight), :no-food (the food is not carried and a fetch is off or failed lately). A :target under 2 is impossible
+  sight; the engine looks round once first), :no-food (the food is not carried and a fetch is off or failed lately). A :target under 2 is impossible
   (:bad-args). Quote: time from :wait-s and the births still missing.
   Ends with the data {:population n :target t :births b}: done when the target is met (info breed.done; an already
   met target is done with 0 births), else with warn breed.gave-up and the cause:
@@ -82,7 +83,8 @@
   (when-not (ctx/frozen-call c)
     (let [vs (villagers (:primitives c) (:radius (:args c)))]
       (when (and (< (:pop (sight vs)) (:target (:args c))) (< (count (filter adult? vs)) 2))
-        {:reason :no-pair :text "fewer than two adult villagers in sight"}))))
+        (cond-> {:reason :no-pair :text "fewer than two adult villagers in sight"}
+          (not (look/surveyed? c :near)) contract/look-first)))))
 
 (defn no-food
   "At the start: the cause :no-food while the meal is not carried and a fetch for it is off or failed lately."

@@ -114,11 +114,13 @@
       (fn ^:async t []
         (doseq [[es inv a] [[[(villager 1 3)] bread args]
                             [[(villager 1 3) (villager 2 5 {:baby true})] bread args]
-                            [[] bread args]
-                            [pair nil (assoc args :fetch false)]]]
+                            [[] bread args]]]
           (let [{:keys [p out]} (await (breed {:entities es :inventory inv} a 30 identity))]
-            (is (= :not-done @out) "a condition, not a stop: the job is not started")
-            (is (empty? (tosses p)))))))))
+            (is (= [:stopped :no-pair] ((juxt :status :reason) @out)) "after one look the child ends condition-failed :no-pair; the job never starts")
+            (is (empty? (tosses p)))))
+        (let [{:keys [p out]} (await (breed {:entities pair} (assoc args :fetch false) 30 identity))]
+          (is (= :not-done @out) "no food is a condition: the job waits, not started")
+          (is (empty? (tosses p))))))))
 
 (deftest an-adult-walking-into-view-is-not-a-birth
   (async done

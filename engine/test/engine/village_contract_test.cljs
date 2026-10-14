@@ -3,6 +3,9 @@
   kind and a cause (a partial run is never done)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
+            [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
+            [jobs.village.breed :as breed]
             [engine.registry :as registry]
             [engine.seek-contract-test :as seek]
             [engine.test-util :as tu]
@@ -54,6 +57,12 @@
         (is (= {:event :waiting :reason :no-food}
                (await (ends '(jobs.village.breed {:target 3 :fetch false})
                              {:entities [(villager [] {:uuid "v-1" :pos {:x 3 :y 64 :z 0}}) (villager [] {:id 2 :uuid "v-2" :pos {:x 5 :y 64 :z 0}})]}))))))))
+
+(deftest breed-no-pair-looks-first-until-surveyed
+  (let [c {:primitives (tu/fake {:entities [(villager [])]}) :args {:target 3 :radius 48}}
+        cause (fn [surveyed?] (with-redefs [ctx/frozen-call (constantly nil) look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))] (breed/no-pair c)))]
+    (is (= :no-pair (:reason (contract/look-cause (cause false)))))
+    (is (= :no-pair (:reason (cause true))))))
 
 (deftest trade-ends-with-a-kind-and-a-cause
   (async done

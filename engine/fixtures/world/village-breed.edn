@@ -22,12 +22,12 @@
          [:wait-s 2]
          [:job (jobs.village.breed {:target 3 :wait-s 60})]]
    :expect [{:event {:source :job :kind :breed.done} :within-s 200 :of-job true}]}
-  ;; should fail: a single adult has nobody to pair with
+  ;; should fail: a single adult has nobody to pair with (a start condition: the manual root stops condition-failed)
   {:name "one-adult-is-no-pair"
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20264,7,3,1]}"]
          [:wait-s 2]
          [:job (jobs.village.breed {:target 3})]]
-   :expect [{:event {:source :job :kind :breed.gave-up :data {:reason "no-pair"}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-pair}} :within-s 30 :of-job true}]
    :after [[:item "bread" 8]]}
   ;; should fail: NoAI villagers never breed, so the attempt ends without a birth
   {:name "noai-pair-no-births"

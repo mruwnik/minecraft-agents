@@ -12,11 +12,14 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
+(def seen-events (atom nil))
+
 (defn ^:async call!
   "Run job with args as a ctx/call child of a recording parent over fake body p; prep gets the engine first. Its ending."
   [p job args prep]
   (let [clock (atom 1000000)
-        [_ sink] (tu/legacy-capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
+        _ (reset! seen-events seen)
         out (atom :not-done)
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
@@ -185,7 +188,20 @@
         (is (= [:condition-failed :not-night]
                (ending-of (await (call! (spawn-world {:time st/noon :blocks {"6,64,0" "red_bed"}}) 'jobs.survival.bed-down {} (constantly nil))))))
         (is (= [:condition-failed :no-bed]
-               (ending-of (await (call! (spawn-world {}) 'jobs.survival.bed-down {} (constantly nil))))))))))
+               (ending-of (await (call! (spawn-world {}) 'jobs.survival.bed-down {:fetch false} (constantly nil))))))))))
+(deftest bed-down-fetch-false-starts-no-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (call! (spawn-world {}) 'jobs.survival.bed-down {:fetch false} (constantly nil)))
+        (is (empty? (filterv #(= :fetch.started (:kind %)) @@seen-events)))))))
+
+(deftest bed-down-with-no-bed-fetches-one-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e (await (call! (spawn-world {}) 'jobs.survival.bed-down {} (constantly nil)))]
+          (is (= 1 (count (filterv #(= :fetch.started (:kind %)) @@seen-events)))))))))
 
 (deftest bed-down-beside-an-open-bed-is-condition-failed-bed-open
   (async done
