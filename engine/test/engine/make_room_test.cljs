@@ -332,7 +332,7 @@
           (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "full" :moved 0}))
           (know-chest! eng chest-pos)
           (await (run-reflex eng {} {}))
-          (is (= [{:pos chest-pos :reason "no-chest-item"}] (mapv :data (chest-entries eng))))
+          (is (= [{:pos chest-pos :reason :no-chest-item}] (mapv :data (chest-entries eng))))
           (is (= 1 (count (calls p "transfer"))) "a full answer is final: it stops using the chest")
           (is (= 3 (count (calls p "toss"))) "then it tosses"))))))
 

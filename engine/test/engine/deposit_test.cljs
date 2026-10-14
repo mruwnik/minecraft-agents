@@ -29,9 +29,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})
-              result (await (tu/child-outcome eng job {:chest chest :items ["dirt"]} 8))]
+              result (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 8))]
           (is (= {} (wt/inv p)))
-          (is (= {:gave-up false} result)))))))
+          (is (= {:kind :done} result)))))))
 
 (deftest deposit-gives-up-when-the-transfer-says-ok-but-moves-nothing
   (async done
@@ -39,8 +39,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})]
           (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "ok" :moved 0}))
-          (let [result (await (tu/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
-            (is (= true (:gave-up result)))
+          (let [result (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 12))]
+            (is (= {:kind :nothing-possible :cause :nothing-moved} (select-keys result [:kind :cause])))
             (is (<= (count (wt/calls p "transfer")) 3))))))))
 
 (deftest deposit-of-everything-keeps-the-three-day-food-reserve
@@ -48,9 +48,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5} {:name "bread" :count 20}] :containers {"10,64,0" []}})
-              result (await (tu/child-outcome eng job {:chest chest} 16))]
+              result (await (wt/ending-of eng job {:chest chest} 16))]
           (is (= {"bread" 12} (wt/inv p)) "bread 12 is the 60 points; dirt and the 8 spare bread go")
-          (is (= {:gave-up false} result)))))))
+          (is (= {:kind :done} result)))))))
 
 (deftest deposit-gives-up-when-the-known-chest-is-gone
   (async done
@@ -58,8 +58,8 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (wt/setup {:inventory [{:name "dirt" :count 5}]})]
           (wt/know-place! eng :chest chest)
-          (is (= {:gave-up true :reason "missing" :status :stopped :moved 0}
-                 (await (tu/child-outcome eng job {:items ["dirt"]} 8))))
+          (is (= {:kind :condition-failed :cause :missing :data {:gave-up true :moved 0}}
+                 (await (wt/ending-of eng job {:items ["dirt"]} 8))))
           (is (some #(= :chest_missing (:kind %)) @seen))
           (is (= [] (:list (core/state eng)))))))))
 
@@ -78,9 +78,9 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5} {:name "gravel" :count 7} {:name "sand" :count 2}]
                                           :containers {"20,64,0" []}})
-              result (await (tu/child-outcome eng job {:chest {:x 20 :y 64 :z 0}} 1))]
+              result (await (wt/ending-of eng job {:chest {:x 20 :y 64 :z 0}} 1))]
           (is (= {} (wt/inv p)))
-          (is (= {:gave-up false} result))
+          (is (= {:kind :done} result))
           (is (= 3 (count (wt/calls p "transfer"))))
           (is (= 1 (count (tu/walked-to eng)))))))))
 
@@ -95,9 +95,9 @@
                        (if (= 1 (swap! n inc))
                          (await (impl token args))
                          #js {:status "full" :moved 0})))
-          (let [result (await (tu/child-outcome eng job {:chest chest :items ["dirt" "gravel"]} 1))]
+          (let [result (await (wt/ending-of eng job {:chest chest :items ["dirt" "gravel"]} 1))]
             (is (= {"gravel" 7} (wt/inv p)))
-            (is (= {:gave-up true :reason "full" :status :stopped :moved 5} result))))))))
+            (is (= {:kind :nothing-possible :cause :full :data {:gave-up true :moved 5}} result))))))))
 
 (defn timed-out
   "An override of a primitive that does the work, then answers an act timeout carrying the inventory change."
@@ -112,8 +112,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})]
           (.override (.-world p) "transfer" (timed-out {"dirt" -5}))
-          (let [result (await (tu/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
-            (is (= {:gave-up false} result))
+          (let [result (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 12))]
+            (is (= {:kind :done} result))
             (is (= {} (wt/inv p)))
             (is (= 1 (count (wt/calls p "transfer"))))))))))
 
@@ -123,8 +123,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})]
           (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "timeout"}))
-          (let [result (await (tu/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
-            (is (= true (:gave-up result)))))))))
+          (let [result (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 12))]
+            (is (= :nothing-possible (:kind result)))))))))
 
 ;; ------------------------------------------------------------------ storage group: a full chest, then a new one
 
@@ -151,9 +151,9 @@
                                           :blocks {"10,64,0" "chest"} :containers {"10,64,0" [] "11,64,0" []}})]
           (wt/know-place! eng :chest chest)
           (full-at p [10 64 0])
-          (let [result (await (tu/child-outcome eng job {:items ["dirt"]} 30))
+          (let [result (await (wt/ending-of eng job {:items ["dirt"]} 30))
                 new-cells (disj (chests-in p) [10 64 0])]
-            (is (= {:gave-up false} result))
+            (is (= {:kind :done} result))
             (is (= {} (wt/inv p)))
             (is (= 1 (count new-cells)))
             (is (= 1 (js/Math.abs (apply + (map - (first new-cells) [10 64 0]))))
@@ -170,8 +170,8 @@
           (wt/know-place! eng :chest chest)
           (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
           (full-at p [10 64 0])
-          (let [result (await (tu/child-outcome eng job {:items ["dirt"]} 30))]
-            (is (= {:gave-up false} result))
+          (let [result (await (wt/ending-of eng job {:items ["dirt"]} 30))]
+            (is (= {:kind :done} result))
             (is (= {"chest" 1} (wt/inv p)) "no chest was placed")
             (is (= #{[10 64 0] [11 64 0]} (chests-in p)))
             (is (= [{"dirt" 5}] [(into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [11 64 0]]))]))))))))
@@ -184,8 +184,8 @@
                                           :blocks {"10,64,0" "chest"} :containers {"10,64,0" []}})]
           (wt/know-place! eng :chest chest)
           (full-at p [10 64 0])
-          (let [result (await (tu/child-outcome eng job {:items ["dirt"] :make-chests? false} 30))]
-            (is (= {:gave-up true :reason "all-chests-full" :status :stopped :moved 0} result))
+          (let [result (await (wt/ending-of eng job {:items ["dirt"] :make-chests? false} 30))]
+            (is (= {:kind :nothing-possible :cause :all-chests-full :data {:gave-up true :moved 0}} result))
             (is (= #{[10 64 0]} (chests-in p)))))))))
 
 (deftest deposit-stops-when-a-new-chest-cannot-be-had
@@ -196,10 +196,8 @@
                                           :blocks {"10,64,0" "chest"} :containers {"10,64,0" []}})]
           (wt/know-place! eng :chest chest)
           (full-at p [10 64 0])
-          (let [result (await (tu/child-outcome eng job {:items ["dirt"]} 60))]
-            (is (= true (:gave-up result)))
-            (is (= :stopped (:status result)))
-            (is (= "no-chest-item" (:reason result)))
+          (let [result (await (wt/ending-of eng job {:items ["dirt"]} 60))]
+            (is (= {:kind :condition-failed :cause :no-chest-item :data {:gave-up true :moved 0}} result))
             (is (= #{[10 64 0]} (chests-in p)))))))))
 
 ;; ------------------------------------------------------------------ chest making: spots, restarts, group upkeep
@@ -228,9 +226,9 @@
               {:keys [eng p]} env]
           (wt/know-place! eng :chest chest)
           (full-at p [10 64 0])
-          (let [result (await (tu/child-outcome eng job {:items ["dirt"]} 40))
+          (let [result (await (wt/ending-of eng job {:items ["dirt"]} 40))
                 new-cells (disj (chests-in p) [10 64 0])]
-            (is (= {:gave-up false} result))
+            (is (= {:kind :done} result))
             (is (= 1 (count new-cells)))
             (is (not (contains? new-cells [11 64 0])) "the zoned cell got no chest")))))))
 
@@ -251,12 +249,49 @@
                                                (if (= [11 64 0] pos)
                                                  (do (swap! refused conj pos) {:reason :not-allowed :pos pos})
                                                  (place/problem c))))]])))
-                result (await (tu/child-outcome eng job {:items ["dirt"]} 60))
+                result (await (wt/ending-of eng job {:items ["dirt"]} 60))
                 new-cells (disj (chests-in p) [10 64 0])]
-            (is (= {:gave-up false} result))
+            (is (= {:kind :done} result))
             (is (= #{[11 64 0]} @refused))
             (is (= 1 (count new-cells)))
             (is (not (contains? new-cells [11 64 0])) "the next cell took the chest")))))))
+
+(defn place-ends-at
+  "eng with the place job ending ending-fn's answer at the cell [11 64 0] and placing as usual elsewhere."
+  [eng end-fn]
+  (let [place-fn (get registry/jobs 'jobs.blocks.place)]
+    (assoc-in eng [:jobs 'jobs.blocks.place]
+              (assoc place-fn :round
+                     (fn ^:async place-round [c]
+                       (if (= [11 64 0] (storage/cell-of (:pos (:args c))))
+                         (end-fn c)
+                         (await ((:round place-fn) c))))))))
+
+(deftest deposit-tries-the-next-spot-when-a-place-condition-turns-up-mid-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [cause [:own-body :no-support :not-allowed :occupied :unreachable]]
+          (let [{:keys [eng p]} (setup-far one-chest-world)]
+            (wt/know-place! eng :chest chest)
+            (full-at p [10 64 0])
+            (let [eng (place-ends-at eng (fn [c] (ctx/end c :condition-failed {:reason cause :pos [11 64 0]})))
+                  result (await (wt/ending-of eng job {:items ["dirt"]} 60))
+                  new-cells (disj (chests-in p) [10 64 0])]
+              (is (= {:kind :done} result) (pr-str cause))
+              (is (= 1 (count new-cells)) (pr-str cause))
+              (is (not (contains? new-cells [11 64 0])) (pr-str cause)))))))))
+
+(deftest deposit-stops-with-no-chest-item-when-the-place-ends-needing-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far one-chest-world)]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (let [eng (place-ends-at eng (fn [c] (ctx/end c :condition-failed {:reason :need :item "chest" :pos [11 64 0]})))
+                result (await (wt/ending-of eng job {:items ["dirt"]} 60))]
+            (is (= {:kind :condition-failed :cause :no-chest-item} (select-keys result [:kind :cause])))))))))
 
 (deftest deposit-stops-with-no-spot-when-every-spot-is-declined
   (async done
@@ -268,8 +303,8 @@
           (full-at p [10 64 0])
           (let [eng (assoc-in eng [:jobs 'jobs.blocks.place]
                               (ending/wrap (assoc place-fn :conditions [[:fn (fn [c] {:reason :not-allowed :pos (storage/cell-of (:pos (:args c)))})]])))
-                result (await (tu/child-outcome eng job {:items ["dirt"]} 80))]
-            (is (= "no-chest-spot" (:reason result)))
+                result (await (wt/ending-of eng job {:items ["dirt"]} 80))]
+            (is (= {:kind :nothing-possible :cause :no-chest-spot} (select-keys result [:kind :cause])))
             (is (= #{[10 64 0]} (chests-in p)))))))))
 
 (deftest deposit-with-fetching-off-does-not-fetch-the-chest
@@ -279,8 +314,8 @@
         (let [{:keys [eng p]} (setup-far (assoc one-chest-world :inventory [{:name "dirt" :count 5} {:name "oak_planks" :count 8}]))]
           (wt/know-place! eng :chest chest)
           (full-at p [10 64 0])
-          (let [result (await (tu/child-outcome eng job {:items ["dirt"] :fetch-chests? false} 60))]
-            (is (= "no-chest-item" (:reason result)))
+          (let [result (await (wt/ending-of eng job {:items ["dirt"] :fetch-chests? false} 60))]
+            (is (= :no-chest-item (:cause result)))
             (is (empty? (wt/calls p "craft")) "no crafting")
             (is (= #{[10 64 0]} (chests-in p)))))))))
 
@@ -300,8 +335,8 @@
               eng (assoc-in eng [:jobs job] seeded)]
           (wt/know-place! eng :chest chest)
           (full-at p [10 64 0])
-          (let [result (await (tu/child-outcome eng job {:items ["dirt"]} 30))]
-            (is (= {:gave-up false} result))
+          (let [result (await (wt/ending-of eng job {:items ["dirt"]} 30))]
+            (is (= {:kind :done} result))
             (is (= {"chest" 1} (wt/inv p)) "no second chest was placed")
             (is (= #{[11 64 0]} (group-cells eng)))))))))
 
@@ -320,7 +355,7 @@
                          10 #js {:status "full" :moved 0}
                          11 #js {:status "missing" :moved 0}
                          (await (impl token args)))))
-          (await (tu/child-outcome eng job {:items ["dirt"]} 40))
+          (await (wt/ending-of eng job {:items ["dirt"]} 40))
           (is (= #{} (group-cells eng)) "the missing chest left the group"))))))
 
 (deftest deposit-uses-a-chest-outside-the-group-alone
@@ -332,8 +367,8 @@
                                           :containers {"10,64,0" [] "20,64,0" []}})]
           (wt/know-place! eng :chest chest)
           (full-at p [20 64 0])
-          (let [result (await (tu/child-outcome eng job {:chest {:x 20 :y 64 :z 0} :items ["dirt"] :make-chests? true} 40))]
-            (is (true? (:gave-up result)))
+          (let [result (await (wt/ending-of eng job {:chest {:x 20 :y 64 :z 0} :items ["dirt"] :make-chests? true} 40))]
+            (is (= {:kind :nothing-possible :cause :full} (select-keys result [:kind :cause])))
             (is (= #{[10 64 0] [20 64 0]} (chests-in p)) "no chest was made, none of the group used")
             (is (empty? (get-in @(fake/state p) [:containers [10 64 0]])))))))))
 
@@ -345,8 +380,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup-zoned one-chest-world [(assoc other-zone :min [10 60 0] :max [10 70 0])])
-              result (await (tu/child-outcome eng job {:chest chest :items ["dirt"] :ignore-zones? true} 12))]
-          (is (= {:gave-up false} result))
+              result (await (wt/ending-of eng job {:chest chest :items ["dirt"] :ignore-zones? true} 12))]
+          (is (= {:kind :done} result))
           (is (nil? (chest-place-of eng))))))))
 
 (deftest a-deposit-into-an-unzoned-chest-becomes-the-chest-place
@@ -354,6 +389,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup-zoned one-chest-world [])
-              result (await (tu/child-outcome eng job {:chest chest :items ["dirt"] :ignore-zones? true} 12))]
-          (is (= {:gave-up false} result))
+              result (await (wt/ending-of eng job {:chest chest :items ["dirt"] :ignore-zones? true} 12))]
+          (is (= {:kind :done} result))
           (is (= {:x 10 :y 64 :z 0} (chest-place-of eng))))))))

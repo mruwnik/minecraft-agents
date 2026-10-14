@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
@@ -13,17 +14,20 @@
   "Walk to the chest (one go-to) and take items out, every name in one call, until at least the wanted count of
   each name in :items is carried. What is short is re-derived from the inventory before each take, so a cut or
   restart loses nothing.
-  Ends with {:gave-up false :short {name n}}; :short is empty when everything is carried, else what the chest could
-  not supply (status stopped, reason chest-lacks, :held {name n} what the chest holds; the withdraw.short info
-  says so in words). After three failed attempts, or at once when go-to cannot reach, it ends
-  stopped {:gave-up true :reason r :short {...}} and warns. r is the inspect or transfer status, \"unreachable\" or
-  \"nothing-moved\".
-  Memory: a container missing at the recorded :chest retracts that place, with one chest_missing warn, and ends at once with reason \"missing\". No chest known: the job waits, reason :no-chest.
-  Zones: a chest in another owner's zone or claim that does not allow :take is refused before the walk and again
-  before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
-  withdraw.refused warn and takes nothing. :ignore-zones? true skips the check.
+  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (condition).
+  Ends done when everything is carried (also at once when it already is). The data of every other ending has :gave-up and
+  :short {name n}, what is still missing; the report counts the items carried toward the wanted ones.
+  - nothing-possible :chest-lacks {:gave-up false :held {name n} :short}: the chest, and the next ones of the group, hold
+    none of what is short (info withdraw.short says so in words); some of the names may have been taken.
+  - condition-failed :refused {:zones [..] :claims [..]}: a chest in another owner's zone or claim that does not allow
+    :take, checked before the walk and again before the transfer (one withdraw.refused warn, nothing taken).
+    :ignore-zones? true skips the check.
+  - condition-failed :unreachable (go-to could not arrive) or :missing (no container at the chest; a recorded :chest
+    place is retracted, one chest_missing warn): at once.
+  - nothing-possible, the cause the inspect or transfer status (:full, :nothing-moved, ..): after three failed attempts
+    in a row (warn withdraw.gave-up).
   Storage group: with no :chest, or a :chest of the group (jobs.lib.storage/group), a chest that lacks what is short
-  is followed by the next one; chest-lacks is reported only once the last has been looked into.
+  is followed by the next one; :chest-lacks is reported only once the last has been looked into.
   Stock: what the chest holds is booked in body memory :fetch/stock when inspected and after each take
   (jobs.lib.fetch), for jobs.items.obtain.")
 
@@ -41,23 +45,58 @@
        (filter (fn [[_ n]] (pos? n)))
        vec))
 
-(defn check
-  "A chest is known; else waits with reason :no-chest."
+(a/defargs settings
+  {::time-s {:default 120 :doc "Seconds a take may last: the walk and the transfers." :spec (a/num-in 0 nil)}
+   ::take-s {:default 1 :doc "Seconds a quote counts for one transfer." :spec (a/num-in 0 nil)}
+   ::walk-speed {:default 4 :doc "Blocks a second a quote counts for the walk to the chest." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
+
+(def target [:chest])
+(def defaults {:spend {:time ::time-s}})
+
+(defn no-chest
+  "A chest is known; else the cause {:reason :no-chest}."
   [c]
-  (or (boolean (storage/chest-of (ctx/view c) (:args c)))
-      (ctx/wait c {:reason :no-chest})))
+  (when-not (storage/chest-of (ctx/view c) (:args c))
+    {:reason :no-chest}))
+
+(def conditions [[:fn no-chest]])
+
+(defn done?
+  "Everything wanted is carried; :done counts the carried items toward the wanted ones."
+  [c]
+  (let [inv (u/inventory (:primitives c))
+        items (:items (:args c))
+        left (reduce + 0 (map second (shortfall inv items)))
+        want (reduce + 0 (vals items))]
+    {:done? (zero? left) :units :items :done (- want left) :left left}))
+
+(defn quote-of
+  "Time for the walk and one transfer a name short; yields up to the shortfall, none when the chest lacks it."
+  [c]
+  (let [short (shortfall (u/inventory (:primitives c)) (:items (:args c)))
+        chest (storage/chest-of (ctx/view c) (:args c))
+        walk (if chest (/ (u/dist (u/self-pos c) chest) (settings/get settings ::walk-speed)) 0)
+        t (+ walk (* (count short) (settings/get settings ::take-s)))]
+    {:uses {:time [(* (count short) (settings/get settings ::take-s)) t (max t (time-s))]}
+     :yields {:items (into {} (map (fn [[name n]] [name [0 n n]])) short)}}))
 
 (defn stop!
-  "End stopped: the reason and the shortfall as the result."
-  [c reason short]
-  (ctx/result! c {:gave-up true :reason reason :status :stopped :short (into {} short)})
-  :done)
+  "End with kind and cause: the data says :gave-up (else the job could go on) and the shortfall."
+  ([c kind cause short] (stop! c kind cause short {}))
+  ([c kind cause short more]
+   (ctx/end c kind cause (merge {:gave-up true :short (into {} short)} more))))
+
+(defn status-stop!
+  "stop! for a status that is not ok: a chest that is not there or not reachable is a fact, any other status a failure."
+  [c status short]
+  (stop! c (if (#{"missing" "unreachable"} status) :condition-failed :nothing-possible) (keyword status) short))
 
 (defn give-up!
-  "u/fail!: :again until the third failure in a row, then stop with the reason and the shortfall."
-  [c reason short]
-  (let [r (u/fail! c :withdraw.gave-up (str "withdraw gave up: " reason))]
-    (if (= :done r) (stop! c reason short) :again)))
+  "u/fail!: :again until the third failure in a row, then end nothing-possible with the status as the cause."
+  [c status short]
+  (let [r (u/fail! c :withdraw.gave-up (str "withdraw gave up: " status))]
+    (if (= :done r) (status-stop! c status short) :again)))
 
 (defn held-in
   "How many of name the inspected container items hold."
@@ -77,12 +116,12 @@
        ")"))
 
 (defn refuse!
-  "End refused: one withdraw.refused warn naming the zones and claims, the refusal as the result."
+  "End refused: one withdraw.refused warn naming the zones and claims; they are the cause and the data."
   [c verdict]
-  (let [fields (access/refusal-fields [verdict])]
+  (let [fields (access/refusal-fields [verdict])
+        refused (select-keys fields [:zones :claims])]
     (ctx/emit! c :withdraw.refused :warn (assoc fields :text (str "withdraw refused: " (access/refusal-text fields))))
-    (ctx/result! c (access/refused-result verdict))
-    :done))
+    (ctx/end c :condition-failed (assoc refused :reason :refused) (assoc refused :gave-up true))))
 
 (defn ^:async take!
   "Inspect the chest in reach and take the first short name the chest holds: :again, or :done."
@@ -90,7 +129,7 @@
   (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))]
     (if (not= "ok" (.-status seen))
       (if (deposit/retracted? c chest (.-status seen))
-        (stop! c (.-status seen) short)
+        (status-stop! c (.-status seen) short)
         (give-up! c (.-status seen) short))
       (let [_ (fetch/note-stock! c chest (.-items seen))
             pick (some (fn [[name n]] (let [held (held-in (.-items seen) name)]
@@ -101,10 +140,10 @@
                             lacking (into {} short)
                             others (rest (:open (deposit/chests c)))]
                         (when (seq others) (deposit/mark-full! c chest))
-                        (if (seq others) :again (do (ctx/emit! c :withdraw.short :info {:short lacking :held held
-                                                           :text (lacks-text (map first short) held)})
-                        (ctx/result! c {:gave-up false :status :stopped :reason "chest-lacks" :held held :short lacking})
-                        :done)))
+                        (if (seq others)
+                          :again
+                          (do (ctx/emit! c :withdraw.short :info {:short lacking :held held :text (lacks-text (map first short) held)})
+                              (ctx/end c :nothing-possible :chest-lacks {:gave-up false :held held :short lacking}))))
           (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
           :else
           (let [[name n] pick
@@ -112,7 +151,7 @@
                 r (await (ctx/act c :transfer (clj->js {:pos chest :direction "withdraw" :item name :count n})))]
             (cond
               (not= "ok" (.-status r)) (if (deposit/retracted? c chest (.-status r))
-                                           (stop! c (.-status r) short)
+                                           (status-stop! c (.-status r) short)
                                            (give-up! c (.-status r) short))
               (or (zero? (.-moved r))
                   (<= (storage/carried (u/inventory (:primitives c)) name) (storage/carried before name)))
@@ -122,14 +161,14 @@
                         :again))))))))
 
 (defn ^:async step!
-  "Walk in reach, then take one name: :again, :continue (go-to waits), or :done when nothing is short, the chest
+  "Walk in reach, then take one name: :again, :continue (go-to waits), or the ending when nothing is short, the chest
   holds none of what is short, or it stopped. The shortfall is read at the start of the step."
   [c]
   (let [{:keys [items]} (:args c)
         chest (some-> (first (:open (deposit/chests c))) deposit/cell-pos)
         short (shortfall (u/inventory (:primitives c)) items)]
     (cond
-      (empty? short) (do (ctx/result! c {:gave-up false :short {}}) :done)
+      (empty? short) (ctx/end c :done nil)
       (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
       :else
       (let [w (await (deposit/walk! c chest))]

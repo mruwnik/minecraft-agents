@@ -1,6 +1,8 @@
 (ns jobs.storage.deposit
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
@@ -17,22 +19,24 @@
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
   and armour (saplings included) and the body's 3-day food reserve (jobs.lib.cost/food-reserve) in inventory order.
   :keep leaves at least that many of a name carried. :free ends the call, clean, once that many slots are free. With explicit :items the reserve is ignored.
-  Ends with {:gave-up false} when nothing is left to put away, or stopped {:gave-up true :status :stopped :reason r
-  :moved n} (n items put in) after three failed transfers (warn chest_unusable) or at once when go-to cannot reach.
-  r is the transfer status or \"unreachable\".
+  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (condition).
+  Ends done when nothing is left to put away (also at once when nothing is). The data of every other ending is
+  {:gave-up true :moved n}, n the items put in; the report counts the items still to put away.
+  - condition-failed :refused {:zones [..] :claims [..]}: a chest in another owner's zone or claim that does not allow :put,
+    checked before the walk and again before the transfer (one deposit.refused warn, nothing put in). :ignore-zones? skips it.
+  - condition-failed :unreachable (go-to could not arrive), :missing (no container at the chest; a recorded :chest place is
+    retracted, one chest_missing warn) or :no-chest: at once.
+  - nothing-possible, the cause the transfer status (:full, :nothing-moved, ..): after three failed transfers in a row
+    (warn chest_unusable).
   Memory: a :chest argument that took at least one item and finished clean, not in another body's zone or claim, is offered to the :chest place. It is
   recorded when none is recorded or the recorded one is gone, never over a different live one (place.kept
-  event; jobs.memory.set-place moves it). A transfer that finds the recorded chest missing retracts it, with one
-  chest_missing warn, and ends at once with reason \"missing\". No chest known: waits, reason :no-chest; no chest
-  at round time gives up \"no-chest\".
-  Zones: a chest in another owner's zone or claim that does not allow :put is refused before the walk and again
-  before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
-  deposit.refused warn and puts nothing in. :ignore-zones? true skips the check.
+  event; jobs.memory.set-place moves it).
   Storage group: with no :chest, or a :chest that is the :chest place or one of the group (memory :storage/chests,
   jobs.lib.storage/group), chests are tried in turn; one that answers full or takes nothing is skipped. When all are
   full and :make-chests? is true, a chest (jobs.blocks.place child, fetching or crafting it by default; :fetch-chests? false only a carried one) goes down
-  beside a full one; a refused spot is skipped for the next free cell and joins the group; none to be had ends {:reason \"no-chest-item\"}, no free cell beside
-  {:reason \"no-chest-spot\"}, :make-chests? false {:reason \"all-chests-full\"}. Any other :chest is used alone.
+  beside a full one and joins the group. A place that ends for a reason of the cell (a zone, the body in it, nothing to place against,
+  unreachable, occupied) tries the next free spot (warn deposit.no-chest); a place that ends :need (no chest to be had) ends condition-failed
+  :no-chest-item, no free cell beside nothing-possible :no-chest-spot, :make-chests? false nothing-possible :all-chests-full. Any other :chest is used alone.
   Found goods (jobs.lib.found: bulk or containers picked up with no job reason) stay carried, even when named in :items; one
   goods.found notice (:attention :notice) names item, count and the pick-up place.
   Stock: a chest whose stock is booked in body memory :fetch/stock gets what was put in added (jobs.lib.fetch).")
@@ -62,23 +66,67 @@
        (some (fn [n] (some #(when (= n (:name %)) (pick %)) items)) wanted)
        (some #(when-not (storage/tool? (:name %)) (pick %)) items)))))
 
-(defn check
-  "A chest is known; else waits with reason :no-chest."
+(a/defargs settings
+  {::time-s {:default 300 :doc "Seconds a put-away may last: the walk, the transfers and a chest placed." :spec (a/num-in 0 nil)}
+   ::take-s {:default 1 :doc "Seconds a quote counts for one transfer." :spec (a/num-in 0 nil)}
+   ::walk-speed {:default 4 :doc "Blocks a second a quote counts for the walk to the chest." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
+
+(def target [:chest])
+(def defaults {:spend {:time ::time-s}})
+
+(defn no-chest
+  "A chest is known; else the cause {:reason :no-chest}."
   [c]
-  (or (boolean (storage/chest-of (ctx/view c) (:args c)))
-      (ctx/wait c {:reason :no-chest})))
+  (when-not (storage/chest-of (ctx/view c) (:args c))
+    {:reason :no-chest}))
+
+(def conditions [[:fn no-chest]])
+
+(defn spare-items
+  "{name n} the call would put away now: the carried names the pick rules allow, each by its spare over the keep."
+  [c]
+  (let [{:keys [items keep]} (:args c)
+        carried (u/inventory (:primitives c))
+        goods (found/goods (ctx/view c))
+        inventory (remove #(contains? goods (:name %)) carried)
+        keeps (if items keep (merge-with max (cost/food-reserve inventory) keep))]
+    (loop [left inventory, acc {}]
+      (if-let [pick (to-deposit left items keeps)]
+        (let [n (:name (:stack pick))]
+          (recur (remove #(= n (:name %)) left) (assoc acc n (- (storage/carried left n) (get keeps n 0)))))
+        acc))))
+
+(defn done?
+  "Counts only: the end of the call is the round's, which offers the chest to the :chest place first."
+  [c]
+  (let [left (reduce + 0 (vals (spare-items c)))]
+    {:done? false :units :items :done (:moved (ctx/mem c) 0) :left left}))
+
+(defn quote-of
+  "Time for the walk and one transfer a name; the chest takes what is spare, up to the free slots it has."
+  [c]
+  (let [spare (spare-items c)
+        chest (some-> (storage/chest-of (ctx/view c) (:args c)))
+        walk (if chest (/ (u/dist (u/self-pos c) chest) (settings/get settings ::walk-speed)) 0)
+        t (+ walk (* (count spare) (settings/get settings ::take-s)))]
+    {:uses {:time [(* (count spare) (settings/get settings ::take-s)) t (max t (time-s))]}}))
 
 (defn stop!
-  "End stopped: {:gave-up true :reason reason :status :stopped :moved n}, n the items put in so far."
-  [c reason]
-  (ctx/result! c {:gave-up true :reason reason :status :stopped :moved (:moved (ctx/mem c) 0)})
-  :done)
+  "End with kind and cause: {:gave-up true :moved n}, n the items put in so far."
+  [c kind cause]
+  (ctx/end c kind cause {:gave-up true :moved (:moved (ctx/mem c) 0)}))
+
+(defn status-stop!
+  "stop! for a status that is not ok: a chest that is not there or not reachable is a fact, any other status a failure."
+  [c status]
+  (stop! c (if (#{"missing" "unreachable"} status) :condition-failed :nothing-possible) (keyword status)))
 
 (defn give-up!
-  "u/fail!: :again until the third failure in a row, then stop with the reason (a warn of kind first)."
-  [c kind text reason]
+  "u/fail!: :again until the third failure in a row, then end nothing-possible with the cause (a warn of kind first)."
+  [c kind text cause]
   (let [r (u/fail! c kind text)]
-    (if (= :done r) (stop! c reason) :again)))
+    (if (= :done r) (status-stop! c (name cause)) :again)))
 
 (defn retracted?
   "retract-if-missing!, and true when status is \"missing\" at the recorded chest place (so the job ends at once)."
@@ -88,12 +136,12 @@
     (and (= "missing" status) (some? recorded) (= chest recorded))))
 
 (defn refuse!
-  "End refused: one deposit.refused warn naming the zones and claims, the refusal as the result."
+  "End refused: one deposit.refused warn naming the zones and claims; they are the cause and the data."
   [c verdict]
-  (let [fields (access/refusal-fields [verdict])]
+  (let [fields (access/refusal-fields [verdict])
+        refused (select-keys fields [:zones :claims])]
     (ctx/emit! c :deposit.refused :warn (assoc fields :text (str "deposit refused: " (access/refusal-text fields))))
-    (ctx/result! c (access/refused-result verdict))
-    :done))
+    (ctx/end c :condition-failed (assoc refused :reason :refused) (assoc refused :gave-up true))))
 
 (defn cell-pos [cell] (zipmap [:x :y :z] cell))
 
@@ -129,17 +177,23 @@
                           (:ok (access/may? c :place pos)))]
            pos))))
 
+(defn spot-failed!
+  "The spot cannot take a chest: it is not tried again. :again while another spot is free, else the no-spot stop."
+  [c pool spot]
+  (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
+  (if (seq (chest-spots c pool)) :again (stop! c :nothing-possible :no-chest-spot)))
+
 (defn ^:async make-chest!
   "Every chest of the pool is full: put a chest down beside one (a jobs.blocks.place child), remember it in the group.
-  :again, :continue while the child waits, or a stop with the reason (all-chests-full when :make-chests? is false,
+  :again, :continue while the child waits, or a stop with the cause (all-chests-full when :make-chests? is false,
   no-chest-spot, no-chest-item)."
   [c pool]
   (cond
-    (not (:make-chests? (:args c))) (stop! c "all-chests-full")
+    (not (:make-chests? (:args c))) (stop! c :nothing-possible :all-chests-full)
     :else
     (let [spot (or (:chest-spot (ctx/mem c)) (first (chest-spots c pool)))]
       (cond
-        (nil? spot) (stop! c "no-chest-spot")
+        (nil? spot) (stop! c :nothing-possible :no-chest-spot)
         (= "chest" (u/seen-name (:primitives c) spot)) ; placed by an earlier round of the child
         (do (ctx/update-mem! c dissoc :chest-spot)
             (storage/add-to-group! c spot)
@@ -148,26 +202,23 @@
         :else
         (let [pargs (merge (select-keys (:args c) [:ignore-zones?]) {:pos spot :item "chest"} (when-not (:fetch-chests? (:args c)) {:fetch false}))
               _ (ctx/update-mem! c assoc :chest-spot spot)
-              r (await (ctx/call-child c :place 'jobs.blocks.place pargs))
-              out (ctx/child-result c :place)]
+              e (await (ctx/call c :place 'jobs.blocks.place pargs))]
           (cond
-            (and (:placed out) (not= :continue r))
+            (= :continue e) :continue
+            (and (= :done (:kind e)) (:placed (:data e)))
             (do (ctx/update-mem! c dissoc :chest-spot)
                 (storage/add-to-group! c spot)
                 (u/progress! c)
                 :again)
-            (= :continue r) :continue
-            (or (= :declined r) (#{:need :unreachable} (:reason out)))
-            (let [why (if (= :declined r) (:reason (b/child-wait c :place 'jobs.blocks.place pargs)) (:reason out))]
-              (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
-              (ctx/emit! c :deposit.no-chest :warn {:text (str "cannot place a new storage chest at " (pr-str (storage/cell-of spot)) ": " (name (or why :not-ready)))})
-              (cond
-                (= :need why) (stop! c "no-chest-item")
-                (seq (chest-spots c pool)) :again
-                :else (stop! c "no-chest-spot")))
-            :else
+            (= :nothing-possible (:kind e))
             (do (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
-                (give-up! c :chest_unusable "could not place a new storage chest" "no-chest-spot"))))))))
+                (give-up! c :chest_unusable "could not place a new storage chest" :no-chest-spot))
+            :else
+            (let [why (contract/cause-key e)]
+              (ctx/emit! c :deposit.no-chest :warn {:text (str "cannot place a new storage chest at " (pr-str (storage/cell-of spot)) ": " (name why))})
+              (if (= :need why)
+                (stop! c :condition-failed :no-chest-item)
+                (spot-failed! c pool spot)))))))))
 
 (defn mark-full!
   "The chest took nothing more: skip it for the rest of the call. :again."
@@ -181,10 +232,10 @@
   [c chest]
   (if (u/within? (u/self-pos c) chest 3)
     nil
-    (let [r (await (child/call-walk c :walk {:pos chest :range 3 :escalate false :warn false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (let [e (await (child/call-walk* c :walk {:pos chest :range 3 :escalate false :warn false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (cond
-        (= :continue r) :continue
-        (:arrived (ctx/child-result c :walk)) :again
+        (= :continue e) :continue
+        (:arrived (:data e)) :again
         :else :unreachable))))
 
 (defn found-here!
@@ -215,15 +266,14 @@
       (nil? pick) (do (when (and (:chest (:args c)) (pos? (:deposited (ctx/mem c) 0))
                                  (not (access/container-refusal (assoc-in c [:args :ignore-zones?] false) :put (:chest (:args c)))))
                         (places/offer! c :chest (:chest (:args c))))
-                      (ctx/result! c {:gave-up false})
-                      :done)
-      (empty? pool) (give-up! c :chest_unusable "no chest is known" "no-chest")
+                      (ctx/end c :done nil))
+      (empty? pool) (stop! c :condition-failed :no-chest)
       (nil? chest) (await (make-chest! c pool))
       (access/container-refusal c :put chest) (refuse! c (access/container-refusal c :put chest))
       :else
       (let [w (await (walk! c chest))]
         (cond
-          (= :unreachable w) (give-up! c :chest_unusable "cannot reach the chest" "unreachable")
+          (= :unreachable w) (give-up! c :chest_unusable "cannot reach the chest" :unreachable)
           w w
           :else
         (if-let [v (access/container-refusal c :put chest)]
@@ -237,13 +287,13 @@
                     (u/progress! c)
                     (fetch/note-moved! c chest (:name (:stack pick)) (.-moved r))
                     :again)
-                (if group? (mark-full! c chest) (give-up! c :chest_unusable "nothing moved into the chest" "nothing-moved")))
+                (if group? (mark-full! c chest) (give-up! c :chest_unusable "nothing moved into the chest" :nothing-moved)))
               (cond
                 (and group? (= "full" (.-status r))) (mark-full! c chest)
                 (and group? (= "missing" (.-status r)) (not= (storage/cell-of chest) (some-> (mem/place (ctx/view c) :chest) storage/cell-of)))
                 (do (storage/drop-from-group! c chest) (mark-full! c chest))
-                (retracted? c chest (.-status r)) (stop! c (.-status r))
-                :else (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (.-status r)))))))))))
+                (retracted? c chest (.-status r)) (status-stop! c (.-status r))
+                :else (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (keyword (.-status r))))))))))))
 
 (defn ^:async round
   "The whole put-away in one call: stacks one after another (the inventory is read again before each, so a restart

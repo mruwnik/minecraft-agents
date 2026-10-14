@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [run-until-empty child-outcome]]
+            [engine.withdraw-test :as wt]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]))
 
@@ -28,6 +29,8 @@
 (def vault {:name "vault" :min [9 60 -1] :max [11 70 1] :owner "Miles"})
 (def stock {"10,64,0" [{:name "bread" :count 32} {:name "wheat" :count 30}]})
 (def refused {:gave-up true :reason :refused :zones ["vault"] :claims []})
+(def refused-ending {:kind :condition-failed :cause {:reason :refused :zones ["vault"] :claims []}
+                     :data {:gave-up true :zones ["vault"] :claims []}})
 (def own-claim {:id "c1" :owner "Miles" :status :active :until 99999999999 :min [9 60 -1] :max [11 70 1]})
 
 ;; ------------------------------------------------------------------ withdraw
@@ -44,9 +47,9 @@
                                      [vault {:ignore-zones? true} true]
                                      [nil {} true]]]
           (let [{:keys [eng p]} (setup {:containers stock} (some-> zone vector))
-                result (await (child-outcome eng 'jobs.storage.withdraw (merge {:chest chest :items {"bread" 8}} extra) 12))]
+                result (await (wt/ending-of eng 'jobs.storage.withdraw (merge {:chest chest :items {"bread" 8}} extra) 12))]
             (is (= taken? (pos? (count (calls p "transfer")))) (pr-str [zone extra]))
-            (is (= ({true {:gave-up false :short {}} false refused} taken?) result) (pr-str [zone extra]))))))))
+            (is (= ({true {:kind :done} false refused-ending} taken?) result) (pr-str [zone extra]))))))))
 
 (deftest withdraw-from-a-foreign-chest-warns-and-never-inspects-its-way-in
   (async done
@@ -64,9 +67,10 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:containers stock} [])]
           (swap! (:state (:world eng)) assoc :area-claims {:value [own-claim]})
-          (let [result (await (child-outcome eng 'jobs.storage.withdraw {:chest chest :items {"bread" 8}} 12))]
+          (let [result (await (wt/ending-of eng 'jobs.storage.withdraw {:chest chest :items {"bread" 8}} 12))]
             (is (empty? (calls p "transfer")))
-            (is (= {:gave-up true :reason :refused :zones [] :claims ["c1"]} result))))))))
+            (is (= {:kind :condition-failed :cause {:reason :refused :zones [] :claims ["c1"]}
+                    :data {:gave-up true :zones [] :claims ["c1"]}} result))))))))
 
 ;; ------------------------------------------------------------------ deposit
 
@@ -79,9 +83,9 @@
                                    [(assoc vault :allow #{:put}) {} true]
                                    [vault {:ignore-zones? true} true]]]
           (let [{:keys [eng p]} (setup {:containers {"10,64,0" []} :inventory [{:name "dirt" :count 5}]} [zone])
-                result (await (child-outcome eng 'jobs.storage.deposit (merge {:chest chest} extra) 12))]
+                result (await (wt/ending-of eng 'jobs.storage.deposit (merge {:chest chest} extra) 12))]
             (is (= put? (pos? (count (calls p "transfer")))) (pr-str [zone extra]))
-            (is (= ({true {:gave-up false} false refused} put?) result) (pr-str [zone extra]))))))))
+            (is (= ({true {:kind :done} false refused-ending} put?) result) (pr-str [zone extra]))))))))
 
 ;; ------------------------------------------------------------------ the parents propagate :refused
 

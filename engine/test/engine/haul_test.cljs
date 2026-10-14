@@ -7,6 +7,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.deposit-test :as dt]
+            [engine.withdraw-test :as wt]
             [engine.test-util :as tu :refer [child-outcome run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
@@ -45,7 +46,8 @@
         (let [{:keys [eng p]} (setup {:containers {"10,64,0" (stacks "a" 40) "10,64,4" (stacks "b" 40) "20,64,0" []}})
               result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0] [10 64 4]]} 120))
               cs (containers p)]
-          (is (= {:gave-up false :trips 3} (select-keys result [:gave-up :trips])))
+          (is (= :done (:status result)))
+          (is (= 3 (:trips result)))
           (is (= 400 (reduce + (vals (:moved result)))))
           (is (empty? (get cs [10 64 0])))
           (is (empty? (get cs [10 64 4])))
@@ -67,7 +69,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:containers {"10,64,0" [{:name "a" :count 5} {:name "keepme" :count 7}] "20,64,0" []}})
               result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]] :keep ["keepme"]} 60))]
-          (is (= false (:gave-up result)))
+          (is (= :done (:status result)))
           (is (= [{:name "keepme" :count 7}] (map #(select-keys % [:name :count]) (get (containers p) [10 64 0]))))
           (is (= ["a"] (map :name (get (containers p) [20 64 0])))))))))
 
@@ -79,8 +81,8 @@
       (fn ^:async t []
         (doseq [args [{} {:from []} {:to [20 64 0]}]]
           (let [{:keys [eng]} (setup {:containers {"20,64,0" []}})
-                result (await (child-outcome eng 'jobs.storage.haul args 10))]
-            (is (= {:gave-up true :status :stopped :reason :no-source} (select-keys result [:gave-up :status :reason])) (pr-str args))))))))
+                result (await (wt/ending-of eng 'jobs.storage.haul args 10))]
+            (is (= {:kind :condition-failed :cause {:reason :no-source}} (select-keys result [:kind :cause])) (pr-str args))))))))
 
 (deftest haul-cut-at-a-transfer-resumes-without-doubling-the-load
   (async done
@@ -118,27 +120,27 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:containers two-sources})]
           (dt/full-at p [20 64 0])
-          (let [result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]] :make-chests? false} 30))]
-            (is (= {:gave-up true :status :stopped :reason :to-full} (select-keys result [:gave-up :status :reason])))))))))
+          (let [result (await (wt/ending-of eng 'jobs.storage.haul {:from [[10 64 0]] :make-chests? false} 30))]
+            (is (= {:kind :nothing-possible :cause :to-full :data {:gave-up true}} (update result :data select-keys [:gave-up])))))))))
 
 (deftest haul-stops-unreachable-when-the-source-cannot-be-reached
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:containers two-sources :unreachable ["10,64,0"]})
-              result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]]} 30))]
-          (is (= {:gave-up true :status :stopped :reason :unreachable} (select-keys result [:gave-up :status :reason]))))))))
+              result (await (wt/ending-of eng 'jobs.storage.haul {:from [[10 64 0]]} 30))]
+          (is (= {:kind :condition-failed :cause :unreachable} (select-keys result [:kind :cause]))))))))
 
 (deftest haul-stops-refused-for-a-source-in-another-agents-zone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args gave-up reason] [[{} true :refused] [{:ignore-zones? true} false nil]]]
+        (doseq [[args gave-up cause] [[{} true :refused] [{:ignore-zones? true} false nil]]]
           (let [w (ew/of-data {} {} [{:name "farm" :owner "Miles" :min [10 60 -5] :max [12 70 5]}])
                 {:keys [eng p]} (setup {:containers two-sources} w)
-                result (await (child-outcome eng 'jobs.storage.haul (merge {:from [[10 64 0]]} args) 30))]
-            (is (= gave-up (:gave-up result)) (pr-str args))
-            (is (= reason (:reason result)) (pr-str args))
+                result (await (wt/ending-of eng 'jobs.storage.haul (merge {:from [[10 64 0]]} args) 30))]
+            (is (= gave-up (boolean (:gave-up (:data result)))) (pr-str args))
+            (is (= cause (some-> result :cause :reason)) (pr-str args))
             (is (= gave-up (boolean (seq (get (containers p) [10 64 0])))) (pr-str args))))))))
 
 (deftest haul-stops-bag-full-when-nothing-can-be-deposited-to-make-room
@@ -146,5 +148,5 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:inventory (vec (repeat 35 {:name "iron_pickaxe" :count 1})) :containers two-sources})
-              result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]]} 30))]
-          (is (= {:gave-up true :status :stopped :reason :bag-full} (select-keys result [:gave-up :status :reason]))))))))
+              result (await (wt/ending-of eng 'jobs.storage.haul {:from [[10 64 0]]} 30))]
+          (is (= {:kind :condition-failed :cause :bag-full} (select-keys result [:kind :cause]))))))))

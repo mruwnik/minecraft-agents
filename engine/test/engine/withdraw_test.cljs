@@ -27,6 +27,20 @@
 (def chest {:x 10 :y 64 :z 0})
 (def job 'jobs.storage.withdraw)
 
+(defn ^:async ending-of
+  "Run job with args as a ctx/call child of a recording parent, at most n ticks: the child's {:kind :cause :data}
+  (nil when it does not end); a nil cause is left out."
+  [eng job args n]
+  (let [out (atom nil)
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [e (await (ctx/call c :kid job args))]
+                           (if (= :continue e) :continue (do (reset! out (into {} (remove (comp nil? val)) (select-keys e [:kind :cause :data]))) :done))))}
+        eng (assoc-in eng [:jobs 'recording-parent] parent)]
+    (core/submit! eng '(recording-parent) {})
+    (await (run-until-empty eng n))
+    @out))
+
 (deftest shortfall-lists-what-is-still-needed-in-order
   (let [items [{:name "bread" :count 3} {:name "dirt" :count 2} {:name "bread" :count 4}]]
     (are [wanted expected] (= expected (vec (wd/shortfall items wanted)))
@@ -41,29 +55,29 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "bread" :count 4}] :containers {"10,64,0" [{:name "bread" :count 32}]}})
-              result (await (child-outcome eng job {:chest chest :items {"bread" 16}} 8))]
+              result (await (ending-of eng job {:chest chest :items {"bread" 16}} 8))]
           (is (= {"bread" 16} (inv p)))
           (is (= [{:name "bread" :count 20}] (chest-items p)))
-          (is (= {:gave-up false :short {}} result)))))))
+          (is (= {:kind :done} result)))))))
 
 (deftest withdraw-with-enough-carried-moves-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "bread" :count 20}] :containers {"10,64,0" [{:name "bread" :count 32}]}})
-              result (await (child-outcome eng job {:chest chest :items {"bread" 16}} 4))]
+              result (await (ending-of eng job {:chest chest :items {"bread" 16}} 4))]
           (is (zero? (count (calls p "transfer"))))
-          (is (= {:gave-up false :short {}} result)))))))
+          (is (= {:kind :done} result)))))))
 
 (deftest withdraw-reports-what-the-chest-lacks
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]}})
-              result (await (child-outcome eng job {:chest chest :items (array-map "bread" 16 "stone_hoe" 2)} 8))]
+              result (await (ending-of eng job {:chest chest :items (array-map "bread" 16 "stone_hoe" 2)} 8))]
           (is (= {"bread" 5} (inv p)))
-          (is (= {:gave-up false :status :stopped :reason "chest-lacks" :held {}
-                  :short {"bread" 11 "stone_hoe" 2}} result))
+          (is (= {:kind :nothing-possible :cause :chest-lacks
+                  :data {:gave-up false :held {} :short {"bread" 11 "stone_hoe" 2}}} result))
           (is (some #(= :withdraw.short (:kind %)) @seen)))))))
 
 (deftest withdraw-names-the-reason-and-the-held-items-when-the-chest-lacks-them
@@ -94,8 +108,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]} :unreachable ["10,64,0"]})
-              result (await (child-outcome eng job {:chest chest :items {"bread" 3}} 8))]
-          (is (= {:gave-up true :status :stopped :reason "unreachable" :short {"bread" 3}} result))
+              result (await (ending-of eng job {:chest chest :items {"bread" 3}} 8))]
+          (is (= {:kind :condition-failed :cause :unreachable :data {:gave-up true :short {"bread" 3}}} result))
           (is (some #(= :withdraw.gave-up (:kind %)) @seen))
           (is (= [] (:list (core/state eng)))))))))
 
@@ -103,19 +117,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[forced reason] [[{:status "full" :moved 0} "full"] [{:status "ok" :moved 0} "nothing-moved"]]]
+        (doseq [[forced reason] [[{:status "full" :moved 0} :full] [{:status "ok" :moved 0} :nothing-moved]]]
           (let [{:keys [eng p]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]}})]
             (.override (.-world p) "transfer" (fn ^:async f [_ _ _] (clj->js forced)))
-            (is (= {:gave-up true :status :stopped :reason reason :short {"bread" 3}}
-                   (await (child-outcome eng job {:chest chest :items {"bread" 3}} 8))))))))))
+            (is (= {:kind :nothing-possible :cause reason :data {:gave-up true :short {"bread" 3}}}
+                   (await (ending-of eng job {:chest chest :items {"bread" 3}} 8))))))))))
 
 (deftest withdraw-gives-up-on-a-missing-chest
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {})]
-          (is (= {:gave-up true :status :stopped :reason "missing" :short {"bread" 3}}
-                 (await (child-outcome eng job {:chest chest :items {"bread" 3}} 8)))))))))
+          (is (= {:kind :condition-failed :cause :missing :data {:gave-up true :short {"bread" 3}}}
+                 (await (ending-of eng job {:chest chest :items {"bread" 3}} 8)))))))))
 
 (deftest withdraw-gives-up-when-the-known-chest-is-gone
   (async done
@@ -123,8 +137,8 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {})]
           (know-place! eng :chest chest)
-          (is (= {:gave-up true :status :stopped :reason "missing" :short {"bread" 3}}
-                 (await (child-outcome eng job {:items {"bread" 3}} 8))))
+          (is (= {:kind :condition-failed :cause :missing :data {:gave-up true :short {"bread" 3}}}
+                 (await (ending-of eng job {:items {"bread" 3}} 8))))
           (is (some #(= :chest_missing (:kind %)) @seen))
           (is (= [] (:list (core/state eng)))))))))
 
@@ -143,9 +157,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:containers {"20,64,0" [{:name "bread" :count 9} {:name "stone_hoe" :count 3}]}})
-              result (await (child-outcome eng job {:chest {:x 20 :y 64 :z 0} :items (array-map "bread" 4 "stone_hoe" 2)} 1))]
+              result (await (ending-of eng job {:chest {:x 20 :y 64 :z 0} :items (array-map "bread" 4 "stone_hoe" 2)} 1))]
           (is (= {"bread" 4 "stone_hoe" 2} (inv p)))
-          (is (= {:gave-up false :short {}} result))
+          (is (= {:kind :done} result))
           (is (= 2 (count (calls p "transfer"))))
           (is (= 1 (count (tu/walked-to eng)))))))))
 
@@ -154,8 +168,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]}})
-              result (await (child-outcome eng job {:chest chest :items (array-map "bread" 16)} 1))]
-          (is (= {:gave-up false :status :stopped :reason "chest-lacks" :held {} :short {"bread" 11}} result)))))))
+              result (await (ending-of eng job {:chest chest :items (array-map "bread" 16)} 1))]
+          (is (= {:kind :nothing-possible :cause :chest-lacks :data {:gave-up false :held {} :short {"bread" 11}}} result)))))))
 
 (deftest withdraw-counts-what-moved-before-a-transfer-timed-out
   (async done
@@ -166,8 +180,8 @@
                      (fn ^:async f [token args impl]
                        (await (impl token args))
                        #js {:status "timeout" :inventoryChange #js {"bread" 16}}))
-          (let [result (await (child-outcome eng job {:chest chest :items {"bread" 16}} 8))]
-            (is (= {:gave-up false :short {}} result))
+          (let [result (await (ending-of eng job {:chest chest :items {"bread" 16}} 8))]
+            (is (= {:kind :done} result))
             (is (= {"bread" 16} (inv p)))
             (is (= 1 (count (calls p "transfer"))))))))))
 
@@ -179,6 +193,17 @@
                                       :containers {"10,64,0" [{:name "dirt" :count 3}] "11,64,0" [{:name "bread" :count 9}]}})]
           (know-place! eng :chest chest)
           (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
-          (let [result (await (child-outcome eng job {:items {"bread" 5}} 12))]
+          (let [result (await (ending-of eng job {:items {"bread" 5}} 12))]
             (is (= {"bread" 5} (inv p)))
-            (is (= {:gave-up false :short {}} result))))))))
+            (is (= {:kind :done} result))))))))
+
+(deftest withdraw-reports-the-carried-counts-and-lists-the-need-as-items
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory [{:name "bread" :count 4}] :containers {"10,64,0" [{:name "bread" :count 5}]}})
+              result (await (child-outcome eng job {:chest chest :items {"bread" 16}} 8))]
+          (is (= :stopped (:status result)))
+          (is (= :chest-lacks (:reason result)))
+          (is (= {:units :items :done 9 :left 7} (select-keys (:report (:ending result)) [:units :done :left]))
+              "a partial take reports what it carried, not done"))))))

@@ -537,14 +537,14 @@
         (let [{:keys [eng p]} (setup chest-world)
               result (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0} :keep {"oak_log" 5 "bread" 9}} 4))]
           (is (zero? (count (calls p "transfer"))))
-          (is (= {:gave-up false} result)))))))
+          (is (= {:status :done} result)))))))
 
 (deftest deposit-reports-that-it-gave-nothing-up-when-it-ends-empty
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup chest-world)]
-          (is (= {:gave-up false} (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0}} 8)))))))))
+          (is (= {:status :done} (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0}} 8)))))))))
 
 (deftest deposit-reports-the-reason-when-it-gives-up
   (async done
@@ -552,7 +552,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup chest-world)]
           (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "full" :moved 0}))
-          (is (= {:gave-up true :reason "full"}
+          (is (= {:gave-up true :reason :full}
                  (select-keys (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0}} 8)) [:gave-up :reason]))))))))
 
 (deftest deposit-reports-an-unreachable-chest-as-unreachable
@@ -560,7 +560,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup (assoc chest-world :unreachable ["10,64,0"]))]
-          (is (= {:gave-up true :reason "unreachable"}
+          (is (= {:gave-up true :reason :unreachable}
                  (select-keys (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0}} 8)) [:gave-up :reason]))))))))
 
 ;; ------------------------------------------------------------- harvest-wood

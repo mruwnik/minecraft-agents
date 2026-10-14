@@ -114,7 +114,7 @@
           (.override (.-world p) "transfer" (fn ^:async f [_ _ _] (clj->js {:status "full" :moved 0})))
           (let [result (await (child-outcome eng job kit-args 12))]
             (is (true? (:gave-up result)))
-            (is (= "full" (:reason result)))
+            (is (= :full (:reason result)))
             (is (some #(= :withdraw.gave-up (:kind %)) @seen))
             (is (= [] (:list (core/state eng))))))))))
 

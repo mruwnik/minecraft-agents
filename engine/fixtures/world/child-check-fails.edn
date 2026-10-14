@@ -12,12 +12,12 @@
    :memory [{:kind :chest :data {:pos #xyz [24 0 16]}}]
    :act [[:job (jobs.storage.withdraw {:items {"bread" 5}})]]
    :expect [{:event {:source :job :kind :chest_missing} :within-s 40 :of-job true}
-            {:event {:source :job :kind :stopped :data {:gave-up true :reason "missing"}} :within-s 40 :of-job true}]}
+            {:event {:source :job :kind :stopped :data {:reason :missing}} :within-s 40 :of-job true}]}
   {:name "deposit-recorded-chest-gone-ends-missing"
    :memory [{:kind :chest :data {:pos #xyz [24 0 16]}}]
    :act [[:job (jobs.storage.deposit {:items ["bread"]})]]
    :expect [{:event {:source :job :kind :chest_missing} :within-s 40 :of-job true}
-            {:event {:source :job :kind :stopped :data {:gave-up true :reason "missing"}} :within-s 40 :of-job true}]}
+            {:event {:source :job :kind :stopped :data {:reason :missing}} :within-s 40 :of-job true}]}
   {:name "withdraw-no-chest-known-waits-with-a-reason"
    :act [[:job (jobs.storage.withdraw {:items {"bread" 5}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-chest}} :within-s 20 :of-job true}
@@ -28,8 +28,8 @@
             {:no-event {:source :job :kind :stopped} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-chest}}}]}
   {:name "withdraw-explicit-missing-chest-gives-up-without-retracting"
    :act [[:job (jobs.storage.withdraw {:chest #at [24 0 16] :items {"bread" 5}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:gave-up true :reason "missing"}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :chest_missing} :for-s 80 :until {:source :job :kind :stopped :data {:gave-up true :reason "missing"}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :missing}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :chest_missing} :for-s 80 :until {:source :job :kind :stopped :data {:reason :missing}}}]
    :limit-s 90}
   {:name "untouched-withdraw-completes"
    :blocks [[:set [24 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:8}]}"]]
