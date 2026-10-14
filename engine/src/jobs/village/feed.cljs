@@ -17,13 +17,15 @@
   :item is the food to give (carried), nil for the first carried of bread, carrot, potato, beetroot. Villagers pick
   up only bread, potato, carrot, wheat, beetroot and seeds: any other :item is refused at the check (:bad-args).
   When none is carried it is fetched (jobs.lib.fetch, :fetch true; a need wait when :fetch is off or failed).
-  Result: {:fed n :item name}; when n is below :count also :status :stopped and :reason, with warn feed.gave-up:
-  - \"gone\": the villager is not seen within :radius (also a non-villager under the uuid).
-  - \"no-food\": none carried and none fetched.
-  - \"unreachable\": three blocked walks in a row, or eight legs without getting within reach.
-  - \"not-taken\": three tosses in a row that the villager did not collect (full inventory, not wanted), or the
-    toss status when the toss is refused three times, or \"litter\" when the drop cannot be collected back.
-  Success is info feed.done. What was fed is booked after each toss, so a cut and restart does not feed twice; a
+  Ends with the data {:fed n :item name}. :done when the villager took :count (info feed.done), or the call's :least
+  (default :all) when it gave up after that many. Otherwise, with warn feed.gave-up and the cause:
+  - condition-failed :no-food: none carried and none fetched (a listed call with :fetch off waits for food).
+  - nothing-possible :gone: the villager is not seen within :radius (also a non-villager under the uuid).
+  - nothing-possible :unreachable: three blocked walks in a row, or eight legs without getting within reach.
+  - nothing-possible :not-taken: three tosses in a row that the villager did not collect (full inventory, not
+    wanted), or the toss status as a keyword when the toss is refused three times, or :litter when the drop
+    cannot be collected back.
+  A :villager that is no uuid, or an :item villagers do not pick up, is a condition that waits (:bad-args). What was fed is booked after each toss, so a cut and restart does not feed twice; a
   toss cut before its receipt is settled on restart, back at its spot (what left the inventory, was not eaten and
   does not lie there counts as taken; none taken counts as refused) and its drop is collected back. Drops lying near
   before the toss are never collected.
@@ -74,32 +76,57 @@
         {:reason :need :item item :count left}
         {:reason :need :any-of foods :count left}))))
 
-(defn check
-  "A villager uuid is given and :item, when given, is food a villager picks up; a missing food is fetched or waits."
+(def target [:villager])
+
+(def defaults {:least :all})
+
+(defn bad-args
+  "The cause :bad-args when no villager uuid is given or :item is not food a villager picks up."
   [c]
   (let [{:keys [villager item]} (:args c)]
     (cond
-      (not (string? villager)) (ctx/wait c {:reason :bad-args :why "needs a villager uuid"})
-      (and item (not (contains? wanted item))) (ctx/wait c {:reason :bad-args :why (str "villagers do not pick up " item)})
-      :else (if-let [w (problem c)] (fetch/check c job w) true))))
+      (not (string? villager)) {:reason :bad-args :why "needs a villager uuid"}
+      (and item (not (contains? wanted item))) {:reason :bad-args :why (str "villagers do not pick up " item)})))
 
-(defn finish!
-  "Hand the parent the result and return :done."
-  [c extra]
-  (ctx/result! c (merge {:fed (fed c) :item (or (:item (ctx/mem c)) (:item (:args c)))} extra))
-  :done)
+(defn no-food
+  "The need as the cause when none is carried and the call will not fetch it (or a fetch for it failed lately)."
+  [c]
+  (when-let [w (problem c)]
+    (when-not (fetch/check c job w) (assoc w :why "no food carried and no fetch for it"))))
+
+(def conditions [[:fn bad-args] [:fn no-food]])
+
+(defn done?
+  "The items taken against :count. Never :done? itself: the job ends with its event and data."
+  [c]
+  {:done? false :units :items :done (fed c) :left (max 0 (- (:count (:args c)) (fed c)))})
+
+(defn quote-of [c]
+  {:uses {:time [0 (* 10 (:count (:args c) 1)) ##Inf]}})
+
+(defn ending-of
+  "The ending of a feeding that stopped for reason: :done when the call's :least was taken, condition-failed :no-food, else
+  nothing-possible with reason as the cause."
+  [c reason]
+  (let [least (or (:least (ctx/frozen-call c)) :all)
+        need (if (= :all least) (:count (:args c)) least)
+        data {:fed (fed c) :item (or (:item (ctx/mem c)) (:item (:args c)))}]
+    (cond
+      (or (nil? reason) (>= (fed c) need)) (ctx/end c :done nil data)
+      (= :no-food reason) (ctx/end c :condition-failed {:reason :no-food :need (problem c)} data)
+      :else (ctx/end c :nothing-possible reason data))))
 
 (defn stop!
-  "Warn and end stopped with a reason."
+  "Warn and end with the ending of reason (a keyword)."
   [c reason text]
   (ctx/emit! c :feed.gave-up :warn {:reason reason :text text :fed (fed c)})
-  (finish! c {:status :stopped :reason reason}))
+  (ending-of c reason))
 
 (defn done!
   "Info and end: the villager took :count."
   [c]
   (ctx/emit! c :feed.done :info {:fed (fed c) :text (str "villager took " (fed c) " " (:item (ctx/mem c)))})
-  (finish! c {}))
+  (ending-of c nil))
 
 (defn find-villager
   "The villager entity with uuid within radius, or nil."
@@ -112,11 +139,11 @@
   "No food carried: fetch it when :fetch allows, else end no-food. :again once it arrived, :continue, or :done."
   [c]
   (if-not (and (fetch/opts c job) (problem c))
-    (stop! c "no-food" "no food to give")
+    (stop! c :no-food "no food to give")
     (let [r (await (fetch/fetch-untimed! c job problem))]
       (cond
         r r
-        (problem c) (stop! c "no-food" "no food to give")
+        (problem c) (stop! c :no-food "no food to give")
         :else :again))))
 
 (defn ^:async walk!
@@ -132,7 +159,7 @@
             _ (ctx/update-mem! c #(-> % (assoc :blocked (if ok? 0 (inc (:blocked % 0)))) (update :walks (fnil inc 0))))
             m (ctx/mem c)]
         (if (or (>= (:blocked m 0) 3) (>= (:walks m 0) (max-walks)))
-          (stop! c "unreachable" "cannot get within reach of the villager")
+          (stop! c :unreachable "cannot get within reach of the villager")
           :again)))))
 
 (defn lying
@@ -171,7 +198,7 @@
         (if (= "collected" (.-status r))
           (do (u/progress! c) :again)
           (if (= :done (u/fail! c :feed.gave-up "feed gave up: litter"))
-            (finish! c {:status :stopped :reason "litter"})
+            (ending-of c :litter)
             :again))))))
 
 (defn tossed!
@@ -207,7 +234,7 @@
         (tossed! c e item (.-count r) r)
         (do (ctx/update-mem! c dissoc :tossing)
             (if (= :done (u/fail! c :feed.gave-up (str "feed gave up: toss " status)))
-              (finish! c {:status :stopped :reason status})
+              (ending-of c (keyword status))
               :again))))))
 
 (defn settle!
@@ -237,8 +264,8 @@
                      (await (walk! c (:at (:tossing m)))))
       (:cleanup m) (await (clean-up! c (:cleanup m)))
       (>= (fed c) count) (done! c)
-      (>= (:refused m 0) (max-refused)) (stop! c "not-taken" "the villager does not take the food")
-      (nil? e) (stop! c "gone" "the villager is not here")
+      (>= (:refused m 0) (max-refused)) (stop! c :not-taken "the villager does not take the food")
+      (nil? e) (stop! c :gone "the villager is not here")
       (nil? item) (await (fetch-food! c))
       (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach)) (await (toss! c e item))
       :else (await (walk! c (u/pos-of (.-pos e)))))))

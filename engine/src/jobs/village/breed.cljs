@@ -136,8 +136,8 @@
           :continue
           (let [res (ctx/child-result c (keyword (str "feed-" next)))]
             (cond
-              (= "no-food" (:reason res)) (stop! c seen "no-food" "no food to feed the villagers")
-              (:status res) (failed-pair! c)
+              (= :no-food (:reason res)) (stop! c seen "no-food" "no food to feed the villagers")
+              (= :stopped (:status res)) (failed-pair! c)
               :else (do (ctx/update-mem! c update :fed conj next) :again))))))))
 
 (defn ^:async wait!

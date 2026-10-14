@@ -66,10 +66,11 @@
 
 (defn all-taken [uuid] (fn [n] {uuid n}))
 
-(deftest check-wants-a-uuid-and-a-food-a-villager-takes
-  (are [args ok] (= ok (boolean ((:check (get registry/jobs job)) {:args args :primitives nil :mem (constantly {})})))
+(deftest bad-args-need-a-uuid-and-a-food-a-villager-takes
+  (are [args ok] (= ok (nil? (feed/bad-args {:args args})))
     {:villager nil :item "bread"} false
-    {:villager "v-1" :item "diamond"} false))
+    {:villager "v-1" :item "diamond"} false
+    {:villager "v-1" :item "bread"} true))
 
 (deftest feeds-the-count-and-names-the-villager-in-the-receipt
   (async done
@@ -77,7 +78,7 @@
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (feed {:entities [(villager 6)] :inventory bread} {:villager "v-1" :count 2} 40
                                                  #(taking % (all-taken "v-1"))))]
-          (is (= {:fed 2 :item "bread"} @out))
+          (is (= {:fed 2 :item "bread"} (select-keys @out [:fed :item])))
           (is (= {"bread" 3} (inv p)))
           (is (= 1 (count (tosses p))))
           (is (gave? s :feed.done)))))))
@@ -96,7 +97,7 @@
         (doseq [[taker left] [[(fn [_] nil) {"bread" 5}] [(all-taken "someone-else") {}]]]
           (let [{:keys [p out] :as s} (await (feed {:entities [(villager 2)] :inventory bread} {:villager "v-1" :count 2} 60
                                                    #(taking % taker)))]
-            (is (= {:fed 0 :item "bread" :status :stopped :reason "not-taken"} @out))
+            (is (= {:fed 0 :item "bread" :status :stopped :reason :not-taken} (select-keys @out [:fed :item :status :reason])))
             (is (= 3 (count (tosses p))))
             (is (= left (inv p)) "a drop nobody took is collected back, one someone else took is gone")
             (is (gave? s :feed.gave-up))))))))
@@ -106,7 +107,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out]} (await (feed {:inventory bread} {:villager "v-1"} 20 identity))]
-          (is (= {:fed 0 :item nil :status :stopped :reason "gone"} @out))
+          (is (= {:fed 0 :item nil :status :stopped :reason :gone} (select-keys @out [:fed :item :status :reason])))
           (is (empty? (tosses p))))))))
 
 (deftest a-blocked-walk-is-unreachable
@@ -115,7 +116,7 @@
       (fn ^:async t []
         (let [{:keys [p out]} (await (feed {:entities [(villager 10)] :inventory bread :unreachable ["10,64,0"]}
                                            {:villager "v-1"} 60 #(taking % (all-taken "v-1"))))]
-          (is (= "unreachable" (:reason @out)))
+          (is (= :unreachable (:reason @out)))
           (is (= 0 (:fed @out)))
           (is (empty? (tosses p))))))))
 
@@ -125,7 +126,7 @@
       (fn ^:async t []
         (let [{:keys [p out]} (await (feed {:entities [(villager 2)] :inventory bread} {:villager "v-1"} 40
                                            #(.override (.-world %) "toss" (fn ^:async f [_ _ _] #js {:status "no-item" :count 0}))))]
-          (is (= {:fed 0 :item nil :status :stopped :reason "no-item"} (select-keys @out [:fed :item :status :reason])))
+          (is (= {:fed 0 :item nil :status :stopped :reason :no-item} (select-keys @out [:fed :item :status :reason])))
           (is (= 3 (count (tosses p)))))))))
 
 (deftest a-drop-that-cannot-be-collected-ends-as-litter
@@ -136,7 +137,7 @@
                                          (fn [p]
                                            (taking p (fn [_] nil))
                                            (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "unreachable" :gained #js []})))))]
-          (is (= "litter" (:reason @out))))))))
+          (is (= :litter (:reason @out))))))))
 
 (deftest no-food-carried-with-fetch-off-feeds-nothing
   (async done
@@ -173,7 +174,7 @@
               {:keys [p out]} (await (feed {:entities [(villager 2) other] :inventory bread} {:villager "v-1" :count 2} 60
                                            #(taking % (fn [_] nil))))
               left (filter #(= "item" (:kind %)) (:entities @(fake/state p)))]
-          (is (= "not-taken" (:reason @out)))
+          (is (= :not-taken (:reason @out)))
           (is (= {"bread" 5} (inv p)) "the body's own tosses came back")
           (is (= [50] (map :id left)) "another's drop stays where it lay"))))))
 
@@ -198,7 +199,7 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (feed {:entities [(villager 6)] :inventory [{:name "bread" :count 3}]}
                                          {:villager "v-1" :count 2} 40 identity (cut-toss) nil))]
-          (is (= {:fed 2 :item "bread"} @out)))))))
+          (is (= {:fed 2 :item "bread"} (select-keys @out [:fed :item]))))))))
 
 (deftest food-eaten-during-a-cut-is-not-counted-as-fed
   (async done
@@ -225,7 +226,7 @@
       (fn ^:async t []
         (let [{:keys [p out]} (await (feed {:entities [(villager 6)] :inventory bread}
                                            {:villager "v-1" :count 1} 40 identity (cut-toss :refused 2) nil))]
-          (is (= "not-taken" (:reason @out)))
+          (is (= :not-taken (:reason @out)))
           (is (empty? (tosses p))))))))
 
 (deftest a-cut-toss-is-settled-back-at-its-spot

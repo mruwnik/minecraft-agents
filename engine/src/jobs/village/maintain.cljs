@@ -122,7 +122,7 @@
               (seq bad) (assoc :status :stopped :reason "incomplete"))
         text (if (seq bad)
                (str "maintain done, incomplete: "
-                    (str/join ", " (map #(str (name %) (some->> (or (:reason (report %)) (when (= :no-pos (:skipped (report %))) "no-pos")) (str " "))) bad)))
+                    (str/join ", " (map #(str (name %) (some->> (or (some-> (:reason (report %)) name) (when (= :no-pos (:skipped (report %))) "no-pos")) (str " "))) bad)))
                (str "maintain done: " (count (filter :skipped (vals report))) " steps skipped"))]
     (ctx/emit! c :maintain.done (if (seq bad) :warn :info) (assoc out :text text))
     (ctx/result! c out)

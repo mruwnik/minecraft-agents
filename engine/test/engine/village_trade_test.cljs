@@ -6,7 +6,8 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu :refer [child-outcome]]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.village.trade :as trade]))
 
 (def clock
   "One clock for every engine of a test run; each tick moves it on, so a backoff pause ends."
@@ -56,6 +57,11 @@
 
 (defn fillers [n] (mapv (fn [i] {:name (str "item_" i) :count 1}) (range n)))
 
+(defn plain
+  "A child result as the data it ended with: no :status of a done one, no :ending of a stopped one."
+  [r]
+  (if (= :done (:status r)) (dissoc r :status) (dissoc r :ending)))
+
 (defn ^:async trade
   "Run the job on a world of entities and inventory, after (prepare p); [result p seen]."
   ([world args] (trade world args identity))
@@ -63,7 +69,7 @@
    (let [{:keys [eng p seen]} (start {:world (cond-> {:entities entities :inventory inventory} unreachable (assoc :unreachable unreachable))})
          _ (prepare p)
          result (await (child-outcome eng job (merge {:villager "v-1" :buy "bread"} args) 80))]
-     [result p seen])))
+     [(plain result) p seen])))
 
 (defn trade-ops
   "An override of the trade primitive recording each op into the atom ops; the first buy asks for only one trade when first-only."
@@ -87,8 +93,8 @@
             (is (contains? (kinds seen) kind) label)))
         cases)))
 
-(deftest trade-check-wants-a-villager-and-an-item
-  (are [args ok] (= ok ((:check (get registry/jobs job)) {:args args}))
+(deftest trade-bad-args-need-a-villager-and-an-item
+  (are [args ok] (= ok (nil? (trade/bad-args {:args args})))
     {:villager "v-1" :buy "bread"} true
     {:villager "v-1" :buy nil} false
     {:villager nil :buy "bread"} false))
@@ -140,23 +146,23 @@
         (await (wait-all
                 [{:label "sells out mid-buy"
                   :world {:entities [(villager [(bread {:maxUses 2})]) ] :inventory [{:name "emerald" :count 10}]}
-                  :args {:count 5} :want {:bought 2 :paid {"emerald" 2} :item "bread" :status :stopped :reason "sold-out"}
+                  :args {:count 5} :want {:bought 2 :paid {"emerald" 2} :item "bread" :status :stopped :reason :sold-out}
                   :have {"emerald" 8 "bread" 2} :kind :trade.gave-up}
                  {:label "sold out from the start"
                   :world {:entities [(villager [(bread {:maxUses 2 :uses 2})])] :inventory [{:name "emerald" :count 10}]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "sold-out"}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :sold-out}
                   :have {"emerald" 10} :kind :trade.gave-up}
                  {:label "no payment"
                   :world {:entities [(villager [(bread {})])]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "payment-short"}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :payment-short}
                   :have {} :kind :trade.gave-up}
                  {:label "partial payment"
                   :world {:entities [(villager [(bread {})])] :inventory [{:name "emerald" :count 2}]}
-                  :args {:count 3} :want {:bought 2 :paid {"emerald" 2} :item "bread" :status :stopped :reason "payment-short"}
+                  :args {:count 3} :want {:bought 2 :paid {"emerald" 2} :item "bread" :status :stopped :reason :payment-short}
                   :have {"bread" 2} :kind :trade.gave-up}
                  {:label "no room"
                   :world {:entities [(villager [(bread {})])] :inventory (into [{:name "emerald" :count 5}] (fillers 35))}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "no-room"}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :no-room}
                   :have (into {"emerald" 5} (map (fn [i] [(:name i) 1])) (fillers 35)) :kind :trade.gave-up}]))))))
 
 (deftest the-price-limit-is-the-adjusted-price-of-the-first-stack
@@ -167,7 +173,7 @@
                 [{:label "over the limit"
                   :world {:entities [(villager [(bread {:cost [{:item "emerald" :count 4}]}) (bread {:cost [{:item "emerald" :count 3}]})])]
                           :inventory [{:name "emerald" :count 10}]}
-                  :args {:max-price 2} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "price" :price 3}
+                  :args {:max-price 2} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :price :price 3}
                   :have {"emerald" 10} :kind :trade.gave-up}
                  {:label "at the limit"
                   :world {:entities [(villager [(bread {:cost [{:item "emerald" :count 3}]})])]
@@ -182,19 +188,19 @@
         (await (wait-all
                 [{:label "not in the world"
                   :world {:entities []}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "gone"} :have {} :kind :trade.gave-up}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :gone} :have {} :kind :trade.gave-up}
                  {:label "a cow under the uuid is not listed as a villager"
                   :world {:entities [{:id 2 :name "cow" :kind "passive" :uuid "v-1" :pos {:x 1 :y 64 :z 0}}]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "gone"} :have {} :kind :trade.gave-up}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :gone} :have {} :kind :trade.gave-up}
                  {:label "unemployed"
                   :world {:entities [(villager [] {:profession nil})]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "no-offers"} :have {} :kind :trade.gave-up}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :no-offers} :have {} :kind :trade.gave-up}
                  {:label "nothing for the item"
                   :world {:entities [(villager [{:cost [{:item "emerald" :count 1}] :gives {:item "apple" :count 1}}])]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "no-offer"} :have {} :kind :trade.gave-up}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :no-offer} :have {} :kind :trade.gave-up}
                  {:label "busy villager, the window never opens"
                   :world {:entities [(villager [(bread {})] {:busy true})] :inventory [{:name "emerald" :count 3}]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "window"} :have {"emerald" 3} :kind :trade.gave-up}]))))))
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :window} :have {"emerald" 3} :kind :trade.gave-up}]))))))
 
 (deftest a-far-villager-is-walked-to
   (async done
@@ -274,7 +280,7 @@
         (let [ops (atom [])
               [result p] (await (trade {:entities [(villager [(bread {})] {:busy true})] :inventory [{:name "emerald" :count 3}]} {}
                                        #(.override (.-world %) "trade" (trade-ops ops false))))]
-          (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason "window"} result))
+          (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason :window} result))
           (is (= ["offers" "offers" "offers"] @ops))
           (is (= {"emerald" 3} (inv p))))))))
 
@@ -306,7 +312,7 @@
         (let [[result _ seen] (await (trade {:entities [(villager [(bread {})] {:pos {:x 30 :y 64 :z 0}})] :inventory [{:name "emerald" :count 3}]
                                              :unreachable ["30,64,0"]}
                                             {}))]
-          (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason "unreachable"} result))
+          (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason :unreachable} result))
           (is (contains? (kinds seen) :trade.gave-up)))))))
 
 (deftest a-buy-that-timed-out-after-the-goods-landed-counts-them

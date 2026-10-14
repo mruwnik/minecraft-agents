@@ -7,7 +7,8 @@
             [engine.registry :as registry]
             [engine.fake :as fake]
             [engine.village-trade-test :as vt]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.village.roll :as roll]))
 
 (def job 'jobs.village.roll)
 
@@ -77,8 +78,8 @@
 (defn digs [p] (count (vt/calls p "dig")))
 (defn workstation [p] (get-in @(fake/state p) [:blocks ws-pos]))
 
-(deftest roll-check-wants-villager-pos-item-and-want
-  (are [args ok] (= ok ((:check (get registry/jobs job)) {:args args}))
+(deftest roll-bad-args-need-villager-pos-item-and-want
+  (are [args ok] (= ok (nil? (roll/bad-args {:args args})))
     {:villager "v-1" :pos [2 64 0] :item "lectern" :want "enchanted_book"} true
     {:villager nil :pos [2 64 0] :item "lectern" :want "enchanted_book"} true
     {:pos [2 64 0] :profession "librarian" :trade "enchanted_book"} true
@@ -137,7 +138,7 @@
         (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")])]
                                             :scripts (repeat 10 [(offer "paper")])}
                                            {:tries 2}))]
-          (is (= {:found false :rolls 2 :status :stopped :reason "no-match"} (select-keys result [:found :rolls :status :reason])))
+          (is (= {:found false :rolls 2 :status :stopped :reason :no-match} (select-keys result [:found :rolls :status :reason])))
           (is (= "lectern" (workstation p)))
           (is (contains? (vt/kinds seen) :roll.gave-up)))))))
 
@@ -146,7 +147,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (roll {:entities [(librarian [(assoc (offer "paper") :uses 1)])]} {}))]
-          (is (= {:found false :status :stopped :reason "locked"} (select-keys result [:found :status :reason])))
+          (is (= {:found false :status :stopped :reason :locked} (select-keys result [:found :status :reason])))
           (is (zero? (digs p))))))))
 
 (deftest a-baby-or-nitwit-cannot-be-rolled
@@ -155,15 +156,15 @@
       (fn ^:async t []
         (let [[baby] (await (roll {:entities [(librarian [(offer "paper")] {:baby true})]} {}))
               [nitwit] (await (roll {:entities [(librarian [(offer "paper")] {:profession "nitwit"})]} {}))]
-          (is (= "baby" (:reason baby)))
-          (is (= "nitwit" (:reason nitwit))))))))
+          (is (= :baby (:reason baby)))
+          (is (= :nitwit (:reason nitwit))))))))
 
 (deftest a-missing-villager-is-gone
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (roll {:entities []} {}))]
-          (is (= {:found false :status :stopped :reason "gone"} (select-keys result [:found :status :reason])))
+          (is (= {:found false :status :stopped :reason :gone} (select-keys result [:found :status :reason])))
           (is (zero? (digs p))))))))
 
 (deftest no-claim-when-the-villager-never-takes-the-workstation
@@ -171,7 +172,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]} {}))]
-          (is (= {:found false :status :stopped :reason "no-claim"} (select-keys result [:found :status :reason])))
+          (is (= {:found false :status :stopped :reason :no-claim} (select-keys result [:found :status :reason])))
           (is (= "lectern" (workstation p))))))))
 
 (deftest a-restart-with-the-workstation-missing-places-it-first
@@ -192,7 +193,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {ws-key "stone"}} {}))]
-          (is (= "occupied" (:reason result))))))))
+          (is (= :occupied (:reason result))))))))
 
 (deftest a-workstation-in-anothers-zone-is-not-broken
   (async done
@@ -209,7 +210,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true} {}))]
-          (is (= {:found false :rolls 1 :status :stopped :reason "still-employed"}
+          (is (= {:found false :rolls 1 :status :stopped :reason :still-employed}
                  (select-keys result [:found :rolls :status :reason])))
           (is (= 1 (digs p)))
           (is (= "lectern" (workstation p))))))))
@@ -219,7 +220,10 @@
   [job-sym result]
   (fn [env]
     (let [j (get (:jobs (:eng env)) job-sym)]
-      (assoc-in env [:eng :jobs job-sym] (assoc j :round (fn ^:async stubbed [c] (ctx/result! c result) :done))))))
+      (assoc-in env [:eng :jobs job-sym] (assoc j :round (fn ^:async stubbed [c]
+                                                           (if (= :stopped (:status result))
+                                                             (ctx/end c :nothing-possible (:reason result))
+                                                             (do (ctx/result! c result) :done))))))))
 
 (def stopped {:status :stopped :reason :no-tool})
 
@@ -228,7 +232,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :wrap (stub-job 'jobs.blocks.dig stopped)} {}))]
-          (is (= {:found false :rolls 0 :status :stopped :reason "dig-failed"} (select-keys result [:found :rolls :status :reason])))
+          (is (= {:found false :rolls 0 :status :stopped :reason :dig-failed} (select-keys result [:found :rolls :status :reason])))
           (is (= "lectern" (workstation p)) "nothing was broken"))))))
 
 (deftest a-place-child-that-stops-ends-place-failed
@@ -238,7 +242,7 @@
         (let [[result p seen] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
                                             :blocks {ws-key "air"}
                                             :wrap (stub-job 'jobs.blocks.place stopped)} {}))]
-          (is (= {:found false :status :stopped :reason "place-failed"} (select-keys result [:found :status :reason])))
+          (is (= {:found false :status :stopped :reason :place-failed} (select-keys result [:found :status :reason])))
           (is (= "air" (workstation p)))
           (is (contains? (vt/kinds seen) :roll.gave-up)))))))
 
@@ -267,7 +271,7 @@
                                        :floor [2 0 2 0]
                                        :blocks {ws-key "air"}}
                                       {}))]
-          (is (= {:found false :status :stopped :reason "place-failed"} (select-keys result [:found :status :reason])))
+          (is (= {:found false :status :stopped :reason :place-failed} (select-keys result [:found :status :reason])))
           (is (= "air" (workstation p))))))))
 
 (deftest a-villager-out-of-reach-that-cannot-be-walked-to-is-unreachable
@@ -277,7 +281,7 @@
         (let [[result p] (await (roll {:entities [(librarian [(offer "paper")] {:pos {:x 20 :y 64 :z 0}})]
                                        :wrap (stub-job 'jobs.movement.go-to {:arrived false :why :no-path})}
                                       {}))]
-          (is (= {:found false :rolls 0 :status :stopped :reason "unreachable"} (select-keys result [:found :rolls :status :reason])))
+          (is (= {:found false :rolls 0 :status :stopped :reason :unreachable} (select-keys result [:found :rolls :status :reason])))
           (is (zero? (digs p))))))))
 
 (deftest offers-that-cannot-be-read-three-times-end-window
@@ -285,7 +289,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")] {:busy true})]} {}))]
-          (is (= {:found false :status :stopped :reason "window"} (select-keys result [:found :status :reason])))
+          (is (= {:found false :status :stopped :reason :window} (select-keys result [:found :status :reason])))
           (is (zero? (digs p)))
           (is (contains? (vt/kinds seen) :roll.gave-up)))))))
 
@@ -327,5 +331,5 @@
         (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
               _ (unemploys-after! env 60000 [(offer "enchanted_book")])
               result (await (child-outcome env {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :claim-s 5} 300))]
-          (is (= "still-employed" (:reason result)))
+          (is (= :still-employed (:reason result)))
           (is (= "lectern" (workstation (:p env)))))))))
