@@ -307,7 +307,7 @@
     :plant (select-keys r [:planted :reason :skipped :refused :short])
     :fertilize (select-keys r [:used])
     :compost (select-keys r [:fed :bone-meal :reason])
-    :deposit (select-keys r [:gave-up :reason])))
+    :deposit (assoc (select-keys r [:reason]) :gave-up (boolean (:gave-up r)))))
 
 (defn part-report
   "{:steps :field} of the pass just made over the field c works (and the plan's notes about it)."
