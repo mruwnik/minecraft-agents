@@ -50,7 +50,8 @@
          [:await {:source :job :kind :dig-in.sealed} 150]
          [:await {:source :job :kind :completed :data {:name "jobs.survival.night"}} 120]
          [:rcon "execute positioned $X $Y $Z run setblock ~17 ~-1 ~16 minecraft:dirt"]
-         [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~16.5"]
+         ;; integer execute coordinates are block centres, so ~16 ~ ~16 is the start cell's centre (~16.5 lands on [17 0 17])
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]
          [:time-set 14000]
          [:job (jobs.survival.night)]
          [:wait-s 60]]
