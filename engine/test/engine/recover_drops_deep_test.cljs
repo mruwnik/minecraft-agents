@@ -156,3 +156,15 @@
           (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])))
           (is (= :stopped (:status res)) (pr-str res))
           (is (re-find #"28 64 0" (str (:text res))) (pr-str res)))))))
+
+(deftest a-stair-the-tunnel-cannot-start-abandons-the-pile-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:blocks deep-ground
+                                         :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}]})]
+          (die! eng {:pos pile-pos :inventory pile} 5000)
+          (core/submit! eng job {})
+          (await (run-until-empty eng 120))
+          (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
+          (is (= 1 (count (filter #(= :recover-drops.deep (:kind %)) @seen)))))))))

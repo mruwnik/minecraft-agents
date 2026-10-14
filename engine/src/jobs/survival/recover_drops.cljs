@@ -610,7 +610,7 @@
                 r (when-not danger (await (ctx/call-child c :dig 'jobs.access.tunnel args)))]
             (cond
               danger (decline-danger! c danger)
-              (= :done r) :next
+              (= :done (:status (ctx/child-result c :dig))) :next
               (not (ctx/alive? c)) :declined
               (and (= :continue r) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
               (= :continue r) (decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
