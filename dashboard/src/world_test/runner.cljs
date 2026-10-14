@@ -663,7 +663,10 @@
   [c]
   (str (:id c) "  " (name (lease/night-class c)) (when-let [t (lease/barrier-ticks c)] (str ":" t))))
 
-(def night-batch-marker-dir (path/join (os/tmpdir) "mc-night-batches"))
+;; Machine-wide and outside every checkout: sweeps run in throwaway worktrees, and /tmp does not survive a reboot.
+(def machine-state-dir (path/join (os/homedir) ".local" "state" "minecraft-claude"))
+
+(def night-batch-marker-dir (path/join machine-state-dir "night-batches"))
 
 (defn night-batch-set?
   "Whether a case of the batch already put the night in place (the marker lives until `--night-batch-end`)."
@@ -697,9 +700,9 @@
   (.then (send [(str "gamerule " sleep-rule " " value)])
          (fn [_] (log-command! opts (str "gamerule " sleep-rule " " value) why))))
 
-;; The server value to restore lives outside /tmp (gitignored state/), written BEFORE the set: a killed run leaves it for the next one.
+;; The server value to restore lives in the machine-wide state dir, written BEFORE the set: a killed run leaves it for the next one.
 (defn sleep-state-file [opts]
-  (path/join (or (:sleep-state-dir opts) (repo-path "state")) "world-test-sleep-rule.edn"))
+  (path/join (or (:sleep-state-dir opts) machine-state-dir) "world-test-sleep-rule.edn"))
 
 (defn read-sleep-state
   "{:old n :batch id :pid p} of a recorded set, or nil (none, or unreadable)."
@@ -709,7 +712,7 @@
       (try (reader/read-string (str (fs/readFileSync file "utf8"))) (catch :default _ nil)))))
 
 (defn restore-sleep-rule!
-  "Restores the recorded players_sleeping_percentage (logged) and removes the state file; never writes 101 back.
+  "Restores the recorded players_sleeping_percentage (logged) and removes the state file; a recorded 101 (our own leftover) restores the vanilla 100.
   :only-dead? restores only when the recording pool is gone (same PID and start time), not a batch still running;
   :batch only a state recorded for that batch; :pool only a state recorded by that pool PID."
   [send opts why & [{:keys [only-dead? batch pool]}]]
@@ -720,7 +723,7 @@
       (and batch (not= batch (:batch st))) (js/Promise.resolve nil)
       (and pool (not= pool pid)) (js/Promise.resolve nil)
       (and only-dead? pid (pid-alive? pid) (or (nil? start) (= start (proc-start pid)))) (js/Promise.resolve nil)
-      :else (.then (if (and old (not= 101 old)) (set-sleep-rule! send (update opts :time-log #(or % (:time-log st))) old why) (js/Promise.resolve nil))
+      :else (.then (if old (set-sleep-rule! send (update opts :time-log #(or % (:time-log st))) (if (= 101 old) 100 old) why) (js/Promise.resolve nil))
                    (fn [_] (fs/rmSync file #js {:force true}) old)))))
 
 (defn claim-night-batch!
@@ -734,7 +737,7 @@
 (defn start-sleep-rule!
   "First setter of a night batch: claims the batch marker (a second starter gets nil and sets nothing). Unless the batch needs
   the vanilla night skip (:sleep-skip) or time changes are not allowed, reads players_sleeping_percentage; only when that read
-  parses (and is not 101) it records the old value in the state file, then sets 101 (sleepers never skip the night early).
+  parses (101 counts as the vanilla 100) it records the old value in the state file, then sets 101 (sleepers never skip the night early).
   Resolves to the old value (nil when nothing was changed)."
   [send opts rc batch dir why]
   (cond
@@ -743,10 +746,10 @@
     (read-sleep-state opts) (js/Promise.resolve nil)
     :else (.then (send [(str "gamerule " sleep-rule)])
                  (fn [[reply]]
-                   (let [old (parse-gamerule reply)]
-                     (when (or (nil? old) (= 101 old))
+                   (let [old (some-> (parse-gamerule reply) (#(if (= 101 %) 100 %)))]
+                     (when (nil? old)
                        (log-command! opts (str "gamerule " sleep-rule " left alone (read " (pr-str reply) ")") why))
-                     (if (or (nil? old) (= 101 old))
+                     (if (nil? old)
                        nil
                        (do (fs/mkdirSync (path/dirname (sleep-state-file opts)) #js {:recursive true})
                            (fs/writeFileSync (sleep-state-file opts) (pr-str {:old old :batch batch :pid (or (:owner-pid opts) (owner-pid)) :start (proc-start (or (:owner-pid opts) (owner-pid))) :time-log (:time-log opts) :at (js/Date.now)}))

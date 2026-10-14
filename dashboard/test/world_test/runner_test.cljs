@@ -1117,18 +1117,36 @@
 (defn- start! [sent old opts batch dir]
   (r/start-sleep-rule! (fake-send sent old) (assoc opts :allow-time true :sleep-state-dir dir) night-rc batch dir "why"))
 
-(deftest an-unparsable-read-or-a-read-of-101-sets-nothing
+(deftest an-unparsable-read-sets-nothing
   (async done
     (let [sent (atom []) dir (tmp-dir)]
       (-> (start! sent "garbage" {} "n1" dir)
-          (.then (fn [old] (is (nil? old))
-                   (start! sent 101 {} "n2" dir)))
           (.then (fn [old]
                    (is (nil? old))
                    (is (nil? (r/read-sleep-state {:sleep-state-dir dir})) "no old value recorded")
                    (is (not-any? #(re-find #" 101$" %) @sent) "the rule was never set")
                    (fs/rmSync dir #js {:recursive true})
                    (done)))))))
+
+(deftest a-read-of-101-counts-as-the-vanilla-100
+  (async done
+    (let [sent (atom []) dir (tmp-dir)]
+      (-> (start! sent 101 {} "n1" dir)
+          (.then (fn [old]
+                   (is (= 100 old))
+                   (is (= 100 (:old (r/read-sleep-state {:sleep-state-dir dir}))))
+                   (reset! sent [])
+                   (fs/writeFileSync (path/join dir "world-test-sleep-rule.edn") (pr-str {:old 101 :batch "n1" :pid 2147483000}))
+                   (r/restore-sleep-rule! (fake-send sent 101) {:sleep-state-dir dir} "crashed" {:only-dead? true})))
+          (.then (fn [_]
+                   (is (= ["gamerule players_sleeping_percentage 100"] @sent) "a recorded 101 restores 100")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest the-markers-live-in-one-machine-wide-dir-outside-any-checkout
+  (let [home (path/join (os/homedir) ".local" "state" "minecraft-claude")]
+    (is (= (path/join home "world-test-sleep-rule.edn") (r/sleep-state-file {})))
+    (is (= (path/join home "night-batches") r/night-batch-marker-dir))))
 
 (deftest two-starters-of-one-batch-set-once-and-record-the-real-value
   (async done
