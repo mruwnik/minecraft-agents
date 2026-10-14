@@ -447,6 +447,46 @@
           (is (<= 6 @hits) "the fight went on past three pauses that each landed a hit")
           (is (not-any? #(= "no_response" (name (:kind %))) @seen) "a landed hit is a response"))))))
 
+(deftest respond-looks-again-before-ending-a-fight-that-yielded-when-no-danger-is-seen-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 1 0)]})
+              calls (atom 0)
+              blink {:check (constantly true)
+                     :round (fn ^:async blink [_c]
+                              (let [n (swap! calls inc)
+                                    es (:entities @(fake/state p))]
+                                (swap! (fake/state p) assoc :entities [])
+                                (when (= 1 n) (js/setImmediate #(swap! (fake/state p) assoc :entities es)))
+                                (if (= 1 n) :continue :done)))}
+              eng (assoc-in eng [:jobs 'jobs.survival.fight-back] blink)]
+          (core/submit! eng respond {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (<= 2 @calls) "one empty check after a :continue does not end the round"))))))
+
+(deftest a-refired-reflex-remembers-the-hits-the-fight-landed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:health 20} :inventory [{:name "stone_sword" :count 1}] :entities [(zombie 7 1 0)]})
+              fights (atom 0)
+              hitter {:check (constantly true)
+                      :round (fn ^:async hit [c]
+                               (swap! fights inc)
+                               (ctx/update-mem! c assoc-in [:struck 7] {:hits 3 :health 2})
+                               (swap! (fake/state p) assoc :entities [])
+                               :continue)}
+              eng (assoc-in eng [:jobs 'jobs.survival.fight-back] hitter)]
+          (core/submit! eng respond {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= 1 @fights))
+          (fake/swap-self! p assoc :health 10)
+          (fake/add-entity! p (zombie 7 1 0))
+          (core/submit! eng respond {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= 2 @fights) "the second encounter fights the nearly dead zombie, no flight"))))))
+
 ;; ----------------------------------------------------------------- retreat
 
 (def retreat '(jobs.survival.retreat))

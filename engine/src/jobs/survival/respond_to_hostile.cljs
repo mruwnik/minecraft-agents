@@ -4,6 +4,7 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.body :as body]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
@@ -124,6 +125,22 @@
   (cond-> {:name (.-name e) :distance (danger-q/mob-distance p e) :hits (:hits struck 0)}
     (number? (:health struck)) (assoc :health (:health struck))))
 
+(def struck-policy
+  "The hits fight-back landed outlive the round for this long, so a refired reflex still counts them."
+  {:cap 8 :ttl 30000})
+
+(defn struck-of
+  "The :struck entry of mob id: the fight child's own, else the one an earlier round left in memory (:struck-hits)."
+  [c id]
+  (or (get-in (ctx/mem c) [:children :fight :struck id])
+      (get-in (mem/latest (ctx/view c) :struck-hits) [:data id])))
+
+(defn keep-struck!
+  "Writes the fight child's :struck map to memory, so a refire after a lost round keeps the hits."
+  [c]
+  (when-let [struck (seq (get-in (ctx/mem c) [:children :fight :struck]))]
+    (ctx/remember! c :struck-hits (into {} struck) struck-policy)))
+
 (defn note-hits
   "Pure: the times (ms) of hits taken in the last window-ms (only a flight counts them), given the earlier ones, now and the health before and now."
   [hits now before after window-ms]
@@ -182,7 +199,7 @@
                                :reserve reserve
                                :damage (cost/fight-damage {:weapon (combat/best-weapon p weapons)
                                                            :equipment (cost/equipment-of (.-equipment self))
-                                                           :mobs (map #(mob-of p (get-in (ctx/mem c) [:children :fight :struck (.-id %)]) %) near)})}))
+                                                           :mobs (map #(mob-of p (struck-of c (.-id %)) %) near)})}))
         stay? (stay-under-roof? c near)
         decision (if (and (= :flee chosen) (>= (count hits) 2) (not-any? combat/creeper? near) (not-any? combat/enderman? near))
                    :fight
@@ -194,6 +211,7 @@
       (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof at night: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))
     (ctx/update-mem! c assoc :decision decision)
     (let [result (await (run-child c decision a stay?))]
+      (keep-struck! c)
       (cond
         (or (not= :declined result) stay?) result
         (and (= :fight decision) (leave-heard? c near)) (leave-heard! c near)
@@ -261,13 +279,20 @@
    :ids (set (map #(.-id %) hs))
    :fight (select-keys (get-in (ctx/mem c) [:children :fight]) [:struck :no-damage :blocked :killed])})
 
+(defn fight-unsettled?
+  "Whether a round that now sees no danger may be a blink: the fight child yielded :continue or the body was hurt within
+  hit-window-ms (a mob knocked a cell off is still there). The round then looks once more before it ends."
+  [c outcome]
+  (boolean (or (= :continue outcome)
+               (seq (ctx/since c :hurt (- (ctx/now c) hit-window-ms))))))
+
 (defn ^:async round
   "One whole attempt: respond (or let the retreat hide on) while a danger is near; stopped when a child stops, or
   :no_response after max-unchanged calls in a row that changed nothing; never for the time a danger stays."
   [c]
   (when-not (contains? (ctx/mem c) :goal)
     (ctx/update-mem! c assoc :goal (or (:goal (:args c)) (goal/interrupted-goal (ctx/view c) (:root c)))))
-  (loop [unchanged 0]
+  (loop [unchanged 0 looked? false]
     (let [hs (near c)
           before (signature c hs)
           outcome (cond
@@ -281,11 +306,12 @@
             (r/stop! c (:reason res) (:text res) :cause (r/cause-of slot res)))
         (cond
           (= :left-heard outcome) :done
-          (not (or (seq after) (hiding? c))) :done
+          (and (empty? after) (not (hiding? c)) (not (and (not looked?) (fight-unsettled? c outcome)))) :done
+          (and (empty? after) (not (hiding? c))) (do (await (pace/pace!)) (recur unchanged true))
           :else
           (let [n (if (= before (signature c after)) (inc unchanged) 0)]
             (if (>= n max-unchanged)
               (do (mute-heard! c hs)
                   (ctx/emit! c :no_response :warn {:text "the hostile is still near and nothing changed in three tries"})
                   (r/stop! c :no_response "a hostile is still near and three tries changed nothing"))
-              (do (await (pace/pace!)) (recur n)))))))))
+              (do (await (pace/pace!)) (recur n false)))))))))
