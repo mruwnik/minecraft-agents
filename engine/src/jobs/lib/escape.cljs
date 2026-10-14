@@ -2,6 +2,7 @@
   "Reads for a body that cannot walk to its goal from where it stands, so jobs.movement.go-to can pick how to make a
   way (its escalation):
   - pit-depth: how many levels up from the feet are walled on at least three sides.
+  - rim-pillar: how high to pillar beside a wall to step onto its top (a pit too wide for pit-depth).
   - door: the cells of a thin wall straight ahead with a floor beyond it (jobs.access.clear-path digs them).
   - stair-heading: a heading with a solid block in front to stair up on (jobs.access.stair).
   - wall-spot: the nearest cell beside a wall, for a body in a hollow with no wall next to it.
@@ -105,6 +106,27 @@
   ([block-at unseen? feet]
    (count (take-while #(walled-at? block-at (if (< % look-levels) (constantly false) unseen?) (up feet %))
                       (range (max-depth))))))
+
+(defn rim-height
+  "How many levels h (2 to max-depth) the side of feet along d ([dx dz]) is solid from the feet up, with a floor on top
+  and room for the body above it; nil when it is not such a wall."
+  [block-at feet d]
+  (let [side (ahead feet d 1)
+        h (count (take-while #(solid? (block-at (up side %))) (range (inc (max-depth)))))]
+    (when (and (<= 2 h (max-depth)) (rules/solid-floor? block-at (up side (dec h)))
+               (passable? (block-at (up side h))) (passable? (block-at (up side (inc h)))))
+      h)))
+
+(defn rim-pillar
+  "The lowest pillar beside a wall along one of dirs that leaves the body a step below the wall's top: h - 1 for a
+  wall h high (rim-height), with the feet column clear up to the head of a body on the rim. nil when none."
+  [block-at feet dirs]
+  (some->> dirs
+           (keep (fn [d] (when-let [h (rim-height block-at feet d)]
+                           (when (every? #(passable? (block-at (up feet %))) (range 2 (+ h 2)))
+                             (dec h)))))
+           seq
+           (apply min)))
 
 (defn stair-cuts
   "The cells a stair up along dir ([dx dz]) cuts from feet in n steps, step by step (plan.shape/step-cells)."
@@ -290,6 +312,7 @@
   allows (go-to: no other owner's zone or claim). opts :skip is a set of steps that already failed (a stair heading
   that failed: [:stair :east]): the next one is chosen.
   - {:step :pillar :height d :item}: in a pit d deep with room above the head and at least d pillar blocks carried.
+    Beside a wall (a pit too wide to be walled on three sides) when nothing above may be dug: d the rim-pillar.
   - {:step :stair :heading kw :steps n}: a block in front to stair up on, n how far the goal is above or the pit's
     depth, whichever is more, at most max-depth (the pit's depth when the longer cut is not all diggable?), every cell
     of its cut diggable?.
@@ -328,7 +351,10 @@
          spot (delay (when (and dir (not (skip :approach)) (not (skip :clear-path)) (walled-side? block-at feet))
                        (door-spot p feet dir #(diggable? block-at may-dig? own? %))))
          back (delay (when-not (or (skip :approach) (skip :clear-path)) (door-back p feet)))
-         door? (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))]
+         door? (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))
+         rim (delay (when (and item (not (skip :pillar)))
+                      (when-let [n (rim-pillar block-at feet (distinct (cond->> cardinals dir (cons dir))))]
+                        (when (>= count n) n))))]
      (cond
        (and pillar-blocks? (passable? (block-at (up feet 2))))
        {:step :pillar :height depth :item item}
@@ -341,6 +367,9 @@
 
        door?
        {:step :clear-path :heading (heading-names dir)}
+
+       @rim
+       {:step :pillar :height @rim :item item}
 
        @spot
        {:step :approach :pos @spot}

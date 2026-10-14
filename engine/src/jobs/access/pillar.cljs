@@ -9,6 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
+            [jobs.lib.look :as sight]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.pace :as pace]
             [jobs.lib.spent :as spent]
@@ -38,6 +39,8 @@
   - the two cells above the head are clear
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell passes jobs.lib.access.rules/may-place?
+  - no seen mob but a hostile stands in the cell: it waits for one to move on (a failed jump while one does is not counted), up to
+    ::mob-wait-ms, then gives up :mob-in-cell (:mob its name)
 
   A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: it waits to land,
   walks back to where it began (go-to child if off the column, then a short centring nudge) and tries again; up to 8 per pillar, then :off-column.
@@ -45,7 +48,7 @@
   Run short part way, it gives up :too-few-blocks. Every give-up ends the job, so a parent running this as a child
   reads the ending.
 
-  Ends :done, or with a cause {:reason r ...}: :condition-failed for :too-few-blocks (:short still owed), :ceiling,
+  Ends :done, or with a cause {:reason r ...}: :condition-failed for :too-few-blocks (:short still owed), :mob-in-cell, :ceiling,
   :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable and :bad-args; :nothing-possible for
   :off-column (the body left the column it started in) and :place-failed (3 failed jumps in a row with the body in
   the column, :detail the primitive's reason). Data {:cells [[x y z] ...] :built n :height n}: :cells are this job's
@@ -61,6 +64,8 @@
 (a/defargs settings
   {::max-height {:default 64 :doc "Tallest pillar a call may ask for, in blocks." :spec (a/int-in 0 nil)}
    ::max-failures {:default 3 :doc "Failed placements before the pillar gives up." :spec (a/int-in 0 nil)}
+   ::mob-wait-ms {:default 10000 :doc "How long a pillar waits for a mob to leave the cell it places into before it gives up :mob-in-cell, in ms." :spec (a/int-in 0 nil)}
+   ::mob-step-ms {:default 500 :doc "Wait between looks for a mob in the pillar's cell, in ms." :spec (a/int-in 1 nil)}
    ::land-step-ms {:default 50 :doc "Wait between looks for the ground after a pillar, in ms." :spec (a/int-in 0 nil)}
    ::land-max-steps {:default 20 :doc "Looks for the ground after a pillar before it goes on." :spec (a/int-in 0 nil)}
    ::block-s {:default 0.6 :doc "Mean seconds one pillar block takes (jump, place, land), for the quote." :spec (a/num-in 0 nil)}})
@@ -115,6 +120,23 @@
                                            {:block-at (constantly "air") :cell cell :feet (up cell 1) :ledger ledger}))]
             (when-not (:ok v) (assoc v :at cell))))
         cells))
+
+(def no-hitbox
+  "Entities a block is placed through."
+  #{"item" "experience_orb" "arrow" "spectral_arrow" "area_effect_cloud" "marker"})
+
+(defn mob-in
+  "The first of entities (seen-entities maps; width 0.6 and height 1.8 when not given) whose box overlaps cell, or
+  nil: the server refuses a block there."
+  [entities [x y z]]
+  (first (filter (fn [{:keys [name pos width height]}]
+                   (let [hw (/ (or width 0.6) 2)
+                         {ex :x ey :y ez :z} pos]
+                     (and ex (not (no-hitbox name))
+                          (< (- ex hw) (inc x)) (> (+ ex hw) x)
+                          (< (- ez hw) (inc z)) (> (+ ez hw) z)
+                          (< ey (inc y)) (> (+ ey (or height 1.8)) y))))
+                 entities)))
 
 (defn give-up [reason & {:as more}] (merge {:step :give-up :reason reason} more))
 
@@ -185,6 +207,7 @@
       (do (ctx/emit! c :pillar.gave-up :warn
                      (assoc result :text (str "pillar gave up at " (count cells) " of " height ": " (name (:reason step))
                                               (when (:short step) (str ", " (:short step) " blocks short"))
+                                              (when (:mob step) (str ", " (:mob step) " stays in the cell"))
                                               (when (:at step) (str " at " (pr-str (:at step)))))))
           (ctx/end c (if (nothing-possible (:reason step)) :nothing-possible :condition-failed) (dissoc step :step) result)))))
 
@@ -282,9 +305,33 @@
         (do (await (walk/centre! c hx hz))
             (if (centred? c [x z] [hx hz]) :in :failed))))))
 
+(defn mob-in-cell
+  "A seen mob other than a hostile in cell: one to wait for. A hostile there is not waited on while it hits; the
+  failed places end the pillar, for its caller to deal with the mob."
+  [c cell]
+  (mob-in (remove #(= "hostile" (:kind %)) (sight/seen-entities (:primitives c) {:radius 4})) cell))
+
+(defn mob-wait!
+  "Count one wait for a mob in the cell of the next block (reset by a placed block); false once they add up to
+  mob-wait-ms."
+  [c]
+  (let [n (inc (:mob-waits (ctx/mem c) 0))]
+    (ctx/update-mem! c assoc :mob-waits n)
+    (<= (* n (settings/get settings ::mob-step-ms)) (settings/get settings ::mob-wait-ms))))
+
+(defn ^:async wait-out-mob!
+  "A mob stands in the cell of the next block: wait mob-step-ms for it to move on, :again; after mob-wait-ms of it,
+  give up :mob-in-cell."
+  [c l {:keys [cell]} mob]
+  (if (mob-wait! c)
+    (do (await (ctx/act c :wait (clj->js {:ms (settings/get settings ::mob-step-ms)})))
+        :again)
+    (finish! c l (give-up :mob-in-cell :at cell :mob (:name mob)))))
+
 (defn ^:async place!
   "Write the intent, jump-place one block, confirm it when the cell shows it. Three failed jumps in a row give up;
-  a failure with the body shoved off or airborne is a knockback and does not count towards the three."
+  a failure with the body shoved off or airborne is a knockback and does not count towards the three, nor does one
+  with a mob in the cell (until mob-wait-ms of such waits)."
   [c l {:keys [cell item]}]
   (let [block-at (access/sensed-at (:primitives c) nil)
         l (ledger/intend l {:cell cell :item item :before (block-at cell) :job (:id c) :purpose purpose})
@@ -292,11 +339,11 @@
         r (await (ctx/act c :jumpPlace #js {:item item :count 1}))]
     (if (pos? (or (.-placed r) 0))
       (do (when (= item (block-at cell)) (ledger/remember! c (ledger/confirm l cell)))
-          (ctx/update-mem! c assoc :failures 0)
+          (ctx/update-mem! c #(-> % (assoc :failures 0) (dissoc :mob-waits)))
           :again)
       (let [shoved? (displaced? c (:base (ctx/mem c)) (:home (ctx/mem c)))
             _ (when shoved? (ctx/update-mem! c #(-> % (update :displaced (fnil inc 0)) (assoc :counted true))))
-            failures (if shoved? (:failures (ctx/mem c) 0) (inc (:failures (ctx/mem c) 0)))]
+            failures (if (or shoved? (and (mob-in-cell c cell) (mob-wait! c))) (:failures (ctx/mem c) 0) (inc (:failures (ctx/mem c) 0)))]
         (ctx/update-mem! c assoc :failures failures)
         (if (and (< failures (max-failures)) (<= (:displaced (ctx/mem c) 0) max-displacements))
           :again
@@ -347,7 +394,9 @@
       (when (not= l seen) (ledger/remember! c l))
       (ctx/update-mem! c #(-> % (assoc :base base :stand feet) (update :home (fn [h] (or h (let [{:keys [x z]} (u/self-pos c)] [x z]))))))
       (if (= :place (:step step))
-        (await (place! c l step))
+        (if-let [mob (mob-in-cell c (:cell step))]
+          (await (wait-out-mob! c l step mob))
+          (await (place! c l step)))
         (finish! c l step)))))
 
 (defn ^:async round

@@ -140,6 +140,24 @@
   (is (= {:step :stair :heading :east :steps 3}
          (escape/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})) [0 61 0] [10 64 0]))))
 
+(def wide-pit
+  "A 3-deep 5x5 pit (inside x -2..2, z -2..2, feet y 61) in a dirt block x -3..3, y 60..63, z -3..3; stone ground east
+  of it (x 4..14) whose top is at the pit's rim (feet y 64)."
+  (apply dissoc (merge (box 4 60 -3 14 63 3 "stone") (box -3 60 -3 3 63 3 "dirt"))
+         (for [x (range -2 3) z (range -2 3) y [61 62 63]] (str x "," y "," z))))
+
+(deftest escape-choose-pillars-beside-the-wall-of-a-wide-pit-it-may-not-dig
+  (let [at-wall (fn [n] (tu/fake {:self {:pos {:x 2 :y 61 :z 0}} :blocks wide-pit :inventory [{:name "dirt" :count n}]}))]
+    (is (= 0 (escape/pit-depth (ba {:blocks wide-pit}) [2 61 0])) "no level of a wide pit is walled on three sides")
+    (is (= {:step :pillar :height 2 :item "dirt"} (escape/choose (at-wall 2) [2 61 0] [10 64 0] (constantly false)))
+        "two blocks up, then a step onto the rim")
+    (is (= {:step :none :why :no-dig} (escape/choose (at-wall 1) [2 61 0] [10 64 0] (constantly false))) "too few blocks")
+    (is (= {:step :none :why :no-dig}
+           (escape/choose (tu/fake {:self {:pos {:x 2 :y 61 :z 0}} :blocks (merge wide-pit (box -3 64 -3 3 64 3 "oak_planks"))
+                                    :inventory [{:name "dirt" :count 9}]})
+                          [2 61 0] [10 64 0] (constantly false)))
+        "a roofed pit has no rim to step onto")))
+
 ;; ------------------------------------------------------------------ go-to escalation
 
 (deftest go-to-pillars-out-of-a-pit-when-it-carries-blocks
@@ -346,7 +364,7 @@
                                                   {:pos [10 64 0] :range 1 :ways #{:walk :stair}}))]
           (is (true? (:arrived @out)))
           (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))) "no pillar, though it carries the blocks"))
-        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
+        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 1}]})
                                                     {:pos [10 64 0] :range 1 :ways #{:walk :pillar}}))]
           (is (= false (:arrived @out)))
           (is (re-find #"shut in" (:text @out)) "too few blocks to pillar and no stair allowed")
@@ -602,6 +620,20 @@
           (is (= {:step :none :why :own-pen} (:escalation @out)) "animals stand in the pit the body owns")
           (is (empty? (calls p "dig")))
           (is (= {:arrived true} @(:out open)) "an own pit with no animals in it is dug out of as before"))))))
+
+(deftest go-to-pillars-out-of-its-own-wide-pen-pit-holding-animals
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "pen" :owner "Fake" :min [-3 60 -3] :max [3 64 3]}]
+              cow {:id 7 :name "cow" :kind "passive" :pos {:x -1.5 :y 61 :z -1.5}}
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0 :y 61 :z 0}} :blocks wide-pit :entities [cow]
+                                                     :inventory [{:name "dirt" :count 5}]}
+                                                    'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
+          (is (= {:arrived true} @out))
+          (is (= :pillar (:step (last (events-of seen :go-to.escalated)))))
+          (is (= 2 (count (calls p "jumpPlace"))))
+          (is (empty? (calls p "dig"))))))))
 
 (deftest go-to-roofed-pit-stairs-through-the-roof-rather-than-pillar
   (async done

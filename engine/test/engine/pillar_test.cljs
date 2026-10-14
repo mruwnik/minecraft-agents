@@ -92,14 +92,15 @@
 
 (defn setup
   "An engine over a fake world with a stone floor under the base; :make starts another engine on the same body."
-  [{:keys [inventory blocks zones hitbox] :or {zones []}}]
+  [{:keys [inventory blocks zones hitbox entities] :or {zones []}}]
   (let [clock (atom 1000000)
         w (world/of-data {} {} zones)
         dir (tu/tmp-dir)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake {:bodyHitbox (boolean hitbox) :self {:pos {:x 0 :y 64 :z 0}}
                     :blocks (merge {"0,63,0" "stone"} blocks)
-                    :inventory (or inventory [{:name "dirt" :count 64}])})
+                    :inventory (or inventory [{:name "dirt" :count 64}])
+                    :entities (or entities [])})
         make (fn [] (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock) :world w
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))]
     {:eng (make) :make make :p p :seen seen :clock clock}))
@@ -393,6 +394,56 @@
           (await (ticks s eng 60))
           (is (finished? eng))
           (is (= :place-failed (:reason (first (of-kind seen :pillar.gave-up))))))))))
+
+(def cow {:id 7 :name "cow" :kind "passive" :width 0.9 :height 1.4 :pos {:x 0.6 :y 64 :z 0.5}})
+
+(defn refuse-while-a-mob-stands-in!
+  "Override jumpPlace to fail as the server does while any entity is left in the fake, and wait to take the cow away
+  after waits (nil: never)."
+  [p waits]
+  (let [left (atom waits)]
+    (.override (.-world p) "jumpPlace"
+               (fn [token args impl]
+                 (if (seq (fake/entities p))
+                   (js/Promise.resolve #js {:status "failed" :placed 0 :reason "place-failed: the block is still air"})
+                   (impl token args))))
+    (.override (.-world p) "wait"
+               (fn [token args impl]
+                 (when (and @left (zero? (swap! left dec))) (swap! (fake/state p) assoc :entities []))
+                 (impl token args)))))
+
+(deftest a-mob-in-the-cell-is-waited-out-not-counted-as-a-failed-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:entities [cow]})]
+          (refuse-while-a-mob-stands-in! p 5)
+          (core/submit! eng (list job {:height 3}) {})
+          (await (ticks s eng 20))
+          (is (finished? eng))
+          (is (= [0 67 0] (feet p)))
+          (is (seq (of-kind seen :pillar.done)))
+          (is (empty? (of-kind seen :pillar.gave-up))))))))
+
+(deftest a-mob-that-stays-in-the-cell-ends-the-pillar-naming-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:entities [cow]})]
+          (refuse-while-a-mob-stands-in! p nil)
+          (core/submit! eng (list job {:height 3}) {})
+          (await (ticks s eng 20))
+          (is (finished? eng))
+          (let [g (first (of-kind seen :pillar.gave-up))]
+            (is (= :mob-in-cell (:reason g)))
+            (is (= "cow" (:mob g)))
+            (is (= [0 64 0] (:at g)))))))))
+
+(deftest a-mob-beside-the-cell-is-no-reason-to-wait
+  (is (nil? (pillar/mob-in [{:name "cow" :width 0.9 :height 1.4 :pos {:x 1.5 :y 64 :z 0.5}}] [0 64 0])))
+  (is (nil? (pillar/mob-in [{:name "item" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}}] [0 64 0])) "a dropped item does not block a place")
+  (is (= "cow" (:name (pillar/mob-in [cow] [0 64 0]))))
+  (is (= "zombie" (:name (pillar/mob-in [{:name "zombie" :kind "hostile" :pos {:x 0.5 :y 63.2 :z 0.5}}] [0 64 0]))) "its upper body is in the cell"))
 
 (defn shove-after-place!
   "Override jumpPlace so that after each real placement the body is moved by the next of offsets [dx dy dz]."
