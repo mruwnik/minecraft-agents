@@ -820,6 +820,14 @@
           (is (= :bad-args (:reason @out)))
           (is (string? (:why @out))))))))
 
+(defn ^:async dig-reached!
+  "Resolves once the job's dig call is waiting on the world."
+  [world]
+  (loop []
+    (when-not (some #(= "dig" (.-name %)) (.-calls world))
+      (await (js/Promise. (fn [resolve] (js/setTimeout resolve 5))))
+      (recur))))
+
 (deftest a-cut-mid-dig-resumes-to-the-same-stair
   (async done
     (tu/run-async done
@@ -829,7 +837,7 @@
           (await (core/tick! eng))
           (.hold world "dig")
           (let [running (core/tick! eng)]
-            (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
+            (await (dig-reached! world))
             (takeover/take! eng {:who "claude" :why "cut"})
             (await running))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
