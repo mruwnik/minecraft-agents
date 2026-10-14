@@ -21,7 +21,7 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.items.equip {:item "iron_pickaxe" :fetch false})]]
    :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 30 :until {:source :job :kind :waiting}}]
+            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 30}]
    :after [[:item "iron_pickaxe" 0]]}
   {:name "tunnel-fetches-a-pickaxe-by-default-then-cuts"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
