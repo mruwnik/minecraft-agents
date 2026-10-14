@@ -27,6 +27,22 @@
       (when-let [reason (some-> @w :reason)] (ctx/hold-still! c reason)))
     [r (some-> @w :reason)]))
 
+(defn ^:async call-walk-reason*
+  "call-walk-reason through ctx/call: [r reason], r :continue or go-to's ending."
+  [c slot args]
+  (let [r (await (ctx/call c slot 'jobs.movement.go-to args))
+        w (atom nil)]
+    (when (= :continue r)
+      (ctx/check-child (assoc c :wait w) slot 'jobs.movement.go-to args)
+      (when-let [reason (some-> @w :reason)] (ctx/hold-still! c reason)))
+    [r (some-> @w :reason)]))
+
+(defn ^:async call-walk*
+  "call-walk through ctx/call: :continue while the walk goes on (holding still when go-to waits on the world), else
+  go-to's ending."
+  [c slot args]
+  (first (await (call-walk-reason* c slot args))))
+
 (defn ^:async run!
   "Call job as the child in slot until it ends (:done or :declined), then resolve to that status. Between calls it
   awaits pace!. After :max-calls calls (opts) it resolves to :continue; the child keeps its memory, so the next run!
@@ -41,6 +57,21 @@
      (let [[r why] (if (= 'jobs.movement.go-to job)
                      (await (call-walk-reason c slot args))
                      [(await (ctx/call-child c slot job args)) nil])]
+       (if (and (= :continue r) (nil? why) (< n max-calls) (ctx/alive? c))
+         (do (await (pace!)) (recur (inc n)))
+         r)))))
+
+(defn ^:async run!*
+  "run! through ctx/call: resolves to the child's ending, or :continue after :max-calls calls or while a go-to child
+  waits on the world."
+  ([c slot job args] (run!* c slot job args {}))
+  ([c slot job args {:keys [max-calls] :or {max-calls (default-max-calls)}}]
+   (when (not= args (get-in (ctx/mem c) [:child-args slot]))
+     (ctx/update-mem! c #(-> % (update :children dissoc slot) (assoc-in [:child-args slot] args))))
+   (loop [n 1]
+     (let [[r why] (if (= 'jobs.movement.go-to job)
+                     (await (call-walk-reason* c slot args))
+                     [(await (ctx/call c slot job args)) nil])]
        (if (and (= :continue r) (nil? why) (< n max-calls) (ctx/alive? c))
          (do (await (pace!)) (recur (inc n)))
          r)))))
@@ -62,14 +93,22 @@
 
 (def entry-depth "Blocks below both ends a walk to or from a line's entry may plan." 16)
 
+(defn walk-into-args [slot cell]
+  (cond-> {:pos cell :range 0 :escalate false}
+    (#{:walk :back} slot) (assoc :at-night :go)
+    (#{:in :out} slot) (assoc :y-margin entry-depth)))
+
 (defn ^:async walk-into!
   "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue
   while it walks, else the child's result. The steps of the line (:walk, :back) go on at night: the cell is one this job
   cut, and the night shelter would hold the body between two steps for ever. The walks to and from the entry (:in, :out)
   plan no deeper than entry-depth below the lower of body and cell: a way through deep caves is no way, the job digs."
   [c slot cell]
-  (if (= :done (await (call-walk c slot (cond-> {:pos cell :range 0 :escalate false}
-                                                (#{:walk :back} slot) (assoc :at-night :go)
-                                                (#{:in :out} slot) (assoc :y-margin entry-depth)))))
+  (if (= :done (await (call-walk c slot (walk-into-args slot cell))))
     (ctx/child-result c slot)
     :continue))
+
+(defn ^:async walk-into!*
+  "walk-into! through ctx/call: :continue while it walks, else go-to's ending (its :data has the old child-result)."
+  [c slot cell]
+  (await (call-walk* c slot (walk-into-args slot cell))))

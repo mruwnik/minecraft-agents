@@ -206,6 +206,25 @@
                                     (:arrived res) :out-of-reach
                                     :else (:why res :unreachable))}))))
 
+(defn ^:async walk!*
+  "walk! through ctx/call: :arrived, :continue, {:held reason} (held? asked), else an ending: go-to's when it did not end
+  :done, else nothing-possible :out-of-reach, or go-to's :why (:unreachable) when it ended not having arrived."
+  [c pos & [see? held? at-night]]
+  (let [pens (when-not (:enter-pens (:args c)) (pen-entry/pens c))
+        keep-out (vec (mapcat :gates pens))
+        [r held] (await (child/call-walk-reason* c :walk (cond-> {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                                                           at-night (assoc :at-night at-night)
+                                                           (seq keep-out) (assoc :keep-out keep-out))))
+        arrived? (and (= :done (:kind r)) (:arrived (:data r)))]
+    (cond
+      (= :continue r) (if (and held? held) {:held held} :continue)
+      (and arrived? (in-reach? c pos see?)) :arrived
+      :else (do (when (seq pens)
+                  (ctx/emit! c :blocks.pen-kept-out :warn {:pens pens :text (kept-out-text pens)}))
+                (if (= :done (:kind r))
+                  (ctx/end c :nothing-possible (if arrived? :out-of-reach (:why (:data r) :unreachable)) (:data r))
+                  r)))))
+
 ;; ------------------------------------------------------------------ for parents
 
 (def body-reasons
@@ -224,6 +243,13 @@
         (cond (map? r) r
               (some? r) {:reason r}
               :else {:reason :not-ready})))))
+
+(defn child-wait*
+  "child-wait as an ending: condition-failed with the wait reason as its cause (the keyword alone when it says no more),
+  or nil when the child's check passes."
+  [c slot job args]
+  (when-let [w (child-wait c slot job args)]
+    (ctx/end c :condition-failed (if (= [:reason] (keys w)) (:reason w) w))))
 
 (defn dig-outcome
   "What one round of a jobs.blocks.dig child (its return r, result res, the reason its check waits with) means for the
