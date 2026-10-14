@@ -63,7 +63,7 @@ Layout:
   including the walker `jobs.lib.walk`/`near`/`pass`), `jobs.<area>.*` (one area's). `jobs/hooks.edn` names the hooks.
   Results: `jobs.lib.result` (`stop!` gives up with reason/text/`:cause`, `cause-of` nests a child's stop, `finish!` hands success data).
   `jobs.lib.child/run!` calls a child that still answers `:continue` per step until it ends (50 ms timer between calls; `:continue` after a call cap; a slot run with other args starts afresh).
-  The `*` versions (`child/call-walk*`, `run!*`, `walk-into!*`, `blocks/walk!*`, `child-wait*`) go through `ctx/call` and return the child's ending (or `:continue`); `jobs.lib.causes` lists the shared cause keywords.
+  The `*` versions (`child/call-walk*`, `run!*`, `walk-into!*`, `blocks/walk!*`, `child-wait*`) go through `ctx/call` and return the child's ending (or `:continue`).
 - `src/triggers/` the triggers, plain fns by area (`triggers.survival.hungry`); `defaults.edn` is the default set.
 - `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, ...; `scratch/` is git-ignored for hand-run probe starts; `idle.edn` is the idle template).
 - `test/engine/` cljs tests (helpers in `engine.test-util`); `test/engine/fake.cljs` is the scriptable fake world.

@@ -8,6 +8,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.declined :as declined]
+            [jobs.lib.pen-entry :as pen-entry]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -83,7 +84,8 @@
 (defn ^:async in-parent
   "Run f (a promise-returning fn of the ctx) as the one round of a parent, with go-to replaced by go-to-def; resolves to
   what f resolved to."
-  [go-to-def f]
+  ([go-to-def f] (in-parent go-to-def f (atom [])))
+  ([go-to-def f seen]
   (let [clock (atom 1000000)
         out (atom nil)
         parent {:check (fn [_] true)
@@ -91,14 +93,14 @@
         eng (core/create {:primitives (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :floor [-5 -5 5 5]})
                           :jobs (assoc registry/jobs 'parent parent 'jobs.movement.go-to go-to-def)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
-                          :events (events/make {:body "Fake" :sinks [] :now #(deref clock)})})]
+                          :events (events/make {:body "Fake" :sinks [(fn [e] (swap! seen conj (tu/legacy-event e)))] :now #(deref clock)})})]
     (core/submit! eng '(parent) {})
     (loop [n 0]
       (when (and (nil? @out) (< n 6))
         (swap! clock + 500)
         (await (core/tick! eng))
         (recur (inc n))))
-    (first @out)))
+    (first @out))))
 
 (def old-walker
   {:check (fn [_] true)
@@ -163,6 +165,44 @@
       (fn ^:async t []
         (let [need (atom true)
               wait (fn [] (in-parent (old-kid need) (fn ^:async f [c] (b/child-wait* c :kid 'jobs.movement.go-to {}))))]
-          (is (= [:condition-failed {:reason :need :what "thing"}] ((juxt :kind :cause) (await (wait)))))
+          (is (= [:condition-failed {:reason :need :what "thing"}] ((juxt :kind :cause) (await (wait)))) "the cause is always the wait's map")
           (reset! need false)
           (is (nil? (await (wait))) "a passing check waits on nothing"))))))
+
+(def night-walker
+  {:check (fn [c] (if (:report-wait c) (ctx/wait c {:reason :night-sheltered}) true))
+   :round (fn ^:async w [_] :continue)})
+
+(deftest a-walk-that-waits-on-the-world-holds-still-with-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [f [#(child/call-walk* % :walk {:pos [1 65 0]})
+                   #(b/walk!* % [1 65 0])]]
+          (let [seen (atom [])]
+            (is (= :continue (await (in-parent night-walker (fn ^:async g [c] (await (f c))) seen))))
+            (is (= [:night-sheltered] (->> @seen (filter #(= :holding (:kind %))) (map :reason) distinct))
+                "the hold-still reason reaches the board")))))))
+
+(deftest walk!*-keeps-out-of-pen-gates-and-warns-when-the-walk-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args (atom nil)
+              seen (atom [])
+              gate {:x 5 :y 64 :z 0}
+              go-to (assoc old-stranded :round (fn ^:async w [c] (reset! args (:args c)) (ctx/result! c {:status :stopped :reason :unreachable}) :done))]
+          (with-redefs [pen-entry/pens (fn [_] [{:gates [gate] :animals 2}])]
+            (is (= :condition-failed (:kind (await (in-parent go-to (fn ^:async g [c] (await (b/walk!* c [9 64 0]))) seen))))))
+          (is (= [gate] (:keep-out @args)))
+          (is (some #(= :blocks.pen-kept-out (:kind %)) @seen)))))))
+
+(deftest walk-into!*-asks-go-to-for-the-slots-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[slot expect] [[:walk {:at-night :go}] [:in {:y-margin child/entry-depth}] [:other {}]]]
+          (let [args (atom nil)
+                go-to (assoc old-walker :round (fn ^:async w [c] (reset! args (:args c)) (ctx/result! c {:arrived true}) :done))]
+            (await (in-parent go-to (fn ^:async g [c] (await (child/walk-into!* c slot [1 65 0])))))
+            (is (= (merge {:pos [1 65 0] :range 0 :escalate false} expect) (select-keys @args [:pos :range :escalate :at-night :y-margin])) (str slot))))))))

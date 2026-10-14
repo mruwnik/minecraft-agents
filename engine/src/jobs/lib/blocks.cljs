@@ -184,6 +184,20 @@
        (str/join "; " (map (fn [{:keys [gates animals]}] (str animals " animals, gate " (str/join " " (map (fn [{:keys [x y z]}] [x y z]) gates)))) pens))
        "; :enter-pens true allows the walk through"))
 
+(defn walk-request
+  "[pens go-to-args] of the walk to pos: range 3, no escalation, and (unless the job's :enter-pens) keeping out of the
+  gates of the pens holding animals."
+  [c pos see? at-night]
+  (let [pens (when-not (:enter-pens (:args c)) (pen-entry/pens c))
+        keep-out (vec (mapcat :gates pens))]
+    [pens (cond-> {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+            at-night (assoc :at-night at-night)
+            (seq keep-out) (assoc :keep-out keep-out))]))
+
+(defn warn-kept-out! [c pens]
+  (when (seq pens)
+    (ctx/emit! c :blocks.pen-kept-out :warn {:pens pens :text (kept-out-text pens)})))
+
 (defn ^:async walk!
   "The walk to pos: one go-to call (child :walk, range 3), the whole walk. Resolves to :arrived (in reach), :continue
   (go-to waits on the world), {:held reason} (it waits, and the caller asked to hear what on: held?) or {:unreachable why}
@@ -191,36 +205,29 @@
   (go-to :see). at-night is go-to's :at-night. Unless the job's :enter-pens, the walk keeps out of the gates of pens
   holding animals (jobs.lib.pen-entry); one that fails then warns :blocks.pen-kept-out naming them."
   [c pos & [see? held? at-night]]
-  (let [pens (when-not (:enter-pens (:args c)) (pen-entry/pens c))
-        keep-out (vec (mapcat :gates pens))
-        [r held] (await (child/call-walk-reason c :walk (cond-> {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                                                          at-night (assoc :at-night at-night)
-                                                          (seq keep-out) (assoc :keep-out keep-out))))
+  (let [[pens args] (walk-request c pos see? at-night)
+        [r held] (await (child/call-walk-reason c :walk args))
         res (ctx/child-result c :walk)]
     (cond
       (= :continue r) (if (and held? held) {:held held} :continue)
       (and (= :done r) (:arrived res) (in-reach? c pos see?)) :arrived
-      :else (do (when (seq pens)
-                  (ctx/emit! c :blocks.pen-kept-out :warn {:pens pens :text (kept-out-text pens)}))
+      :else (do (warn-kept-out! c pens)
                 {:unreachable (cond (not= :done r) :declined
                                     (:arrived res) :out-of-reach
                                     :else (:why res :unreachable))}))))
 
 (defn ^:async walk!*
-  "walk! through ctx/call: :arrived, :continue, {:held reason} (held? asked), else an ending: go-to's when it did not end
-  :done, else nothing-possible :out-of-reach, or go-to's :why (:unreachable) when it ended not having arrived."
-  [c pos & [see? held? at-night]]
-  (let [pens (when-not (:enter-pens (:args c)) (pen-entry/pens c))
-        keep-out (vec (mapcat :gates pens))
-        [r held] (await (child/call-walk-reason* c :walk (cond-> {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                                                           at-night (assoc :at-night at-night)
-                                                           (seq keep-out) (assoc :keep-out keep-out))))
+  "walk! through ctx/call: :arrived, :continue (go-to waits on the world; the round holds still with its reason), else
+  an ending: go-to's when it did not end :done, else nothing-possible :out-of-reach, or go-to's :why (:unreachable)
+  when it ended not having arrived."
+  [c pos & [see? at-night]]
+  (let [[pens args] (walk-request c pos see? at-night)
+        [r] (await (child/call-walk-reason* c :walk args))
         arrived? (and (= :done (:kind r)) (:arrived (:data r)))]
     (cond
-      (= :continue r) (if (and held? held) {:held held} :continue)
+      (= :continue r) :continue
       (and arrived? (in-reach? c pos see?)) :arrived
-      :else (do (when (seq pens)
-                  (ctx/emit! c :blocks.pen-kept-out :warn {:pens pens :text (kept-out-text pens)}))
+      :else (do (warn-kept-out! c pens)
                 (if (= :done (:kind r))
                   (ctx/end c :nothing-possible (if arrived? :out-of-reach (:why (:data r) :unreachable)) (:data r))
                   r)))))
@@ -245,11 +252,11 @@
               :else {:reason :not-ready})))))
 
 (defn child-wait*
-  "child-wait as an ending: condition-failed with the wait reason as its cause (the keyword alone when it says no more),
-  or nil when the child's check passes."
+  "child-wait as an ending: condition-failed with the wait map ({:reason ..}) as its cause, or nil when the child's check
+  passes."
   [c slot job args]
   (when-let [w (child-wait c slot job args)]
-    (ctx/end c :condition-failed (if (= [:reason] (keys w)) (:reason w) w))))
+    (ctx/end c :condition-failed w)))
 
 (defn dig-outcome
   "What one round of a jobs.blocks.dig child (its return r, result res, the reason its check waits with) means for the

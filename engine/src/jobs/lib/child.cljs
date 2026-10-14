@@ -17,25 +17,25 @@
   []
   (js/Promise. (fn [resolve] (js/setTimeout resolve pace-ms))))
 
-(defn ^:async call-walk-reason
-  "call-walk, resolving to [result reason]: reason is what go-to waits on (:night-sheltered) when it yielded :continue, else nil."
-  [c slot args]
-  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to args))
+(defn ^:async walk-reason
+  "call-walk-reason with the child call fn (ctx/call-child, or ctx/call for the ending-returning versions)."
+  [call c slot args]
+  (let [r (await (call c slot 'jobs.movement.go-to args))
         w (atom nil)]
     (when (= :continue r)
       (ctx/check-child (assoc c :wait w :report-wait true) slot 'jobs.movement.go-to args)
       (when-let [reason (some-> @w :reason)] (ctx/hold-still! c reason)))
     [r (some-> @w :reason)]))
 
-(defn ^:async call-walk-reason*
+(defn call-walk-reason
+  "call-walk, resolving to [result reason]: reason is what go-to waits on (:night-sheltered) when it yielded :continue, else nil."
+  [c slot args]
+  (walk-reason ctx/call-child c slot args))
+
+(defn call-walk-reason*
   "call-walk-reason through ctx/call: [r reason], r :continue or go-to's ending."
   [c slot args]
-  (let [r (await (ctx/call c slot 'jobs.movement.go-to args))
-        w (atom nil)]
-    (when (= :continue r)
-      (ctx/check-child (assoc c :wait w) slot 'jobs.movement.go-to args)
-      (when-let [reason (some-> @w :reason)] (ctx/hold-still! c reason)))
-    [r (some-> @w :reason)]))
+  (walk-reason ctx/call c slot args))
 
 (defn ^:async call-walk*
   "call-walk through ctx/call: :continue while the walk goes on (holding still when go-to waits on the world), else
@@ -43,7 +43,20 @@
   [c slot args]
   (first (await (call-walk-reason* c slot args))))
 
-(defn ^:async run!
+(defn ^:async run-with
+  "run! with the child call fn and walk-reason fn of its version."
+  [call walk c slot job args max-calls]
+  (when (not= args (get-in (ctx/mem c) [:child-args slot]))
+    (ctx/update-mem! c #(-> % (update :children dissoc slot) (assoc-in [:child-args slot] args))))
+  (loop [n 1]
+    (let [[r why] (if (= 'jobs.movement.go-to job)
+                    (await (walk c slot args))
+                    [(await (call c slot job args)) nil])]
+      (if (and (= :continue r) (nil? why) (< n max-calls) (ctx/alive? c))
+        (do (await (pace!)) (recur (inc n)))
+        r))))
+
+(defn run!
   "Call job as the child in slot until it ends (:done or :declined), then resolve to that status. Between calls it
   awaits pace!. After :max-calls calls (opts) it resolves to :continue; the child keeps its memory, so the next run!
   with the same args resumes it. A slot last run with other args is cleared first: the parent changed its mind.
@@ -51,30 +64,14 @@
   at once with :continue and call-walk's hold."
   ([c slot job args] (run! c slot job args {}))
   ([c slot job args {:keys [max-calls] :or {max-calls (default-max-calls)}}]
-   (when (not= args (get-in (ctx/mem c) [:child-args slot]))
-     (ctx/update-mem! c #(-> % (update :children dissoc slot) (assoc-in [:child-args slot] args))))
-   (loop [n 1]
-     (let [[r why] (if (= 'jobs.movement.go-to job)
-                     (await (call-walk-reason c slot args))
-                     [(await (ctx/call-child c slot job args)) nil])]
-       (if (and (= :continue r) (nil? why) (< n max-calls) (ctx/alive? c))
-         (do (await (pace!)) (recur (inc n)))
-         r)))))
+   (run-with ctx/call-child call-walk-reason c slot job args max-calls)))
 
-(defn ^:async run!*
+(defn run!*
   "run! through ctx/call: resolves to the child's ending, or :continue after :max-calls calls or while a go-to child
   waits on the world."
   ([c slot job args] (run!* c slot job args {}))
   ([c slot job args {:keys [max-calls] :or {max-calls (default-max-calls)}}]
-   (when (not= args (get-in (ctx/mem c) [:child-args slot]))
-     (ctx/update-mem! c #(-> % (update :children dissoc slot) (assoc-in [:child-args slot] args))))
-   (loop [n 1]
-     (let [[r why] (if (= 'jobs.movement.go-to job)
-                     (await (call-walk-reason* c slot args))
-                     [(await (ctx/call c slot job args)) nil])]
-       (if (and (= :continue r) (nil? why) (< n max-calls) (ctx/alive? c))
-         (do (await (pace!)) (recur (inc n)))
-         r)))))
+   (run-with ctx/call call-walk-reason* c slot job args max-calls)))
 
 (defn ^:async call-walk
   "Call a go-to child in slot with args (one round). While it yields :continue and its check would decline (go-to waiting
