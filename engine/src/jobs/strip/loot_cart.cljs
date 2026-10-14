@@ -7,6 +7,7 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
+            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [engine.settings :as settings]))
 
@@ -68,11 +69,9 @@
   (ctx/emit! c :loot-cart.stopped :warn {:reason reason :text (str "loot-cart stopped: " why)})
   (ctx/end c (kinds reason) reason (items-data c (merge {:why why} extra))))
 
-(defn start-only [f] (fn [c] (when-not (ctx/frozen-call c) (f c))))
-
 (def conditions
-  [[:fn (start-only (fn [c] (when (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius)) :danger)))]
-   [:fn (start-only (fn [c] (when (empty? (carts c)) :gone)))]])
+  [[:fn (started/at-start (fn [c] (when (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius)) :danger)))]
+   [:fn (started/at-start (fn [c] (when (empty? (carts c)) :gone)))]])
 
 (defn done?
   "Never done before the round has run: the items counted are the gain since the first round."

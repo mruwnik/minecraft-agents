@@ -10,6 +10,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.standing :as standing]
+            [jobs.lib.started :as started]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
@@ -305,7 +306,7 @@
           (empty? causes) {:reason :nothing-to-do :backed-off (vec (sort (keys rested)))}
           :else (or (first (filter contract/look-cause causes)) (last causes)))))))
 
-(def conditions [[:fn (fn [c] (when-not (ctx/frozen-call c) (problem c)))]])
+(def conditions [[:fn (started/at-start problem)]])
 
 (defn worked?
   "Whether the summary of a step says it changed something."

@@ -239,6 +239,4 @@
   "The whole fight: steps until no hostile is left (:done) or the retreat should take over (an ending other than :done)."
   [c]
   (ctx/update-mem! c assoc :health0 (.-health (.self (:primitives c))))
-  (if-let [problem (start-problem c)]
-    (ctx/end c :condition-failed problem)
-    (await (pace/steps! c #(step c)))))
+  (await (pace/steps! c #(step c))))
