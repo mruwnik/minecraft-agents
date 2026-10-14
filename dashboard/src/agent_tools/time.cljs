@@ -8,7 +8,7 @@
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is. dawn: waits until day, then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
+(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is. dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
 (def stale-ms 90000)
 
 (defn options [argv]
@@ -62,6 +62,10 @@
                    (.join path (:world-dir ctx) "observers" by "agent.edn"))
           (.then #(cond-> result % (assoc :missed %)))))))
 
+(defn dawn-reached?
+  "Whether the day just began: ticks 0..5999. Evening ticks and the last ticks before the sun wraps still wait."
+  [tick] (< tick 6000))
+
 (defn execute! [{:keys [ctx command timeout-ms poll-ms]}]
   (let [started (js/Date.now) deadline (+ started timeout-ms)]
     (letfn [(poll []
@@ -69,7 +73,7 @@
                 (cond
                   (= command :clock) (js/Promise.resolve result)
                   (not (:ok result)) (js/Promise.resolve (assoc result :waited-ms (- now started)))
-                  (:day? result) (js/Promise.resolve (assoc result :wake :day :waited-ms (- now started)))
+                  (dawn-reached? (:time-of-day result)) (js/Promise.resolve (assoc result :wake :day :waited-ms (- now started)))
                   (>= now deadline) (js/Promise.resolve (assoc result :ok false :reason :timeout :waited-ms (- now started)))
                   :else (.then (setTimeout (min poll-ms (- deadline now))) (fn [_] (poll))))))]
       (poll))))

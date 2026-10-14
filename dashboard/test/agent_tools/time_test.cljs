@@ -28,6 +28,9 @@
     (is (true? (:day? day)))
     (is (false? (:day? dusk)))))
 
+(deftest dawn-waits-through-the-evening-and-the-last-ticks-before-the-wrap
+  (is (= [false false false false true true] (map time/dawn-reached? [10437 11505 12455 23500 0 1000]))))
+
 (deftest a-stale-or-offline-reading-is-no-clock
   (is (= {:ok false :reason :time-unknown} (select-keys (clock-of pose (+ 1000000 time/stale-ms 1)) [:ok :reason])))
   (is (false? (:ok (clock-of (assoc pose :status "offline") 1001000)))))
