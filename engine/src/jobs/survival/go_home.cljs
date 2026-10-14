@@ -13,8 +13,7 @@
   through the night).
   Conditions (at the start only): not night, else condition-failed :night; a :home or :bed remembered, else :no-home.
   Done {:home pos} on arrival (also records :home there unless a live one exists), or at once when already within 2 of it.
-  A place farther than :limit blocks is a fact: condition-failed :too-far {:pos :distance :text} with one warn go-home.too-far and a
-  :too-far memory (the night job then digs in or sleeps; :dusk-home skips that place). A walk that did not arrive is
+  A place farther than :limit blocks is a condition: the call waits (:too-far {:pos :distance :text}) while the night job digs in or sleeps. A walk that did not arrive is
   nothing-possible {:reason :walk-failed :walk go-to's cause} with {:text}. The :dusk-home trigger starts it when the day left
   no longer covers the walk; a work job it cuts is resumed by the scheduler afterwards.
   Quote: time by the straight distance at :speed blocks a second; done 1 visit.")
@@ -42,7 +41,17 @@
       (not (.-isDay (.self (:primitives c)))) :night
       (nil? (place c)) :no-home)))
 
-(def conditions [[:fn start-fact]])
+(defn too-far
+  "The cause :too-far while home is beyond :limit blocks; its text tells the agent to dig in or turn back. Pure: a check
+  cannot emit or remember."
+  [c]
+  (when-let [pos (place c)]
+    (let [d (js/Math.round (u/dist (u/self-pos c) pos))]
+      (when (> d (:limit (:args c)))
+        (let [text (str "home at " (pr-str pos) " is " d " blocks away, beyond " (:limit (:args c)) ": night finds the body here; dig in or head back now")]
+          {:reason :too-far :pos pos :distance d :text text})))))
+
+(def conditions [[:fn start-fact] [:fn too-far]])
 
 (def target [])
 
@@ -57,15 +66,6 @@
         s (if pos (/ (u/dist (u/self-pos c) pos) (settings/get settings ::speed)) 0)]
     {:uses {:time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
-(defn too-far!
-  "Home is beyond :limit at dusk: one warn so the agent can dig in or turn back, and the fact."
-  [c pos]
-  (let [d (js/Math.round (u/dist (u/self-pos c) pos))
-        text (str "home at " (pr-str pos) " is " d " blocks away, beyond " (:limit (:args c)) ": night finds the body here; dig in or head back now")]
-    (ctx/emit! c :go-home.too-far :warn {:pos pos :distance d :text text})
-    (ctx/remember! c :too-far {:home pos} too-far-policy)
-    (ctx/end c :condition-failed :too-far {:pos pos :distance d :text text})))
-
 (defn ^:async walk! [c pos]
   (let [e (await (child/call-walk* c :walk {:pos pos :range arrive-range :at-night :go}))]
     (cond
@@ -79,5 +79,4 @@
   (let [pos (place c)]
     (cond
       (nil? pos) (ctx/end c :condition-failed :no-home)
-      (> (u/dist (u/self-pos c) pos) (:limit (:args c))) (too-far! c pos)
       :else (await (walk! c pos)))))

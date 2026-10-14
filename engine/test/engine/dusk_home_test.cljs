@@ -60,7 +60,7 @@
           (await (tu/run-until-empty eng 30))
           (is (< (js/Math.abs (- 12 (.-x (.-pos (.self p))))) 3) "the body stands within 2 of the home"))))))
 
-(deftest go-home-beyond-its-limit-warns-and-stops-too-far
+(deftest go-home-beyond-its-limit-waits-too-far
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -68,10 +68,8 @@
           (mem/write! (:store eng) :home {:pos {:x 300 :y 64 :z 0}} mem/place-policy)
           (do (core/submit! eng '(jobs.survival.go-home) {})
             (await (tu/run-until-empty eng 10))
-            (is (= [:too-far] (mapv :reason (filter #(= :stopped (:kind %)) @seen))))
-            (is (some #(and (= :go-home.too-far (:kind %)) (= :warn (:level %))) @seen) "one warn names the distance")
-            (is (= [{:x 300 :y 64 :z 0}] (mapv (comp :home :data) (mem/entries (mem/view (:store eng)) :too-far)))
-                "the refusal is remembered, so the trigger does not fire again for it")))))))
+            (is (= [:too-far] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
+            (is (= 1 (count (:list (core/state eng)))) "the order waits in the list, once")))))))
 
 (deftest a-home-go-home-refused-does-not-fire-the-trigger-again
   (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})

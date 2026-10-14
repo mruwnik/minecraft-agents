@@ -84,7 +84,7 @@
         (let [e (await (call! (spawn-world {:time st/noon}) 'jobs.survival.go-home {}
                               #(mem/write! (:store %) :home {:pos {:x 300 :y 64 :z 0}} mem/place-policy)))]
           (is (= [:condition-failed :too-far] (ending-of e)))
-          (is (= 300 (:x (:pos (:data e))))))))))
+          (is (= 300 (:x (:pos (:cause e))))))))))
 
 (deftest go-home-arriving-ends-done
   (async done
@@ -160,3 +160,13 @@
                               #(mem/write! (:store %) :home {:pos {:x 12 :y 90 :z 0}} mem/place-policy)))]
           (is (= [:nothing-possible :walk-failed] (ending-of e)))
           (is (keyword? (:walk (:cause e))) "go-to's cause rides along"))))))
+
+(deftest a-listed-sleep-beside-an-open-bed-waits-bed-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup {:blocks {"1,64,0" "red_bed"} :time st/night})]
+          (core/submit! eng '(jobs.survival.sleep {:bed {:x 1 :y 64 :z 0} :open-bed false}) {})
+          (await (tu/run-until-empty eng 5))
+          (is (= [:bed-open] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
+          (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end"))))))

@@ -60,9 +60,9 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (angle {:count 2} {:inventory rod :fish {:catch ["cod"] :misses 1}})) [:event])))
-        (is (= {:event :stopped :kind :condition-failed :reason :no-rod}
+        (is (= {:event :waiting :reason :no-rod}
                (await (angle {:count 1 :fetch false} {:inventory []}))))
-        (is (= {:event :stopped :kind :condition-failed :reason :no-water}
+        (is (= {:event :waiting :reason :no-water}
                (await (angle {:count 1} {:inventory rod :blocks bank}))))
         (is (= {:event :stopped :kind :nothing-possible :reason :no-bite}
                (await (angle {:count 2 :max-misses 3} {:inventory rod :fish {:misses 100}}))))
@@ -107,9 +107,9 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (hunting {:count 1 :keep 0} {:inventory h/sword :entities [(cow 1 3)]})) [:event])))
-        (is (= {:event :stopped :kind :condition-failed :reason :too-few}
+        (is (= {:event :waiting :reason :too-few}
                (await (hunting {:count 1 :keep 2} {:inventory h/sword :entities [(cow 1 3)]}))))
-        (is (= {:event :stopped :kind :condition-failed :reason :no-color}
+        (is (= {:event :waiting :reason :no-color}
                (await (hunting {:mob "sheep" :color "pink" :keep 0} {:inventory h/sword :entities [(sheep 1 3)]}))))
         (is (= {:event :stopped :kind :nothing-possible :reason :none}
                (await (hunting {:count 1 :keep 0} {:inventory h/sword :entities [(assoc (cow 1 3) :invulnerable true)]})))

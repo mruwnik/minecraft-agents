@@ -13,7 +13,8 @@
 (def doc
   "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed within :bed-radius, else the live :spawn-bed within it.
   Conditions (at the start only): night, else condition-failed :not-night; a bed, else :no-bed; the bed not in :bed-unreachable
-  (an unexpired entry with the same position), else :bed-unreachable {:pos}. A body already asleep is done.
+  (an unexpired entry with the same position), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
+  the bed, a roofed room, else :bed-open. A body already asleep is done.
   Holds (:continue, holding still with the reason) for at most :hold-s seconds in all, then ends condition-failed with that cause: a bed
   occupied by another player (sh/bed-permit; also when it became so mid-round) :bed-occupied {:pos}; a body in a shelter with the bed more
   than 16 blocks away :night-sheltered.
@@ -75,6 +76,21 @@
    ::time-s {:default 300 :doc "Seconds the walk to the bed and the sleep may take." :spec (a/num-in 0 nil)}
    ::speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
 
+(defn bed-block? [c bed]
+  (.endsWith (or (u/seen-name (:primitives c) bed) "") "_bed"))
+
+(defn open-bed?
+  "Whether the body, standing beside its bed, would lie in the open: not shut in a closed room under a roof nor buried."
+  [c]
+  (let [p (:primitives c)]
+    (not (or (sh/shut-in-room? p) (sh/buried? p)))))
+
+(defn bed-open
+  "The cause :bed-open when :open-bed is false, the body stands within 3 blocks of its bed and would lie in the open."
+  [c bed]
+  (when (and (false? (:open-bed (:args c))) (<= (u/dist (u/self-pos c) bed) 3) (bed-block? c bed) (open-bed? c))
+    {:reason :bed-open :pos bed :text "the bed is open (not shut in a roofed room)"}))
+
 (defn start-fact
   "The fact that bars starting, or nil: night and a bed that is not given up on and not occupied."
   [c]
@@ -85,7 +101,8 @@
         (not (sh/night? p)) :not-night
         (sh/sleeping? p) nil
         (nil? bed) {:reason :no-bed :text "no bed given or remembered within the bed radius"}
-        (unreachable-bed? c bed) {:reason :bed-unreachable :pos bed}))))
+        (unreachable-bed? c bed) {:reason :bed-unreachable :pos bed}
+        :else (bed-open c bed)))))
 
 (defn sheltered-hold
   "The hold of a body in a shelter with the bed far off: {:reason :night-sheltered ...}, else nil."
@@ -146,15 +163,6 @@
       (let [text (str "cannot sleep: " (.-status r) (when-let [why (.-reason r)] (str " (" why ")")))]
         (fail-ending c (u/fail! c :bed_unusable text) :bed-unusable text bed)))))
 
-(defn bed-block? [c bed]
-  (.endsWith (or (u/seen-name (:primitives c) bed) "") "_bed"))
-
-(defn open-bed?
-  "Whether the body, standing beside its bed, would lie in the open: not shut in a closed room under a roof nor buried."
-  [c]
-  (let [p (:primitives c)]
-    (not (or (sh/shut-in-room? p) (sh/buried? p)))))
-
 (defn still-permitted?
   "sense/decide!'s retry? for the bed-taken decision: its value is true while the bed still reads permitted, so keep looking."
   [v]
@@ -186,6 +194,5 @@
           (taken?) (hold! c {:reason :bed-occupied :pos bed})
           (= :continue walk) :continue
           (not= :done (:kind walk)) (give-up-unreachable! c bed walk)
-          (and (false? (:open-bed (:args c))) (bed-block? c bed) (open-bed? c))
-          (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a roofed room)"})
+          (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a roofed room)"})
           :else (await (sleep-at! c bed)))))))

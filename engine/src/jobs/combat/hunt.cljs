@@ -26,11 +26,10 @@
   Babies are never targets and never counted. Animals the body spares (jobs.lib.animal-spare: kinds in :off-limits, animals in
   a zone or plan of its own or a closed enclosure unless :spare-pens is false) are never targets either; when only such animals
   are left it ends :spared (the data has :spared-by, a count per rule, and warn hunt.done names them when nothing was killed).
-  A queued hunt waits (condition :low-health) while the body is too hurt (jobs.lib.body/too-hurt). The first round ends
-  :condition-failed with warn hunt.done / hunt.too-few and the data: :unarmed (a hostile kind and no weapon of the call's
-  :use :tools carried), :no-color (a :color and none of it in range; :seen-colors), or :too-few, with
-  :keep or fewer adults within :radius (the data has :in-range, :radius, :keep and :nearest, the distance of the nearest
-  adult of the kind in sight up to ::sight-radius).
+  A queued hunt waits (conditions) while the body is too hurt (:low-health, jobs.lib.body/too-hurt), and at its start (one kind
+  only) while :no-color (a :color and none of it in range; :seen-colors) or :too-few (:keep or fewer adults within :radius; the
+  cause has :in-range, :radius, :keep and :nearest, the distance of the nearest adult of the kind in sight up to ::sight-radius).
+  The first round ends :condition-failed :unarmed (warn hunt.done) for a hostile kind and no weapon of the call's :use :tools carried.
   One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
   1. With a :target, the attack child fights it. It is booked killed, or skipped when attack gave up on it or lost it.
      :max-skips skips in a row end the job :gave-up (warn hunt.gave-up).
@@ -168,10 +167,6 @@
        (when (pos? keep) (str ", keeping " keep))
        (when nearest (str "; the nearest is " nearest " away"))))
 
-(def conditions
-  "Only the health line waits (as the old check did). The other refusals end the first round (start-problem), so a queued hunt never blocks the queue."
-  [[:fn low-health]])
-
 (defn unarmed!
   "End at once: a hostile kind and no weapon carried (an unarmed body does not fist-fight)."
   [c]
@@ -180,27 +175,33 @@
     (ctx/emit! c :hunt.done :warn out)
     (ctx/end c :condition-failed :unarmed out)))
 
-(defn no-color!
-  "End at once, nothing of the :color in range: the colours that are, in the data and text."
+(defn no-color
+  "The cause :no-color while nothing of the :color is in range: the colours that are, in the data and text."
   [c]
   (let [{:keys [mob color]} (:args c)
         seen (vec (sort (distinct (keep #(.-color %) (present-any c)))))
-        out {:killed 0 :reason :no-color :spared 0 :remaining (count (present-any c)) :seen-colors seen}
         text (str "hunt stopped: no " color " " mob " within " (:radius (:args c)) " blocks"
                   (when (seq seen) (str "; seen: " (str/join ", " seen)))
                   (let [n (count (filter #(and (= color (.-color %)) (true? (.-sheared %)))
                                          (adults-within c (:radius (:args c)))))]
                     (when (pos? n) (str "; " n " sheared " color " sheep skipped"))))]
-    (ctx/emit! c :hunt.done :warn (assoc out :text text))
-    (ctx/end c :condition-failed :no-color (assoc out :text text))))
+    {:reason :no-color :killed 0 :spared 0 :remaining (count (present-any c)) :seen-colors seen :text text}))
 
-(defn too-few!
-  "Warn and end at once: :keep or fewer adults in range, with how many are and how far the nearest is."
+(defn too-few-cause [c]
+  (let [m (too-few c)]
+    (assoc m :killed 0 :text (too-few-text m))))
+
+(defn start-fact
+  "The cause that bars a hunt's first step, or nil: nothing of the :color in range, or :keep or fewer adults."
   [c]
-  (let [m (too-few c)
-        out (assoc (dissoc m :reason) :reason :too-few :killed 0 :text (too-few-text m))]
-    (ctx/emit! c :hunt.too-few :warn out)
-    (ctx/end c :condition-failed :too-few out)))
+  (when-not (or (:started (ctx/mem c)) (kinds c))
+    (cond
+      (and (:color (:args c)) (empty? (present c))) (no-color c)
+      (<= (count (present c)) (keep-of c)) (too-few-cause c))))
+
+(def conditions
+  "Waits while too hurt or on a start fact (start-fact: not for a several-kinds call, whose kinds each check theirs)."
+  [[:fn low-health] [:fn start-fact]])
 
 (defn done?
   "The animals killed against the count asked. Never :done? itself: the hunt ends with its event and data."
@@ -299,8 +300,6 @@
           next-target (first (candidates c))]
       (cond
         (and first? (hostile? c) (not (armed? c))) (unarmed! c)
-        (and first? (:color (:args c)) (empty? (present c))) (no-color! c)
-        (and first? (<= (count (present c)) keep)) (too-few! c)
         target (await (attack! c (attack-opts c)))
         collecting (await (hunting/collect! c :yield))
         (>= (or killed 0) wanted) (finish! c :count)

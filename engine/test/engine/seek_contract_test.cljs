@@ -33,7 +33,7 @@
 (def flight-world {:floor h/flight-floor})
 
 (defn ^:async ending-of
-  "Submit spec over a fake world and tick until the job ends: {:event :completed|:stopped :kind :reason}."
+  "Submit spec over a fake world and tick until the job ends: {:event :completed|:stopped :kind :reason}, or {:event :waiting :reason} for a job still waiting on a condition."
   [make-prims spec]
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
@@ -48,9 +48,12 @@
         (swap! clock + 700)
         (await (core/tick! eng))
         (recur (inc i))))
-    (let [e (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
+    (let [e (first (filter #(#{:completed :stopped} (:kind %)) @seen))
+          w (last (filter #(= :waiting (:kind %)) @seen))]
       (core/shutdown! eng)
-      (assoc (select-keys (:data e) [:kind :reason]) :event (:kind e)))))
+      (if e
+        (assoc (select-keys (:data e) [:kind :reason]) :event (:kind e))
+        {:event (when w :waiting) :reason (:reason (:data w))}))))
 
 (defn zed [id x & [more]] (merge {:id id :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 0}} more))
 

@@ -118,7 +118,7 @@
           (is (= 2 (get (inv s) "porkchop")))
           (is (finished? s)))))))
 
-(deftest at-most-keep-of-the-kind-ends-the-job-without-attacking
+(deftest at-most-keep-of-the-kind-waits-without-attacking
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -128,12 +128,13 @@
                  [{:keep 0} [] "none at all"]
                  [{:keep 1} [(cow 1 3) (animal 2 "sheep" 2) (animal 3 "sheep" 3)] "other kinds do not count"]
                  [{:keep 1 :radius 10} [(cow 1 3) (cow 2 30)] "outside the radius does not count"]]]
-          (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities entities})]
+          (let [{:keys [eng p] :as s} (h/setup {:inventory h/sword :entities entities})]
             (core/submit! eng (spec args) {})
             (await (core/tick! eng))
             (is (zero? (count (h/calls p "attack"))) note)
             (is (zero? (count (h/calls p "equip"))) note)
-            (is (empty? (:list (core/state eng))) note)))))))
+            (is (= [:too-few] (distinct (map :reason (events-of s :waiting)))) note)
+            (is (not (finished? s)) "the order waits for animals")))))))
 
 (deftest a-cow-hunt-never-attacks-a-sheep
   (async done
@@ -241,11 +242,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (h/setup {:inventory h/sword
-                                        :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
+        (let [{:keys [eng p] :as s} (h/setup {:inventory h/sword
+                                              :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
           (core/submit! eng (spec {:keep 2}) {})
           (await (core/tick! eng))
-          (is (empty? (:list (core/state eng))) "two adults and three babies: nothing to take")
+          (is (= [:too-few] (distinct (map :reason (events-of s :waiting)))) "two adults and three babies: nothing to take")
           (is (zero? (count (h/calls p "attack")))))))))
 
 (deftest keep-ends-the-hunt-on-adults-with-babies-around
@@ -350,7 +351,7 @@
           (is (= :count (:reason (done-event s))))
           (is (finished? s) "one call"))))))
 
-(deftest too-few-animals-end-the-job-stopped-saying-how-many-are-in-range-and-how-far-the-nearest-is
+(deftest too-few-animals-hold-the-job-waiting-saying-how-many-are-in-range-and-how-far-the-nearest-is
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -363,11 +364,13 @@
                   {:keep 0 :in-range 0 :radius 24} "none seen at all"]
                  [{:mob "skeleton" :radius 24} [(animal 1 "skeleton" 32 {:kind "hostile"})]
                   {:keep 0 :in-range 0 :radius 24 :nearest 32} "a hostile kind keeps none, with none in range to say it is hostile"]]]
-          (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
-                r (await (tu/child-outcome eng 'jobs.combat.hunt args 20))]
-            (is (= (assoc want :status :stopped :reason :too-few :mob (:mob args) :killed 0)
-                   (select-keys r [:status :reason :mob :killed :keep :in-range :radius :nearest])) note)
-            (is (= (pos? (:keep want)) (str/includes? (:text r) "keeping")) note)))))))
+          (let [{:keys [eng seen]} (h/setup {:inventory h/sword :entities entities})
+                _ (await (tu/child-outcome eng 'jobs.combat.hunt args 20))
+                r (last (filter #(= :waiting (:kind %)) @seen))
+                cause (or (:cause r) r)]
+            (is (= (assoc want :reason :too-few :mob (:mob args) :killed 0)
+                   (select-keys cause [:reason :mob :killed :keep :in-range :radius :nearest])) note)
+            (is (= (pos? (:keep want)) (str/includes? (:text cause) "keeping")) note)))))))
 
 ;; ------------------------------------------------------------------ colour
 
@@ -383,17 +386,18 @@
           (is (= 1 (get (inv s) "white_wool")))
           (is (= :count (:reason (done-event s)))))))))
 
-(deftest a-colour-hunt-with-no-such-sheep-ends-at-once-naming-the-colours-seen
+(deftest a-colour-hunt-with-no-such-sheep-waits-naming-the-colours-seen
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(sheep 1 3 "brown") (sheep 2 6 "gray")]} 5))
-              e (done-event s)]
+              e (last (events-of s :waiting))
+              cause (or (:cause e) e)]
           (is (empty? (attacked s)))
-          (is (= :no-color (:reason e)))
-          (is (= ["brown" "gray"] (:seen-colors e)))
-          (is (re-find #"no white sheep" (:text e)))
-          (is (finished? s)))))))
+          (is (= :no-color (:reason cause)))
+          (is (= ["brown" "gray"] (:seen-colors cause)))
+          (is (re-find #"no white sheep" (:text cause)))
+          (is (not (finished? s))))))))
 
 (deftest a-colour-hunt-counts-only-its-colour-against-keep
   (async done
@@ -402,9 +406,9 @@
         (doseq [[args entities reason note]
                 [[{:mob "sheep" :color "white" :count 1 :keep 1} [(sheep 1 3 "white") (sheep 2 5 "brown") (sheep 3 6 "brown")] :too-few "one white, keep 1: too few, however many of other colours"]
                  [{:mob "sheep" :color "white" :count 1 :keep 2} [(sheep 1 3 "brown")] :no-color "none of the colour wins over too-few"]]]
-          (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
-                r (await (tu/child-outcome eng 'jobs.combat.hunt args 20))]
-            (is (= reason (:reason r)) note)))))))
+          (let [{:keys [eng seen]} (h/setup {:inventory h/sword :entities entities})
+                _ (await (tu/child-outcome eng 'jobs.combat.hunt args 20))]
+            (is (= reason (:reason (last (filter #(= :waiting (:kind %)) @seen)))) note)))))))
 
 (deftest a-colour-hunt-skips-sheared-sheep-and-says-when-only-sheared-ones-are-in-range
   (async done
@@ -413,11 +417,12 @@
         (let [shorn #(assoc (sheep %1 %2 "white") :sheared true)
               s (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(shorn 1 3) (sheep 2 6 "white")]} 30))
               s2 (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(shorn 1 3) (shorn 2 6)]} 5))
-              e (done-event s2)]
+              e (last (events-of s2 :waiting))
+              cause (or (:cause e) e)]
           (is (= #{2} (set (attacked s))) "the nearer sheared sheep is left alone")
           (is (empty? (attacked s2)))
-          (is (= :no-color (:reason e)))
-          (is (re-find #"sheared" (:text e))))))))
+          (is (= :no-color (:reason cause)))
+          (is (re-find #"sheared" (:text cause))))))))
 
 (deftest a-badly-hurt-body-waits-to-heal-before-it-hunts
   (async done
