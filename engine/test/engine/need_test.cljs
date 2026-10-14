@@ -164,3 +164,10 @@
           (is (= [:continue :done] (map #(if (map? %) (:kind %) %) (take 2 @got))))
           (is (= [{:pos {:x 0 :y 64 :z 0} :range 0}] (map #(select-keys % [:pos :range]) @walks)))
           (is (= [0.5 64 0.5] (get-in @(fake/state p) [:self :pos]))))))))
+
+(deftest a-minutes-limit-reaches-the-fetch-child-as-a-time-spend
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run! #(need/item! % "coal" 1 {:minutes 2}) nil 1))]
+          (is (= {:time 120} (:spend (first @(:obtain r))))))))))

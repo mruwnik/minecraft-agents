@@ -50,9 +50,9 @@
     [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
 
 (defn ^:async fetch!
-  [c job args cause-reason wanted {:keys [slot how explore return?]}]
+  [c job args cause-reason wanted {:keys [slot how explore return? minutes]}]
   (let [slot (or slot :need)
-        args (merge (assoc args :explore (boolean explore)) (fetch/child-limits job {:how how}))
+        args (merge (assoc args :explore (boolean explore)) (fetch/child-limits job {:how how :minutes minutes}))
         want [job args]
         fresh? (nil? (get-in (ctx/mem c) [:children slot]))]
     (if (and fresh? (repeat-done? c want))

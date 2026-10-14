@@ -323,6 +323,12 @@
   [c]
   (await (child/run!* c :wear 'jobs.items.wear {})))
 
+(defn kit-minutes
+  "The kit fetch's limit: the fetch option's :minutes, at most the minutes the pile's despawn window has left."
+  [c entry limits]
+  (let [left (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 60000)]
+    (max 0.1 (min left (or (:minutes limits) left)))))
+
 (defn ^:async kit!
   "Once per run: fetch and wear a weapon and armour when the pile is worth the trip, the danger calls for them and a known
   chest has them (jobs.lib.need, one piece at a time). A fetch child waiting on the world is waited for (declared hold
@@ -334,7 +340,7 @@
       (do (ctx/update-mem! c assoc :kit-done true) nil)
       (loop []
         (let [wanted (kt/kit-problem c)
-              r (if wanted (await (need/blocks! c (:any-of wanted) 1 (select-keys limits [:how :explore]))) :done)]
+              r (if wanted (await (need/blocks! c (:any-of wanted) 1 (assoc (select-keys limits [:how :explore]) :minutes (kit-minutes c entry limits)))) :done)]
           (cond
             (nil? wanted)
             (do (await (wear-kit! c))

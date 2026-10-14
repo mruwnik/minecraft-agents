@@ -115,3 +115,15 @@
         (let [{:keys [eng seen]} (await ((run-with-pile dt/death-pile-of-the-field-report (fn ^:async stub-fetch [c names n opts] (contract/ending :nothing-possible :failed nil)))))]
           (is (some #{:recover-drops.kit-dropped} (kinds-of seen)))
           (is (some #{:recover-drops.decided} (kinds-of seen))))))))
+
+(deftest the-kit-fetch-is-limited-to-the-minutes-left-in-the-despawn-window
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [opts (atom nil)
+              real (aget need/blocks! arity4)
+              stub (fn ^:async stub-fetch [c names n o] (reset! opts o) (await (real c names n o)))]
+          (await ((run-with-pile dt/death-pile-of-the-field-report stub)))
+          (is (number? (:minutes @opts)) "the fetch carries a time limit")
+          (is (<= (:minutes @opts) 3) "never above the configured limit")
+          (is (< 0 (:minutes @opts) 5) "within the 5 minute window"))))))
