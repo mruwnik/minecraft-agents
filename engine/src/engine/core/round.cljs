@@ -323,9 +323,12 @@
         c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
                          :args args :round (:round run) :reflex (:reflex run) :results results
                          :child-wait child-wait :t0s [t0]})
-        own-limit #(limits/ending eng (:id run) [] %)]
+        own-limit #(limits/ending eng (:id run) [] %)
+        ;; flat: a nested let here compiles to an awaited async fn, a tick before the round starts, in which a reflex could cut it
+        {:keys [op job]} (:spec inst)
+        ident (when (and (= :leaf op) (ending/contract-job? def)) (ending/frame-identity (assoc def :sym job) args))]
     (try
-      (when-let [ident (let [{:keys [op job]} (:spec inst)] (when (and (= :leaf op) (ending/contract-job? def)) (ending/frame-identity (assoc def :sym job) args)))]
+      (when ident
         (mem/update-job! (:store eng) (:id run) [] update :contract merge ident))
       (limits/check! eng c)
       (let [r (or (own-limit nil) (await ((:round def) c)))]
