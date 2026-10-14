@@ -2,8 +2,10 @@
   (:require [cljs.test :refer [deftest is]]
             [engine.expr :as expr]
             [engine.registry :as registry]
+            [clojure.string :as str]
             [engine.triggers :as triggers]
-            [jobs.lib.choose :as choose]))
+            [jobs.lib.choose :as choose]
+            [jobs.primitive :as primitive]))
 
 (def migrated
   '#{jobs.survival.breathe jobs.survival.unwedge jobs.survival.extinguish
@@ -32,12 +34,27 @@
      jobs.blocks.dig jobs.blocks.fill-cells jobs.blocks.place jobs.blocks.use-on jobs.items.interact
      jobs.memory.set-place jobs.memory.forget-place jobs.memory.remember})
 
+(def primitive-names
+  "The table's keys as job names: jobs.primitive.<kebab-case>."
+  (set (map #(symbol (str "jobs.primitive." (str/replace (name %) #"[A-Z]" (fn [c] (str "-" (str/lower-case c)))))) (keys primitive/table))))
+
 (deftest the-registry-holds-every-job-namespace
-  (is (= migrated (set (keys registry/jobs)))))
+  (is (= migrated (set (remove primitive-names (keys registry/jobs))))))
+
+(deftest every-primitive-is-a-job-by-name
+  (is (= 29 (count primitive-names)))
+  (is (every? #(contains? registry/jobs %) primitive-names))
+  (is (contains? registry/jobs 'jobs.primitive.move-to))
+  (is (= [:pos] (get-in registry/jobs ['jobs.primitive.dig :target]))))
+
+(deftest a-primitive-job-refuses-unknown-arg-keys
+  (is (re-find #"jobs.primitive.dig has no arg :bogus; its args are .*:pos"
+               (expr/problem registry/jobs '(jobs.primitive.dig {:bogus 1}))))
+  (is (nil? (expr/problem registry/jobs '(jobs.primitive.dig {:pos [1 2 3] :timeoutS 5})))))
 
 (deftest every-job-exports-check-and-round-and-a-doc
   (doseq [[sym job] registry/jobs]
-    (is (fn? (:check job)) (str sym))
+    (is (or (fn? (:check job)) (some? (:conditions job))) (str sym))
     (is (fn? (:round job)) (str sym))
     (is (string? (:doc job)) (str sym))))
 

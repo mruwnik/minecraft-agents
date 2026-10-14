@@ -227,7 +227,7 @@ A job is a namespace under `src/jobs/` exporting `check` and `round`, and option
 There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:check :round :doc :args}}`,
 built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
 that defines `round` and `check` or `conditions` (others are helpers), fails the compile when such a file's `ns` does not match its
-path, and the macro `engine.registry/job-registry` emits the map. `check` and `round` must be top-level `def`/`defn` forms, and a job must not
+path, and the macro `engine.registry/job-registry` emits the map, with each `jobs.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args). `check` and `round` must be top-level `def`/`defn` forms, and a job must not
 require `engine.registry`.
 
 - **check**: can the job usefully run now? Cheap and side-effect free: its ctx has no token, so `act`, `update-mem!` and

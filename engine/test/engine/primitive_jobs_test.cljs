@@ -8,6 +8,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.primitive :as primitive]))
@@ -127,3 +128,46 @@
                     (is (= 1 (calls p "place")) "the second place would use a second cobblestone")
                     (is (= {:kind :limit-reached :cause {:line :items :item "cobblestone" :spend 1 :act :place}}
                            (stopped seen)))))))))))
+
+(defn completed [seen] (job-ev seen :completed))
+
+(deftest a-primitive-is-called-by-name-as-a-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup registry/jobs)]
+          (core/submit! eng '(jobs.primitive.look {:pos [1 64 1]}) {})
+          (await (core/tick! eng))
+          (is (= 1 (calls p "look")))
+          (is (= 1 (count (completed seen)))))))))
+
+(deftest a-primitive-job-ends-with-the-primitives-status
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup registry/jobs)]
+          (core/submit! eng '(jobs.primitive.dig {:pos [0 60 0]}) {})
+          (await (core/tick! eng))
+          (is (= 1 (calls p "dig")))
+          (is (= {:kind :condition-failed :cause :missing} (stopped seen))))))))
+
+(def quoter
+  {:conditions [] :defaults {:spend {:time 100}} :args {}
+   :round (fn ^:async quoter-round [c]
+            (swap! world assoc :quote (await (ctx/quote c 'jobs.primitive.eat {:item "bread"})))
+            (ctx/end c :done nil))})
+
+(deftest a-primitive-is-quoted-by-name
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (assoc registry/jobs 'quoter quoter))]
+          (core/submit! eng '(quoter) {})
+          (await (core/tick! eng))
+          (is (= (quote-of :eat p {:item "bread"}) (:quote @world)))
+          (is (zero? (calls p "eat")) "a quote does not act"))))))
+
+(deftest a-primitive-job-without-what-the-act-needs-fails-its-condition
+  (let [[_ condition] (first (:conditions (primitive/job :place)))]
+    (is (= {:reason :bad-args :missing [:pos :item]} (condition {:args {:pos nil}})))
+    (is (nil? (condition {:args {:pos {:x 0 :y 64 :z 0} :item "dirt"}})))))

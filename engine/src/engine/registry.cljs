@@ -1,7 +1,8 @@
 (ns ^:dev/always engine.registry
   "The job registry: every job namespace under engine/src/jobs, found at
   compile time. See README.md, Jobs."
-  (:require-macros [engine.registry :refer [job-registry settings-registry]]))
+  (:require-macros [engine.registry :refer [job-registry settings-registry]])
+  (:require [jobs.primitive]))
 
 (def jobs
   "{ns-symbol {:check fn :round fn :doc string-or-nil :args map-or-nil :idle-ok true-or-nil}}"

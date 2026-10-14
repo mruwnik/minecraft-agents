@@ -121,21 +121,37 @@
       (catch Exception e
         (assoc base :error (str "unreadable: " (ex-message e)))))))
 
+(defn primitive-job-name
+  "jobs.primitive.<kebab-case> for the primitive keyword k (:moveTo is jobs.primitive.move-to)."
+  [k]
+  (symbol (str "jobs.primitive." (str/replace (name k) #"[A-Z]" #(str "-" (str/lower-case %))))))
+
+(defn primitive-keys
+  "The primitives of the table in jobs/primitive.cljs (its keys), in order, or []."
+  []
+  (if-let [dir (jobs-dir)]
+    (vec (keys (def-value "table" (read-forms (io/file dir "primitive.cljs")))))
+    []))
+
 (defn job-metadata
   "file-metadata of every job file under jobs/ (helpers left out), in path order."
   []
   (if-let [dir (jobs-dir)]
-    (vec (keep (fn [f] (let [id (expected-ns dir f)]
-                         (when (job? (try (defined-names (read-forms f)) (catch Exception _ #{'check 'round})))
-                           (file-metadata id f))))
-               (job-files dir)))
+    (vec (concat (keep (fn [f] (let [id (expected-ns dir f)]
+                                 (when (job? (try (defined-names (read-forms f)) (catch Exception _ #{'check 'round})))
+                                   (file-metadata id f))))
+                       (job-files dir))
+                 (let [file (io/file dir "primitive.cljs")]
+                   (for [k (primitive-keys)]
+                     (assoc (file-metadata (primitive-job-name k) file) :doc (str "The primitive " k " as a job: one act."))))))
     []))
 
 (defmacro job-registry
   "{ns-symbol {:check :round :doc :args :idle-ok}} for every job namespace under jobs/; a contract job's entry also
-  holds :conditions :target :ways :defaults :done? :quote-of :legacy-args and its namespace's :settings."
+  holds :conditions :target :ways :defaults :done? :quote-of :legacy-args and its namespace's :settings. Each
+  primitive of the jobs/primitive.cljs table is a job too, as jobs.primitive.<kebab-case> (jobs.primitive/job)."
   []
-  (into {}
+  (into (into {} (map (fn [k] [(list 'quote (primitive-job-name k)) (list 'jobs.primitive/job k)])) (primitive-keys))
         (map (fn [{:keys [ns defines]}]
                (let [ref (fn [k] (when (defines k) (symbol (str ns) (str k))))]
                  [(list 'quote ns) (cond-> {:check (ref 'check) :round (ref 'round)
