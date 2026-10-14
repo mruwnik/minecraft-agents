@@ -39,10 +39,10 @@
   :lit-brake :no-bed :blocked :wet :no-buffer :launch-trap :unloaded; at most 12) and what the build left (:refused
   :given-up :short)).
   Start facts (one rail-build.declined warn (:plan :reason) each):
-  - impossible: the plan is missing or unreadable (:plan); its rail cells are not one chain (:not-a-line, :why
-    :gap|:branch|:two-chains|:loop|:no-rails); a cell wanting a redstone block holds another block (:source-blocked,
-    :cells; the builder never digs, so on natural ground put a torch or lever in the plan, or use a raised bed).
-  - condition-failed: no zone list has been read (:no-zones); a cell still to build is refused by the access rules
+  - impossible: its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails).
+  - condition-failed: the plan is missing or unreadable (:plan); no zone list has been read (:no-zones); a cell wanting
+    a redstone block holds another block (:source-blocked, :cells; the builder never digs, so on natural ground put a
+    torch or lever in the plan, or use a raised bed); a cell still to build is refused by the access rules
     (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :all-carried (the default) items for
     the cells still to build are not all carried (:short, one rail-build.short warn {item n}; an :any want counts every
     choice carried; only cells seen empty are owed, the warn's :up-to {item n} counts the unseen cells too). With
@@ -79,7 +79,7 @@
                 (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))
         chain (when (seq cells) (rail/line cells))
         trouble (cond
-                  (plan/plan-trouble answer cells) {:reason :plan :detail (plan/plan-trouble answer cells)
+                  (plan/plan-trouble answer cells) {:reason :plan :why (plan/plan-trouble answer cells)
                                                      :text (plan/plan-trouble answer cells)}
                   (:error chain) (merge {:reason :not-a-line :why (:error chain)
                                          :text (str "its rail cells are not one line: " (name (:error chain))
@@ -177,22 +177,21 @@
   (check-cache/cached c :planned #(planned c)))
 
 (defn plan-problem
-  "No zone list read: a failed condition. A plan that is missing or no line is impossible."
+  "No zone list read, or a plan missing or unreadable (it may be saved or fixed later): failed conditions. Rail cells
+  that are not one chain are impossible."
   [c]
   (let [{:keys [trouble]} (judged-plan c)]
     (cond
       (nil? trouble) nil
-      (= :no-zones (:reason trouble)) {:reason :no-zones}
+      (#{:no-zones :plan} (:reason trouble)) (dissoc trouble :text)
       :else (contract/impossible (dissoc trouble :text)))))
 
 (defn ready-problem
-  "Why a line not yet begun and not sound may not be begun (not-ready): a blocked source is impossible, the rest failed
-  conditions."
+  "Why a line not yet begun and not sound may not be begun (not-ready): a failed condition."
   [c]
   (let [{:keys [cells trouble]} (judged-plan c)]
     (when-not (or trouble (sound? c cells))
-      (when-let [why (check-cache/cached c :ready #(not-ready c cells))]
-        (if (= :source-blocked (:reason why)) (contract/impossible why) why)))))
+      (check-cache/cached c :ready #(not-ready c cells)))))
 
 (def conditions [[:fn plan-problem] [:fn (started/at-start ready-problem)]])
 
@@ -224,7 +223,7 @@
 (defn unlit-levers
   "The planned levers standing in the world switched off and not yet tried."
   [c cells]
-  (let [tried (set (:switched (ctx/mem c)))]
+  (let [tried (set (concat (:switched (ctx/mem c)) (:tried (ctx/mem c))))]
     (filterv (fn [{:keys [pos want]}]
                (let [b ((block-at c) pos)]
                  (and (= "lever" (shape/want-block want)) (= "lever" (:name b))
@@ -232,14 +231,15 @@
              cells)))
 
 (defn ^:async switch-step!
-  "Switch on the next planned lever that is off (once each, whatever the child ends), then move on to the proof."
+  "Switch on the next planned lever that is off (once each; counted switched only when the toggle ended done, a cut
+  waits), then move on to the proof."
   [c cells]
   (if-let [{:keys [pos]} (first (unlit-levers c cells))]
     (let [r (await (ctx/call c :lever 'jobs.access.toggle {:pos pos :state :on}))]
-      (if (= :continue r)
-        :continue
-        (do (ctx/update-mem! c update :switched (fnil conj []) pos)
-            :again)))
+      (cond
+        (or (= :continue r) (= :cut-off (:kind r))) :continue
+        (= :done (:kind r)) (do (ctx/update-mem! c update :switched (fnil conj []) pos) :again)
+        :else (do (ctx/update-mem! c update :tried (fnil conj []) pos) :again)))
     (do (ctx/update-mem! c assoc :phase :check)
         :again)))
 

@@ -148,8 +148,8 @@
 
 (defn ^:async dig-away!
   "Dig the rail at pos through the jobs.blocks.dig child (hazards, tidy record, tool, drops) if the rules agree, and
-  count one fix when it is dug. Water beside is taken as :accept says, lava never. A hazard or a failed dig counts a
-  :shape failure, and so does a cell already clear that the plan still reads as a wrong rail (the next round re-reads it).
+  count one fix when it is dug. Water beside is taken as :accept says, lava never. A dig that ended done without
+  digging or on a hazard counts a :shape failure (the next round re-reads the cell); any other ending (no tool, a limit) is the job's.
   Resolves to :continue while the child waits or the cell cannot be reached (the build parks), else :again."
   [c pos]
   (let [v (rules/may-dig? (assoc (plan/rules-input c) :cell pos))
@@ -164,9 +164,11 @@
       (let [r (await (ctx/call c :dig 'jobs.blocks.dig args))]
         (cond
           (= :continue r) :continue
-          (= :unreachable (contract/cause-key r)) :continue
+          (or (= :unreachable (contract/cause-key r)) (= :cut-off (:kind r))) :continue
           (and (= :done (:kind r)) (:dug (:data r))) (do (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0)) :again)
-          :else (do (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c))) :again))))))
+          (or (= :done (:kind r)) (#{:hazard :fluid-adjacent :cannot} (contract/cause-key r)))
+          (do (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c))) :again)
+          :else (ctx/end c (:kind r) (:cause r)))))))
 
 (defn ^:async fix-step!
   "Deal with the settled wrong rail at pos: give up as :shape once the fixes are spent, else dig it (walking into

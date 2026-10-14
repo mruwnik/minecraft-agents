@@ -1,12 +1,13 @@
 (ns jobs.build.pen
   (:require [engine.args :as a] [jobs.lib.fetch :as fetch]
             [clojure.string :as str]
-            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.child :as child]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.look :as look]
+            [jobs.lib.started :as started]
+            [jobs.build.from-plan :as from-plan]
             [jobs.lib.pen :as pen]
             [jobs.build.from-plan.plan :as plan]
             [jobs.lib.pace :as pace]
@@ -32,11 +33,12 @@
   (one warn pen-build.leaky naming the leaks {:pos :why} (:gap :open-gate :climb :open :unloaded; at most 12) and what
   the build left (:refused, :given-up, :short)); nothing-possible :inside when the body cannot get out of the finished
   pen. The builder's own condition-failed ending (:no-items, :refused, :no-zones) is this job's.
-  Start facts (one pen-build.declined warn naming the cells or the reason):
-  - impossible {:reason :plan-trouble :why text}: the plan is missing, unreadable, has no cells (in :part), has no fence
-    cells, or its ring steps more than 1 between neighbouring fences, or a gate is more than 1 above the ground of an
-    inside neighbour (animals will not step down 2), unless :uneven? true.
-  - condition-failed {:reason :no-zones}: no zone list has been read (unless :ignore-zones?).
+  Start facts, all failed conditions (one pen-build.declined warn naming the cells or the reason):
+  - {:reason :plan-trouble :why text}: the plan is missing, unreadable, has no cells (in :part) or no fence cells.
+  - {:reason :uneven :why text}: its ring steps more than 1 between neighbouring fences, or a gate is more than 1 above
+    the ground of an inside neighbour (animals will not step down 2), unless :uneven? true.
+  - {:reason :no-zones}: no zone list has been read (unless :ignore-zones?).
+  - {:reason :no-items}: the builder's own (jobs.build.from-plan): nothing to place is carried or fetchable.
   A pen already sound is done at once with nothing placed. Nothing is rebuilt after a restart: the world is the memory.")
 
 (a/defargs args
@@ -120,8 +122,6 @@
                 (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))
         trouble (or (plan/plan-trouble answer cells)
                     (when-not (barrier-box cells) "the plan has no fence, wall or gate cells")
-                    (when-not (:uneven? (:args c))
-                      (when-let [bad (seq (uneven cells (plan/top-fn c)))] (uneven-text bad)))
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) plan/no-zones))]
     (if-not trouble
       {:cells cells}
@@ -156,15 +156,30 @@
   (check-cache/cached c :planned #(planned c)))
 
 (defn plan-problem
-  "No zone list read: a failed condition. A plan that cannot be worked is impossible."
+  "A plan that is missing, unreadable or without fence cells, or no zone list read: failed conditions (the plan may be
+  saved or fixed later)."
   [c]
   (let [{:keys [trouble]} (judged-plan c)]
     (cond
       (nil? trouble) nil
       (= plan/no-zones trouble) {:reason :no-zones}
-      :else (contract/impossible {:reason :plan-trouble :why trouble}))))
+      :else {:reason :plan-trouble :why trouble})))
 
-(def conditions [[:fn plan-problem]])
+(defn uneven-problem
+  "A ring that steps over max-step or a gate that drops too far onto the seen ground, unless :uneven? (ground the body
+  sees changes, so a failed condition at the start only)."
+  [c]
+  (let [{:keys [cells trouble]} (judged-plan c)]
+    (when-not (or trouble (:uneven? (:args c)))
+      (when-let [bad (seq (uneven cells (plan/top-fn c)))]
+        (let [why (uneven-text bad)]
+          (ctx/warn-once! c [(:plan (:args c)) why] :pen-build.declined
+                          {:plan (:plan (:args c)) :part (:part (:args c)) :reason why
+                           :text (str "pen build declines plan " (:plan (:args c)) ": " why)})
+          {:reason :uneven :why why})))))
+
+(def conditions
+  [[:fn plan-problem] [:fn (started/at-start uneven-problem)] [:fn (started/at-start from-plan/no-items)]])
 
 (defn done?
   "Counts only (the round ends the call with its data): the cells still owed."

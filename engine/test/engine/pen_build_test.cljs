@@ -96,14 +96,14 @@
           (is (= {:kind :nothing-possible :cause :leak} (kc leaky)))
           (is (= :leak (get-in leaky [:data :reason]))))))))
 
-(deftest a-plan-that-cannot-work-is-impossible-and-no-zone-list-is-a-failed-condition
+(deftest a-plan-the-world-may-fix-and-no-zone-list-are-failed-conditions
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [stone {:id "pen" :parts [{:id "s" :cells [[2 64 2]] :want "stone"}]}]
           (doseq [[plans zones kind reason]
-                  [[{} [] :impossible :plan-trouble]
-                   [{"pen" stone} [] :impossible :plan-trouble]
+                  [[{} [] :condition-failed :plan-trouble]
+                   [{"pen" stone} [] :condition-failed :plan-trouble]
                    [{"pen" (ring-plan)} nil :condition-failed :no-zones]]]
             (let [e (await (ending-of (b/start (spec kit) plans zones) job {:plan "pen"} 10))]
               (is (= [kind reason] [(:kind e) (get-in e [:cause :reason])])))))))))
@@ -209,6 +209,7 @@
     (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
     {:places (count (h/calls p "place"))
      :declined (mapv #(select-keys % [:plan :reason]) (kinds-of seen :pen-build.declined))
+     :waits (mapv #(select-keys % [:reason :why]) (kinds-of seen :waiting))
      :done (count (kinds-of seen :pen-build.done))
      :listed (:list (core/state eng))}))
 
@@ -347,5 +348,6 @@
               r (await (declines (spec kit) {"pen" plan} {:plan "pen" :surface false}))
               ok (await (declines (spec kit) {"pen" plan} {:plan "pen" :surface false :uneven? true}))]
           (is (= [{:plan "pen" :reason "the pen is uneven (steps over 1): [3 64 2] to [4 66 2] steps 2"}] (:declined r)))
+          (is (= [:uneven] (distinct (map :reason (:waits r)))) "the job waits listed")
           (is (= 0 (:places r)))
           (is (= [] (:declined ok))))))))

@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.build-from-plan-test :as b]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.farm-contract-test :refer [ending-of kc]]
             [engine.harvest-test :as h]
             [engine.memory :as mem]
@@ -113,7 +114,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[plans args zones declined]
-                [[{} {:plan "line"} [] [{:plan "line" :reason :plan}]]
+                [[{} {:plan "line"} [] [{:plan "line" :reason :plan :why "no such plan"}]]
                  [{"line" holed-plan} {:plan "line"} [] [{:plan "line" :reason :not-a-line :why :gap}]]
                  [{"line" (line-plan {})} {:plan "line"} :none [{:plan "line" :reason :no-zones}]]
                  [{"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} {:plan "line"} []
@@ -463,6 +464,21 @@
           (is (empty? (h/calls p "dig")) "the dig was never made")
           (is (= [{:pos [10 64 0] :why :shape}] (:breaks (first (h/events-of seen :rail-build.broken))))))))))
 
+(deftest a-dig-child-that-is-cut-parks-and-any-other-failed-ending-is-passed-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
+              ended (fn [attempt]
+                      (with-dig-attempt! attempt
+                        (fn ^:async f []
+                          (let [{:keys [eng]} (b/start world {"line" (route-plan l-route {})} [])]
+                            (await (ending-of {:eng eng} job {:plan "line" :all-carried false} 300))))))
+              no-tool (await (ended (fn [c _] (ctx/end c :condition-failed {:reason :no-tool}))))
+              cut (await (ended (fn [c _] (ctx/end c :cut-off nil))))]
+          (is (= {:kind :condition-failed :cause {:reason :no-tool}} (kc no-tool)))
+          (is (nil? cut) "a cut dig parks the build"))))))
+
 (deftest an-unreachable-dig-child-is-passed-up-and-the-build-parks
   (async done
     (tu/run-async done
@@ -532,22 +548,22 @@
 
 ;; ---------------------------------------------------------------- the wait reason
 
-(deftest a-line-not-ready-waits-with-the-reason-and-one-that-can-never-be-built-is-impossible
+(deftest a-line-not-ready-or-with-a-plan-or-ground-the-world-may-fix-waits-and-one-that-can-never-be-built-is-impossible
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[world plans zones reason text]
                 [[(spec "stone" 63 (kit {})) {"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} [] :refused #"footprint"]
                  [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail"]
-                 [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :no-zones #"no-zones"]]]
+                 [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :no-zones #"no-zones"]
+                 [(spec "stone" 63 (kit {:power :block})) {"line" (line-plan {:power :block})} [] :source-blocked #"source-blocked"]
+                 [(spec "stone" 63 (kit {})) {} [] :plan #"plan"]]]
           (let [r (await (declines world plans {:plan "line"} zones))
                 w (first (:waits r))]
             (is (= reason (:reason w)) (str reason))
             (is (re-find text (str (:text w))) (str reason " " (pr-str w)))))
         (doseq [[world plans reason]
-                [[(spec "stone" 63 (kit {:power :block})) {"line" (line-plan {:power :block})} :source-blocked]
-                 [(spec "stone" 63 (kit {})) {"line" holed-plan} :not-a-line]
-                 [(spec "stone" 63 (kit {})) {} :plan]]]
+                [[(spec "stone" 63 (kit {})) {"line" holed-plan} :not-a-line]]]
           (let [e (await (ending-of (b/start world plans []) job {:plan "line"} 10))]
             (is (= [:impossible reason] [(:kind e) (get-in e [:cause :reason])]) (str reason))))))))
 
@@ -591,3 +607,24 @@
               result (await (outcome eng job {:plan "line"} 1))]
           (is (true? (:ok? result)))
           (is (true? (:powered (props p [3 64 0])))))))))
+
+(deftest a-lever-toggle-that-is-cut-is-asked-again-and-one-that-failed-is-not-counted-switched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [opts {:power :lever}
+              run (fn ^:async run1 [first-ending]
+                    (let [{:keys [eng p]} (b/start (spec "stone" 63 (kit opts)) {"line" (line-plan opts)} [])
+                          calls (atom [])
+                          real (get-in eng [:jobs 'jobs.access.toggle])
+                          stub (assoc real :round (fn [c] (if (= 1 (count (swap! calls conj (:pos (:args c)))))
+                                                            (ctx/end c first-ending nil)
+                                                            ((:round real) c))))
+                          e (await (ending-of {:eng (assoc-in eng [:jobs 'jobs.access.toggle] stub)} job {:plan "line"} 900))]
+                      [e @calls p]))
+              [cut _ p] (await (run :cut-off))
+              [failed] (await (run :nothing-possible))]
+          (is (= :done (:kind cut)))
+          (is (true? (:powered (props p [3 64 0]))))
+          (is (= {:kind :nothing-possible :cause :broken} (kc failed)))
+          (is (= [:unlit] (distinct (map :why (get-in failed [:data :breaks]))))))))))
