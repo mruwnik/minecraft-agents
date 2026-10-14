@@ -678,7 +678,7 @@
 (defn get-tool-stub
   "A jobs.items.get-tool that records its args in calls and hands over give (a pickaxe name) or, when nil, stops :no-source."
   [calls p give]
-  {:check (constantly true)
+  {:ways [:chest :craft :gather] :check (constantly true)
    :round (fn ^:async get-tool [c]
             (swap! calls conj (:args c))
             (if give
