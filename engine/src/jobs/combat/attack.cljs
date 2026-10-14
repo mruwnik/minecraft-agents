@@ -1,5 +1,6 @@
 (ns jobs.combat.attack
-  (:require [engine.settings :as settings]
+  (:require [clojure.string :as str]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
@@ -14,7 +15,8 @@
   "Attack the entities :targets names until none is left within :radius.
   A target is an entity id (a number), a player's username, or a mob type such as \"zombie\"
   (every mob of that name within :radius). Players match only by username. Items never match. The body never targets itself.
-  One call is the whole fight: it takes the nearest target not given up on, holds the best weapon carried, walks within
+  One call is the whole fight: it takes the nearest target not given up on, holds the first of the call's :use :tools
+  carried (default the best weapons carried, swords over axes; each entry is an item name or a part of one), walks within
   reach (jobs.lib.near/go-near!, doors :shut, each leg bounded by :walk-timeout-s) and swings, again and again until
   it ends. Swings at most once per :attack-gap-ms (nil: the held weapon's cooldown); the rest of the gap is spent looking
   round and waiting.
@@ -27,32 +29,42 @@
   - :too-many-hits: :max-hits hits without a kill.
   A kill counts only when the attack reports killed. A killed target or player is not attacked again in this run,
   even after respawning.
-  Ends with info attack.done and the result {:reason :killed [ids] :given-up {id reason}}. :reason is:
-  - :cleared: no target within :radius for :lost-s (waiting in 1 s steps), and every target seen was killed.
-  - :gave-up: every target seen was killed or given up on, and one was given up on.
-  - :lost: some target was neither killed nor given up on.
-  - :timeout: :timeout-s after the first round (attack.timeout warning).
-  - :absent: no target was present after a 2 s grace for the world's entities to arrive and a look round (a far one is sensed only in view).
+  Ends with info attack.done and the data {:reason :killed [ids] :given-up {id reason}}; the ending is
+  - :done (:cleared): no target within :radius for :lost-s (waiting in 1 s steps), and every target seen was killed.
+  - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
+  - :nothing-possible :lost: some target was neither killed nor given up on.
+  - :limit-reached :timeout (the call's :spend :time, default ::time-s, from the first round; attack.timeout warning).
+  - :condition-failed :absent: no target was present after a 2 s grace for the world's entities to arrive and a look round (a far one is sensed only in view).
   :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
-  :absent :wait makes the check decline until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
-  Otherwise the check passes while a target not given up on is within :radius, and always once the job has started.
+  :absent :wait makes the call wait (condition :no-target) until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
   Creepers get no special handling. The job does not guard the body's health: the survival register sits above it and cuts it.")
 
 (a/defargs args
   {:targets {:doc "entity ids, player usernames and mob types to kill; a single one may be given bare" :spec (a/or-of number? string? (a/coll-of (a/or-of number? string?))) :default []}
    :radius {:doc "targets within this many blocks count" :spec (a/num-in 0 nil) :default 16}
-   :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
    :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
    :lost-s {:doc "seconds without a target in radius before the job is done" :spec (a/num-in 0 nil) :default 5}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :spec (a/num-in 0 nil) :default 120}
    :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :spec (a/int-in 1 nil) :default 4}
    :max-hits {:doc "hits without a kill before a target is given up on" :spec (a/int-in 1 nil) :default 40}
    :walk-timeout-s {:doc "bound of one walk towards a target" :spec (a/num-in 0 nil) :default 5}
    :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :spec #{:done :wait} :default :done}})
 
 (a/defargs settings
-  {::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}})
+  {::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}
+   ::time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
+(defn time-s [] (settings/get settings ::time-s))
+
+(def target [:targets])
+
+(def defaults {:spend {:time ::time-s} :use {:tools :attack}})
+
+(defn legacy-args
+  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}, and :timeout-s as :spend {:time}."
+  [{:keys [weapons timeout-s] :as args}]
+  (cond-> (dissoc args :weapons :timeout-s)
+    (and (seq weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))
+    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
 (def absent-grace-ms
   "How long a job that has seen nothing waits for the world's entities to arrive."
   2000)
@@ -105,11 +117,23 @@
   (let [given-up (:given-up (ctx/mem c) {})]
     (into [] (remove #(contains? given-up (.-id %))) (present c))))
 
-(defn check [c]
-  (or (boolean (or (:started (ctx/mem c))
-                   (not= :wait (:absent (:args c)))
-                   (seq (candidates c))))
-      (ctx/wait c {:reason :no-target})))
+(defn no-target
+  "At the call's start with :absent :wait: the cause :no-target while no target is present."
+  [c]
+  (when (and (not (ctx/frozen-call c)) (= :wait (:absent (:args c))) (empty? (candidates c)))
+    :no-target))
+
+(def conditions [[:fn no-target]])
+
+(defn done?
+  "The targets killed against those seen. Never :done? itself: the fight ends with its event and data."
+  [c]
+  (let [{:keys [killed seen]} (ctx/mem c)]
+    {:done? false :units :targets :done (count killed) :left (count (remove (set killed) seen))}))
+
+(defn quote-of [c]
+  (let [most (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))]
+    {:uses {:time [0 (min 30 most) most]}}))
 
 (defn book-kill!
   "Add id to :killed; its username, if any, is not attacked again."
@@ -208,15 +232,18 @@
     (await (swing! c target walked?))))
 
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
+  "Emit the outcome and end the call: done when cleared, else the ending of reason."
   [c reason]
   (let [m (ctx/mem c)
         result {:reason reason :killed (vec (:killed m)) :given-up (:given-up m {})}]
     (when (= :timeout reason)
       (ctx/emit! c :attack.timeout :warn (assoc result :text "attack timed out")))
     (ctx/emit! c :attack.done :info (assoc result :text (str "attack done: " (name reason) ", killed " (count (:killed m)))))
-    (ctx/result! c result)
-    :done))
+    (case reason
+      :cleared (ctx/end c :done nil result)
+      :timeout (ctx/end c :limit-reached {:line :time :reason :timeout} result)
+      :absent (ctx/end c :condition-failed :absent result)
+      (ctx/end c :nothing-possible reason result))))
 
 (defn settled-reason
   "How a run that saw nothing for :lost-s ends: :cleared when every target
@@ -243,10 +270,16 @@
   (let [last-attack (:last-attack (ctx/mem c))]
     (and last-attack (< (- (ctx/now c) last-attack) (gap-ms c)))))
 
+(defn weapon-for
+  "The name of the first of uses (item names or parts of one) carried, the best of those an entry matches."
+  [p uses]
+  (let [carried (map :name (u/inventory p))]
+    (some (fn [use] (->> carried (filter #(str/includes? % use)) (sort-by weapon/weapon-score >) first)) uses)))
+
 (defn ^:async engage!
   "Equip, walk to the nearest target and swing once."
   [c target]
-  (await (combat/equip-best! c (combat/best-weapon (:primitives c) (:weapons (:args c)))))
+  (await (combat/equip-best! c (weapon-for (:primitives c) (ctx/use c :tools))))
   (case (await (walk! c target))
     :there (await (swing-or-close-in! c target false))
     :arrived (await (swing-or-close-in! c target true))
@@ -259,15 +292,16 @@
   :again)
 
 (defn ^:async step
-  "One step of the fight: finish, wait, wait out the swing gap, or walk and swing once. :again or :done."
+  "One step of the fight: end, wait, wait out the swing gap, or walk and swing once. :again or the ending."
   [c]
   (let [now (ctx/now c)
-        {:keys [timeout-s lost-s]} (:args c)]
+        {:keys [lost-s]} (:args c)
+        time-limit (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))]
     (ctx/update-mem! c update :started #(or % now))
     (let [{:keys [started seen last-seen]} (ctx/mem c)
           targets (candidates c)]
       (cond
-        (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
+        (>= (- now started) (* 1000 time-limit)) (finish! c :timeout)
         (and (empty? targets) (seq (present c))) (finish! c :gave-up)
         (and (empty? targets) (empty? seen)) (cond
                                                (< (- now started) absent-grace-ms) (await (wait! c 500))

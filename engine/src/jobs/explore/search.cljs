@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.breath :as breath]
@@ -18,7 +19,7 @@
   Each step looks around (blocks and entities with those names within :scan-radius), notes what it saw (:seen) and
   the spot (:searched) (engine.notes), and ends when :count are found. Otherwise it walks the next leg with
   jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
-  on the world or for leg columns to load.
+  on the world or for leg columns to load (:chunks-loading).
 
   Legs are :spacing apart: :spiral rings round the origin, or :outward ahead along :heading, then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond :max-distance (XZ) of the origin. It is skipped (:skipped)
@@ -29,7 +30,7 @@
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
   in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
   counted in :max-legs) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
-  left the round ends and the check declines for 2 s, up to :load-wait-s (a body just logged in has no chunks
+  left the round yields for 2 s, up to :load-wait-s (a body just logged in has no chunks
   yet), then the search ends :not-loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck); until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
@@ -40,10 +41,12 @@
   sees another block at that cell now, and a noted entity standing in a zone or plan of the body's own (its pens) never counts. The
   search.done text lists the positions.
 
-  Ends with {:reason :found|:not-found :why :found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
-  :failed [{:pos :reason}] :skipped :farthest}}, info search.done or warn search.not-found. :why is one of
-  :distance (no leg left), :legs (:max-legs walked), :time (:timeout-s since the first round, not counting go-to's wait for day in a shelter), :stuck
-  or :not-loaded.
+  Ends with info search.done or warn search.not-found (the data {:found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
+  :failed [{:pos :reason}] :skipped :farthest} :why}) and the ending:
+  - :done: :count found.
+  - :nothing-possible :distance (no leg left), :legs (:max-legs walked) or :stuck (three failed walks in a row).
+  - :limit-reached :time (the call's :spend :time, default ::time-s, since the first round, not counting go-to's wait for day in a shelter).
+  - :condition-failed :not-loaded (leg columns never loaded). A call with no :target waits (condition :no-target).
 
   Memory: :origin :started :paused-ms :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
@@ -58,7 +61,6 @@
    :spacing {:doc "blocks between legs, 4 to 64" :spec (a/int-in 4 64) :default 16}
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
    :max-legs {:doc "legs walked before it gives up" :spec (a/int-in 0 nil) :default 32}
-   :timeout-s {:doc "seconds from the first round before it gives up, not counting the time go-to holds for day in a shelter" :spec (a/num-in 0 nil) :default 600}
    :takeable {:doc "leave out blocks a zone, claim or plan footprint bars this body from taking" :spec boolean? :default false}
    :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :avoid-boxes {:doc "boxes [[x1 z1] [x2 z2]] (corners inclusive, any order) of columns whose blocks do not count as found: a pen is one box, not its columns (a job expression is size-limited)" :spec (a/coll-of (a/pred "two [x z] corners" #(and (vector? %) (= 2 (count %)) (every? vector? %)))) :default nil}
@@ -69,17 +71,29 @@
    :load-wait-s {:doc "how long to wait for unloaded leg columns to load when no loaded leg is left" :spec (a/num-in 0 nil) :default 30}})
 
 (a/defargs settings
-  {::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
+  {::time-s {:default 600 :doc "Seconds from the first round before a search gives up, not counting the time go-to holds for day in a shelter." :spec (a/num-in 0 nil)}
+   ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
    ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}
    ::reach {:default 12 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::held-angle {:default 60 :doc "A leg lies the way a failed leg went when the angle between them, seen from the body, is under this many degrees." :spec (a/num-in 0 180)}
    ::held-near {:default 4 :doc "Blocks from where a leg failed within which its way still holds others back." :spec (a/num-in 0 nil)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))
 (defn reach [] (settings/get settings ::reach))
 (defn descent [] (settings/get settings ::descent))
+(def target [:target])
+
+(def defaults {:spend {:time ::time-s}})
+
+(defn legacy-args
+  "An old caller's :timeout-s as the call's :spend {:time}."
+  [{:keys [timeout-s] :as args}]
+  (cond-> (dissoc args :timeout-s)
+    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
+
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 
 ;; ------------------------------------------------------------------ pure
@@ -186,13 +200,25 @@
   [m now]
   (> (:wait-until m 0) now))
 
-(defn check
-  "A target is named, and the job is not waiting for leg columns to load; says which it waits for."
+(defn no-target
+  "At the call's start: the cause :no-target while no target is named."
   [c]
-  (cond
-    (empty? (targets c)) (ctx/wait c {:reason :no-target})
-    (waiting? (ctx/mem c) (ctx/now c)) (ctx/wait c {:reason :chunks-loading :until (:wait-until (ctx/mem c))})
-    :else true))
+  (when (and (not (ctx/frozen-call c)) (empty? (targets c))) :no-target))
+
+(def conditions [[:fn no-target]])
+
+(defn done?
+  "The targets found against :count. Never :done? itself: the search ends with its event and data."
+  [c]
+  (let [n (count (:found (ctx/mem c)))]
+    {:done? false :units :found :done n :left (max 0 (- (:count (:args c)) n))}))
+
+(defn time-limit "Seconds the call may search." [c]
+  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+
+(defn quote-of [c]
+  (let [most (time-limit c)]
+    {:uses {:time [0 (min 60 most) most]}}))
 
 (defn cell [p] (mapv js/Math.floor [(.-x p) (.-y p) (.-z p)]))
 (defn here [c] (cell (.-pos (.self (:primitives c)))))
@@ -208,7 +234,7 @@
                (look/seen-entities p {:names names :radius radius :max 32}))))
 
 (defn finish!
-  "Emit the outcome, hand it to the parent, end the job."
+  "Emit the outcome and end the call: done when found, else the ending of why."
   [c reason why]
   (let [m (ctx/mem c)
         result (cond-> {:reason reason :found (:found m [])
@@ -220,10 +246,13 @@
       (ctx/emit! c :search.done :info (assoc result :text (str "found " (count (:found result)) " " what " at "
                                                                            (str/join ", " (map #(str/join "," (:pos %)) (:found result))))))
       (ctx/emit! c :search.not-found :warn
-                 (assoc result :text (str "no " what " found (" (name why) (when (= :time why) (str ", :timeout-s " (:timeout-s (:args c)))) ") after " (:legs m 0) " legs, "
+                 (assoc result :text (str "no " what " found (" (name why) (when (= :time why) (str ", :spend :time " (time-limit c))) ") after " (:legs m 0) " legs, "
                                           (:scans m 0) " looks, " (:farthest m 0) " blocks out"))))
-    (ctx/result! c result)
-    :done))
+    (case why
+      nil (ctx/end c :done nil result)
+      :time (ctx/end c :limit-reached {:line :time :reason :time} result)
+      :not-loaded (ctx/end c :condition-failed :not-loaded result)
+      (ctx/end c :nothing-possible why result))))
 
 (defn takeable
   "found without the blocks in :avoid columns and :avoid-boxes, the noted entities standing in a zone or plan of the body's own (its pens),
@@ -327,18 +356,20 @@
 
 (defn ^:async walk!
   "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields, else :again
-  (or :done when the failed legs in a row end the search)."
+  (or the ending when the failed legs in a row end the search)."
   [c]
   (let [[x y z] (:leg (ctx/mem c))
-        [r waiting] (await (child/call-walk-reason c :leg {:pos {:x x :y y :z z} :range 2
+        [r waiting] (await (child/call-walk-reason* c :leg {:pos {:x x :y y :z z} :range 2
                                                            :escalate (>= (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row)))
                                                            :goal-danger :end}))]
     (ctx/update-mem! c assoc :holding (boolean waiting))
-    (if-not (= :done r)
+    (if (= :continue r)
       :continue
-      (let [{:keys [in-water why] :as res} (ctx/child-result c :leg)
-            arrived (and (:arrived res) (not in-water))
-            dangerous? (= :goal-dangerous why)
+      (let [{:keys [in-water why] :as data} (:data r)
+            cause (contract/cause-key r)
+            res (assoc data :reason cause)
+            arrived (and (:arrived data) (not in-water))
+            dangerous? (= :goal-dangerous (or why cause))
             in-row (cond arrived 0 dangerous? (:failed-in-row (ctx/mem c) 0) :else (inc (:failed-in-row (ctx/mem c) 0)))
             [hx _ hz] (here c)]
         (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg :leg-column) :failed-in-row in-row)
@@ -392,9 +423,11 @@
                                  (:holding m) (update :paused-ms (fnil + 0) (- now (:last-step m now)))))))
   (let [{:keys [leg started paused-ms]} (ctx/mem c)]
     (cond
-      (>= (- (ctx/now c) started (or paused-ms 0)) (* 1000 (:timeout-s (:args c)))) (finish! c :not-found :time)
+      (>= (- (ctx/now c) started (or paused-ms 0)) (* 1000 (time-limit c))) (finish! c :not-found :time)
       leg (await (walk! c))
       :else (await (step! c)))))
 
 (defn ^:async round [c]
-  (await (pace/steps! c #(search-step! c))))
+  (if (waiting? (ctx/mem c) (ctx/now c))
+    (do (ctx/hold-still! c :chunks-loading) :continue)
+    (await (pace/steps! c #(search-step! c)))))

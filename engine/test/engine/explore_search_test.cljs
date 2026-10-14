@@ -383,12 +383,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [calls (atom 0)
-              real child/call-walk-reason
+              real child/call-walk-reason*
               night (fn ^:async night-walk [c slot args]
                       (if (< (swap! calls inc) 150)
                         [:continue :night-sheltered]
                         (await (real c slot args))))
-              s (with-redefs [child/call-walk-reason night]
+              s (with-redefs [child/call-walk-reason* night]
                   (await (search! {:target "diamond_block" :max-distance 20 :timeout-s 60} {} 400)))
               e (event-of s :search.not-found)]
           (is (finished? s))
@@ -398,11 +398,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (with-redefs [child/call-walk-reason (fn [_ _ _] (js/Promise.resolve [:continue nil]))]
+        (let [s (with-redefs [child/call-walk-reason* (fn [_ _ _] (js/Promise.resolve [:continue nil]))]
                   (await (search! {:target "diamond_block" :max-distance 20 :timeout-s 60} {} 400)))
               e (event-of s :search.not-found)]
           (is (= :time (:why e)))
-          (is (re-find #"timeout-s" (:text e))))))))
+          (is (re-find #":spend :time" (:text e))))))))
 
 (deftest three-failed-legs-in-a-row-end-it-stuck
   (async done
@@ -453,33 +453,19 @@
   (is (re-find #":heading must be one of :east, :north, :south, :west, got :up"
                (expr/problem registry/jobs '(jobs.explore.search {:target "diamond_block" :pattern :outward :heading :up})))))
 
-(deftest it-declines-without-a-target
-  (let [c {:args {:target nil}}]
-    (is (not (search/check c)))
-    (is (not (search/check {:args {:target []}})))))
-
-(deftest it-states-why-it-declines-without-a-target
-  (let [c {:args {:target nil} :wait (atom nil)}]
-    (search/check c)
-    (is (= :no-target (:reason @(:wait c))))))
+(deftest a-call-without-a-target-waits-at-its-start
+  (with-redefs [ctx/frozen-call (constantly nil)]
+    (is (= :no-target (search/no-target {:args {:target nil}})))
+    (is (= :no-target (search/no-target {:args {:target []}})))
+    (is (nil? (search/no-target {:args {:target "diamond_block"}}))))
+  (with-redefs [ctx/frozen-call (constantly {:least 1})]
+    (is (nil? (search/no-target {:args {:target nil}})) "a started call runs on")))
 
 (deftest it-waits-only-until-the-wait-is-over
   (are [m now expected] (= expected (search/waiting? m now))
     {} 5000 false
     {:wait-until 6000} 5000 true
     {:wait-until 6000} 6000 false))
-
-(deftest it-states-the-wait-for-chunks-to-load-and-then-passes
-  (let [c {:args {:target "diamond_block"} :wait (atom nil)}]
-    (with-redefs [ctx/mem (constantly {:wait-until 6000})
-                  ctx/now (constantly 5000)]
-      (is (false? (search/check c)))
-      (is (= {:reason :chunks-loading :until 6000} @(:wait c))))
-    (reset! (:wait c) nil)
-    (with-redefs [ctx/mem (constantly {:wait-until 6000})
-                  ctx/now (constantly 6000)]
-      (is (true? (search/check c)))
-      (is (nil? @(:wait c))))))
 
 (deftest ore-the-body-has-not-seen-is-neither-found-nor-noted
   (async done
