@@ -341,3 +341,29 @@
           (is (<= closed-room (* 2 (retreat-home/max-doors))) (str "each door side flooded once a flight: " @counts))
           (is (<= room (+ closed-room (* steps (retreat-home/max-rooms)))) (str "rooms rebuilt per step: " @counts))
           (is (<= walk-steps (* steps (retreat-home/max-rooms))) (str "one walk search per room door per step: " @counts)))))))
+
+(defn reading!
+  "Count p's cell reads (sensedAt) in reads."
+  [p reads]
+  (let [f (.-sensedAt p)]
+    (aset p "sensedAt" (fn [pos] (swap! reads inc) (.call f p pos)))))
+
+(deftest a-close-melee-chaser-gets-a-first-step-that-floods-no-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [reads (atom 0)
+              per-step (atom [])
+              step retreat/flight-step!
+              world (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states) [(zombie 5.5 9.5 0.4)] lone-doors)
+                           :home false)
+              {:keys [eng p]} (setup world)
+              _ (reading! p reads)
+              _ (set! retreat/flight-step! (fn [c] (let [before @reads]
+                                                     (.then (step c) (fn [r] (swap! per-step conj (- @reads before)) r)))))]
+          (core/submit! eng '(jobs.survival.retreat) {})
+          (try (await (tu/run-until-empty eng 2))
+               (finally (set! retreat/flight-step! step)))
+          (let [flood (let [before @reads] (reach/closed-room? p {:x -6 :y 64 :z 5}) (- @reads before))]
+            (is (seq @per-step))
+            (is (< (first @per-step) flood) (str "cells read by the first step, fewer than one open room flood (" flood "): " @per-step))))))))

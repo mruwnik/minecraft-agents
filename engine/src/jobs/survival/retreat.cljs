@@ -251,7 +251,11 @@
         early (when (and threat (not hit?)) (await (early-refuge! c)))
         covered? (cover/cover-fn p threats)
         blast (filterv #(flight/blaster? p %) threats)
-        survey (when (and threat (empty? blast)) (retreat-home/survey c (cover/home-pos c)))
+        survey (when (and threat (not hit?) (empty? blast))
+                 (retreat-home/survey c (cover/home-pos c)
+                                      (if (some #(and (not (combat/ranged? %)) (<= (danger-q/mob-distance p %) (cornered/cover-gap))) threats)
+                                        0
+                                        (retreat-home/judge-per-step))))
         rooms (:rooms survey)
         verdicts (when survey (retreat-home/verdicts p rooms threats (not (cover/exposed-low? c covered?))))
         {:keys [room way inside?]} (retreat-home/pick verdicts)

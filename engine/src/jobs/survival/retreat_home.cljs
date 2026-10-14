@@ -21,10 +21,12 @@
 (a/defargs settings
   {::door-radius {:default 32 :doc "Blocks from the body within which a seen door or gate may lead into a closed building to flee to." :spec (a/num-in 0 64)}
    ::max-doors {:default 8 :doc "Seen doors and gates, nearest first, whose two sides a flight checks for a closed room." :spec (a/int-in 0 nil)}
-   ::max-rooms {:default 3 :doc "Closed rooms, the home first then the nearest, a flight step races for." :spec (a/int-in 1 nil)}})
+   ::max-rooms {:default 3 :doc "Closed rooms, the home first then the nearest, a flight step races for." :spec (a/int-in 1 nil)}
+   ::judge-per-step {:default 2 :doc "Door sides not judged before that a flight step floods for a closed room (an open one reads up to room-cells cells), nearest first; none while a melee chaser is within cover-gap. The home is always judged." :spec (a/int-in 0 nil)}})
 (defn door-radius [] (settings/get settings ::door-radius))
 (defn max-doors [] (settings/get settings ::max-doors))
 (defn max-rooms [] (settings/get settings ::max-rooms))
+(defn judge-per-step [] (settings/get settings ::judge-per-step))
 
 (defn cell-key [{:keys [x y z]}] (str x "," y "," z))
 
@@ -62,22 +64,31 @@
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach/room plus :start and :home?): the home's (home
   {:x :y :z} or nil) and those behind the doors the body has seen (starts), at most max-rooms, the home first then the
   nearest; and {:dropped [{:at [x y z] :own? :why}]}, the cells that are none: :run-failed (a run to it failed this
-  flight) or :not-closed."
-  [c home]
-  (let [p (:primitives c)
-        me (u/self-pos c)
-        failed (:refuges-failed (ctx/mem c) #{})
-        judged (mapv (fn [{:keys [pos] :as s}]
-                       (assoc s :why (cond (failed (cell-key pos)) :run-failed (not (closed? c pos)) :not-closed)))
-                     (starts p home))]
-    {:dropped (vec (for [{:keys [pos home? why]} judged :when why] {:at (mapv pos [:x :y :z]) :own? home? :why why}))
-     :rooms (->> judged
-                 (remove :why)
-                 (sort-by (fn [{:keys [pos home?]}] [(if home? 0 1) (u/dist me (mid pos))]))
-                 (keep (fn [{:keys [pos home?]}] (some-> (reach/room p pos) (assoc :start pos :home? home?))))
-                 (reduce (fn [acc r] (if (some #(contains? (:cells %) (mapv (:start r) [:x :y :z])) acc) acc (conj acc r))) [])
-                 (take (max-rooms))
-                 vec)}))
+  flight), :not-closed, or :unjudged (a door side not judged this flight beyond the fresh ones it may flood now; the
+  home is always judged)."
+  ([c home] (survey c home js/Infinity))
+  ([c home fresh]
+   (let [p (:primitives c)
+         me (u/self-pos c)
+         failed (:refuges-failed (ctx/mem c) #{})
+         left (volatile! fresh)
+         judge (fn [pos home?]
+                 (let [known (get (:refuge-rooms (ctx/mem c)) (cell-key pos))]
+                   (cond
+                     (some? known) (when-not known :not-closed)
+                     (or home? (pos? @left)) (do (when-not home? (vswap! left dec)) (when-not (closed? c pos) :not-closed))
+                     :else :unjudged)))
+         judged (mapv (fn [{:keys [pos home?] :as s}]
+                        (assoc s :why (if (failed (cell-key pos)) :run-failed (judge pos home?))))
+                      (starts p home))]
+     {:dropped (vec (for [{:keys [pos home? why]} judged :when why] {:at (mapv pos [:x :y :z]) :own? home? :why why}))
+      :rooms (->> judged
+                  (remove :why)
+                  (sort-by (fn [{:keys [pos home?]}] [(if home? 0 1) (u/dist me (mid pos))]))
+                  (keep (fn [{:keys [pos home?]}] (some-> (reach/room p pos) (assoc :start pos :home? home?))))
+                  (reduce (fn [acc r] (if (some #(contains? (:cells %) (mapv (:start r) [:x :y :z])) acc) acc (conj acc r))) [])
+                  (take (max-rooms))
+                  vec)})))
 
 (defn rooms
   "The closed rooms to flee to (survey), none a run to failed this flight."
