@@ -10,6 +10,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [engine.shelter-test :as st]
+            [jobs.survival.recover-drops.estimate :as estimate]
             [jobs.survival.recover-drops :as recover-drops]
             [engine.test-util :as tu :refer [run-until-empty]]
             [triggers.survival.died :as died]))
@@ -156,7 +157,7 @@
         death {:pos {:x 20 :y 24 :z 0} :inventory dt/death-pile-of-the-field-report :cause "skeleton"}]
     (die! eng death)
     (is (= ["skeleton"]
-           (mapv :name (:top-mobs (recover-drops/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000)))))))
+           (mapv :name (:top-mobs (estimate/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000)))))))
 
 (deftest a-later-death-by-a-mob-near-an-older-pile-guards-that-pile-too
   (async done
@@ -222,8 +223,8 @@
               id (core/submit! eng job {})]
           (await (core/tick! eng))
           (let [w (core/waiting eng id)]
-            (is (= [:no-drops :skip] ((juxt :reason :decision) w)) (pr-str w))
-            (is (re-find #"already decided: skip: value .*cost" (:text w)) (pr-str w))))))))
+            (is (= [:no-drops :skip] [(:reason w) (:decision (:cause w))]) (pr-str w))
+            (is (re-find #"already decided: skip: value .*cost" (:text (:cause w))) (pr-str w))))))))
 
 (def plug-cells
   "The two dirt cells the body placed in the mouth of a stone cell round the death point."
@@ -392,7 +393,7 @@
           (let [id (core/submit! eng dear {})]
             (await (core/tick! eng))
             (is (= :danger-remembered (:reason (core/waiting eng id))) (pr-str (core/waiting eng id)))
-            (is (re-find #"zombie" (str (:text (core/waiting eng id)))) "the wait names what made it decline")
+            (is (re-find #"zombie" (str (:text (:cause (core/waiting eng id))))) "the wait names what made it decline")
             (is (= 1 (count (dt/emitted seen :recover-drops.decided))) "the danger is not weighed again")
             (is (= [] (tu/walk-calls p)))
             (swap! clock + 151000)

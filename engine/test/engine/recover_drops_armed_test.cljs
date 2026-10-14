@@ -6,10 +6,14 @@
             [engine.library-test :refer [setup inv]]
             [engine.recover-drops-danger-test :refer [decided-text]]
             [engine.test-util :as tu :refer [run-until-empty]]
+            [engine.contract :as contract]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [engine.memory :as mem]))
 
 (def chest-cell [-2 64 3])
+
+(def arity4 "need/blocks! callers use its 4-arity, which the compiler calls directly" "cljs$core$IFn$_invoke$arity$4")
 
 (def kit-in-chest [{:name "iron_sword" :count 1} {:name "iron_helmet" :count 1}])
 
@@ -65,19 +69,19 @@
           (is (nil? (get (inv p) "iron_sword"))))))))
 
 (defn run-with-pile
-  "Like run-with-chest for any pile; fetch-stub (or nil) replaces jobs.lib.fetch/fetch!."
+  "Like run-with-chest for any pile; fetch-stub (or nil) replaces jobs.lib.need/blocks!."
   [pile fetch-stub]
   (fn ^:async t []
     (let [world {:floor tu/walk-floor :entities (vec (pile-drops pile))
                  :blocks {"-2,64,3" "chest"} :containers {"-2,64,3" kit-in-chest}}
           {:keys [eng seen p]} (setup world)
-          real fetch/fetch!]
+          real (aget need/blocks! arity4)]
       (mem/write! (:store eng) fetch/stock-kind {:pos chest-cell :items (fetch/stacks->items kit-in-chest)} fetch/stock-policy)
       (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
       (core/submit! eng job {})
-      (set! fetch/fetch! (or fetch-stub real))
+      (aset need/blocks! arity4 (or fetch-stub real))
       (try (await (run-until-empty eng 60))
-           (finally (set! fetch/fetch! real)))
+           (finally (aset need/blocks! arity4 real)))
       {:eng eng :seen seen :p p})))
 
 (def kinds-of (fn [seen] (mapv :kind @seen)))
@@ -95,19 +99,19 @@
     (tu/run-async done
       (fn ^:async t []
         (let [calls (atom 0)
-              real fetch/fetch!
-              stub (fn ^:async stub-fetch [c j pr]
-                     (if (= 1 (swap! calls inc)) :continue (await (real c j pr))))
+              real (aget need/blocks! arity4)
+              stub (fn ^:async stub-fetch [c names n opts]
+                     (if (= 1 (swap! calls inc)) :continue (await (real c names n opts))))
               {:keys [eng seen p]} (await ((run-with-pile dt/death-pile-of-the-field-report stub)))]
           (is (< 1 @calls))
           (is (not (some #{:yielded :recover-drops.declined} (kinds-of seen))))
           (is (= 1 (get (inv p) "iron_sword")))
           (is (not= :skip (:decision (recovered eng)))))))))
 
-(deftest a-fetch-that-ends-the-job-drops-the-kit-and-the-trip-goes-on
+(deftest a-fetch-that-fails-drops-the-kit-and-the-trip-goes-on
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (await ((run-with-pile dt/death-pile-of-the-field-report (fn ^:async stub-fetch [c j pr] :done))))]
+        (let [{:keys [eng seen]} (await ((run-with-pile dt/death-pile-of-the-field-report (fn ^:async stub-fetch [c names n opts] (contract/ending :nothing-possible :failed nil)))))]
           (is (some #{:recover-drops.kit-dropped} (kinds-of seen)))
           (is (some #{:recover-drops.decided} (kinds-of seen))))))))

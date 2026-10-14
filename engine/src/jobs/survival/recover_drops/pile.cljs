@@ -1,0 +1,42 @@
+(ns jobs.survival.recover-drops.pile
+  "A pile in the inventory and on the ground: what of it is back, what is left, which of its items are in sight."
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.storage :as storage]
+            [jobs.lib.util :as u]
+            [jobs.survival.recover-drops.config :as cfg]))
+
+(defn recovered-items
+  "How many of the pile's items entered the inventory since the baseline (taken when the
+  trip was decided): per item name the rise, capped by what the pile held. Items picked up
+  on the walk count as well as those the collect step picks up."
+  [c pile]
+  (let [baseline (:baseline (ctx/mem c))
+        now (storage/carried-totals (u/inventory (:primitives c)))
+        wanted (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} pile)]
+    (reduce + 0 (map (fn [[name n]] (min n (max 0 (- (get now name 0) (get baseline name 0))))) wanted))))
+
+(defn pile-ids
+  "Ids of the item entities in sight lying within radius of pos whose name is one of names."
+  [c pos names radius]
+  (let [wanted (set names)]
+    (->> (array-seq (.entities (:primitives c) #js {:radius (+ radius (cfg/stray-range) 4) :kind "item" :max 64}))
+         (remove #(false? (.-visible %)))
+         (filter #(wanted (some-> (.-item %) .-name)))
+         (filter #(<= (u/dist pos (u/pos-of (.-pos %))) radius))
+         (mapv #(.-id %)))))
+
+(defn left-over
+  "{item name count} of the pile not yet back in the inventory."
+  [c pile]
+  (let [baseline (:baseline (ctx/mem c))
+        now (storage/carried-totals (u/inventory (:primitives c)))
+        wanted (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} pile)]
+    (into {} (keep (fn [[name n]] (let [l (- n (max 0 (- (get now name 0) (get baseline name 0))))] (when (pos? l) [name l]))) wanted))))
+
+(defn look-cell
+  "The cell [x y z] the first unseen drop was last seen in, from the :left of a collect pass's ending data, or nil."
+  [swept]
+  (->> (:left swept)
+       (filter #(= :unseen (:reason %)))
+       (mapcat (comp vals :last))
+       first))

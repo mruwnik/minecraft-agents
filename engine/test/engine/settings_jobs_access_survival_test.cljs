@@ -11,7 +11,7 @@
             [jobs.survival.breathe :as breathe]
             [jobs.survival.extinguish :as extinguish]
             [jobs.survival.night.sites :as sites]
-            [jobs.survival.recover-drops :as recover-drops]
+            [jobs.survival.recover-drops.config :as recover-drops]
             [jobs.survival.retreat-flight :as flight]))
 
 (deftest defaults-are-the-old-constants

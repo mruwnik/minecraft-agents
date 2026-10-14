@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.events :as events]
             [jobs.lib.world-files :as ew]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.expr :as expr]
             [engine.fake :as fake]
@@ -265,8 +266,9 @@
           (await (run-until-empty eng 2))
           (swap! clock + 60000)
           (is (nil? (recovered eng)) "a blocked walk is no verdict")
-          (is (= 1 (count (:list (core/state eng)))) "the job is still on its way")
+          (is (= [] (:list (core/state eng))) "the run ended; the death stays open for the trigger to fire again")
           (swap! (fake/state p) assoc :unreachable #{})
+          (core/submit! eng job {})
           (is (< (await (run-until-empty eng 20)) 20))
           (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)))
           (is (= :collected (:decision (recovered eng)))))))))
@@ -280,6 +282,7 @@
           (core/submit! eng job {})
           (await (run-until-empty eng 6))
           (swap! clock + 300000)
+          (core/submit! eng job {})
           (await (run-until-empty eng 6))
           (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason]))))))))
 
@@ -494,8 +497,9 @@
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= [] (tu/walk-calls p)) "no acting while a hostile is within the danger radius")
-          (is (= 1 (count (:list (core/state eng)))) "the job stays listed")
+          (is (= [] (:list (core/state eng))) "the run ended, the death stays open")
           (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
+          (core/submit! eng job {})
           (await (run-until-empty eng 10))
           (is (= :collected (:decision (recovered eng)))))))))
 
@@ -563,9 +567,9 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds})
-          (with-redefs [ctx/call-child (fn [& _] (js/Promise.resolve :done))
-                        ctx/child-result (fn [& _] {:arrived false :reason :unreachable :why :start-enclosed
-                                                    :inside-own-shelter {:x 0 :y 64 :z 0}})]
+          (with-redefs [ctx/call (fn [& _] (js/Promise.resolve
+                                            (contract/ending :nothing-possible {:reason :unreachable :why :start-enclosed}
+                                                             {:arrived false :why :start-enclosed :inside-own-shelter {:x 0 :y 64 :z 0}})))]
             (dotimes [_ 5]
               (core/submit! eng job {})
               (await (run-until-empty eng 6))))
@@ -769,6 +773,7 @@
               (await (core/tick! eng))
               (recur (inc n))))
           (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
+          (core/submit! eng job {})
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng))))
           (is (= [death-pos] (tu/walked-to eng)))
