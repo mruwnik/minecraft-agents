@@ -29,7 +29,6 @@
             [jobs.lib.torch :as torch]
             [jobs.lib.placement :as placement]
             [jobs.gather.mine-stay :as stay]
-            [jobs.access.stair :as stair]
             [jobs.lib.world :as known]
             [jobs.gather.mine.targets :refer [reach air kinds carried around face-names rules-in soil-blocks scan off-ground? snapshot book-ground! way-floor last-exit? skip! drop-radius left-behind skip-failed! skip-unreachable! stalled! step-cell zone-margin within-own-zone drop-in-line? next-target!]]
             [jobs.gather.mine.end :refer [wrap-up! to-mend! home-round!]]
@@ -676,7 +675,7 @@
   [res]
   (let [h (first (:hazards res))
         at (some-> (or (when (= :hazard (:reason res)) (:at h)) (:cell res)) (#(zipmap [:x :y :z] %)))]
-    {:reason (cond (nil? res) :refused (and h (= :hazard (:reason res))) (stair/hazard-key h) :else (:reason res)) :at at}))
+    {:reason (cond (nil? res) :refused (and h (= :hazard (:reason res))) (access/stair-hazard-key h) :else (:reason res)) :at at}))
 
 (defn book-cut!
   "After a stair step: its dug cells booked for the mend (ground under the start), and the last mined block among them

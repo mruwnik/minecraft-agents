@@ -162,14 +162,6 @@
   #{"wheat" "carrots" "potatoes" "beetroots" "melon_stem" "pumpkin_stem" "attached_melon_stem" "attached_pumpkin_stem"
     "nether_wart" "sweet_berry_bush" "torchflower_crop" "pitcher_crop" "farmland"})
 
-(defn hazard-key
-  "The :accept key of a hazard: a fluid beside is :lava or :water (bubble columns are water); a falling block over the
-  body's own column is :on-body, which no :accept takes (it would land on the body)."
-  [{:keys [reason fluid on-body]}]
-  (cond on-body :on-body
-        (= :fluid-adjacent reason) (if (= "lava" fluid) :lava :water)
-        :else reason))
-
 (defn stair-hazards
   "The hazard the stair adds to the rules' for cell: a falling block over it, unless that cell is cut too (the rules
   see one only over the body's own column; the body walks into the next one)."
@@ -272,7 +264,7 @@
                 (let [v (cell-verdict (assoc in :cell cell) cut)]
                   (cond
                     (not (:ok v)) (assoc (dissoc v :ok) :cell cell)
-                    (not-every? (comp accept hazard-key) (:hazards v))
+                    (not-every? (comp accept access/stair-hazard-key) (:hazards v))
                     {:reason :hazard :cell cell :hazards (:hazards v) :why (hazards-why (:hazards v))}))))
             cut))))
 
@@ -533,7 +525,7 @@
               block ((:block-at in) cell)]
           (cond
             (not (:ok v)) (assoc (dissoc v :ok) :cell cell)
-            (not-every? (comp accept hazard-key) (:hazards v)) {:reason :hazard :cell cell :hazards (:hazards v) :why (hazards-why (:hazards v))}
+            (not-every? (comp accept access/stair-hazard-key) (:hazards v)) {:reason :hazard :cell cell :hazards (:hazards v) :why (hazards-why (:hazards v))}
             (rules/air block) :continue
             :else
             (do

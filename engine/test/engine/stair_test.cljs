@@ -13,6 +13,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
             [jobs.access.stair :as stair]
+            [jobs.lib.access :as access]
             [jobs.lib.bridge :as bridge]
             [jobs.lib.ledger :as ledger]
             [engine.settings :as settings]
@@ -221,7 +222,7 @@
 (deftest gravel-over-the-head-going-up-is-a-hazard-no-accept-takes
   (let [named {[0 67 0] "stone" [0 68 0] "gravel" [1 65 0] "stone"}]
     (is (= :hazard (:reason (stop named #{:water} :dir :up))))
-    (is (= [:on-body] (map stair/hazard-key (:hazards (stop named #{:falling-block} :dir :up)))) "it would land on the body")
+    (is (= [:on-body] (map access/stair-hazard-key (:hazards (stop named #{:falling-block} :dir :up)))) "it would land on the body")
     (is (nil? (stop (assoc named [0 68 0] "stone" [1 68 0] "gravel" [1 67 0] "stone") #{:falling-block} :dir :up))
         "gravel over the next column falls into the cut")))
 
