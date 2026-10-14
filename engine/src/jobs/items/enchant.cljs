@@ -10,22 +10,25 @@
 
 (def doc
   "Enchant one :item at an enchanting table. Walks to the table (:table, else the nearest within :radius), reads
-  the three offers with the item lying in the table, chooses one and enchants.
+  the three offers with the item lying in the table, chooses one and enchants. Needs lapis and levels; it does not
+  fetch them. Quote: A, a walk and a visit.
   An offer costs its slot number in lapis, and in levels at least its level cost and its slot number. The
   choice: :slot 1-3 takes that offer alone. Otherwise :choice \"best\" takes the dearest offer the body can pay and
   \"cheapest\" the lowest level cost it can pay (the lower slot on a tie). Offers dearer than :max-level-cost
   are ignored.
-  Result on success: {:enchanted true :item :slot :level-cost :levels-spent :lapis-spent :enchants [{:name
+  Ends :done with {:enchanted true :item :slot :level-cost :levels-spent :lapis-spent :enchants [{:name
   :level}] :xp-level :hint {:enchant :level}|nil}, measured from what is carried and the body's level after the
   window closed. Info enchant.done.
-  It gives up with {:enchanted false :reason r :levels-spent n :lapis-spent n} and warn enchant.gave-up.
-  Reasons: no-table, not-a-table, no-item, already-enchanted (every copy carried is enchanted),
-  not-enchantable, no-lapis, too-few-levels, no-offer (the :slot has none), no-offer-within-cost,
-  inventory-full, enchant-failed (an answer not understood after the call), window (did not open, three times),
-  window-stalled, not-confirmed (the item came back unenchanted), offer-changed (three times), unreachable.
+  A give-up warns enchant.gave-up and ends with {:enchanted false :item :levels-spent n :lapis-spent n}.
+  Condition-failed: :bad-args (condition), :no-table, :not-a-table, :no-item, :already-enchanted (every copy carried is
+  enchanted), :not-enchantable, :no-lapis, :too-few-levels, :no-offer (the :slot has none), :no-offer-within-cost,
+  :inventory-full. Nothing-possible: :enchant-failed (an answer not understood after the call), :window (did not open,
+  three times), :window-stalled, :not-confirmed (the item came back unenchanted), :offer-changed (three times),
+  :unreachable, :timeout.
   One call is the whole enchant (it yields :continue only while go-to waits on the world).
   A failed enchant is never repeated, as it may have taken the price. The attempt is written to memory before the
-  call. After a restart that finds the item enchanted, the job reports it (:resumed true, enchants unknown).")
+  call. After a restart that finds the item enchanted, the job reports it (:resumed true, enchants unknown).
+  done? counts the item enchanted.")
 
 (a/defargs args
   {:item {:doc "name of the item to enchant, from the inventory" :spec a/item? :default nil}
@@ -36,14 +39,33 @@
    :choice {:doc "\"best\" (dearest affordable offer) or \"cheapest\" (lowest level cost affordable)" :spec #{"best" "cheapest"} :default "best"}})
 
 (a/defargs settings
-  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}})
+  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::walk-s {:default 10 :doc "Seconds the walk to the table takes (the quote)." :spec (a/num-in 0 nil)}
+   ::visit-s {:default 5 :doc "Seconds the offers and the enchant take at the table (the quote)." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 
-(defn check
-  "A non-blank item name is given."
+(def target [:item :table :slot :choice])
+
+(defn problem
+  "The cause {:reason :bad-args} when no item name is given."
   [c]
-  (or (let [i (:item (:args c))] (and (string? i) (not (str/blank? i))))
-      (ctx/wait c {:reason :bad-args :why "no item name"})))
+  (let [i (:item (:args c))]
+    (when-not (and (string? i) (not (str/blank? i)))
+      {:reason :bad-args :why "no item name"})))
+
+(def conditions [[:fn problem]])
+
+(defn done?
+  "Counts only (the round ends the call with its data)."
+  [c]
+  (let [n (if (:enchanted (ctx/mem c)) 1 0)]
+    {:done? false :units :items :done n :left (- 1 n)}))
+
+(defn quote-of [_c]
+  (let [walk (settings/get settings ::walk-s)
+        visit (settings/get settings ::visit-s)]
+    {:uses {:time [visit (+ walk visit) (+ walk (* 3 visit))]
+            :items {"lapis_lazuli" [1 2 3]}}}))
 
 ;; ------------------------------------------------------------------ the choice
 
@@ -75,17 +97,22 @@
 
 ;; ------------------------------------------------------------------ the round
 
+(def condition-reasons
+  "Give-ups that are a fact about the call; any other give-up is a failed try."
+  #{:no-table :not-a-table :no-item :already-enchanted :not-enchantable :no-lapis :too-few-levels :no-offer
+    :no-offer-within-cost :inventory-full})
+
 (defn finish!
-  "Hand the parent the result and return :done. extra is merged over the nothing-spent default."
-  [c extra]
-  (ctx/result! c (merge {:enchanted false :item (:item (:args c)) :levels-spent 0 :lapis-spent 0} extra))
-  :done)
+  "The ending of kind with cause; the data defaults to nothing spent."
+  [c kind cause extra]
+  (ctx/end c kind cause (merge {:enchanted false :item (:item (:args c)) :levels-spent 0 :lapis-spent 0} extra)))
 
 (defn give-up!
-  "Warn and finish with a reason (and what was spent, when anything was)."
+  "Warn and end with a reason (and what was spent, when anything was)."
   [c reason extra]
-  (ctx/emit! c :enchant.gave-up :warn {:reason reason :text (str "enchant gave up: " reason)})
-  (finish! c (assoc extra :reason reason)))
+  (let [reason (keyword reason)]
+    (ctx/emit! c :enchant.gave-up :warn {:reason (name reason) :text (str "enchant gave up: " (name reason))})
+    (finish! c (if (condition-reasons reason) :condition-failed :nothing-possible) reason extra)))
 
 (defn fail-up!
   "Count a failed attempt in a row: :again until u/max-failures, then give up with the reason."
@@ -116,7 +143,8 @@
   (let [result {:enchanted true :slot (inc (:choice r)) :level-cost (:level-cost offer) :levels-spent (:levelsSpent r)
                 :lapis-spent (:lapisSpent r) :enchants (:enchants r) :xp-level (:xpLevel r) :hint (:hint offer)}]
     (ctx/emit! c :enchant.done :info (assoc result :item (:item (:args c)) :text (str "enchanted " (:item (:args c)))))
-    (finish! c result)))
+    (ctx/update-mem! c assoc :enchanted true)
+    (finish! c :done nil result)))
 
 (defn resumed!
   "The attempt noted before the call found its item enchanted: report it, spending unknown."
@@ -124,7 +152,7 @@
   (let [{:keys [slot level-cost]} (:attempt (ctx/mem c))
         result {:enchanted true :resumed true :slot slot :level-cost level-cost :enchants nil}]
     (ctx/emit! c :enchant.done :info (assoc result :item (:item (:args c)) :text (str "enchanted " (:item (:args c)) " (found done after a restart)")))
-    (finish! c result)))
+    (finish! c :done nil result)))
 
 (def failed-reasons {"enchant-stalled" "window-stalled" "not-confirmed" "not-confirmed" "item-not-returned" "not-confirmed"})
 
@@ -182,10 +210,10 @@
         (do (await (look/survey! c)) :again)) ; a table behind the body is not seen until it looks
       (let [r (if (u/within? (u/self-pos c) pos (reach))
                 :done
-                (await (child/call-walk c :walk {:pos pos :range (reach) :escalate false :warn false :retry false :zone-tolls true})))]
+                (await (child/call-walk* c :walk {:pos pos :range (reach) :escalate false :warn false :retry false :zone-tolls true})))]
         (cond
           (= :continue r) :continue
-          (not (or (u/within? (u/self-pos c) pos (reach)) (:arrived (ctx/child-result c :walk)))) (fail-up! c "unreachable")
+          (not (or (u/within? (u/self-pos c) pos (reach)) (:arrived (:data r)))) (fail-up! c "unreachable")
           :else (await (consider! c pos)))))))
 
 (defn ^:async round

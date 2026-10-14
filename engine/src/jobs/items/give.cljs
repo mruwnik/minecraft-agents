@@ -10,24 +10,27 @@
 
 (def doc
   "Walk to the player :player, toss them :count of :item (everything carried when nil) and confirm the drop was
-  taken.
-  Before the toss it ends with {:given 0 :reason r} when:
-  - nothing is carried: \"no-item\" (warn give.no-item).
-  - the player is not seen within :radius for 2 s: \"gone\" (info give.gone).
-  - three walks in a row are blocked: \"unreachable\" (warn give.unreachable).
-  - three arrivals in a row are still out of reach: \"out-of-range\" (warn give.out-of-range).
+  taken. Needs the item carried and the player in sight. Quote: A, walks, the toss and the wait.
+  Ends before the toss as a failed condition with data {:given 0}:
+  - :bad-args, a player and an item name are needed (condition).
+  - :no-item, nothing is carried (warn give.no-item).
+  - :gone, the player is not seen within :radius for 2 s (info give.gone).
+  Nothing-possible, {:given 0}:
+  - :unreachable, three walks in a row are blocked (warn give.unreachable).
+  - :out-of-range, three arrivals in a row are still out of reach (warn give.out-of-range).
   A player farther than :reach is walked to (doors :shut). In reach the body looks at the player's head and tosses.
   The item entities of that name within 10 blocks of the toss spot that were not there before are the drop.
   After the toss:
-  - The drop is gone once seen: {:given n} (info give.done).
-  - The drop is never seen within 3 s: {:given tossed :reason \"unconfirmed\"} (info give.unconfirmed).
-  - The drop still lies after :wait-s: it is collected back, never left as litter. The result is {:given (tossed -
-    back) :reason \"not-taken\" :returned back} (info give.returned). The same happens if the body picks it up on
-    its own.
-  A toss refused three times in a row, or three collects in a row that change nothing, end through u/fail! (warn give.gave-up)
-  with the status or \"litter\" as the reason.
+  - The drop is gone once seen: done {:given n} (info give.done).
+  - The drop is never seen within 3 s: done {:given tossed :unconfirmed true} (info give.unconfirmed).
+  - The drop still lies after :wait-s: it is collected back, never left as litter. Done {:given (tossed - back)
+    :returned back} when some was taken (the call's :least, default 1), else nothing-possible :not-taken (info
+    give.returned). The same happens if the body picks it up on its own.
+  A toss refused three times in a row, or three collects in a row that change nothing, end nothing-possible (warn
+  give.gave-up) with the status or :litter as the cause.
   A cut after the toss leaves the drop where it lies.
-  One call is the whole give; it yields :continue only while it waits for the player to appear or to take the drop.")
+  One call is the whole give; it yields :continue only while it waits for the player to appear or to take the drop.
+  done? counts the items given so far.")
 
 (a/defargs args
   {:player {:spec a/name? :default nil}
@@ -44,6 +47,8 @@
    ::max-blocked {:default 3 :doc "Blocked attempts before the job gives up." :spec (a/int-in 0 nil)}
    ::unseen-ms {:default 3000 :doc "How long a target may stay unseen before it counts as gone, in ms." :spec (a/int-in 0 nil)}
    ::head-height {:default 1.6 :doc "Height of a player's head above its position, in blocks." :spec (a/num-in 0 nil)}
+   ::walk-s {:default 10 :doc "Seconds the walk to the player takes (the quote)." :spec (a/num-in 0 nil)}
+   ::toss-s {:default 2 :doc "Seconds the toss and the confirmation take (the quote)." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
 (defn grace-ms [] (settings/get settings ::grace-ms))
 (defn idle-ms [] (settings/get settings ::idle-ms))
@@ -52,12 +57,36 @@
 (defn unseen-ms [] (settings/get settings ::unseen-ms))
 (defn head-height [] (settings/get settings ::head-height))
 
-(defn check
-  "A player name and an item name are given."
+(def target [:player :item :count])
+
+(defn problem
+  "The cause {:reason :bad-args} unless a player name and an item name are given."
   [c]
   (let [{:keys [player item]} (:args c)]
-    (or (and (string? player) (string? item))
-        (ctx/wait c {:reason :bad-args :why "needs a player name and an item name"}))))
+    (when-not (and (string? player) (string? item))
+      {:reason :bad-args :why "needs a player name and an item name"})))
+
+(def conditions [[:fn problem]])
+
+(defn given-so-far
+  "Items given and not taken back so far."
+  [c]
+  (let [{:keys [tossed back] :or {tossed 0 back 0}} (ctx/mem c)]
+    (max 0 (- tossed back))))
+
+(defn done?
+  "Counts only (the round ends the call with its data)."
+  [c]
+  (let [n (given-so-far c)
+        want (or (:count (:args c)) (:had (ctx/mem c)))]
+    {:done? false :units :items :done n :left (max 0 (- (or want n) n))}))
+
+(defn quote-of [c]
+  (let [n (or (:count (:args c)) 1)
+        walk (settings/get settings ::walk-s)
+        toss (settings/get settings ::toss-s)]
+    {:uses {:time [toss (+ toss walk) (+ toss (* 2 walk) (:wait-s (:args c)))]}
+     :done [0 n n]}))
 
 (defn find-player
   "The position {:x :y :z} of player named name within radius, or nil."
@@ -69,10 +98,22 @@
            u/pos-of))
 
 (defn finish!
-  "Hand the parent result and return :done."
-  [c result]
-  (ctx/result! c result)
-  :done)
+  "The ending of kind with cause; data carries what was given (0 unless said)."
+  [c kind cause data]
+  (ctx/end c kind cause (merge {:given 0} data)))
+
+(defn enough?
+  "Whether n given meets the call's :least (default 1; :all wants every one asked)."
+  [c n]
+  (let [least (:least (ctx/frozen-call c) 1)]
+    (>= n (if (= :all least) (or (:count (:args c)) (:had (ctx/mem c))) least))))
+
+(defn gave!
+  "End after a toss: done when enough was given, else nothing-possible with cause."
+  [c given cause data]
+  (if (and (pos? given) (enough? c given))
+    (finish! c :done nil (assoc data :given given))
+    (finish! c :nothing-possible cause (assoc data :given given))))
 
 (defn ^:async idle!
   "A neutral wait for the world (the player to appear or to take the drop), then :continue: the yield."
@@ -87,9 +128,9 @@
   :again, :continue (go-to waits) or :done."
   [c pos]
   (let [reach (:reach (:args c))
-        r (await (child/call-walk c :walk {:pos pos :range reach :doors :shut :leg-s (walk-leg-s)
+        r (await (child/call-walk* c :walk {:pos pos :range reach :doors :shut :leg-s (walk-leg-s)
                                                                :escalate false :warn false :retry false :zone-tolls true}))
-        res (when-not (= :continue r) (ctx/child-result c :walk))]
+        res (when-not (= :continue r) (:data r))]
     (if (= :continue r)
       :continue
       (let [blocked (if (or (:arrived res) (:leg res)) 0 (inc (:blocked (ctx/mem c) 0)))
@@ -98,13 +139,13 @@
         (cond
           (>= out (max-blocked))
           (do (ctx/emit! c :give.out-of-range :warn {:text (str "still out of reach of " (:player (:args c)))})
-              (finish! c {:given 0 :reason "out-of-range"}))
+              (finish! c :nothing-possible :out-of-range nil))
 
           (< blocked (max-blocked)) :again
 
           :else
           (do (ctx/emit! c :give.unreachable :warn {:text (str "cannot reach " (:player (:args c)))})
-              (finish! c {:given 0 :reason "unreachable"})))))))
+              (finish! c :nothing-possible :unreachable nil)))))))
 
 (defn ^:async toss!
   "In reach: remember the drops already lying, look at the player's head and
@@ -123,14 +164,15 @@
             :again)
         (let [v (u/fail! c :give.gave-up (str "give gave up: " status))]
           (if (= :done v)
-            (finish! c {:given 0 :reason status})
+            (finish! c :nothing-possible (keyword status) nil)
             :again))))))
 
 (defn returned!
   "The body holds back more of the item: info and finish with what was given."
   [c given back]
+  (ctx/update-mem! c assoc :back back)
   (ctx/emit! c :give.returned :info {:text (str back " came back") :returned back})
-  (finish! c {:given given :reason "not-taken" :returned back}))
+  (gave! c given :not-taken {:returned back}))
 
 (defn ^:async collect!
   "Take the nearest drop back. Each collect that gathers nothing counts through
@@ -142,7 +184,7 @@
       (do (u/progress! c) :again)
       (let [v (u/fail! c :give.gave-up "give gave up: litter")]
         (if (= :done v)
-          (finish! c {:given given :reason "litter" :returned back})
+          (finish! c :nothing-possible :litter {:given given :returned back})
           :again)))))
 
 (defn ^:async after-toss!
@@ -167,13 +209,13 @@
 
       (and (empty? lying) (not seen-drop))
       (do (ctx/emit! c :give.unconfirmed :info {:text (str "never saw the drop of " item)})
-          (finish! c {:given tossed :reason "unconfirmed"}))
+          (gave! c tossed :unconfirmed {:unconfirmed true}))
 
       (empty? lying)
       (if collecting
         (returned! c given back)
         (do (ctx/emit! c :give.done :info {:text (str "gave " tossed)})
-            (finish! c {:given tossed})))
+            (gave! c tossed :short nil)))
 
       (and (not collecting) (< since (* 1000 wait-s)))
       (await (idle! c))
@@ -192,14 +234,14 @@
     (cond
       (zero? have)
       (do (ctx/emit! c :give.no-item :warn {:text (str "no " item " to give")})
-          (finish! c {:given 0 :reason "no-item"}))
+          (finish! c :condition-failed :no-item nil))
 
       (and (nil? pos) (< (- now (:started (ctx/mem c))) (grace-ms)))
       (await (idle! c))
 
       (nil? pos)
       (do (ctx/emit! c :give.gone :info {:text (str player " is not here")})
-          (finish! c {:given 0 :reason "gone"}))
+          (finish! c :condition-failed :gone nil))
 
       (not (u/within? (u/self-pos c) pos reach))
       (await (walk! c pos))

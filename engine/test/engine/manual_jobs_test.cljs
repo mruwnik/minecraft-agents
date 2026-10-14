@@ -90,7 +90,7 @@
       (fn ^:async t []
         (let [{:keys [result p]} (await (outcome (merge {:entities [(cow 7 2)]} (stacks "wheat")) interact {:id 7 :item "wheat"}))]
           (is (true? (:used result)))
-          (is (nil? (:status result)))
+          (is (= :done (:status result)))
           (is (= 1 (count (calls p "interact")))))))))
 
 (deftest interact-walks-to-a-far-entity

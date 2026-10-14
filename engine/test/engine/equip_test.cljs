@@ -65,7 +65,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (equip (assoc (stacks "iron_pickaxe") :self {:held "iron_pickaxe"}) {:item "iron_pickaxe"}))]
-          (is (= {:status :done :item "iron_pickaxe" :hand "main" :held true} @out)))))))
+          (is (= {:status :done} @out)))))))
 
 (deftest a-missing-item-is-refused-with-a-reason
   (async done
@@ -89,8 +89,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (equip (stacks "dirt") {}))]
-          (is (= :unknown-item (:reason @out)))
-          (is (= "equip needs :item" (:text @out))))))))
+          (is (= :not-done @out) "refused before it starts"))))))
 
 (deftest a-bad-hand-is-refused-at-submit
   (is (re-find #"jobs.items.equip :hand must be one of \"main\", \"off\", got \"foot\""
@@ -104,26 +103,19 @@
           (core/submit! (:eng s) (list job {:item "wooden_pickaxe"}) {})
           (await (ft/run-ticks s 40))
           (is (= "wooden_pickaxe" (held (:p s))))
-          (is (= 1 (count (ft/events-of s :fetch.done))))
           (is (= ["wooden_pickaxe"] (mapv :item (ft/events-of s :equip.done))))
           (is (empty? (ft/chest-items s [-2 64 3]))))))))
 
-(deftest fetch-with-nothing-to-get-fails-and-the-job-waits-with-the-failure
+(deftest fetch-with-nothing-to-get-ends-the-call-need
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (ft/start (ft/world {}) [])
-              id (core/submit! (:eng s) (list job {:item "wooden_pickaxe"}) {})]
+        (let [s (ft/start (ft/world {}) [])]
+          (core/submit! (:eng s) (list job {:item "wooden_pickaxe"}) {})
           (await (ft/run-ticks s 40))
           (is (nil? (held (:p s))))
-          (is (= 1 (count (ft/events-of s :fetch.failed))))
           (is (empty? (ft/events-of s :equip.done)))
-          (is (empty? (ft/events-of s :equip.refused)) "it waits for the item, it does not stop :no-item")
-          (is (= 1 (count (:list (core/state (:eng s))))) "the job is still queued, not finished")
-          (let [w (core/waiting (:eng s) id)]
-            (is (= :need (:reason w)))
-            (is (= "wooden_pickaxe" (:item w)))
-            (is (some? (get-in w [:fetch :failed])))))))))
+          (is (empty? (:list (core/state (:eng s)))) "the call ended, it does not wait for the item"))))))
 
 (deftest fetch-false-opts-out-and-the-round-stops-no-item-without-touching-the-chest
   (async done

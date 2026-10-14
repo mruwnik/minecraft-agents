@@ -29,7 +29,7 @@
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                           (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :ending :status)))
                            r))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
@@ -94,8 +94,8 @@
           (swap! (fake/state p) update :entities conj @held)
           (reset! held nil))))))
 
-(deftest give-check-wants-strings
-  (are [args ok] (= ok ((:check (get registry/jobs job)) {:args args}))
+(deftest give-conditions-want-strings
+  (are [args ok] (= ok (nil? ((second (first (:conditions (get registry/jobs job)))) {:args args})))
     {:player "Steve" :item "bread"} true
     {:player "Steve" :item nil} false
     {:player nil :item "bread"} false
@@ -122,7 +122,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (give {:entities [(steve 10)]} {:player "Steve" :item "bread"} 5 true))]
-          (is (= {:given 0 :reason "no-item"} @out))
+          (is (= {:given 0 :reason :no-item} @out))
           (is (empty? (calls p "toss")))
           (is (has-event? s :give.no-item)))))))
 
@@ -131,7 +131,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out clock] :as s} (await (give bread {:player "Steve" :item "bread"} 12 true))]
-          (is (= {:given 0 :reason "gone"} @out))
+          (is (= {:given 0 :reason :gone} @out))
           (is (<= 2000 (- @clock 1000000)))
           (is (empty? (calls p "toss")))
           (is (has-event? s :give.gone)))))))
@@ -142,7 +142,7 @@
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)] :unreachable ["10,64,0"])
                                                  {:player "Steve" :item "bread"} 12 true))]
-          (is (= {:given 0 :reason "unreachable"} @out))
+          (is (= {:given 0 :reason :unreachable} @out))
           (is (= 3 (count (tu/walked-to (:eng s)))))
           (is (empty? (calls p "toss")))
           (is (has-event? s :give.unreachable)))))))
@@ -153,7 +153,7 @@
       (fn ^:async t []
         (let [{:keys [p out clock] :as s} (await (give (assoc bread :entities [(steve 10)])
                                                       {:player "Steve" :item "bread" :count 5} 40 false))]
-          (is (= {:given 0 :reason "not-taken" :returned 5} @out))
+          (is (= {:given 0 :reason :not-taken :returned 5} @out))
           (is (= {"bread" 5} (inv p)))
           (is (= 1 (count (calls p "collect"))))
           (is (<= 6000 (- @clock 1000000)))
@@ -171,7 +171,7 @@
                        (fake/add-item! p "bread" 2)))
               {:keys [out]} (await (give (assoc bread :entities [(steve 10)])
                                          {:player "Steve" :item "bread" :count 5} 40 false nil hook))]
-          (is (= {:given 3 :reason "not-taken" :returned 2} @out)))))))
+          (is (= {:given 3 :returned 2} @out)))))))
 
 (deftest a-toss-that-keeps-failing-gives-up
   (async done
@@ -180,7 +180,7 @@
         (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
                                                 {:player "Steve" :item "bread"} 20 true
                                                 (fn [p] (.override (.-world p) "toss" (fn ^:async f [_ _ _] #js {:status "no-item" :count 0})))))]
-          (is (= {:given 0 :reason "no-item"} @out))
+          (is (= {:given 0 :reason :no-item} @out))
           (is (= 3 (count (calls p "toss"))))
           (is (has-event? s :give.gave-up)))))))
 
@@ -191,7 +191,7 @@
         (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
                                                 {:player "Steve" :item "bread" :count 5} 60 false
                                                 (fn [p] (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "unreachable" :gained #js []})))))]
-          (is (= {:given 5 :reason "litter" :returned 0} @out))
+          (is (= {:given 5 :reason :litter :returned 0} @out))
           (is (= 3 (count (calls p "collect"))))
           (is (has-event? s :give.gave-up)))))))
 
@@ -218,7 +218,7 @@
               {:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
                                                 {:player "Steve" :item "bread" :count 5} 60 false
                                                 #(late-drop % held) (appear-two-ticks-after-toss held)))]
-          (is (= {:given 0 :reason "not-taken" :returned 5} @out) "waited for the drop, then took it back")
+          (is (= {:given 0 :reason :not-taken :returned 5} @out) "waited for the drop, then took it back")
           (is (= 1 (count (calls p "collect"))))
           (is (not (has-event? s :give.done))))))))
 
@@ -230,7 +230,7 @@
               {:keys [out clock] :as s} (await (give (assoc bread :entities [(steve 10)])
                                                     {:player "Steve" :item "bread" :count 5} 30 false
                                                     #(late-drop % held)))]
-          (is (= {:given 5 :reason "unconfirmed"} @out))
+          (is (= {:given 5 :unconfirmed true} @out))
           (is (<= 3000 (- @clock 1000000)))
           (is (has-event? s :give.unconfirmed)))))))
 

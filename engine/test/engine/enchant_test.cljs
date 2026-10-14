@@ -115,7 +115,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[r p seen] (await (enchant! (assoc table-world :self {:experience {:level 5}}) {}))]
-          (is (= {:enchanted true :item "diamond_sword" :slot 3 :level-cost 5 :levels-spent 3 :lapis-spent 3 :xp-level 2} (dissoc r :enchants :hint)))
+          (is (= {:enchanted true :item "diamond_sword" :slot 3 :level-cost 5 :levels-spent 3 :lapis-spent 3 :xp-level 2} (dissoc r :enchants :hint :status)))
           (is (= [{:name "sharpness" :level 1}] (:enchants r)))
           (is (= {:enchant "sharpness" :level 1} (:hint r)) "the hint the table gave for the chosen offer")
           (is (= {"diamond_sword" 1 "lapis_lazuli" 6} (inv p)))
@@ -148,21 +148,21 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[r p] (await (enchant! table-world {} tu/blind))]
-          (is (= "no-table" (:reason r)))
+          (is (= :no-table (:reason r)))
           (is (empty? (ops p))))))))
 
 (def give-up-rows
-  [["no table within reach" {:blocks {"40,64,0" "enchanting_table"}} {} "no-table"]
-   ["not a table" {:blocks {spot "chest"}} {:table {:x 1 :y 64 :z 0}} "not-a-table"]
-   ["the table block is gone" {:blocks {}} {:table {:x 1 :y 64 :z 0}} "no-table"]
-   ["item not carried" {:inventory [(lapis 9)]} {} "no-item"]
-   ["already enchanted" {:inventory [(assoc sword :enchants [{:name "sharpness" :level 1}]) (lapis 9)]} {} "already-enchanted"]
-   ["not enchantable" {:inventory [{:name "dirt" :count 1} (lapis 9)]} {:item "dirt"} "not-enchantable"]
-   ["no lapis" {:inventory [sword]} {} "no-lapis"]
-   ["too few levels" {:self {:experience {:level 1}} :enchantTables {spot {:offers [4 9 16]}}} {} "too-few-levels"]
-   ["no offer within the cost limit" {:enchantTables {spot {:shelves 15}}} {:max-level-cost 5} "no-offer-within-cost"]
-   ["the chosen slot has no lapis" {:inventory [sword (lapis 1)]} {:slot 3} "no-lapis"]
-   ["the window never opens" {:enchantTables {spot {:busy true}}} {} "window"]])
+  [["no table within reach" {:blocks {"40,64,0" "enchanting_table"}} {} :no-table]
+   ["not a table" {:blocks {spot "chest"}} {:table {:x 1 :y 64 :z 0}} :not-a-table]
+   ["the table block is gone" {:blocks {}} {:table {:x 1 :y 64 :z 0}} :no-table]
+   ["item not carried" {:inventory [(lapis 9)]} {} :no-item]
+   ["already enchanted" {:inventory [(assoc sword :enchants [{:name "sharpness" :level 1}]) (lapis 9)]} {} :already-enchanted]
+   ["not enchantable" {:inventory [{:name "dirt" :count 1} (lapis 9)]} {:item "dirt"} :not-enchantable]
+   ["no lapis" {:inventory [sword]} {} :no-lapis]
+   ["too few levels" {:self {:experience {:level 1}} :enchantTables {spot {:offers [4 9 16]}}} {} :too-few-levels]
+   ["no offer within the cost limit" {:enchantTables {spot {:shelves 15}}} {:max-level-cost 5} :no-offer-within-cost]
+   ["the chosen slot has no lapis" {:inventory [sword (lapis 1)]} {:slot 3} :no-lapis]
+   ["the window never opens" {:enchantTables {spot {:busy true}}} {} :window]])
 
 (deftest gives-up-with-a-reason-and-spends-nothing
   (async done
@@ -176,7 +176,7 @@
                     (is (= reason (:reason r)) label)
                     (is (= false (:enchanted r)) label)
                     (is (= [0 0] [(:levels-spent r) (:lapis-spent r)]) label)
-                    (is (= reason (:reason (first (of-kind seen :enchant.gave-up)))) label)
+                    (is (= (name reason) (:reason (first (of-kind seen :enchant.gave-up)))) label)
                     (is (= 1 (count (of-kind seen :enchant.gave-up))) label)
                     (is (not (some #{"enchant"} (ops p))) label)
                     (is (= (select-keys (merge {:self {:experience {:level 30}}} spec) [:self]) (select-keys {:self {:experience {:level (level p)}}} [:self])) label)))))))))
@@ -211,7 +211,7 @@
                                                                  (if (= "enchant" (.-op args))
                                                                    #js {:status "failed" :reason "enchant-stalled" :lapisSpent 0 :levelsSpent 0}
                                                                    (await (impl token args))))))))]
-          (is (= "window-stalled" (:reason r)))
+          (is (= :window-stalled (:reason r)))
           (is (= 1 (count (filter #{"enchant"} (ops p)))) "never tried again")
           (is (= "window-stalled" (:reason (first (of-kind seen :enchant.gave-up))))))))))
 
@@ -224,7 +224,7 @@
                                                             (if (= "enchant" (.-op args))
                                                               #js {:status "failed" :reason "not-confirmed" :lapisSpent 3 :levelsSpent 3}
                                                               (await (impl token args))))))))]
-          (is (= {:reason "not-confirmed" :lapis-spent 3 :levels-spent 3 :enchanted false} (select-keys r [:reason :lapis-spent :levels-spent :enchanted]))))))))
+          (is (= {:reason :not-confirmed :lapis-spent 3 :levels-spent 3 :enchanted false} (select-keys r [:reason :lapis-spent :levels-spent :enchanted]))))))))
 
 (deftest a-full-inventory-gives-up
   (async done
@@ -235,7 +235,7 @@
                                                             (if (= "enchant" (.-op args))
                                                               #js {:status "full"}
                                                               (await (impl token args))))))))]
-          (is (= "inventory-full" (:reason r))))))))
+          (is (= :inventory-full (:reason r))))))))
 
 (deftest an-offer-that-changed-is-read-again-and-three-changes-give-up
   (async done
@@ -246,7 +246,7 @@
                                                             (if (= "enchant" (.-op args))
                                                               #js {:status "cannot" :reason "offer-changed" :offers #js [1 2 3]}
                                                               (await (impl token args))))))))]
-          (is (= "offer-changed" (:reason r)))
+          (is (= :offer-changed (:reason r)))
           (is (= 3 (count (filter #{"enchant"} (ops p))))))))))
 
 (deftest an-unknown-status-after-the-enchant-call-gives-up-and-is-not-repeated
@@ -258,7 +258,7 @@
                                                             (if (= "enchant" (.-op args))
                                                               #js {:status "weird"}
                                                               (await (impl token args))))))))]
-          (is (= "enchant-failed" (:reason r)))
+          (is (= :enchant-failed (:reason r)))
           (is (= 1 (count (filter #{"enchant"} (ops p)))) "never tried again"))))))
 
 (deftest a-restart-after-the-enchant-landed-reports-it-and-does-not-enchant-again

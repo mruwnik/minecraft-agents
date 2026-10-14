@@ -1,5 +1,5 @@
 (ns engine.fetch-test
-  "The :fetch option (jobs.lib.fetch), jobs.items.obtain, jobs.items.get-tool and jobs.items.fetch-limits against
+  "The :fetch option (jobs.lib.fetch), jobs.items.obtain and jobs.items.get-tool against
   the fake world, slice F1: carried and chest sources only, chests the body has seen."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
@@ -592,24 +592,6 @@
           (core/submit! (:eng s) (list 'jobs.storage.withdraw {:chest [-2 64 3] :items {"dirt" 2}}) {})
           (await (run-ticks s 20))
           (is (= {"dirt" 3} (get (fetch/stock-of (mem/view (:store (:eng s)))) [-2 64 3]))))))))
-
-;; ------------------------------------------------------------------ per-body limits
-
-(deftest fetch-limits-writes-the-body-defaults
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (world {}) [])]
-          (core/submit! (:eng s) (list 'jobs.items.fetch-limits {:depth 3}) {})
-          (core/submit! (:eng s) (list 'jobs.items.fetch-limits {:job 'jobs.blocks.dig :minutes 2}) {})
-          (await (run-ticks s 4))
-          (is (= {:all {:depth 3} :jobs {'jobs.blocks.dig {:minutes 2}}}
-                 (fetch/body-limits (mem/view (:store (:eng s))))))
-          (is (re-find #":depth must be a whole number >= 0, got -2"
-                       (expr/problem registry/jobs (list 'jobs.items.fetch-limits {:depth -2}))))
-          (core/submit! (:eng s) (list 'jobs.items.fetch-limits {:clear true}) {})
-          (await (run-ticks s 2))
-          (is (= {} (fetch/body-limits (mem/view (:store (:eng s)))))))))))
 
 ;; ------------------------------------------------------------------ the craft source
 

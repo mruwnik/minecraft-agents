@@ -11,8 +11,7 @@
   The :fetch arg: false/nil (off), true (all kinds, all sources), a set of kinds (#{:tool :item}), or a map of limits
   {:what :how :depth :minutes :fail-minutes :explore}; :explore (default false: reflexes must not walk off) lets the
   fetch jobs walk and look for a raw need not seen. Limits merge, later wins: built-in, the job's code default, the body's
-  default for all jobs, the body's default for this job (both set by jobs.items.fetch-limits, body memory
-  :fetch/limits), the call's own arg.
+  memory :fetch/limits (all jobs, then this job), the call's own arg.
 
   Also body memory :fetch/stock: what a chest held when last looked into or moved from (withdraw, deposit, kit,
   obtain), so obtain goes first to a chest known to hold the item and skips one known not to."
