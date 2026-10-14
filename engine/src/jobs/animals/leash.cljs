@@ -5,6 +5,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
+            [jobs.lib.started :as started]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -59,7 +60,7 @@
   (when-not (or (fetch/parse-arg (:fetch (:args c))) (animals/lead-carried? c))
     {:reason :no-lead}))
 
-(def conditions [[:fn no-lead]])
+(def conditions [[:fn (started/at-start no-lead)]])
 
 (defn legacy-args
   "An old caller's :timeout-s as the call's :spend {:time}."

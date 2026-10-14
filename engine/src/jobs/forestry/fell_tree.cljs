@@ -14,6 +14,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.started :as started]
             [jobs.lib.targets :as targets]
             [jobs.lib.trees :refer [axe-worth-fetching? axe-fetch-limits trees-near tree-near tree-at unreachable-set debts replant-kind
                                     replant-policy default-radius max-partials]]
@@ -401,7 +402,7 @@
                   (and at (not (u/seen-name (:primitives c) at))))
       (cond-> (no-tree-cause c) (not (look/surveyed? c :near)) contract/look-first))))
 
-(def conditions [[:fn sheltered] [:fn no-tree]])
+(def conditions [[:fn (started/at-start sheltered)] [:fn no-tree]])
 
 (defn done? [_c] {:done? false :units :trees :done 0 :left 1})
 

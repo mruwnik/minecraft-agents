@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]))
@@ -106,7 +107,7 @@
       (< health (:min-health (:args c))) {:reason :low-health :health health :min (:min-health (:args c))}
       (empty? (targets c)) {:reason :no-target})))
 
-(def conditions [[:fn start-problem]])
+(def conditions [[:fn (started/at-start start-problem)]])
 
 (defn done?
   "The hostiles killed against those in range."

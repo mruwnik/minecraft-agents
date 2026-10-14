@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.started :refer [at-start]]
             [engine.settings :as settings]
             [jobs.gather.mine.descent :refer [descent-wanted? descend-due? descend-round! shaft-due? shaft-top-here? shaft-round!]]
             [jobs.gather.mine.drops :refer [collect! dig-cell!]]
@@ -216,11 +217,6 @@
 (def defaults {:least :all :spend {:time ::time-s}})
 
 ;; ------------------------------------------------------------------ the contract
-
-(defn at-start
-  "f of the call, at its start only; nil once it began."
-  [f]
-  (fn [c] (when-not (ctx/frozen-call c) (f c))))
 
 (defn away
   "The cause of a call submitted with a :from the body has since left (jobs.lib.submitted/away-wait), or nil."

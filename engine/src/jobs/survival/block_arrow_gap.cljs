@@ -14,6 +14,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.seal :as seal]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.started :as started]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]))
@@ -160,7 +161,7 @@
   [c]
   (when (empty? (ranged-dangers c)) :no-ranged-danger))
 
-(def conditions [[:fn no-ranged-danger]])
+(def conditions [[:fn (started/at-start no-ranged-danger)]])
 
 (defn done?
   "The cells placed; never :done? itself: the job ends when no line of fire is left."

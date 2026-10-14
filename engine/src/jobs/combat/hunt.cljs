@@ -13,6 +13,7 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]
+            [jobs.lib.started :as started]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -201,7 +202,7 @@
 
 (def conditions
   "Waits while too hurt or on a start fact (start-fact: not for a several-kinds call, whose kinds each check theirs)."
-  [[:fn low-health] [:fn start-fact]])
+  [[:fn (started/at-start low-health)] [:fn start-fact]])
 
 (defn done?
   "The animals killed against the count asked. Never :done? itself: the hunt ends with its event and data."

@@ -5,6 +5,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
+            [jobs.lib.started :as started]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -76,7 +77,7 @@
                (nil? (animals/food-carried (:primitives c) mob)))
       {:reason :no-food})))
 
-(def conditions [[:fn no-food]])
+(def conditions [[:fn (started/at-start no-food)]])
 
 (defn legacy-args
   "An old caller's :timeout-s as the call's :spend {:time}."

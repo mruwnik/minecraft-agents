@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [engine.settings :as settings]
             [jobs.access.stair.cells :as geo]
             [jobs.access.stair.memory :as smem]
@@ -227,21 +228,21 @@
   (let [w (atom nil)]
     (when (false? (submitted/away-wait (assoc c :wait w))) @w)))
 
-(defn at-start
-  "f of the call with its heading, at the call's start only; nil once it began."
+(defn at-start-heading
+  "f of the call with its heading, at the call's start only."
   [f]
-  (fn [c] (when-not (ctx/frozen-call c) (f (with-heading c)))))
+  (started/at-start (fn [c] (f (with-heading c)))))
 
 (def conditions
-  [[:fn (at-start away)]
-   [:fn (at-start (fn [c]
-                    (let [t (geo/target-steps (:args c) (reach/standing-vec (:primitives c)))]
-                      (when (map? t)
-                        (if (:here t)
-                          {:reason :y-not-beyond-feet :why (:error t)}
-                          (contract/impossible {:reason :bad-args :why (:error t)}))))))]
-   [:fn (at-start (fn [c] (when-let [stop (refusal c)] (assoc (access/refusal-fields [stop]) :reason :refused))))]
-   [:fn (at-start unmet)]])
+  [[:fn (started/at-start away)]
+   [:fn (at-start-heading (fn [c]
+                           (let [t (geo/target-steps (:args c) (reach/standing-vec (:primitives c)))]
+                             (when (map? t)
+                               (if (:here t)
+                                 {:reason :y-not-beyond-feet :why (:error t)}
+                                 (contract/impossible {:reason :bad-args :why (:error t)}))))))]
+   [:fn (at-start-heading (fn [c] (when-let [stop (refusal c)] (assoc (access/refusal-fields [stop]) :reason :refused))))]
+   [:fn (at-start-heading unmet)]])
 
 (defn done?
   "The steps cut against the steps asked. Never :done? itself: the round ends the stair with its event and way."
