@@ -14,6 +14,9 @@
                             (status+first (run (world {:fill [hole]}) (near 8 64 8) {} from)))
     ;; z .91 over the hole: the hitbox reaches z 5.21, the block under (2,64,5) holds the body
     {:x 2 :y 64 :z 4 :px 2.5 :py 64 :pz 4.91} [2 64 5]
+    ;; z .6926 (trial): the client box (half width .30999) reaches z 5.0026 and the block under (2,64,5) holds it,
+    ;; though the server's 0.3 box would not reach
+    {:x 2 :y 64 :z 4 :px 2.5 :py 64 :pz 4.6926} [2 64 5]
     ;; z .09 the other way: the block under (2,64,3)
     {:x 2 :y 64 :z 4 :px 2.5 :py 64 :pz 4.09} [2 64 3]
     ;; x edge: the block under (3,64,4)
@@ -37,6 +40,7 @@
   (let [steps [{:x 2 :y 64 :z 5 :h 0 :move :start :px 2.5 :pz 5.5}
                {:x 3 :y 64 :z 5 :h 0 :move :walk :px 3.5 :pz 5.5}]]
     (is (= 0 (:i (ex/start steps 0 {:x 2.5 :y 64 :z 4.91}))) "body beside the start cell: step 0 first")
+    (is (= 0 (:i (ex/start steps 0 {:x 2.5 :y 64 :z 4.6926}))) "body whose client box just reaches the start cell: step 0 first")
     (is (= 1 (:i (ex/start steps 0 {:x 2.5 :y 64 :z 5.5}))) "body in the start cell")
     (is (= 1 (:i (ex/start steps 0 {:x 2.5 :y 64 :z 3.5}))) "body further away: unchanged")
     (is (= 1 (:i (ex/start steps 0))) "no pose: unchanged")))
@@ -87,3 +91,4 @@
   (are [from] (= ["found" nil [2 65 4]] (status+first (run (world {:fill [stair]}) (near 8 64 4) {} from)))
     {:x 2 :y 64 :z 4 :px 2.7 :py 64.5 :pz 4.5}
     {:x 2 :y 64 :z 4 :px 2.2 :py 64.5 :pz 4.5}))
+

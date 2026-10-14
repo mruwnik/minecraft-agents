@@ -580,12 +580,12 @@
      :yaw yaw' :pitch 0}))
 
 (defn beside-start?
-  "The body at pose stands outside step 0's cell but its hitbox reaches into it: the planner moved the start
-  there off a block's edge (planner-tuned start-query)."
+  "The body at pose stands outside step 0's cell but its box (the client physics' width) reaches into it: the planner
+  moved the start there off a block's edge (planner-tuned start-query)."
   [step0 {:keys [x z] :as pose}]
   (and (not (in-cell? step0 pose))
-       (< (- (:x step0) constants/hitbox-half-width) x (+ (:x step0) 1 constants/hitbox-half-width))
-       (< (- (:z step0) constants/hitbox-half-width) z (+ (:z step0) 1 constants/hitbox-half-width))))
+       (< (- (:x step0) constants/body-half-width) x (+ (:x step0) 1 constants/body-half-width))
+       (< (- (:z step0) constants/body-half-width) z (+ (:z step0) 1 constants/body-half-width))))
 
 (defn start
   "The state for walking steps; step 0 is where the plan starts. With the body's pose: a body beside step 0's cell

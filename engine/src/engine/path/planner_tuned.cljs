@@ -417,8 +417,8 @@
      ;; goal-seen
      (.-goalSeen options))))
 
-;; the body's hitbox reaches this far from its centre in x and z
-(def HITBOX-HALF constants/hitbox-half-width)
+;; the body's box reaches this far from its centre in x and z: the client physics' width, which decides what holds it up
+(def HITBOX-HALF constants/body-half-width)
 
 (defn- overlap [lo hi c] (- (js/Math.min hi (inc c)) (js/Math.max lo c)))
 
@@ -437,7 +437,7 @@
 
 (defn- start-query
   "query with its start cell moved for a body on the edge of a block: when from (the floored body position) is no
-  place to stand but from.px/pz is given, the first cell the 0.6-wide hitbox overlaps (hitbox-cells) that stands with
+  place to stand but from.px/pz is given, the first cell the body's box (HITBOX-HALF) overlaps (hitbox-cells) that stands with
   the feet at from.py (when given, within 1/16). A body whose feet are above the floored cell's floor (a stair, whose
   stand the search puts in the cell above it) starts from the cell above when that stands. Unchanged when the floored
   cell stands or no cell does.
