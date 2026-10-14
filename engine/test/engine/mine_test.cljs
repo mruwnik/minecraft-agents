@@ -1918,7 +1918,7 @@
   (let [s (start {:world world})
         out (atom nil)
         fetched (atom [])
-        stub {:check (constantly true)
+        stub {:ways [:chest :craft :gather] :check (constantly true)
               :round (fn ^:async get-tool [c]
                        (swap! fetched conj (:args c))
                        (if give

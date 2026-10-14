@@ -31,7 +31,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [inv (into h/sword (carried "white_wool" 2 "oak_planks" 3 "crafting_table" 1))
-              s (await (scenario {:any-of beds :count 1 :how #{:craft :gather}}
+              s (await (scenario {:any-of beds :count 1 :ways #{:craft :smelt :gather}}
                                  {:inventory inv :entities [(sheep 1 3 "brown") (sheep 2 6 "white") (sheep 3 8 "white") (sheep 4 10 "white") (sheep 5 11 "white")]} 40))]
           (is (seq (attacked s)) "a sheep was attacked")
           (is (every? #{2 3 4 5} (attacked s)) "only white sheep"))))))
@@ -41,7 +41,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [inv (into h/sword (carried "white_wool" 2 "oak_planks" 3 "crafting_table" 1))
-              s (await (scenario {:any-of beds :count 1 :how #{:craft :gather}}
+              s (await (scenario {:any-of beds :count 1 :ways #{:craft :smelt :gather}}
                                  {:inventory inv :entities [(sheep 1 3 "brown") (sheep 2 6 "brown") (sheep 4 10 "brown") (sheep 5 11 "brown")]} 40))
               e (first (filter #(= :obtain.wool-colour (:kind %)) @(:seen s)))]
           (is (seq (attacked s)))
@@ -58,7 +58,7 @@
         (let [inv (into h/sword (carried "white_wool" 2 "oak_planks" 3 "crafting_table" 1))
               shorn #(assoc (sheep %1 %2 "white") :sheared true)
               ;; white: 3 sheep, 1 sheared: 2 unsheared are the pair hunt keeps; brown has 4
-              s (await (scenario {:any-of beds :count 1 :how #{:craft :gather}}
+              s (await (scenario {:any-of beds :count 1 :ways #{:craft :smelt :gather}}
                                  {:inventory inv :entities [(shorn 1 3) (sheep 2 6 "white") (sheep 3 8 "white")
                                                             (sheep 4 10 "brown") (sheep 5 11 "brown") (sheep 6 12 "brown") (sheep 7 13 "brown")]} 40))
               e (first (filter #(= :obtain.wool-colour (:kind %)) @(:seen s)))]

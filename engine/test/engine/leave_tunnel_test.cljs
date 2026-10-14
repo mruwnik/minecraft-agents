@@ -382,7 +382,7 @@
       (fn ^:async t []
         (let [calls (atom [])
               body (atom nil)
-              stub {:check (constantly true)
+              stub {:ways [:chest :craft :gather] :check (constantly true)
                     :round (fn ^:async get-tool [c]
                              (swap! calls conj (:args c))
                              (fake/add-item! @body "iron_pickaxe" 1)
@@ -403,7 +403,7 @@
       (fn ^:async t []
         (let [calls (atom [])
               body (atom nil)
-              stub {:check (constantly true)
+              stub {:ways [:chest :craft :gather] :check (constantly true)
                     :round (fn ^:async get-tool [c]
                              (swap! calls conj (:args c))
                              (fake/add-item! @body "iron_pickaxe" 1)
@@ -424,7 +424,7 @@
       (fn ^:async t []
         (let [calls (atom [])
               body (atom nil)
-              stub {:check (constantly true)
+              stub {:ways [:chest :craft :gather] :check (constantly true)
                     :round (fn ^:async get-tool [c]
                              (swap! calls conj (:args c))
                              (fake/add-item! @body "iron_pickaxe" 1)

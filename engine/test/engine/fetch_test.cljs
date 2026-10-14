@@ -533,7 +533,7 @@
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at) (assoc :inventory [{:name "stick" :count 1}])) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :ways #{:craft :smelt}}) {})
           (await (run-ticks s 5))
-          (is (re-find #"needs 2 stick, have 1" (no-source-why s :stopped))))))))
+          (is (re-find #"needs 2 stick, have 1" (no-source-why s :waiting))))))))
 
 (deftest obtain-any-of-takes-the-first-name-the-chest-holds
   (async done

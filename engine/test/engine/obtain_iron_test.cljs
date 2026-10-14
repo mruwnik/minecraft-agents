@@ -220,13 +220,13 @@
   (is (= {:inv {"a" 1} :t 0 :at 8000}
          (obtain/progress {:inv {"a" 1} :t 0 :at 5000} {"a" 1} 8000 10000)) "a short gap counts whole"))
 
-(deftest nuggets-carried-are-combined-into-an-ingot-with-how-given-as-a-vector
+(deftest nuggets-carried-are-combined-into-an-ingot-with-ways-given
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (assoc (f/bare [{:name "iron_nugget" :count 27} {:name "oak_log" :count 2}])
                                   :recipes {"iron_ingot" {:count 1 :needs {"iron_nugget" 9} :table true}}) [])]
-          (await (obtain! s {:item "iron_ingot" :count 1 :ways [:craft :smelt]} 80))
+          (await (obtain! s {:item "iron_ingot" :count 1 :ways #{:craft :smelt}} 80))
           (is (empty? (f/listed s)))
           (is (= 1 (get (f/inv s) "iron_ingot"))))))))
 

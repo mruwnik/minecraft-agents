@@ -15,7 +15,8 @@
   "An old fetch job: each round records its args and slot, then does (step c), which ends it :done (nil) or stops it
   with a reason; :continue yields instead."
   [seen step]
-  {:check (fn [_] true)
+  {:ways [:chest :craft :smelt :gather]
+   :check (fn [_] true)
    :round (fn ^:async r [c]
             (swap! seen conj (assoc (:args c) :slot (peek (:slots c))))
             (let [s (step c)]
@@ -110,11 +111,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [rounds (atom 0)
-              r (await (run! #(need/item! % "coal" 2 {:slot :coal :how #{:chest} :depth 2})
+              r (await (run! #(need/item! % "coal" 2 {:slot :coal :how #{:chest}})
                              {:obtain-step #(when (= 1 (swap! rounds inc)) :continue)} 2))]
           (is (= [:continue :done] [(first @got) (:kind (second @got))]))
-          (is (= [{:how #{:chest} :depth 2 :slot :coal}]
-                 (distinct (map #(select-keys % [:how :depth :slot]) @(:obtain r))))))))))
+          (is (= [{:ways #{:chest} :slot :coal}]
+                 (distinct (map #(select-keys % [:ways :slot]) @(:obtain r))))))))))
 
 (deftest a-done-fetch-that-leaves-the-need-is-not-solved
   (async done
