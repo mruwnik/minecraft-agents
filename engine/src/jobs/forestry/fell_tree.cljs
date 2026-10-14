@@ -164,6 +164,8 @@
     (case (:reason res)
       (:dug :already-clear) :ok
       (:cannot :fluid) :cannot
+      (:not-allowed :hazard) :refused
+      (:unreachable :no-tool :inventory-full :not-loaded) :unreachable
       (keyword (or (:status res) (:reason res))))))
 
 (defn ^:async dig-log!
