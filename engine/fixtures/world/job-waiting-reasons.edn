@@ -32,11 +32,10 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-burning}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-burning}} :of-job true}
             {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-burning}} :of-job true}]}
-  {:name "get-food-waits-not-hungry"
+  {:name "get-food-not-hungry-is-condition-failed"
    :act [[:job (jobs.survival.get-food {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :not-hungry}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-hungry}} :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-hungry}} :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :not-hungry}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :waiting} :for-s 20 :until {:source :job :kind :stopped :data {:kind :condition-failed :reason :not-hungry}} :of-job true}]}
   {:name "night-waits-not-night"
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-night}} :within-s 20 :of-job true}

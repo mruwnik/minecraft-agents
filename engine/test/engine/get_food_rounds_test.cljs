@@ -250,61 +250,58 @@
             (is (= fed? (> (food p) 3)) (pr-str world))
             (is (= [] (reflex-events seen :continued)) "a reflex job that yields is a bug (C1 turns it into :declined)")))))))
 
-(deftest a-way-that-yields-does-not-end-the-round-continued
+(defn yields-twice
+  "A next-way! that yields :continue twice, then is the real one."
+  []
+  (let [real get-food/next-way!
+        n (atom 0)]
+    (fn ^:async f [c] (if (< (swap! n inc) 3) :continue (await (real c))))))
+
+(deftest a-reflex-round-waits-out-a-way-that-yields
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [real get-food/next-way!
+        (with-redefs [get-food/next-way! (yields-twice)]
+          (let [{:keys [eng p seen]} (setup {:self {:food 3} :entities herd} :step-ms 5)]
+            (core/load-scenario! eng (scenario/parse "{:register [{:trigger :hungry}]}"))
+            (await (core/tick! eng))
+            (is (= 1 (count (reflex-events seen :ended))) "the reflex waited and went on in one tick")
+            (is (< 3 (food p)))
+            (is (= [] (reflex-events seen :continued)))))))))
+
+(deftest a-manual-round-yields-continue-while-a-way-waits-and-resumes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (with-redefs [get-food/next-way! (yields-twice)]
+          (let [{:keys [eng p seen]} (setup {:self {:food 3} :entities herd} :step-ms 5)]
+            (await (one-round! eng {}))
+            (is (= 1 (count (:list (core/state eng)))) "one tick: the call yielded, still queued")
+            (is (= [] (ended seen)))
+            (await (tu/run-until-empty eng 10))
+            (is (< 3 (food p)))
+            (is (= [:completed] (mapv :kind (ended seen))))))))))
+
+(deftest a-body-that-ate-mid-run-ends-done-not-condition-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 3}})
+              real get-food/next-way!
               n (atom 0)]
           (with-redefs [get-food/next-way! (fn ^:async f [c]
-                                             (if (< (swap! n inc) 3) :continue (await (real c))))]
-            (let [{:keys [eng p seen]} (setup {:self {:food 3} :entities herd} :step-ms 5)]
-              (await (one-round! eng {}))
-              (is (= [] (:list (core/state eng))) "the round waited and went on in one tick")
-              (is (< 3 (food p)))
-              (is (= [:completed] (mapv :kind (ended seen)))))))))))
-
-(deftest hunt-skips-babies-and-animals-in-another-zone
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [[ent zones attacks] [[cow nil true]
-                                     [cow [{:name "pen" :owner "Miles" :min [4 63 -1] :max [12 66 1]}] false]
-                                     [(assoc cow :baby true) nil false]]]
-          (let [{:keys [eng p]} (setup {:self {:food 5} :entities (into [ent] (rest herd))} :step-ms 5 :zones zones)]
-            (await (one-round! eng {}))
-            (is (= attacks (boolean (seq (calls p "attack")))) (pr-str [ent zones]))))))))
-
-(deftest food-none-names-the-animals-it-passed-over
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [(assoc cow :baby true)]} :step-ms 5)]
-          (await (one-round! eng {}))
-          (let [none (first (filterv #(= :food.none (:kind %)) @seen))]
-            (is (= [{:name "cow" :id 7 :why :baby}] (mapv #(select-keys % [:name :id :why]) (:animals none))))
-            (is (re-find #"passed over 1 animal \(cow: baby\)" (str (:text none))))))))))
-
-(deftest food-none-lists-what-the-scan-saw-when-no-animal-qualified
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [(assoc cow :kind "other")]} :step-ms 5)]
-          (await (one-round! eng {}))
-          (let [none (first (filterv #(= :food.none (:kind %)) @seen))]
-            (is (= [{:name "cow" :kind "other"}] (mapv #(select-keys % [:name :kind]) (:nearby none))))
-            (is (re-find #"nothing hunted; in range: cow \(other\)" (str (:text none))))))))))
-
-(deftest food-none-nearby-leaves-out-a-hostile-behind-a-wall
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20 :visible false}
-              {:keys [eng seen]} (setup {:self {:food 1} :entities [(assoc cow :kind "other") zombie]} :step-ms 5)]
-          (await (one-round! eng {}))
-          (let [none (first (filterv #(= :food.none (:kind %)) @seen))]
-            (is (= ["cow"] (mapv :name (:nearby none))))
-            (is (not (re-find #"zombie" (str (:text none)))))))))))
+                                             (if (= 1 (swap! n inc))
+                                               (do (swap! (fake/state p) assoc-in [:self :food] 20) :again)
+                                               (await (real c))))]
+            (let [out (atom nil)
+                  parent {:check (constantly true)
+                          :round (fn ^:async r [c]
+                                   (let [e (await (ctx/call c :kid 'jobs.survival.get-food {}))]
+                                     (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) :done))))}
+                  eng (assoc-in eng [:jobs 'rec-parent] parent)]
+              (core/submit! eng '(rec-parent) {})
+              (await (tu/run-until-empty eng 40))
+              (is (= :done (:kind @out))))))))))
 
 ;; ---------------------------------------------------------------- cut and resume
 

@@ -444,7 +444,8 @@
 
 (defn ^:async round
   "One whole attempt: eat, then while hungry take the next way and eat again. A step that yields (:continue) is
-  waited out in the call (a reflex never yields); a cut call starts again from the world."
+  waited out in a reflex round (a reflex never yields), else the round yields :continue and keeps the child; a cut
+  call starts again from the world."
   [c]
   (loop [n 0]
     (let [cooked (when (and (way? c :cook) (cook/cook-first? c)) (await (cook/cook! c)))
@@ -457,7 +458,7 @@
       (cond
         (not (ctx/alive? c)) :continue
         (= :again cooked) (recur n)
-        (or (= :continue eaten) (= :continue way)) (do (await (child/pace!)) (recur n))
+        (or (= :continue eaten) (= :continue way)) (if (:reflex c) (do (await (child/pace!)) (recur n)) :continue)
         (= ::fed way) (ctx/end c :done nil (cond-> {:food (food-level c)} (seq (:killed (ctx/mem c))) (assoc :killed (:killed (ctx/mem c)))))
         (= ::enough way) (stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")
                                 :food (food-level c))
@@ -466,7 +467,7 @@
                     more (cond fished fished (or (gave-up-recently? c) (not (:explore (:args c)))) nil :else (await (explore! c)))
                     bad (when-not more (await (eat-bad! c)))]
                 (cond
-                  (or (= :continue more) (= :continue bad)) (do (await (child/pace!)) (recur n))
+                  (or (= :continue more) (= :continue bad)) (if (:reflex c) (do (await (child/pace!)) (recur n)) :continue)
                   (or more bad) (recur (inc n))
                   (not (hungry-now? c)) (stock-stop! c)
                   (gave-up-recently? c) (ctx/end c :condition-failed (no-food-cause c) {:food (food-level c)})
