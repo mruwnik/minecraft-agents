@@ -71,6 +71,8 @@
 
 (defn equip-spec [extra] (list 'jobs.items.equip (merge {:item "wooden_pickaxe"} extra)))
 
+(defn mine-spec [extra] (list 'jobs.gather.mine (merge {:block "stone" :count 1} extra)))
+
 (defn stopped-reasons [s] (mapv :reason (events-of s :stopped)))
 
 (defn no-source-events
@@ -246,56 +248,58 @@
           (is (empty? (transfers s)))
           (is (= [:no-tool] (stopped-reasons s))))))))
 
-(deftest a-failure-is-remembered-and-a-second-equip-does-not-look-again
+(deftest a-failure-is-remembered-and-a-second-mine-does-not-look-again
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world {chest-at [{:name "dirt" :count 3}]}) [own-zone])
-              a (core/submit! (:eng s) (equip-spec {:fetch true}) {})]
+        (let [s (start (world {chest-at [{:name "dirt" :count 3}]}) [own-zone])]
+          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
           (await (run-ticks s 25))
           (is (= 1 (count (inspects s))) "the chest was looked into once")
           (is (empty? (transfers s)))
-          (is (= :no-source (:failed (:fetch (core/waiting (:eng s) a)))))
-          (let [b (core/submit! (:eng s) (equip-spec {:fetch true}) {})]
-            (await (run-ticks s 15))
-            (is (= 1 (count (inspects s))) "not again within the failure's time")
-            (is (= :no-source (:failed (:fetch (core/waiting (:eng s) b)))))
-            (is (= 1 (count (events-of s :fetch.failed))))))))))
+          (is (= 1 (count (events-of s :fetch.failed))))
+          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
+          (await (run-ticks s 15))
+          (is (= 1 (count (inspects s))) "not again within the failure's time")
+          (is (= 1 (count (events-of s :fetch.failed)))))))))
 
 (deftest a-failure-is-forgotten-when-the-body-gets-material-for-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world {}) [own-zone])
-              id (core/submit! (:eng s) (equip-spec {:fetch true}) {})]
+        (let [s (start (world {}) [own-zone])]
+          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
           (await (run-ticks s 25))
           (is (= 1 (count (events-of s :fetch.failed))))
-          (is (= :no-source (:failed (:fetch (core/waiting (:eng s) id)))))
           (swap! (fake/state (:p s)) fake/give "oak_log" 4)
+          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
           (await (run-ticks s 60))
-          (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id))))))))
+          (is (= 1 (count (events-of s :fetch.failed))) "no second failure: the fetch ran again")
+          (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
 
 (deftest a-failure-stays-when-the-body-picks-up-something-unrelated
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world {}) [own-zone])
-              id (core/submit! (:eng s) (equip-spec {:fetch true}) {})]
+        (let [s (start (world {}) [own-zone])]
+          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
           (await (run-ticks s 25))
           (swap! (fake/state (:p s)) fake/give "dirt" 4)
+          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
           (await (run-ticks s 25))
           (is (= 1 (count (events-of s :fetch.failed))))
-          (is (= :no-source (:failed (:fetch (core/waiting (:eng s) id))))))))))
+          (is (nil? (get (inv s) "wooden_pickaxe"))))))))
 
 (deftest a-failure-expires-after-fail-minutes
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world {chest-at [{:name "dirt" :count 3}]}) [own-zone])
-              _ (core/submit! (:eng s) (equip-spec {:fetch {:fail-minutes 1}}) {})]
+        (let [s (start (world {chest-at [{:name "dirt" :count 3}]}) [own-zone])]
+          (core/submit! (:eng s) (mine-spec {:fetch {:fail-minutes 1}}) {})
           (await (run-ticks s 25))
           (is (= 1 (count (events-of s :fetch.failed))))
           (swap! (:clock s) + 70000)
+          (core/submit! (:eng s) (mine-spec {:fetch {:fail-minutes 1}}) {})
           (await (run-ticks s 25))
           (is (= 2 (count (events-of s :fetch.failed))) "tried again after the minute"))))))
 
