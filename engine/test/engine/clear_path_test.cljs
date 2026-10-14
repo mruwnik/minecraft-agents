@@ -1,6 +1,7 @@
 (ns engine.clear-path-test
   "jobs.access.clear-path against the fake world: how a dig child's wait or a refilled cell ends the door."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -22,16 +23,19 @@
   unless args says otherwise; its result."
   ([world stub] (run-door world stub {:heading :east :max-thick 3}))
   ([world stub args] (run-door world stub args nil))
-  ([world stub args rounds]
+  ([world stub args rounds] (run-door world stub args rounds ctx/call-child))
+  ([world stub args rounds call]
    (let [clock (atom 1000000)
          [_ sink] (tu/legacy-capture-sink)
          p (tu/fake (dissoc world :plans))
          out (atom :not-done)
          parent {:check (constantly true)
                  :round (fn ^:async recording-round [c]
-                          (let [r (await (ctx/call-child c :kid job args))]
-                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                            r))}
+                          (let [r (await (call c :kid job args))]
+                            (cond
+                              (= :continue r) r
+                              (= call ctx/call-child) (do (when (= :done r) (reset! out (ctx/child-result c :kid))) r)
+                              :else (do (reset! out r) :done))))}
          jobs (cond-> (assoc registry/jobs 'recording-parent parent)
                 stub (assoc 'jobs.blocks.dig (assoc (get registry/jobs 'jobs.blocks.dig) :round stub))
                 rounds (as-> js (reduce-kv (fn [m k round] (assoc m k (assoc (get m k) :round round))) js rounds)))
@@ -59,7 +63,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (run-door wall nil {:heading :east :max-thick 3 :by-hand true}))]
-          (is (= [:done :done [3 64 0]] [(:status r) (:reason r) (:through r)]) (pr-str r))
+          (is (= [:done [3 64 0]] [(:status r) (:through r)]) (pr-str r))
           (is (= 4 (count (:dug r))) "two blocks high, two thick, bare-handed"))))))
 
 (deftest a-cell-that-is-dug-but-never-clears-ends-refills
@@ -103,7 +107,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) nil))]
-          (is (= [:done :done [3 64 0]] [(:status r) (:reason r) (:through r)]) (pr-str r))
+          (is (= [:done [3 64 0]] [(:status r) (:through r)]) (pr-str r))
           (is (= 4 (count (:dug r))) "two blocks high, two thick")
           (is (= [3 64 0] (:at r))))))))
 
@@ -139,8 +143,36 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (run-door wall nil {:max-thick 3}))]
-          (is (= [:stopped :bad-args] [(:status r) (:reason r)]) (pr-str r)))))))
+        (let [e (await (run-door wall nil {:max-thick 3} nil ctx/call))]
+          (is (= [:condition-failed :bad-args] [(:kind e) (contract/cause-key e)]) (pr-str e)))))))
+
+(deftest the-job-exports-the-contract-and-quotes-validly
+  (let [def (get registry/jobs job)
+        q ((:quote-of def) {:primitives (tu/fake wall) :args {:heading :east :max-thick 3}})]
+    (is (= [:heading] (:target def)))
+    (is (seq (:conditions def)))
+    (is (nil? (:check def)))
+    (is (nil? (contract/quote-problem q)) (pr-str q))))
+
+(deftest a-door-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pick {:inventory [{:name "wooden_pickaxe" :count 1}]}
+              end (fn ^:async end* [world stub args]
+                    (let [e (await (run-door world stub args nil ctx/call))]
+                      [(:kind e) (contract/cause-key e) (:kind (:because e))]))
+              refilling (fn ^:async refilling [c] (ctx/result! c {:dug true}) :done)
+              failing (fn ^:async failing [c] (ctx/result! c {:dug false :reason :failed :primitive "timeout" :status :stopped}) :done)
+              east {:heading :east :max-thick 3}]
+          (is (= [:done :done nil] (await (end (merge wall pick) nil east))))
+          (is (= [:condition-failed :dig-waits :condition-failed] (await (end wall nil east))) "the dig child's wait is its because")
+          (is (= [:nothing-possible :refills nil] (await (end (merge wall pick) refilling east))))
+          (is (= [:nothing-possible :dig-failed :nothing-possible] (await (end (merge wall pick) failing east))))
+          (is (= [:condition-failed :no-door nil] (await (end (dissoc wall :blocks) nil east))))
+          (is (= [:condition-failed :footprint nil]
+                 (await (end (assoc (merge wall pick) :plans {"hut" (shape/with-author {:id "hut" :parts [{:id "w" :cells [[1 64 0]] :want "stone"}]} "Fake")})
+                             nil east)))))))))
 
 (deftest a-wall-of-the-bodys-own-plan-is-not-dug-unless-told-to
   (async done

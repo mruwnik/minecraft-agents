@@ -2,6 +2,7 @@
   "jobs.access.pillar: the step decision as a plain function, then whole pillars against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [jobs.lib.ledger :as ledger]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.events :as events]
             [engine.memory :as mem]
@@ -179,7 +180,7 @@
           (await (ticks s eng 3))
           (is (not (finished? eng)) "still listed: it waits for blocks")
           (is (empty? (calls p "jumpPlace")))
-          (is (= {:reason :too-few-blocks :short 6} (select-keys (core/waiting eng id) [:reason :short]))))))))
+          (is (= [:too-few-blocks 6] ((juxt :reason (comp :short :cause)) (core/waiting eng id)))))))))
 
 (deftest running-short-part-way-builds-what-it-has-and-gives-up-saying-so
   (async done
@@ -424,3 +425,66 @@
 (deftest centred-is-false-off-the-point-or-the-cell
   (are [pos] (false? (pillar/centred? (stub-body (first pos) (second pos)) [0 0] [0.5 0.5]))
     [0.9 0.5] [1.1 0.5] [0.5 -0.1]))
+
+;; ------------------------------------------------------------------ the contract
+
+(defn ^:async root-ending
+  "{:event :kind :reason} of the first completed or stopped event of spec run on a fake world (setup's options, and
+  :before, called with the body)."
+  [spec {:keys [inventory blocks zones before]}]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/capture-sink)
+        p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge {"0,63,0" "stone"} blocks)
+                    :inventory (or inventory [{:name "dirt" :count 64}])})
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (world/of-data {} {} (or zones [])) :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+        ended #(first (filter (comp #{:completed :stopped} :kind) @seen))]
+    (when before (before p))
+    (core/submit! eng spec {})
+    (loop [i 0]
+      (when (and (< i 10) (nil? (ended)))
+        (swap! clock + 500)
+        (await (core/tick! eng))
+        (recur (inc i))))
+    (let [e (ended)]
+      (core/shutdown! eng)
+      (assoc (select-keys (:data e) [:kind :reason]) :event (:kind e) :p p))))
+
+(deftest the-job-exports-the-contract-and-quotes-validly
+  (let [def (get registry/jobs job)
+        q ((:quote-of def) {:primitives (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :inventory [{:name "dirt" :count 9}]})
+                            :args {:height 4} :quote-call {:use {:blocks ["dirt"]}}})]
+    (is (= [] (:target def)))
+    (is (seq (:conditions def)))
+    (is (nil? (:check def)))
+    (is (= {:blocks :pillar} (:use (:defaults def))))
+    (is (nil? (contract/quote-problem q)) (pr-str q))
+    (is (= [0 68 0] (:moves-to q)))))
+
+(deftest a-pillar-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ending (fn ^:async ending* [spec opts] (dissoc (await (root-ending spec opts)) :p))
+              refuse (fn [p] (.override (.-world p) "jumpPlace"
+                                        (fn [_t _a _i] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"}))))]
+          (is (= {:event :completed :kind :done} (await (ending (list job {:height 2}) {}))))
+          (is (= {:event :stopped :kind :condition-failed :reason :ceiling}
+                 (await (ending (list job {:height 6}) {:blocks {"0,68,0" "stone"}}))))
+          (is (= {:event :stopped :kind :condition-failed :reason :zone}
+                 (await (ending (list job {:height 6}) {:zones [{:name "keep-out" :min [-3 66 -3] :max [3 66 3]}]}))))
+          (is (= {:event :stopped :kind :condition-failed :reason :too-few-blocks}
+                 (await (ending (list job {:height 6}) {:inventory [{:name "dirt" :count 2}]}))) "short part way")
+          (is (= {:event :stopped :kind :nothing-possible :reason :place-failed}
+                 (await (ending (list job {:height 6}) {:before refuse})))))))))
+
+(deftest the-blocks-come-from-the-call-or-the-old-item-args
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [both [{:name "dirt" :count 9} {:name "cobblestone" :count 9}]
+              top (fn ^:async top* [spec] (let [{:keys [p]} (await (root-ending spec {:inventory both}))] (blocks-at p [[0 64 0] [0 65 0]])))]
+          (is (= ["dirt" "dirt"] (await (top (list job {:height 2})))) "the chooser lists dirt first")
+          (is (= ["cobblestone" "cobblestone"] (await (top (list job {:height 2 :use {:blocks ["cobblestone"]}})))))
+          (is (= ["cobblestone" "cobblestone"] (await (top (list job {:height 2 :item "cobblestone"})))))
+          (is (= ["cobblestone" "cobblestone"] (await (top (list job {:height 2 :item nil :items ["cobblestone" "dirt"]}))))))))))

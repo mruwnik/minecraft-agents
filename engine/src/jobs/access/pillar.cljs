@@ -25,6 +25,12 @@
   jump and confirmed when the cell is seen holding it, so a cleanup can take the pillar back after a cut or
   restart. A restart between intent and placement is decided from the cell.
 
+  Needs: blocks for the :use {:blocks [...]} list of the call (default: the carried fillers for a pillar, dirt then
+  cobblestone, jobs.lib.choose); an old caller's :item / :items become that list. A call starts only with some of them
+  carried (condition :too-few-blocks, with :short) and, when it was submitted with a :from, with the body near it
+  (:moved-since-submit); both are checked at the call's start only. Quote: height x the time of a block, that many
+  blocks of the first carried one, ending height up.
+
   Before each block it checks:
   - the whole rest of the column, feet up to the top, is permitted (no zone that bars :place, no other plan's
     footprint, a zone list loaded)
@@ -36,31 +42,42 @@
   A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: it waits to land,
   walks back to where it began (go-to child if off the column, then a short centring nudge) and tries again; up to 8 per pillar, then :off-column.
 
-  The check waits (:too-few-blocks, with :short) when blocks are missing at the start; run short part way, it gives
-  up :too-few-blocks. Every give-up ends the job, so a parent running this as a child reads the result.
+  Run short part way, it gives up :too-few-blocks. Every give-up ends the job, so a parent running this as a child
+  reads the ending.
 
-  Ends with {:status :done|:stopped :reason :cells [[x y z] ...] :built n :height n}. :cells are this job's
+  Ends :done, or with a cause {:reason r ...}: :condition-failed for :too-few-blocks (:short still owed), :ceiling,
+  :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable and :bad-args; :nothing-possible for
+  :off-column (the body left the column it started in) and :place-failed (3 failed jumps in a row with the body in
+  the column, :detail the primitive's reason). Data {:cells [[x y z] ...] :built n :height n}: :cells are this job's
   confirmed blocks, lowest first. Events: pillar.done (info) and pillar.gave-up (warn, with :reason and by
-  reason :at :block :zone :short :detail). Gives up with :too-few-blocks (:short still owed), :ceiling,
-  :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable, :off-column (the body left the
-  column it started in), :place-failed (3 failed jumps in a row with the body in the column, :detail the primitive's reason) or :bad-args.")
+  reason :at :block :zone :short :detail).")
 
 (a/defargs args
   {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
    :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
    :height {:doc "blocks to rise, 1 to 64" :spec (a/int-in 1 64) :default 1}
-   :item {:doc "the block to pillar with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
-   :items {:doc "the blocks to pillar with when :item is nil, first carried wins; nil: dirt, then cobblestone" :spec (a/coll-of a/item?) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
   {::max-height {:default 64 :doc "Tallest pillar a call may ask for, in blocks." :spec (a/int-in 0 nil)}
    ::max-failures {:default 3 :doc "Failed placements before the pillar gives up." :spec (a/int-in 0 nil)}
    ::land-step-ms {:default 50 :doc "Wait between looks for the ground after a pillar, in ms." :spec (a/int-in 0 nil)}
-   ::land-max-steps {:default 20 :doc "Looks for the ground after a pillar before it goes on." :spec (a/int-in 0 nil)}})
+   ::land-max-steps {:default 20 :doc "Looks for the ground after a pillar before it goes on." :spec (a/int-in 0 nil)}
+   ::block-s {:default 0.6 :doc "Mean seconds one pillar block takes (jump, place, land), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-height [] (settings/get settings ::max-height))
 
 (def purpose :pillar)
+
+(def target [])
+
+(def defaults {:use {:blocks :pillar}})
+
+(defn legacy-args
+  "An old caller's :item / :items as the call's :use {:blocks [...]} (nil ones dropped)."
+  [{:keys [item items] :as args}]
+  (let [blocks (cond item [item] (seq items) (vec items))]
+    (cond-> (dissoc args :item :items)
+      (and blocks (not (get-in args [:use :blocks]))) (assoc-in [:use :blocks] blocks))))
 
 (defn max-failures [] (settings/get settings ::max-failures))
 
@@ -148,8 +165,12 @@
        (sort-by (comp second :cell))
        (reduce (fn [log {:keys [item cell]}] (spent/add log item cell)) nil)))
 
+(def nothing-possible
+  "Give-ups that are no fact about the world but a pillar that could not be made: the rest end :condition-failed."
+  #{:off-column :place-failed})
+
 (defn finish!
-  "End the job: the result (with :spent and :spent-at) and its event."
+  "End the job: its event and the ending, the result (with :spent and :spent-at) as the ending's data."
   [c l step]
   (let [cells (built c l)
         height (:height (:args c))
@@ -157,33 +178,66 @@
         result (merge {:status (if (= :done (:step step)) :done :stopped) :cells cells :built (count cells) :height height}
                       (some-> spent-log spent/summary)
                       (dissoc step :step))]
-    (ctx/result! c result)
     (if (= :done (:step step))
-      (ctx/emit! c :pillar.done :info (assoc result :text (str "pillar of " (count cells) " up to " (pr-str (peek cells))
-                                                                     (some->> (spent/text spent-log "pillar") (str "; ")))))
-      (ctx/emit! c :pillar.gave-up :warn
-                 (assoc result :text (str "pillar gave up at " (count cells) " of " height ": " (name (:reason step))
-                                          (when (:short step) (str ", " (:short step) " blocks short"))
-                                          (when (:at step) (str " at " (pr-str (:at step))))))))
-    :done))
+      (do (ctx/emit! c :pillar.done :info (assoc result :text (str "pillar of " (count cells) " up to " (pr-str (peek cells))
+                                                                   (some->> (spent/text spent-log "pillar") (str "; ")))))
+          (ctx/end c :done nil result))
+      (do (ctx/emit! c :pillar.gave-up :warn
+                     (assoc result :text (str "pillar gave up at " (count cells) " of " height ": " (name (:reason step))
+                                              (when (:short step) (str ", " (:short step) " blocks short"))
+                                              (when (:at step) (str " at " (pr-str (:at step)))))))
+          (ctx/end c (if (nothing-possible (:reason step)) :nothing-possible :condition-failed) (dissoc step :step) result)))))
 
-(defn check
-  "True, or a wait for what a pillar lacks (next-step's :too-few-blocks, with how many blocks are short). Every other
-  give-up stays with the round, which ends with its result; so does this one for a pillar run as a child (retreat),
-  whose parent reads the result."
+(defn blocks-of
+  "The block names the call lists for the pillar: its :use {:blocks}, before the call has started (the engine freezes
+  it at the first round) the one it was given or the carried fillers."
   [c]
-  (let [p (:primitives c)
-        block-at (access/sensed-at p blocks/hidden-guess)
-        l (ledger/reconcile (ledger/open-entries (ctx/view c)) (access/sensed-at p nil))
-        feet (pl/feet-cell c)
-        {:keys [height item items]} (:args c)
-        step (next-step (merge (access-inputs c)
-                               {:feet feet :base (or (:base (ctx/mem c)) feet) :height height :block-at block-at
-                                :carried (pl/carried p) :item item :items items :ledger (ledger/cells l)}))]
-    (cond
-      (some? (submitted/away-wait c)) false
-      (= :too-few-blocks (:reason step)) (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item items (choose/fillers :pillar))})
-      :else true)))
+  (or (ctx/use c :blocks) (get-in c [:args :use :blocks]) (mapv :item (:list (choose/fillers-for c :pillar 1)))))
+
+(defn step-now
+  "next-step for the body as it stands, with ledger l, its feet and the base of its column."
+  [c l feet base]
+  (let [p (:primitives c)]
+    (next-step (merge (access-inputs c)
+                      {:feet feet :base base :height (:height (:args c)) :block-at (access/sensed-at p blocks/hidden-guess)
+                       :carried (pl/carried p) :item nil :items (blocks-of c) :ledger (ledger/cells l)}))))
+
+(defn away
+  "The cause of a call submitted with a :from the body has since left (jobs.lib.submitted/away-wait), or nil."
+  [c]
+  (let [w (atom nil)]
+    (when (false? (submitted/away-wait (assoc c :wait w))) @w)))
+
+(defn too-few-blocks
+  "At the call's start: the cause when no listed block is carried (:short blocks missing), else nil. Run short part
+  way, the round gives up with its pillar and ledger settled."
+  [c]
+  (when-not (ctx/frozen-call c)
+    (let [feet (pl/feet-cell c)
+          l (ledger/reconcile (ledger/open-entries (ctx/view c)) (access/sensed-at (:primitives c) nil))
+          step (step-now c l feet (or (:base (ctx/mem c)) feet))]
+      (when (= :too-few-blocks (:reason step))
+        {:reason :too-few-blocks :short (:short step) :items (blocks-of c)}))))
+
+(defn moved-since-submit [c] (when-not (ctx/frozen-call c) (away c)))
+
+(def conditions [[:fn moved-since-submit] [:fn too-few-blocks]])
+
+(defn done?
+  "The blocks of this job in the ledger against :height. Never :done? itself: the round ends the pillar with its
+  event and cells."
+  [c]
+  (let [n (count (built c (ledger/open-entries (ctx/view c))))]
+    {:done? false :units :blocks :done n :left (max 0 (- (:height (:args c)) n))}))
+
+(defn quote-of [c]
+  (let [h (:height (:args c))
+        s (settings/get settings ::block-s)
+        carried (pl/carried (:primitives c))
+        item (first (filter #(pos? (get carried % 0)) (blocks-of c)))
+        [x y z] (pl/feet-cell c)]
+    (cond-> {:uses {:time [(* h s 0.5) (* h s) (* h s 3)]} :moves-to [x (+ y h) z]}
+      item (assoc-in [:uses :items item] [h h h]))))
 
 (defn ^:async land!
   "Wait in short steps until the body is on the ground, up to land-max-steps."
@@ -218,7 +272,7 @@
     (let [{sx :x sz :z} (reach/standing-cell (:primitives c))
           on-column? (= [x z] [sx sz])
           r (when-not on-column?
-              (await (child/call-walk c :recentre {:pos {:x hx :y y :z hz} :range 0 :escalate false})))]
+              (await (child/call-walk* c :recentre {:pos {:x hx :y y :z hz} :range 0 :escalate false})))]
       (if (= :continue r)
         :continue
         (do (await (walk/centre! c hx hz))
@@ -274,22 +328,18 @@
         (await (look/look-at! c cell))))))
 
 (defn ^:async step!
-  "One block of the pillar (or its end): :again, :continue while a recentring go-to waits, or :done."
+  "One block of the pillar (or its end): :again, :continue while a recentring go-to waits, or the ending."
   [c]
   (await (land! c))
   (await (look-up! c))
   (if (= :continue (await (shoved-back! c)))
     :continue
     (let [p (:primitives c)
-          block-at (access/sensed-at p blocks/hidden-guess)
           seen (ledger/open-entries (ctx/view c))
           l (ledger/reconcile seen (access/sensed-at p nil))
           feet (pl/feet-cell c)
           base (or (:base (ctx/mem c)) feet)
-          {:keys [height item items]} (:args c)
-          step (next-step (merge (access-inputs c)
-                                 {:feet feet :base base :height height :block-at block-at :carried (pl/carried p)
-                                  :item item :items items :ledger (ledger/cells l)}))]
+          step (step-now c l feet base)]
       (when (not= l seen) (ledger/remember! c l))
       (ctx/update-mem! c #(-> % (assoc :base base :stand feet) (update :home (fn [h] (or h (let [{:keys [x z]} (u/self-pos c)] [x z]))))))
       (if (= :place (:step step))
