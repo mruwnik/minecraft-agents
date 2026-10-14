@@ -88,6 +88,17 @@
           (is (= :done (:kind e)))
           (is (= #{"diamond_hoe"} (set (map #(.-item (.-args %)) (tt/calls (:p env) "useOn"))))))))))
 
+(deftest till-partial-run-is-done-only-when-it-meets-least
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:inventory tt/hoe :blocks (assoc tt/four "1,64,1" "cobblestone")}]
+          (doseq [[least kind cause] [[3 :done nil] [4 :nothing-possible :partial] [:all :nothing-possible :partial]]]
+            (let [e (await (ending-of (tt/setup world) till (assoc tt/box :least least) 30))]
+              (is (= {:kind kind :cause cause} (kc e)) (str ":least " least))
+              (is (= 3 (get-in e [:data :tilled])))))
+          (is (some? (contract/call-problem till nil (assoc tt/box :least 0))) ":least 0 is no call, so 0 tilled is never enough"))))))
+
 ;; ------------------------------------------------------------------ fertilize
 
 (def fertilize 'jobs.farm.fertilize)
@@ -110,6 +121,16 @@
         (is (= {:kind :condition-failed :cause {:reason :no-zones}}
                (kc (await (ending-of (ft/setup ft/two-wheat (ew/of-data {} {} nil)) fertilize {} 5)))))))))
 
+(deftest fertilize-partial-run-is-done-only-when-it-meets-least
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc ft/two-wheat :inventory [{:name "bone_meal" :count 1}])]
+          (doseq [[least kind cause] [[1 :done nil] [2 :nothing-possible :need] [:all :nothing-possible :need]]]
+            (let [e (await (ending-of (ft/setup world) fertilize {:least least :fetch false} 30))]
+              (is (= {:kind kind :cause cause} (kc e)) (str ":least " least))
+              (is (= 1 (get-in e [:data :used]))))))))))
+
 ;; ------------------------------------------------------------------ compost
 
 (def compost 'jobs.farm.compost)
@@ -126,6 +147,16 @@
                (kc (await (ending-of (ct/setup {:inventory (ct/inv "oak_leaves" 4)}) compost {} 10)))))
         (is (= {:kind :condition-failed :cause :nothing-to-feed}
                (kc (await (ending-of (ct/setup {:inventory (ct/inv "stick" 4) :blocks ct/comp-block}) compost {:at ct/at} 10)))))))))
+
+(deftest compost-stopped-early-is-done-only-when-it-meets-least
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[least kind cause] [[1 :done nil] [2 :condition-failed :nothing-to-feed]]]
+          (let [e (await (ending-of (ct/setup {:inventory (ct/inv "wheat_seeds" 10) :blocks ct/comp-block}) compost
+                                    {:at ct/at :items ["wheat_seeds"] :times 2 :least least} 60))]
+            (is (= {:kind kind :cause cause} (kc e)) (str ":least " least))
+            (is (= 1 (get-in e [:data :bone-meal])))))))))
 
 ;; ------------------------------------------------------------------ find-spot
 

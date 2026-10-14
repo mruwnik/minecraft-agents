@@ -386,6 +386,16 @@
         (let [{:keys [p]} (await (seeing-till {} 120))]
           (is (every? #(= "farmland" (block-at p %)) [{:x 1 :y 63 :z 1} {:x 2 :y 63 :z 1} {:x 1 :y 63 :z 2} {:x 2 :y 63 :z 2}])))))))
 
+(deftest till-fetch-is-a-child-the-agent-sees
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (seeing-till {} 120))
+              started (filterv #(= :need (:slot %)) (kinds seen :child_started))
+              ended (filterv #(= :need (:slot %)) (kinds seen :child_ended))]
+          (is (= 1 (count started)))
+          (is (= [:done] (mapv #(get-in % [:ending :kind]) ended))))))))
+
 (deftest till-fetch-false-waits-no-tool-and-leaves-the-chest
   (async done
     (tu/run-async done

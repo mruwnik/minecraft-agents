@@ -844,7 +844,9 @@
           (core/submit! (:eng s) (list 'jobs.farm.fertilize {:grass true :max 1}) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
-          (is (= 1 (count (calls s "useOn")))))))))
+          (is (= 1 (count (calls s "useOn"))))
+          (is (= 1 (count (filter #(= :need (:slot %)) (events-of s :child_started)))) "the bone meal fetch is a child the agent sees")
+          (is (= [:done] (mapv #(get-in % [:ending :kind]) (filter #(= :need (:slot %)) (events-of s :child_ended))))))))))
 
 (deftest fertilize-fetches-bone-meal-from-an-own-seen-chest
   (async done
