@@ -588,6 +588,15 @@
   [p]
   (and (shut-in-room? p) (wide-room? (reach/room p (feet p)))))
 
+(defn unlooked-for-bed?
+  "Night, awake, a bed carried or remembered, and a cell beside the feet (floor, feet or head) the body has never seen:
+  the room checks (shut-in-hut?, walk-leaves-shelter?) would read the room smaller than it is, so look before deciding."
+  [p view]
+  (let [{:keys [x y z]} (feet p)]
+    (boolean (and (night? p) (not (sleeping? p))
+                  (or (some? (carried-bed p)) (some? (mem/place view :bed)))
+                  (look/unseen? p (for [dx [-1 0 1] dz [-1 0 1] dy [-1 0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))))))
+
 (defn breached-home?
   "Whether the roofed body's room has a hole: a :bed-open entry (a bed found open) within breach-near blocks and the body
   not shut in a closed room. A bare roof alone is no sign of a home."
@@ -647,6 +656,7 @@
      (if (night? p)
        (and (not (sleeping? p))
             (or (some? (bed-to-use p view (bed-radius view args) permit?))
+                (unlooked-for-bed? p view)
                 (and (not buried) (bed-place-wanted? p view (bed-radius view args) permit?))
                 (and (not buried) (log-out-for-sleepers? p view))
                 (not (safe-from-night? p (:roof-height args default-roof-height)))

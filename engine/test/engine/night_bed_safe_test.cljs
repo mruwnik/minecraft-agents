@@ -26,7 +26,7 @@
   "A miner at x 5 in the one-wide stone tunnel (x 0..20), at night, with a bed block at far-bed in the open."
   [light]
   {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :offlineScale 0.0001
-   :blocks (merge hut/tunnel {"40,64,0" "red_bed"}) :light light})
+   :blocks (merge hut/tunnel {"40,64,0" "red_bed"}) :light light :sees-all true})
 
 (defn lit-fake
   "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh/buried?). :sees-all in the
@@ -132,3 +132,19 @@
         _ (blind-above p)]
     (st/know-bed! eng {:x 6 :y 64 :z -1})
     (is (= {:x 6 :y 64 :z -1} (sh/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))))
+
+(defn unseen-hut-world
+  "The closed hut, the body in it with nothing seen yet (no sight pass), not the fake's all-seeing sight."
+  [blocks extra]
+  (merge (hut/hut-world {:x 4 :y 64 :z -1} blocks) {:time st/night :light hut-light} extra))
+
+(deftest a-body-in-a-hut-it-has-not-looked-at-looks-then-places-its-carried-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p raw]} (setup (unseen-hut-world {} {:inventory [{:name "red_bed" :count 1}]}))]
+          (is (true? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))) "the trigger holds to look")
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (is (seq (st/calls raw "look")) "looked")
+          (is (seq (st/calls raw "place")) "the bed is put down"))))))
