@@ -260,6 +260,29 @@
           (await (core/tick! eng))
           (is (= {:kind :impossible :cause {:reason :not-smeltable :item "diamond"}} (dissoc (:child-ending @world) :report))))))))
 
+(def tried
+  {:conditions [[:fn (ctx/after-tries 2 (fn [_] (:cause @world)))]]
+   :round (fn [c] (swap! world assoc :tried-ran true) (ctx/end c :done nil))})
+
+(deftest a-job-held-up-n-times-turns-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'tried tried})
+              step! (fn ^:async step [cause] (swap! world assoc :cause cause) (await (core/tick! eng)))]
+          (core/submit! eng '(tried) {})
+          (await (step! :a))
+          (await (step! :a))
+          (is (= 1 (:tries (raw-mem eng "j1" []))) "a wait that goes on is one try")
+          (await (step! :b))
+          (is (= 2 (:tries (raw-mem eng "j1" []))))
+          (is (seq (:list (core/state eng))) "still queued after two tries")
+          (await (step! :c))
+          (is (empty? (:list (core/state eng))) "the third check is impossible")
+          (is (nil? (:tried-ran @world)))
+          (is (= {:kind :impossible :cause {:reason :tries :tries 2 :cause :c}}
+                 (select-keys (:data (first (job-ev seen :stopped))) [:kind :cause]))))))))
+
 (deftest a-condition-that-needs-a-look-looks-once-then-the-job-waits-unstarted
   (async done
     (tu/run-async done

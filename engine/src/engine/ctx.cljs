@@ -24,6 +24,21 @@
   [ctx f & args]
   ((:update-mem ctx) f args))
 
+(defn tries
+  "How often this job has been held up (a wait that began or changed its reason), kept across restarts."
+  [ctx]
+  (or (:tries (mem ctx)) 0))
+
+(defn after-tries
+  "Condition f that turns impossible, {:reason :tries :tries n :cause its cause}, once the job has been held up n times
+  and f still skips."
+  [n f]
+  (fn [c]
+    (let [r (f c)]
+      (if (and r (not (contract/impossible-cause r)) (not (contract/look-cause r)) (>= (tries c) n))
+        (contract/impossible {:reason :tries :tries n :cause r})
+        r))))
+
 ;; ------------------------------------------------------------------ the contract (engine.contract)
 
 (defn frozen-call
