@@ -91,7 +91,7 @@
                                   ["lever" nil :off]
                                   ["stone_button" {:powered true} :press]]]
           (let [{:keys [result p]} (await (run (world name from) {:pos at :state want}))]
-            (is (= {:status :done :reason :already} (head result [:status :reason])) (str name want))
+            (is (= :done (:status result)) (str name want))
             (is (empty? (calls p "useOn")) (str name want ": no click"))))))))
 
 (deftest a-far-body-walks-into-reach-first
@@ -147,7 +147,8 @@
                                          ["oak_door" {:open false} {:pos at} :bad-args]
                                          ["oak_door" {:open false} {:state :open} :bad-args]]]
           (let [{:keys [result p seen]} (await (run (world name from 3 14) args))]
-            (is (= {:status :declined :reason reason} (head result [:status :reason])) (str name args))
+            (is (= {:status :stopped :reason reason} (head result [:status :reason])) (str name args))
+            (is (= :condition-failed (get-in result [:ending :kind])) (str name args))
             (is (empty? (calls p "useOn")) (str name args))
             (is (empty? (tu/walk-calls p)) (str name args ": no walk"))
             (is (= 1 (count (kinds seen :toggle.declined))) (str name args))))))))
@@ -204,6 +205,7 @@
               result (await (child-outcome eng job {:pos at :state :open} 40))
               warns (filterv #(= :toggle.gave-up (:kind %)) @seen)]
           (is (= {:status :stopped :reason :unchanged :wanted :open} (head result [:status :reason :wanted])))
+          (is (= :nothing-possible (get-in result [:ending :kind])))
           (is (= 1 (count (calls p "useOn"))) "one click, no retry")
           (is (= 1 (count warns)))
           (is (= :unchanged (:reason (:data (first warns))))))))))
@@ -233,6 +235,7 @@
         (let [w (assoc (world "oak_door" {:open false} 3 14) :unreachable ["3,64,0"])
               {:keys [result p seen]} (await (run w {:pos at :state :open}))]
           (is (= {:status :stopped :reason :unreachable} (head result [:status :reason])))
+          (is (= :condition-failed (get-in result [:ending :kind])))
           (is (empty? (calls p "useOn")))
           (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
 

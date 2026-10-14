@@ -9,8 +9,8 @@
             [jobs.lib.places :as places]))
 
 (def doc
-  "Put one block into a WANTED :state. The state is read first. A block already there is left alone and the run
-  ends :already with no click. :pos is [x y z] or {:x :y :z}.
+  "Put one block into a WANTED :state. The state is read first. A block already there is left alone: the job is done
+  with no click. :pos is [x y z] or {:x :y :z}.
 
   States by block:
   - :open / :closed: fence gates, doors and trapdoors of every wood and of copper. A door is two blocks that
@@ -19,9 +19,7 @@
   - :press: a button. It counts when the click shows it powered.
 
   Iron doors and iron trapdoors ignore a hand (:needs-redstone). Any other block is :not-toggleable. A state the
-  block cannot have is :bad-state with :valid. Closing a door, gate or trapdoor the body stands in is declined
-  :standing-in (the check waits for it), opening never is. Zones and footprints do not apply, since no block
-  type changes.
+  block cannot have is :bad-state with :valid. Zones and footprints do not apply, since no block type changes.
 
   The body walks within :reach of the block (jobs.movement.go-to child with :doors :never, so the approach
   opens nothing). A walk that gives up is :unreachable. It then clicks once with the hand as it is (useOn with no
@@ -30,22 +28,33 @@
   and clicks again, twice at most and never closer than 1, then is :unreachable.
 
   One call is the whole run (walk, click, walks closer); it yields :continue only while the go-to child waits on the
-  world. There is no second click. A click that changed nothing (iron-like block, protected area or lag, which cannot
-  be told apart) is :unchanged. A block that moved but not to the wanted state is :wrong-way. Both give one
-  warn toggle.gave-up. Other reasons: :gone (block vanished or unloaded), :refused (useOn said cannot or
-  no-item).
+  world. There is no second click.
 
-  Declines before any walk with warn toggle.declined and :reason :bad-args, :not-loaded, :no-block,
-  :not-toggleable, :needs-redstone, :bad-state or :standing-in.
+  Waits (conditions): :not-loaded (the block is not loaded) and :standing-in (the body stands in the door or gate to be
+  closed; it must step out).
 
-  Ends with info toggle.done (:changed or :already) and the result {:status :done|:declined|:stopped :reason
-  :pos :block :wanted :was :now}. The pen-gate trigger may shut a planned pen gate this job opened once the
-  body has been more than 2 blocks away for 4 s.")
+  Ends :done (:changed or already there; data :pos :block :wanted :was :now), or condition-failed with the cause
+  :bad-args, :no-block, :not-toggleable, :needs-redstone, :bad-state (with :valid), :gone (block vanished or
+  unloaded), :refused (useOn said cannot or no-item) or :unreachable, or nothing-possible with :unchanged (a click
+  that changed nothing: iron-like block, protected area or lag, which cannot be told apart), :wrong-way (a block that
+  moved but not to the wanted state) or :unseen. Each refusal is one warn toggle.declined, each give-up one warn
+  toggle.gave-up, a click that worked info toggle.done. The pen-gate trigger may shut a planned pen gate this job
+  opened once the body has been more than 2 blocks away for 4 s.")
 
 (a/defargs args
   {:pos {:doc "the block, [x y z] or {:x :y :z}; either half of a door" :spec ::a/pos :default nil}
    :state {:doc ":open or :closed (gate, door, trapdoor), :on or :off (lever), :press (button)" :spec (a/or-of #{:open :closed :on :off :press} #{"open" "closed" "on" "off" "press"}) :default nil}
    :reach {:doc "walk until within this many cells of the block (the click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}})
+
+(a/defargs settings
+  {::time-s {:default 120 :doc "Seconds a toggle may take: the walk, the click and the walks closer." :spec (a/num-in 0 nil)}
+   ::max-closer {:default 2 :doc "How often a click the game answers out of reach is followed by a walk one cell closer." :spec (a/int-in 0 nil)}})
+(defn max-closer [] (settings/get settings ::max-closer))
+(defn time-s [] (settings/get settings ::time-s))
+
+(def target [:pos])
+
+(def defaults {:spend {:time ::time-s}})
 
 (def valid-states
   {:openable #{:open :closed} :lever #{:on :off} :button #{:press}})
@@ -66,50 +75,54 @@
   [status reason pos state more]
   (merge {:status status :reason reason :pos pos :wanted state} more))
 
+(def condition-failures "Give-up reasons that read as a failed condition, the others as nothing possible." #{:gone :refused :unreachable})
+
 (defn decline!
   ([c reason pos state text] (decline! c reason pos state text nil))
   ([c reason pos state text more]
    (let [result (report :declined reason pos state more)]
      (ctx/emit! c :toggle.declined :warn (assoc result :text (str "toggle: " text)))
-     (ctx/result! c result)
-     :done)))
+     (ctx/end c :condition-failed reason (dissoc result :status :reason)))))
 
 (defn give-up!
   [c reason pos state text more]
   (let [result (report :stopped reason pos state more)]
     (ctx/emit! c :toggle.gave-up :warn (assoc result :text (str "toggle: " text)))
-    (ctx/result! c result)
-    :done))
+    (ctx/end c (if (condition-failures reason) :condition-failed :nothing-possible) reason (dissoc result :status :reason))))
 
 (defn finish!
   [c reason pos state text more]
   (let [result (report :done reason pos state more)]
     (ctx/emit! c :toggle.done :info (assoc result :text text))
-    (ctx/result! c result)
-    :done))
+    (ctx/end c :done nil (dissoc result :status))))
 
-(defn check
-  "True, or a wait for what the block's state needs from the body: :not-loaded (the block is not loaded) or
-  :standing-in (the body stands in the door or gate to be closed; it must step out). Bad args and every other decline
-  stay with the round, which ends with its result; so do these for a toggle run as a child (herd, rail-line), whose
-  parent reads the result."
+(defn waits
+  "The cause of the wait the block's state needs from the body, or nil: :not-loaded (the block is not loaded) or
+  :standing-in (the body stands in the door or gate to be closed; it must step out). Bad args and every other refusal
+  end the round, so do these for a toggle run as an old child (herd, rail-line), whose parent reads the result."
   [c]
   (let [{:keys [pos state error]} (parse (:args c))]
-    (if error
-      true
+    (when-not error
       (let [b (u/block-at (:primitives c) pos)
             props (some-> b click/props-of)]
         (cond
-          (nil? b) (ctx/wait c {:reason :not-loaded :pos pos})
+          (nil? b) {:reason :not-loaded :pos pos}
           (and (= :openable (click/kind-of (.-name b))) (= :closed state)
                (not (click/reached? state props))
                (click/standing-in? (u/self-pos c) pos (:half props)))
-          (ctx/wait c {:reason :standing-in :pos pos :block (.-name b)})
-          :else true)))))
+          {:reason :standing-in :pos pos :block (.-name b)})))))
 
-(a/defargs settings
-  {::max-closer {:default 2 :doc "How often a click the game answers out of reach is followed by a walk one cell closer." :spec (a/int-in 0 nil)}})
-(defn max-closer [] (settings/get settings ::max-closer))
+(def conditions [[:fn waits]])
+
+(defn done?
+  "Whether the block is in the wanted state already."
+  [c]
+  (let [{:keys [pos state error]} (parse (:args c))
+        b (when-not error (u/block-at (:primitives c) pos))
+        reached (boolean (and b (contains? (valid-states (click/kind-of (.-name b))) state) (click/reached? state (click/props-of b))))]
+    {:done? reached :units :toggles :done (if reached 1 0) :left (if reached 0 1)}))
+
+(defn quote-of [_c] {:uses {:time [0.1 2 (time-s)]}})
 
 (defn reach
   "The reach the walk aims for now: :reach, less one for each walk closer after a click out of reach (at least 1)."
@@ -140,14 +153,14 @@
       :wrong-way (give-up! c :wrong-way pos state (str text " moved, but not to " (name state)) facts))))
 
 (defn ^:async walk! [c pos state block]
-  (let [r (await (child/call-walk c :walk {:pos pos :range (reach c) :doors :never :escalate false}))]
+  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach c) :doors :never :escalate false}))]
     (cond
       (= :continue r) :continue
-      (:arrived (ctx/child-result c :walk)) (do (ctx/update-mem! c assoc :arrived true) :again)
+      (:arrived (:data r)) (do (ctx/update-mem! c assoc :arrived true) :again)
       :else (give-up! c :unreachable pos state (str "cannot walk within reach of " block " at " (pr-str pos)) {:block block}))))
 
 (defn ^:async next!
-  "One piece of the run: a decline, the walk, or the click. :again, :continue (the walk waits) or :done."
+  "One piece of the run: a decline, the walk, or the click. :again, :continue (the walk waits) or the ending."
   [c]
   (let [{:keys [pos state error]} (parse (:args c))]
     (if error

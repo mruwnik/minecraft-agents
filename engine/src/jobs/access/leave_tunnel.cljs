@@ -1,12 +1,14 @@
 (ns jobs.access.leave-tunnel
-  (:require [jobs.lib.choose :as choose]
+  (:require [engine.contract :as contract]
+            [jobs.lib.choose :as choose]
             [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.need :as need]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.declined :as declined]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
             [jobs.lib.torch :as torch]
@@ -21,8 +23,7 @@
 (def doc
   "Leave a dead-end tunnel (the result of jobs.access.tunnel: :line :dug :torches): take its torches back and
   block its mouth off. One call does all of it (:continue only while a child waits on the world); a cut or
-  restart reads the world again and goes on. A nil zone list declines
-  the check (one warn leave-tunnel.declined).
+  restart reads the world again and goes on. A nil zone list waits (condition :no-zones).
 
   Torches first. For each torch that still stands, deepest first, the body walks to the cell after its site
   (a go-to child). It asks jobs.lib.access.rules/may-dig?. A refusal books the torch as left
@@ -48,12 +49,14 @@
   with :escape (the stair results). The ledger entries of torches the stair or the fill destroyed are dropped
   when the job ends.
 
-  Result {:status :done|:stopped :reason :sealed|:open|:walk-failed|:bad-args :at [x y z] :taken [cells] :left
-  [{:cell :site :reason}] :filled [cells] :open [{:cell :reason}]}. :left holds torches not taken, including
-  those still standing on a stop. Events: leave-tunnel.done (info, :sealed), leave-tunnel.open (warn, :open),
-  leave-tunnel.stopped (warn, :walk-failed or :bad-args).
+  Ends :done with data {:reason :sealed|:open :at [x y z] :taken [cells] :left [{:cell :site :reason}] :filled [cells]
+  :open [{:cell :reason}]}; :left holds torches not taken. :open with :escaped true: the entry itself was unreachable.
+  Or condition-failed with the cause :bad-args (no :line in the tunnel) or :no-tool (the escape stair has no pickaxe and
+  :fetch is off, or the fetch failed, as its :because), or nothing-possible with :walk-failed (every escape failed; data
+  :escape holds the stair endings). Events: leave-tunnel.done (info, :sealed), leave-tunnel.open (warn, :open),
+  leave-tunnel.stopped (warn, any stop).
 
-  :fetch (default true; false waits :no-tool; jobs.lib.fetch): the escape stair's missing pickaxe is got with jobs.items.get-tool, then
+  :fetch (default true; false ends :no-tool): the escape stair's missing pickaxe is got with jobs.items.get-tool (jobs.lib.need), then
   the body walks back to the cell it stood on and goes on.")
 
 (a/defargs args
@@ -61,12 +64,29 @@
    :spare {:doc "items filled with only when nothing else is carried (a caller's own haul)" :spec (a/coll-of a/item?) :default []}
    :reach {:doc "mouth cells whose centre is this close to the eye are filled from the entry, in blocks" :spec (a/num-in 0 nil) :default u/bucket-reach}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get a missing pickaxe for the escape instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}})
+   :fetch {:doc "get a missing pickaxe for the escape with jobs.items.get-tool instead of ending :no-tool: a set of kinds or a map of limits counts as true; false ends :no-tool" :spec fetch/option? :default true}})
 
-(defn check [c]
-  (if (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
-    (access/decline! c :leave-tunnel.declined "leave-tunnel" {:reason :no-zones})
-    (fetch/declined-check c 'jobs.access.leave-tunnel)))
+(a/defargs settings
+  {::time-s {:default 900 :doc "Seconds a way out may take: the torches, the escape, the seal." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
+
+(def target [:tunnel])
+
+(def defaults {:spend {:time ::time-s}})
+
+(defn no-zones [c]
+  (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) :no-zones))
+
+(def conditions [[:fn no-zones]])
+
+(defn done?
+  "Progress only: the job is done by the round that has sealed the mouth."
+  [c]
+  {:done? false :units :torches :done (count (:taken (ctx/mem c)))})
+
+(defn quote-of [c]
+  (let [n (count (:torches (:tunnel (:args c))))]
+    {:uses {:time [1 (+ 3 (* 4 n)) (max (+ 3 (* 4 n)) (time-s))]}}))
 
 (def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
@@ -126,35 +146,41 @@
     (when (seq gone)
       (ledger/remember! c (reduce ledger/drop-cell l gone)))))
 
+(def condition-reasons "Stop reasons that read as a failed condition; any other stop is nothing possible." #{:bad-args :no-tool})
+
 (defn finish!
-  "Hand the result over and end, with the event of its reason; on a stop the torches still standing are left too."
-  [c status reason detail]
+  "Hand the ending over, with the event of its reason; on a stop the torches still standing are left too. reason is
+  a keyword, or a cause map with :reason."
+  [c status cause detail]
   (let [{:keys [tunnel]} (:args c)
+        reason (if (map? cause) (:reason cause) cause)
         m (ctx/mem c)
         block-at (access/sensed-at (:primitives c) nil)
         stopped? (= :stopped status)
         _ (forget-gone! c tunnel block-at)
         still (when stopped?
                 (map (fn [{:keys [cell site]}] {:cell cell :site site :reason reason}) (standing block-at tunnel m)))
-        result (merge {:status status :reason reason :at (reach/standing-vec (:primitives c)) :taken (:taken m []) :left (into (:left m []) still)
+        result (merge {:reason reason :at (reach/standing-vec (:primitives c)) :taken (:taken m []) :left (into (:left m []) still)
                        :filled (:filled m []) :open (:open m [])}
                       detail)
         text (str "leave-tunnel " (name reason) ": took " (count (:taken result)) " torches, filled "
                   (count (:filled result)) ", left " (count (:left result)) " torches and " (count (:open result)) " cells")]
-    (ctx/result! c result)
     (case reason
-      :sealed (ctx/emit! c :leave-tunnel.done :info (assoc result :text text))
-      :open (ctx/emit! c :leave-tunnel.open :warn (assoc result :text text))
-      (ctx/emit! c :leave-tunnel.stopped :warn (assoc result :text text)))
-    :done))
+      :sealed (ctx/emit! c :leave-tunnel.done :info (assoc result :status status :text text))
+      :open (ctx/emit! c :leave-tunnel.open :warn (assoc result :status status :text text))
+      (ctx/emit! c :leave-tunnel.stopped :warn (assoc result :status status :text text)))
+    (if stopped?
+      (ctx/end c (if (condition-reasons reason) :condition-failed :nothing-possible) cause result)
+      (ctx/end c :done nil result))))
 
 (defn ^:async walk-to!
   "Walk to cell: :continue while the walk waits on the world, :again once there. A walk that did not arrive starts the escape (the way out
   does not need the tunnel's stair); once out, giveup is called with the walk instead."
   [c cell giveup]
-  (let [r (await (child/walk-into! c :walk cell))]
+  (let [e (await (child/walk-into!* c :walk cell))
+        r (:data e)]
     (cond
-      (= :continue r) :continue
+      (= :continue e) :continue
       (and (:arrived r) (= cell (reach/standing-vec (:primitives c)))) :again
       (:escaped (ctx/mem c)) (giveup r)
       :else (do (ctx/update-mem! c assoc :escape {:i 0 :cell cell :walk r :results []})
@@ -174,10 +200,21 @@
   [{:keys [dir]} entry-y]
   {:dir (if (= :up dir) :down :up) :y entry-y})
 
+(defn ^:async fetch-tool!
+  "Get the pickaxe the escape stair lacks (its ending e names the block or tool kind): :continue while it works, :again
+  once it is got, else the stop :no-tool (the fetch's ending its :because)."
+  [c e]
+  (let [{:keys [block tool]} (:cause e)
+        t (await (need/tool! c (if block {:block block} {:kind tool}) {:return? true}))]
+    (cond
+      (= :continue t) :continue
+      (= :done (:kind t)) :again
+      :else (finish! c :stopped (:cause e) {}))))
+
 (defn ^:async escape!
   "One attempt of the way out: a stair to the entry's height (opposite the tunnel's :dir) along the next heading; done, the body is out and the
-  rounds go on; stopped or refused by a zone, the next heading; none left, the walk failure stands; the stair declined (:declined: its
-  wait, e.g. :no-tool, reaches this job's job.waiting)."
+  rounds go on; stopped or refused by a zone, the next heading; none left, the walk failure stands; a stair without a pickaxe gets one
+  (:fetch) or stops the job :no-tool."
   [c]
   (let [{:keys [tunnel]} (:args c)
         ignore? (boolean (:ignore-zones? (:args c)))
@@ -185,30 +222,25 @@
         attempts (escape-attempts (:heading (:line tunnel)) ignore?)
         attempt (get attempts i)
         entry-y (second (first (ln/line-cells (:line tunnel))))]
-    (cond
-      (nil? attempt)
+    (if (nil? attempt)
       (finish! c :stopped :walk-failed {:cell cell :walk walk :escape results})
-      :else
       (let [slot (keyword (str "escape-" i))
             sargs (assoc (escape-stair (:line tunnel) entry-y)
                          :heading (:heading attempt) :fetch false :spent-ok true :stock-torches false :ignore-zones? (:ignore-zones? attempt))
-            r (await (declined/call-child! c slot 'jobs.access.stair sargs))
-            res (when (= :done r) (ctx/child-result c slot))
-            refused (when (= :declined r) (blocks/child-wait c slot 'jobs.access.stair sargs))]
+            e (await (ctx/call c slot 'jobs.access.stair sargs))
+            why (when (map? e) (contract/cause-key e))
+            next-heading! #(do (ctx/update-mem! c update :escape (fn [m] (-> m (assoc :i (inc i)) (update :results conj %)))) :again)]
         (cond
-          (= :refused (:reason refused))
-          (do (declined/begin! c)
-              (ctx/update-mem! c update :escape #(-> % (assoc :i (inc i)) (update :results conj {:reason :refused :heading (:heading attempt)})))
-              :again)
-          (= :declined r) :declined
-          (nil? res) :continue
-          (= :done (:status res))
+          (= :continue e) :continue
+          (= :done (:kind e))
           (do (ctx/emit! c :leave-tunnel.escape :info {:at (reach/standing-vec (:primitives c)) :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)
                                                       :text (str "leave-tunnel dug its own way out " (name (:heading attempt)))})
               (ctx/update-mem! c #(-> % (dissoc :escape) (assoc :escaped true)))
               :again)
-          :else (do (ctx/update-mem! c update :escape #(-> % (assoc :i (inc i)) (update :results conj (select-keys res [:reason :cell :heading]))))
-                    :again))))))
+          (= :refused why) (next-heading! {:reason :refused :heading (:heading attempt)})
+          (and (= :no-tool why) (:fetch (:args c))) (await (fetch-tool! c e))
+          (= :no-tool why) (finish! c :stopped (:cause e) {})
+          :else (next-heading! (assoc (select-keys (:data e) [:cell]) :reason why :heading (:heading attempt))))))))
 
 (defn book-left! [c cell site reason]
   (ctx/update-mem! c update :left (fnil conj []) {:cell cell :site site :reason reason})
@@ -243,7 +275,7 @@
 (defn ^:async collect!
   "Pick the dropped torches up near the body; the flag clears when the pick-up ends (done, or it cannot run)."
   [c]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 3 :filter ["torch"]}))]
+  (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius 3 :filter ["torch"]}))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c dissoc :collect) :again))))
@@ -293,7 +325,6 @@
       :else (await (fill! c (first (sort-by (juxt #(% 1) #(- (u/eye-dist body %))) todo)))))))
 
 (defn ^:async work-round [c]
-  (declined/begin! c)
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
         torches (when (:line tunnel) (standing (:block-at (stair/rules-in c (reach/standing-vec (:primitives c)))) tunnel m))]
@@ -305,13 +336,11 @@
       :else (await (seal! c)))))
 
 (defn ^:async step!
-  "One piece of the way out: the fetch part first (the escape stair's booked wait), then the work. :again, :continue
-  (a child waits on the world), :declined or :done."
+  "One piece of the way out: the walk back after a fetch first, then the work. :again, :continue (a child waits on the
+  world) or the ending."
   [c]
-  (let [r (await (fetch/step! c 'jobs.access.leave-tunnel (fetch/booked-wait c) {:return? true}))]
-    (cond
-      r r
-      :else (await (work-round c)))))
+  (let [back (await (need/return! c))]
+    (if back back (await (work-round c)))))
 
 (defn ^:async round
   "The whole way out: step! until it ends, a pace between; :continue after (stair/max-steps) of them or while a child

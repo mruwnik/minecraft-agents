@@ -85,7 +85,7 @@
   (is (= {:step :give-up :reason :unseen :at [1 66 0]} (select-keys (step #{[1 66 0]}) [:step :reason :at])))
   (is (= :move (:step (step #{})))))
 
-(deftest bridge-with-no-blocks-and-no-fetch-waits-after-looking-ahead
+(deftest bridge-with-no-blocks-and-no-fetch-ends-after-looking-ahead
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -98,9 +98,8 @@
               (swap! (:clock s) + 500)
               (await (core/tick! eng))
               (recur (inc i))))
-          (is (empty? (d/events-of s :bridge.gave-up)) "no give-up: blocks missing at the start are a wait")
-          (is (seq (:list (core/state eng))))
-          (is (= :too-few-blocks (:reason (core/waiting eng (first (:list (core/state eng))))))))))))
+          (is (= [:too-few-blocks] (mapv :reason (d/events-of s :bridge.gave-up))) "blocks missing at the start end the job")
+          (is (empty? (:list (core/state eng)))))))))
 
 (deftest dig-looks-at-water-beside-the-cell-before-it-digs
   (async done

@@ -1,5 +1,6 @@
 (ns jobs.access.bridge
   (:require [jobs.lib.choose :as choose]
+            [jobs.lib.need :as need]
             [jobs.lib.submitted :as submitted]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -17,12 +18,14 @@
 (def doc
   "Bridge a 1-wide row of :length blocks along :heading from the cell the body stands in, over air or fluid: place the
   floor cell ahead against the block the body stands on, walk onto it (jobs.movement.go-to child, no escalation),
-  repeat. One call builds the whole row; it yields :continue only while a go-to waits on the world. Not a way round a
+  repeat. One call builds the whole row; it yields :continue only while a child waits on the world. Not a way round a
   gap the walker could not plan: the caller decides to bridge.
 
   Every block is written to the scaffold ledger (jobs.lib.ledger, body memory, purpose :bridge) as an intent before
   its place and confirmed when the cell is seen holding it, so a cleanup can take the row back after a cut or restart.
   Each (re)start reads the row from the cells: a cell ahead that is already solid floor is stepped onto, not placed.
+
+  Waits (condition): :moved-since-submit, when the body stands over jobs.lib.submitted/limit from :from at the start.
 
   Before each step it checks:
   - the whole rest of the row is permitted (no zone that bars :place, no other plan's footprint, a zone list loaded)
@@ -34,15 +37,15 @@
   A shove off the line walks back to the last cell stood on (3 tries), then gives up :off-line. The sneak-edge
   variant is not used: the body stands at the block's centre, so it does not step off the edge.
 
-  The check waits (:too-few-blocks, with :short) when blocks are missing at the start (seen first: the round yields once
-  for it after looking ahead); run short part way, it gives up
-  :too-few-blocks; a cell ahead still unsensed after the look gives up :unseen. Every give-up ends the job, so a parent running it as a child reads the result.
+  Blocks missing (:too-few-blocks, with :short) are got with jobs.items.obtain (jobs.lib.need, then the body walks back
+  to the cell it stood on) unless :fetch is false; a cell ahead still unsensed after the look ends :unseen.
 
-  Ends with {:status :done|:stopped :reason :placed [[x y z] ...] :built n :length n}. :placed are this job's confirmed
-  blocks, nearest first. Events: bridge.done (info) and bridge.gave-up (warn, with :reason and by reason :at :block
-  :zone :short :detail). Gives up with :too-few-blocks, :not-on-solid, :blocked (a cell ahead at body height is not
-  clear), :zone, :footprint, :no-zones, :not-loaded, :not-replaceable, :off-line, :place-failed (3 failed places in a
-  row, :detail the primitive's reason), :move-failed (3 failed walks onto a placed block) or :bad-args.")
+  Ends :done with data {:placed [[x y z] ...] :built n :length n}; :placed are this job's confirmed blocks, nearest
+  first. A give-up is condition-failed with the cause :too-few-blocks (the fetch ending as its :because), :not-on-solid,
+  :blocked (a cell ahead at body height is not clear), :zone, :footprint, :no-zones, :not-loaded, :not-replaceable,
+  :unseen or :bad-args, or nothing-possible with :off-line, :place-failed (3 failed places in a row, :detail the
+  primitive's reason) or :move-failed (3 failed walks onto a placed block); the data holds :placed and :built as well,
+  and by reason :at :block :zone :short :detail. Events: bridge.done (info) and bridge.gave-up (warn).")
 
 (a/defargs args
   {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
@@ -51,12 +54,18 @@
    :length {:doc "blocks in the row, 1 to 64" :spec (a/int-in 1 64) :default 1}
    :item {:doc "the block to bridge with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get missing blocks instead of waiting :too-few-blocks (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
+   :fetch {:doc "get missing blocks with jobs.items.obtain instead of ending :too-few-blocks (false: end); a set of kinds or a map of limits counts as true" :spec fetch/option? :default true}})
 
 (a/defargs settings
-  {::max-length {:default 64 :doc "Longest bridge a call may ask for, in blocks." :spec (a/int-in 0 nil)}
+  {::time-s {:default 600 :doc "Seconds a bridge may take." :spec (a/num-in 0 nil)}
+   ::max-length {:default 64 :doc "Longest bridge a call may ask for, in blocks." :spec (a/int-in 0 nil)}
    ::max-failures {:default 3 :doc "Failed moves or recoveries before the bridge gives up." :spec (a/int-in 0 nil)}})
 (defn max-length [] (settings/get settings ::max-length))
+(defn time-s [] (settings/get settings ::time-s))
+
+(def target [:heading])
+
+(def defaults {:spend {:time ::time-s}})
 
 (def purpose :bridge)
 
@@ -130,22 +139,27 @@
          (sort-by #(or (at %) 0))
          vec)))
 
+(def condition-reasons
+  "Give-up reasons that read as a failed condition; any other is nothing possible."
+  #{:bad-args :not-on-solid :blocked :zone :footprint :no-zones :not-loaded :not-replaceable :unseen :too-few-blocks})
+
 (defn finish!
-  "End the job: the result and its event."
+  "End the job: the ending and its event."
   [c l step]
   (let [{:keys [heading length]} (:args c)
         cells (placed c l (:start (ctx/mem c)) heading)
         done? (= :done (:step step))
-        result (merge {:status (if done? :done :stopped) :placed cells :built (count cells) :length length}
-                      (dissoc step :step))]
-    (ctx/result! c result)
+        result (merge {:placed cells :built (count cells) :length length}
+                      (dissoc step :step :reason))]
     (if done?
-      (ctx/emit! c :bridge.done :info (assoc result :text (str "bridge of " (count cells) " blocks " (name heading))))
-      (ctx/emit! c :bridge.gave-up :warn
-                 (assoc result :text (str "bridge gave up at " (count cells) " of " length ": " (name (:reason step))
-                                          (when (:short step) (str ", " (:short step) " blocks short"))
-                                          (when (:at step) (str " at " (pr-str (:at step))))))))
-    :done))
+      (do (ctx/emit! c :bridge.done :info (assoc result :status :done :text (str "bridge of " (count cells) " blocks " (name heading))))
+          (ctx/end c :done nil result))
+      (do (ctx/emit! c :bridge.gave-up :warn
+                     (assoc result :status :stopped :reason (:reason step)
+                            :text (str "bridge gave up at " (count cells) " of " length ": " (name (:reason step))
+                                       (when (:short step) (str ", " (:short step) " blocks short"))
+                                       (when (:at step) (str " at " (pr-str (:at step)))))))
+          (ctx/end c (if (condition-reasons (:reason step)) :condition-failed :nothing-possible) (:reason step) result)))))
 
 (defn inputs
   "next-step's input now, with the ledger l."
@@ -156,27 +170,27 @@
            {:feet feet :start (or (:start (ctx/mem c)) feet) :heading heading :length length :block-at (access/sensed-at p "air") :unknown? #(look/unknown? p %)
             :carried (pl/carried p) :item item :ledger (ledger/cells l)})))
 
-(defn need
-  "The wait reason for the blocks step lacks, or nil: a :need for jobs.lib.fetch."
-  [c step]
-  (when (= :too-few-blocks (:reason step))
-    (let [item (:item (:args c))]
-      (cond-> {:reason :need :count (:short step)}
-        item (assoc :item item)
-        (not item) (assoc :any-of (choose/fillers :pillar))))))
-
-(defn check
-  "True, or a wait for the blocks a bridge lacks at its start (fetched for unless :fetch is off); every other give-up
-  stays with the round."
+(defn away
+  "The wait cause of a body that stands too far from where the job was submitted, or nil."
   [c]
-  (let [p (:primitives c)
-        l (ledger/reconcile (ledger/open-entries (ctx/view c)) (access/sensed-at p nil))
-        step (next-step (inputs c l (pl/feet-cell c)))]
-    (cond
-      (some? (submitted/away-wait c)) false
-      (not= :too-few-blocks (:reason step)) true
-      (nil? (fetch/opts c 'jobs.access.bridge)) (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or (:item (:args c)) (choose/fillers :pillar))})
-      :else (fetch/check c 'jobs.access.bridge (need c step)))))
+  (let [w (atom nil)]
+    (submitted/away-wait (assoc c :wait w))
+    @w))
+
+(def conditions [[:fn away]])
+
+(defn done?
+  "Progress only: the row is finished by a round that sees the body at its end."
+  [c]
+  (let [{:keys [heading length]} (:args c)
+        start (:start (ctx/mem c))
+        built (if start (count (placed c (ledger/open-entries (ctx/view c)) start heading)) 0)]
+    {:done? false :units :blocks :done built :left (max 0 (- (or length 0) built))}))
+
+(defn quote-of [c]
+  (let [{:keys [length item]} (:args c)
+        n (or length 1)]
+    {:uses (cond-> {:time [(* 0.3 n) n (max n (time-s))]} item (assoc :items {item [0 n n]}))}))
 
 (defn ^:async place!
   "Write the intent, place one block, confirm it when the cell shows it. Three failed places in a row give up."
@@ -200,11 +214,11 @@
 (defn ^:async walk-to!
   "A go-to child to the cell [x y z] (range 0, no escalation). :continue while it waits; :ok on arrival, else :failed."
   [c [x y z]]
-  (let [r (await (child/call-walk c :step {:pos {:x x :y y :z z} :range 0 :escalate false
-                                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+  (let [r (await (child/call-walk* c :step {:pos {:x x :y y :z z} :range 0 :escalate false
+                                            :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue r) :continue
-      (and (= :done r) (not= :stopped (:status (ctx/child-result c :step)))) :ok
+      (= :done (:kind r)) :ok
       :else :failed)))
 
 (defn ^:async move!
@@ -235,8 +249,24 @@
     (when (look/unknown? (:primitives c) cell)
       (await (look/look-at! c cell)))))
 
-(defn ^:async step!
-  "One block of the bridge (or its end): :again, :continue while a go-to waits, or :done."
+(defn ^:async fetch-blocks!
+  "Get the blocks step lacks with jobs.items.obtain: :continue while it works, :again once it is done, else the bridge's
+  give-up (:too-few-blocks, the fetch's ending its :because). Without :fetch the give-up at once."
+  [c l step]
+  (if-not (:fetch (:args c))
+    (finish! c l step)
+    (let [item (:item (:args c))
+          n (:short step)
+          e (await (if item
+                     (need/item! c item n {:return? true})
+                     (need/blocks! c (choose/fillers :pillar) n {:return? true})))]
+      (cond
+        (= :continue e) :continue
+        (= :done (:kind e)) :again
+        :else (finish! c l step)))))
+
+(defn ^:async work!
+  "One block of the bridge (or its end): look ahead, decide, act."
   [c]
   (await (pillar/land! c))
   (await (look-ahead! c (pl/feet-cell c)))
@@ -244,21 +274,21 @@
         seen (ledger/open-entries (ctx/view c))
         l (ledger/reconcile seen block-at)
         feet (pl/feet-cell c)
-        step (next-step (inputs c l feet))
-        fetched (await (fetch/step! c 'jobs.access.bridge (need c step) {:return? true}))]
+        step (next-step (inputs c l feet))]
     (when (not= l seen) (ledger/remember! c l))
     (ctx/update-mem! c #(-> % (update :start (fn [s] (or s feet))) (update :stand (fn [s] (or s feet)))))
-    (if fetched
-      fetched
-      (cond
-        (= :place (:step step)) (await (place! c l block-at step))
-        (= :move (:step step)) (await (move! c l step))
-        (= :off-line (:reason step)) (await (recover! c l block-at step))
-        ;; blocks missing before the first block, seen only now the look ahead has sensed the cells: yield once, the check waits
-        (and (= :too-few-blocks (:reason step)) (empty? (placed c l (:start (ctx/mem c)) (:heading (:args c))))
-             (not (:short-yield (ctx/mem c))))
-        (do (ctx/update-mem! c assoc :short-yield true) :continue)
-        :else (finish! c l step)))))
+    (cond
+      (= :place (:step step)) (await (place! c l block-at step))
+      (= :move (:step step)) (await (move! c l step))
+      (= :off-line (:reason step)) (await (recover! c l block-at step))
+      (= :too-few-blocks (:reason step)) (await (fetch-blocks! c l step))
+      :else (finish! c l step))))
+
+(defn ^:async step!
+  "A step of the bridge: the walk back after a fetch first, else work!. :again, :continue while a child waits, or the ending."
+  [c]
+  (let [back (await (need/return! c))]
+    (if back back (await (work! c)))))
 
 (defn ^:async round
   "The whole bridge: step! until it ends, a pace between blocks."

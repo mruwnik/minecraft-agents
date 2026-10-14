@@ -85,8 +85,8 @@
 
 (defn setup
   "An engine over a fake world: stone under the start and from x=6 on, a gap between; :make starts another engine on the
-  same body."
-  [{:keys [inventory blocks zones] :or {zones []}}]
+  same body. :jobs replaces jobs of the registry."
+  [{:keys [inventory blocks zones jobs] :or {zones []}}]
   (let [clock (atom 1000000)
         w (world/of-data {} {} zones)
         dir (tu/tmp-dir)
@@ -94,7 +94,7 @@
         p (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}
                     :blocks (merge {"0,63,0" "stone"} landing blocks)
                     :inventory (or inventory [{:name "dirt" :count 64}])})
-        make (fn [] (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock) :world w
+        make (fn [] (core/create {:primitives p :jobs (merge registry/jobs jobs) :triggers triggers/all :dir dir :now #(deref clock) :world w
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))]
     {:eng (make) :make make :p p :seen seen :clock clock}))
 
@@ -129,39 +129,46 @@
           (let [d (first (of-kind seen :bridge.done))]
             (is (= (row 5) (:placed d)))))))))
 
+(defn obtain-stub
+  "An obtain that records the args of each round in the atom and yields."
+  [calls]
+  {:check (constantly true)
+   :round (fn ^:async obtain [c] (swap! calls conj (select-keys (:args c) [:any-of :count])) :continue)
+   :args {:item {:default nil} :any-of {:default nil} :count {:default 1} :how {:default nil} :depth {:default nil} :explore {:default true}}})
+
 (deftest no-blocks-fetches-them-by-default
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (setup {:inventory []})]
+        (let [got (atom [])
+              {:keys [eng p] :as s} (setup {:inventory [] :jobs {'jobs.items.obtain (obtain-stub got)}})]
           (core/submit! eng (list job {:heading :east :length 5}) {})
           (await (ticks s eng 4))
           (is (empty? (calls p "place")))
-          (let [f (first (of-kind seen :fetch.started))]
-            (is (= :need (:for f)))
-            (is (= ["dirt" "cobblestone"] (:any-of (:args f))))
-            (is (= 5 (:count (:args f))))))))))
+          (is (= {:any-of ["dirt" "cobblestone"] :count 5} (first @got))))))))
 
 (deftest running-short-part-way-fetches-the-rest-by-default
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen] :as s} (setup {:inventory [{:name "dirt" :count 2}]})]
+        (let [got (atom [])
+              {:keys [eng] :as s} (setup {:inventory [{:name "dirt" :count 2}] :jobs {'jobs.items.obtain (obtain-stub got)}})]
           (core/submit! eng (list job {:heading :east :length 5}) {})
           (await (ticks s eng 12))
-          (is (= 3 (:count (:args (first (of-kind seen :fetch.started)))))))))))
+          (is (= 3 (:count (first @got)))))))))
 
-(deftest too-few-blocks-at-the-start-waits-saying-so
+(deftest too-few-blocks-at-the-start-without-fetch-ends-saying-so
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (setup {:inventory []})
-              id (core/submit! eng (list job {:heading :east :length 5 :fetch false}) {})]
+        (let [got (atom [])
+              {:keys [eng p seen] :as s} (setup {:inventory [] :jobs {'jobs.items.obtain (obtain-stub got)}})]
+          (core/submit! eng (list job {:heading :east :length 5 :fetch false}) {})
           (await (ticks s eng 3))
-          (is (not (finished? eng)))
+          (is (finished? eng))
           (is (empty? (calls p "place")))
-          (is (empty? (of-kind seen :fetch.started)))
-          (is (= :too-few-blocks (:reason (core/waiting eng id)))))))))
+          (is (empty? @got))
+          (is (= [:too-few-blocks] (mapv :reason (of-kind seen :stopped)))))))))
 
 (deftest running-short-part-way-builds-what-it-has-and-gives-up-saying-so
   (async done

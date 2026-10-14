@@ -312,6 +312,7 @@
                                                           {:target [6 57 0] :ignore-zones? true} {} :between block-stair!)))
               escapes (events-of s :leave-tunnel.escape)]
           (is (= [:stopped :walk-failed] ((juxt :status :reason) @out)) "every heading refused: the escapes are used up")
+          (is (= :nothing-possible (get-in @out [:ending :kind])))
           (is (= [:refused :refused :refused :refused] (map :reason (:escape @out))))
           (is (not-any? :ignore-zones? escapes) "no attempt ran with :ignore-zones?"))))))
 
@@ -342,35 +343,17 @@
         reads {[1 64 0] nil [2 64 0] "air" [3 64 0] "wall_torch"}]
     (is (= [[2 64 0]] (leave-tunnel/gone-cells l tunnel reads)))))
 
-(deftest a-body-without-a-pickaxe-cannot-dig-out-and-waits-for-one
+(deftest a-body-without-a-pickaxe-cannot-dig-out-and-ends-saying-so
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory)}
                                                         {:target [6 57 0]} {:fetch false} :between drop-pickaxe!)))]
-          (is (= :not-done @out) "no result: the escape's stair declined")
-          (is (= :no-tool (:reason (waiting s))) "the parent waits with the stair's reason")
-          (is (= "pickaxe" (:tool (waiting s))))
-          (is (= 0 (count (events-of s :leave-tunnel.escape))))
-          (is (= 0 (count (events-of s :leave-tunnel.stopped)))))))))
-
-(deftest a-waiting-escape-runs-no-rounds-and-resumes-when-a-pickaxe-is-given
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng clock p out] :as s} (setup {:blocks eight-down :inventory (inventory)}
-                                                     {:target [6 57 0]} {:fetch false} :between drop-pickaxe!)
-              rounds #(count (filter (fn [e] (= :round_started (:kind e))) @(:seen s)))
-              tick-n! (fn ^:async tick-n [n] (dotimes [_ n] (swap! clock + 500) (await (core/tick! eng))))]
-          (await (ticks-while! s #(not (waiting s))))
-          (await (tick-n! 2))
-          (let [n (rounds)]
-            (await (tick-n! 15))
-            (is (= n (rounds)) "parked: no rounds while the escape's stair would decline")
-            (is (= 1 (count (filter #(= :waiting (:kind %)) @(:seen s)))) "told once")
-            (fake/add-item! p "iron_pickaxe" 1)
-            (await (run-out! s))
-            (is (= :done (:status @out)) "resumes once the pickaxe is carried")))))))
+          (is (= [:stopped :no-tool] ((juxt :status :reason) @out)) "the escape's stair declined: the job ends with its reason")
+          (is (= :condition-failed (get-in @out [:ending :kind])))
+          (is (= "pickaxe" (:tool (:cause (:ending @out)))))
+          (is (nil? (waiting s)))
+          (is (= 0 (count (events-of s :leave-tunnel.escape)))))))))
 
 (deftest a-tunnel-result-without-a-line-is-bad-args
   (async done
@@ -391,7 +374,7 @@
           (core/submit! eng '(recording-parent) {})
           (dotimes [_ 5] (swap! clock + 500) (await (core/tick! eng)))
           (is (= [:stopped :bad-args] ((juxt :status :reason) @out)))
-          (is (= 1 (count (filter #(= :leave-tunnel.stopped (:kind %)) @seen)))))))))
+          (is (= :condition-failed (get-in @out [:ending :kind]))))))))
 
 (deftest a-missing-pickaxe-is-fetched-for-the-escape-with-fetch
   (async done
@@ -454,7 +437,7 @@
               _ (reset! body (:p s))
               {:keys [out]} (await (run-out! s))]
           (is (empty? @calls))
-          (is (= :not-done @out)))))))
+          (is (= [:stopped :no-tool] ((juxt :status :reason) @out))))))))
 
 (deftest one-call-takes-the-torches-back-and-seals
   (async done

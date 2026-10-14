@@ -749,7 +749,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 
 **Fetching, contract jobs** (`jobs.lib.need`): `item!`, `blocks!`, `tool!` call `items.obtain` / `items.get-tool` through `ctx/call` and resolve to `:continue` or an ending: `:done` as given, else the same kind with cause `{:reason :need|:tool|:free-slots :why ..}` and the fetch ending as `:because`. No failure booking: a duplicate call is the engine's refusal. The same want asked again after a `:done` fetch, nothing of it used up, ends `:why :not-solved`; `{:return? true}` keeps the start cell and `return!` (first in each round) walks back to it after a done fetch. Both sit in the caller's memory.
 
-**Fetching what a job lacks** (`jobs.lib.fetch`): `blocks.dig`, `blocks.place`, `access.stair`, `access.tunnel`, `access.leave-tunnel` and `items.equip` take `:fetch`
+**Fetching what a job lacks** (`jobs.lib.fetch`): `blocks.dig`, `blocks.place`, `access.stair`, `access.tunnel` and `items.equip` take `:fetch`; `access.bridge` and `access.leave-tunnel` (contract jobs) take it through `jobs.lib.need`
 (default true; `false` waits or stops with the reason). Go-to's escalation children, clear-path's digs, the stairs and places
 of leave-tunnel, tunnel, dig-in and breathe, obtain's table place passes `:fetch false`, its gather mines `:fetch {:what #{:tool} :how #{:chest :craft}}` (no mine inside a mine's fetch); `gather.mine`'s stair passes true. `true` allows every kind (`:tool :item`) and source (`:chest :craft :gather`); a
 set narrows the kinds; a map gives limits `{:what :how :depth :minutes :fail-minutes}` (built-in, the job's default, the
