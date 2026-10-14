@@ -1,11 +1,13 @@
 (ns jobs.animals.herd-trip
   "One animal's trip for jobs.animals.herd: leashing the next, regathering, the steps through the gate and the release."
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.settings :as settings]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
@@ -61,13 +63,12 @@
   [c]
   (let [{:keys [mob radius]} (:args c)
         m (ctx/mem c)
-        r (await (ctx/call-child c :leash 'jobs.animals.leash
-                                 (cond-> {:mob mob :radius radius :center (:origin (ctx/mem c)) :skip (skip-keys c)} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
-        res (when (= :done r) (ctx/child-result c :leash))]
+        e (await (ctx/call c :leash 'jobs.animals.leash
+                           (cond-> {:mob mob :radius radius :center (:origin (ctx/mem c)) :skip (skip-keys c)} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (cond
-      (nil? res) :continue
-      (= :leashed (:reason res)) (start-trip! c (:animal res))
-      (and (empty? (:brought m)) (empty? (:given-up m))) (finish! c (get-in res [:ending :data :reason] (:reason res)))
+      (= :continue e) :continue
+      (= :leashed (get-in e [:data :reason])) (start-trip! c (get-in e [:data :animal]))
+      (and (empty? (:brought m)) (empty? (:given-up m))) (finish! c (or (get-in e [:data :reason]) (contract/cause-key e)))
       :else (finish! c nil))))
 
 (defn lead-possible?
@@ -85,13 +86,6 @@
       (or (lead-possible? c) (not (contains? animals/breeding-food mob))) :lead
       :else :lure)))
 
-(defn lure-problem
-  "The need wait for the mob's food while none is carried, else nil."
-  [c]
-  (let [mob (:mob (:args c))]
-    (when (nil? (animals/food-carried (:primitives c) mob))
-      {:reason :need :any-of (get animals/breeding-food mob) :count 1})))
-
 (defn lure-candidates
   "The adults within radius outside the pen, not on a lead, not skipped, the zone rules allowing, nearest first."
   [c]
@@ -104,14 +98,17 @@
          (animals/allowed c :herd.declined "herd" :take))))
 
 (defn ^:async fetch-food!
-  "A lure run with no food carried: fetch it (:fetch allowing), else end :no-food. Nil when food is carried."
+  "A lure run with no food carried: get one of the mob's breeding foods (jobs.lib.need, :fetch allowing), else end
+  :no-food. Nil when food is carried."
   [c]
-  (let [p (:primitives c)]
-    (when-not (animals/food-carried p (:mob (:args c)))
-      (let [r (when (fetch/opts c 'jobs.animals.herd) (await (fetch/fetch-untimed! c 'jobs.animals.herd lure-problem)))]
+  (let [p (:primitives c)
+        mob (:mob (:args c))
+        limits (fetch/parse-arg (:fetch (:args c)))]
+    (when-not (animals/food-carried p mob)
+      (let [e (when limits (await (need/blocks! c (get animals/breeding-food mob) 1 (select-keys limits [:how :explore]))))]
         (cond
-          r r
-          (animals/food-carried p (:mob (:args c))) :continue
+          (= :continue e) :continue
+          (animals/food-carried p mob) :continue
           :else (finish! c :no-food))))))
 
 (defn ^:async food-first!
@@ -223,8 +220,8 @@
 (defn ^:async regather! [c]
   (if (lure? c)
     (set-phase! c :leash)
-    (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (regather-radius) :filter ["lead"]}))]
-      (if (= :done r) (set-phase! c :leash) :continue))))
+    (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius (regather-radius) :filter ["lead"]}))]
+      (if (= :continue e) :continue (set-phase! c :leash)))))
 
 
 
@@ -236,7 +233,7 @@
         in? (boolean (and there (pen/in-pen? (read-pen c) there)))
         failed (get (:unleash-failed (ctx/mem c)) k)]
     (ctx/update-mem! c #(-> %
-                            (dissoc :release-tried :releasing :release-declines :unleash-failed)
+                            (dissoc :release-tried :releasing :unleash-failed)
                             (assoc :led [] :animal nil)
                             (cond-> (and in? (not failed) (not (some #{k} (:brought %)))) (update :brought (fnil conj []) k))
                             (cond-> (and (or failed (not in?)) (not (contains? (:given-up %) k)))

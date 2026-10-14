@@ -182,9 +182,9 @@
 (defn event-reason [e] (or (:reason e) (get-in e [:data :reason])))
 
 (defn declared-failure?
-  "A round that threw one of the jobs' own ex-info on purpose (README: a throw is a failure): the messages of clear-box/cells, till/cells and herd-run, not a library error or a stray JS error."
+  "A round that threw one of the jobs' own ex-info on purpose (README: a throw is a failure): the messages of clear-box/cells and till/cells, not a library error or a stray JS error."
   [text]
-  (boolean (re-find #"^#error \{:message \"(clear-box (needs|covers)|till (needs|covers)|herd brought none)" (str text))))
+  (boolean (re-find #"^#error \{:message \"(clear-box (needs|covers)|till (needs|covers))" (str text))))
 
 (defn act-cap? [text] (str/includes? (str text) "(runaway job)"))
 

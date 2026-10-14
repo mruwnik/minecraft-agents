@@ -2,11 +2,13 @@
   "The state of a herd run: its constants, the ending and what the animals on the lead did, shared by the pen, the trip and the job."
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.bait :as bait]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-gate :as pg]
             [jobs.lib.pen-read :as pen-read]
@@ -28,8 +30,7 @@
    ::crowd-out-radius {:default 2.5 :doc "Radius of crowding outside the gate, in blocks." :spec (a/num-in 0 nil)}
    ::crowd-in-radius {:default 2.0 :doc "Radius of crowding inside the gate, in blocks." :spec (a/num-in 0 nil)}
    ::max-reopens {:default 2 :doc "How often a gate shut with the body inside is opened again for the body to go out." :spec (a/int-in 0 nil)}
-   ::max-shut-retries {:default 2 :doc "How often a gate that will not shut is tried again before the run gives up on it." :spec (a/int-in 0 nil)}
-   ::max-release-declines {:default 3 :doc "How often the unleash child of one animal may decline before the animal is given up on." :spec (a/int-in 0 nil)}})
+   ::max-shut-retries {:default 2 :doc "How often a gate that will not shut is tried again before the run gives up on it." :spec (a/int-in 0 nil)}})
 (defn near-pen [] (settings/get settings ::near-pen))
 (defn approach-range [] (settings/get settings ::approach-range))
 (defn watch-radius [] (settings/get settings ::watch-radius))
@@ -106,14 +107,22 @@
   [c]
   (filterv #(some->> (animal-now c %) (held-by-me? c)) (:led (ctx/mem c))))
 
-(def transient-keys "Memory of one wait or walk, dropped when the phase or position moves on." [:walked :settle-from :last-seen :wait-from])
+(def transient-keys "Memory of one wait or walk, dropped when the phase or position moves on." [:walked :settle-from :last-seen :wait-from :holding])
 
 (defn set-phase!
-  "Go to phase (the walk and wait state dropped), merging more into the memory."
+  "Go to phase (the walk and wait state dropped, a pause's hold too), merging more into the memory."
   ([c phase] (set-phase! c phase nil))
   ([c phase more]
+   (when (:holding (ctx/mem c)) (ctx/hold-still! c nil))
    (ctx/update-mem! c #(-> (apply dissoc % transient-keys) (merge more) (assoc :phase phase)))
    :continue))
+
+(defn ^:async pause!
+  "Hold still settle-ms on purpose, for why (a jobs.time.noop child): the animal settles, a cell clears. :continue."
+  [c why]
+  (ctx/update-mem! c assoc :holding why)
+  (await (child/pause! c (/ (settle-ms) 1000) why))
+  :continue)
 
 (defn gate-cell [c] (cell (:gate (ctx/mem c))))
 
@@ -150,9 +159,18 @@
 
 ;; ------------------------------------------------------------------ the end
 
-(def stop-reasons
-  "Endings that are an answer, not a fault (the animals are lost, the pen or the food will not do): a run that brought none stops with them named instead of failing."
-  #{:lost :no-pen :leaky :no-gate :refused :too-shallow :no-food})
+(def condition-reasons
+  "Reasons that say the pen, the food or the zones will not do: a run that ends on one short of its least is condition-failed."
+  #{:no-pen :leaky :no-gate :refused :too-shallow :no-food :no-zones})
+
+(defn ending-kind
+  "The kind of a run that ended for reason with n animals brought: :done when the pen holds the target (:brought,
+  :full) or n reached least, else condition-failed for condition-reasons and nothing-possible for the rest."
+  [reason n least]
+  (cond
+    (or (#{:brought :full} reason) (>= n least)) :done
+    (condition-reasons reason) :condition-failed
+    :else :nothing-possible))
 
 (defn pen-keys
   "The keys of the adults in the pen: those on its cells as sensed, plus those known in it (in at the start or brought)
@@ -185,17 +203,19 @@
            (when (:need result) (str ", " (:depth result) " cells in a line, " (:need result) " needed")) ")"))))
 
 (defn finish!
-  "Count the pen, emit the outcome, hand it to the parent and end. A nil reason is judged by the count."
+  "Count the pen, emit the outcome and end with its ending (ending-kind; the call's :least, default 1, of animals
+  brought makes it done). A nil reason is judged by the count."
   [c reason & [extra]]
   (let [m (ctx/mem c)
         target (:target (:args c))
+        least (let [l (:least (ctx/frozen-call c) 1)] (if (= :all l) target l))
         answer (read-pen c)
         inside (pen-keys c answer)
         rows (animals/in-pen-rows (:primitives c) answer (watch-radius))
         brought (filterv inside (:brought m))
         reason (or reason
                    (if (>= (count (remove (set (keys (:given-up m))) inside)) target) :brought :short))
-        stop? (and (empty? brought) (stop-reasons reason))
+        kind (ending-kind reason (count brought) least)
         text (str (end-text c reason (count inside)) (detail-text extra))
         result (merge {:reason reason :inside (count inside) :target target :brought brought
                        :given-up (:given-up m {}) :gate (:gate m) :escaped (:escaped-total m 0) :animals rows}
@@ -204,14 +224,7 @@
     (ctx/emit! c :herd.done :info (assoc result :text text))
     (when-not (#{:brought :full} reason)
       (ctx/emit! c :herd.gave-up :warn {:reason reason :text (str "herding stopped: " (name reason))}))
-    (ctx/result! c (cond-> (assoc result :text text) stop? (assoc :status :stopped)))
-    (when (and (empty? brought) (not stop?) (not (#{:brought :full} reason)))
-      (throw (ex-info (str "herd brought none of the " target " wanted: " (name reason)
-                           (detail-text result)
-                           ", " (count inside) " in the pen"
-                           (when (seq (:given-up m)) (str ", given up " (pr-str (:given-up m)))))
-                      result)))
-    :done))
+    (ctx/end c kind (when-not (= :done kind) (if (seq extra) (assoc extra :reason reason) reason)) (assoc result :text text))))
 
 (defn end!
   "Give up with reason: the animal on the lead is let go where the body stands, then an open gate shut."
@@ -271,12 +284,10 @@
       (after-shut! c)
       (set-phase! c :leash))))
 
-(defn max-release-declines [] (settings/get settings ::max-release-declines))
-
 (defn ^:async release-step!
-  "One round of unleashing (in a lure run: the food put away, so nothing follows; jobs.animals.unleash by key, kept on one animal until that child is done, which
-  includes picking its lead up), the next led animal not yet tried after it; on-done once none is left. A child
-  that declines max-release-declines times gives the animal up as :declined."
+  "One round of unleashing (in a lure run: the food put away, so nothing follows; jobs.animals.unleash by key, kept on one animal until that child ends, which
+  includes picking its lead up), the next led animal not yet tried after it; on-done once none is left. A child that
+  ends without freeing it books the animal under :unleash-failed with the child's reason."
   [c on-done]
   (let [m (ctx/mem c)
         k (or (:releasing m) (first (remove (set (:release-tried m)) (led-now c))))]
@@ -285,21 +296,13 @@
       (lure? c) (do (await (put-food-away! c)) (on-done))
       :else
       (do (ctx/update-mem! c assoc :releasing k)
-          (let [r (await (ctx/call-child c :unleash 'jobs.animals.unleash
-                                         (cond-> {:mob (:mob (:args c)) :animal k :radius (release-radius)}
-                                           (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
-                reason (when (= :done r) (:reason (ctx/child-result c :unleash)))
-                declines (cond-> (:release-declines (ctx/mem c) 0) (= :declined r) inc)]
-            (cond
-              (= :done r)
+          (let [e (await (ctx/call c :unleash 'jobs.animals.unleash
+                                   (cond-> {:mob (:mob (:args c)) :animal k :radius (release-radius)}
+                                     (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
+                reason (if (= :done (:kind e)) (get-in e [:data :reason]) (contract/cause-key e))]
+            (when-not (= :continue e)
               (ctx/update-mem! c #(-> %
                                       (update :release-tried (fnil conj []) k)
                                       (cond-> (not= :unleashed reason) (update :unleash-failed assoc k (or reason :refused)))
-                                      (dissoc :releasing :release-declines)))
-              (>= declines (max-release-declines))
-              (ctx/update-mem! c #(-> %
-                                      (update :release-tried (fnil conj []) k)
-                                      (update :unleash-failed assoc k :declined)
-                                      (dissoc :releasing :release-declines)))
-              :else (ctx/update-mem! c assoc :release-declines declines)))
+                                      (dissoc :releasing)))))
           :continue))))

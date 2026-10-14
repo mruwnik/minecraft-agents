@@ -6,14 +6,13 @@
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
-            [jobs.lib.declined :as declined]
             [jobs.lib.gate :as gate]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
-            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 pen-opts read-pen set-phase! settle-ms shut-failed!]]))
+            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell detail-text drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 pause! pen-opts read-pen set-phase! shut-failed!]]))
 
 ;; ------------------------------------------------------------------ the pen and its gate
 
@@ -282,7 +281,7 @@
       (seq leaks) (refuse :leaky {:leaks (vec (take 12 leaks))})
       (>= inside target) (refuse :full)
       (< (depth (:inside answer) (cell gate) in) min-depth)
-      (refuse :too-shallow {:cell (cell in) :depth (depth (:inside answer) (cell gate) in) :need min-depth})
+      (refuse :too-shallow {:cell in :depth (depth (:inside answer) (cell gate) in) :need min-depth})
       :else {:chosen chosen})))
 
 (defn survey-pen!
@@ -296,17 +295,18 @@
                            :axis (axis (:primitives c) (:inside answer) (cell gate) in out (depth (:inside answer) (cell gate) in)))
           :continue))))
 
-(defn precheck!
-  "Once, for a body far from the pen: the pen as the body sees and remembers it, before any walk. A definite refusal ends the
-  run here; a pen it cannot read from where it stands (unseen cells) is left to the survey at the pen. :precheck? false skips it."
+(defn pen-refusal
+  "Why the pen, as the body sees and remembers it from where it stands, will not do: the verdict's refusal as
+  {:reason :text} with its :why, :cell, :leaks or :depth. nil when it will do, already holds :target (done? answers)
+  or cannot be read from here (the run reads it at the pen). :precheck? false skips it."
   [c]
-  (let [m (ctx/mem c)]
-    (when (and (:precheck? (:args c)) (not (:prechecked m)) (> (u/dist (u/self-pos c) (box-centre (:box (:args c)))) (near-pen)))
-      (ctx/update-mem! c assoc :prechecked true)
-      (let [answer (read-pen c)]
-        (when-not (#{:unloaded :no-start} (:reason answer))
-          (let [{:keys [refuse extra]} (verdict c answer)]
-            (when refuse (finish! c refuse extra))))))))
+  (when (:precheck? (:args c))
+    (let [answer (read-pen c)]
+      (when-not (or (#{:unloaded :no-start} (:reason answer))
+                    (>= (count (in-pen-adults c answer)) (:target (:args c))))
+        (let [{:keys [refuse extra]} (verdict c answer)]
+          (when refuse
+            (assoc extra :reason refuse :text (str "herd waits: the pen will not do, " (name refuse) (detail-text extra)))))))))
 
 (defn ^:async survey! [c]
   (let [centre (box-centre (:box (:args c)))]
@@ -331,10 +331,10 @@
 
 (defn ^:async toggle-gate!
   [c state next reach then]
-  (let [r (await (declined/call-child! c :gate 'jobs.access.toggle {:pos (:gate (ctx/mem c)) :state state :reach reach}))]
+  (let [e (await (ctx/call c :gate 'jobs.access.toggle {:pos (:gate (ctx/mem c)) :state state :reach reach}))]
     (cond
-      (not= :done r) (if (= :declined r) :declined :continue)
-      (= :done (:status (ctx/child-result c :gate)))
+      (= :continue e) :continue
+      (= :done (:kind e))
       (do (ctx/emit! c (if (= :open state) :gate.opened :gate.shut) :info {:cell (gate-cell c) :text (str "gate " (gate-cell c) (if (= :open state) " opened" " shut"))})
           (when (= :closed state) (ctx/update-mem! c assoc :gate-closed true) (drop-gate! c))
           (set-phase! c next then))
@@ -444,7 +444,7 @@
             (if (>= waited max-ms)
               :settled
               (do (ctx/update-mem! c assoc :last-seen there)
-                  (await (ctx/act c :wait #js {:ms (settle-ms)}))
+                  (await (pause! c :animal-settling))
                   nil))))
         :settled))))
 
@@ -458,8 +458,7 @@
       (on-done r))))
 
 (defn ^:async look-wait! [c]
-  (await (ctx/act c :wait #js {:ms (settle-ms)}))
-  :continue)
+  (await (pause! c :gate-crowded)))
 
 (defn waited-ms
   "Ms since this phase's first look (the clock starts on the first call)."

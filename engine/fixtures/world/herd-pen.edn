@@ -10,7 +10,25 @@
   :body {:at [12.5 0 16.5] :yaw 270 :inventory [["lead" 4]]}
   :limit-s 300}
  :cases
- [{:name "shut-gate-one-cow-brought"
+ [;; should-fail: a 3x3 box can never give the 5 cells in a line the walk-in needs (impossible from the args, no walk)
+  {:name "three-by-three-box-impossible"
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [21 0 16]} :target 1})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :too-shallow}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :herd.done} :for-s 20 :until {:source :job :kind :stopped}}]}
+  ;; should-fail: a fence across the pen 2 cells in from the gate, seen at the start: a start condition, so it waits, no walk
+  {:name "seen-shallow-pen-refused-at-start"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+            [:fill [19 0 14] [23 0 18] "air"]
+            [:fill [21 0 14] [21 0 18] "oak_fence"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :too-shallow}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :leash.done} :for-s 30}]}
+  {:name "shut-gate-one-cow-brought"
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]

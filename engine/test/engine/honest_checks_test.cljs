@@ -33,7 +33,6 @@
     'jobs.animals.leash {:mob "cow" :fetch false} :no-lead
     'jobs.animals.breed {:mob "cow" :fetch false} :no-food
     'jobs.animals.tend {:box box :target 4} :nothing-to-do
-    'jobs.animals.herd {:target 4} :no-mob-or-box
     'jobs.combat.attack {:targets ["zombie"] :absent :wait} :no-target))
 
 (deftest build-checks-say-why-they-decline
@@ -57,8 +56,7 @@
 (deftest world-checks-say-why-they-decline
   (are [job args spec plans reason] (= [reason] (mapv :reason (waits-in-world job args spec plans)))
     'jobs.build.from-plan {:plan "pen" :fetch false} {:inventory []} {"pen" (b/pen-plan)} :no-items
-    'jobs.build.pen {:plan "pen"} (pen/spec pen/kit pen/built-pen) {"pen" (pen/ring-plan)} :already-sound
-    'jobs.animals.herd {:mob "cow" :box box :target 0} {} {} :at-target))
+    'jobs.build.pen {:plan "pen"} (pen/spec pen/kit pen/built-pen) {"pen" (pen/ring-plan)} :already-sound))
 
 (deftest bad-argument-checks-say-why-they-decline
   (are [job reason] (= reason (waiting-reason job {}))

@@ -116,8 +116,8 @@
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :herd.declined :data {:reason :refused}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :herd.done :data {:reason :refused}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :leash.done} :for-s 20 :until {:source :job :kind :herd.done}}]
+            {:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :leash.done} :for-s 30}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0] [:item "lead" 4]]}
   {:name "herd-gate-foreign-zone-ignore-zones-brought"
    :tags [:herd :animals :jobs :access :zones]

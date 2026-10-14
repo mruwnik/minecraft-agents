@@ -8,6 +8,8 @@
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.seek-contract-test :as seek]
+            [engine.settings :as settings]
             [engine.triggers :as triggers]
             [jobs.animals.herd :as herd]
             [jobs.animals.herd-pen :as hp]
@@ -95,6 +97,14 @@
   "The error text the job was parked failed with, or nil while it is not failed."
   [{:keys [eng]}]
   (some-> (core/state eng) :failed vals first :error))
+(defn refusal
+  "The pen refusal of the run: its herd.done, else the cause of the start condition the job waits on."
+  [s]
+  (or (done-event s) (:cause (last (events-of s :waiting)))))
+(defn stopped?
+  "Whether the job ended stopped (any kind but done), once."
+  [s]
+  (= 1 (count (events-of s :stopped))))
 (defn calls-of [{:keys [p]} name] (h/calls p name))
 (defn entities-of [{:keys [p]}] (fake/entities p))
 (defn cow-of [s id] (first (filter #(= id (:id %)) (entities-of s))))
@@ -267,11 +277,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :timeout-s 600})
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1})
               log (watch-gate! s)
               trail (await (body-trail s 900))
               e (done-event s)]
-          (is (failed-error s))
+          (is (stopped? s))
           (is (= :short (:reason e)))
           (is (= {"u1" :jammed} (:given-up e)))
           (is (= [] (:brought e)))
@@ -308,8 +318,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[s log] (await (scenario-log {:target 2 :timeout-s 900} {:entities [(cow 1 4 3) (cow 8 10.2 3.5)]} 1200))]
-          (is (failed-error s))
+        (let [[s log] (await (scenario-log {:target 2} {:entities [(cow 1 4 3) (cow 8 10.2 3.5)]} 1200))]
+          (is (stopped? s))
           (is (every? zero? (map :overlapping (filter :was-open @log))) "never a shut while it overlapped")
           (is (seq (events-of s :herd.gate-open)) "the gate is left open with a warn, for the pen-gate trigger")
           (is (empty? (held-entries s))))))))
@@ -358,23 +368,25 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :timeout-s 40})
-              opened (atom false)]
-          (on-step-when! s #(gate-open? s) #(reset! opened true))
-          (await (run-ticks s 400))
-          (is @opened "the gate was opened")
-          (is (failed-error s))
-          (is (= :timeout (:reason (done-event s))))
-          (is (empty? (on-lead s)) "the animal is let go")
-          (is (not (gate-open? s)))
-          (is (empty? (held-entries s))))))))
+        (await (settings/with-settings {::herd/animal-timeout-s 40}
+                 (fn ^:async timed []
+                   (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1})
+                         opened (atom false)]
+                     (on-step-when! s #(gate-open? s) #(reset! opened true))
+                     (await (run-ticks s 400))
+                     (is @opened "the gate was opened")
+                     (is (stopped? s))
+                     (is (= :timeout (:reason (done-event s))))
+                     (is (empty? (on-lead s)) "the animal is let go")
+                     (is (not (gate-open? s)))
+                     (is (empty? (held-entries s)))))))))))
 
 (deftest a-led-animal-is-let-go-when-the-way-to-the-gate-is-blocked
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :unreachable ["9,64,3"]} 100))]
-          (is (failed-error s))
+          (is (stopped? s))
           (is (= :unreachable (:reason (done-event s))))
           (is (empty? (on-lead s)) "never left tethered to the body")
           (is (= 2 (count-of s "lead")))
@@ -527,14 +539,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :timeout-s 600})
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1})
               opened-at (atom nil)
               longest (atom 0)]
           (on-step! s #(let [now @(:clock s)
                              since (swap! opened-at open-since (gate-open? s) now)]
                          (swap! longest max (- now (or since now)))))
           (await (run-ticks s 900))
-          (is (failed-error s))
+          (is (stopped? s))
           (is (= {"u1" :jammed} (:given-up (done-event s))))
           (is (< @longest 40000) "the gate is never left open through the walk out and the second line-up")
           (is (not (gate-open? s))))))))
@@ -661,22 +673,75 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[label w reason]
-                [["no lead or food" {:inventory [] :entities [(cow 1 4 3)]} :no-food]
-                 ["no cow outside" {:entities [(cow 9 13 3)]} :none]
-                 ["a gap in the fence" {:entities [(cow 1 4 3)] :blocks {"16,64,3" "air"}} :leaky]
-                 ["no gate" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence"}} :no-gate]
-                 ["only a corner gate" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence" "10,64,0" "oak_fence_gate"}} :no-gate]]]
+        (doseq [[label w reason gave-up]
+                [["no lead or food" {:inventory [] :entities [(cow 1 4 3)]} :no-food 1]
+                 ["no cow outside" {:entities [(cow 9 13 3)]} :none 1]
+                 ["a gap in the fence: a start condition" {:entities [(cow 1 4 3)] :blocks {"16,64,3" "air"}} :leaky 0]
+                 ["no gate: a start condition" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence"}} :no-gate 0]
+                 ["only a corner gate: a start condition" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence" "10,64,0" "oak_fence_gate"}} :no-gate 0]]]
           (let [s (await (scenario {:target 2} w 20))]
-            (is (or (= :none reason) (nil? (failed-error s))) label)
-            (is (= reason (:reason (done-event s))) label)
+            (is (= reason (:reason (refusal s))) label)
             (is (empty? (calls-of s "useOn")) label)
             (is (empty? (on-lead s)) label)
-            (is (= 1 (count (events-of s :herd.gave-up))) label)))))))
+            (is (= gave-up (count (events-of s :herd.gave-up))) label)))))))
+
+;; ------------------------------------------------------------------ the contract
+
+(defn ^:async ending
+  "How a herd call with args (over :mob \"cow\" :box box) in world w ends: seek/ending-of."
+  [args w]
+  (await (seek/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} (world w)))
+                         (list job (merge {:mob "cow" :box box} args)))))
+
+(def shallow-wall (into {} (for [z (range 0 7)] [(str "13,64," z) "oak_fence"])))
+
+(deftest herd-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label args w want]
+                [["no mob" {:mob nil} {} {:event :stopped :kind :impossible :reason :no-mob-or-box}]
+                 ["a 3x3 box can never hold 5 cells in a line" {:box {:min {:x 11 :y 64 :z 1} :max {:x 13 :y 64 :z 3}}}
+                  {:entities [(cow 1 4 3)]} {:event :stopped :kind :impossible :reason :too-shallow}]
+                 ["a target already met is done at once" {:target 0} {} {:event :completed}]
+                 ["no cow outside" {:target 2} {:entities [(cow 9 13 3)]} {:event :stopped :kind :nothing-possible :reason :none}]
+                 ["a seen gap in the fence is a wait" {:target 2} {:entities [(cow 1 4 3)] :blocks {"16,64,3" "air"}} {:event :waiting :reason :leaky}]
+                 ["a seen shallow pen is a wait" {:target 2} {:entities [(cow 1 4 3)] :blocks shallow-wall} {:event :waiting :reason :too-shallow}]]]
+          (is (= want (select-keys (await (ending args w)) (keys want))) label))))))
+
+(deftest a-shallow-pen-is-refused-at-the-start-naming-real-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks shallow-wall} 5))
+              w (last (events-of s :waiting))]
+          (is (= :too-shallow (:reason w)))
+          (is (= {:cell [11 64 3] :depth 2 :need 5} (select-keys (:cause w) [:cell :depth :need])) "the first pen cell inside the gate")
+          (is (re-find #"11 64 3" (str (:text (:cause w)))))
+          (is (empty? (calls-of s "moveTo")) "refused before any walk"))))))
+
+(deftest a-box-too-narrow-for-the-walk-in-is-impossible-naming-its-size
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 2 :box {:min {:x -33 :y 66 :z -629} :max {:x -31 :y 66 :z -627}}} {} 3))
+              e (first (events-of s :stopped))]
+          (is (= :too-shallow (:reason e)))
+          (is (re-find #"3x3, 5 cells in a line needed" (:text (:cause e))))
+          (is (nil? (done-event s)) "nothing was done: no run, no herd.done"))))))
+
+(deftest a-run-that-brought-none-is-stopped-not-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :states {gate-key {:open false :locked true}}} 100))]
+          (is (= :gate-stuck (:reason (done-event s))))
+          (is (nil? (failed-error s)))
+          (is (= [:gate-stuck] (mapv :reason (events-of s :stopped)))))))))
 
 (def far-floor (into {} (for [x (range -70 -10) z (range -10 16)] [(str x ",63," z) "stone"])))
 
-(deftest a-pen-that-fails-the-check-ends-the-run-before-the-body-leaves
+(deftest a-pen-that-fails-the-check-waits-before-the-body-leaves
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -685,12 +750,11 @@
                  ["no gate" {:blocks {gate-key "oak_fence"}} :no-gate :why :no-gate-in-pen]
                  ["a pen too shallow" {:blocks (into {} (for [z (range 0 7)] [(str "13,64," z) "oak_fence"]))} :too-shallow :depth 2]]]
           (let [s (await (scenario {:target 2} (-> w (update :blocks merge far-floor) (assoc :self {:pos {:x -40 :y 64 :z 3}} :entities [(cow 1 -58 3)])) 20))
-                e (done-event s)]
+                e (refusal s)]
             (is (= reason (:reason e)) label)
             (is (= value (if (= :leaks key) (mapv #(select-keys % [:pos :why]) (:leaks e)) (get e key))) label)
             (is (= -40 (js/Math.round (self-x s))) (str label ": the body stayed where the animal is"))
-            (is (nil? (failed-error s)) label)
-            (is (finished? s) label)))))))
+            (is (nil? (done-event s)) (str label ": the run never started"))))))))
 
 (deftest no-food-ends-the-run-before-the-body-leaves
   (async done
@@ -709,7 +773,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :states {gate-key {:open false :locked true}}} 100))]
-          (is (failed-error s))
+          (is (stopped? s))
           (is (= :gate-stuck (:reason (done-event s))))
           (is (empty? (on-lead s)))
           (is (not (gate-open? s)))
@@ -737,7 +801,7 @@
           (ignore-clicks-while-open! s shut-clicks)
           (await (run-ticks s 600))
           (let [warns (events-of s :herd.gate-open)]
-            (is (failed-error s))
+            (is (stopped? s))
             (is (empty? (on-lead s)) "the animal is unleashed before the shut is tried again")
             (is (= 1 (count warns)))
             (is (= gate (:gate (first warns))))
@@ -786,18 +850,18 @@
                                          (swap! stale conj (:unleash-failed %)))))
           (is (empty? @stale) "released for good once the let-go is done"))))))
 
-(deftest a-release-child-that-declines-is-given-up-after-a-few-rounds
+(deftest a-release-child-whose-condition-fails-gives-the-animal-up-with-its-cause
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [orig ctx/call-child
+        (let [orig ctx/call
               s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})]
-          (set! ctx/call-child (fn [c slot job args] (if (= :unleash slot) (js/Promise.resolve :declined) (orig c slot job args))))
+          (set! ctx/call (fn [c slot job args] (if (= :unleash slot) (js/Promise.resolve {:kind :condition-failed :cause :refused}) (orig c slot job args))))
           (try (await (run-ticks s 400))
-               (finally (set! ctx/call-child orig)))
+               (finally (set! ctx/call orig)))
           (let [e (done-event s)]
             (is (some? e) "the run ends")
-            (is (= {"u1" :declined} (:given-up e)))))))))
+            (is (= {"u1" :refused} (:given-up e)))))))))
 
 (deftest the-escape-census-counts-the-animals-gone-from-the-pen
   (doseq [[before after escaped] [[3 3 0] [3 2 1] [2 0 2] [1 2 0]]]
@@ -1031,43 +1095,15 @@
 
 ;; ------------------------------------------------------------------ the survey's new declines
 
-(def box3 {:min {:x 11 :y 64 :z 1} :max {:x 13 :y 64 :z 3}})
-(def ring3 (into {} (for [x (range 10 15) z (range 0 5) :when (or (#{10 14} x) (#{0 4} z))] [(str x ",64," z) "oak_fence"])))
-
-(defn ^:async scenario3
-  "A 3x3 pen (box3, gate at 10,64,2) with one cow outside; blocks merged over."
-  [blocks n]
-  (let [w (world {:entities [(cow 1 4 2)] :self {:pos {:x 2 :y 64 :z 2}}})
-        s (submit! (setup (assoc w :self {:pos {:x 2 :y 64 :z 2}}
-                                   :blocks (merge ground ring3 {"10,64,2" "oak_fence_gate"} blocks)
-                                   :states {"10,64,2" {:open false}}))
-                   {:box box3})]
-    (await (run-ticks s n))
-    s))
-
-(deftest a-pen-less-than-five-deep-along-the-gate-line-is-too-shallow
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario3 {} 20))
-              e (done-event s)]
-          (is (nil? (failed-error s)))
-          (is (= :too-shallow (:reason e)))
-          (is (empty? (calls-of s "useOn")))
-          (is (empty? (on-lead s)))
-          (is (= 1 (count (events-of s :herd.gave-up)))))))))
-
 (deftest an-approach-blocked-three-cells-out-is-no-gate-with-no-approach
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks {"7,64,3" "stone" "7,65,3" "stone"}} 20))
-              e (done-event s)]
-          (is (nil? (failed-error s)))
+              e (refusal s)]
           (is (= :no-gate (:reason e)))
           (is (= :no-approach (:why e)))
-          (is (empty? (calls-of s "useOn")))
-          (is (= 1 (count (events-of s :herd.gave-up)))))))))
+          (is (empty? (calls-of s "useOn"))))))))
 
 (deftest a-pen-floor-a-step-below-its-fence-line-still-has-a-gate
   (async done
@@ -1135,7 +1171,7 @@
                 [[{} :refused [:refused]] [{:ignore-zones? true} :brought []]]]
           (let [s (submit! (setup-zoned (world {:entities [(cow 1 4 3)]}) 10) (merge {:target 1} extra))]
             (await (run-ticks s 400))
-            (is (= reason (:reason (done-event s))) (pr-str extra))
+            (is (= reason (:reason (refusal s))) (pr-str extra))
             (is (= declined (mapv :reason (events-of s :herd.declined))) (pr-str extra))))))))
 
 (def pen-zone (ew/of-data {} {} [{:name "farm" :owner "Miles" :min [11 60 1] :max [15 70 5]}]))
@@ -1159,7 +1195,7 @@
             (let [store (ew/of-data {"pen" (shape/with-author plan by)} {} [])
                   s (submit! (clock-on-wait! (h/setup (world {:entities [(cow 1 4 3)]}) 0 store)) {:target 1})]
               (await (run-ticks s 400))
-              (is (= reason (:reason (done-event s))) by))))))))
+              (is (= reason (:reason (refusal s))) by))))))))
 
 (deftest the-gate-work-walks-never-escalate-through-the-fence
   (async done
@@ -1206,7 +1242,7 @@
                 [["out of sight" (fn [s] (set-x! s 1 -500)) :lost]
                  ["beyond the follow range" (fn [s] (set-x! s 1 (- (self-x s) 15))) :animal-stalled]
                  ["trailing, never catching up" (fn [s] (set-x! s 1 (- (self-x s) 8.5))) :animal-stalled]]]
-          (let [s (submit! (setup (world {:entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground})) {:target 1 :radius 60 :timeout-s 900})
+          (let [s (submit! (setup (world {:entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground})) {:target 1 :radius 60})
                 moved (atom false)]
             (let [arm! #(when (or @moved (<= (self-x s) -30)) (reset! moved true) (move s))]
               (doseq [act ["steer" "wait"]]
@@ -1223,7 +1259,7 @@
       (fn ^:async t []
         (let [orig child/call-walk
               backs (atom [])
-              s (submit! (setup (world {:entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground})) {:target 1 :radius 60 :timeout-s 900})
+              s (submit! (setup (world {:entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground})) {:target 1 :radius 60})
               seen (atom false)]
           (set! child/call-walk (fn [c slot opts] (when (= :back slot) (swap! backs conj (:doors opts))) (orig c slot opts)))
           (try
@@ -1246,7 +1282,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (submit! (setup (world {:entities [(cow 1 4 3) (cow 9 13 3)] :inventory [wheat]})) {:target 2 :timeout-s 900})]
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3) (cow 9 13 3)] :inventory [wheat]})) {:target 2})]
           (on-step-when! s #(gate-open? s) (fn [] (swap! (fake/state (:p s)) update :entities (fn [es] (filterv #(not= 9 (:id %)) es)))))
           (await (run-ticks s 900))
           (is (= :short (:reason (done-event s))))
@@ -1256,7 +1292,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (submit! (setup (world {:entities [(cow 1 4 3)] :inventory [wheat]})) {:target 1 :timeout-s 900})
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3)] :inventory [wheat]})) {:target 1})
               moved (atom false)
               backs (atom 0)]
           (on-step-when! s #(and (not @moved) (gate-open? s) (>= (self-x s) 12))
@@ -1326,11 +1362,11 @@
                 [["no floor outside the gate" {:entities [(cow 1 4 3)] :blocks {"9,63,3" "air"}} :no-floor-outside [9 64 3] #"no-floor-outside at \[9 64 3\]"]
                  ["no gate in the pen's fence" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence" "10,64,0" "oak_fence_gate"}} :no-gate-in-pen nil #"\(no-gate-in-pen\)"]]]
           (let [s (await (scenario {:target 1} w 20))
-                e (done-event s)]
+                e (refusal s)]
             (is (= :no-gate (:reason e)) label)
             (is (= why (:why e)) label)
             (is (= cell (:cell e)) label)
-            (is (re-find text (:text (done-event s))) label)))))))
+            (is (re-find text (:text (refusal s))) label)))))))
 
 (deftest herd-refusals-name-the-cell
   (async done
@@ -1338,10 +1374,10 @@
       (fn ^:async t []
         (doseq [[label w reason text]
                 [["a fence gap" {:entities [(cow 1 4 3)] :blocks {"16,64,3" "air"}} :leaky #"gap at \[16 64 3\]"]
-                 ["a pen too shallow" {:entities [(cow 1 4 3)] :blocks (into {} (for [z (range 0 7)] [(str "13,64," z) "oak_fence"]))} :too-shallow #"2 cells in a line, 5 needed"]]]
+                 ["a pen too shallow" {:entities [(cow 1 4 3)] :blocks (into {} (for [z (range 0 7)] [(str "13,64," z) "oak_fence"]))} :too-shallow #"at \[11 64 3\], 2 cells in a line, 5 needed"]]]
           (let [s (await (scenario {:target 2} w 20))]
-            (is (= reason (:reason (done-event s))) label)
-            (is (re-find text (:text (done-event s))) label)))))))
+            (is (= reason (:reason (refusal s))) label)
+            (is (re-find text (:text (refusal s))) label)))))))
 
 (deftest radius-is-measured-from-where-the-body-started-not-from-the-pen
   (async done
