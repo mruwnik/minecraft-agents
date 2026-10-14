@@ -11,3 +11,6 @@ tools/view/web/cljs/
 worlds/
 engine/test/fixtures/pathfinding/
 engine/scenarios/scratch/
+
+# marker written by tools/integration-worktree.sh
+.res-slot-heavy

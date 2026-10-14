@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Why JavaScript: a thin launcher around flock(1) and /proc/meminfo (machine-wide resource gate); no engine behaviour.
 // tools/res-slot <kind> [--need MB] -- <cmd...>   waits for a free slot of <kind> AND MemAvailable - need >= floor, then runs cmd.
+// Heavy runs (--heavy, RES_SLOT_HEAVY=1, or a .res-slot-heavy file in the cwd or a parent: tools/integration-worktree.sh writes it, since agents' test runs cannot set env) may also take the `reserve` slots a kind keeps back in res-slot.json.
 // tools/res-slot status                            holders per kind (pid, command, age) and free memory.
 // A run appends {start:true, pid, kind, cmd} to /tmp/mc-res/log.jsonl when it gets its slot, and {kind, needMb, waitedS, ranS, code, cmd} when it finishes.
 // Kinds, need, max and the memory floor: tools/res-slot.json (tools/test-shards.mjs reads the same floor and tests numbers).
@@ -22,6 +23,15 @@ export const decide = ({ freeSlots, availableMb, needMb, floorMb, waitedMs, maxW
   if (!why) return { action: 'run' }
   return { action: waitedMs >= maxWaitMs ? 'busy' : 'wait', why }
 }
+
+// Pure: the free slots a run may take. The last `reserve` slots of a kind are for heavy runs (integration, world sweep) so many light holders cannot starve them.
+export const hasHeavyMarker = (cwd) => {
+  for (let d = path.resolve(cwd); ; d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, '.res-slot-heavy'))) return true
+    if (d === path.dirname(d)) return false
+  }
+}
+export const usableSlots = (free, max, reserve, heavy) => heavy ? free : free.filter((i) => i < max - reserve)
 
 export const slotDir = () => process.env.RES_SLOT_DIR ?? '/tmp/mc-res'
 const dir = slotDir
@@ -119,6 +129,8 @@ const main = async () => {
   const kind = argv[0], cmd = dd < 0 ? [] : argv.slice(dd + 1)
   const k = cfg.kinds[kind]
   if (!k || !cmd.length) { console.error(`usage: tools/res-slot <${Object.keys(cfg.kinds).join('|')}> [--need MB] -- <cmd...> | status`); process.exit(2) }
+  const hi = argv.indexOf('--heavy')
+  const heavy = (hi > 0 && hi < dd) || !!process.env.RES_SLOT_HEAVY || hasHeavyMarker(process.cwd())
   const ni = argv.indexOf('--need')
   const needMb = ni > 0 && ni < dd ? Number(argv[ni + 1]) : k.needMb
   const maxWaitMs = Number(process.env.RES_SLOT_MAX_WAIT_MS ?? 540000), pollMs = Number(process.env.RES_SLOT_POLL_MS ?? 1000)
@@ -126,7 +138,7 @@ const main = async () => {
   const t0 = Date.now()
   let lastLine = t0, lastReason = ''
   for (;;) {
-    const free = [...Array(k.max).keys()].filter((i) => !held(kind, i))
+    const free = usableSlots([...Array(k.max).keys()].filter((i) => !held(kind, i)), k.max, k.reserve ?? 0, heavy)
     const gated = await withGate(() => {
       const reserved = currentReserved()
       const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved })
