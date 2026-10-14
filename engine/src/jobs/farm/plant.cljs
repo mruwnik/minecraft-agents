@@ -40,8 +40,7 @@
   not carried] instead of :untilled; :untilled lists the dirt, grass or path cells of the box: till them first). Done when
   every bare cell was sown, or some were and the number meets :least (cells, default 1); else condition-failed :need,
   :refused or :food-reserve for cells left without a seed or permission, nothing-possible :gave-up for skipped cells;
-  some planted but fewer than :least with nothing left, nothing-possible :partial; none planted and nothing left,
-  condition-failed :nothing-to-do. done? counts the cells sown and the bare cells
+  none planted and nothing left, condition-failed :nothing-to-do. done? counts the cells sown and the bare cells
   left.")
 
 (a/defargs args
@@ -305,7 +304,6 @@
     (cond
       (and (nil? cause) (pos? planted)) (ctx/end c :done nil data)
       (and (pos? planted) (common/enough? c planted (+ planted left))) (ctx/end c :done nil data)
-      (and (nil? cause) (pos? planted)) (ctx/end c :nothing-possible :partial data)
       (nil? cause) (ctx/end c :condition-failed :nothing-to-do data)
       (= :gave-up cause) (ctx/end c :nothing-possible :gave-up data)
       :else (ctx/end c :condition-failed cause data))))
