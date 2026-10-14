@@ -160,8 +160,8 @@
               end (fn ^:async end* [world stub args]
                     (let [e (await (run-door world stub args nil ctx/call))]
                       [(:kind e) (contract/cause-key e) (:kind (:because e))]))
-              refilling (fn ^:async refilling [c] (ctx/result! c {:dug true}) :done)
-              failing (fn ^:async failing [c] (ctx/result! c {:dug false :reason :failed :primitive "timeout" :status :stopped}) :done)
+              refilling (fn ^:async refilling [c] (ctx/end c :done nil {:dug true :reason :dug}))
+              failing (fn ^:async failing [c] (ctx/end c :nothing-possible :failed {:dug false :primitive "timeout"}))
               east {:heading :east :max-thick 3}]
           (is (= [:done :done nil] (await (end (merge wall pick) nil east))))
           (is (= [:condition-failed :dig-waits :condition-failed] (await (end wall nil east))) "the dig child's wait is its because")
