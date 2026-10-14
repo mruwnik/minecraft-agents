@@ -12,13 +12,14 @@
             [agent-tools.observe :as observe]
             [agent-tools.observe.request :as observe-request]
             [agent-tools.observe.status :as status :refer [clip coded code-of round1]]
+            [agent-tools.vitals :as vitals]
             [agent-tools.world-data :as data]
             [clojure.string :as str]
             ["node:fs" :as fs]
             ["node:path" :as path]))
 
 (def usage
-  (str "usage: progress.mjs <agent> --world <world> [--goal <jN|none>] [--want <item[:n],...|none>] [--wait <60m> [--stall <10m>]] [--worlds <dir>] [--state <legacy-parent>]\n"
+  (str "usage: progress.mjs <agent> --world <world> [--goal <jN|none>] [--want <item[:n],...|none>] [--wait <60m> [--stall <10m>] [--no-danger]] [--worlds <dir>] [--state <legacy-parent>]\n"
        "One line: hp, food, the goal job, counts toward --want (worn items count), queue size and needs-you (attention, a job waiting for something only you can fix, failures, a recent death, idle, manual, offline). "
        "--goal and --want are kept for later calls. --wait <dur> (10s-24h) blocks until the goal job ends, the body dies, a job gives up, the body idles for a reason you must clear, new attention, addressed chat, the body goes offline, or no progress for --stall (default 10m; job, position, inventory unchanged); then prints a WAKE line, the line and up to 3 recent items. Run it in the background."))
 
@@ -72,9 +73,9 @@
     (let [{:keys [positionals values]} (map-tool/parse-options (vec argv)
                                           {:state {:type "string"} :worlds {:type "string"} :world {:type "string"}
                                            :goal {:type "string"} :want {:type "string"} :wait {:type "string"}
-                                           :stall {:type "string"}})
+                                           :stall {:type "string"} :no-danger {:type "boolean" :default false}})
           [agent & extra] positionals
-          {:keys [world goal want wait stall]} values]
+          {:keys [world goal want wait stall no-danger]} values]
       (when-not (and (string? agent) (re-matches observe-request/body-name agent)) (throw (js/Error. "agent must be a body name")))
       (when-not (and (string? world) (re-matches observe-request/world-name world)) (throw (js/Error. "missing or invalid --world <world>")))
       (when (seq extra) (throw (js/Error. "progress takes one body name")))
@@ -87,7 +88,8 @@
           goal (assoc :goal goal)
           want (assoc :want (if (= "none" want) "none" (parse-want want)))
           wait (assoc :wait-ms (duration-ms "--wait" wait)
-                      :stall-ms (if stall (duration-ms "--stall" stall) default-stall-ms)))))
+                      :stall-ms (if stall (duration-ms "--stall" stall) default-stall-ms)
+                      :danger (not no-danger)))))
     (catch :default error {:error (.-message error)})))
 
 (defn remember-plan!
@@ -241,6 +243,7 @@
                 :text (str "attention: " (str/join "; " (map #(str (:job %) " " (word (:reason %)) " " (clip (:message %) 80))
                                                              (take 3 (:requests wake)))))}
     :chat {:wake :chat :text (str (:from wake) ": " (clip (:message wake) 160))}
+    :danger {:wake :needs-you :text (str "hit: health " (:health wake))}
     :reconnect-failed {:wake :needs-you :text (str "body offline: " (:reason wake))}
     :idle (when-not (routine-idle? (:jobs wake)) {:wake :needs-you :text (str "body idle: " (idle-text (:jobs wake)))})
     :job-finished (cond
@@ -260,9 +263,11 @@
 
 (defn wake-text
   "The printed answer of a wait: a WAKE line, the progress line and up to max-items items."
-  [{:keys [wake text line items]}]
-  (str (str/join "\n" (concat [(str "WAKE " (word wake) (when (seq text) (str ": " text)))]
+  [{:keys [wake text line items vitals]}]
+  (str (str/join "\n" (concat (when-let [hurt (:hurt vitals)] [(str "HURT: " hurt)])
+                              [(str "WAKE " (word wake) (when (seq text) (str ": " text)))]
                               (when line [line])
+                              (when (seq (dissoc vitals :hurt)) [(str "NOW " (str/join " " (map (fn [[k v]] (str (name k) " " (if (coll? v) (str/join "," v) v))) (dissoc vitals :hurt))))])
                               (map #(str "- " %) (take-last max-items items))))
        "\n"))
 
@@ -273,7 +278,7 @@
   [{:keys [base]} ids ms get! signal]
   (await (observe/wait-observe
           (assoc base :wait-options (observe-request/wait-options {:timeout (str (js/Math.round ms) "ms") :observer "progress"
-                                                                  :watch (clj->js ids) :chatter "addressed"}))
+                                                                  :watch (clj->js ids) :chatter "addressed" :no-danger (not (:danger r))}))
           get! signal identity)))
 
 (defn fatal? [error] (contains? #{"ABORT_ERR" "EOBSERVERBUSY" "EOBSERVERLIMIT"} (code-of error)))
@@ -339,7 +344,8 @@
              (.then (fn []
                       (let [r (remember-plan! r)]
                         (if (:wait-ms r)
-                          (.then (wait-progress! r get! (.-signal controller)) #(output (wake-text %)))
+                          (.then (vitals/around! (get-in r [:base :socket-path]) get! #(wait-progress! r get! (.-signal controller)))
+                                 (fn [[wake report]] (output (wake-text (assoc wake :vitals report)))))
                           (.then (read-view! get! r (.-signal controller)) #(output (str (progress-line %) "\n")))))))
              (.then (constantly 0))
              (.catch (fn [error] (-> (output (observe/failure-text (:base r) error)) (.then (constantly 2)))))

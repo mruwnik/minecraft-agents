@@ -10,7 +10,7 @@
 
 (defn usage-for [prefix]
   "Build the usage string with the given invocation prefix (e.g., 'observe.mjs' or './bin/observe')."
-  (str "usage: " prefix " <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | seen [--radius 32 (1 to 64)] [--names a,b,*_ore] [--limit 16] | chests [--limit 16] | job <id> | result <id> | events [--kinds died,hurt --job j12 --level debug|info|warn --since 10m|death|<ms> --until death|10m|<ms> --before <seq> --limit 20 (1 to 64)] | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix] | settings [--changed] [--raw] | settings reload | settings set <:ns/key> <edn> | settings unset <:ns/key>] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\n--wait: job notices wake once per kind and job; notices of a job that has since ended go to the summary; with --watch only the watched jobs' notices wake; the summary's 4 items keep job ends, deaths and notices before routine ones; events over 10 min old are only counted.\nsettings: every key with value and layer (:code, :world, :body) and the game rate; set and unset edit the body's settings.edn and reload.\nchests: what the body saw in chests it opened (remembered, may be out of date), nearest first with :distance and :age-ms.\nseen: blocks the body has seen (memory, nothing through walls), nearest first with :distance; default names are workstations, storage, beds, doors, ores and crops.\nevents: past events, newest page first, printed oldest first with :next-before (pass it as --before for older ones), :window {:scanned :oldest-seq :partial?}; debug-level noise is left out unless --level debug; --until death ends at the newest death, so a post-mortem is `events --until death`; --since/--until also take a duration back from now or an epoch ms; at most the last 8000 retained events are scanned.\nstatus: :missed lists job ends, flights, fight/flee decisions, reflex ends, deaths and one summed :hurt (damage, lowest-health, cause) since the last observe --wait. :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job."))
+  (str "usage: " prefix " <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | seen [--radius 32 (1 to 64)] [--names a,b,*_ore] [--limit 16] | chests [--limit 16] | job <id> | result <id> | events [--kinds died,hurt --job j12 --level debug|info|warn --since 10m|death|<ms> --until death|10m|<ms> --before <seq> --limit 20 (1 to 64)] | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix] | settings [--changed] [--raw] | settings reload | settings set <:ns/key> <edn> | settings unset <:ns/key>] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\n--wait: a hit on the body wakes it too (--no-danger turns that off); job notices wake once per kind and job; notices of a job that has since ended go to the summary; with --watch only the watched jobs' notices wake; the summary's 4 items keep job ends, deaths and notices before routine ones; events over 10 min old are only counted.\nsettings: every key with value and layer (:code, :world, :body) and the game rate; set and unset edit the body's settings.edn and reload.\nchests: what the body saw in chests it opened (remembered, may be out of date), nearest first with :distance and :age-ms.\nseen: blocks the body has seen (memory, nothing through walls), nearest first with :distance; default names are workstations, storage, beds, doors, ores and crops.\nevents: past events, newest page first, printed oldest first with :next-before (pass it as --before for older ones), :window {:scanned :oldest-seq :partial?}; debug-level noise is left out unless --level debug; --until death ends at the newest death, so a post-mortem is `events --until death`; --since/--until also take a duration back from now or an epoch ms; at most the last 8000 retained events are scanned.\nstatus: :missed lists job ends, flights, fight/flee decisions, reflex ends, deaths and one summed :hurt (damage, lowest-health, cause) since the last observe --wait. :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job."))
 
 (def usage (usage-for "observe.mjs"))
 
@@ -27,7 +27,7 @@
    :timeout {:type "string"} :chatter {:type "string"} :observer {:type "string"}
    :watch {:type "string" :multiple true}
    :from {:type "string"} :poll-ms {:type "string"}
-   :changed {:type "boolean" :default false} :danger {:type "boolean" :default false} :disconnect {:type "boolean" :default false}
+   :changed {:type "boolean" :default false} :no-danger {:type "boolean" :default false} :disconnect {:type "boolean" :default false}
    :quiet-notices {:type "boolean" :default false}
    :kinds {:type "string"} :job {:type "string"} :level {:type "string"} :since {:type "string"} :until {:type "string"} :before {:type "string"}})
 
@@ -56,7 +56,7 @@
 
 (def duration-units {"ms" 1 "s" 1000 "m" 60000})
 
-(defn wait-options [{:keys [timeout observer chatter watch from poll-ms danger disconnect quiet-notices]}]
+(defn wait-options [{:keys [timeout observer chatter watch from poll-ms no-danger disconnect quiet-notices]}]
   (let [[_ amount unit] (re-matches #"^(\d+(?:\.\d+)?)(ms|s|m)?$" (or timeout "60s"))
         timeout-ms (if amount (* (js/Number amount) (duration-units (or unit "s"))) js/NaN)
         observer (or observer "agent")
@@ -70,7 +70,7 @@
     (check (and (truthy-text? from) (not (re-matches body-name from))) "--from must be a player name")
     (check (not (integer-in? poll 50 5000)) "--poll-ms must be 50-5000")
     {:timeout-ms timeout-ms :observer observer :chatter chatter :watch watch
-     :poll-ms poll :from from :danger danger :disconnect disconnect :quiet-notices quiet-notices}))
+     :poll-ms poll :from from :danger (not no-danger) :disconnect disconnect :quiet-notices quiet-notices}))
 
 (def setting-key #":[a-z][a-z0-9.-]*/[a-z][a-z0-9-]*")
 
@@ -221,7 +221,7 @@
             query (query-string params)]
         (when-not (:wait values)
           (check (or (some #(some? (get values %)) [:timeout :chatter :observer :watch :from :poll-ms])
-                     (:danger values) (:disconnect values) (:quiet-notices values))
+                     (:no-danger values) (:disconnect values) (:quiet-notices values))
                  "wait options require --wait"))
         (check (and (:verbose values) (or (not= "status" op) (:raw values)))
                "--verbose is only valid for status without --raw")

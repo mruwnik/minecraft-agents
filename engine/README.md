@@ -829,7 +829,7 @@ Every workspace `bin/` call appends a `:start` and an `:end` line (tool, argv, o
 
 - `observe --wait` blocks until addressed chat, new attention, a watched job or action finishing, `body.idle`, an engine restart or the
   timeout (default 60 s). Each named observer (`--observer`) keeps its cursor in `worlds/<world>/observers/<body>/`; delivery
-  is at least once. `--chatter none|addressed|all`, `--danger` and `--disconnect` choose what wakes it. Only the first `reconnect-failed` of an
+  is at least once. `--chatter none|addressed|all` and `--disconnect` choose what wakes it; a hit on the body always wakes every agent-tool wait (`observe --wait`, `jobs/world submit --wait`, `progress --wait`) unless `--no-danger`. Each wait reply carries `:vitals` (`:hurt` first when health fell during the wait, `:health`, `:food`, hostiles seen/heard near, and the reflexes-off reminder under a manual take); `drive` replies repeat that reminder. Only the first `reconnect-failed` of an
   outage wakes it (later tries are summarised). Status of an offline body adds `:back-in-s`. A `died` wake or summary item carries `:cancelled-jobs [{:id :name}]` (jobs the death cancelled, seen in the same call).
 - `jobs.mjs show jID` of a job the scheduler no longer holds answers from the event history, as `observe job` does.
 - `jobs.mjs submit` of a plain job call is held back (exit 1, `:reason :job-clash`, `:clashes`, `:hint`) while a job of the same name is running, queued or resuming on the body; `--alongside` overrides, a `(repeat ...)` or combinator spec is never held (tool only; the engine accepts both).
