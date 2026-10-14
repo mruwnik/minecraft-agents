@@ -148,7 +148,7 @@
           (= :not-replaceable (:reason v)) nil
           (not (:ok v)) {:reason (:reason v) :pos pos}
           :else (or (when-not (fetching? c) (when-let [n (needs c items)] (assoc n :reason :need :pos pos)))
-                    (when-not (or (boats? items) (b/support? p pos) (b/unseen-near? p pos)) {:reason :no-support :pos pos})))))))
+                    (when-not (or (boats? items) (b/support? p pos) (b/unseen-near? p pos) (and (fetching? c) (nil? (b/chosen c items)))) {:reason :no-support :pos pos})))))))
 
 (def conditions [[:fn problem]])
 
