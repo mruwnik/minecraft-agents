@@ -1179,6 +1179,16 @@ test('moveTo: a goto that resolves within range is arrived', async () => {
   assert.equal((await p.moveTo('t1', { pos: at(30, 64, 0) })).status, 'arrived')
 })
 
+test('moveTo: maxDropDown caps the walk\'s drops, and the movements keep their own cap after', async () => {
+  const { bot, p } = rig(world)
+  const drops = []
+  bot.pathfinder.movements = { maxDropDown: 4 }
+  bot.pathfinder.goto = () => { drops.push(bot.pathfinder.movements.maxDropDown); bot.entity.position = new Vec3(29.5, 64, 0.5); return Promise.resolve() }
+  assert.equal((await p.moveTo('t1', { pos: at(30, 64, 0), maxDropDown: 3 })).status, 'arrived')
+  assert.deepEqual(drops, [3])
+  assert.equal(bot.pathfinder.movements.maxDropDown, 4)
+})
+
 // moveTo: a capped hop stays on the surface (its goal needs a column open to the sky), and a walk with no progress ends early.
 const hopGoal = async blocks => {
   const { bot, p } = rig({ ...world, blocks: { ...world.blocks, ...blocks }, hang: ['goto'] })

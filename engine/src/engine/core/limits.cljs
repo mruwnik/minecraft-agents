@@ -2,8 +2,8 @@
   "A call's limits (engine.contract) as the engine checks them: before every act and at each ctx/call and root round
   boundary, over the started contract frames of the chain. The outermost crossed frame is the one a crossing ends.
   With :engine.contract/enforce-limits on it is tagged (its :contract :limit) and a limit error unwinds to its call
-  boundary, which ends it :limit-reached; on the way frames may act but not call, and a crossing inside ctx/atomic is
-  held until the section closes. Before an act, its most (engine.primitive) is checked against what each frame has left:
+  boundary, which ends it :limit-reached; on the way frames may act unchecked but not call (frames further out are
+  still checked), and a crossing inside ctx/atomic is held until the section closes. Before an act, its most (engine.primitive) is checked against what each frame has left:
   enforced, a crossing refuses the act at once. Off, job.limit_would_end is told once per crossed frame and line, and
   the job goes on."
   (:require [engine.contract :as contract]
@@ -71,14 +71,19 @@
     (when-let [{:keys [frame cause]} (some (comp :limit second) (frames eng root slots))]
       (throw (contract/limit-error frame cause)))))
 
+(defn outside-unwinding
+  "The frames of fs (root first) outside the outermost one unwinding (tagged): an unwinding frame and those within it
+  may act; a frame further out still holds its lines."
+  [fs]
+  (take-while (comp not :limit second) fs))
+
 (defn check-frames!
   "check! over fs, the chain's started frames."
   [eng {:keys [root t0s section-depth held]} fs]
   (cond
     (empty? fs) nil
     (not (enforce?)) (run! #(would-end! eng root %) (crossings eng fs t0s))
-    (some (comp :limit second) fs) nil
-    :else (when-let [x (first (crossings eng fs t0s))]
+    :else (when-let [x (first (crossings eng (outside-unwinding fs) t0s))]
             (if (and section-depth (pos? @section-depth))
               (swap! held #(or % x))
               (throw (tag! eng root x)))))
@@ -106,19 +111,15 @@
 
 (defn check-act!
   "check! before act k with args, then the act's most against what every frame has left. Enforced, a crossing refuses
-  the act, inside ctx/atomic too: it ends the outermost frame it crosses, or goes on unwinding a frame already
-  unwinding. Off, job.limit_would_end is told once per frame, line and act."
+  the act, inside ctx/atomic too, and ends the outermost frame it crosses; frames unwinding are not checked (cleanup
+  acts). Off, job.limit_would_end is told once per frame, line and act."
   [eng {:keys [root slots t0s] :as base} k args]
   (let [fs (frames eng root slots)]
     (check-frames! eng base fs)
-    (when (seq fs)
-      (let [xs (refusals eng fs t0s k args)]
-        (cond
-          (not (enforce?)) (run! #(would-end! eng root %) xs)
-          (empty? xs) nil
-          :else (throw (if-let [{:keys [frame cause]} (some (comp :limit second) fs)]
-                         (contract/limit-error frame cause)
-                         (tag! eng root (first xs)))))))))
+    (if (enforce?)
+      (when-let [x (first (refusals eng (outside-unwinding fs) t0s k args))]
+        (throw (tag! eng root x)))
+      (run! #(would-end! eng root %) (refusals eng fs t0s k args)))))
 
 (defn section-closed!
   "After a ctx/atomic section of base's round closed: throw the crossing it held, once no section is open."

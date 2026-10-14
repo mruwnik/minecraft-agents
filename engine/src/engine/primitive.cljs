@@ -1,9 +1,9 @@
 (ns engine.primitive
   "The acting primitives as the job contract sees them (docs/goals-and-actions.md): each is one act, which cannot be
-  stopped midway. An entry is {:target [arg keys] :quote-of (fn [p args] quote) :ending (fn [result] ending)}: p the
-  primitives, args the act's args (keyword keys), result the primitive's JS result. engine.core.limits checks a
+  stopped midway. An entry is {:args [arg keys] :target [arg keys] :quote-of (fn [p args] quote)
+  :ending (fn [result] ending)}: p the primitives, args the act's args (keyword keys), result the primitive's JS result. engine.core.limits checks a
   quote's most against what every frame has left before the act runs, so a most is finite and never short of the
-  real cost: time is the primitive's own bound (js/prim-*.mjs). jobs.primitive wraps each entry as a registry job."
+  real cost (moveTo's drops excepted, see fall): time is the primitive's own bound (js/prim-*.mjs). jobs.primitive wraps each entry as a registry job."
   (:require [engine.contract :as contract]
             [engine.settings :as settings]))
 
@@ -26,12 +26,20 @@
 (defn carried [p item]
   (reduce + 0 (keep #(when (= item (.-name %)) (.-count %)) (.-inventory (.self p)))))
 
+(def own-max-drop "The pathfinder's own maxDropDown, the drop cap of a walk that sets none." 4)
+
 (defn fall
-  "The health a fall straight from where the body stands down to pos costs: each block past 3 is 1 hp."
-  [p pos]
-  (let [from (some-> (.self p) .-pos .-y)]
-    (if (and (number? from) (number? (:y pos)))
-      (max 0 (- (js/Math.floor from) (js/Math.floor (:y pos)) 3))
+  "The health the drops of a walk from where the body stands to pos could cost, each drop at most max-drop blocks and
+  1 hp per block past 3. Every drop and every 1-block climb takes a step, so a path along the straight line holds at
+  most (steps + descent) / (max-drop + 1) full drops; a path that strays further is not foreseen."
+  [p pos max-drop]
+  (let [from (some-> (.self p) .-pos)
+        hurt (- max-drop 3)]
+    (if (and (pos? hurt) from (every? number? [(:x pos) (:y pos) (:z pos)]))
+      (let [cell #(js/Math.floor %)
+            steps (js/Math.ceil (js/Math.hypot (- (cell (:x pos)) (cell (.-x from))) (- (cell (:z pos)) (cell (.-z from)))))
+            descent (- (cell (.-y from)) (cell (:y pos)))]
+        (* hurt (max 0 (quot (+ steps descent) (inc max-drop)))))
       0)))
 
 (defn ending-of
@@ -48,15 +56,26 @@
         (= "failed" s) (contract/ending :nothing-possible :failed nil)
         :else (contract/ending :condition-failed (or k :no-status) nil)))))
 
-(defn entry [target done quote-of] {:target target :quote-of quote-of :ending (ending-of done)})
+(def spawn-s "connect.mjs SPAWN_TIMEOUT_MS: how long one connect waits for the spawn." 60)
 
-(defn fixed [target done most] (entry target done (fn [_ _] (timed most))))
+(defn reconnect-s
+  "The most a reconnect after offline takes (primitives.mjs reconnectBot): each try a spawn and a world load, a retry
+  wait between tries."
+  []
+  (let [tries (js-setting "prim/reconnect-tries" 3)]
+    (+ (* tries (+ spawn-s (/ (js-setting "prim/world-timeout-ms" 10000) 1000)))
+       (* (dec tries) (/ (js-setting "prim/reconnect-retry-ms" 5000) 1000)))))
+
+(defn entry [args target done quote-of] {:args args :target target :quote-of quote-of :ending (ending-of done)})
+
+(defn fixed [args target done most] (entry args target done (fn [_ _] (timed most))))
 
 (def table
-  {:moveTo (entry [:pos] #{"arrived"}
-                  (fn [p {:keys [pos timeoutS]}]
-                    (assoc-in (timed (min (or timeoutS 20) 60)) [:uses :health] [0 0 (fall p pos)])))
-   :dig (entry [:pos] #{"dug"}
+  {:moveTo (entry [:pos :range :timeoutS :maxDistance :maxDropDown] [:pos] #{"arrived"}
+                  (fn [p {:keys [pos timeoutS maxDropDown]}]
+                    (assoc-in (timed (min (or timeoutS 20) 60)) [:uses :health]
+                              [0 0 (fall p pos (or maxDropDown own-max-drop))])))
+   :dig (entry [:pos :timeoutS] [:pos] #{"dug"}
                (fn [p {:keys [pos timeoutS]}]
                  (let [ms (or (when pos (.digTime p (clj->js pos))) 0)
                        bound (+ (/ (if (js/Number.isFinite ms) ms 0) 1000)
@@ -64,14 +83,14 @@
                        tool (held p)]
                    (cond-> (timed (min bound (or timeoutS ##Inf)))
                      tool (assoc-in [:uses :wear tool] [0 1 1])))))
-   :place (entry [:pos] #{"placed"} (fn [_ {:keys [item]}] (use-items (timed 5) item 1)))
-   :jumpPlace (entry [] #{"done"}
+   :place (entry [:pos :item :click] [:pos] #{"placed"} (fn [_ {:keys [item]}] (use-items (timed 5) item 1)))
+   :jumpPlace (entry [:item :count] [] #{"done"}
                      (fn [_ {:keys [item count]}]
                        (let [n (min (or count 1) (js-setting "prim/jump-place-max" 8))]
                          (use-items (timed (* n (js-setting "prim/jump-place-block-s" 2))) item n))))
-   :collect (entry [:id] #{"collected"} (fn [_ {:keys [timeoutS]}] (timed (min (or timeoutS 10) 20))))
-   :inspectContainer (fixed [:pos] #{"ok"} 5)
-   :transfer (entry [:pos :item] #{"ok"}
+   :collect (entry [:id :timeoutS :maxDropDown] [:id] #{"collected"} (fn [_ {:keys [timeoutS]}] (timed (min (or timeoutS 10) 20))))
+   :inspectContainer (fixed [:pos :entity] [:pos] #{"ok"} 5)
+   :transfer (entry [:pos :entity :direction :item :count] [:pos :item] #{"ok"}
                     (fn [_ {:keys [direction item count]}]
                       (let [q (timed 5)]
                         (cond
@@ -79,39 +98,39 @@
                           (= "deposit" direction) (use-items q item count)
                           (string? item) (assoc-in q [:yields :items item] [0 count count])
                           :else q))))
-   :equip (fixed [:item] #{"equipped"} 2)
-   :toss (entry [:item] #{"tossed"}
+   :equip (fixed [:item :dest] [:item] #{"equipped"} 2)
+   :toss (entry [:item :count :slot :watchS] [:item] #{"tossed"}
                 (fn [p {:keys [item count watchS]}]
                   (use-items (timed (+ 2 (min (or watchS 0) 5))) item (or count (carried p item)))))
-   :craft (entry [:item] #{"crafted"} (fn [_ {:keys [count]}] (timed (min 60 (+ 4 (* 6 (or count 1)))))))
-   :furnace (fixed [:pos] #{"ok"} 5)
-   :enchant (fixed [:pos] #{"ok" "enchanted"} 15)
-   :chat (fixed [] #{"sent"} 3)
-   :eat (entry [:item] #{"ate"} (fn [_ {:keys [item]}] (use-items (timed 5) item 1)))
-   :fish (entry [:pos] #{"caught"}
+   :craft (entry [:item :count :table] [:item] #{"crafted"} (fn [_ {:keys [count]}] (timed (min 60 (+ 4 (* 6 (or count 1)))))))
+   :furnace (fixed [:pos :op :input :fuel :output] [:pos] #{"ok"} 5)
+   :enchant (fixed [:pos :op :item :choice :levelCost] [:pos] #{"ok" "enchanted"} 15)
+   :chat (fixed [:message :to] [] #{"sent"} 3)
+   :eat (entry [:item] [:item] #{"ate"} (fn [_ {:keys [item]}] (use-items (timed 5) item 1)))
+   :fish (entry [:pos :timeoutS] [:pos] #{"caught"}
                 (fn [_ {:keys [timeoutS]}] (timed (+ 5 (or timeoutS (js-setting "prim/fish-wait-s" 45))))))
-   :attack (fixed [:id] #{"hit" "killed"} 1)
-   :interact (entry [:id] #{"used"} (fn [_ {:keys [item]}] (use-items (timed 2) item 1)))
-   :trade (fixed [:id] #{"bought" "ok"} 8)
-   :unequip (fixed [] #{"ok" "empty"} 2)
-   :sleep (fixed [:pos] #{"sleeping"} 5)
-   :look (fixed [:pos] #{"ok"} 1)
-   :swim (entry [] #{"surfaced" "landed" "timeout"}
+   :attack (fixed [:id] [:id] #{"hit" "killed"} 1)
+   :interact (entry [:id :item] [:id] #{"used"} (fn [_ {:keys [item]}] (use-items (timed 2) item 1)))
+   :trade (fixed [:id :op :offer :times] [:id] #{"bought" "ok"} 8)
+   :unequip (fixed [:dest] [] #{"ok" "empty"} 2)
+   :sleep (fixed [:pos] [:pos] #{"sleeping"} 5)
+   :look (fixed [:pos :yaw :pitch] [:pos] #{"ok"} 1)
+   :swim (entry [:ms :toward] [] #{"surfaced" "landed" "timeout"}
                 (fn [_ {:keys [ms]}]
                   (timed (/ (min (or ms (js-setting "prim/swim-default-ms" 3000)) (js-setting "prim/swim-max-ms" 10000))
                             1000))))
-   :useOn (entry [:pos] #{"used"} (fn [_ {:keys [item]}] (use-items (timed 5) (when (not= "none" item) item) 1)))
-   :steer (entry [] #{"done"} (fn [_ {:keys [timeoutS]}] (timed (or timeoutS (js-setting "steer/default-timeout-s" 60)))))
-   :mount (fixed [:id] #{"mounted" "already-mounted"} 2)
-   :dismount (fixed [] #{"dismounted"} 2)
-   :paddle (fixed [] #{"ok"} 4)
-   :wait (entry [] #{"ok"}
+   :useOn (entry [:pos :item :face] [:pos] #{"used"} (fn [_ {:keys [item]}] (use-items (timed 5) (when (not= "none" item) item) 1)))
+   :steer (entry [:decide :timeoutS] [] #{"done"} (fn [_ {:keys [timeoutS]}] (timed (or timeoutS (js-setting "steer/default-timeout-s" 60)))))
+   :mount (fixed [:id] [:id] #{"mounted" "already-mounted"} 2)
+   :dismount (fixed [:yaw :pitch] [] #{"dismounted"} 2)
+   :paddle (fixed [:ticks :turn :forward] [] #{"ok"} 4)
+   :wait (entry [:ms] [] #{"ok"}
                 (fn [_ {:keys [ms]}]
                   (let [s (/ (min (max (if (number? ms) ms 0) 0) (js-setting "prim/wait-max-ms" 10000)) 1000)]
                     {:uses {:time [s s s]}})))
-   :offline (entry [] #{"ok"}
+   :offline (entry [:ms :why] [] #{"ok"}
                    (fn [_ {:keys [ms]}]
                      (let [s (/ (min (or ms (js-setting "prim/offline-default-ms" 300000))
                                      (js-setting "prim/offline-max-ms" 600000))
                                 1000)]
-                       {:uses {:time [0 s s]}})))})
+                       {:uses {:time [0 s (+ s (reconnect-s))]}})))})

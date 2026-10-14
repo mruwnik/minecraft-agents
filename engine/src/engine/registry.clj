@@ -154,7 +154,7 @@
   holds :conditions :target :ways :defaults :done? :quote-of :legacy-args and its namespace's :settings. Each
   primitive of the engine/primitive.cljs table is a job too, as jobs.primitive.<kebab-case> (jobs.primitive/job)."
   []
-  (into (into {} (map (fn [k] [(list 'quote (primitive-job-name k)) (list 'jobs.primitive/job k)])) (primitive-keys))
+  (into (into {} (map (fn [k] [(list 'quote (primitive-job-name k)) (list 'jobs.primitive/job k (list 'quote (primitive-job-name k)))])) (primitive-keys))
         (map (fn [{:keys [ns defines]}]
                (let [ref (fn [k] (when (defines k) (symbol (str ns) (str k))))]
                  [(list 'quote ns) (cond-> {:check (ref 'check) :round (ref 'round)

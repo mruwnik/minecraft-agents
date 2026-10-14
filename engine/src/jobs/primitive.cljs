@@ -1,22 +1,10 @@
 (ns jobs.primitive
   "The acting primitives of engine.primitive as registry jobs: `job` wraps a table entry, which engine.registry lists
   as jobs.primitive.<kebab-case name> so agents and jobs call and quote each by name."
-  (:require [clojure.string :as str]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.primitive :as primitive]))
-
-(def arg-keys
-  "The keys of each primitive's args (engine/README, Acting); a job of it takes these and the call keys."
-  {:moveTo [:pos :range :timeoutS :maxDistance] :dig [:pos :timeoutS] :place [:pos :item :click]
-   :jumpPlace [:item :count] :collect [:id :timeoutS :maxDropDown] :inspectContainer [:pos :entity]
-   :transfer [:pos :entity :direction :item :count] :equip [:item :dest] :toss [:item :count :slot :watchS]
-   :craft [:item :count :table] :furnace [:pos :op :input :fuel :output] :enchant [:pos :op :item :choice :levelCost]
-   :fish [:pos :timeoutS] :chat [:message :to] :eat [:item] :attack [:id] :interact [:id :item]
-   :trade [:id :op :offer :times] :unequip [:dest] :sleep [:pos] :look [:pos :yaw :pitch] :swim [:ms :toward]
-   :useOn [:pos :item :face] :steer [:decide :timeoutS] :mount [:id] :dismount [:yaw :pitch]
-   :paddle [:ticks :turn :forward] :wait [:ms] :offline [:ms :why]})
 
 (def position-keys #{:pos})
 
@@ -32,14 +20,12 @@
       (when-let [missing (seq (remove #(some? (get (:args c) %)) need))]
         {:reason :bad-args :missing (vec missing)}))))
 
-(defn kebab [k] (str/replace (name k) #"[A-Z]" #(str "-" (str/lower-case %))))
-
 (defn args-data [k]
   (into {} (map (fn [arg] [arg (if (position-keys arg)
                                   {:doc "where, [x y z] or {:x :y :z}" :spec ::a/pos}
                                   {:doc (str "the act's " (name arg) ", as the primitive reads it")
                                    :spec (a/pred "a value" some?) :form 'some?})]))
-        (arg-keys k)))
+        (get-in primitive/table [k :args])))
 
 (defn act-args
   "The act's args as JavaScript: the job's own args, unset ones and the call keys left out."
@@ -47,11 +33,10 @@
   (clj->js (apply dissoc (into {} (remove (comp nil? val)) args) (keys contract/call-keys))))
 
 (defn job
-  "The registry entry of primitive k: one round is one act, ended by the table's ending of its result (the result's
-  fields are the ending's data)."
-  [k]
-  (let [{:keys [target quote-of ending]} (get primitive/table k)
-        sym (symbol (str "jobs.primitive." (kebab k)))]
+  "The registry entry of primitive k, the job sym (engine.registry names it): one round is one act, ended by the table's
+  ending of its result (the result's fields are the ending's data)."
+  [k sym]
+  (let [{:keys [target quote-of ending]} (get primitive/table k)]
     {:conditions [[:fn (missing-args k)]] :target target :args (a/declare! sym (args-data k))
      :doc (str "The primitive " k " as a job: one act, which cannot be stopped midway. Takes the act's args (engine/README,"
                " Acting). Ends done when the act's status is a success, else with the ending its status maps to; the result"

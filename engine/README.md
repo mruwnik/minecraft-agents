@@ -132,7 +132,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 
 | method | args | statuses |
 |---|---|---|
-| `moveTo` | `{pos, range=1, timeoutS=20, maxDistance=64}` (numbers, range from 0, the others above 0, else `bad-args`) | `arrived`, `partial`, `blocked` (reason `noPath`, `planTimeout`, `stalled`, `timeout`), `refused-mounted`. Uses the mineflayer pathfinder and treats doors as walls; jobs walk with `go-to` instead |
+| `moveTo` | `{pos, range=1, timeoutS=20, maxDistance=64, maxDropDown}` (maxDropDown caps the path's drops, default the pathfinder's 4; numbers, range from 0, the others above 0, else `bad-args`) | `arrived`, `partial`, `blocked` (reason `noPath`, `planTimeout`, `stalled`, `timeout`), `refused-mounted`. Uses the mineflayer pathfinder and treats doors as walls; jobs walk with `go-to` instead |
 | `dig` | `{pos, timeoutS?}` | `dug` (`drops`), `missing` (air, a fluid or unloaded), `unreachable` (over 4.5), `cannot` |
 | `place` | `{pos, item, click?}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable`, `failed` (server refused: reason names face, body spot and entities near the cell); buckets pour/scoop at `pos` |
 | `jumpPlace` | `{item, count=1}` (max 8) | `done`, `partial`, `failed` (`no-item`, `no-support`, `no-headroom`, `not-raised`) |
@@ -310,8 +310,10 @@ remainder only with `enforce-limits` on (else `job.way_would_drop`); a least of 
 **Limits (engine.core.limits).** A child's limits are clamped to its caller's; acts and call boundaries check the chain.
 `:engine.contract/enforce-limits` off (default): `job.limit_would_end` once per crossed frame and line (`:used`, `:health`,
 `:food` or `:now`); on: the outermost crossed frame ends `:limit-reached`; catch-alls rethrow on `contract/passes-through?`.
-Before an act, its most (`engine.primitive` table: target, quote-of, ending per primitive) is checked against what each frame
+Before an act, its most (`engine.primitive` table: args, target, quote-of, ending per primitive) is checked against what each frame
 has left: a crossing (cause with `:act`, amount `:most`/`:left`) refuses the act when enforced, inside `ctx/atomic` too.
+Unwinding frames act unchecked (cleanup); frames further out are still checked. moveTo's health most is the drops a path
+along the straight line could hold (`maxDropDown` 3: none hurts).
 
 **Old and contract jobs together (engine.core.legacy).** An old job through `ctx/call` ends with the ending its
 check, round and result map to; a decline after its first round with a `legacy/short-waits` reason (`:cooking`, `:night-sheltered`, `:torches-cooking`, `:chunks-loading`) is `:continue`, the

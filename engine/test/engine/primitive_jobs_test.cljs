@@ -36,19 +36,39 @@
 (deftest every-primitive-has-a-target-a-quote-and-an-ending
   (let [p (tu/fake {})]
     (is (= 29 (count primitive/table)))
-    (doseq [[k {:keys [target quote-of ending]}] primitive/table]
+    (doseq [[k {:keys [target args quote-of ending]}] primitive/table]
       (is (vector? target) k)
+      (is (and (vector? args) (every? (set args) target)) (str k ": its args name the act's keys, the target's among them"))
       (is (nil? (contract/quote-problem (quote-of p {}))) k)
       (is (every? #(< (nth % 2) ##Inf) (keep #(get-in (quote-of p {}) [:uses %]) [:time :health :food]))
           (str k ": an act cannot be stopped midway, so its most is finite"))
       (is (contract/ending? (ending #js {:status "failed"})) k))))
 
-(deftest a-drop-is-quoted-as-the-fall-straight-to-the-goal
-  (let [p (tu/fake {})]
+(deftest a-walk-is-quoted-by-the-drops-its-path-could-take
+  (let [p (tu/fake {})
+        hp #(get-in (quote-of :moveTo p %) [:uses :health])]
     (fake/swap-self! p assoc :pos [0 70 0])
-    (is (= [0 0 3] (get-in (quote-of :moveTo p {:pos {:x 0 :y 64 :z 0}}) [:uses :health])))
-    (is (= [0 0 0] (get-in (quote-of :moveTo p {:pos {:x 0 :y 68 :z 9}}) [:uses :health])) "3 blocks hurt nothing")
+    (is (= [0 0 2] (hp {:pos {:x 0 :y 64 :z 6}})) "6 down over 6: at most two 4-block drops, 1 hp each")
+    (is (= [0 0 1] (hp {:pos {:x 0 :y 70 :z 5}})) "level 5 away: a drop and the climb back")
+    (is (= [0 0 0] (hp {:pos {:x 0 :y 70 :z 4}})) "too near to drop 4 and climb back")
+    (is (= [0 0 0] (hp {:pos {:x 0 :y 64 :z 6} :maxDropDown 3})) "a drop of 3 hurts nothing")
+    (is (= [0 0 3] (hp {:pos {:x 0 :y 64 :z 6} :maxDropDown 6})) "one 6-block drop, 3 hp")
     (is (= [0 1 20] (get-in (quote-of :moveTo p {:pos {:x 0 :y 64 :z 0} :timeoutS 20}) [:uses :time])))))
+
+(deftest a-dig-is-quoted-past-its-dig-time-and-wears-the-held-tool
+  (let [p (tu/fake {})]
+    (swap! (fake/state p) assoc :dig-ms 3000)
+    (fake/swap-self! p assoc :held "iron_pickaxe")
+    (let [q (quote-of :dig p {:pos {:x 0 :y 63 :z 0}})]
+      (is (= 9 (get-in q [:uses :time 2])) "3 s of digging, the dig margin 5 and the drop wait 1")
+      (is (= [0 1 1] (get-in q [:uses :wear "iron_pickaxe"]))))))
+
+(deftest a-wait-is-quoted-its-time-and-offline-its-reconnect-too
+  (let [p (tu/fake {})]
+    (is (= [4 4 4] (get-in (quote-of :wait p {:ms 4000}) [:uses :time])))
+    (is (= [10 10 10] (get-in (quote-of :wait p {:ms 60000}) [:uses :time])) "the wait's own cap")
+    (is (= [0 20 240] (get-in (quote-of :offline p {:ms 20000}) [:uses :time]))
+        "20 s away, then up to 3 reconnects of a 60 s spawn and a 10 s world load, 5 s apart")))
 
 (deftest endings-read-the-primitives-status
   (let [end (get-in primitive/table [:dig :ending])]
@@ -60,7 +80,7 @@
 (defn drops-to [y]
   {:conditions [] :defaults {:floor {:health 15}}
    :round (fn ^:async drop-round [c]
-            (swap! world assoc :moved (.-status (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y y :z 0}}))))
+            (swap! world assoc :moved (.-status (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y y :z 9}}))))
             :continue)})
 
 (defn high-up [p]
@@ -152,6 +172,18 @@
           (is (= 1 (calls p "dig")))
           (is (= {:kind :condition-failed :cause :missing} (stopped seen))))))))
 
+(deftest wait-and-offline-run-by-name-as-jobs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [form ['(jobs.primitive.wait {:ms 10}) '(jobs.primitive.offline {:ms 10 :why "test"})]]
+          (let [{:keys [eng seen p]} (setup registry/jobs)
+                k (name (first form))]
+            (core/submit! eng form {})
+            (await (core/tick! eng))
+            (is (= 1 (calls p (subs k (inc (.lastIndexOf k "."))))) k)
+            (is (= 1 (count (completed seen))) k)))))))
+
 (def quoter
   {:conditions [] :defaults {:spend {:time 100}} :args {}
    :round (fn ^:async quoter-round [c]
@@ -169,6 +201,111 @@
           (is (zero? (calls p "eat")) "a quote does not act"))))))
 
 (deftest a-primitive-job-without-what-the-act-needs-fails-its-condition
-  (let [[_ condition] (first (:conditions (primitive-job/job :place)))]
+  (let [[_ condition] (first (:conditions (primitive-job/job :place 'jobs.primitive.place)))]
     (is (= {:reason :bad-args :missing [:pos :item]} (condition {:args {:pos nil}})))
     (is (nil? (condition {:args {:pos {:x 0 :y 64 :z 0} :item "dirt"}})))))
+
+(defn waits-for [ms]
+  {:conditions []
+   :round (fn ^:async wait-round [c]
+            (await (ctx/act c :wait #js {:ms ms}))
+            (swap! world update :waited (fnil inc 0))
+            :continue)})
+
+(defn enforced-run [jobs form check]
+  (enforced
+   (fn ^:async enforced-run []
+     (let [{:keys [eng seen p]} (setup jobs)]
+       (fake/swap-self! p assoc :pos [0 64 0])
+       (core/submit! eng form {})
+       (await (core/tick! eng))
+       (check seen p)))))
+
+(deftest enforced-an-act-past-the-time-left-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (enforced-run {'waits (assoc (waits-for 5000) :defaults {:spend {:time 3}})} '(waits)
+                             (fn [seen p]
+                               (is (zero? (calls p "wait")))
+                               (is (= {:kind :limit-reached :cause {:line :time :spend 3 :act :wait}} (stopped seen))))))))))
+
+(deftest enforced-an-act-past-the-deadline-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (enforced-run {'waits (waits-for 5000)} '(waits {:deadline 1002000})
+                             (fn [seen p]
+                               (is (zero? (calls p "wait")))
+                               (is (= {:kind :limit-reached :cause {:line :deadline :deadline 1002000 :act :wait}}
+                                      (stopped seen))))))))))
+
+(def digs
+  {:conditions [] :defaults {:spend {:wear {"iron_pickaxe" 0}}}
+   :round (fn ^:async dig-round [c] (await (ctx/act c :dig #js {:pos #js {:x 0 :y 63 :z 0}})) :continue)})
+
+(deftest enforced-a-dig-past-the-tool-wear-left-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (enforced
+                (fn ^:async enforced-wear []
+                  (let [{:keys [eng seen p]} (setup {'digs digs})]
+                    (fake/swap-self! p assoc :pos [0 64 0] :held "iron_pickaxe")
+                    (core/submit! eng '(digs) {})
+                    (await (core/tick! eng))
+                    (is (zero? (calls p "dig")))
+                    (is (= {:kind :limit-reached :cause {:line :wear :tool "iron_pickaxe" :spend 0 :act :dig}}
+                           (stopped seen)))))))))))
+
+(defn calls-kid [kid defaults]
+  {:conditions [] :defaults defaults
+   :round (fn ^:async parent-round [c]
+            (await (ctx/call c :kid kid {:spend {:time 100}}))
+            (swap! world assoc :parent-went-on true)
+            :continue)})
+
+(deftest enforced-a-clamped-chain-ends-its-outermost-crossed-frame
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (enforced-run {'top (calls-kid (waits-for 5000) {:spend {:time 4}})} '(top)
+                             (fn [seen p]
+                               (is (zero? (calls p "wait")))
+                               (is (nil? (:parent-went-on @world)))
+                               (is (= {:kind :limit-reached :cause {:line :time :spend 4 :act :wait}}
+                                      (stopped seen))))))))))
+
+(defn cleans-up-with [defaults]
+  {:conditions [] :defaults defaults
+   :round (fn ^:async cleanup-round [c]
+            (fake/swap-self! (:primitives c) assoc :health 11)
+            (try
+              (await (ctx/act c :look #js {:yaw 0 :pitch 0}))
+              (catch :default e
+                (await (ctx/act c :wait #js {:ms 5000}))
+                (swap! world assoc :cleaned-up true)
+                (throw e)))
+            :continue)})
+
+(deftest enforced-an-unwinding-frame-may-act-past-its-own-lines
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (enforced-run {'job (cleans-up-with {:floor {:health 12} :spend {:time 3}})} '(job)
+                             (fn [seen p]
+                               (is (= 1 (calls p "wait")) "the cleanup act ran")
+                               (is (true? (:cleaned-up @world)))
+                               (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))))
+
+(deftest enforced-a-cleanup-act-past-an-outer-frames-line-ends-that-frame
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (enforced-run {'top (calls-kid (cleans-up-with {:floor {:health 12}}) {:spend {:time 4}})} '(top)
+                             (fn [seen p]
+                               (is (zero? (calls p "wait")) "refused: the outer frame has 4 s left")
+                               (is (nil? (:cleaned-up @world)))
+                               (is (nil? (:parent-went-on @world)))
+                               (is (= {:kind :limit-reached :cause {:line :time :spend 4 :act :wait}}
+                                      (stopped seen))))))))))
