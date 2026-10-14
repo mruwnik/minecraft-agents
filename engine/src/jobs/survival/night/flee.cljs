@@ -109,10 +109,10 @@
   [c t]
   (hold/busy! c)
   (ctx/update-mem! c assoc :fleeing t)
-  (let [w (await (ctx/call-child c :flee 'jobs.movement.go-to (assoc (flee-args t) :at-night :go)))]
+  (let [w (await (ctx/call c :flee 'jobs.movement.go-to (assoc (flee-args t) :at-night :go)))]
     (if (= :continue w)
       :again
-      (let [arrived (:arrived (ctx/child-result c :flee))]
+      (let [arrived (:arrived (:data w))]
         (ctx/update-mem! c #(-> % (dissoc :fleeing :niche) (update :flees (fnil inc 0)) (update :flee-failed (fnil conj []) (:pos t))))
         (when (and arrived (= :cave (:kind t))) (ctx/update-mem! c assoc :enclose (:pos t)))
         (if arrived

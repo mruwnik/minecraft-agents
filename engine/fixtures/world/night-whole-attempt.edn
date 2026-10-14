@@ -1,6 +1,6 @@
 ;; Night as one whole attempt (cards 3df7476d, 65b99a04): one round from the start to the morning leave, every hold
 ;; declared (job.holding while exposed), a body that digs in ends the night at once (the morning trigger lets it out), a site
-;; where dig-in stops is left for another pit site 9+ blocks away, and a night with no site holds exposed and ends stopped :exposed at day. Dirt pad y -6..-1 (the plot floor is over void); the wet-site case
+;; where dig-in stops is left for another pit site 9+ blocks away, and a night with no site holds exposed and ends nothing-possible :exposed at day. Dirt pad y -6..-1 (the plot floor is over void); the wet-site case
 ;; covers the whole plot, since sites 9+ away are judged from the surface and dig-in finds the void.
 ;; jobs.survival.night is submitted in :act. Needs night: --allow-time --time-log <the shared time log>, one case per call.
 {:defaults
@@ -33,13 +33,13 @@
   {:name "no-site-holds-exposed-then-stops-at-day"
    :time :night-exclusive
    :blocks [[:fill [8 -6 8] [24 -1 24] "air"] [:fill [12 -1 12] [20 -1 20] "stone"]]
-   :act [[:job (jobs.survival.night {:flee-radius 0})]
+   :act [[:job (jobs.survival.night {:ways #{:bed :shelter}})]
          [:await {:source :job :kind :shelter.exposed} 60]
          [:wait-s 15]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 60}
             {:event {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 120 :of-job true}]
+            {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}} :within-s 120 :of-job true}]
    :limit-s 140}
   ;; Card 97fac480 (fix 57d67d3b). Night 1 relocates off a wet start site (a :night-site entry) and ends roofed; the entries are
   ;; forgotten then, so night 2 (water gone) digs at the start again instead of skipping it: the start's descent cell is dug.

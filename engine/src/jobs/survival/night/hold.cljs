@@ -62,7 +62,7 @@
   (await (eat-if-hungry! c))
   (when (food-wanted? c)
     (ctx/hold-still! c nil)
-    (await (ctx/call-child c :food 'jobs.survival.get-food {}))
+    (await (ctx/call c :food 'jobs.survival.get-food {}))
     (ctx/hold-still! c reason))
   (await (child/pause! c (/ hold-ms 1000) reason))
   :again)

@@ -1,31 +1,38 @@
 (ns jobs.survival.night
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.lib.child :as child]
-            [jobs.lib.dawn :as dawn]
             [jobs.survival.retreat-doors :as retreat-doors]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
-            [jobs.lib.result :as result]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.spent :as spent]
-            [jobs.lib.tidy :as tidy]
+            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.hold :as hold]
-            [jobs.survival.night.sites :as sites]))
+            [jobs.survival.night.morning :as morning]
+            [jobs.survival.night.sites :as sites]
+            [jobs.time.wait-for-day :as wait-for-day]))
 
 (def doc
-  "The night: one round from the trigger until the night is over and the body is out of its shelter. The round repeats
-  one choice, each time from the world as it is now (the first that applies), with a 50 ms timer between:
-  - day: a dug-in or exposed night leaves the shelter (dig-in-leave/leave!); :no-way-out stops the job (shelter.failed warn,
+  "The night: one round from the trigger until the night is over and the body is out of its shelter.
+  Ways (the call's :ways, all by default): :bed (a bed used or put down, a sleeper's log-out), :shelter (a roofed place
+  walked to, dig-in, relocation, niche, a breached room walled in, the exposed retry), :flee (a walk somewhere safer, a
+  cave walled in). A door is always shut and the morning always runs.
+  Condition at the start: the night trigger's (a listed night waits :not-night, or :night-safe {:shelter}; :spawn with
+  the respawn bed's state). Quote: the time left of the night (jobs.time.wait-for-day) and ::morning-s, least 0.
+  The round repeats one choice, each time from the world as it is now (the first that applies), with a 50 ms timer between:
+  - day: a dug-in or exposed night leaves the shelter (dig-in-leave/leave!); :no-way-out ends it nothing-possible :no-way-out (shelter.failed warn,
     a :shelter-trapped entry, 5 minutes); then a bed it put down outside its own zones (:bed-placed) is dug up and its
-    drop walked over (go-to), unless it is the respawn bed (:spawn-bed); then the job ends: done {:night :slept|:dug-in|:logged-out}, or stopped :exposed {:sites} after a
+    drop walked over (go-to), unless it is the respawn bed (:spawn-bed); then the job ends: done {:night :slept|:dug-in|:logged-out}, or nothing-possible :exposed {:sites} after a
     night with no shelter.
   - asleep: hold (:sleeping).
   - roofed and sheltered (slept, dug in, or shut in its own latest :shelter): a log-out stint while someone else sleeps,
@@ -53,7 +60,7 @@
     as far as the body has seen it (a seen cell with block light >= :lit-light; an unseen cell is not lit; the line approximates go-to's route): walk there (go-to :place). A walk
     that does not arrive is not tried again tonight, and the night digs in; arrived, the next pass is roofed.
   - else a safe place: jobs.survival.dig-in here, unless a site tonight failed within 8 blocks. A dig-in that does not
-    roof the body (stopped, or declined) writes a :night-site {:pos :reason} entry, and the body walks (go-to) to the
+    roof the body (any other ending) writes a :night-site {:pos :reason} entry, and the body walks (go-to) to the
     nearest cell within 16 blocks, 9+ from every failed site, that looks dry and solid from the surface (shelter.relocated info; dig-in finds out the
     rest), to dig in there. After max-sites failed sites, or with no such cell, it cuts a niche (jobs.survival.dig-niche with :fetch false, once, :niche;
     out of a failed pit first; never a tool fetched in the dark), else flees somewhere safer, else holds exposed until day (one shelter.exposed
@@ -68,7 +75,7 @@
   site, with standing room (pit-site?). While that search goes on the night holds its pass. Arrived at a cave cell it walls itself in (dig-in :enclose, walls only, never a
   pit): sealed, it holds :dug-in until morning; a refusal marks the site failed and the roofed body ends the night :roofed. shelter.fled info on arrival, shelter.flee_failed when not arrived; a walk cut by a
   reflex resumes the same target. Arrived: the next pass sleeps, is roofed, or digs in there (a niche is tried again).
-  Done {:night how :fled n} (stopped :exposed {:fled n}) when it fled.
+  Done {:night how :fled n} (nothing-possible :exposed {:fled n}) when it fled.
   Every hold is declared (ctx/hold-still!) and waits hold-ms at a time, eating one carried food when the hungry
   trigger's condition holds (hungry?, or below 7 hp; not asleep); a starving body with no food runs get-food (when no danger is near).
   An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed). A respawn bed
@@ -91,15 +98,39 @@
    :home-radius {:doc "a remembered roofed place (:roofed-places) this close is walked into, whatever the light, before a bed is used or put down; a carried bed is never put down in the open while one is" :spec (a/num-in 0 nil) :default 12}
    :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :spec (a/num-in 0 nil) :default 64}})
 
-(defn check
-  "The night trigger's condition, or job memory :sheltered (a listed night cut before its morning)."
+(a/defargs settings
+  {::morning-s {:default 60 :doc "Seconds the morning (out of the shelter, a put-down bed picked up) is reckoned to take at most, in the quote." :spec (a/num-in 0 nil)}})
+
+(def target [])
+
+(def ways [:bed :shelter :flee])
+
+(def defaults {:ways (set ways)})
+
+(defn night-safe
+  "The cause while the night trigger's condition fails: :night-safe with the shelter the body is in, else :not-night;
+  with :spawn when the respawn bed is known or lost."
   [c]
-  (let [spawn (sh/spawn-state (:primitives c) (ctx/view c))]
-    (or (some? (:sheltered (ctx/mem c)))
-        (boolean (sh/night-holds? (:primitives c) (ctx/view c) (:args c) (bed-down/bed-permit c)))
-        (if-let [shelter (sh/night-sheltered (:primitives c) (:data (ctx/latest c :shelter)))]
-          (ctx/wait c (cond-> {:reason :night-safe :shelter shelter} spawn (assoc :spawn spawn)))
-          (ctx/wait c (cond-> {:reason :not-night} spawn (assoc :spawn spawn)))))))
+  (let [p (:primitives c)]
+    (when-not (sh/night-holds? p (ctx/view c) (:args c) (bed-down/bed-permit c))
+      (let [spawn (sh/spawn-state p (ctx/view c))]
+        (cond-> (if-let [shelter (sh/night-sheltered p (:data (ctx/latest c :shelter)))]
+                  {:reason :night-safe :shelter shelter}
+                  {:reason :not-night})
+          spawn (assoc :spawn spawn))))))
+
+(def conditions [[:fn (started/at-start night-safe)]])
+
+(defn done?
+  "Counts only: the round ends the night."
+  [_c]
+  {:done? false :units :nights :done 0 :left 1})
+
+(defn quote-of
+  "The time left of the night (jobs.time.wait-for-day's quote), a bed possibly ending it at once, and ::morning-s on top."
+  [c]
+  (let [[_ mean most] (get-in (wait-for-day/quote-of c) [:uses :time])]
+    {:uses {:time [0 mean (+ most (settings/get settings ::morning-s))]}}))
 
 (def needs-bed-policy {:cap 1 :ttl sh/ms-per-day})
 
@@ -125,11 +156,10 @@
   next pass looks again. Declined or failed (unsupported, closed): :log-out-failed, not tried again by this job."
   [c]
   (hold/busy! c)
-  (let [l (await (ctx/call-child c :log-out 'jobs.survival.log-out {}))
-        status (:how (ctx/child-result c :log-out))]
+  (let [l (await (ctx/call c :log-out 'jobs.survival.log-out {}))]
     (cond
       (= :continue l) :again
-      (and (= :done l) (#{"ok" "cut"} status)) (do (when-not (:sheltered (ctx/mem c)) (hold/sheltered! c :logged-out)) :again)
+      (= :done (:kind l)) (do (when-not (:sheltered (ctx/mem c)) (hold/sheltered! c :logged-out)) :again)
       :else (do (ctx/update-mem! c assoc :log-out-failed true) :again))))
 
 (defn ^:async bed-down-step
@@ -137,10 +167,10 @@
   the next pass chooses again."
   [c bed]
   (hold/busy! c)
-  (let [d (await (ctx/call-child c :bed-down 'jobs.survival.bed-down
+  (let [d (await (ctx/call c :bed-down 'jobs.survival.bed-down
                                  (cond-> (select-keys (:args c) [:roof-height :bed-radius :urgent-bed-radius :max-days-awake])
                                    bed (assoc :bed bed))))]
-    (when (and (= :done d) (:slept (ctx/child-result c :bed-down)))
+    (when (and (= :done (:kind d)) (:slept (:data d)))
       (hold/sheltered! c :slept))
     :again))
 
@@ -150,9 +180,9 @@
   "Walk (go-to :place) to the roofed place; :again. A walk that ends without arriving, or arrives and is still not roofed, is marked :roof-walk-failed."
   [c {:keys [name]}]
   (hold/busy! c)
-  (let [w (await (ctx/call-child c :roof-walk 'jobs.movement.go-to {:place name :range 0 :at-night :go}))]
+  (let [w (await (ctx/call c :roof-walk 'jobs.movement.go-to {:place name :range 0 :at-night :go}))]
     (when (and (not= :continue w)
-               (not (and (:arrived (ctx/child-result c :roof-walk)) (sh/roofed? (:primitives c) (:roof-height (:args c))))))
+               (not (and (:arrived (:data w)) (sh/roofed? (:primitives c) (:roof-height (:args c))))))
       (ctx/update-mem! c assoc :roof-walk-failed true))
     :again))
 
@@ -187,13 +217,18 @@
     (let [r (await (dig-leave/climb! c {:start pit} nil))]
       (when (map? r) (ctx/update-mem! c assoc :pit-trapped true))
       :again)
-    (let [d (await (ctx/call-child c :niche 'jobs.survival.dig-niche {:fetch false}))]
+    (let [d (await (ctx/call c :niche 'jobs.survival.dig-niche {:fetch false}))]
       (when-not (= :continue d)
         (ctx/update-mem! c assoc :niche :tried)
-        (spent/absorb! c (ctx/child-result c :niche)))
+        (spent/absorb! c (:data d)))
       :again)))
 
 ;; ------------------------------------------------------------------ somewhere safer
+
+(defn site-reason
+  "Why a dig-in ending d left the site unsheltered: its cause, :unsealed when it ended done."
+  [d]
+  (if (= :done (:kind d)) :unsealed (contract/cause-key d)))
 
 (defn ^:async enclose!
   "At a cave target (:enclose is its feet cell): wall in with dig-in :enclose, one call. Sealed in: :dug-in, held until
@@ -206,15 +241,23 @@
     (if (not= pos (sh/feet p))
       (do (ctx/update-mem! c dissoc :enclose) :again)
       (let [_ (hold/busy! c)
-            d (await (ctx/call-child c :enclose 'jobs.survival.dig-in {:roof-height roof-height :enclose true :wall-value (:wall-value (:args c))}))
-            res (ctx/child-result c :enclose)]
+            d (await (ctx/call c :enclose 'jobs.survival.dig-in {:roof-height roof-height :enclose true :wall-value (:wall-value (:args c))}))]
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :enclose)
-              (if (and (= :done d) (dig-cells/sealed-in? p :walls roof-height) (not= :stopped (:status res)))
+              (if (and (= :done (:kind d)) (dig-cells/sealed-in? p :walls roof-height))
                 (hold/sheltered! c :dug-in)
-                (sites/site-failed! c pos (or (:reason res) (if (= :declined d) :declined :unsealed))))
+                (sites/site-failed! c pos (site-reason d)))
               :again))))))
+
+(defn ^:async flee-or-hold!
+  "No site to dig in: flee somewhere safer (way :flee), else hold exposed."
+  [c]
+  (let [t (when (ctx/way? c :flee) (await (flee/flee-target c)))]
+    (cond
+      (= :searching t) :again
+      t (await (flee/flee! c t))
+      :else (await (hold-exposed! c)))))
 
 (defn ^:async relocate!
   "Get to a nearby cell where a pit can be dug; the next pass digs in there. Out of its own failed pit first by a stair
@@ -227,11 +270,7 @@
     (cond
       (:pit-trapped (ctx/mem c)) (await (hold-exposed! c))
       (and (nil? site) (not= :tried (:niche (ctx/mem c)))) (await (niche! c pit))
-      (nil? site) (let [t (await (flee/flee-target c))]
-                    (cond
-                      (= :searching t) :again
-                      t (await (flee/flee! c t))
-                      :else (await (hold-exposed! c))))
+      (nil? site) (await (flee-or-hold! c))
       pit (do (hold/busy! c)
               (ctx/update-mem! c assoc :relocating site)
               (let [r (await (dig-leave/climb! c {:start pit} site))]
@@ -240,11 +279,11 @@
       :else
       (do (hold/busy! c)
           (ctx/update-mem! c #(-> % (assoc :relocating site) (dissoc :dig-out)))
-          (let [w (await (ctx/call-child c :relocate 'jobs.movement.go-to {:pos site :range 0 :at-night :go}))]
+          (let [w (await (ctx/call c :relocate 'jobs.movement.go-to {:pos site :range 0 :at-night :go}))]
             (if (= :continue w)
               :again
               (do (ctx/update-mem! c dissoc :relocating)
-                  (if (:arrived (ctx/child-result c :relocate))
+                  (if (:arrived (:data w))
                     (ctx/emit! c :shelter.relocated :info {:pos site :sites (sites/failed-sites c)
                                                            :text "the last site failed; moved to dig in elsewhere"})
                     (sites/site-failed! c site :unreachable))
@@ -288,15 +327,14 @@
             _ (when-not resume
                 (ctx/update-mem! c assoc :digging start)
                 (sites/site-failed! c start :interrupted))
-            d (await (ctx/call-child c :dig-in 'jobs.survival.dig-in {:roof-height (dig-in-roof-height c) :wall-value (:wall-value (:args c))}))
-            res (ctx/child-result c :dig-in)]
+            d (await (ctx/call c :dig-in 'jobs.survival.dig-in {:roof-height (dig-in-roof-height c) :wall-value (:wall-value (:args c))}))]
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :digging)
               (ctx/forget-where! c :night-site #(= {:pos start :reason :interrupted} %))
-              (if (and (= :done d) (sh/roofed? p (dig-in-roof-height c)) (not= :stopped (:status res)))
+              (if (and (= :done (:kind d)) (sh/roofed? p (dig-in-roof-height c)))
                 (hold/sheltered! c :dug-in)
-                (sites/site-failed! c start (or (:reason res) (if (= :declined d) :declined :unsealed))))
+                (sites/site-failed! c start (site-reason d)))
               :again))))))
 
 
@@ -313,91 +351,6 @@
                                              :text "an open door of the room would not shut; the room is not safe"})
     (ctx/remember! c :night-door-failed {:door (sh/door-key (:cell door))} {:cap 1 :ttl (sh/door-failed-ms)}))
   :again)
-
-;; ------------------------------------------------------------------ morning
-
-(defn ^:async collect-bed!
-  "By day: dig up the bed at pos the night put down outside the body's zones, then walk over its drop. One try: the
-  :bed-placed entry is dropped whatever happens, and a :bed entry at pos is retracted."
-  [c pos]
-  (let [walk (await (ctx/call-child c :bed-collect 'jobs.movement.go-to {:pos pos :range 2 :at-night :go}))]
-    (if (= :continue walk)
-      :again
-      (do (when (:arrived (ctx/child-result c :bed-collect))
-            (let [r (await (tidy/dig! c pos))]
-              (when (= "dug" (.-status r))
-                (when (= pos (mem/place (ctx/view c) :bed))
-                  (ctx/remember! c :bed {:gone true :was pos} mem/place-policy))
-                (ctx/update-mem! c assoc :pickup pos))))
-          (ctx/forget-where! c :bed-placed (constantly true))
-          :again))))
-
-(defn ^:async pick-up-drop!
-  "Walk over the dug bed's drop at pos (go-to); one try, then the walk is over."
-  [c pos]
-  (let [w (await (ctx/call-child c :bed-pickup 'jobs.movement.go-to {:pos pos :range 0 :at-night :go}))]
-    (when-not (= :continue w) (ctx/update-mem! c dissoc :pickup))
-    :again))
-
-(defn fled
-  "Walks to somewhere safer this night made, or nil when none."
-  [c]
-  (let [n (:flees (ctx/mem c))]
-    (when (and n (pos? n)) n)))
-
-(defn spent-fields
-  "What the night's children placed (the niche), as the :spent, :spent-at and :text a done result carries; {} when nothing."
-  [c]
-  (let [log (spent/log c)]
-    (if log (assoc (spent/summary log) :text (spent/text log "night shelter")) {})))
-
-(defn end-night!
-  "The night is over: forget tonight's failed sites (sites/forget-failed!) and end, done {:night how}, or stopped :exposed {:sites} when
-  nothing sheltered the body."
-  [c]
-  (let [how (:sheltered (ctx/mem c))
-        sites (sites/failed-sites c)]
-    (sites/forget-failed! c)
-    (if (= :exposed how)
-      (result/stop! c :exposed (str "no shelter tonight: no bed, nobody asleep, no site to dig in, nowhere safer known (" (sites/exposed-why sites) ")")
-                    :sites sites :fled (fled c))
-      (result/finish! c (cond-> (spent-fields c) how (assoc :night how) (fled c) (assoc :fled (fled c)))))))
-
-(defn ^:async morning-step!
-  "By day, nothing to walk over: out of a dig-in pit first, then a bed picked up, then the end."
-  [c]
-  (cond
-    (and (or (= :dug-in (:sheltered (ctx/mem c))) (dig-leave/sheltered-in c)) (dawn/hostile-hold? (:primitives c)))
-    (do (when-not (:dawn-noted (ctx/mem c))
-          (ctx/update-mem! c assoc :dawn-noted true)
-          (ctx/emit! c :night.dawn-hold :info {:text "first light, but a hostile is known near the shelter; staying in until it is gone or the grace is over"}))
-        (await (hold/hold! c "first light: hostile near")))
-    (or (#{:dug-in :exposed} (:sheltered (ctx/mem c))) (:dig-out (ctx/mem c)) (dig-leave/sheltered-in c))
-    (let [r (await (dig-leave/leave! c {:take-back? (:take-back? (:args c))}))]
-      (cond
-        (= :continue r) :again
-        (= :out (:reason r)) (do (ctx/update-mem! c dissoc :dig-out)
-                                 (when-not (= :exposed (:sheltered (ctx/mem c))) (hold/sheltered! c :dug-in))
-                                 (if (sh/bed-to-collect (:primitives c) (ctx/view c)) :again (end-night! c)))
-        (= :no-way-out (:reason r))
-        (let [text "no way out of the shelter by day; giving the body back"]
-          (ctx/emit! c :shelter.failed :warn {:reason :no-way-out :at (:at r) :tries (:tries r) :text text})
-          (ctx/remember! c :shelter-trapped {:pos (sh/feet (:primitives c))} sh/trapped-policy)
-          (ctx/forget-where! c :night-site (constantly true))
-          (result/stop! c :no-way-out text :at (:at r) :tries (:tries r)))
-        :else (await (hold/hold! c :leaving))))
-    :else
-    (if-let [bed (sh/bed-to-collect (:primitives c) (ctx/view c))]
-      (await (collect-bed! c bed))
-      (end-night! c))))
-
-(defn ^:async morning!
-  "By day: a dug bed's drop is walked over first, else morning-step!."
-  [c]
-  (hold/busy! c)
-  (if-let [pos (:pickup (ctx/mem c))]
-    (await (pick-up-drop! c pos))
-    (morning-step! c)))
 
 (defn note-bed-far!
   "Once a night, with no bed to use: say the nearest known bed or :home is too far, so the agent can carry a bed on long trips."
@@ -441,7 +394,8 @@
   (let [p (:primitives c)
         breached (sh/breached-home? p (ctx/view c))
         roofed (and (sh/roofed? p (:roof-height (:args c))) (not breached))
-        sheltered (:sheltered (ctx/mem c))]
+        sheltered (:sheltered (ctx/mem c))
+        bed-way (ctx/way? c :bed)]
     (when (and (sh/night? p) (bed-down/overdue? c)) (note-needs-bed! c))
     (note-spawn-lost! c)
     (cond
@@ -449,35 +403,38 @@
       (do (await (look/look-around! c))
           (ctx/remember! c :night-looked {:cell (sh/feet p)} sh/night-looked-policy)
           :again)
-      (not (sh/night? p)) (await (morning! c))
+      (not (sh/night? p)) (await (morning/morning! c))
       (sh/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))
       (do (when-not sheltered (hold/sheltered! c :dug-in))
           (cond
-            (log-out-wanted? c) (await (log-out-step c))
+            (and bed-way (log-out-wanted? c)) (await (log-out-step c))
             (sh/night-holds? p (ctx/view c) (:args c) (bed-down/bed-permit c)) (await (hold/hold! c :sheltered))
-            :else (end-night! c)))
+            :else (morning/end-night! c)))
       :else
-      (let [bed (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c))))
+      (let [bed (when bed-way (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))))
+            bed-wanted (and bed-way (carried-bed-wanted? c))
             door (sh/open-room-door p (ctx/view c))
             home-near (when-not roofed (sites/near-roofed-home c))]
-        (when-not bed (note-bed-far! c))
-        (when (and home-near (:roof-walk-failed (ctx/mem c)) (not bed)) (note-bed-kept! c))
+        (when (and bed-way (not bed)) (note-bed-far! c))
+        (when (and bed-way home-near (:roof-walk-failed (ctx/mem c)) (not bed)) (note-bed-kept! c))
         (when breached
           (note-room-open! c)
-          (when-not (or door (:enclose (ctx/mem c)) (sites/failed-here? c))
+          (when-not (or door (:enclose (ctx/mem c)) (sites/failed-here? c) (not (ctx/way? c :shelter)))
             (ctx/update-mem! c assoc :enclose (sh/feet p))))
         (cond
           door (await (shut-room-door! c door))
-          (and home-near (sites/roof-walk-wanted? c) (or bed (carried-bed-wanted? c))) (await (roof-walk! c home-near))
-          (or bed (and (carried-bed-wanted? c) (not home-near))) (await (bed-down-step c bed))
-          (log-out-wanted? c) (await (log-out-step c))
+          (and home-near (sites/roof-walk-wanted? c) (or bed bed-wanted)) (await (roof-walk! c home-near))
+          (or bed (and bed-wanted (not home-near))) (await (bed-down-step c bed))
+          (and bed-way (log-out-wanted? c)) (await (log-out-step c))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
-          (and (or roofed (and (sh/buried? p) (not (sh/open-cave? p))) (sh/shut-in-room? p)) (empty? (sh/open-room-doors p))) (do (ctx/forget-where! c :night-site (constantly true))
-                                                                 (result/finish! c (cond-> (assoc (spent-fields c) :night (if (= :logged-out sheltered) :logged-out :roofed)) (fled c) (assoc :fled (fled c)))))
+          (and (or roofed (and (sh/buried? p) (not (sh/open-cave? p))) (sh/shut-in-room? p)) (empty? (sh/open-room-doors p)))
+          (do (ctx/forget-where! c :night-site (constantly true))
+              (ctx/end c :done nil (morning/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
           (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))
-          (and (= :exposed sheltered) (sites/retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
+          (and (= :exposed sheltered) (ctx/way? c :shelter) (sites/retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
           (= :exposed sheltered) (await (hold/hold! c (str "exposed: " (sites/exposed-why (sites/failed-sites c)))))
+          (not (ctx/way? c :shelter)) (await (flee-or-hold! c))
           :else (if-let [place (and (sites/roof-walk-wanted? c) (await (sense/decide! c ::roofed-place #(sites/roofed-place c))))]
                   (await (roof-walk! c place))
                   (await (shelter! c))))))))

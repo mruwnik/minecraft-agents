@@ -232,9 +232,9 @@
                   (let [{:keys [eng]} (st/setup world)
                         id (core/submit! eng '(jobs.survival.night) {})]
                     (core/tick! eng)
-                    (select-keys (:waiting (job-api/summary eng id)) [:reason :shelter])))]
-    (is (= {:reason :not-night} (waiting {:time noon})))
-    (is (= {:reason :night-safe :shelter :roofed} (waiting {:time night :blocks roof})))))
+                    (let [w (:waiting (job-api/summary eng id))] [(:reason w) (:shelter (:cause w))])))]
+    (is (= [:not-night nil] (waiting {:time noon})))
+    (is (= [:night-safe :roofed] (waiting {:time night :blocks roof})))))
 
 (deftest the-night-says-once-that-the-respawn-bed-it-sees-gone-is-lost
   (async done
@@ -254,7 +254,7 @@
                         _ (seed! eng)
                         id (core/submit! eng '(jobs.survival.night) {})]
                     (core/tick! eng)
-                    (:spawn (:waiting (job-api/summary eng id)))))
+                    (:spawn (:cause (:waiting (job-api/summary eng id))))))
         bed {:pos {:x 6 :y 64 :z 0}}]
     (is (nil? (waiting {:time noon} (constantly nil))))
     (is (= {:bed {:x 6 :y 64 :z 0}} (waiting {:time noon :blocks {"6,64,0" "red_bed"}} #(write! % :spawn-bed bed))))
@@ -585,14 +585,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks st/floor})
-              call-child ctx/call-child]
+              call ctx/call]
           ;; the dig-in leaves the body roofed some other way (a passer-by built over it), the night then ends :roofed
-          (set! ctx/call-child (fn ^:async f [c k sym a]
-                                 (swap! (.-state (.-world p)) assoc-in [:blocks [0 66 0]] "stone")
-                                 :declined))
+          (set! ctx/call (fn ^:async f [c k sym a]
+                           (swap! (.-state (.-world p)) assoc-in [:blocks [0 66 0]] "stone")
+                           (contract/ending :condition-failed :declined nil)))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
-          (set! ctx/call-child call-child)
+          (set! ctx/call call)
           (is (= [] (st/entries eng :night-site)) "no entry outlives the night that wrote it"))))))
 
 (deftest a-dig-in-that-yields-is-not-a-failed-site
@@ -602,16 +602,16 @@
         (let [{:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})
               calls (atom 0)
               seen-sites (atom nil)
-              call-child ctx/call-child]
-          (set! ctx/call-child (fn ^:async f [c k sym a]
-                                 (let [n (swap! calls inc)]
-                                   (when (= 2 n)
-                                     (reset! seen-sites (mapv :reason (st/entries eng :night-site)))
-                                     (.setTime (.-world p) st/noon))
-                                   (if (= :dig-in k) :continue (await (call-child c k sym a))))))
+              call ctx/call]
+          (set! ctx/call (fn ^:async f [c k sym a]
+                           (let [n (swap! calls inc)]
+                             (when (= 2 n)
+                               (reset! seen-sites (mapv :reason (st/entries eng :night-site)))
+                               (.setTime (.-world p) st/noon))
+                             (if (= :dig-in k) :continue (await (call c k sym a))))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
-          (set! ctx/call-child call-child)
+          (set! ctx/call call)
           (is (= [:interrupted] @seen-sites) "the yield left only the in-flight mark, and the next call resumed the dig-in"))))))
 
 (deftest a-body-held-exposed-tries-to-dig-in-again-later
@@ -620,15 +620,15 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (st/setup {:time night :blocks st/floor})
               tries (atom 0)
-              call-child ctx/call-child]
+              call ctx/call]
           (st/refuse-placing! p)
           (st/on-wait! p (fn [n] (if (< n 10) (swap! clock + 660000) (.setTime (.-world p) st/noon))))
-          (set! ctx/call-child (fn ^:async f [c k sym a]
-                                 (when (= :dig-in k) (swap! tries inc))
-                                 (await (call-child c k sym a))))
+          (set! ctx/call (fn ^:async f [c k sym a]
+                           (when (= :dig-in k) (swap! tries inc))
+                           (await (call c k sym a))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
-          (set! ctx/call-child call-child)
+          (set! ctx/call call)
           (is (= (inc (sites/max-retries)) @tries) "one dig-in, then one more per retry of the exposed hold"))))))
 
 (deftest an-exposed-hold-retries-only-from-futile-radius-plus-one-away
@@ -807,18 +807,18 @@
           (is (< (:x (st/pos-of p)) 5)))))))
 
 (defn ^:async with-child-log
-  "Run (f), a promise, with ctx/call-child logging [key sym args] of every child call; the log. (on-call c k sym a) may
-  answer a result to stand for the child."
+  "Run (f), a promise, with ctx/call logging [key sym args] of every child call; the log. (on-call c k sym a) may
+  answer an ending or :continue to stand for the child."
   ([f] (with-child-log f (fn [_ _ _ _] nil)))
   ([f on-call]
    (let [log (atom [])
-         orig ctx/call-child]
-     (set! ctx/call-child (fn ^:async g [c k sym a]
+         orig ctx/call]
+     (set! ctx/call (fn ^:async g [c k sym a]
                             (swap! log conj [k sym a])
                             (let [r (on-call c k sym a)]
                               (if (some? r) r (await (orig c k sym a))))))
      (await (f))
-     (set! ctx/call-child orig)
+     (set! ctx/call orig)
      @log)))
 
 (def walled-home
@@ -841,7 +841,7 @@
         (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))
               beside {:x 10 :y 64 :z 1}
               log (await (with-child-log #(tu/run-until-empty eng 60)
-                           (fn [c k sym a] (when (:place a) (ctx/call-child c k sym (-> a (dissoc :place) (assoc :pos beside)))))))]
+                           (fn [c k sym a] (when (:place a) (ctx/call c k sym (-> a (dissoc :place) (assoc :pos beside)))))))]
           (is (= 1 (count (filter #(and (= :roof-walk (first %)) (:place (nth % 2))) log))) "walked once, arrived unroofed, then dug in")
           (is (seq (st/calls p "place")) "the night dug in"))))))
 
@@ -908,12 +908,6 @@
           (is (empty? (st/emitted seen :shelter.exposed)))
           (let [fled (st/emitted seen :shelter.fled)]
             (is (= [:roofed-place] (mapv :target fled)))))))))
-
-(deftest a-night-that-fled-ends-with-its-flee-count
-  (with-redefs [ctx/mem (constantly {:flees 2})]
-    (is (= 2 (night/fled nil))))
-  (with-redefs [ctx/mem (constantly {})]
-    (is (nil? (night/fled nil)))))
 
 (deftest with-flee-radius-0-the-night-holds-exposed
   (async done
