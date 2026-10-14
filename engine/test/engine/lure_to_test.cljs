@@ -5,6 +5,8 @@
             [engine.fake :as fake]
             [engine.hostile-test :as h]
             [engine.test-util :as tu]
+            [jobs.animals.escort :as escort]
+            [jobs.lib.walk :as walk]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.world-files :as ew]))
 
@@ -435,3 +437,13 @@
                                      {:floor [-30 -30 40 30] :blocks wall :inventory wheat :entities [(cow 1 2)]} 6))]
               (is (< 10 (count (tu/walked-to (:eng s)))) (pr-str (tu/walked-to (:eng s)))))
             (finally (set! wsearch/round-budget budget))))))))
+
+(deftest the-leg-plan-may-open-gates-as-go-to-plans-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (h/setup {:floor tu/walk-floor :inventory wheat} 50)
+              opts (atom nil)]
+          (with-redefs [walk/plan-walk! (fn ([_ _ _ _ _] (js/Promise.resolve nil)) ([_ _ _ _ _ o] (reset! opts o) (js/Promise.resolve nil)))]
+            (await (escort/leg-target {:primitives p} {:x 30 :y 64 :z 0} 2)))
+          (is (contains? (:moves (:policy @opts)) :open) "a planned gate is a way, not a wall"))))))

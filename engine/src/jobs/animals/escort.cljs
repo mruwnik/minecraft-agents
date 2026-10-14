@@ -51,11 +51,12 @@
 (defn ^:async plan-or-nil
   "The walk plan to the cell of target (floored by places/parse-pos, as go-to does; a promise: the search yields to
   the event loop), nil when there is none or planning throws a RangeError (a far target the planner cannot index):
-  the check never fails the job."
+  the check never fails the job. The plan may open gates and doors, as the go-to legs that walk it do."
   ([c pw target] (plan-or-nil c pw target nil))
   ([c pw target opts]
   (when-let [{:keys [x y z]} (:pos (places/parse-pos target))]
-    (try (await (walk/plan-walk! c pw [x y z] 1 walk/default-weight opts))
+    (try (await (walk/plan-walk! c pw [x y z] 1 walk/default-weight
+                                 (assoc opts :policy (update (wworld/body-policy c) :moves conj :open))))
          (catch js/RangeError _ nil)))))
 
 (def leg-steps
