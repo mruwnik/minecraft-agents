@@ -1,6 +1,7 @@
 (ns jobs.farm.tend
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -43,10 +44,15 @@
   within 4 blocks of water, level or one up, are tilled anyway), :no-bare, :fertilize-off, :no-bone-meal, :none-unripe, :no-composter, :no-surplus-seed, :no-chest,
   :nothing-to-store or :declined (the child declined).
   A step that ran keeps its summary even if it is skipped later in the same run.
-  The job declines (does nothing) unless the box has at most 2048 cells and some step would run (a field partly never
-  seen is looked around once first). A started run always continues. A step under way is not re-decided.
-  It ends :done with {:steps {step summary} :field {:crops :bare :untilled}} (info farm-tend.done). :field is
-  counted live at the end. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n}, plant {:planted
+  Start facts, failed conditions: impossible {:reason :no-box} unless the box has a crop layer and at most 2048 cells (or
+  :plan is given); {:reason :away :site :limit} far from the field while another job is listed, or deep below it;
+  {:reason :nothing-to-do} (with :backed-off, :covered, :refused, :food-reserve) or {:reason :short-seed :seeds} when no
+  step would run, after one look round from here when a cell was never seen. A started run always continues. A step under
+  way is not re-decided.
+  Ends :done with data {:steps {step summary} :field {:crops :bare :untilled}} (info farm-tend.done) when some step
+  changed something (units steps); nothing-possible :gave-up with the same data when children ran and none did;
+  limit-reached with a child's cause when a child hit a limit; condition-failed :nothing-to-do when no step ran.
+  :field is counted live at the end. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n}, plant {:planted
   :reason :skipped}, fertilize {:used}, compost {:fed :bone-meal :reason}, deposit {:gave-up :reason}.
   Limits: harvest and fertilize work in a sphere around the box centre, so crops just outside the box may be
   touched. A dirt lane inside the box counts as a bed unless :till is false. A ripe crop that cannot be reached
@@ -67,10 +73,10 @@
   When only refused ground remains, the check stays false: the job waits and the reason is on record.
   :parts (a list of part names) works those parts in one job, a pass each in order, and ends :done with
   {:parts {part {:steps :field}}} (one info farm-tend.done). A part (or the whole field) whose pass leaves a step that would
-  still run rests 10 minutes (jobs.lib.standing): its check is false for that long, the wait names it as :backed-off, and the
+  still run rests 10 minutes (jobs.lib.standing): its condition fails for that long, the cause names it as :backed-off, and the
   other parts go on; so the job can stand in the queue under repeat without starving other jobs.
-  The job declines (one farm-tend.declined warn) while the plan is missing, unreadable, has no crop cells, or no
-  zone list has been read. A started run declines in its next round if the plan stops being workable.")
+  Condition-failed {:reason :plan-trouble :why text} (one farm-tend.declined warn) while the plan is missing, unreadable,
+  has no crop cells, or no zone list has been read; a started run ends so in its next round if the plan stops being workable.")
 
 (a/defargs args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :spec a/box? :default nil}
@@ -83,6 +89,9 @@
    :chest {:doc "chest position {:x :y :z} for the farm goods; nil: do not store" :spec ::a/pos :default nil}
    :keep {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :spec (a/map-of string? number?) :default {}}
    :ignore-zones? {:doc "act regardless of zones and claims (passed to harvest, till, plant, fertilize and compost); the rules of the game allow it" :spec boolean? :default false}})
+
+(def target [:box :plan :part :parts])
+(def defaults {:least 1})
 
 (a/defargs settings
   {::max-cells {:default 2048 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}})
@@ -247,19 +256,18 @@
   (cond-> (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused]))
     (:till-held f) (assoc :food-reserve (:till-held f))))
 
-(defn check-part
-  "Passes when a run is under way or a step would call a child. Otherwise it waits: :short-seed names the seeds the
-  plan's bare cells want and the body lacks (the round says it with a warn)."
+(defn part-cause
+  "Why no step of the part in c would run, a cause map, or nil when a run is under way or a step would call a child.
+  :short-seed names the seeds the plan's bare cells want and the body lacks. Asks for a look first while a cell was
+  never seen and the body has not looked round near here."
   [c]
   (let [trouble (when (:plan (:args c)) (:trouble (tend-plan/planned c)))]
     (if trouble
-      (ctx/wait c {:reason :plan-trouble :why trouble})
-      (if (and (not (:plan (:args c))) (not (usable-box? (:box (:args c)))))
-        (ctx/wait c {:reason :no-box})
-        (let [f (check-facts c)]
-          (or (would-run? c f)
-              (look/wait-unless-surveyed c (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f))
-                                         (field-cells c))))))))
+      {:reason :plan-trouble :why trouble}
+      (let [f (check-facts c)]
+        (when-not (would-run? c f)
+          (cond-> (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f))
+            (and (look/unseen? (:primitives c) (field-cells c)) (not (look/surveyed? c :near))) contract/look-first))))))
 
 (def job-sym 'jobs.farm.tend)
 (defn key-of [part] (or part "*"))
@@ -279,22 +287,52 @@
     (when min {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)})
     (when (:plan (:args c)) (first (keys (:crops (tend-plan/planned c)))))))
 
-(defn check
-  "Passes when a run is under way, or when some part not resting passes check-part. Otherwise it waits (the reason of the
-  last part checked), naming the resting parts as :backed-off. It declines far from the field while another job is listed."
+(defn problem
+  "Why no run can start, a cause: impossible without a usable box (or plan), away while the field is far and another job
+  is listed, else the cause of the last part not resting (the first to ask for a look), nil when some part has work."
   [c]
-  (let [m (ctx/mem c)]
+  (let [{:keys [plan box]} (:args c)
+        away (when (false? (standing/away-wait c (site c))) {:reason :away :site (site c) :limit (standing/away-limit)})]
     (cond
-      (seq (:results m)) true
-      (and (not (:cur m)) (some? (standing/away-wait c (site c)))) false
-      (:cur m) (true? (check-part (for-part c (:part (:cur m)))))
+      (and (not plan) (not (usable-box? box))) (contract/impossible {:reason :no-box})
+      away away
       :else
       (let [rested (standing/rested c job-sym)
-            live (remove #(contains? rested (key-of %)) (parts-of c))]
-        (or (boolean (some #(true? (check-part (for-part c %))) live))
-            (do (when (seq rested)
-                  (ctx/wait c {:reason :nothing-to-do :backed-off (vec (sort (keys rested)))}))
-                false))))))
+            causes (map #(part-cause (for-part c %)) (remove #(contains? rested (key-of %)) (parts-of c)))]
+        (cond
+          (some nil? causes) nil
+          (empty? causes) {:reason :nothing-to-do :backed-off (vec (sort (keys rested)))}
+          :else (or (first (filter contract/look-cause causes)) (last causes)))))))
+
+(def conditions [[:fn problem]])
+
+(defn worked?
+  "Whether the summary of a step says it changed something."
+  [step s]
+  (boolean
+   (case step
+     :harvest (pos? (+ (:cut s 0) (:replanted s 0)))
+     :till (pos? (:tilled s 0))
+     :plant (pos? (:planted s 0))
+     :fertilize (pos? (:used s 0))
+     :compost (seq (:fed s))
+     :deposit (and (not (:skipped s)) (not (:gave-up s))))))
+
+(defn step-summaries
+  "[[step summary]] of the pass under way and the finished parts."
+  [m]
+  (for [r (cons (:report m) (map :steps (vals (:results m)))) entry r] entry))
+
+(defn done?
+  "Counts only (the round ends the call with its data): the steps that changed something, the steps not yet decided."
+  [c]
+  (let [m (ctx/mem c)]
+    {:done? false :units :steps :done (count (filter #(apply worked? %) (step-summaries m))) :left (count (:todo m))}))
+
+(defn quote-of
+  "A guess: a second and a half per cell of the field."
+  [c]
+  {:uses {:time [0 (* 1.5 (count (field-cells c))) ##Inf]}})
 
 ;; ------------------------------------------------------------------ rounds
 
@@ -336,19 +374,25 @@
     :again))
 
 (defn finish-all!
-  "Every part has had its pass: the event and the result, :done."
+  "Every part has had its pass: the event and the ending."
   [c]
-  (let [results (:results (ctx/mem c))
+  (let [m (ctx/mem c)
+        results (:results m)
         multi? (seq (:parts (:args c)))
         out (if multi?
               {:parts (into (array-map) (map (fn [part] [part (get results (key-of part))])) (filter #(contains? results (key-of %)) (:parts (:args c))))}
-              (val (first results)))
+              (some-> results first val))
+        summaries (step-summaries m)
         fields (if multi? (map :field (vals (:parts out))) [(:field out)])
         sum #(reduce + (map (fn [f] (get f % 0)) fields))]
-    (ctx/emit! c :farm-tend.done :info
-               (assoc out :text (str "farm tend done: " (sum :crops) " crops, " (sum :bare) " bare, " (sum :untilled) " untilled")))
-    (ctx/result! c out)
-    :done))
+    (when (seq results)
+      (ctx/emit! c :farm-tend.done :info
+                 (assoc out :text (str "farm tend done: " (sum :crops) " crops, " (sum :bare) " bare, " (sum :untilled) " untilled"))))
+    (cond
+      (:limit m) (ctx/end c :limit-reached (:limit m) out)
+      (some #(apply worked? %) summaries) (ctx/end c :done nil out)
+      (some (fn [[_ s]] (not (:skipped s))) summaries) (ctx/end c :nothing-possible :gave-up out)
+      :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
 
 (defn after-till
   "Memory after a till child ended: the cell is tried, its tilled cells counted, the step stays to be decided again."
@@ -363,15 +407,23 @@
                                       (and declined? (nil? %)) {:skipped :declined}
                                       :else %)))))
 
+(defn refused?
+  "Whether child ending e is a contract child's refusal before it started (condition-failed, no data): it counts as declined."
+  [e]
+  (and (= :condition-failed (:kind e)) (empty? (:data e))))
+
 (defn after-child
-  "Memory after the child of step ended with :done or :declined."
-  [m step call-args outcome r]
-  (if (= :till step)
-    (after-till m call-args (if (= :done outcome) (:tilled r 0) 0) (= :declined outcome))
-    (-> m
-        (update :todo rest)
-        (dissoc :call-args)
-        (assoc-in [:report step] (if (= :done outcome) (summary step r) {:skipped :declined})))))
+  "Memory after the child of step ended with e. A limit the child hit is kept as :limit to end the run with."
+  [m step call-args e]
+  (let [declined? (or (refused? e) (= :impossible (:kind e)))
+        r (:data e)]
+    (cond-> (if (= :till step)
+              (after-till m call-args (if declined? 0 (:tilled r 0)) declined?)
+              (-> m
+                  (update :todo rest)
+                  (dissoc :call-args)
+                  (assoc-in [:report step] (if declined? {:skipped :declined} (summary step r)))))
+      (= :limit-reached (:kind e)) (assoc :limit (:cause e)))))
 
 (defn with-zone-opt-out
   "The args of the child of step, with :ignore-zones? true when the tend job has it (the children that change blocks)."
@@ -380,11 +432,6 @@
     (assoc child-args :ignore-zones? true)
     child-args))
 
-(defn refused?
-  "Whether child result r is a contract child's refusal before it started (condition-failed, no data): it counts as declined."
-  [r]
-  (and (= :condition-failed (get-in r [:ending :kind])) (empty? (get-in r [:ending :data]))))
-
 (defn ^:async work
   "One child call, or the report when no step is left: :again after a child ended, :continue while one waits."
   [c]
@@ -392,27 +439,28 @@
     (ctx/update-mem! c assoc :todo decide/steps :report {} :till-tried #{} :tilled 0))
   (let [{:keys [call] :as p} (steps/next-plan decide/decide decide/jobs c facts)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
-    (if-not call
+    (if (or (not call) (:limit (ctx/mem c)))
       (finish-part! c (:report p))
       (let [step (:slot call)
             _ (ctx/update-mem! c assoc :call-args (:args call))
-            outcome (await (ctx/call-child c step (:job call) (with-zone-opt-out c step (:args call))))]
-        (when (#{:done :declined} outcome)
-          (let [r (when (= :done outcome) (ctx/child-result c step))]
-            (ctx/update-mem! c after-child step (:args call) (if (refused? r) :declined outcome) r)))
-        (if (= :continue outcome) :continue :again)))))
+            e (await (ctx/call c step (:job call) (with-zone-opt-out c step (:args call))))]
+        (if (= :continue e)
+          :continue
+          (do (ctx/update-mem! c after-child step (:args call) e)
+              :again))))))
 
 (defn ^:async step
   "A run over a field partly never seen looks around first and yields (the check decides on what is seen then)."
   [c]
   (cond
-    (and (:plan (:args c)) (:trouble (tend-plan/planned c))) :declined
+    (and (:plan (:args c)) (:trouble (tend-plan/planned c)))
+    (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble (tend-plan/planned c))})
     (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (look/unseen? (:primitives c) (field-cells c)))
     (await (look/survey! c))
     :else (await (work c))))
 
 (defn ^:async pass-step
-  "One step of the pass over the part in c (a child call or the look round): :again, :continue, :declined."
+  "One step of the pass over the part in c (a child call or the look round): :again, :continue or an ending."
   [c]
   (await (step c)))
 
@@ -424,7 +472,8 @@
       (when (seq parts)
         (let [part (first parts)]
           (ctx/update-mem! c update :tried (fnil conj #{}) (key-of part))
-          (if (and (not (contains? rested (key-of part))) (true? (check-part (for-part c part))))
+          (if (and (not (contains? rested (key-of part)))
+                   (let [cause (part-cause (for-part c part))] (or (nil? cause) (contract/look-cause cause))))
             {:part part}
             (recur (rest parts))))))))
 
@@ -433,7 +482,7 @@
   [c]
   (if-let [cur (:cur (ctx/mem c))]
     (await (pass-step (for-part c (:part cur))))
-    (if-let [{:keys [part]} (next-part c)]
+    (if-let [{:keys [part]} (when-not (:limit (ctx/mem c)) (next-part c))]
       (do (ctx/update-mem! c assoc :cur {:part part})
           :again)
       (finish-all! c))))

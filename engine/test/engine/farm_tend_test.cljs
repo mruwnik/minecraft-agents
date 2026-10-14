@@ -1,7 +1,9 @@
 (ns engine.farm-tend-test
   "jobs.farm.tend against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.contract :as contract]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.events :as events]
             [engine.registry :as registry]
@@ -41,18 +43,16 @@
 (defn item [name n] {:name name :count n})
 
 (defn setup
-  "An engine over a fake world; every result of tend's check is logged in :checks."
+  "An engine over a fake world."
   ([spec] (setup spec nil))
   ([spec zones]
   (let [clock (atom 1000000)
-        checks (atom [])
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor spec))
-        logged (assoc-in registry/jobs ['jobs.farm.tend :check] (fn [c] (let [r (tend/check c)] (swap! checks conj r) r)))
-        eng (core/create (cond-> {:primitives p :jobs logged :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                            zones (assoc :world (world/of-data {} {} zones))))]
-    {:eng eng :p p :seen seen :clock clock :checks checks})))
+    {:eng eng :p p :seen seen :clock clock})))
 
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
@@ -211,14 +211,10 @@
           (is (= 7 (age-at s 9 64 2))))))))
 
 (deftest nothing-to-do-declines-and-asks-the-body-nothing
-  (let [mature (world (farm "wheat" 3 all-cells all-cells) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4) (item "bone_meal" 3)]})
-        huge {:min {:x 0 :y 63 :z 0} :max {:x 60 :y 64 :z 20}}]
+  (let [mature (world (farm "wheat" 3 all-cells all-cells) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4) (item "bone_meal" 3)]})]
     (is (declines? {:box box} mature) "unripe crops, fertilize off by default")
     (is (declines? {:box box :fertilize true :till false} (world (farm "wheat" 3 all-cells all-cells))) "bone meal wanted but none carried")
-    (is (declines? {:box box :till false} (world (ground "dirt" [[2 2]]) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]})) "till off")
-    (is (declines? {} (world (farm "wheat" 7 all-cells all-cells))) "no box")
-    (is (declines? {:box huge} (world (farm "wheat" 7 all-cells all-cells))) "box over the cell cap")
-    (is (declines? {:box {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 63 :z 4}}} (world (farm "wheat" 7 all-cells all-cells))) "no crop layer")))
+    (is (declines? {:box box :till false} (world (ground "dirt" [[2 2]]) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]})) "till off")))
 
 (deftest without-a-chest-the-goods-stay-carried
   (async done
@@ -302,16 +298,6 @@
           (is (empty? (calls s "dig")))
           (is (some? (step s :harvest)))
           (is (= {:crops 1 :bare 0 :untilled 0} (:field (done-event s))))
-          (is (true? (finished? s))))))))
-
-(deftest a-started-run-passes-its-check-on-every-tick-until-it-hands-over-its-result
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {} (world (farm "wheat" 7 [[2 2] [3 2]] [[2 2] [3 2]]) wheat-drops) 80))]
-          (is (pos? (count @(:checks s))))
-          (is (every? true? @(:checks s)) "also after the harvest left nothing that decide would call")
-          (is (some? (done-event s)))
           (is (true? (finished? s))))))))
 
 (deftest the-nearest-untilled-cell-is-tilled-first
@@ -445,23 +431,43 @@
            (:report (steps/plan decide/decide [:till] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {}))))))
 
 (deftest a-contract-child-refused-before-it-started-counts-as-declined
-  (are [r refused] (= refused (tend/refused? r))
-    {:status :stopped :reason :no-zones :ending {:kind :condition-failed :cause {:reason :no-zones}}} true
-    {:status :stopped :reason :no-composter :ending {:kind :condition-failed :cause :no-composter :data {:fed {}}}} false
-    {:status :stopped :reason :unreachable :ending {:kind :nothing-possible :cause :unreachable}} false
-    {:status :done :tilled 2} false)
+  (are [e refused] (= refused (tend/refused? e))
+    {:kind :condition-failed :cause {:reason :no-zones}} true
+    {:kind :condition-failed :cause :no-composter :data {:fed {}}} false
+    {:kind :nothing-possible :cause :unreachable} false
+    {:kind :done :data {:tilled 2}} false)
   (is (= {:till {:skipped :declined}}
-         (:report (tend/after-child {:report {}} :till {:from {:x 1 :y 63 :z 1}} :declined nil)))))
+         (:report (tend/after-child {:report {}} :till {:from {:x 1 :y 63 :z 1}} {:kind :condition-failed :cause {:reason :no-zones}})))))
+
+(deftest a-child-that-hit-a-limit-ends-the-step-and-the-run-with-its-cause
+  (let [m (tend/after-child {:todo [:harvest :till] :report {}} :harvest {} {:kind :limit-reached :cause {:limit :time} :data {:cut 1}})]
+    (is (= {:limit :time} (:limit m)))
+    (is (= {:harvest {:cut 1}} (:report m)))
+    (is (= [:till] (:todo m)))))
+
+(deftest a-step-counts-as-worked-only-when-it-changed-something
+  (are [step summary worked] (= worked (tend/worked? step summary))
+    :harvest {:cut 0 :replanted 0 :gave-up true} false
+    :harvest {:cut 1} true
+    :till {:tilled 0} false
+    :plant {:planted 2} true
+    :plant {:skipped :no-bare} false
+    :fertilize {:used 0} false
+    :compost {:fed {"wheat_seeds" 6}} true
+    :compost {:fed {}} false
+    :deposit {:gave-up false} true
+    :deposit {:gave-up true} false
+    :deposit {:skipped :no-chest} false))
 
 ;; ------------------------------------------------------------------ zones
 
 (defn ^:async first-check
-  "tend's check on the first tick, in a world whose zone list is zones."
+  "Whether tend starts a round on the first tick, in a world whose zone list is zones."
   [args spec zones]
-  (let [{:keys [eng checks]} (setup spec zones)]
-    (core/submit! eng (list 'jobs.farm.tend (merge {:box box} args)) {})
-    (await (core/tick! eng))
-    (first @checks)))
+  (let [s (setup spec zones)]
+    (core/submit! (:eng s) (list 'jobs.farm.tend (merge {:box box} args)) {})
+    (await (core/tick! (:eng s)))
+    (boolean (seq (events-of s :round_started)))))
 
 (def foreign-zone {:name "keep-out" :min [2 60 2] :max [4 70 4] :owner "Miles" :allow #{}})
 
@@ -520,7 +526,7 @@
             (await (core/tick! (:eng s))))
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
-            (is (= 9 (:covered w)) "9 tillable cells have a block over them: the box sits too low")))))))
+            (is (= 9 (:covered (:cause w))) "9 tillable cells have a block over them: the box sits too low")))))))
 
 (def far-box {:min {:x 202 :y 63 :z 2} :max {:x 204 :y 64 :z 4}})
 (def far-ripe
@@ -562,3 +568,58 @@
           (dotimes [_ 3] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
           (is (empty? (events-of s :round_started)))
           (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
+
+;; ------------------------------------------------------------------ contract
+
+(defn ^:async ending-of
+  "Run tend with args as a ctx/call child of a recording parent in setup s, at most n ticks: the child's {:kind :cause :data}."
+  [s args n]
+  (let [out (atom nil)
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [e (await (ctx/call c :kid 'jobs.farm.tend args))]
+                           (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) :done))))}
+        eng (assoc-in (:eng s) [:jobs 'recording-parent] parent)]
+    (core/submit! eng '(recording-parent) {})
+    (dotimes [_ n]
+      (swap! (:clock s) + 700)
+      (await (core/tick! eng)))
+    @out))
+
+(deftest tend-exports-the-contract-and-quotes-validly
+  (let [job (get registry/jobs 'jobs.farm.tend)]
+    (is (vector? (:conditions job)))
+    (is (nil? (:check job)) "no old check")
+    (is (vector? (:target job)))
+    (is (fn? (:done? job)))
+    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (tu/fake {}) :args {:box box}}))))))
+
+(deftest a-run-that-worked-is-done-with-its-steps-and-field
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (world (farm "wheat" 7 all-cells [[2 2] [3 2]]) wheat-drops))
+              e (await (ending-of s {:box box} 80))]
+          (is (= :done (:kind e)))
+          (is (= 2 (get-in e [:data :steps :harvest :cut])))
+          (is (= {:crops 2 :bare 7 :untilled 0} (get-in e [:data :field]))))))))
+
+(deftest a-call-with-nothing-to-do-fails-its-condition-and-a-box-that-cannot-hold-a-field-is-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))]
+          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}} (select-keys (await (ending-of s {:box box} 20)) [:kind :cause]))))
+        (let [s (setup (world (farm "wheat" 7 all-cells all-cells)))]
+          (is (= {:kind :impossible :cause {:reason :no-box}} (select-keys (await (ending-of s {} 20)) [:kind :cause])))
+          (is (= :impossible (:kind (await (ending-of s {:box {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 63 :z 4}}} 20)))) "no crop layer")
+          (is (= :impossible (:kind (await (ending-of s {:box {:min {:x 0 :y 63 :z 0} :max {:x 60 :y 64 :z 20}}} 20)))) "over the cell cap"))))))
+
+(deftest a-run-that-gave-up-on-everything-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (world (farm "wheat" 7 [[4 4]] [[4 4]]) {:unreachable [(k 4 64 4)]}))
+              e (await (ending-of s {:box box} 80))]
+          (is (= {:kind :nothing-possible :cause :gave-up} (select-keys e [:kind :cause])))
+          (is (some? (get-in e [:data :steps :harvest]))))))))

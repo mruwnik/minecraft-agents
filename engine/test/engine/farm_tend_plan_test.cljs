@@ -132,7 +132,7 @@
       (fn ^:async t []
         (let [s (await (run-standing {:plan "mix" :part "wheat"} stuck-wheat {"mix" (plan-of)} 80))]
           (is (= 1 (count (events-of s :farm-tend.done))) "one pass, then the part rests")
-          (is (some #(= [:wheat] (map keyword (:backed-off %))) (events-of s :waiting)) "the wait names the part")
+          (is (some #(= [:wheat] (map keyword (:backed-off (:cause %)))) (events-of s :waiting)) "the wait names the part")
           (swap! (:clock s) + 660000)
           (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
           (is (= 2 (count (events-of s :farm-tend.done))) "after the back-off it tries again"))))))
@@ -157,7 +157,7 @@
                             {"mix" (plan-of)} 6))]
           (is (empty? (.-calls (.-world (:p s)))))
           (is (= [] (events-of s :farm-tend.short-seed)) "the check writes no warn")
-          (is (= [[:short-seed ["carrot"]]] (distinct (map (juxt :reason :seeds) (events-of s :waiting))))))))))
+          (is (= [[:short-seed ["carrot"]]] (distinct (map (juxt :reason (comp :seeds :cause)) (events-of s :waiting))))))))))
 
 (deftest the-check-reads-the-field-once-per-window
   (async done
@@ -380,22 +380,6 @@
                   {"mix" (plan-of)}) "young crops only")
   (is (untouched? {:plan "mix"} (world-of (ground "dirt" wheat-cells) {:inventory [(item "wheat_seeds" 6)]}) {"mix" (plan-of)})
       "dirt without a hoe"))
-
-(deftest a-started-run-keeps-its-check-true-until-it-hands-over
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [checks (atom [])
-              tend-check (:check (registry/jobs job))
-              logged (assoc-in registry/jobs [job :check] (fn [c] (let [r (tend-check c)] (swap! checks conj r) r)))
-              s (setup (world-of farmland-all all-seed) {"mix" (plan-of)} [] logged)]
-          (core/submit! (:eng s) (list job {:plan "mix"}) {})
-          (dotimes [_ 60]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
-          (is (pos? (count @checks)))
-          (is (every? true? @checks))
-          (is (some? (done-event s))))))))
 
 ;; ---------------------------------------------------------------- the children over a plan
 
