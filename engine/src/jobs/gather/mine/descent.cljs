@@ -9,12 +9,17 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :refer [cell-of]]
             [jobs.gather.mine.targets :refer [base-ore step-cell within-own-zone]]
-            [jobs.gather.mine.end :refer [to-mend!]]))
+            [jobs.gather.mine.end :refer [to-mend!]]
+            [jobs.gather.mine.torches :refer [stair-torch-due? torch-step!]]
+            [jobs.gather.mine.tunnel :refer [heading-stops turn-heading! result-of]]))
 
 (a/defargs settings
   {::ore-levels {:default {"iron_ore" 16 "copper_ore" 48 "gold_ore" -16 "lapis_ore" 0 "redstone_ore" -54 "diamond_ore" -54}
                  :doc "The feet height a strip tunnel for an ore runs at when :level is nil, by the ore's stone kind; an ore not listed tunnels where the body stands."
-                 :spec (a/map-of string? (a/int-in nil nil))}})
+                 :spec (a/map-of string? (a/int-in nil nil))}
+   ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}})
+
+(defn max-restairs [] (settings/get settings ::max-restairs))
 
 (defn tunnel-level
   "The feet height the strip tunnel should run at (args a): :level, else the ore's ::ore-levels entry; nil for none (:level false)."
@@ -141,18 +146,18 @@
                 (ctx/update-mem! c assoc :shaft (assoc (select-keys p [:id :top :heading :to-y :bottom])
                                                        :state (if (shafts/on-line? p [(:x feet) (:y feet) (:z feet)]) :down :going)))
                 :again)))
-      :going (let [r (await (child/call-walk c :shaft-walk {:pos top :range 0 :zone-tolls true}))]
+      :going (let [r (await (child/call-walk* c :shaft-walk {:pos top :range 0 :zone-tolls true}))]
                (cond
                  (= :continue r) :continue
                  (u/within? (u/self-pos c) (cell-of (xyz top)) 1) (do (ctx/update-mem! c assoc-in [:shaft :state] :down) :again)
                  :else (shaft-none! c :unreachable)))
-      :down (let [r (await (ctx/call-child c :shaft-stair 'jobs.access.stair
+      :down (let [r (await (ctx/call c :shaft-stair 'jobs.access.stair
                                            {:dir :down :heading heading :y to-y :fetch true :stock-torches false :through id
                                             :ignore-zones? (:ignore-zones? (:args c))}))
-                  res (when (not= :continue r) (ctx/child-result c :shaft-stair))]
+                  res (result-of r)]
               (cond
                 (= :continue r) :continue
-                (and (= :done r) (= :done (:status res)))
+                (= :done (:status res))
                 (let [shaft (assoc sh :to-y to-y)
                       n (shafts/branch-count c id)
                       branch (shafts/next-for c shaft)]
@@ -162,7 +167,7 @@
                 :else (do (ctx/update-mem! c assoc-in [:descent :steps] (or (:steps res) 0))
                           (shaft-none! c (or (:reason res) :stair-stopped)))))
       :walking (let [{:keys [from heading]} (:branch sh)
-                     r (when from (await (child/call-walk c :shaft-branch {:pos from :range 0 :zone-tolls true})))]
+                     r (when from (await (child/call-walk* c :shaft-branch {:pos from :range 0 :zone-tolls true})))]
                  (cond
                    (= :continue r) :continue
                    (and from (not (u/within? (u/self-pos c) (cell-of (xyz from)) 1))) (shaft-none! c :unreachable)
@@ -171,3 +176,41 @@
                              (ctx/emit! c :mine.shaft :info {:shaft id :to-y to-y :branch (:n sh) :heading heading
                                                              :text (str "mine took shaft " id " down to y " to-y (when heading (str ", branch " (:n sh) " " (name heading))))})
                              :again))))))
+
+(defn ^:async descend-round!
+  "One step of the stair down (jobs.access.stair child, :steps 1) along the tunnel heading; the next round looks round and scans.
+  To the tunnel level: a torch first when one is due (stair-torch-due?), :fetch passed on; the stair stopping ends the descent there.
+  For stone: :fetch true; at :descend-limit steps, or when the stair stops, ends :no-stone-found."
+  [c]
+  (let [n (:steps (:descent (ctx/mem c)) 0)
+        level? (to-level? c)]
+    (cond
+      (and level? (stair-torch-due? c)) (await (torch-step! c :stair))
+      (and (not level?) (>= n (:descend-limit (:args c)))) (no-stone! c)
+      (stair-in-own-zone? c) (do (ctx/update-mem! c assoc-in [:descent :stop] :own-zone)
+                                 (ctx/emit! c :mine.own-zone :warn {:zone (:name (stair-in-own-zone? c))
+                                                                    :text (str "mine's stair stops at the edge of its own zone " (:name (stair-in-own-zone? c)))})
+                                 (if level? (stair-stopped! c) (to-mend! c :own-zone)))
+      :else
+      (let [_ (when-not (get-in (ctx/mem c) [:descent :top])
+                (ctx/update-mem! c update :descent assoc :top (access/cell (cell-of (u/self-pos c))) :top-heading (keyword (:heading (ctx/mem c)))))
+            r (await (ctx/call c :stair 'jobs.access.stair
+                                     {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :stock-torches false :fetch (if level? (:fetch (:args c)) true)
+                                      :accept (filterv #{:falling-block} (:accept (:args c)))
+                                      :ignore-zones? (:ignore-zones? (:args c))
+                                      :pick-up-ores (:pick-up-ores (:args c))}))
+            res (result-of r)]
+        (cond
+          (= :continue r) :continue
+          (= :done (:status res))
+          (do (ctx/update-mem! c update :descent (fn [d] (assoc d :steps (+ (:steps d 0) (or (:steps res) 1)) :bottom-y (js/Math.floor (:y (u/self-pos c))))))
+              :again)
+          (and (= :off-stair (:reason res)) (< (get-in (ctx/mem c) [:descent :restairs] 0) (max-restairs)))
+          (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair finds the body off its line (" (:why res) "); it starts a new stair here")})
+              (ctx/update-mem! c #(-> % (update :children dissoc :stair) (update :descent (fn [d] (-> d (dissoc :top) (update :restairs (fnil inc 0)))))))
+              :again)
+          :else (let [stop (or (:reason res) :declined)]
+                  (if (and (zero? n) (heading-stops stop) (turn-heading! c stop))
+                    :again
+                    (do (ctx/update-mem! c update :descent assoc :stop stop)
+                        (if level? (stair-stopped! c) (no-stone! c))))))))))

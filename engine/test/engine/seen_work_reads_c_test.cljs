@@ -7,7 +7,7 @@
             [jobs.build.from-plan.plan :as plan]
             [jobs.explore.search :as search]
             [jobs.gather.mine.targets :as mine-targets]
-            [jobs.gather.mine :as mine]))
+            [jobs.gather.mine.mend :as mine-mend]))
 
 (def far {:x 0 :y 64 :z 4})
 
@@ -22,7 +22,7 @@
 (deftest mine-owed-ignores-unseen-ground
   (let [blocks {"0,64,4" "air"}
         owed (fn [w] (with-redefs [ctx/mem (constantly {:ground [{:pos far :name "stone"}]})]
-                       (mine/owed {:primitives w})))]
+                       (mine-mend/owed {:primitives w})))]
     (is (empty? (owed (wrapped blocks true))) "behind stone: not judged owed")
     (is (= 1 (count (owed (wrapped blocks false)))) "seen air: owed")))
 

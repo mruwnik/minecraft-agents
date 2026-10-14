@@ -41,8 +41,32 @@
          (when-let [stop (:stop tunnel)] (when (not= :tunnel-length stop) (str "; tunnel stopped: " (name stop))))
          (when (seq unreached) (str "; seen ore out of reach at " (str/join " " (map #(str/join "," %) unreached)))))))
 
+(def facts
+  "End reasons that name a fact (condition-failed); the other reasons short of the count are tries that failed
+  (nothing-possible)."
+  #{:none :wet :refused :own-zone :no-shaft :flooded :hungry :no-tool})
+
+(defn wanted
+  "The items the call needs for :done: :count, or the call's :least when that is a number."
+  [c]
+  (let [n (:count (:args c))
+        least (:least (ctx/frozen-call c) :all)]
+    (if (number? least) (min n least) n)))
+
+(defn end-run
+  "The ending of a run with data {:got n :reason r ..}, the old result fields: :done when :got meets wanted and the
+  body got home, else by reason a kind: a worn last tool (memory :tool-spent) limit-reached on :wear, a fact
+  condition-failed, any other nothing-possible. The cause is {:reason r} with :tool and :why when the data has them."
+  [c {:keys [got reason] :as data}]
+  (let [cause (merge {:reason reason} (select-keys data [:tool :why]))]
+    (cond
+      (and (not= :not-home reason) (>= got (wanted c))) (ctx/end c :done nil data)
+      (and (= :no-tool reason) (:tool-spent (ctx/mem c))) (ctx/end c :limit-reached (assoc cause :line :wear) data)
+      (facts reason) (ctx/end c :condition-failed cause data)
+      :else (ctx/end c :nothing-possible cause data))))
+
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
+  "Emit the outcome and end the job (end-run)."
   [c]
   (let [{:keys [goal mended dig-reason resumes tunnel left descent wet-skipped] :as m} (ctx/mem c)
         suggest (shaft-suggest m (:args c))
@@ -67,14 +91,15 @@
                                                               (str ", walked back to " (str/join "," back-at))
                                                               ", did not get back to its origin"))))}
                                          why))
-    (ctx/result! c (merge (cond
-                            (zero? got) {:status :stopped :text (str "mine got nothing: " (name reason)
-                                                                     (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
-                                                                     (dug-text m reason))}
-                            (= :not-home reason) {:status :stopped :text (str "mine got " got " but did not get back to its start")}
-                            (< got (:count (:args c))) {:status :stopped :text (str "mine got " got " of " (:count (:args c)) ": " (name reason) (dug-text m reason))})
-                          {:got got :reason reason} why))
-    :done))
+    (end-run c (merge (cond
+                        (zero? got) {:text (str "mine got nothing: " (name reason)
+                                                (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
+                                                (dug-text m reason))}
+                        (= :not-home reason) {:text (str "mine got " got " but did not get back to its start")}
+                        (< got (:count (:args c))) {:text (str "mine got " got " of " (:count (:args c)) ": " (name reason) (dug-text m reason))})
+                      {:got got :reason reason}
+                      (:end-cause m)
+                      why))))
 
 (defn wrap-up!
   "The normal end: the body walks back to where it started (phase :home), whatever the run did, then finishes."
@@ -168,7 +193,7 @@
         arrived? #(let [here (cell-of (u/self-pos c))] (if (zero? range) (= here cell) (beside? here start)))
         r (if (arrived?)
             :arrived
-            (await (child/call-walk c :home
+            (await (child/call-walk* c :home
                                    (cond-> {:pos {:x (+ (:x cell) 0.5) :y (:y cell) :z (+ (:z cell) 0.5)} :range range :escalate true :zone-tolls true
                                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                                      y-margin (assoc :y-margin y-margin)))))]
@@ -178,7 +203,7 @@
 
 (defn ^:async home-round!
   "The last step of every normal run: back to the cell it started on through a go-to child (beside it when its floor is open or unseen),
-  whatever the digging left open behind it; a warn mine.not-home when the walk did not arrive (the job ends :stopped :not-home)."
+  whatever the digging left open behind it; a warn mine.not-home when the walk did not arrive (the job ends :not-home)."
   [c]
   (let [{:keys [start homing]} (ctx/mem c)]
     (when-not homing

@@ -2,6 +2,7 @@
   "jobs.gather.mine against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [clojure.string]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -21,11 +22,15 @@
             [jobs.gather.mine.descent :as mine-descent]
             [jobs.gather.mine.end :as mine-end]
             [jobs.gather.mine.targets :as mine-targets]
+            [jobs.gather.mine.torches :as mine-torches]
+            [jobs.gather.mine.tunnel :as mine-tunnel]
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]))
 
 (defn spec [args] (list 'jobs.gather.mine args))
+
+(declare as-child)
 
 (def floor-block
   "The ground under the walks: a block no test here mines, so the floor never counts as a target (stone would)."
@@ -605,7 +610,7 @@
           (dotimes [_ 10]
             (swap! clock + 700)
             (await (core/tick! eng)))
-          (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} @out)))))))
+          (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} (select-keys @out [:status :got :reason :tool]))))))))
 
 (deftest no-tool-warns-and-never-digs
   (async done
@@ -625,9 +630,10 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [left [1 3]]
-          (let [s (await (scenario {:block "stone" :count 2} {:blocks (cells "stone" [3 4] [64] [0]) :inventory [{:name "stone_pickaxe" :count 1 :durability left :max 131}]} 10))]
+          (let [{:keys [s out]} (await (as-child {:block "stone" :count 2} {:blocks (cells "stone" [3 4] [64] [0]) :inventory [{:name "stone_pickaxe" :count 1 :durability left :max 131}]} nil 10))]
             (is (zero? (dig-count s)))
-            (is (= :no-tool (:reason (done-event s))))))))))
+            (is (= :no-tool (:reason (done-event s))))
+            (is (= [:limit-reached :wear :no-tool] [(:kind out) (:line (:cause out)) (contract/cause-key out)]) (pr-str out))))))))
 
 (deftest a-pickaxe-with-uses-to-spare-digs
   (async done
@@ -835,7 +841,7 @@
     (fn [{:keys [x y z]}] (get m [x y z]))))
 
 (def east [1 0])
-(defn start-x [name-at] (:x (mine/open-start name-at {:x 0 :y 64 :z 0} east)))
+(defn start-x [name-at] (:x (mine-tunnel/open-start name-at {:x 0 :y 64 :z 0} east)))
 
 (deftest open-start-runs-over-open-cells-with-a-floor
   (is (= 5 (start-x (open-line (range 0 6) (range 0 6))))))
@@ -851,16 +857,16 @@
     (is (= 2 (start-x (open-line (range 0 6) (range 0 6) {[3 64 0] fluid}))) fluid)))
 
 (deftest open-start-stops-at-the-skip-cap
-  (is (= mine/max-open-skip (start-x (open-line (range 0 (+ mine/max-open-skip 10)) (range 0 (+ mine/max-open-skip 10)))))))
+  (is (= mine-tunnel/max-open-skip (start-x (open-line (range 0 (+ mine-tunnel/max-open-skip 10)) (range 0 (+ mine-tunnel/max-open-skip 10)))))))
 
 (deftest open-start-steps-down-a-stair-but-not-past-the-drop-bound
   (let [descending (fn [{:keys [x y z]}]
                      (when (zero? z)
                        (let [floor (- 63 x)]
                          (cond (= y floor) "stone" (> y floor) "air"))))
-        drop (- 64 (:y (mine/open-start descending {:x 0 :y 64 :z 0} east)))]
+        drop (- 64 (:y (mine-tunnel/open-start descending {:x 0 :y 64 :z 0} east)))]
     (is (pos? drop) "a stair still counts")
-    (is (= (mine/open-skip-drop) drop) "the origin sits the drop bound below the start")))
+    (is (= (mine-tunnel/open-skip-drop) drop) "the origin sits the drop bound below the start")))
 
 (def corridor (into {} (for [x (range 1 6) y [64 65]] [(str x "," y ",0") "air"])))
 
@@ -1896,9 +1902,9 @@
 
 (deftest the-branch-torch-site-is-none-straight-above-or-below-the-tunnel
   (let [tunnel {:origin {:x 0 :y 64 :z 0} :heading "east" :steps 8}]
-    (is (nil? (mine/branch-site tunnel {:x 5 :y 70 :z 0})) "straight above: no side to hang on")
-    (is (nil? (mine/branch-site tunnel {:x 5 :y 58 :z 0})) "straight below")
-    (is (= {:dir [0 1] :site {:x 5 :y 64 :z 3}} (mine/branch-site tunnel {:x 5 :y 64 :z 4})) "off to the side: the cell behind")))
+    (is (nil? (mine-torches/branch-site tunnel {:x 5 :y 70 :z 0})) "straight above: no side to hang on")
+    (is (nil? (mine-torches/branch-site tunnel {:x 5 :y 58 :z 0})) "straight below")
+    (is (= {:dir [0 1] :site {:x 5 :y 64 :z 3}} (mine-torches/branch-site tunnel {:x 5 :y 64 :z 4})) "off to the side: the cell behind")))
 
 (deftest the-no-torch-text-names-a-branch
   (async done
@@ -1912,7 +1918,7 @@
 ;; ------------------------------------------------------------------ honest ends, soil, fetching the pickaxe
 
 (defn ^:async as-child
-  "Run the job with args under a parent for n ticks; {:s setup :out the child's result :fetch the get-tool calls}.
+  "Run the job with args under a contract parent (ctx/call) for n ticks; {:s setup :out the child's ending :fetch the get-tool calls}.
   get-tool is a stub that records its args and, when give is set, hands over that pickaxe (else stops :no-source)."
   [args world give n & [{:keys [move-to]}]]
   (let [s (start {:world world})
@@ -1931,9 +1937,8 @@
                      :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
         parent {:check (constantly true)
                 :round (fn ^:async mining-parent [c]
-                         (let [r (await (ctx/call-child c :kid 'jobs.gather.mine args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+                         (let [e (await (ctx/call c :kid 'jobs.gather.mine args))]
+                           (if (= :continue e) :continue (do (reset! out e) :done))))}
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'mining-parent parent 'jobs.items.get-tool stub))]
     (core/submit! eng '(mining-parent) {})
     (dotimes [_ n]
@@ -1946,7 +1951,24 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (as-child {:block "iron_ore" :level false :count 2 :tunnel-length 0} (rock-world {}) nil 30))]
-          (is (= {:status :stopped :got 0 :reason :none} (dissoc out :text))))))))
+          (is (= [:condition-failed :none 0] [(:kind out) (contract/cause-key out) (:got (:data out))])))))))
+
+(deftest a-run-that-meets-the-least-of-its-call-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[least kind] [[1 :done] [nil :condition-failed]]]
+          (let [{:keys [out]} (await (as-child (cond-> {:block "iron_ore" :level false :count 2 :tunnel-length 0 :mend false} least (assoc :least least))
+                                               (rock-world {"1,64,0" "air" "1,65,0" "air" "2,64,0" "iron_ore"}) nil 60))]
+            (is (= kind (:kind out)) (pr-str least out))
+            (is (= 1 (:got (:data out))) (pr-str least))))))))
+
+(deftest a-tunnel-used-up-with-nothing-got-ends-nothing-possible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 2 :mend false} (rock-world {}) nil 120))]
+          (is (= [:nothing-possible :tunnel-length 0] [(:kind out) (contract/cause-key out) (:got (:data out))]) (pr-str out)))))))
 
 (deftest a-missing-pickaxe-is-fetched-then-the-stone-is-dug
   (async done
@@ -1954,7 +1976,7 @@
       (fn ^:async t []
         (let [{:keys [s out fetch]} (await (as-child {:block "stone" :count 1} {:blocks {"3,64,0" "stone"} :drops cobble} "stone_pickaxe" 40))]
           (is (= ["stone"] (mapv :block fetch)))
-          (is (= :count (:reason out)))
+          (is (= [:done :count] [(:kind out) (:reason (:data out))]))
           (is (= 1 (get (inv s) "cobblestone"))))))))
 
 (deftest the-tunnel-starts-where-the-body-stood-before-the-pickaxe-fetch
@@ -1973,16 +1995,16 @@
       (fn ^:async t []
         (let [{:keys [s out fetch]} (await (as-child {:block "stone" :count 1} {:blocks {"3,64,0" "stone"} :drops cobble} nil 20))]
           (is (= 1 (count fetch)))
-          (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} out))
+          (is (= [:condition-failed :no-tool "pickaxe" 0] [(:kind out) (contract/cause-key out) (:tool (:cause out)) (:got (:data out))]) (pr-str out))
           (is (zero? (dig-count s))))))))
 
-(deftest a-failed-pickaxe-fetch-is-booked-through-the-fetch-lib
+(deftest a-failed-pickaxe-fetch-is-the-because-of-the-no-tool-ending
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [s out]} (await (as-child {:block "stone" :count 1} {:blocks {"3,64,0" "stone"} :drops cobble} nil 20))]
-          (is (= :no-tool (:reason out)))
-          (is (= 1 (count (events-of s :fetch.failed)))))))))
+        (let [{:keys [out]} (await (as-child {:block "stone" :count 1} {:blocks {"3,64,0" "stone"} :drops cobble} nil 20))]
+          (is (= :no-tool (contract/cause-key out)))
+          (is (= :no-source (contract/cause-key (:because out))) (pr-str out)))))))
 
 (deftest a-bad-fetch-arg-is-refused-at-submit-not-treated-as-true
   (is (re-find #"jobs.gather.mine :fetch must be true, false"
@@ -1999,7 +2021,7 @@
       (fn ^:async t []
         (let [{:keys [s out fetch]} (await (as-child {:block "stone" :count 1 :fetch false} {:blocks {"3,64,0" "stone"} :drops cobble} "stone_pickaxe" 20))]
           (is (empty? fetch))
-          (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} out))
+          (is (= [:condition-failed :no-tool] [(:kind out) (contract/cause-key out)]))
           (is (zero? (dig-count s))))))))
 
 (deftest soil-in-the-tunnel-is-not-dug-with-the-pickaxe
@@ -2424,13 +2446,13 @@
               waits (events-of s :waiting)]
           (is (zero? (dig-count s)) "nothing dug at 0.5 hp")
           (is (= [:low-health] (distinct (map :reason waits))))
-          (is (= 0.5 (:health (first waits))))
-          (is (re-find #"heal" (str (:text (first waits)))))
+          (is (= 0.5 (:health (:cause (first waits)))))
+          (is (re-find #"heal" (str (:text (:cause (first waits))))))
           (swap! (.. world -state) assoc-in [:self :health] 20)
           (await (run-ticks s 60))
           (is (>= (get (inv s) "sand") 6) "healed, it mines"))))))
 
-(deftest a-cut-mine-resumed-at-low-health-waits
+(deftest a-started-mine-at-low-health-holds-still-till-it-heals
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -2442,7 +2464,8 @@
           (swap! (.. world -state) assoc-in [:self :health] 2)
           (await (run-ticks s 10))
           (is (= dug (dig-count s)) "no dig after the body got hurt")
-          (is (= [:low-health] (distinct (map :reason (events-of s :waiting))))))))))
+          (is (= [:low-health] (distinct (map :reason (events-of s :holding)))))
+          (is (not (finished? s)) "the run waits, it does not end"))))))
 
 (deftest a-body-with-its-head-in-water-digs-nothing-and-says-flooded
   (async done
@@ -2633,3 +2656,16 @@
          (mine-end/dug-text {:tunnel {:steps 2 :heading "east" :origin {:y 5} :stop :lava}} :tunnel-stopped)))
   (is (= "; tunnel 2 blocks east at y 5"
          (mine-end/dug-text {:tunnel {:steps 2 :heading "east" :origin {:y 5} :stop :tunnel-length}} :tunnel-length))))
+
+;; ------------------------------------------------------------------ the contract
+
+(deftest the-job-exports-the-contract-and-quotes-validly
+  (let [def (get registry/jobs 'jobs.gather.mine)
+        c {:primitives (tu/fake-on-floor {:blocks sand-patch}) :args (second (expr/leaf registry/jobs 'jobs.gather.mine {:block "sand" :count 3}))}
+        q ((:quote-of def) c)]
+    (is (= [:block :heading] (:target def)))
+    (is (seq (:conditions def)))
+    (is (nil? (:check def)))
+    (is (nil? (contract/quote-problem q)) (pr-str q))
+    (is (= [0 3 3] (get-in q [:yields :items "sand"])))
+    (is (fn? (:done? def)))))
