@@ -13,7 +13,6 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.seal :as seal]
-            [jobs.lib.result :as r]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]
@@ -26,12 +25,13 @@
   the body first, one that ends the line alone before one that blocks half of it. A mob that was only heard is
   taken at the rough spot its direction and band give (jobs.lib.danger/mob-pos). A door, gate or trapdoor standing
   open in the way is shut, not walled over (jobs.survival.dig-in-cells/place-all!).
-  Declines (waiting) with :no-ranged-danger when no ranged mob within :radius has a line of fire.
-  With none of :blocks carried it fetches one (:fetch, default true; jobs.lib.fetch, jobs.items.obtain) before it stops :no-blocks.
-  Ends done {:placed [cells]} once none has (also when the mob moved away meanwhile), else stopped :no-blocks (none
-  carried that :blocks names, nothing fetched), :refused (every cell that would help is another's zone, claim or plan; :ignore-zones?
-  lifts it), :no-gap (a line of fire stays and no open cell within :reach would end it), :place-failed or
-  :no-progress (over max-steps rounds).
+  Not started (condition :no-ranged-danger) when no ranged mob within :radius has a line of fire.
+  The blocks are the call's :use :blocks (default the carried shelter fillers, jobs.lib.choose/fillers; the old :blocks arg maps in legacy-args).
+  With none of them carried it fetches one (:fetch, default true; jobs.lib.fetch, jobs.items.obtain) before it ends :condition-failed :no-blocks.
+  Ends :done with the data {:placed [cells]} once none has a line of fire (also when the mob moved away meanwhile), else
+  :condition-failed :no-blocks (none carried, nothing fetched) or :refused (every cell that would help is another's zone,
+  claim or plan; :ignore-zones? lifts it), or :nothing-possible :no-gap (a line of fire stays and no open cell within
+  :reach would end it), :place-failed or :no-progress (over max-steps rounds).
   Does not fight, flee or walk: respond-to-hostile and retreat own that.
   What it placed is what place-all! reports placed (the body trusts its own place, not a view that may lag).
   Filling a doorway can shut the body in: the blocks are the building blocks dig-in shelters with, and a shut-in body
@@ -41,13 +41,28 @@
 (a/defargs args
   {:radius {:doc "ranged mobs within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :reach {:doc "open cells within this many blocks of the body's feet may be filled" :spec (a/num-in 0 nil) :default 3}
-   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default (choose/fillers :shelter)}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :fetch {:doc "get a missing block (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-blocks" :spec fetch/option? :default true}})
 
 (a/defargs settings
   {::max-steps {:default 12 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
+
+(def target [])
+
+(def defaults {:use {:blocks :shelter}})
+
+(defn legacy-args
+  "An old caller's :blocks as the call's :use {:blocks [...]}."
+  [{:keys [blocks] :as args}]
+  (cond-> (dissoc args :blocks)
+    (and (seq blocks) (nil? (get-in args [:use :blocks]))) (assoc-in [:use :blocks] (vec blocks))))
+
+(defn blocks
+  "The blocks it may place: the call's :use :blocks, else (nothing carried when the call began) the shelter fillers."
+  [c]
+  (let [used (ctx/use c :blocks)]
+    (if (seq used) used (choose/fillers :shelter))))
 
 (def ray-heights "Heights above the body's feet the arrows are aimed at." [game/eye-height 0.9])
 
@@ -101,19 +116,22 @@
         :unseen
         (reach/arrow-kind-of #js {:name (:name b) :properties (clj->js (:properties b))})))))
 
+(def failure-kinds {:no-blocks :condition-failed :refused :condition-failed})
+
 (defn fail! [c reason text]
   (ctx/emit! c :block_arrow_gap_failed :warn {:reason reason :text text})
-  (r/stop! c reason text))
+  (ctx/end c (get failure-kinds reason :nothing-possible) reason {:placed (vec (:placed (ctx/mem c))) :text text}))
 
 (defn ^:async step
   "One cell: :done, :again, or :continue while it fetches a block."
   [c]
   (let [p (:primitives c)
-        {:keys [blocks] within :reach} (:args c)
+        within (:reach (:args c))
+        blocks (blocks c)
         dangers (ranged-dangers c)]
     (if (empty? dangers)
       (do (ctx/emit! c :block-arrow-gap.closed :info {:placed (vec (:placed (ctx/mem c))) :text "no arrow line to the body"})
-          (r/finish! c {:placed (vec (:placed (ctx/mem c)))}))
+          (ctx/end c :done nil {:placed (vec (:placed (ctx/mem c)))}))
       (let [kind-at (seen-kind p)
             in (access/rules-input c)
             skip (:skip (ctx/mem c) #{})
@@ -137,10 +155,19 @@
                     (do (ctx/update-mem! c update :skip (fnil conj #{}) cell)
                         :again))))))))
 
-(defn check
-  "A ranged mob with a line of fire to the body; a decline says why (ctx/wait): :no-ranged-danger."
+(defn no-ranged-danger
+  "At the call's start: the cause :no-ranged-danger unless a ranged mob has a line of fire to the body."
   [c]
-  (or (boolean (seq (ranged-dangers c))) (ctx/wait c {:reason :no-ranged-danger})))
+  (when (empty? (ranged-dangers c)) :no-ranged-danger))
+
+(def conditions [[:fn no-ranged-danger]])
+
+(defn done?
+  "The cells placed; never :done? itself: the job ends when no line of fire is left."
+  [c]
+  {:done? false :units :cells :done (count (:placed (ctx/mem c))) :left (count (ranged-dangers c))})
+
+(defn quote-of [_c] {:uses {:time [0 3 30]}})
 
 (defn ^:async round
   "Fill the gap (see doc), one cell a step with a timer between."

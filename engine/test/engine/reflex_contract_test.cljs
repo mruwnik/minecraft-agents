@@ -1,0 +1,104 @@
+(ns engine.reflex-contract-test
+  "survival.fight-back, block-arrow-gap and extinguish as contract jobs: they export the contract, quote validly, and
+  end with a kind and a cause."
+  (:require [cljs.test :refer [deftest is async]]
+            [engine.block-arrow-gap-test :as gt]
+            [engine.contract :as contract]
+            [engine.core :as core]
+            [engine.extinguish-test :as et]
+            [engine.hostile-test :as h]
+            [engine.registry :as registry]
+            [engine.seek-contract-test :as sc]
+            [engine.test-util :as tu]
+            [jobs.survival.block-arrow-gap :as gap]
+            [jobs.survival.fight-back :as fight-back]))
+
+(defn job [sym] (get registry/jobs sym))
+
+(deftest each-job-exports-the-contract-and-quotes-validly
+  (doseq [sym ['jobs.survival.fight-back 'jobs.survival.block-arrow-gap 'jobs.survival.extinguish]]
+    (is (some? (:conditions (job sym))) (str sym " has conditions"))
+    (is (nil? (:check (job sym))) (str sym " has no old check"))
+    (is (vector? (:target (job sym))) (str sym " has a target"))
+    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args {} :quote-call {}}))) (str sym))))
+
+(deftest old-options-map-to-the-call
+  (is (= {:range 4 :use {:tools ["_sword"]}} (fight-back/legacy-args {:range 4 :weapons ["_sword"]})))
+  (is (= {:range 4 :use {:tools ["iron_sword"]}} (fight-back/legacy-args {:range 4 :use {:tools ["iron_sword"]}})))
+  (is (= {:radius 8 :use {:blocks ["dirt"]}} (gap/legacy-args {:radius 8 :blocks ["dirt"]}))))
+
+(defn ^:async fight [args world]
+  (await (sc/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) (list 'jobs.survival.fight-back args))))
+
+(deftest a-cleared-fight-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= :completed (:event (await (fight {} {:inventory h/sword :entities [(h/zombie 7 3 0)]})))))))))
+
+(deftest a-fight-that-gave-up-on-every-target-is-nothing-possible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :kind :nothing-possible :reason :given-up}
+               (await (fight {} {:inventory h/sword :entities [(assoc (h/zombie 7 3 0) :invulnerable true)]}))))))))
+
+;; ------------------------------------------------------------------ block-arrow-gap
+
+(defn ^:async gap-end [spec args]
+  (await (sc/ending-of #(:p (gt/setup [] spec)) (list 'jobs.survival.block-arrow-gap args))))
+
+(deftest a-stoned-gap-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= :completed (:event (await (gap-end {:entities [gt/pit-skeleton] :blocks (merge gt/ground gt/pit gt/shell)} {})))))))))
+
+(deftest no-blocks-is-a-failed-condition
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :kind :condition-failed :reason :no-blocks}
+               (await (gap-end {:inventory []} {:fetch false}))))))))
+
+(deftest no-open-cell-to-stop-the-arrows-is-nothing-possible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :kind :nothing-possible :reason :no-gap}
+               (await (gap-end {:blocks (merge gt/ground gt/pit gt/shell)  :entities [gt/pit-skeleton]} {:reach 0}))))))))
+
+;; ------------------------------------------------------------------ extinguish
+
+(defn ^:async burn-end [world]
+  (await (sc/ending-of #(tu/seeing-all (tu/fake world)) '(jobs.survival.extinguish))))
+
+(deftest a-body-that-burns-on-standing-is-limit-reached
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :kind :limit-reached :reason :still-burning}
+               (await (burn-end {:self {:onFire true} :blocks (et/floor 8)}))))))))
+
+(deftest a-body-with-no-safe-cell-is-nothing-possible-stuck
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :kind :nothing-possible :reason :stuck}
+               (await (burn-end {:self {:onFire true} :blocks {"0,63,0" "stone" "1,64,0" "fire"}}))))))))
+
+(deftest a-body-that-is-not-burning-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (et/setup {:blocks (et/floor 8)})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (:list (core/state eng)))) "a standing body does not start it"))))))
+
+(deftest standing-beside-a-danger-is-a-failed-condition
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :kind :condition-failed :reason :hostile-near}
+               (await (burn-end {:self {:onFire true} :blocks (et/floor 8) :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]}))))))))

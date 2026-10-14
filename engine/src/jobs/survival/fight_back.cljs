@@ -15,8 +15,12 @@
   With :hold the body stays where it is: a melee hostile beyond reach is waited for, 15 s at most, then the job declines (a ranged one is still walked up to).
   A ranged hostile farther than ::ranged-chase (6) is not walked to while another is in range (the job declines).
   A hostile more than :leash blocks from the point the job started at is not chased (the job declines, so the retreat takes over).
-  Declines when health is below :min-health.
-  Ends when no hostile is within :range, with the result {:killed [ids]}.
+  Not started below :min-health (condition :low-health, or when no hostile is in range: :no-target).
+  Ends :done when no hostile is within :range, with the data {:killed [ids]}.
+  Every other ending is a decline, so the retreat takes over: :limit-reached :low-health (hurt below :min-health after a swing),
+  :limit-reached :hold-timeout, or :nothing-possible with the cause :too-far, :heard-only, :given-up or :no-target;
+  its data are {:killed :struck :memory}, the job memory a caller puts back (restore-memory!), as a decline kept it.
+  The weapons are the call's :use :tools (default the weapons carried; the old :weapons substrings map in legacy-args).
   A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts,
   unless the body lost health since the last blocked walk (the count then starts over).
   So is one that three swings in a row did no damage to (the attack result says hurt false), with a fight_no_damage warning.
@@ -29,7 +33,6 @@
    :ranged-range {:doc "ranged hostiles (skeletons and the like) within this many blocks are fought" :spec (a/num-in 0 nil) :default 16}
    :leash {:doc "hostiles farther than this from where the job started are not chased" :spec (a/num-in 0 nil) :default 20}
    :min-health {:doc "decline below this health" :spec (a/num-in 0 20) :default 8}
-   :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
    :skip {:doc "entity ids already dead: not fought" :spec (a/coll-of number?) :default []}
    :attack-gap-ms {:doc "least time between swings" :spec (a/num-in 0 nil) :default 600}
    :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach (night, with more hostiles about than the body sees)" :spec boolean? :default false}})
@@ -37,6 +40,16 @@
 (a/defargs settings
   {::reach {:default 3 :doc "How near the target the body stands to hit, in blocks." :spec (a/int-in 0 nil)}
    ::ranged-chase {:default 6 :doc "Farthest a ranged mob may be for the body to cross open ground to it while another hostile is in range; beyond it the fight declines." :spec (a/num-in 0 nil)}})
+(def target [])
+
+(def defaults {:use {:tools :attack}})
+
+(defn legacy-args
+  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}."
+  [{:keys [weapons] :as args}]
+  (cond-> (dissoc args :weapons)
+    (and (seq weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))))
+
 (defn reach [] (settings/get settings ::reach))
 (defn ranged-chase [] (settings/get settings ::ranged-chase))
 
@@ -85,12 +98,28 @@
   [c]
   (->> (in-range c) (filter danger-q/seen-only?) (filter #(in-leash? c %)) (remove #(given-up? c %))))
 
-(defn check [c]
+(defn start-problem
+  "Why the fight cannot start: {:reason :low-health ..} or {:reason :no-target}; nil when it can."
+  [c]
   (let [health (.-health (.self (:primitives c)))]
     (cond
-      (< health (:min-health (:args c))) (ctx/wait c {:reason :low-health :health health :min (:min-health (:args c))})
-      (empty? (targets c)) (ctx/wait c {:reason :no-target})
-      :else true)))
+      (< health (:min-health (:args c))) {:reason :low-health :health health :min (:min-health (:args c))}
+      (empty? (targets c)) {:reason :no-target})))
+
+(def conditions [[:fn start-problem]])
+
+(defn done?
+  "The hostiles killed against those in range."
+  [c]
+  (let [n (count (in-range c))]
+    {:done? false :units :hostiles :done (count (:killed (ctx/mem c))) :left n}))
+
+(defn quote-of [_c] {:uses {:time [0 10 60]}})
+
+(defn weapons
+  "The weapons of the call: its :use :tools, else the default substrings."
+  [c]
+  (or (ctx/use c :tools) combat/default-weapons))
 
 (defn note-blocked!
   "Count a blocked walk towards target; warn once when it is given up on."
@@ -164,34 +193,51 @@
        (> (danger-q/mob-distance (:primitives c) target) (ranged-chase))
        (some #(not= (.-id %) (.-id target)) (in-range c))))
 
+(defn declined
+  "The ending of a fight that stops with hostiles left, for the retreat to take over: kind and cause, and the job
+  memory with the kills and hits a caller reads."
+  [c kind cause]
+  (let [m (dissoc (ctx/mem c) :contract)]
+    (ctx/end c kind cause {:killed (vec (:killed m)) :struck (:struck m) :memory m})))
+
 (defn ^:async step
-  "One step of the fight: look at a heard mob, wait out the swing gap, or swing once. :again, :continue, :done or :declined."
+  "One step of the fight: look at a heard mob, wait out the swing gap, or swing once. :again, :continue or an ending."
   [c]
-  (let [{:keys [weapons attack-gap-ms min-health]} (:args c)
+  (let [{:keys [attack-gap-ms min-health]} (:args c)
         p (:primitives c)
         target (first (targets c))
         last-attack (:last-attack (ctx/mem c))]
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
     (cond
-      (and last-attack (< (.-health (.self p)) min-health)) :declined
-      (held-too-long? c) :declined
-      (and target (too-far-to-chase? c target)) :declined
+      (and last-attack (< (.-health (.self p)) min-health)) (declined c :limit-reached {:line :health :reason :low-health})
+      (held-too-long? c) (declined c :limit-reached {:line :time :reason :hold-timeout})
+      (and target (too-far-to-chase? c target)) (declined c :nothing-possible :too-far)
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (first (remove danger-q/seen-only? (in-range c)))]
                       (do (await (ctx/act c :look (let [{:keys [x y z]} (danger-q/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))
-                          :declined)
-                      (if (seq (in-range c)) :declined :done))
+                          (declined c :nothing-possible :heard-only))
+                      (if (seq (in-range c)) (declined c :nothing-possible :given-up) (ctx/end c :done nil {:killed (vec (:killed (ctx/mem c)))})))
       (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) (do (await (combat/wait-gap! c last-attack attack-gap-ms)) :again)
       :else
-      (do (await (combat/equip-best! c (combat/best-weapon p weapons)))
+      (do (await (combat/equip-best! c (combat/best-weapon p (weapons c))))
           (await (swing! c target))
           (cond
-            (empty? (in-range c)) (do (ctx/result! c {:killed (vec (:killed (ctx/mem c)))}) :done)
-            (empty? (targets c)) :declined
+            (empty? (in-range c)) (ctx/end c :done nil {:killed (vec (:killed (ctx/mem c)))})
+            (empty? (targets c)) (declined c :nothing-possible :given-up)
             :else :again)))))
 
+(defn restore-memory!
+  "After a call-child of fight-back in slot that ended other than :done (a decline): res is its child-result. The call
+  cleared the child's memory; its :memory is put back, as a decline kept it. True for such a decline."
+  [c slot res]
+  (when (= :stopped (:status res))
+    (ctx/update-mem! c assoc-in [:children slot] (:memory res))
+    true))
+
 (defn ^:async round
-  "The whole fight: steps until no hostile is left (:done) or the retreat should take over (:declined)."
+  "The whole fight: steps until no hostile is left (:done) or the retreat should take over (an ending other than :done)."
   [c]
   (ctx/update-mem! c assoc :health0 (.-health (.self (:primitives c))))
-  (await (pace/steps! c #(step c))))
+  (if-let [problem (start-problem c)]
+    (ctx/end c :condition-failed problem)
+    (await (pace/steps! c #(step c)))))

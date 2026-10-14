@@ -16,7 +16,8 @@
             [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.survival.retreat-home :as retreat-home]
             [jobs.survival.retreat-refuge :as refuge]
-            [jobs.survival.retreat-walk :as walk]))
+            [jobs.survival.retreat-walk :as walk]
+            [jobs.survival.fight-back :as fight-back]))
 
 (def tool-weapons
   "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."
@@ -55,7 +56,7 @@
                                     :skip (flight/dead-ids c)}))]
       (ctx/update-mem! c update :dead #(into (vec %) (concat (get-in (ctx/mem c) [:children :cornered :killed])
                                                              (:killed (ctx/child-result c :cornered)))))
-      (if (= :declined r)
+      (if (or (= :declined r) (fight-back/restore-memory! c :cornered (ctx/child-result c :cornered)))
         (do (flight/tried! c :fight) nil)
         :again))))
 

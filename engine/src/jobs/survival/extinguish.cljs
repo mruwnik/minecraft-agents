@@ -7,14 +7,13 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
-            [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.survival.eat :as eat]
             [jobs.lib.body :as body]))
 
 (def doc
   "Put the body out when it is on fire or in lava. One run, re-reading the world before each pass, until the body is
-  neither burning nor in lava (:done). Each pass, in this order:
+  neither burning nor in lava (:done). Not started (condition :not-burning) when it is not burning and no poured water is left to scoop. Each pass, in this order:
   1. With a water bucket carried and the body not in lava, pours water at the feet and notes the cell in body memory
      (:extinguish-pour, ten minutes), so a run cut before the scoop leaves it for the next run.
      A cell in another's zone or claim is skipped while another way exists. As a last resort it pours there anyway,
@@ -32,12 +31,13 @@
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
   Before each decision from a new cell it looks round (level and down) so the fire at the feet and the lava beside them are seen.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
-     With a real danger near (jobs.lib.danger, the hostile-near radii) it ends stopped :hostile-near instead, never standing still beside it.
+     With a real danger near (jobs.lib.danger, the hostile-near radii) it ends :condition-failed :hostile-near instead, never standing still beside it.
      Otherwise it holds still (:burning-wait): emits info extinguish_wait once, eats when food is under 18 and food is carried
-     (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends stopped :still-burning.
+     (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends :limit-reached :still-burning.
   A walk that is blocked (boxed in, perhaps by its own covers) goes through a go-to from then on (it pillars, stairs or digs
-  out when shut in); a go-to still working is not a failure. Three failures (no safe cell, or a go-to that fails, with its reason) give an extinguish_stuck warning and end stopped :stuck.
-  Still burning after max-passes passes ends stopped :still-burning. Never :continue.
+  out when shut in); a go-to still working is not a failure. Three failures (no safe cell, or a go-to that fails, with its reason) give an extinguish_stuck warning and end :nothing-possible :stuck.
+  Still burning after max-passes passes ends :limit-reached :still-burning. Never :continue, bar a cut round.
+  The cover blocks are the call's :use :blocks (default the carried :cover fillers of jobs.lib.choose).
   Memory: writes :extinguish {:pos :cause} each pass (cap 20, one hour),
   and lava seen within :scan-radius as :hazard entries (cap 50, six hours) for retreat logic.")
 
@@ -97,9 +97,24 @@
   [c]
   (some-> (ctx/latest c :extinguish-pour) :data :pos))
 
-(defn check [c]
-  (or (boolean (or (body-burning? c) (poured c)))
-      (ctx/wait c {:reason :not-burning})))
+(def target [])
+
+(def defaults {:use {:blocks :cover}})
+
+(defn not-burning
+  "At the call's start: the cause :not-burning unless the body burns or has water left to scoop."
+  [c]
+  (when-not (or (body-burning? c) (poured c)) :not-burning))
+
+(def conditions [[:fn not-burning]])
+
+(defn done?
+  "Out: not burning and no poured water left to scoop."
+  [c]
+  (let [out? (not (or (body-burning? c) (poured c)))]
+    {:done? out? :units :fires :done (if out? 1 0) :left (if out? 0 1)}))
+
+(defn quote-of [_c] {:uses {:time [0 5 60]}})
 
 (defn floor-cell [pos] (into {} (map (fn [[k v]] [k (js/Math.floor v)])) pos))
 
@@ -196,7 +211,11 @@
                    (not (or (nil? above) (contains? passable above) (= "lava" above))))))
           scanned))
 
-(defn cover-item [c] (choose/filler c :cover))
+(defn cover-item
+  "The cover block to place: the first of the call's :use :blocks carried, else the first :cover filler carried."
+  [c]
+  (let [carried (into #{} (map :name) (u/inventory (:primitives c)))]
+    (or (first (filter carried (ctx/use c :blocks))) (choose/filler c :cover))))
 
 (defn lava-refusals
   "Why each scanned lava cell is no cover candidate, as [{:pos :reason}]: a run-wide reason (:no-cover-item, :max-covers,
@@ -296,6 +315,9 @@
   (when (await (pour-water! c pos))
     :again))
 
+(defn still-burning [c text]
+  (ctx/end c :limit-reached {:line :time :reason :still-burning} {:text text}))
+
 (defn ^:async stand-wait!
   "One wait off the fire: eat to keep regenerating, tell the agent once, wait a second. Stopped :still-burning after
   max-stand-waits."
@@ -313,7 +335,7 @@
     (await (ctx/act c :wait (clj->js {:ms (stand-wait-ms)})))
     (cond
       (clear? c) :done
-      (>= waits (max-stand-waits)) (result/stop! c :still-burning "still burning after standing still off the fire")
+      (>= waits (max-stand-waits)) (still-burning c "still burning after standing still off the fire")
       :else :again)))
 
 (defn ^:async stand-pass!
@@ -321,7 +343,7 @@
   :hostile-near, so the hostile reflex can act."
   [c]
   (if (danger-q/danger-near? (:primitives c) (danger-q/hostile-radius) (danger-q/ranged-radius))
-    (result/stop! c :hostile-near "a hostile is near: not standing still")
+    (ctx/end c :condition-failed :hostile-near {:text "a hostile is near: not standing still"})
     (await (stand-wait! c))))
 
 (defn stuck!
@@ -330,7 +352,7 @@
   (if-not (u/count-fail! c)
     :again
     (do (ctx/emit! c :extinguish_stuck :warn {:tries (u/max-failures) :text text})
-        (result/stop! c :stuck text))))
+        (ctx/end c :nothing-possible :stuck {:text text}))))
 
 (defn ^:async move!
   "An emergency step to pos (range 0). The walk's status."
@@ -432,9 +454,10 @@
 (defn ^:async round [c]
   (loop [i 0]
     (cond
-      (not (ctx/alive? c)) :done
-      (<= (max-passes) i) (result/stop! c :still-burning "still burning after many tries")
+      (not (ctx/alive? c)) :continue
+      (<= (max-passes) i) (still-burning c "still burning after many tries")
       :else (let [r (await (pass! c))]
-              (if (= :again r)
-                (do (await (pace/pace!)) (recur (inc i)))
+              (case r
+                :again (do (await (pace/pace!)) (recur (inc i)))
+                :done (ctx/end c :done nil)
                 r)))))

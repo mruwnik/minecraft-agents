@@ -79,7 +79,7 @@
                            [{:onFire true :inLava true} true]
                            [{:inWater true} false]
                            [{} false]]]
-    (is (= expected (extinguish/check (bare-ctx (tu/fake {:self self}) {}))) (pr-str self))))
+    (is (= expected (nil? (extinguish/not-burning (bare-ctx (tu/fake {:self self}) {})))) (pr-str self))))
 
 (def fire-resistance [{:name "fire_resistance" :amplifier 0 :duration 600}])
 
@@ -88,7 +88,7 @@
                            [{:inLava true :effects fire-resistance} false]
                            [{:onFire true :effects [{:name "speed" :amplifier 0 :duration 600}]} true]
                            [{:onFire true} true]]]
-    (is (= expected (extinguish/check (bare-ctx (tu/fake {:self self}) {}))) (pr-str self))
+    (is (= expected (nil? (extinguish/not-burning (bare-ctx (tu/fake {:self self}) {})))) (pr-str self))
     (is (= expected ((:when (:burning triggers/all)) (tu/fake {:self self}) nil {})) (pr-str self))))
 
 (deftest burning-trigger-holds-for-an-unscooped-pour-even-when-the-fire-is-out
@@ -110,7 +110,7 @@
                             [{:self {} :blocks {"0,65,0" "fire"}} true]
                             [{:self {:effects fire-resistance} :blocks {"0,64,0" "fire"}} false]
                             [{:self {} :blocks {"1,64,0" "fire"}} false]]]
-    (is (= expected (extinguish/check (bare-ctx (tu/fake world) {}))) (pr-str world))
+    (is (= expected (nil? (extinguish/not-burning (bare-ctx (tu/fake world) {})))) (pr-str world))
     (is (= expected ((:when (:burning triggers/all)) (tu/fake world) nil {})) (pr-str world))))
 
 (defn zombie-at [x z] {:id 7 :name "zombie" :kind "hostile" :pos {:x x :y 64 :z z}})
@@ -159,7 +159,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (tu/fake {})]
-          (is (= :done (await (extinguish/round (bare-ctx p {})))))
+          (is (= :done (:kind (await (extinguish/round (bare-ctx p {}))))))
           (is (= [] (vec (.-calls (.-world p))))))))))
 
 (deftest heads-for-water-when-it-is-near

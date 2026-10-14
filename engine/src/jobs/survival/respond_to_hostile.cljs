@@ -13,7 +13,8 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.survival.fight-back :as fight-back]))
 
 (def doc
   "A hostile is near: fight it (jobs.survival.fight-back, best weapon equipped) when the odds are fair,
@@ -98,7 +99,10 @@
                              :hold (or hold (hold? c))}
                      :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve :quiet-s quiet-s :hide-s hide-s
                             :goal (:goal (ctx/mem c))})]
-    (await (ctx/call-child c decision (child-jobs decision) child-args))))
+    (let [r (await (ctx/call-child c decision (child-jobs decision) child-args))]
+      (if (and (= :fight decision) (fight-back/restore-memory! c :fight (ctx/child-result c :fight)))
+        :declined
+        r))))
 
 (defn encounter-text [{:keys [mob decision pos direction band]}]
   (str (name decision) ": " mob
@@ -242,7 +246,7 @@
 (defn stopped-child
   "[slot result] of the child that stopped in this round's last call, or nil."
   [c]
-  (some #(let [res (ctx/child-result c %)] (when (= :stopped (:status res)) [% res])) [:flee :fight]))
+  (some #(let [res (ctx/child-result c %)] (when (= :stopped (:status res)) [% res])) [:flee]))
 
 (def max-unchanged
   "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no_response."
