@@ -2,7 +2,8 @@
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
   the body, cuts, firing reflexes and holding them off during a section (ctx/atomic), tick! and do-now!."
   (:require [engine.args :as a]
-            [engine.core.base :refer [add-instance call-guarded dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
+            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
+            [engine.core.attention :refer [request-attention!]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
             [engine.core.activity :refer [check-body-idle! check-idle! restart-body-idle! section-level sections]]
@@ -40,14 +41,22 @@
   (some-> (:waiting eng) deref (get id)))
 
 (defn check-passes?
-  "Whether listed instance id's check passes now. A throwing check declines. A declining check's reason (ctx/wait)
-  is told once with note-waiting!."
+  "Whether listed instance id's check passes now. A declining check's reason (ctx/wait) is told once with
+  note-waiting!. A throwing check is a bug, not a world state: the job is parked like a round that threw."
   [eng id]
   (let [inst (get-in (state eng) [:instances id])
         wait (atom nil)
-        ok? (boolean (call-guarded eng (str "check of " id) false
-                                   #(let [[def args] (job-of eng inst)]
-                                      ((:check def) (check-ctx eng inst args wait)))))]
+        ok? (try (boolean (let [[def args] (job-of eng inst)]
+                            ((:check def) (check-ctx eng inst args wait))))
+                 (catch :default e
+                   (let [error (str e)]
+                     (emit! eng {:source :system :kind :error :level :warn :job id
+                                 :text (str "check of " id " (" (expr/label (:spec inst)) ") threw: " error)})
+                     (request-attention! eng {:job-id id :reason :round-failed :kind :failed
+                                              :data {:error error}
+                                              :message (str "Job failed and is parked until retried or cancelled: " error)
+                                              :state-update #(assoc-in % [:failed id] {:error error :t (now eng)})}))
+                   false))]
     (note-waiting! eng id (if ok? ::passed @wait))
     ok?))
 

@@ -16,12 +16,21 @@
 
 (defn started? [c] (some? (ctx/frozen-call c)))
 
+(defn run-condition
+  "(f c); a throw is rethrown naming the condition fn."
+  [c f]
+  (try (f c)
+       (catch :default e
+         (if (contract/passes-through? e)
+           (throw e)
+           (throw (js/Error. (str "condition " (.-name f) ": " (or (.-message e) e))))))))
+
 (defn verdict
   "What conditions ([:fn f], (f c) nil, a cause, contract/impossible or contract/look-first) say now: nil to start,
   [:impossible cause] when one is impossible, else [:skip cause] for the first that fails, else [:look cause] for the
   first that asks for a look."
   [c conditions]
-  (let [rs (filter identity (map (fn [[_ f]] (f c)) conditions))]
+  (let [rs (filter identity (map (fn [[_ f]] (run-condition c f)) conditions))]
     (or (some #(some->> (contract/impossible-cause %) (vector :impossible)) rs)
         (some #(when-not (contract/look-cause %) [:skip %]) rs)
         (some #(some->> (contract/look-cause %) (vector :look)) rs))))

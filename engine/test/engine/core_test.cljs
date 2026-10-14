@@ -1138,14 +1138,17 @@
           (is (some #(and (= :error (:kind %)) (re-find #"sync tick error" (str (:text %)))) @seen)
               "the error was reported"))))))
 
-(deftest a-throwing-check-warns-once-per-error-not-every-tick
-  (let [{:keys [eng seen clock]} (setup {})]
-    (core/submit! eng '(bad-check) {})
+(deftest a-throwing-check-parks-the-job-with-one-error
+  (let [{:keys [eng seen clock]} (setup {})
+        id (core/submit! eng '(bad-check) {})]
     (dotimes [_ 40]
       (swap! clock + 250)
       (core/tick! eng))
-    (is (= 1 (count (filter #(and (= :error (:kind %)) (re-find #"check of" (str (:text %)))) @seen)))
-        "10 s of the same failure is one warn")))
+    (is (= 1 (count (filter #(and (= :error (:kind %)) (re-find #"check of.*broken check" (str (:text %)))) @seen)))
+        "the throw is told once, with the message")
+    (is (re-find #"broken check" (str (get-in (core/state eng) [:failed id :error]))) "the job is parked, not waiting")
+    (is (= 1 (count (filter #(= :failed (:kind %)) @seen))) "one job.failed")
+    (is (empty? (ran seen)) "its round never ran")))
 
 (deftest a-failed-state-write-warns-but-does-not-break-the-change
   (let [dir (tu/tmp-dir)
