@@ -64,7 +64,7 @@
   - :inventory-full: the drop has no room.
   - :refills: a cell refilled 3 times (with a :why when the block does not fall: something put it back).
   - :hazard: a hazard not in :accept (below).
-  - :off-stair: the body is off the stair line.
+  - :off-stair: the body is off the stair line and max-returns walks back onto it (go-to children) are used up.
   - :lava-exposed: lava beside an open cell of the step (or in one) with :on-lava :stop.
   - :floor-unseen: the floor of the step is still unseen once its cut is open and looked at once more.
   - :lava-unsealed: that lava could not be filled (:on-lava :seal, the default): the place child's outcome in :place,
@@ -129,8 +129,10 @@
 
 (a/defargs settings
   {::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::max-returns {:default 3 :doc "Walks back onto the stair's line (after a reflex moved the body off it) one call makes before it stops :off-stair." :spec (a/int-in 0 nil)}
    ::cell-s {:default 1.2 :doc "Mean seconds one cut cell of a step takes (look, dig, walk), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
+(defn max-returns [] (settings/get settings ::max-returns))
 
 (def target [:dir :heading :y])
 
@@ -333,6 +335,23 @@
              :walk (merge (select-keys (:data r) [:why :arrived])
                           {:status (if (= :done (:kind r)) :done :stopped) :reason (contract/cause-key r)})})))
 
+(defn ^:async return!
+  "The body is off the stair's line (a reflex walked it away): a go-to child (slot :return) back to the stair's cell of
+  step at-step, at most max-returns times per call. :continue while it walks, :again once it ended, nil when the
+  returns are used up."
+  [c]
+  (let [{:keys [dir heading]} (:args c)
+        {:keys [origin at-step returns]} (ctx/mem c)
+        cell (shape/add origin (mapv #(* (or at-step 0) %) (geo/delta dir heading)))]
+    (when (< (or returns 0) (max-returns))
+      (let [r (await (child/walk-into!* c :return cell))]
+        (when-not (= :continue r)
+          (ctx/update-mem! c update :returns (fnil inc 0))
+          (let [arrived (= cell (reach/standing-vec (:primitives c)))]
+            (ctx/emit! c :stair.return :info {:to cell :arrived arrived
+                                              :text (str "stair " (if arrived "walked back onto" "could not walk back onto") " its line at " (pr-str cell))})))
+        (if (= :continue r) :continue :again)))))
+
 (defn ^:async work!
   "One bounded piece of the stair from the body's place on it: check the way back, dig one cell or take the step."
   [c]
@@ -344,10 +363,11 @@
         i (geo/stair-index origin feet dir heading target)]
     (ctx/update-mem! c geo/record-dug (:block-at in))
     (cond
-      (nil? i) {:reason :off-stair :cell feet :origin origin
-                :offset (mapv - feet origin)
-                :why (str "the body is " (pr-str (mapv - feet origin)) " from the stair's start " (pr-str origin)
-                          ", off its line")}
+      (nil? i) (or (await (return! c))
+                   {:reason :off-stair :cell feet :origin origin
+                    :offset (mapv - feet origin)
+                    :why (str "the body is " (pr-str (mapv - feet origin)) " from the stair's start " (pr-str origin)
+                              ", off its line")})
       (= :continue (await (ore-pick/pick! c))) :continue
       :else
       (do

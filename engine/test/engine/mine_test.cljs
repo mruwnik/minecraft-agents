@@ -1260,6 +1260,29 @@
           (is (= [0 64 0] (feet s)) "back on its start cell")
           (is (seq (calls s "place")) "a torch lights the stair or the tunnel"))))))
 
+(defn ^:async run-until
+  "Run ticks until (done? s) or n ticks."
+  [s n done?]
+  (loop [i 0]
+    (when (and (< i n) (not (done? s)))
+      (await (run-ticks s 1))
+      (recur (inc i)))))
+
+;; Sorrel #14: a night reflex walked the body home between two steps of the stair down; the next step started a new
+;; stair where the body stood, off the heading's line.
+(deftest a-descent-interrupted-between-steps-walks-back-to-its-stair-and-goes-on-along-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world (deep-rock {"9,58,1" "iron_ore" "0,64,1" "air" "0,65,1" "air" "0,64,2" "air" "0,65,2" "air"})})]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :level 58 :mend false}) {})
+          (await (run-until s 400 #(<= 2 (count (events-of % :stair.done)))))
+          (swap! (.. (:p s) -world -state) assoc-in [:self :pos] [0.5 64 2.5])
+          (await (run-ticks s 400))
+          (is (= :count (:reason (done-event s))))
+          (is (empty? (remove (fn [[_ y z :as cell]] (or (> y 63) (zero? z) (= [9 58 1] cell))) (dug-cells s))) "every cell below the start but the ore is on the line z 0")
+          (is (= 58 (second (:origin (:tunnel (done-event s)))))))))))
+
 (def shaft-plan
   "A mineshaft by Miles: its top is the body's start cell, a stair east down to y 60."
   (-> {:id "s" :kind :mineshaft :parts [{:id "stair" :stair {:from [0 64 0] :heading :east :to-y 60} :want :clear}]}
@@ -2104,7 +2127,7 @@
           (is (= :no-stone-found (:reason (done-event s)))))))))
 
 ;; Alder j48: between two stair steps something moved the body off the stair line; the stair stopped :off-stair and mine ended with no stone.
-(deftest a-stair-that-finds-the-body-off-its-line-starts-again-where-it-stands
+(deftest a-stair-that-finds-the-body-off-its-line-goes-on-along-it
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -2120,7 +2143,7 @@
                          r)))
           (core/submit! (:eng s) (spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :mend false}) {})
           (await (run-ticks s 300))
-          (is (seq (events-of s :mine.restair)))
+          (is (empty? (events-of s :mine.restair)) "the stair walks back onto its line itself")
           (is (<= 2 (get (inv s) "cobblestone" 0)))
           (is (= :count (:reason (done-event s)))))))))
 

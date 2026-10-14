@@ -344,22 +344,38 @@
             (is (empty? (digs p)) block)
             (is (= block (block-at p [1 65 0])) block)))))))
 
-(deftest off-stair-says-where-the-body-is-against-the-start
+(defn move-after-digs
+  "A prep that puts the body on [7 65 2] (on the ground beside the stair) after each of the first n digs (a reflex walking it off the stair)."
+  [n]
+  (fn [p]
+    (let [world (.-world p)
+          left (atom n)]
+      (.override world "dig"
+                 (fn ^:async f [token a impl]
+                   (let [r (await (impl token a))]
+                     (when (pos? @left)
+                       (swap! left dec)
+                       (swap! (.. world -state) assoc-in [:self :pos] [7 65 2]))
+                     r))))))
+
+;; Sorrel #14: a night reflex took the body home between two digs; the resumed stair ended :off-stair.
+(deftest a-stair-that-finds-the-body-off-its-line-walks-back-and-goes-on
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [prep (fn [p]
-                     (let [world (.-world p)]
-                       (.override world "dig"
-                                  (fn ^:async f [token a impl]
-                                    (let [r (await (impl token a))]
-                                      (swap! (.. world -state) assoc-in [:self :pos] [7 65 4])
-                                      r)))))
-              {:keys [out]} (await (stair! {:blocks ground} east prep))]
+        (let [{:keys [out] :as s} (await (stair! {:blocks ground} east (move-after-digs 1)))]
+          (is (= :done (:status @out)))
+          (is (= 3 (:steps @out)))
+          (is (seq (events-of s :stair.return))))))))
+
+(deftest off-stair-stands-once-the-walks-back-are-used-up-and-says-where-the-body-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (stair! {:blocks ground} east (move-after-digs 100)))]
           (is (= :off-stair (:reason @out)))
           (is (= [0 65 0] (:origin @out)))
-          (is (= [7 0 4] (:offset @out)))
-          (is (= 0 (:steps @out))))))))
+          (is (= [7 0 2] (:offset @out))))))))
 
 (deftest three-steps-down-east-in-stone
   (async done
