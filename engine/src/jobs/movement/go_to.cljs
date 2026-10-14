@@ -69,8 +69,7 @@
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
   - :at-night :wait (default): at night a walk that would take the body out of the shelter it stands in
-    (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground; a walk down to open air leaves a roofed hut) waits for day: a listed
-    go-to declines {:reason :night-sheltered :shelter :goal}, a child call waits 1 s and yields :continue (info
+    (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground; a walk down to open air leaves a roofed hut) waits for day: go-to waits 1 s and yields :continue (cause carries :shelter; info
     go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
   - A walk with no escalating way from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not beyond the near band, 8 blocks, nor while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min, in all across the go-to children of one root job) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.

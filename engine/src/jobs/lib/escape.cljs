@@ -325,9 +325,9 @@
          ledge (delay (when (and item (not (skip :stair)) (pos? rise) (not (walled-side? block-at feet)))
                         (stair-heading block-at feet stair-dirs rise may-dig? own? true)))
          gap (when (and dir (not (skip :clear-path))) (door block-at (unseen-of p) feet dir (max-door)))
-         spot (delay (when (and dir (not (skip :approach)) (walled-side? block-at feet))
+         spot (delay (when (and dir (not (skip :approach)) (not (skip :clear-path)) (walled-side? block-at feet))
                        (door-spot p feet dir #(diggable? block-at may-dig? own? %))))
-         back (delay (when-not (skip :approach) (door-back p feet)))
+         back (delay (when-not (or (skip :approach) (skip :clear-path)) (door-back p feet)))
          door? (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))]
      (cond
        (and pillar-blocks? (passable? (block-at (up feet 2))))
@@ -348,7 +348,7 @@
        @back
        {:step :approach :pos @back}
 
-       (and (not (skip :approach)) (not (walled-side? block-at feet)) (wall-spot p feet dir))
+       (and (not (skip :approach)) (not (and (skip :clear-path) (skip :stair))) (not (walled-side? block-at feet)) (wall-spot p feet dir))
        {:step :approach :pos (wall-spot p feet dir)}
 
        @ledge

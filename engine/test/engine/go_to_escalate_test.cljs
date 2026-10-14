@@ -730,6 +730,11 @@
     (is (= :none (:step (escape/choose (tu/fake with-dirt) [0 61 0] [10 64 0] (constantly true)
                                        {:skip #{:pillar :stair :clear-path :approach}}))))))
 
+(deftest escape-choose-offers-no-approach-when-clear-path-is-barred
+  (let [p (tu/fake {:self {:pos {:x 1 :y 64 :z 0}} :blocks room})]
+    (is (= :approach (:step (escape/choose p [1 64 0] [8 64 0] (constantly true) {:skip #{:stair :pillar}}))) "the door spot, when digging is allowed")
+    (is (= :none (:step (escape/choose p [1 64 0] [8 64 0] (constantly true) {:skip #{:stair :pillar :clear-path}}))) "no walk to a door that may not be dug")))
+
 (deftest escape-door-beside-counts-only-doors-the-body-can-open
   (let [at (fn [b] (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (assoc room "3,64,0" b)}))
         in-yard (fn [b] (escape/door-beside? (at b) [2 64 0]))]
