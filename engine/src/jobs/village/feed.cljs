@@ -20,7 +20,7 @@
   Ends with the data {:fed n :item name}. :done when the villager took :count (info feed.done), or the call's :least
   (default :all) when it gave up after that many. Otherwise, with warn feed.gave-up and the cause:
   - condition-failed :no-food: none carried and none fetched (a listed call with :fetch off waits for food).
-  - nothing-possible :gone: the villager is not seen within :radius (also a non-villager under the uuid).
+  - condition-failed :gone: the villager is not seen within :radius (also a non-villager under the uuid).
   - nothing-possible :unreachable: three blocked walks in a row, or eight legs without getting within reach.
   - nothing-possible :not-taken: three tosses in a row that the villager did not collect (full inventory, not
     wanted), or the toss status as a keyword when the toss is refused three times, or :litter when the drop
@@ -105,7 +105,7 @@
   {:uses {:time [0 (* 10 (:count (:args c) 1)) ##Inf]}})
 
 (defn ending-of
-  "The ending of a feeding that stopped for reason: :done when the call's :least was taken, condition-failed :no-food, else
+  "The ending of a feeding that stopped for reason: :done when the call's :least was taken, condition-failed :no-food or :gone, else
   nothing-possible with reason as the cause."
   [c reason]
   (let [least (or (:least (ctx/frozen-call c)) :all)
@@ -114,6 +114,7 @@
     (cond
       (or (nil? reason) (>= (fed c) need)) (ctx/end c :done nil data)
       (= :no-food reason) (ctx/end c :condition-failed {:reason :no-food :need (problem c)} data)
+      (= :gone reason) (ctx/end c :condition-failed :gone data)
       :else (ctx/end c :nothing-possible reason data))))
 
 (defn stop!

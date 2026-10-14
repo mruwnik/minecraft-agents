@@ -21,10 +21,12 @@
   An offer matches when it gives :want, is not sold out and its price (the adjusted count of the first cost stack) is at
   most :max-price (nil: no limit). Offers do not name the enchantment of a book: :want is an item name only.
   Ends with the data {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: :done (info
-  roll.done) when an offer matches, else nothing-possible (warn roll.gave-up) with the cause:
-  - :gone (not seen within 48), :baby, :nitwit (they take no job), :locked (an offer was already used: breaking
-    the workstation changes nothing), :occupied (another block stands at :pos), :still-employed (it kept its job).
-  - :no-claim (the villager took no profession within :claim-s after the workstation was placed: night, no path, a
+  roll.done) when an offer matches, else (warn roll.gave-up) with the cause:
+  - condition-failed: :gone (not seen within :radius), :baby (takes no job yet), :locked (an offer was already used:
+    breaking the workstation changes nothing), :occupied (another block stands at :pos). :baby, :occupied and a named
+    :villager's :gone are checked at the start and then wait (a skipped job); a nitwit takes no job ever: impossible,
+    :nitwit, also checked at the start.
+  - nothing-possible: :still-employed (it kept its job), :no-claim (the villager took no profession within :claim-s after the workstation was placed: night, no path, a
     taken workstation), :no-match (:tries rolls without a match), :unreachable, :window (offers could not be read
     three times), :dig-failed, :place-failed (a child stopped, with its reason).
   A workstation item, wanted item or cell that is missing or bad is a condition that waits (:bad-args).
@@ -77,7 +79,22 @@
       {:reason :bad-args :why "needs a workstation item (or profession) and a wanted item"}
       error {:reason :bad-args :why error})))
 
-(def conditions [[:fn bad-args]])
+(defn start-facts
+  "At the call's start, with a named villager in view: impossible for a nitwit (never a job), the cause :baby for a baby
+  and :occupied when another block stands at :pos (not now). The rest is found out by the rounds."
+  [c]
+  (let [{:keys [villager]} (:args c)
+        p (:primitives c)
+        e (when (and (string? villager) (not (ctx/frozen-call c))) (trade/find-villager p villager))
+        block (when e (some->> (:pos (b/parse (:args c))) (u/seen-name p)))
+        item (item-of (:args c))]
+    (cond
+      (nil? e) nil
+      (= "nitwit" (.-profession e)) (contract/impossible {:reason :nitwit})
+      (.-baby e) {:reason :baby}
+      (and block (not (b/air block)) (not= item block)) {:reason :occupied :block block})))
+
+(def conditions [[:fn bad-args] [:fn start-facts]])
 
 (defn rolls [c] (:rolls (ctx/mem c) 0))
 
@@ -92,11 +109,14 @@
 (defn data-of [c extra]
   (merge {:found false :rolls (rolls c) :item (item-of (:args c))} extra))
 
+(def failed-conditions "Causes that end condition-failed: the villager or the cell is not right now. The rest are nothing-possible."
+  #{:gone :baby :locked :occupied})
+
 (defn stop!
-  "Warn and end nothing-possible with reason (a keyword) as the cause."
+  "Warn and end with reason (a keyword) as the cause: condition-failed for those in failed-conditions, else nothing-possible."
   [c reason text]
   (ctx/emit! c :roll.gave-up :warn {:reason reason :text text :rolls (rolls c)})
-  (ctx/end c :nothing-possible reason (data-of c nil)))
+  (ctx/end c (if (failed-conditions reason) :condition-failed :nothing-possible) reason (data-of c nil)))
 
 (defn found!
   [c offer]

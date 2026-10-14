@@ -5,7 +5,8 @@
             [engine.contract :as contract]
             [engine.registry :as registry]
             [engine.seek-contract-test :as seek]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [engine.village-trade-test :as vt]))
 
 (defn job [sym] (get registry/jobs sym))
 
@@ -34,7 +35,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :stopped :kind :nothing-possible :reason :gone}
+        (is (= {:event :stopped :kind :condition-failed :reason :gone}
                (await (ends '(jobs.village.feed {:villager "v-1"}) {:inventory bread}))))
         (is (= {:event :waiting :reason :need}
                (await (ends '(jobs.village.feed {:villager "v-1" :fetch false}) {:entities [(villager [])]}))))
@@ -51,10 +52,40 @@
                             [:event])))
         (is (= {:event :stopped :kind :condition-failed :reason :payment-short}
                (await (ends '(jobs.village.trade {:villager "v-1" :buy "bread"}) {:entities [(villager [bread-offer])]}))))
+        (is (= {:event :stopped :kind :condition-failed :reason :gone}
+               (await (ends '(jobs.village.trade {:villager "v-1" :buy "bread"}) {}))))
+        (is (= {:event :stopped :kind :condition-failed :reason :no-room}
+               (await (ends '(jobs.village.trade {:villager "v-1" :buy "bread"})
+                             {:entities [(villager [bread-offer])] :inventory (into [{:name "emerald" :count 5}] (vt/fillers 35))}))))
+        (is (= {:event :completed}
+               (select-keys (await (ends '(jobs.village.trade {:villager "v-1" :buy "bread" :count 3 :least 1})
+                                         {:entities [(villager [bread-offer])] :inventory [{:name "emerald" :count 1}]}))
+                            [:event])))
         (is (= {:event :stopped :kind :nothing-possible :reason :no-offer}
                (await (ends '(jobs.village.trade {:villager "v-1" :buy "apple"}) {:entities [(villager [bread-offer])]}))))
         (is (= {:event :waiting :reason :bad-args}
                (await (ends '(jobs.village.trade {:villager "v-1"}) {}))))))))
+
+(def roll-args {:villager "v-1" :pos [2 64 0] :item "lectern" :want "enchanted_book"})
+(def librarian {:profession "librarian"})
+(def lectern-world {:blocks {"2,64,0" "lectern" "2,63,0" "stone"}})
+
+(deftest roll-start-facts-are-conditions
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[extra world expected]
+                [[{:profession "nitwit"} nil {:event :stopped :kind :impossible :reason :nitwit}]
+                 [{:baby true} nil {:event :waiting :reason :baby}]
+                 [librarian {:blocks {"2,64,0" "stone" "2,63,0" "stone"}} {:event :waiting :reason :occupied}]
+                 [{:uses 1} nil {:event :stopped :kind :condition-failed :reason :locked}]]]
+          (is (= expected
+                 (await (ends (list 'jobs.village.roll roll-args)
+                              (merge lectern-world world
+                                     {:entities [(villager [(assoc bread-offer :uses (:uses extra 0))] (dissoc (merge librarian extra) :uses))]}))))
+              (str extra world)))
+        (is (= {:event :stopped :kind :condition-failed :reason :gone}
+               (await (ends (list 'jobs.village.roll roll-args) lectern-world))))))))
 
 (deftest roll-waits-on-bad-args
   (async done

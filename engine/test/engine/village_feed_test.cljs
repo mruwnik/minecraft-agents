@@ -102,6 +102,15 @@
             (is (= left (inv p)) "a drop nobody took is collected back, one someone else took is gone")
             (is (gave? s :feed.gave-up))))))))
 
+(deftest a-partial-feeding-is-done-only-when-it-meets-least
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[least status] [[1 :done] [:all :stopped]]]
+          (let [{:keys [out]} (await (feed {:entities [(villager 2)] :inventory bread} {:villager "v-1" :count 2 :least least} 60
+                                           #(taking % (fn [n] (when (= 2 n) {"v-1" 1})))))]
+            (is (= {:fed 1 :status status} (select-keys @out [:fed :status])) (str ":least " least))))))))
+
 (deftest a-villager-who-is-not-there-is-gone
   (async done
     (tu/run-async done

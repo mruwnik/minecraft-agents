@@ -150,15 +150,6 @@
           (is (= {:found false :status :stopped :reason :locked} (select-keys result [:found :status :reason])))
           (is (zero? (digs p))))))))
 
-(deftest a-baby-or-nitwit-cannot-be-rolled
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[baby] (await (roll {:entities [(librarian [(offer "paper")] {:baby true})]} {}))
-              [nitwit] (await (roll {:entities [(librarian [(offer "paper")] {:profession "nitwit"})]} {}))]
-          (is (= :baby (:reason baby)))
-          (is (= :nitwit (:reason nitwit))))))))
-
 (deftest a-missing-villager-is-gone
   (async done
     (tu/run-async done
@@ -187,13 +178,6 @@
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])))
           (is (zero? (digs p)))
           (is (= "lectern" (workstation p))))))))
-
-(deftest another-block-on-the-workstation-cell-stops
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[result] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {ws-key "stone"}} {}))]
-          (is (= :occupied (:reason result))))))))
 
 (deftest a-workstation-in-anothers-zone-is-not-broken
   (async done

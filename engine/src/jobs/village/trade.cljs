@@ -15,7 +15,7 @@
   :count is items wanted. An offer gives several per trade, so it buys ceil(remaining / items per trade) trades
   and may overshoot a little.
   Ends with the data {:bought n :paid {item n} :item :buy} (n counts the items actually gained; success is info trade.done): :done when :count (or the call's :least, default :all)
-  was bought, else with warn trade.gave-up and the cause, condition-failed for :payment-short and :no-room, else
+  was bought, else with warn trade.gave-up and the cause, condition-failed for :gone, :not-villager, :payment-short and :no-room, else
   nothing-possible. A partial purchase stays bought and paid. A missing villager uuid or item name is a condition that
   waits (:bad-args). The causes:
   - :gone (not listed within 48, also a non-villager entity under the uuid), :not-villager.
@@ -66,7 +66,7 @@
 (defn quote-of [c]
   {:uses {:time [0 (* 5 (:count (:args c) 1)) ##Inf]}})
 
-(def failed-conditions "Reasons the body could mend itself: the rest are nothing-possible." #{:payment-short :no-room})
+(def failed-conditions "Reasons the body could mend itself: the rest are nothing-possible." #{:gone :not-villager :payment-short :no-room})
 
 (defn finish!
   "End with the counts so far plus extra: :done when the call's :least was bought (reason nil), else
