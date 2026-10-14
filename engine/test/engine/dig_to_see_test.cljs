@@ -14,7 +14,6 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.access.stair.cells :as sc]
-            [jobs.access.stair.cells :as sc]
             [jobs.access.tunnel :as tunnel]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
