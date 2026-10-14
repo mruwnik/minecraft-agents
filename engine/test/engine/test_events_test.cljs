@@ -25,3 +25,8 @@
 
 (deftest result-message-is-capped
   (is (<= (count (:message (ev/result "#'x/y" [{:type :fail :expected (apply str (repeat 5000 "x")) :actual 1}]))) 2000)))
+
+(deftest an-incomplete-run-fails-and-names-the-pending-test
+  (let [proc #js {:exitCode 0}]
+    (is (re-find #"engine.a-test/stuck never finished" (ev/incomplete-exit! proc "engine.a-test/stuck")))
+    (is (= 1 (.-exitCode proc)))))

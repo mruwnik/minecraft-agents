@@ -73,6 +73,7 @@ whose repo path is the main checkout (also from a worktree), override with `CARD
 
 - `tools/compile` is the only user of `/tmp/mc-compile.lock`: never `flock` it or wrap it in `flock` (it exits 2 if you do).
 - Run tests with `tools/test-engine engine.<ns>-test ...` (queues the compile, then runs node outside the lock; `--full` = whole suite in 4 shards, at most as many node processes at once machine-wide as free memory allows (flock slots in /tmp/mc-res; `--shards N --slots M --slowest K`); per-test ms in `engine/out/test-timings.jsonl`).
+- A test run whose event loop drains before the last test ends (a promise that never settles) exits 1 and names that test (`engine.test-events`).
 - A targeted run (`tools/test-run.mjs`) uses a private copy of the bundle (removed on every exit; copies of dead pids swept at start), needs `900 + 60 x namespaces` MB, and is killed (exit 124, `TIMEOUT ... last finished test`) after `60 s + 5 x` its prior timing (180-1200 s; `MC_TEST_TIMEOUT_S` overrides). Shards are timed out the same way.
 - `tools/test-engine --golden` runs the opt-in planner pins (`*-golden` namespaces, not in `--full`).
 - `tools/test-engine --changed [<git-rev>]` runs only the cljs test namespaces that (transitively) require, or name by quoted symbol, the changed files, plus own/changed test files and the JS tests covering changed JS; changed = working tree + staged + untracked vs HEAD (or vs `<git-rev>`). Prints the list and count first. Build config changes (`shadow-cljs.edn`, `package.json`) run the full suite.
