@@ -97,12 +97,18 @@
         (do (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
             nil)))))
 
+(def near-blocks 3)
+
 (defn surveyed?
-  "Whether the job has looked around: this run (per :run, the default) or from the cell the body stands in (:cell)."
+  "Whether the job has looked around: this run (per :run, the default), from the cell the body stands in (:cell) or
+  from within near-blocks of it (:near)."
   ([c] (surveyed? c :run))
   ([c per]
    (let [looked (:looked (ctx/mem c))]
-     (if (= :cell per) (= looked (cell-of (u/self-pos c))) (some? looked)))))
+     (case per
+       :cell (= looked (cell-of (u/self-pos c)))
+       :near (boolean (and looked (<= (u/dist looked (cell-of (u/self-pos c))) near-blocks)))
+       (some? looked)))))
 
 (defn ^:async survey!
   "Look around once before choosing work from what the body has seen, as a player turns before deciding there is

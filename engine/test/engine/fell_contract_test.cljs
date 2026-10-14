@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.event-api :as event-api]
+            [engine.core :as core]
             [engine.farm-contract-test :refer [ending-of]]
             [engine.fell-tree-test :as ft]
             [engine.forest-maintain-test :as fm]
@@ -64,6 +65,15 @@
         (let [{:keys [end]} (await (fell-ending {:blocks {}} 'jobs.forestry.fell-tree {:radius 10} 40))]
           (is (= {:kind :condition-failed :cause :no-tree} (kc end)))
           (is (= 10 (get-in end [:cause :radius]))))))))
+
+(deftest a-column-not-yet-seen-is-walked-to-not-looked-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (fm/start {:blocks {}} {})]
+          (core/submit! eng '(jobs.forestry.fell-tree {:at {:x 30 :y 64 :z 0}}) {})
+          (await (core/tick! eng))
+          (is (empty? (filterv #(= :waiting (:kind %)) @seen)) "not held back by a look-first no-tree"))))))
 
 (deftest every-tree-out-of-reach-is-nothing-possible-tree-unreachable-with-the-columns
   (async done

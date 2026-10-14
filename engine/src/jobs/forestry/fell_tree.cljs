@@ -393,13 +393,13 @@
 
 (defn no-tree
   "The cause :no-tree while no tree is chosen or marked unreachable, none is in sight and no unseen :at is to be walked
-  to; a look first while the body has not looked round from here."
+  to; a look first while the body has not looked round within a few blocks of here."
   [c]
   (let [m (ctx/mem c)
         {:keys [radius species at]} (:args c)]
     (when-not (or (:column m) (seq (:unreachable m)) (first (candidates c radius species))
                   (and at (not (u/seen-name (:primitives c) at))))
-      (cond-> (no-tree-cause c) (not (look/surveyed? c :cell)) contract/look-first))))
+      (cond-> (no-tree-cause c) (not (look/surveyed? c :near)) contract/look-first))))
 
 (def conditions [[:fn sheltered] [:fn no-tree]])
 

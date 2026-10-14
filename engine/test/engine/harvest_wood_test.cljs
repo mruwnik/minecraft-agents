@@ -63,6 +63,23 @@
           (is (empty? (filterv #(= :stopped (:kind %)) @seen)))
           (is (= [:no-tree] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
 
+(deftest a-waiting-job-looks-again-only-after-the-body-moved-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 9 0 "oak" 3)})
+              looks #(count (lt/calls p "look"))
+              move! (fn [x] (fake/swap-self! p assoc :pos [x 64 0]))]
+          (core/submit! eng '(jobs.forestry.harvest-wood {:radius 2}) {})
+          (await (tu/run-until-empty eng 3))
+          (let [n (looks)]
+            (move! 1)
+            (await (tu/run-until-empty eng 3))
+            (is (= n (looks)) "a one-block move is the same place")
+            (move! -8)
+            (await (tu/run-until-empty eng 3))
+            (is (> (looks) n) "a new place is looked at")))))))
+
 (deftest any-species-wide-radius-no-sapling-ends-with-the-debt-owed
   (async done
     (tu/run-async done
