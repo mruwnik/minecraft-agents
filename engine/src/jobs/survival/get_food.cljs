@@ -15,6 +15,7 @@
             [jobs.survival.eat :as eat]
             [jobs.survival.get-food.cook :as cook]
             [jobs.survival.get-food.report :as report]
+            [jobs.survival.get-food.risk :as risk]
             [jobs.survival.get-food.sources :as sources]))
 
 (def doc
@@ -38,6 +39,9 @@
   :hunt  The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
   :crops  Mature crops, sweet berry bushes or melons within :hunt-radius (blocks.dig).
   :fish  Nothing left: with a fishing rod carried and a bank beside seen water two deep within ::fish-radius (48), once per job it fishes two (jobs.food.fish) and eats or cooks them.
+  :pen   The surplus of its own pens: an animal in a zone or plan of its own in sight, else it walks (go-to) to the
+         nearest zone or plan of its own within :source-radius it has not visited in this job and hunts there (the
+         same keep rules; the kill's rule is :own-pen). Its stock is its reserve: taken after the wild food in reach, before fishing and the search.
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
   ::explore setting; not at night nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food with a food.none warning (what was searched, the nearest known source) and writes
@@ -47,7 +51,11 @@
   Start conditions (a listed call waits, a called one ends condition-failed): :not-hungry (the line is in :why); :no-food-found, hungry inside the ask cooldown with no food carried, nothing to bake or cook, no source learned since, no animal to hunt and no ripe crop in range (harmful food above ::eat-bad-food does not count): it looks around once from here first. Mid-call it ends condition-failed :no-food-found when the cooldown is on and nothing is left to try.
   Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the call.
   More than 12 ways in one call without getting fed ends nothing-possible :still-hungry.
-  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
+  Fragile (health at or below foods/::fragile-health, 6) with no food carried, it walks out (a search, a source, its pen,
+  an animal, a furnace to cook at) only on a calm day (jobs.lib.dawn/calm?) and not past known hostiles whose route
+  danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it then ends condition-failed
+  :too-dangerous (no :hungry written) and the hungry trigger waits for a calm day (jobs.survival.get-food.risk).
+  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
   get-food.trespass-last-resort warning). :ignore-zones? lifts both.
   A cut call starts again from the world: carried food first, then the ways.
@@ -65,7 +73,7 @@
    :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; not underground unless starving): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
    :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
    :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :spec (a/num-in 0 nil) :default (* 10 60 1000)}
-   :spare-pens {:doc "never hunt animals in a zone or plan of the body's own (false: a job asked to get food may take them)" :spec boolean? :default true}
+   :spare-pens {:doc "never hunt animals in a closed enclosure, nor those in a zone or plan of the body's own but by the :pen way (false: a job asked to get food may take them all)" :spec boolean? :default true}
    :keep-adults {:doc "adults of a kind in sight that are never hunted, so they can breed (hunted only when ::kept-lifted-below lifts it)" :spec (a/int-in 0 nil) :default 2}
    :off-limits {:doc "animal kinds never hunted; nil: the jobs.lib.animal-spare/off-limits setting" :spec (a/or-of (a/pred "nil" nil?) (a/coll-of a/item?)) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
@@ -136,7 +144,7 @@
 
 ;; ------------------------------------------------------------------ ways
 
-(def ways [:bake :cook :source :collect :hunt :crops :fish])
+(def ways [:bake :cook :source :collect :hunt :crops :fish :pen])
 
 (def defaults {:ways (set ways)})
 
@@ -160,8 +168,10 @@
   "The food animals the entity scan lists within :hunt-radius, nearest first, as {:entity e :why r :adults n :rule k}: r is nil for one
   to hunt, else :tried (attacked this job), :baby, :refused (another's zone or claim), or what jobs.lib.animal-spare/why
   says (:off-limits, :pen: a zone or plan of its own or a closed enclosure, :kept: the last :keep-adults of a kind are lifted only at ::kept-lifted-below
-  food or less with no food carried, by default never); n counts the adults of its kind in sight and k is the spare rule that allowed the hunt."
-  [c]
+  food or less with no food carried, by default never); n counts the adults of its kind in sight and k is the spare rule that allowed the hunt.
+  own? (the :pen way): an animal in a zone or plan of its own is no pen, and its rule is :own-pen."
+  ([c] (animals-in-sight c false))
+  ([c own?]
   (let [skipped (set (:skipped-animals (ctx/mem c)))
         seen (array-seq (.entities (:primitives c) #js {:radius (hunt-radius c) :kind "passive"
                                                         :names (clj->js food-animals) :max 16}))
@@ -172,25 +182,26 @@
     (->> seen
          (mapv (fn [e]
                  (let [n (adults (.-name e))
-                       penned? (and (not (skipped (.-id e))) (not (true? (.-baby e)))
+                       mine? (and own? (access/in-own-area? c (u/pos-of (.-pos e))))
+                       penned? (and (not mine?) (not (skipped (.-id e))) (not (true? (.-baby e)))
                                     (spare/penned? c pens e))
                        why (cond (skipped (.-id e)) :tried
                                  (true? (.-baby e)) :baby
                                  (access/container-refusal c :take (u/pos-of (.-pos e))) :refused
                                  :else (spare/why (:args c) (.-name e) n penned? starved?))]
                    {:entity e :why why :adults n
-                    :rule (when-not why (spare/allowed-by (:args c) n penned?))}))))))
+                    :rule (when-not why (if mine? :own-pen (spare/allowed-by (:args c) n penned?)))})))))))
 
 (defn nearest-animal
   "The nearest adult food animal within :hunt-radius not skipped in this job and not in another's zone or claim, as an animals-in-sight entry."
-  [c]
-  (->> (animals-in-sight c) (remove :why) first))
+  [c own?]
+  (->> (animals-in-sight c own?) (remove :why) first))
 
 (defn ^:async animal-in-sight
   "The nearest food animal in sight (an animals-in-sight entry); with none, the body looks around once from where it stands and tries again."
-  [c]
-  (or (nearest-animal c)
-      (await (look/survey-until! c :cell #(nearest-animal c)))))
+  [c own?]
+  (or (nearest-animal c own?)
+      (await (look/survey-until! c :cell #(nearest-animal c own?)))))
 
 (defn note-kill!
   "Say which animal the hunt attacked and where, with the adults of its kind counted, the keep threshold, the food level
@@ -206,20 +217,22 @@
                                            why))))
 
 (defn ^:async hunt!
-  "Kill the nearest food animal (combat.attack) and pick up its drops: :again, or nil when there is none (after a
-  look around). An animal is attacked once per job, killed or not."
-  [c]
-  (when-let [{animal :entity :as target} (await (animal-in-sight c))]
-    (let [{:keys [attack-gap-ms]} (:args c)
-          hunt-radius (hunt-radius c)
-          st (await (child/run! c :attack 'jobs.combat.attack
-                                {:targets [(.-id animal)] :radius hunt-radius :attack-gap-ms attack-gap-ms
-                                 :lost-s 0 :timeout-s 60}))]
-      (if (= :continue st)
-        :continue
-        (do (ctx/update-mem! c update :skipped-animals (fnil conj []) (.-id animal))
-            (note-kill! c target)
-            (or (await (collect-drops! c (drop-radius))) :again))))))
+  "Kill the nearest food animal (combat.attack; own?: its own pens' too, see animals-in-sight) and pick up its drops:
+  :again, or nil when there is none (after a look around) or the walk to it is refused (risk). An animal is attacked
+  once per job, killed or not."
+  [c own?]
+  (when-let [{animal :entity :as target} (await (animal-in-sight c own?))]
+    (when-not (risk/refused? c (u/pos-of (.-pos animal)))
+      (let [{:keys [attack-gap-ms]} (:args c)
+            hunt-radius (hunt-radius c)
+            st (await (child/run! c :attack 'jobs.combat.attack
+                                  {:targets [(.-id animal)] :radius hunt-radius :attack-gap-ms attack-gap-ms
+                                   :lost-s 0 :timeout-s 60}))]
+        (if (= :continue st)
+          :continue
+          (do (ctx/update-mem! c update :skipped-animals (fnil conj []) (.-id animal))
+              (note-kill! c target)
+              (or (await (collect-drops! c (drop-radius))) :again)))))))
 
 (defn passed-over
   "The animals in sight that were not hunted, as {:name :id :why}."
@@ -269,6 +282,7 @@
        (not (and (way? c :cook) (cook/can-cook? c)))
        (not (and (way? c :source) (sources/fresh-source c)))
        (or (not (way? c :hunt)) (empty? (remove :why (animals-in-sight c))))
+       (or (not (way? c :pen)) (empty? (remove :why (animals-in-sight c true))))
        (or (not (way? c :crops)) (empty? (sources/ripe-blocks c (merge sources/ripe-age sources/wild-food) (u/self-pos c) (hunt-radius c))))))
 
 (defn no-food-cause [c]
@@ -311,14 +325,30 @@
 (defn ^:async use-source!
   "Way :source: :again or :continue when the source gave something to do, else nil."
   [c source]
-  (case (:kind source)
-    :farm (await (sources/farm! c source))
-    :chest (await (sources/chest! c source))
-    :animals (case (await (sources/go-near! c (:pos source)))
-               :continue :continue
-               :far (sources/bury-source! c (:pos source))
-               (do (sources/pass-over! c (:pos source)) (await (hunt! c))))
-    nil))
+  (if (risk/refused? c (:pos source))
+    (do (sources/pass-over! c (:pos source)) :again)
+    (case (:kind source)
+      :farm (await (sources/farm! c source))
+      :chest (await (sources/chest! c source))
+      :animals (case (await (sources/go-near! c (:pos source)))
+                 :continue :continue
+                 :far (sources/bury-source! c (:pos source))
+                 (do (sources/pass-over! c (:pos source)) (await (hunt! c false))))
+      nil)))
+
+(defn ^:async pen!
+  "Way :pen: hunt the surplus of its own pens in sight, else walk to the nearest zone or plan of its own not visited in
+  this job (not inside the ask cooldown) and hunt there. :again after a visit, nil with none left."
+  [c]
+  (if (nearest-animal c true)
+    (await (hunt! c true))
+    (when-let [pos (when-not (gave-up-recently? c) (first (sources/own-areas c)))]
+      (sources/pass-over! c pos)
+      (if (risk/refused? c pos)
+        :again
+        (case (await (sources/go-near! c pos))
+          :continue :continue
+          (or (await (hunt! c true)) :again))))))
 
 (defn ^:async next-way!
   "The first allowed way with something to do: :again (try eating, then the ways, again), :continue (yield), or nil when
@@ -329,8 +359,9 @@
         (when (and (way? c :cook) (cook/can-cook? c)) (await (cook/cook! c)))
         (when source (await (use-source! c source)))
         (when (way? c :collect) (await (collect-drops! c (drop-radius))))
-        (when (way? c :hunt) (await (hunt! c)))
-        (when (way? c :crops) (await (sources/dig-ripe! c (merge sources/ripe-age sources/wild-food) (u/self-pos c) (hunt-radius c)))))))
+        (when (way? c :hunt) (await (hunt! c false)))
+        (when (way? c :crops) (await (sources/dig-ripe! c (merge sources/ripe-age sources/wild-food) (u/self-pos c) (hunt-radius c))))
+        (when (way? c :pen) (await (pen! c))))))
 
 (defn night-blocks-search?
   "Whether the night stops the search: it does, unless the body is starving and no danger is near."
@@ -352,15 +383,17 @@
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
   not at night (a body sheltered for the night stays in) nor while the night handler holds, unless starving with no
-  danger near (jobs.lib.danger/danger-near?), nor underground (sh/buried?) unless starving. :again when the search found something to hunt or dig, else nil with what it
+  danger near (jobs.lib.danger/danger-near?), nor underground (sh/buried?) unless starving and not fragile, nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
   (let [e (:explore (:args c))]
     (cond
       (or (not e) (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (foods/starving-rest-ms))) nil
+      (risk/refused? c nil)
+      (do (ctx/update-mem! c assoc :explored (str "not searched: " (:too-dangerous (ctx/mem c)))) nil)
       (night-blocks-search? c)
       (do (ctx/update-mem! c assoc :explored "not searched at night or while the night handler holds") nil)
-      (and (sh/buried? (:primitives c)) (not (starving? c)))
+      (and (sh/buried? (:primitives c)) (or (not (starving? c)) (foods/fragile? (.self (:primitives c)))))
       (do (ctx/update-mem! c assoc :explored "not searched underground: the caves are dark and full of mobs; surface or eat first") nil)
       :else
       (do
@@ -447,6 +480,7 @@
   waited out in a reflex round (a reflex never yields), else the round yields :continue and keeps the child; a cut
   call starts again from the world."
   [c]
+  (ctx/update-mem! c dissoc :too-dangerous)
   (loop [n 0]
     (let [cooked (when (and (way? c :cook) (cook/cook-first? c)) (await (cook/cook! c)))
           eaten (if (or (= :continue cooked) (= :again cooked)) cooked (await (eat-carried! c)))
@@ -470,5 +504,9 @@
                   (or (= :continue more) (= :continue bad)) (if (:reflex c) (do (await (child/pace!)) (recur n)) :continue)
                   (or more bad) (recur (inc n))
                   (not (hungry-now? c)) (stock-stop! c)
+                  (:too-dangerous (ctx/mem c))
+                  (ctx/end c :condition-failed {:reason :too-dangerous
+                                                :why (str "hungry (food " (food-level c) "), " (:too-dangerous (ctx/mem c)))}
+                           {:food (food-level c)})
                   (gave-up-recently? c) (ctx/end c :condition-failed (no-food-cause c) {:food (food-level c)})
                   :else (none! c)))))))

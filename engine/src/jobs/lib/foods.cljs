@@ -12,7 +12,8 @@
 (a/defargs settings
   {::starving-rest-ms {:default 60000 :doc "The rest after a fruitless food search while starving (food 0, or hurt and hungry), for get-food's ask cooldown and the hungry trigger." :spec (a/num-in 0 nil)}
    ::reserve-eat-below {:default 3 :doc "At this much food or less bait reserved by a running animal job is eaten as well." :spec (a/int-in 0 20)}
-   ::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :spec (a/int-in 0 nil)}})
+   ::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :spec (a/int-in 0 nil)}
+   ::fragile-health {:default 6 :doc "At or below this health a body with no food carried walks out for food only on a calm day (jobs.lib.dawn/calm?) and never past a known hostile that would likely kill it (the hungry trigger, get-food)." :spec (a/num-in 0 20)}})
 
 (def table-for
   "{item name {:points :saturation}} for every food minecraft-data lists for a version (memoised)."
@@ -81,6 +82,11 @@
   7)
 
 (defn starving-rest-ms [] (settings/get settings ::starving-rest-ms))
+
+(defn fragile?
+  "Health at or below ::fragile-health: one hit may kill."
+  [self]
+  (<= (.-health self) (settings/get settings ::fragile-health)))
 
 (defn starving?
   "Food 0, or health below default-health while hungry: the rest after a fruitless search shortens."

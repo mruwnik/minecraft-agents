@@ -4,13 +4,15 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.access.zones :as zones]
             [jobs.lib.child :as child]
             [jobs.lib.crops :as crops]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.world :as known]))
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
@@ -79,6 +81,29 @@
         gave-up (:t (ctx/latest c :hungry))]
     (when (and source learned gave-up (> learned gave-up))
       source)))
+
+(defn own-areas
+  "The middles {:x :y :z} of the zones this body owns and of the plans it made (their footprints), within :source-radius,
+  not tried in this job, nearest first: its own pens and farms, which it knows without seeing them."
+  [c]
+  (let [self (ctx/self-name c)
+        here (u/self-pos c)
+        tried (set (:tried-sources (ctx/mem c)))
+        middle (fn [cells] (zipmap [:x :y :z] (apply map #(js/Math.floor (/ (+ %1 %2) 2)) cells)))
+        zoned (->> (known/zones c)
+                   (filter #(zones/same-owner? (:owner %) self))
+                   (map #(middle [(:min %) (:max %)])))
+        planned (->> (known/footprints c)
+                     (filter (comp (access/own-plans c) val))
+                     (group-by val)
+                     vals
+                     (map (fn [cells] (let [cs (map key cells)]
+                                        (middle [(apply mapv min cs) (apply mapv max cs)])))))]
+    (->> (concat zoned planned)
+         distinct
+         (remove tried)
+         (filter #(<= (u/dist here %) (:source-radius (:args c))))
+         (sort-by #(u/dist here %)))))
 
 (defn pass-over!
   "Not try the source at pos again in this job."

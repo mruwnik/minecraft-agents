@@ -603,6 +603,58 @@
           (is (= [] (events-of seen :search.not-found)) "a hostile near: no search")
           (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
 
+(defn stop-text
+  "The job's stopped events, printed: the ending's reason and why."
+  [seen]
+  (pr-str (filterv #(and (= :job (:source %)) (= :stopped (:kind %))) @seen)))
+
+(def creeper {:id 5 :name "creeper" :kind "hostile" :health 20})
+
+(deftest a-body-on-low-health-does-not-search-at-first-light
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {:self {:food 10 :health 2} :time 23800} :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (= [] (events-of seen :search.not-found)) "no search")
+          (is (= [] (tu/walk-calls p)))
+          (is (re-find #":reason :too-dangerous" (stop-text seen)))
+          (is (= [] (entries eng :hungry)) "not a fruitless search: no rest written"))))))
+
+(deftest a-body-on-low-health-searches-on-a-calm-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 10 :health 2} :time 6000} :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (= 1 (count (events-of seen :search.not-found)))))))))
+
+(def bread-chest {:floor [-30 -10 100 10] :containers {"60,64,0" [{:name "bread" :count 4}]}})
+
+(deftest a-body-on-low-health-does-not-walk-past-a-known-creeper-to-a-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup (merge bread-chest {:self {:food 5 :health 2} :time 6000
+                                                              :entities [(assoc creeper :pos {:x 50.5 :y 64 :z 0.5})]})
+                                          :step-ms 5)]
+          (know-source! eng {:x 60 :y 64 :z 0} :chest)
+          (await (one-round! eng {:explore false}))
+          (is (= [] (calls p "transfer")))
+          (is (re-find #"too-dangerous" (stop-text seen)))
+          (is (re-find #"passes creeper" (stop-text seen))))))))
+
+(deftest a-body-on-low-health-walks-to-a-source-with-no-hostile-about
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (merge bread-chest {:self {:food 5 :health 2} :time 6000}) :step-ms 5)]
+          (know-source! eng {:x 60 :y 64 :z 0} :chest)
+          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (await (tu/run-until-empty eng 60))
+          (is (= ["bread"] (call-args p "transfer" "item")))
+          (is (> (food p) 5)))))))
+
 (deftest hungry-at-night-in-a-roofed-hut-does-not-explore-out-of-it
   (async done
     (tu/run-async done
@@ -730,6 +782,29 @@
                                       :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]})]
           (await (one-round! eng {:explore false}))
           (is (= [] (calls p "furnace")) "no cooking under threat")
+          (is (> (food p) 5)))))))
+
+(defn ^:async low-health-cook! [entities]
+  (let [{:keys [eng p] :as w} (setup {:blocks {"30,64,0" "furnace"} :self {:food 5 :health 2} :time 6000 :entities entities
+                                      :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
+                                     :step-ms 2000)]
+    (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+    (await (run-until-idle! eng p 40))
+    w))
+
+(deftest raw-beef-is-cooked-on-low-health-on-a-calm-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (low-health-cook! []))]
+          (is (some #{"take"} (call-args p "furnace" "op"))))))))
+
+(deftest raw-beef-is-eaten-raw-on-low-health-with-a-creeper-by-the-furnace
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (low-health-cook! [(assoc creeper :pos {:x 33.5 :y 64 :z 0.5})]))]
+          (is (= [] (calls p "furnace")) "the walk would likely kill it")
           (is (> (food p) 5)))))))
 
 (deftest raw-beef-is-cooked-at-a-remembered-furnace-beyond-the-cook-radius

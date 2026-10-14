@@ -78,6 +78,15 @@
     (is (not (level {:time night :self {:food 4}})) "at night nothing is searched for: the body waits sheltered")
     (is (level {:time night :self {:food 4} :inventory [{:name "bread" :count 1}]}) "carried food is eaten at night")))
 
+(deftest hungry-on-low-health-waits-sheltered-for-a-calm-day
+  (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/fake world) {} {}))
+        creeper {:id 5 :name "creeper" :kind "hostile" :pos {:x 20.5 :y 64 :z 0.5} :health 20}]
+    (is (not (level {:time 23800 :self {:food 10 :health 2}})) "first light: the dawn grace has not passed")
+    (is (not (level {:time 6000 :self {:food 10 :health 2} :entities [creeper]})) "a known creeper about")
+    (is (level {:time 6000 :self {:food 10 :health 2}}) "a calm day: it goes")
+    (is (level {:time 23800 :self {:food 10 :health 2} :inventory [{:name "bread" :count 1}]}) "carried food is eaten")
+    (is (level {:time 23800 :self {:food 4 :health 20}}) "a healthy body goes at first light")))
+
 ;; ------------------------------------------- the hungry reflex with nothing to eat
 
 (defn hungry-fired [seen]
@@ -520,15 +529,40 @@
           (is (some #(and (= :food.none (:kind %)) (re-find #"cow: kept for breeding" (str (:text %)))) @seen)
               "the text says the cows were kept"))))))
 
-(deftest get-food-spares-animals-in-the-bodys-own-zone
+(def own-farm [{:name "farm" :owner "Fake" :min [0 60 -3] :max [20 70 3]}])
+
+(defn killed-events [seen] (filterv #(= :food.killed (:kind %)) @seen))
+
+(deftest get-food-takes-the-surplus-of-its-own-pen-when-nothing-else-is-found
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (hunt-world three-cows [{:name "farm" :owner "Fake" :min [0 60 -3] :max [20 70 3]}])]
+        (let [{:keys [eng p seen]} (hunt-world three-cows own-farm)]
           (await (run-until-empty eng 40))
-          (is (= [] (calls p "attack"))))))))
+          (is (= [7] (distinct (call-args p "attack" "id"))) "one cow, the two others kept for breeding")
+          (is (= [:own-pen] (mapv :rule (killed-events seen)))))))))
 
-(def own-farm [{:name "farm" :owner "Fake" :min [0 60 -3] :max [20 70 3]}])
+(deftest get-food-hunts-wild-animals-before-its-own-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wild (mapv #(assoc %1 :id %2 :pos {:x %3 :y 64 :z 0}) three-cows [17 18 19] [-4 -8 -9])
+              {:keys [eng p]} (hunt-world (into three-cows wild) own-farm)]
+          (await (run-until-empty eng 40))
+          (is (= [17] (distinct (call-args p "attack" "id")))))))))
+
+(deftest get-food-walks-to-its-own-pen-out-of-sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [penned (mapv #(assoc cow :id %1 :pos {:x %2 :y 64 :z 0}) [7 8 9] [33 36 37])
+              {:keys [eng p]} (setup {:self {:food 4} :entities penned}
+                                     [{:name "far-pen" :owner "Fake" :min [30 60 -3] :max [40 70 3]}])]
+          (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0 :explore false}) {})
+          (await (run-until-empty eng 60))
+          (is (seq (tu/walk-calls p)) "walked to the pen it could not see")
+          (is (= [7] (distinct (call-args p "attack" "id"))))
+          (is (> (food p) 4)))))))
 
 (defn hunt-world-with [spec entities zones]
   (let [{:keys [eng p seen] :as w} (setup {:self {:food 4} :entities entities} zones)]
@@ -567,8 +601,6 @@
         (let [{:keys [eng seen]} (hunt-world-with {} three-cows nil)]
           (await (run-until-empty eng 40))
           (is (some #(and (= :food.killed (:kind %)) (re-find #"cow" (str (:text %))) (re-find #"\[5 64 0\]" (str (:text %)))) @seen)))))))
-
-(defn killed-events [seen] (filterv #(= :food.killed (:kind %)) @seen))
 
 (deftest get-food-says-why-each-kill-was-allowed
   (async done

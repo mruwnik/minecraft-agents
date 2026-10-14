@@ -36,7 +36,7 @@
     (is (vector? (:conditions job)))
     (is (nil? (:check job)) "no old check")
     (is (= [] (:target job)))
-    (is (= [:bake :cook :source :collect :hunt :crops :fish] (:ways job)))
+    (is (= [:bake :cook :source :collect :hunt :crops :fish :pen] (:ways job)))
     (is (fn? (:done? job)))
     (is (nil? (contract/quote-problem ((:quote-of job) {:args {}}))))
     (is (fn? cook/cook!) "the cooking block night's hold uses lives in get-food.cook")

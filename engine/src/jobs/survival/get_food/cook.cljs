@@ -9,7 +9,8 @@
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.survival.get-food.risk :as risk]))
 
 (a/defargs settings
   {::shelter-cook-reach {:default 5 :doc "Blocks within which a furnace counts for cooking while the night handler holds the body in its shelter." :spec (a/int-in 0 nil)}
@@ -71,10 +72,12 @@
     (<= (.-health (.self (:primitives c))) (+ lost (settings/get settings ::cook-margin-hp)))))
 
 (defn rushed?
-  "No time to cook: a real danger is sensed near, or food is 0 and health would not outlast the cook (starving-too-soon?)."
+  "No time to cook: a real danger is sensed near, food is 0 and health would not outlast the cook (starving-too-soon?),
+  or a fragile body may not walk to the furnace (jobs.survival.get-food.risk/refusal)."
   [c]
   (boolean (or (seq (threats/sensed-mobs (:primitives c) {}))
-               (and (<= (food-level c) 0) (starving-too-soon? c)))))
+               (and (<= (food-level c) 0) (starving-too-soon? c))
+               (and (seq (raw-carried c)) (risk/refusal c (or (:furnace (:cooking (ctx/mem c))) (nearest-cooker c)))))))
 
 (defn worth-cooking?
   "Cooking the raw food carried beats eating it now (jobs.lib.cost/cook-worth?): the walk to the furnace known, or

@@ -3,6 +3,7 @@
   (:require [jobs.lib.body :as body]
             [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.dawn :as dawn]
             [jobs.lib.foods :as foods]
             [jobs.lib.shelter :as sh]
             [engine.memory :as mem]))
@@ -42,6 +43,7 @@
   Holds at :urgent when eat-now? does (low health) or food is at most ::urgent-food (2), else at its :comfort level.
   Args: :food, :health, :rest-s.
   At night it holds only with food carried to eat: a search in the dark walks into mobs, and starvation stops at half a heart.
+  A fragile body (foods/fragile?) with no food carried holds only on a calm day (jobs.lib.dawn/calm?): it waits sheltered.
   It rests (resting?) for :rest-s (600; at most foods/::starving-rest-ms, 60 s, when starving) after get-food found nothing, so a body with nothing at hand is not sent
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
   [world memory args]
@@ -53,5 +55,6 @@
              (foods/top-up? (.-food self) (.-health self) (foods/carried-names self reserved))
              (foods/eat-now? self args reserved))
          (not (resting? self memory args))
-         (or (not (sh/night? world)) (foods/carries-food? self reserved))
+         (or (foods/carries-food? self reserved)
+             (and (not (sh/night? world)) (or (not (foods/fragile? self)) (dawn/calm? world))))
          (if urgent? :urgent true))))
