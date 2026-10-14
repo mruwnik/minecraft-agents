@@ -29,12 +29,15 @@
    :blocks (merge hut/tunnel {"40,64,0" "red_bed"}) :light light})
 
 (defn lit-fake
-  "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh/buried?)."
+  "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh/buried?). :sees-all in the
+  world: the fake's own sight (every block seen) with the perception only for its light."
   [world]
   (let [raw-p (tu/fake (dissoc world :light))
         _ (swap! (fake/state raw-p) assoc :light (:light world {}))
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
-    {:raw raw-p :p (perception/wrap raw-p per)}))
+    {:raw raw-p :p (if (:sees-all world)
+                     (doto (js/Object.assign #js {} raw-p) (aset "perception" per))
+                     (perception/wrap raw-p per))}))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -105,3 +108,27 @@
           (is (= {:x 5 :y 64 :z 0} (update-vals (st/pos-of p) js/Math.floor)) "the body stays in the tunnel")
           (is (empty? (st/calls raw "sleep")))
           (is (empty? (st/calls raw "moveTo")) "no walk toward the far bed"))))))
+
+(def hut-light
+  "A closed hut: sky light 0 at the body's feet and head cells."
+  {[4 64 -1] [0 0] [4 65 -1] [0 0]})
+
+(defn hut-night-world [blocks extra]
+  (merge (hut/hut-world {:x 4 :y 64 :z -1} blocks) {:time st/night :light hut-light :sees-all true} extra))
+
+(defn blind-above
+  "p that has not seen the roof: the roof (above the walls) is unknown (a body cannot look up from inside)."
+  [p]
+  (let [seen (.-sensedAt p)]
+    (doto p (aset "sensedAt" (fn [a] (if (> (.-y a) 66) #js {:unknown true} (.call seen p a)))))))
+
+(deftest a-body-buried-in-a-closed-hut-places-its-carried-bed
+  (let [{:keys [eng p]} (setup (hut-night-world {} {:inventory [{:name "red_bed" :count 1}]}))
+        _ (blind-above p)]
+    (is (true? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))))))
+
+(deftest a-body-buried-in-a-closed-hut-uses-a-bed-in-the-same-hut
+  (let [{:keys [eng p]} (setup (hut-night-world {"6,64,-1" "red_bed"} {}))
+        _ (blind-above p)]
+    (st/know-bed! eng {:x 6 :y 64 :z -1})
+    (is (= {:x 6 :y 64 :z -1} (sh/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))))

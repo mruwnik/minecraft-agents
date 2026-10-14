@@ -570,11 +570,23 @@
      :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
                 "(jobs.survival.night), or run jobs.survival.dig-in leave")}))
 
+(defn wide-room?
+  "Whether the room has a 2x2 floor patch: a hut, not a one-wide tunnel the body dug."
+  [{:keys [cells]}]
+  (let [in? (set cells)]
+    (boolean (some (fn [[x y z]] (and (in? [(inc x) y z]) (in? [x y (inc z)]) (in? [(inc x) y (inc z)]))) in?))))
+
 (defn shut-in-room?
   "Whether the body stands in a closed room (reach/closed-room?) with a roof over it within room-roof-height blocks:
-  safe from the night though the roof is above :roof-height."
+  safe from the night though the roof is above :roof-height. Sealed from the sky (buried?) counts as roofed: the roof
+  over the feet cannot be looked at from inside."
   [p]
-  (and (roofed? p (room-roof-height)) (reach/closed-room? p (feet p))))
+  (and (or (roofed? p (room-roof-height)) (buried? p)) (reach/closed-room? p (feet p))))
+
+(defn shut-in-hut?
+  "shut-in-room? and wide: a hut, not a one-wide tunnel the body dug."
+  [p]
+  (and (shut-in-room? p) (wide-room? (reach/room p (feet p)))))
 
 (defn breached-home?
   "Whether the roofed body's room has a hole: a :bed-open entry (a bed found open) within breach-near blocks and the body
@@ -630,7 +642,7 @@
   A buried body is not pulled out of the ground to place a bed or log out: the night changes nothing there."
   [p view args permit?]
   (let [shelter (:data (mem/latest view :shelter))
-        buried (buried? p)]
+        buried (and (buried? p) (not (shut-in-hut? p)))]
     (boolean
      (if (night? p)
        (and (not (sleeping? p))
