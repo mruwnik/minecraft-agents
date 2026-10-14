@@ -3,7 +3,7 @@
   boundary, over the started contract frames of the chain. The outermost crossed frame is the one a crossing ends.
   With :engine.contract/enforce-limits on it is tagged (its :contract :limit) and a limit error unwinds to its call
   boundary, which ends it :limit-reached; on the way frames may act but not call, and a crossing inside ctx/atomic is
-  held until the section closes. Before an act, its most (jobs.primitive) is checked against what each frame has left:
+  held until the section closes. Before an act, its most (engine.primitive) is checked against what each frame has left:
   enforced, a crossing refuses the act at once. Off, job.limit_would_end is told once per crossed frame and line, and
   the job goes on."
   (:require [engine.contract :as contract]
@@ -11,7 +11,7 @@
             [engine.expr :as expr]
             [engine.memory :as mem]
             [engine.settings :as settings]
-            [jobs.primitive :as primitive]))
+            [engine.primitive :as primitive]))
 
 (defn enforce? [] (settings/get contract/settings ::contract/enforce-limits))
 
@@ -91,7 +91,7 @@
   (check-frames! eng base (frames eng root slots)))
 
 (defn refusals
-  "As crossings, each line of frames act k with args could cross before it can be stopped (its jobs.primitive quote's
+  "As crossings, each line of frames act k with args could cross before it can be stopped (its engine.primitive quote's
   most, engine.contract/most-crossings), the cause naming the act."
   [eng frames t0s k args]
   (when-let [quote-of (get-in primitive/table [k :quote-of])]

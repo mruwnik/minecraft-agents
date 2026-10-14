@@ -4,7 +4,7 @@
             [clojure.string :as str]
             [engine.fake :as fake]
             [engine.test-util :as tu]
-            [jobs.primitive :as primitive]))
+            [engine.primitive :as primitive]))
 
 (defn at [x y z] {:x x :y y :z z})
 

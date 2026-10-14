@@ -227,7 +227,7 @@ A job is a namespace under `src/jobs/` exporting `check` and `round`, and option
 There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:check :round :doc :args}}`,
 built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
 that defines `round` and `check` or `conditions` (others are helpers), fails the compile when such a file's `ns` does not match its
-path, and the macro `engine.registry/job-registry` emits the map, with each `jobs.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args). `check` and `round` must be top-level `def`/`defn` forms, and a job must not
+path, and the macro `engine.registry/job-registry` emits the map, with each `engine.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args). `check` and `round` must be top-level `def`/`defn` forms, and a job must not
 require `engine.registry`.
 
 - **check**: can the job usefully run now? Cheap and side-effect free: its ctx has no token, so `act`, `update-mem!` and
@@ -310,7 +310,7 @@ remainder only with `enforce-limits` on (else `job.way_would_drop`); a least of 
 **Limits (engine.core.limits).** A child's limits are clamped to its caller's; acts and call boundaries check the chain.
 `:engine.contract/enforce-limits` off (default): `job.limit_would_end` once per crossed frame and line (`:used`, `:health`,
 `:food` or `:now`); on: the outermost crossed frame ends `:limit-reached`; catch-alls rethrow on `contract/passes-through?`.
-Before an act, its most (`jobs.primitive` table: target, quote-of, ending per primitive) is checked against what each frame
+Before an act, its most (`engine.primitive` table: target, quote-of, ending per primitive) is checked against what each frame
 has left: a crossing (cause with `:act`, amount `:most`/`:left`) refuses the act when enforced, inside `ctx/atomic` too.
 
 **Old and contract jobs together (engine.core.legacy).** An old job through `ctx/call` ends with the ending its

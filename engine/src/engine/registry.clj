@@ -126,11 +126,14 @@
   [k]
   (symbol (str "jobs.primitive." (str/replace (name k) #"[A-Z]" #(str "-" (str/lower-case %))))))
 
+(defn primitive-file "engine/primitive.cljs on the classpath, or nil." []
+  (some-> (io/resource "engine/primitive.cljs") io/file))
+
 (defn primitive-keys
-  "The primitives of the table in jobs/primitive.cljs (its keys), in order, or []."
+  "The primitives of the table in engine/primitive.cljs (its keys), in order, or []."
   []
-  (if-let [dir (jobs-dir)]
-    (vec (keys (def-value "table" (read-forms (io/file dir "primitive.cljs")))))
+  (if-let [file (primitive-file)]
+    (vec (keys (def-value "table" (read-forms file))))
     []))
 
 (defn job-metadata
@@ -141,7 +144,7 @@
                                  (when (job? (try (defined-names (read-forms f)) (catch Exception _ #{'check 'round})))
                                    (file-metadata id f))))
                        (job-files dir))
-                 (let [file (io/file dir "primitive.cljs")]
+                 (let [file (primitive-file)]
                    (for [k (primitive-keys)]
                      (assoc (file-metadata (primitive-job-name k) file) :doc (str "The primitive " k " as a job: one act."))))))
     []))
@@ -149,7 +152,7 @@
 (defmacro job-registry
   "{ns-symbol {:check :round :doc :args :idle-ok}} for every job namespace under jobs/; a contract job's entry also
   holds :conditions :target :ways :defaults :done? :quote-of :legacy-args and its namespace's :settings. Each
-  primitive of the jobs/primitive.cljs table is a job too, as jobs.primitive.<kebab-case> (jobs.primitive/job)."
+  primitive of the engine/primitive.cljs table is a job too, as jobs.primitive.<kebab-case> (jobs.primitive/job)."
   []
   (into (into {} (map (fn [k] [(list 'quote (primitive-job-name k)) (list 'jobs.primitive/job k)])) (primitive-keys))
         (map (fn [{:keys [ns defines]}]

@@ -11,7 +11,8 @@
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
-            [jobs.primitive :as primitive]))
+            [engine.primitive :as primitive]
+            [jobs.primitive :as primitive-job]))
 
 (def world (atom {}))
 (def clock (atom 0))
@@ -168,6 +169,6 @@
           (is (zero? (calls p "eat")) "a quote does not act"))))))
 
 (deftest a-primitive-job-without-what-the-act-needs-fails-its-condition
-  (let [[_ condition] (first (:conditions (primitive/job :place)))]
+  (let [[_ condition] (first (:conditions (primitive-job/job :place)))]
     (is (= {:reason :bad-args :missing [:pos :item]} (condition {:args {:pos nil}})))
     (is (nil? (condition {:args {:pos {:x 0 :y 64 :z 0} :item "dirt"}})))))

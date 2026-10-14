@@ -5,7 +5,7 @@
             [clojure.string :as str]
             [engine.triggers :as triggers]
             [jobs.lib.choose :as choose]
-            [jobs.primitive :as primitive]))
+            [engine.primitive :as primitive]))
 
 (def migrated
   '#{jobs.survival.breathe jobs.survival.unwedge jobs.survival.extinguish
