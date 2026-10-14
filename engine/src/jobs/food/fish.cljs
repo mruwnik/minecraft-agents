@@ -1,10 +1,12 @@
 (ns jobs.food.fish
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
+            [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
-            [jobs.lib.result :as result]
             [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]))
 
@@ -12,10 +14,13 @@
   "Catch :count fish with a fishing rod from a bank beside seen water.
   The bank is a land cell with seen water (two deep) beside it at the level below, within :radius of the body (:pos names the water cell
   to cast at instead). The body walks there (go-to), holds the rod and casts: one cast waits for a bite up to :cast-s, then reels.
-  A body with no rod gets one first (a jobs.items.obtain child, unless :fetch is false).
-  Ends {:status :done :got n :caught {item n}} once :count fish (cod, salmon, tropical fish, pufferfish) came in, else {:status :stopped :got n :reason r}:
-  :no-rod (none carried and none could be had), :no-water (no seen water with a bank within :radius), :unreachable (the bank could not be walked to),
-  :no-bite (:max-misses casts in a row caught nothing) or :timeout (:timeout-s from the first round). Info fish.caught per fish.
+  A body with no rod gets one first (jobs.lib.need, unless :fetch is false).
+  Ends with the data {:got n :text}, info fish.caught per fish, and the ending:
+  - :done: :count fish (cod, salmon, tropical fish, pufferfish) came in.
+  - :condition-failed :no-rod (none carried and :fetch false), :no-water (no seen water with a bank within :radius), both
+    ending the first round, or a failed rod fetch (the cause names the rod, :because the fetch's ending).
+  - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (:max-misses casts in a row caught nothing).
+  - :limit-reached :timeout (the call's :spend :time, default ::time-s, from the first round).
   Resumes from the carried fish: the goal is the count carried at the first round plus :count.")
 
 (a/defargs args
@@ -24,12 +29,21 @@
    :radius {:doc "how far from the body to look for a bank" :spec (a/num-in 1 nil) :default 24}
    :cast-s {:doc "seconds one cast waits for a bite" :spec (a/num-in 1 nil) :default 45}
    :max-misses {:doc "casts in a row without a catch before the job gives up :no-bite" :spec (a/int-in 1 nil) :default 8}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :spec (a/num-in 1 nil) :default 600}
-   :fetch {:doc "get a rod when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-rod" :spec fetch/option? :default true}})
+   :fetch {:doc "get a rod when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-rod" :spec fetch/option? :default true}})
 
-(defn check
-  "Passes: the round decides, and ends :stopped with the reason when it cannot fish."
-  [_c] true)
+(a/defargs settings
+  {::time-s {:default 600 :doc "Seconds from the first round before fishing gives up." :spec (a/num-in 1 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
+
+(def target [:pos])
+
+(def defaults {:spend {:time ::time-s}})
+
+(defn legacy-args
+  "An old caller's :timeout-s as the call's :spend {:time}."
+  [{:keys [timeout-s] :as args}]
+  (cond-> (dissoc args :timeout-s)
+    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
 
 (def fish-items #{"cod" "salmon" "tropical_fish" "pufferfish"})
 
@@ -38,8 +52,7 @@
 
 (defn rod-carried? [c] (boolean (some #(= "fishing_rod" (:name %)) (u/inventory (:primitives c)))))
 
-(defn rod-problem [c]
-  (when-not (rod-carried? c) {:reason :need :item "fishing_rod" :count 1}))
+(defn got [c] (- (fish-carried c) (:base (ctx/mem c) (fish-carried c))))
 
 (defn spots
   "The banks {:land :water} to cast from: the one beside :pos when given, else the seen ones within :radius, nearest first;
@@ -53,12 +66,32 @@
                 (shore/spots p (u/self-pos c) {:radius (:radius (:args c))}))]
     (filter deep? found)))
 
-(defn stop! [c reason text]
-  (result/stop! c reason text :got (- (fish-carried c) (:base (ctx/mem c) 0))))
+(def conditions
+  "None wait: a refusal ends the call in its first round (start-problem), so a queued order never blocks the queue."
+  [])
 
-(defn done! [c]
-  (let [got (- (fish-carried c) (:base (ctx/mem c)))]
-    (result/finish! c {:got got :text (str "caught " got " fish")})))
+(defn done? [c]
+  (let [n (got c) want (:count (:args c))]
+    {:done? (>= n want) :units :fish :done n :left (max 0 (- want n))}))
+
+(defn time-limit "Seconds the call may fish." [c]
+  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+
+(defn quote-of [c]
+  (let [most (time-limit c)]
+    {:uses {:time [0 (min most (* 30 (:count (:args c) 1))) most]}}))
+
+(defn stop!
+  "End the call: kind and cause, the fish got so far and text as the data."
+  [c kind cause text]
+  (ctx/end c kind cause {:got (got c) :text text}))
+
+(defn start-problem
+  "At the call's start, why it cannot fish: [cause text], or nil."
+  [c]
+  (cond
+    (and (not (rod-carried? c)) (nil? (fetch/parse-arg (:fetch (:args c))))) [:no-rod "no fishing rod is carried and :fetch is off"]
+    (empty? (spots c)) [:no-water "no seen water with a bank in reach"]))
 
 (defn ^:async cast! [c {:keys [water]}]
   (let [r (await (ctx/act c :fish (clj->js {:pos water :timeoutS (:cast-s (:args c))})))
@@ -69,26 +102,40 @@
                    :again)
       (do (ctx/update-mem! c update :misses (fnil inc 0)) :again))))
 
+(defn ^:async get-rod!
+  "A rod through jobs.lib.need (its time is not fishing time): :again once it is done, :continue while it waits, else the ending."
+  [c]
+  (let [limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :depth :explore])
+        e (await (u/untimed! c #(need/item! c "fishing_rod" 1 limits)))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) :again
+      :else (assoc-in e [:data :got] (got c)))))
+
+(defn ^:async walk! [c {:keys [land]}]
+  (let [r (await (child/call-walk* c :bank {:pos (select-keys land [:x :y :z]) :range 1 :escalate false :zone-tolls true}))]
+    (cond
+      (= :continue r) :continue
+      (= :done (:kind r)) :arrived
+      :else (stop! c :nothing-possible :unreachable (str "could not walk to the bank at " (pr-str land))))))
+
 (defn ^:async step [c]
   (let [m (ctx/mem c)
-        {:keys [count max-misses timeout-s]} (:args c)]
+        {:keys [count max-misses]} (:args c)]
     (cond
-      (>= (fish-carried c) (+ (:base m) count)) (done! c)
-      (> (- (ctx/now c) (:started m)) (* 1000 timeout-s)) (stop! c :timeout "fishing took too long")
-      (>= (:misses m 0) max-misses) (stop! c :no-bite (str max-misses " casts in a row caught nothing"))
+      (>= (got c) count) (let [n (got c)] (ctx/end c :done nil {:got n :text (str "caught " n " fish")}))
+      (> (- (ctx/now c) (:started m)) (* 1000 (time-limit c))) (stop! c :limit-reached {:line :time :reason :timeout} "fishing took too long")
+      (>= (:misses m 0) max-misses) (stop! c :nothing-possible :no-bite (str max-misses " casts in a row caught nothing"))
+      (not (rod-carried? c)) (await (get-rod! c))
       :else
-      (or (await (fetch/fetch! c 'jobs.food.fish rod-problem))
-          (if-not (rod-carried? c)
-            (stop! c :no-rod "no fishing rod is carried and none could be had")
-            (if-let [spot (first (spots c))]
-              (let [w (await (near/go-near! c (:land spot) 1))]
-                (case w
-                  :there (await (cast! c spot))
-                  :partial :continue
-                  (stop! c :unreachable (str "could not walk to the bank at " (pr-str (:land spot))))))
-              (stop! c :no-water "no seen water with a bank in reach")))))))
+      (if-let [spot (first (spots c))]
+        (let [w (await (walk! c spot))]
+          (if (= :arrived w) (await (cast! c spot)) w))
+        (stop! c :condition-failed :no-water "no seen water with a bank in reach")))))
 
 (defn ^:async round [c]
-  (ctx/update-mem! c update :base #(or % (fish-carried c)))
-  (ctx/update-mem! c update :started #(or % (ctx/now c)))
-  (await (pace/steps! c #(step c))))
+  (if-let [[cause text] (when-not (:started (ctx/mem c)) (start-problem c))]
+    (stop! c :condition-failed cause text)
+    (do (ctx/update-mem! c update :base #(or % (fish-carried c)))
+        (ctx/update-mem! c update :started #(or % (ctx/now c)))
+        (await (pace/steps! c #(step c))))))

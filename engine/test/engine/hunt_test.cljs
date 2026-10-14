@@ -77,7 +77,8 @@
         (let [s (await (scenario {:mob ["cow" "pig"] :keep 0} {:inventory h/sword :entities []} 20))
               e (first (events-of s :hunt.batch-done))]
           (is (= 0 (:killed e)))
-          (is (= :stopped (:status e)))
+          (is (= :too-few (:reason e)) "the first kind's ending")
+          (is (seq (events-of s :stopped)) "0 killed ends stopped, not completed")
           (is (finished? s)))))))
 
 ;; ------------------------------------------------------------------ the job
@@ -223,7 +224,7 @@
           (dotimes [_ 60]
             (swap! clock + 700)
             (await (core/tick! eng)))
-          (is (= {:killed 2 :reason :count :spared 0 :remaining 0} @out)))))))
+          (is (= {:killed 2 :reason :count :spared 0 :remaining 0 :status :done} @out)))))))
 
 (defn baby-cow [id x] (animal id "cow" x {:drops cow-drops :baby true}))
 

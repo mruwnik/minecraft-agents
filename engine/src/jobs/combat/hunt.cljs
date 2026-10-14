@@ -1,6 +1,7 @@
 (ns jobs.combat.hunt
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.settings :as settings]
@@ -21,11 +22,15 @@
   when every kind reached its count, else :partial; no kill at all ends stopped with the first kind's reason.
   Never takes the last :keep adults of the kind, so they can breed. :keep nil means 2 for animals and 0 for hostile mobs
   (by the kind's name, else a kind any of whose entities in range reports kind hostile). 0 turns the rule off.
+  The weapons are the call's :use :tools (default the best carried; the old :weapons substrings map in legacy-args).
   Babies are never targets and never counted. Animals the body spares (jobs.lib.animal-spare: kinds in :off-limits, animals in
   a zone or plan of its own or a closed enclosure unless :spare-pens is false) are never targets either; when only such animals
-  are left it ends :spared (stopped when nothing was killed; the result has :spared-by, a count per rule, and warn hunt.done names them).
-  With :keep or fewer adults within :radius at the start it ends at once, stopped :too-few (warn hunt.too-few; the result
-  has :in-range, :radius, :keep and :nearest, the distance of the nearest adult of the kind in sight up to ::sight-radius).
+  are left it ends :spared (the data has :spared-by, a count per rule, and warn hunt.done names them when nothing was killed).
+  A queued hunt waits (condition :low-health) while the body is too hurt (jobs.lib.body/too-hurt). The first round ends
+  :condition-failed with warn hunt.done / hunt.too-few and the data: :unarmed (a hostile kind and no weapon of the call's
+  :use :tools carried), :no-color (a :color and none of it in range; :seen-colors), or :too-few, with
+  :keep or fewer adults within :radius (the data has :in-range, :radius, :keep and :nearest, the distance of the nearest
+  adult of the kind in sight up to ::sight-radius).
   One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
   1. With a :target, the attack child fights it. It is booked killed, or skipped when attack gave up on it or lost it.
      :max-skips skips in a row end the job :gave-up (warn hunt.gave-up).
@@ -33,12 +38,14 @@
      else every item within :collect-radius).
   3. :killed reaching :count ends :count.
   4. At most :keep adults present ends :keep. Skipped animals still count.
-  With a :color only unsheared sheep of that colour count and are hunted (the :keep rule applies to them: the last :keep stay); none of it in range at the start ends :stopped :no-color (:seen-colors).
+  With a :color only unsheared sheep of that colour count and are hunted (the :keep rule applies to them: the last :keep stay).
   5. No candidate (present, not skipped) ends :none, on the second such round in a row, after a 1 s wait.
   6. Otherwise the nearest candidate becomes the :target and is attacked in the same round.
      The target stays until killed or given up on, even when a nearer animal turns up.
   Before the first step it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
-  Ends with info hunt.done and the result {:killed n :reason r :spared s :remaining m}.
+  Ends with info hunt.done and the data {:killed n :reason r :spared s :remaining m}. The ending: :done for :count, and for
+  any other reason when the call's :least (default 1) animals were killed; else :nothing-possible with r as the cause
+  (:keep, :spared, :none, :gave-up). A list of kinds ends :done :count / :partial, else with the first kind's ending.
   :spared is the kills asked for and not made because of the pair rule (0 unless :keep ended it).
   :remaining is the adults of the kind in range at the end.")
 
@@ -50,7 +57,6 @@
    :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count); nil: 2 for animals, 0 for hostile mobs; 0 turns the rule off" :spec (a/int-in 0 nil) :default nil}
    :collect-radius {:doc "how far around to collect drops after a kill" :spec (a/num-in 0 nil) :default 8}
    :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default true}
-   :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
    :off-limits {:doc "animal kinds never hunted; nil: the jobs.lib.animal-spare/off-limits setting" :spec (a/or-of (a/pred "nil" nil?) (a/coll-of a/item?)) :default nil}
    :spare-pens {:doc "never hunt animals in a zone or plan of the body's own or in a closed enclosure (false: this hunt may take them)" :spec boolean? :default true}
@@ -58,6 +64,16 @@
 
 (a/defargs settings
   {::sight-radius {:default 64 :doc "How far the :too-few wait looks for the nearest adult of the kind, in blocks." :spec (a/num-in 0 nil)}})
+
+(def target [:mob])
+
+(def defaults {:least 1 :use {:tools :attack}})
+
+(defn legacy-args
+  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}; [] means no weapons."
+  [{:keys [weapons] :as args}]
+  (cond-> (dissoc args :weapons)
+    (and (some? weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))))
 
 (defn adults-within
   "The adult entities named :mob within radius blocks, nearest first, never players, items or babies
@@ -127,28 +143,45 @@
     (cond-> {:reason :too-few :mob mob :keep (keep-of c) :in-range (count (present c)) :radius radius}
       nearest (assoc :nearest (js/Math.round (.-distance nearest))))))
 
-(defn check
-  "Waits {:reason :low-health} while the body is too hurt (jobs.lib.body/too-hurt). Too few animals at the start end the
-  job in its round, so a held hunt never blocks the queue."
+(defn low-health
+  "The cause {:reason :low-health ..} while the body is too hurt (jobs.lib.body/too-hurt)."
   [c]
-  (if-let [hurt (body/too-hurt (:primitives c))]
-    (ctx/wait c hurt)
-    true))
+  (body/too-hurt (:primitives c)))
 
-(defn too-few!
-  "Warn and end the job stopped :too-few with how many are in range."
+(def food-animals ["cow" "pig" "sheep" "chicken"])
+
+(defn kinds
+  "The kinds of :mob when it names several (a list, or :food-animals); nil for one kind."
   [c]
-  (let [{:keys [reason] :as m} (too-few c)
-        out (-> m (dissoc :reason) (assoc :status :stopped :reason reason :killed 0))
-        text (str "hunt stopped: " (:in-range m) " " (:mob m) " adults within " (:radius m) " blocks"
-                  (when (pos? (:keep m)) (str ", keeping " (:keep m)))
-                  (when-let [n (:nearest m)] (str "; the nearest is " n " away")))]
-    (ctx/emit! c :hunt.too-few :warn (assoc out :text text))
-    (ctx/result! c (assoc out :text text))
-    :done))
+  (let [mob (:mob (:args c))]
+    (cond (contains? #{:food-animals "food-animals"} mob) food-animals
+          (coll? mob) (vec (distinct mob)))))
+
+(defn armed?
+  "Whether a carried item is one of the call's :use :tools (default jobs.lib.combat/default-weapons), each an item name or part of one."
+  [c]
+  (let [tools (or (ctx/use c :tools) combat/default-weapons)]
+    (boolean (some (fn [t] (some #(str/includes? (:name %) (name t)) (u/inventory (:primitives c)))) tools))))
+
+(defn too-few-text [{:keys [in-range keep nearest mob radius]}]
+  (str "hunt stopped: " in-range " " mob " adults within " radius " blocks"
+       (when (pos? keep) (str ", keeping " keep))
+       (when nearest (str "; the nearest is " nearest " away"))))
+
+(def conditions
+  "Only the health line waits (as the old check did). The other refusals end the first round (start-problem), so a queued hunt never blocks the queue."
+  [[:fn low-health]])
+
+(defn unarmed!
+  "End at once: a hostile kind and no weapon carried (an unarmed body does not fist-fight)."
+  [c]
+  (let [mob (:mob (:args c))
+        out {:killed 0 :reason :unarmed :mob mob :text (str "hunt stopped: no weapon carried for a hostile " mob)}]
+    (ctx/emit! c :hunt.done :warn out)
+    (ctx/end c :condition-failed :unarmed out)))
 
 (defn no-color!
-  "End at once, nothing of the :color in range: the colours that are, in the result and text."
+  "End at once, nothing of the :color in range: the colours that are, in the data and text."
   [c]
   (let [{:keys [mob color]} (:args c)
         seen (vec (sort (distinct (keep #(.-color %) (present-any c)))))
@@ -159,11 +192,39 @@
                                          (adults-within c (:radius (:args c)))))]
                     (when (pos? n) (str "; " n " sheared " color " sheep skipped"))))]
     (ctx/emit! c :hunt.done :warn (assoc out :text text))
-    (ctx/result! c (assoc out :status :stopped :text text))
-    :done))
+    (ctx/end c :condition-failed :no-color (assoc out :text text))))
+
+(defn too-few!
+  "Warn and end at once: :keep or fewer adults in range, with how many are and how far the nearest is."
+  [c]
+  (let [m (too-few c)
+        out (assoc (dissoc m :reason) :reason :too-few :killed 0 :text (too-few-text m))]
+    (ctx/emit! c :hunt.too-few :warn out)
+    (ctx/end c :condition-failed :too-few out)))
+
+(defn done?
+  "The animals killed against the count asked. Never :done? itself: the hunt ends with its event and data."
+  [c]
+  (let [killed (if-let [ks (kinds c)]
+                 (reduce + (map #(get-in (ctx/mem c) [:kinds % :killed] 0) ks))
+                 (:killed (ctx/mem c) 0))]
+    {:done? false :units :animals :done killed :left (max 0 (- (* (:count (:args c)) (count (or (kinds c) [1]))) killed))}))
+
+(defn quote-of [c]
+  {:uses {:time [0 (* 20 (:count (:args c) 1)) ##Inf]}})
+
+(defn ending-of
+  "The ending of a hunt of killed animals that stopped for reason: :done for :count or when the call's :least was killed,
+  else :nothing-possible with reason as the cause; data its result."
+  [c reason killed data]
+  (let [least (:least (ctx/frozen-call c) 1)
+        need (if (= :all least) (:count (:args c)) least)]
+    (if (or (= :count reason) (>= killed need))
+      (ctx/end c :done nil data)
+      (ctx/end c :nothing-possible reason data))))
 
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
+  "Emit the outcome and end the call (ending-of)."
   [c reason]
   (let [killed (:killed (ctx/mem c) 0)
         spared (if (and (= :keep reason) (pos? (keep-of c))) (max 0 (- (:count (:args c)) killed)) 0)
@@ -171,13 +232,11 @@
         by (when (= :spared reason) (frequencies (vals (spare-rules c))))
         out (cond-> {:killed killed :reason reason :spared spared :remaining remaining}
               (= :gave-up reason) (merge (sh/shelter-hint c))
-              by (assoc :spared-by by)
-              (and by (zero? killed)) (assoc :status :stopped))
+              by (assoc :spared-by by))
         text (str "hunt done: " (name reason) ", killed " killed ", spared " spared " of the ask, " remaining " adults left"
                   (when by (str "; left alone: " (str/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))]
     (ctx/emit! c :hunt.done (if (and by (zero? killed)) :warn :info) (assoc out :text text))
-    (ctx/result! c out)
-    :done))
+    (ending-of c reason killed out)))
 
 (defn give-up!
   "Warn and end after too many skipped animals in a row."
@@ -197,31 +256,59 @@
 (defn attack-opts
   "Options for hunting.attack!: a wide search around the ask; ends the job after too many skips."
   [c]
-  {:radius (+ (:radius (:args c)) 8) :waiting :yield :give-up give-up! :job "jobs.combat.hunt" :rule-fn allowed-by})
+  {:radius (+ (:radius (:args c)) 8) :give-up give-up! :job "jobs.combat.hunt" :rule-fn allowed-by})
+
+(defn book-outcome!
+  "Book the attack child's ending e for target: a kill, or a skipped animal. Then start collecting."
+  [c target e]
+  (let [killed? (some #{target} (get-in e [:data :killed]))]
+    (when killed? (hunting/kill-event! c target))
+    (ctx/update-mem! c (fn [m]
+                         (-> (if killed?
+                               (-> m (update :killed (fnil inc 0)) (assoc :skips 0))
+                               (-> m (update :skipped (fnil conj []) target) (update :skips (fnil inc 0))))
+                             (dissoc :target)
+                             (assoc :collecting true))))))
+
+(defn ^:async attack!
+  "Call the attack child on the target (a whole fight) with the call's weapons; books its end. :again, :yield while the
+  child waits on the world, or the ending after too many skips in a row (opts :give-up)."
+  [c {:keys [radius give-up] :as opts}]
+  (let [target (:target (ctx/mem c))
+        _ (hunting/note-target! c target opts)
+        tools (ctx/use c :tools)
+        e (await (ctx/call c :attack 'jobs.combat.attack
+                           (cond-> {:targets [target] :radius radius :lost-s 1 :absent :done}
+                             tools (assoc :use {:tools tools}))))]
+    (if (= :continue e)
+      :yield
+      (do (book-outcome! c target e)
+          (if (>= (:skips (ctx/mem c) 0) (:max-skips (:args c)))
+            (give-up c)
+            :again)))))
 
 (defn ^:async step
   "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child is waiting on the world) or :done."
   [c]
   (let [now (ctx/now c)
         wanted (:count (:args c))
-        keep (keep-of c)]
-    (cond
-      (and (not (:started (ctx/mem c))) (:color (:args c)) (empty? (present c))) (no-color! c)
-      (and (not (:started (ctx/mem c))) (<= (count (present c)) keep)) (too-few! c)
-      :else
-        (do
-        (ctx/update-mem! c #(-> % (update :started (fn [t] (or t now))) (assoc :keep keep)))
-        (let [{:keys [target collecting killed]} (ctx/mem c)
-              next-target (first (candidates c))]
-          (cond
-            target (await (hunting/attack! c (attack-opts c)))
-            collecting (await (hunting/collect! c :yield))
-            (>= (or killed 0) wanted) (finish! c :count)
-            (<= (count (present c)) keep) (finish! c :keep)
-            (and (nil? next-target) (seq (spare-rules c))) (finish! c :spared)
-            (nil? next-target) (await (hunting/search! c #(finish! % :none)))
-            :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
-                      (await (hunting/attack! c (attack-opts c))))))))))
+        keep (keep-of c)
+        first? (not (:started (ctx/mem c)))]
+    (ctx/update-mem! c #(-> % (update :started (fn [t] (or t now))) (assoc :keep keep)))
+    (let [{:keys [target collecting killed]} (ctx/mem c)
+          next-target (first (candidates c))]
+      (cond
+        (and first? (hostile? c) (not (armed? c))) (unarmed! c)
+        (and first? (:color (:args c)) (empty? (present c))) (no-color! c)
+        (and first? (<= (count (present c)) keep)) (too-few! c)
+        target (await (attack! c (attack-opts c)))
+        collecting (await (hunting/collect! c :yield))
+        (>= (or killed 0) wanted) (finish! c :count)
+        (<= (count (present c)) keep) (finish! c :keep)
+        (and (nil? next-target) (seq (spare-rules c))) (finish! c :spared)
+        (nil? next-target) (await (hunting/search! c #(finish! % :none)))
+        :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
+                  (await (attack! c (attack-opts c))))))))
 
 (defn ^:async hunt-round
   "The whole hunt of one kind: steps until it ends; yields only while a child waits on the world."
@@ -231,34 +318,32 @@
     (let [r (await (pace/steps! c #(step c)))]
       (if (= :yield r) :continue r))))
 
-(def food-animals ["cow" "pig" "sheep" "chicken"])
-
-(defn kinds
-  "The kinds of :mob when it names several (a list, or :food-animals); nil for one kind."
-  [c]
-  (let [mob (:mob (:args c))]
-    (cond (contains? #{:food-animals "food-animals"} mob) food-animals
-          (coll? mob) (vec (distinct mob)))))
-
 (defn kind-slot [kind] (keyword (str "kind-" kind)))
 
 (defn kind-args [c kind]
   (cond-> (assoc (:args c) :mob kind)
     (not= "sheep" kind) (dissoc :color)))
 
+(defn child-result
+  "A kind's ending e as the result kept in memory: its data, :reason (the data's for a done, else the cause) and :kind."
+  [e]
+  (assoc (merge {:killed 0} (:data e)) :kind (:kind e)
+         :reason (if (= :done (:kind e)) (get-in e [:data :reason]) (contract/cause-key e))))
+
 (defn finish-kinds!
-  "End the batch: the sums and each kind's result. No kill ends stopped with the first kind's reason."
+  "End the batch: the sums and each kind's result. No kill ends with the first kind's ending."
   [c kinds]
   (let [results (into {} (map (fn [k] [k (get-in (ctx/mem c) [:kinds k])])) kinds)
         killed (reduce + (map #(:killed % 0) (vals results)))
         all-count? (every? #(= :count (:reason %)) (vals results))
-        reason (cond all-count? :count (zero? killed) (:reason (get results (first kinds))) :else :partial)
-        out (cond-> {:killed killed :reason reason :kinds results}
-              (zero? killed) (assoc :status :stopped))]
+        first-kind (get results (first kinds))
+        reason (cond all-count? :count (zero? killed) (:reason first-kind) :else :partial)
+        out {:killed killed :reason reason :kinds results}]
     (ctx/emit! c :hunt.batch-done (if (zero? killed) :warn :info)
                (assoc out :text (str "hunt done: killed " killed " of " (str/join ", " kinds) ", " (some-> reason name))))
-    (ctx/result! c out)
-    :done))
+    (if (or all-count? (>= killed (let [least (:least (ctx/frozen-call c) 1)] (if (= :all least) (* (:count (:args c)) (count kinds)) least))))
+      (ctx/end c :done nil out)
+      (ctx/end c (if (= :done (:kind first-kind)) :nothing-possible (:kind first-kind)) reason out))))
 
 (defn ^:async kinds-round
   "One child hunt after another, one per kind; :continue only while a child waits on the world."
@@ -268,12 +353,11 @@
           kind (first (remove #(contains? done %) kinds))]
       (if-not kind
         (finish-kinds! c kinds)
-        (let [slot (kind-slot kind)
-              out (await (ctx/call-child c slot 'jobs.combat.hunt (kind-args c kind)))]
-          (if (= :done out)
-            (do (ctx/update-mem! c assoc-in [:kinds kind] (ctx/child-result c slot))
-                (recur))
-            :continue))))))
+        (let [e (await (ctx/call c (kind-slot kind) 'jobs.combat.hunt (kind-args c kind)))]
+          (if (= :continue e)
+            :continue
+            (do (ctx/update-mem! c assoc-in [:kinds kind] (child-result e))
+                (recur))))))))
 
 (defn ^:async round
   "The hunt of the one :mob kind, or one hunt after another for a list of kinds."
