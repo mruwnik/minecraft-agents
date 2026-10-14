@@ -1,6 +1,5 @@
 (ns jobs.survival.retreat
-  (:require [jobs.lib.choose :as choose]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -20,7 +19,9 @@
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.survival.retreat-home :as retreat-home]
+            [jobs.survival.retreat-pillar :as pillar]
             [jobs.survival.retreat-refuge :as refuge]
+            [jobs.survival.retreat-seal :as seal]
             [jobs.survival.retreat-walk :as walk]))
 
 (def doc
@@ -64,7 +65,7 @@
      Eats one bite a step (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
   Low on health (at most :hide-health) in a seen ranged chaser's line of fire (over the cells it has seen) with no
   covered step, it takes cover where it stands first: seal in, else dig down and plug, else a side pocket (as below);
-  none of them possible, it walks on. A seal begun where it stands is finished before it walks on (refuge/sealing-here?).
+  none of them possible, it walks on. A seal begun where it stands is finished before it walks on (seal/sealing-here?).
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
   A step of at most 1.5 s there that left the body where it stood (a search) is followed by that cover at once.
   A mob that attacks at close range within :radius and outruns the body (jobs.lib.cost/outruns?: a spider at any food;
@@ -75,7 +76,7 @@
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else seal, pit, pocket, last of all fight.
      - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
-     - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
+     - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried blocks,
        at most :max-places a step, the sides towards a seen ranged hostile first (feet, then head: the first blocks
        stop its arrows). It first steps to the middle of its cell, and does not place while a hostile's hitbox
        overlaps a cell to fill. An open door is shut, not filled. A cell that answers occupied (torch, chest, bed) is left alone.
@@ -93,7 +94,7 @@
        filled with a carried block (:on-lava :seal, the default; :stop leaves it).
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist. A body with no weapon
        (the call's :use :tools, else jobs.lib.combat/default-weapons) first looks for a way to walk once more (:fist-sweeps, default 1).
-       A pillared body that is hit raises the pillar `retreat-refuge/::pillar-extend` (2) blocks, once, before the refuge fails.
+       A pillared body that is hit raises the pillar `retreat-pillar/::pillar-extend` (2) blocks, once, before the refuge fails.
      Order: fight if it wins, then seal, pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), pit, pocket, fight.
      Against a creeper back off comes first.
      Under fire (::fire-hits hits within ::hurt-window-s whose attacker is a ranged mob, or arrow damage: the mob need not be seen or known) cover comes before any fight: the order is
@@ -114,6 +115,7 @@
   :cannot_escape only once every option failed in two sweeps in a row with no gain between.
   Each change of what it chose among is said in one retreat.choice info: the hostiles and where, every closed room and why
   it is not run to, the cells that are no closed room, the home and why it is no run (:home-why), the goal and why it is dropped, where it leans.
+  Blocks placed are the call's :use :blocks (old :blocks in legacy-args), else every :build filler, carried or dug.
   Needs nothing to start (no conditions). Ends done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none},
   nothing-possible :cannot_escape {:fled [ids]}, or limit-reached. Quote: time (0, ::mean-s, ##Inf).
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
@@ -127,7 +129,6 @@
    :step {:doc "blocks per walk" :spec (a/num-in 1 nil) :default 6}
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :spec (a/num-in 0 nil) :default 64}
    :reserve {:doc "health a cornered fight must be expected to leave" :spec (a/num-in 0 nil) :default cost/default-reserve}
-   :blocks {:doc "names of the blocks a cornered body may seal itself in with" :spec (a/coll-of (a/or-of string? keyword?)) :default (choose/fillers :build)}
    :max-places {:doc "seal placements per step" :spec (a/int-in 1 nil) :default 4}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}
    :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :spec (a/num-in 0 nil) :default 4}
@@ -155,11 +156,13 @@
 (def defaults {:spend {:time ::time-s}})
 
 (defn legacy-args
-  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}."
-  [{:keys [weapons] :as args}]
+  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}, its :blocks as :use {:blocks [...]}."
+  [{:keys [weapons blocks] :as args}]
   (cond-> args
     (sequential? weapons) (dissoc :weapons)
-    (and (sequential? weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))))
+    (sequential? blocks) (dissoc :blocks)
+    (and (sequential? weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))
+    (and (sequential? blocks) (nil? (get-in args [:use :blocks]))) (assoc-in [:use :blocks] (mapv name blocks))))
 
 (def conditions [])
 
@@ -261,7 +264,7 @@
   [c]
   (let [hostiles (cornered/near-hostiles c)]
     (when (and (not (:early-refuge-failed (ctx/mem c))) (lone-melee? (:primitives c) hostiles)
-               (refuge/pillar-item c) (not (cornered/fight-wins? c hostiles)))
+               (pillar/pillar-item c) (not (cornered/fight-wins? c hostiles)))
       (let [r (or (when-not (flight/tried? c :pillar) (await (refuge/pillar! c)))
                   (when-not (flight/tried? c :seal) (await (refuge/hide! c))))]
         (when (nil? r) (ctx/update-mem! c assoc :early-refuge-failed true))
@@ -323,7 +326,7 @@
             low? (cover/exposed-low? c covered?)
             cover (cond
                     (and low?
-                         (or (refuge/sealing-here? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
+                         (or (seal/sealing-here? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
                          (not (cover/close-danger? p threats)))
                     (await (cover/take-cover! c))
                     (and target (not stair) (sh/buried? p) (not (cover/close-danger? p threats)))

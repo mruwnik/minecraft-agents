@@ -1026,7 +1026,7 @@
                               (await (cover/dig-pocket! c)))
                             :done)}
               s (assoc-in s [:eng :jobs 'again] job)]
-          (await (run-job! s 'again {:blocks ["cobblestone"]}))
+          (await (run-job! s 'again {}))
           (is (= 1 @digs) "one dig attempt for the whole flight"))))))
 
 (defn looks [raw] (count (filter #(= "look" (.-name %)) (.-calls (.-world raw)))))

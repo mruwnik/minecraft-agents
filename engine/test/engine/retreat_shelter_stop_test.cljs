@@ -11,7 +11,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.survival.dig-in-cells :as dig-cells]
-            [jobs.survival.retreat-refuge :as refuge]))
+            [jobs.survival.retreat-pit :as pit]))
 
 (def dead-end-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
 
@@ -113,9 +113,9 @@
 (deftest open-shell-is-the-first-seen-open-neighbour-outside-keep
   (let [p (tu/seeing-all (tu/fake {:blocks (assoc (into {} (for [x (range -2 3) y (range 62 66) z (range -2 3)] [(key-of x y z) "stone"]))
                                                   (key-of 0 63 1) "air")}))]
-    (is (= (cell 0 63 1) (refuge/open-shell p (cell 0 63 0) #{})))
-    (is (nil? (refuge/open-shell p (cell 0 63 0) #{(cell 0 63 1)})) "its own cells and the way in do not count")
-    (is (nil? (refuge/open-shell p (cell -1 63 -1) #{})) "rock all round")))
+    (is (= (cell 0 63 1) (pit/open-shell p (cell 0 63 0) #{})))
+    (is (nil? (pit/open-shell p (cell 0 63 0) #{(cell 0 63 1)})) "its own cells and the way in do not count")
+    (is (nil? (pit/open-shell p (cell -1 63 -1) #{})) "rock all round")))
 
 (defn sensing-stub
   "A body that has seen only the named cells ({[x y z] name}); every other cell is unknown."
@@ -269,7 +269,7 @@
    :self {:pos [0.5 64 0.5]}
    :inventory kit})
 
-(defn plan-ctx [p] {:primitives p :args {:blocks ["cobblestone"]}})
+(defn plan-ctx [p] {:primitives p :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}})
 
 (defn seen-closed-cell
   "Primitives over world that know every cell but those below y 63 (unknown, as the ground under a body's own floor is) when
@@ -286,7 +286,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (seen-closed-cell (closed-cell-world nil) true)
-              plan (refuge/pit-plan (plan-ctx p) (cell 0 64 0))
+              plan (pit/pit-plan (plan-ctx p) (cell 0 64 0))
               [lo hi] (:prep plan)]
           (is (some? plan) "a pit is planned although no side is open")
           (is (= 2 (count (:prep plan))) "the side cells at feet and head height are dug first")
@@ -299,14 +299,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (seen-closed-cell (closed-cell-world "obsidian") true)]
-          (is (nil? (refuge/pit-plan (plan-ctx p) (cell 0 64 0)))))))))
+          (is (nil? (pit/pit-plan (plan-ctx p) (cell 0 64 0)))))))))
 
 (deftest a-pit-goes-straight-down-when-the-floors-are-known
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (seen-closed-cell (closed-cell-world nil) false)
-              plan (refuge/pit-plan (plan-ctx p) (cell 0 64 0))]
+              plan (pit/pit-plan (plan-ctx p) (cell 0 64 0))]
           (is (some? plan))
           (is (nil? (:prep plan)) "nothing dug beside it")
           (is (empty? (:plugs plan)) "straight down has no side plug")

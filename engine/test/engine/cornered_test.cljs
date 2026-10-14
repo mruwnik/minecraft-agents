@@ -19,7 +19,8 @@
             [jobs.survival.retreat-cover :as cover]
             [jobs.survival.retreat-walk :as retreat-walk]
             [jobs.lib.seal :as seal]
-            [jobs.survival.retreat-refuge :as retreat-refuge]))
+            [jobs.survival.retreat-pillar :as retreat-pillar]
+            [jobs.survival.retreat-seal :as retreat-seal]))
 
 (defn setup
   "An engine over a fake; its clock moves a second with every primitive call (a whole flight ends by time). The world's
@@ -462,6 +463,16 @@
           (is (empty? (calls p "steer")) "no flee step first")
           (is (empty? (calls p "moveTo")) "no flee step first"))))))
 
+(deftest the-calls-blocks-are-the-only-blocks-a-refuge-uses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round '(jobs.survival.retreat {:use {:blocks ["dirt"]}})
+                                              {:self {:health 10} :inventory [{:name "cobblestone" :count 39}]
+                                               :entities [(zombie 8 64 0)]}))]
+          (is (empty? (calls p "jumpPlace")) "no pillar of cobblestone the call did not list")
+          (is (seq (concat (calls p "steer") (calls p "moveTo"))) "it flees instead"))))))
+
 (deftest a-flee-step-logs-its-speed
   (async done
     (tu/run-async done
@@ -805,9 +816,9 @@
         east {:x 1 :y 64 :z 0} west {:x -1 :y 64 :z 0}
         support {:x 1 :y 66 :z 0} roof {:x 0 :y 66 :z 0}
         cells [east west support roof]]
-    (is (= [west east support roof] (retreat-refuge/nearest-first feet [{:x -3.5 :y 64 :z 0.5}] cells)) "the side towards it first; support, then roof")
-    (is (= [east west support roof] (retreat-refuge/nearest-first feet [{:x 0.5 :y 66 :z 0.5}] cells)) "a zombie over the roof does not pull the roof ahead of its support")
-    (is (= cells (retreat-refuge/nearest-first feet [] cells)) "no chaser: as given")))
+    (is (= [west east support roof] (retreat-seal/nearest-first feet [{:x -3.5 :y 64 :z 0.5}] cells)) "the side towards it first; support, then roof")
+    (is (= [east west support roof] (retreat-seal/nearest-first feet [{:x 0.5 :y 66 :z 0.5}] cells)) "a zombie over the roof does not pull the roof ahead of its support")
+    (is (= cells (retreat-seal/nearest-first feet [] cells)) "no chaser: as given")))
 
 (deftest a-creeper-beside-an-enderman-keeps-the-creeper-order
   (is (= :back-off (first (cornered/escape-order {:enderman? true :creeper? true})))))
@@ -980,10 +991,10 @@
         with (fn [cells] (fn [pos] (if (contains? cells pos) "stone" (floor pos))))
         column (fn [x h] (for [y (range 64 (+ 64 h))] [x y 0]))
         slope (set (concat (column 1 3) (column 2 2) (column 3 1)))]
-    (is (true? (retreat-refuge/pillar-ok? (with #{}) [0 64 0])) "open ground all round")
-    (is (false? (retreat-refuge/pillar-ok? (with slope) [0 64 0]))
+    (is (true? (retreat-pillar/pillar-ok? (with #{}) [0 64 0])) "open ground all round")
+    (is (false? (retreat-pillar/pillar-ok? (with slope) [0 64 0]))
         "a slope up to the pillar's top: a zombie walks up and reaches the body")
-    (is (true? (retreat-refuge/pillar-ok? (with (set (column 1 3))) [0 64 0]))
+    (is (true? (retreat-pillar/pillar-ok? (with (set (column 1 3))) [0 64 0]))
         "a wall of the same height with no steps up to it: out of reach")))
 
 (defn ^:async pillar-then-arrives

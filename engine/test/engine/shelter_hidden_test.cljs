@@ -2,8 +2,7 @@
   "The shelter plans (retreat's pit and pocket, dig-niche's niche) for a body that has seen only the surface (Q98): a cell
   inside rock reads stone when it lies behind seen solid faces, and the dig looks at what it laid open and stops on
   fluid or a hole that shows. The primitives are wrapped; nothing inside the rock is known."
-  (:require [jobs.lib.choose :as choose]
-            [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -18,7 +17,7 @@
             [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-niche :as niche]
-            [jobs.survival.retreat-refuge :as refuge]))
+            [jobs.survival.retreat-pit :as pit]))
 
 (defn stone [[x0 x1] [y0 y1] [z0 z1]]
   (into {} (for [x (range x0 (inc x1)) y (range y0 (inc y1)) z (range z0 (inc z1))] [(str x "," y "," z) "stone"])))
@@ -48,14 +47,14 @@
 (defn seen-world [extra]
   (see-surface! (sensing {:blocks (merge ground hill extra)})))
 
-(defn ctx-of [p] {:primitives p :args {:blocks (choose/fillers :shelter)}})
+(defn ctx-of [p] {:primitives p :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}})
 
 (deftest a-pit-in-rock-the-body-has-not-looked-into-is-planned
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (await (seen-world {}))
-              plan (refuge/pit-plan (ctx-of p) {:x -1 :y 64 :z 0})]
+              plan (pit/pit-plan (ctx-of p) {:x -1 :y 64 :z 0})]
           (is (= 61 (:target-y plan)) "three deep on flat ground, every cell read as stone behind the seen floor"))))))
 
 (deftest a-seen-fluid-beside-the-pit-still-rules-it-out
@@ -63,14 +62,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (await (seen-world {"0,63,0" "water"}))]
-          (is (nil? (refuge/pit-plan (ctx-of p) {:x -1 :y 64 :z 0}))))))))
+          (is (nil? (pit/pit-plan (ctx-of p) {:x -1 :y 64 :z 0}))))))))
 
 (deftest a-pocket-in-the-hill-face-is-planned-on-the-faces-seen
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (await (seen-world {}))]
-          (is (= [{:x 3 :y 64 :z 0} {:x 3 :y 65 :z 0}] (refuge/pocket-cells (ctx-of p) {:x 2 :y 64 :z 0} [1 0]))))))))
+          (is (= [{:x 3 :y 64 :z 0} {:x 3 :y 65 :z 0}] (pit/pocket-cells (ctx-of p) {:x 2 :y 64 :z 0} [1 0]))))))))
 
 (deftest a-niche-in-the-hill-is-found-on-the-faces-seen
   (async done

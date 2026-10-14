@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
+            [jobs.lib.choose :as choose]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
@@ -28,6 +29,12 @@
   {:cap 1 :ttl 1800000})
 
 (defn wait-ms [] (settings/get settings ::wait-ms))
+
+(defn blocks
+  "The block names a cornered body may place: the call's :use {:blocks}, else every :build filler, carried or not (a
+  pit or pocket plugs with the blocks it digs)."
+  [c]
+  (or (ctx/use c :blocks) (choose/fillers :build)))
 
 (defn floor
   "The lowest feet height a flight step may end at under rock: retreat-walk/max-descent below where the flight began."

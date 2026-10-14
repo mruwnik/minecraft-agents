@@ -17,6 +17,7 @@
             [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.survival.retreat-home :as retreat-home]
             [jobs.survival.retreat-refuge :as refuge]
+            [jobs.survival.retreat-pit :as pit]
             [jobs.survival.retreat-walk :as walk]))
 
 (def tool-weapons
@@ -414,7 +415,7 @@
                   :swim-out (await (swim-out! c))
                   :back-off (when threat (await (back-off! c threat)))
                   :pit (await (refuge/pit! c))
-                  :pocket (await (refuge/pocket! c))))]
+                  :pocket (await (pit/pocket! c))))]
         (cond
           (some? r) r
           (seq more) (recur more)
