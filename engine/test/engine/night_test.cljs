@@ -29,12 +29,14 @@
 (def roof {"0,66,0" "stone"})
 
 (defn holds?
-  "The :night condition in world after seed! wrote body memory; :later moves the clock on after seed!."
+  "The :night condition in world after the night's look pass and seed! wrote body memory; :later moves the clock on after seed!."
   [world seed! & {:keys [later] :or {later 0}}]
-  (let [{:keys [eng clock]} (st/setup {})]
+  (let [{:keys [eng clock]} (st/setup {})
+        p (tu/fake world)]
+    (st/looked-round! eng p)
     (seed! eng)
     (swap! clock + later)
-    (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store eng)) {}))))
+    (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))))
 
 (defn write! [eng kind data] (mem/write! (:store eng) kind data nil))
 
@@ -494,6 +496,7 @@
           (is (= [[:roof-failed]] (mapv #(mapv :reason (:sites %)) (st/emitted seen :shelter.relocated)))
               "moved once, after the failed site, with dig-in's stop reason")
           (is (= [] (st/entries eng :night-site)) "tonight's failed sites are forgotten at morning")
+          (is (= [] (st/entries eng :dig-in-futile)) "dig-in's failed sites too: the next night digs there again")
           (is (empty? (st/emitted seen :shelter.exposed))))))))
 
 (deftest a-failed-site-is-not-dug-again-after-a-cut-however-long-the-night

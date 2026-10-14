@@ -16,7 +16,10 @@
 (defn open-door-hut [pos extra] (assoc (hut-world pos extra) :states open-door-states :time st/night))
 
 (defn fires-seen? [world]
-  (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store (:eng (st/setup {})))) {})))
+  (let [eng (:eng (st/setup {}))
+        p (tu/fake world)]
+    (st/looked-round! eng p)
+    (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))))
 
 (deftest night-holds-for-a-closed-room-with-an-open-door-until-the-door-is-shut
   (are [world held] (= held (fires-seen? world))

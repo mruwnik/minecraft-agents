@@ -29,12 +29,15 @@
    :blocks (merge hut/tunnel {"40,64,0" "red_bed"}) :light light})
 
 (defn lit-fake
-  "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh/buried?)."
+  "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh/buried?). :sees-all in the
+  world: the fake's own sight (every block seen) with the perception only for its light."
   [world]
   (let [raw-p (tu/fake (dissoc world :light))
         _ (swap! (fake/state raw-p) assoc :light (:light world {}))
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
-    {:raw raw-p :p (perception/wrap raw-p per)}))
+    {:raw raw-p :p (if (:sees-all world)
+                     (doto (js/Object.assign #js {} raw-p) (aset "perception" per))
+                     (perception/wrap raw-p per))}))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -50,7 +53,8 @@
     (sh/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))
 
 (defn holds? [world]
-  (let [{:keys [eng p]} (setup world)]
+  (let [{:keys [eng p]} (setup world)
+        _ (st/looked-round! eng p)]
     (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))))
 
 (deftest a-buried-body-does-not-use-a-bed-out-in-the-open
@@ -60,6 +64,7 @@
 (deftest a-buried-body-neither-places-a-carried-bed-nor-logs-out-for-a-sleeper
   (let [carrying (assoc (tunnel-world buried-light) :inventory [{:name "red_bed" :count 1}])
         {:keys [eng p]} (setup carrying)]
+    (st/looked-round! eng p)
     (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
     (is (false? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))) "mining goes on")))
 
@@ -105,3 +110,88 @@
           (is (= {:x 5 :y 64 :z 0} (update-vals (st/pos-of p) js/Math.floor)) "the body stays in the tunnel")
           (is (empty? (st/calls raw "sleep")))
           (is (empty? (st/calls raw "moveTo")) "no walk toward the far bed"))))))
+
+(def hut-light
+  "A closed hut: sky light 0 at the body's feet and head cells."
+  {[4 64 -1] [0 0] [4 65 -1] [0 0]})
+
+(defn hut-night-world [blocks extra]
+  (merge (hut/hut-world {:x 4 :y 64 :z -1} blocks) {:time st/night :light hut-light :sees-all true} extra))
+
+(defn blind-above
+  "p that has not seen the roof: the roof (above the walls) is unknown (a body cannot look up from inside)."
+  [p]
+  (let [seen (.-sensedAt p)]
+    (doto p (aset "sensedAt" (fn [a] (if (> (.-y a) 66) #js {:unknown true} (.call seen p a)))))))
+
+(deftest a-body-buried-in-a-closed-hut-places-its-carried-bed
+  (let [{:keys [eng p]} (setup (hut-night-world {} {:inventory [{:name "red_bed" :count 1}]}))
+        _ (blind-above p)]
+    (is (true? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))))))
+
+(deftest a-body-buried-in-a-closed-hut-uses-a-bed-in-the-same-hut
+  (let [{:keys [eng p]} (setup (hut-night-world {"6,64,-1" "red_bed"} {}))
+        _ (blind-above p)]
+    (st/know-bed! eng {:x 6 :y 64 :z -1})
+    (is (= {:x 6 :y 64 :z -1} (sh/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))))
+
+(defn stale-until-looked
+  "p whose memory of cell (a [x y z] vector) is air until the body looks: a bed set there since it last saw the cell."
+  [p raw [x y z]]
+  (let [seen (.-sensedAt p)]
+    (doto p (aset "sensedAt" (fn [a] (if (and (= [x y z] [(.-x a) (.-y a) (.-z a)]) (empty? (st/calls raw "look")))
+                                       #js {:name "air" :pos a}
+                                       (.call seen p a)))))))
+
+(deftest a-body-in-a-hut-looks-round-once-and-sleeps-in-a-bed-it-had-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p raw]} (setup (hut-night-world {"6,64,1" "red_bed"} {}))
+              _ (stale-until-looked p raw [6 64 1])
+              holds #(sh/night-holds? p (mem/view (:store eng)) {} (constantly true))]
+          (is (true? (holds)) "the trigger holds to look round the hut")
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (is (seq (st/calls raw "look")) "looked")
+          (is (= [{:x 6 :y 64 :z 1}] (mapv st/arg-pos (st/calls raw "sleep"))) "slept in the bed it then saw"))))))
+
+(deftest a-body-in-a-hut-with-no-bed-looks-once-then-the-night-does-not-hold
+  (let [{:keys [eng p]} (setup (hut-night-world {} {}))
+        holds #(sh/night-holds? p (mem/view (:store eng)) {} (constantly true))]
+    (is (true? (holds)))
+    (st/looked-round! eng p)
+    (is (false? (holds)) "looked from this room tonight")))
+
+(defn unseen-hut-world
+  "The closed hut, the body in it with nothing seen yet (no sight pass), not the fake's all-seeing sight."
+  [blocks extra]
+  (merge (hut/hut-world {:x 4 :y 64 :z -1} blocks) {:time st/night :light hut-light} extra))
+
+(deftest a-body-in-a-hut-it-has-not-looked-at-looks-then-places-its-carried-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p raw]} (setup (unseen-hut-world {} {:inventory [{:name "red_bed" :count 1}]}))]
+          (is (true? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))) "the trigger holds to look")
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (is (seq (st/calls raw "look")) "looked")
+          (is (seq (st/calls raw "place")) "the bed is put down"))))))
+
+(deftest a-buried-miner-looks-once-then-the-night-does-not-hold-on-the-next-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p raw]} (setup (assoc (tunnel-world buried-light) :inventory [{:name "red_bed" :count 1}]))
+              holds #(sh/night-holds? p (mem/view (:store eng)) {} (constantly true))]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (let [looks (count (st/calls raw "look"))]
+            (is (pos? looks) "looked once")
+            (is (false? (holds)) "no hold after the look, whatever stays unseen")
+            (st/teleport! raw 6 64 0)
+            (is (false? (holds)) "nor on the next cell of the tunnel")
+            (core/submit! eng '(jobs.survival.night) {})
+            (await (st/tick-n eng 12))
+            (is (= looks (count (st/calls raw "look"))) "no second look pass")))))))

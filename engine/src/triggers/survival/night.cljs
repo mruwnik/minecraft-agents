@@ -3,6 +3,8 @@
     a bed to sleep in (sh/bed-to-use: seen, or the nearest remembered :bed or live :spawn-bed within :bed-radius under any roof; not occupied, nor one whose
       walk would leave an underground, dug-in or closed-room shelter)
     a bed item carried and no bed to use (sh/bed-place-wanted?)
+    a look round first (sh/unlooked-for-bed?): a bed known or carried and cells beside the feet never seen, or a closed hut
+      not looked round from tonight while it could still sleep
     someone else on the server asleep (sh/log-out-for-sleepers?)
     nothing solid within :roof-height blocks straight above, not buried and not in a closed room, or buried in a dark open cave (sh/open-cave?: 16+ standable cells under a ceiling within 3 blocks, under 8 block light; its own 1-wide tunnel is not one) (sh/unsafe-night?)
     an open door in the closed room the body stands in (sh/open-room-doors), also one the night could not shut

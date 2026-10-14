@@ -79,6 +79,11 @@
 
 (defn know-bed! [eng pos] (mem/write! (:store eng) :bed {:pos pos} mem/place-policy))
 
+(defn looked-round!
+  "The night's look pass from p's cell, as the body remembers it: a trigger check after it is not held by the look."
+  [eng p]
+  (mem/write! (:store eng) :night-looked {:cell (sh/feet p)} sh/night-looked-policy))
+
 (defn pos-of [p] (js->clj (.-pos (.self p)) :keywordize-keys true))
 
 (defn teleport! [p x y z] (fake/swap-self! p assoc :pos [x y z]))
@@ -1084,13 +1089,14 @@
                                  [{"0,63,0" "stone" "0,62,0" "water"} :no-floor]
                                  [{"0,63,0" "water"} :hazard-below]]]
           (let [{:keys [eng p seen]} (setup {:time night :blocks blocks :inventory [{:name "dirt" :count 1} {:name "iron_pickaxe" :count 1}]})
-                mid (mid-night! p 4 #(count (:list (core/state eng))))]
+                mid (mid-night! p 4 #(hash-map :jobs (count (:list (core/state eng)))
+                                               :futile (:reason (first (entries eng :dig-in-futile)))))]
             (core/submit! eng '(jobs.survival.night) {})
             (await (tick-n eng 3))
             (is (= [] (calls p "dig")) (pr-str blocks))
             (is (= 4 (count (emitted seen :dig_in_failed))) (str (pr-str blocks) ": one try at the site, then max-sites sites in all"))
-            (is (= reason (:reason (first (entries eng :dig-in-futile)))) (pr-str blocks))
-            (is (= 1 @mid) "held exposed at night")))))))
+            (is (= {:jobs 1 :futile reason} @mid) (str (pr-str blocks) ": held exposed at night, dig-in's futile entry written"))
+            (is (= [] (entries eng :dig-in-futile)) "forgotten when the night ends")))))))
 
 (deftest night-over-an-open-floor-walks-to-another-site-before-holding
   (async done
@@ -1230,8 +1236,9 @@
         (let [{:keys [eng p seen clock]} (setup (assoc futile-world :floor [-4 -4 4 4]))
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (core/register-reflex! eng {:trigger :always-shelter})
-          (await (tick-n eng 6))
-          (is (= [{:pos {:x 1 :y 63 :z 0} :reason :no-floor}] (entries eng :dig-in-futile)))
+          (let [futile (mid-night! p (dec default-dawn) #(entries eng :dig-in-futile))]
+            (await (tick-n eng 6))
+            (is (= [{:pos {:x 1 :y 63 :z 0} :reason :no-floor}] @futile) "written while the night holds"))
           (await (tick-nights eng clock 3))
           (is (= 1 (count (calls p "dig"))) "the hold does not dig again")
           (is (= [] (declined-events seen :always-shelter))))))))
@@ -1376,8 +1383,9 @@
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (refuse-placing! p)
           (core/register-reflex! eng {:trigger :always-shelter})
-          (await (tick-n eng 8))
-          (is (= :walls-failed (:reason (first (entries eng :dig-in-futile)))))
+          (let [futile (mid-night! p (dec default-dawn) #(entries eng :dig-in-futile))]
+            (await (tick-n eng 8))
+            (is (= :walls-failed (:reason (first @futile))) "written while the night holds"))
           (swap! clock + 11000)
           (await (tick-n eng 8))
           (is (= 3 (count (calls p "place"))))

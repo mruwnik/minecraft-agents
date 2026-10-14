@@ -385,7 +385,8 @@
   [c]
   (let [{:keys [max-legs use-notes max-distance] want :count} (:args c)
         names (targets c)
-        _ (when-not (breath/in-water? (:primitives c)) (await (scan! c names)))
+        resumed (:choosing (ctx/mem c))
+        _ (when-not (or resumed (breath/in-water? (:primitives c))) (await (scan! c names)))
         ns (notes/notes c)
         m (ctx/mem c)
         found (cond-> (:found m) use-notes (add-found (takeable c (noted (:primitives c) ns names (:origin m) max-distance)) want))]
@@ -400,6 +401,7 @@
                                              (update :tried (fnil into []) tried)
                                              (update :failed (fnil into []) failed)
                                              (update :skipped (fnil + 0) skipped)
+                                             (assoc :choosing (boolean (and more (not leg))))
                                              (assoc :deferred (when (and more (not leg)) unloaded)))))
               (cond
                 leg (do (ctx/update-mem! c (fn [m] (-> m (dissoc :waiting-since) (assoc :leg leg :leg-column column)

@@ -21,7 +21,10 @@
             {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]
    :after [[:body-near [16.5 0 14.5] 4]]
    :limit-s 80}
-  {:name "carried-bed-outside-own-zone-is-picked-up-at-day"
+  ;; Sleeping in the put-down bed makes it the respawn bed (:spawn-bed), so it stays at day. The spawn point starts elsewhere:
+  ;; the server says "Respawn point set" only when it changes, and an earlier case may have slept on this cell.
+  {:name "carried-bed-outside-own-zone-slept-in-is-kept-at-day"
+   :body {:spawnpoint [2 0 2]}
    :act [[:rcon "give $BODY red_bed 1"]
          [:job (jobs.survival.night)]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
@@ -30,7 +33,7 @@
    :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 60}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 120 :of-job true}]
-   :after [[:item "red_bed" 1]]
+   :after [[:item "red_bed" 0] [:memory {:entries {:spawn-bed [{:data {:pos [:any]}}]}}]]
    :limit-s 150}
   {:name "occupied-remembered-bed-is-refused"
    :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot,occupied=true]"] [:set [11 0 12] "red_bed[facing=east,part=head,occupied=true]"]]

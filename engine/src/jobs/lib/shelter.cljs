@@ -570,11 +570,50 @@
      :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
                 "(jobs.survival.night), or run jobs.survival.dig-in leave")}))
 
+(defn wide-room?
+  "Whether the room has a 2x2 floor patch: a hut, not a one-wide tunnel the body dug."
+  [{:keys [cells]}]
+  (let [in? (set cells)]
+    (boolean (some (fn [[x y z]] (and (in? [(inc x) y z]) (in? [x y (inc z)]) (in? [(inc x) y (inc z)]))) in?))))
+
 (defn shut-in-room?
   "Whether the body stands in a closed room (reach/closed-room?) with a roof over it within room-roof-height blocks:
-  safe from the night though the roof is above :roof-height."
+  safe from the night though the roof is above :roof-height. Sealed from the sky (buried?) counts as roofed: the roof
+  over the feet cannot be looked at from inside."
   [p]
-  (and (roofed? p (room-roof-height)) (reach/closed-room? p (feet p))))
+  (and (or (roofed? p (room-roof-height)) (buried? p)) (reach/closed-room? p (feet p))))
+
+(defn shut-in-hut?
+  "shut-in-room? and wide: a hut, not a one-wide tunnel the body dug."
+  [p]
+  (and (shut-in-room? p) (wide-room? (reach/room p (feet p)))))
+
+(def night-looked-policy {:cap 1 :ttl (quot ms-per-day 2)})
+
+(defn looked-here?
+  "Whether the night's look pass (night.cljs, remembered as :night-looked {:cell}) was from this room or within two
+  blocks: a cell that shows no face (a tunnel's diagonals) stays unseen whatever is looked at."
+  [p view]
+  (let [self (feet p)
+        {:keys [cell]} (:data (mem/latest view :night-looked))]
+    (boolean (and cell
+                  (or (<= (u/dist self cell) 2)
+                      (contains? (:cells (reach/room p self)) [(:x cell) (:y cell) (:z cell)]))))))
+
+(defn unlooked-for-bed?
+  "Night, awake, not looked from here (looked-here?), and either a bed carried or remembered with a cell beside the feet
+  (floor, feet or head) never seen (the room checks, shut-in-hut? and walk-leaves-shelter?, would read the room smaller
+  than it is), or the body shut in a hut with no sleep tonight and no :sleep-failed entry (a bed may stand where it has
+  not looked, or have been set down since it saw the cell): look before deciding."
+  [p view]
+  (let [{:keys [x y z]} (feet p)]
+    (boolean (and (night? p) (not (sleeping? p))
+                  (not (looked-here? p view))
+                  (or (and (or (some? (carried-bed p)) (some? (mem/place view :bed)))
+                           (look/unseen? p (for [dx [-1 0 1] dz [-1 0 1] dy [-1 0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
+                      (and (zero? (mem/count-in view :slept slept-tonight-ms))
+                           (empty? (mem/entries view :sleep-failed))
+                           (shut-in-hut? p)))))))
 
 (defn breached-home?
   "Whether the roofed body's room has a hole: a :bed-open entry (a bed found open) within breach-near blocks and the body
@@ -630,11 +669,12 @@
   A buried body is not pulled out of the ground to place a bed or log out: the night changes nothing there."
   [p view args permit?]
   (let [shelter (:data (mem/latest view :shelter))
-        buried (buried? p)]
+        buried (and (buried? p) (not (shut-in-hut? p)))]
     (boolean
      (if (night? p)
        (and (not (sleeping? p))
             (or (some? (bed-to-use p view (bed-radius view args) permit?))
+                (unlooked-for-bed? p view)
                 (and (not buried) (bed-place-wanted? p view (bed-radius view args) permit?))
                 (and (not buried) (log-out-for-sleepers? p view))
                 (not (safe-from-night? p (:roof-height args default-roof-height)))

@@ -34,6 +34,7 @@
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
    :limit-s 100}
   {:name "carried-bed-in-the-open-is-slept-in-and-kept-at-day"
+   :body {:spawnpoint [2 0 2]}
    :act [[:rcon "give $BODY red_bed 1"]
          [:job (jobs.survival.night {:flee-radius 0})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]

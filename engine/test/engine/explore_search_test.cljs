@@ -531,7 +531,7 @@
           (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 40 :spacing 4}) {})
           (await (run-until-done s 400))
           (let [e (event-of s :search.not-found)]
-            (is (> (get-in e [:coverage :scans]) 5) "the points are examined over several steps")
+            (is (<= (get-in e [:coverage :scans]) 2) "a step that only goes on choosing points does not look again")
             (is (= :distance (:why e)))
             (is (> (count (get-in e [:coverage :failed])) 100))))))))
 
