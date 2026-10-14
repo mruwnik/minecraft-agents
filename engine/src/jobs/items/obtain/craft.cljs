@@ -13,6 +13,13 @@
   (ctx/update-mem! c assoc-in [:craft :why] why)
   :again)
 
+(defn stop-why
+  "What a craft that made nothing says for tried-text: the short ingredients (and alternatives) of a :need stop, else its reason."
+  [res]
+  (if (:short res)
+    (select-keys res [:short :alternatives])
+    (or (:reason res) :declined)))
+
 (defn smelt-fetch
   "The :fetch limits of a smelt child (its fuel and furnace): this obtain's, one level deeper."
   [c]
@@ -105,5 +112,5 @@
 
                   ;; the craft child ran its own rounds and made nothing: another child of the same step would repeat them
                   :else
-                  (let [why (or (:reason res) (when (:short res) {:short (:short res)}) :declined)]
+                  (let [why (stop-why res)]
                     (if (= :declined r) (fruitless! c why) (tried! c :craft why)))))))))))

@@ -145,9 +145,9 @@
         out (ctx/child-result c :craft)]
     (if-not (= :done r)
       (if (= :declined r) (declined! c :craft 'jobs.items.craft cargs) :continue)
-      (do (if (:reason out)
-            (stop! c :bake.craft-failed (str "cannot craft the bread: " (:reason out))
-                   (str "craft " (:reason out)))
+      (do (if (and (:reason out) (not (and (= :need (:reason out)) (pos? (:made out 0)))))
+            (stop! c :bake.craft-failed (str "cannot craft the bread: " (name (:reason out)))
+                   (str "craft " (name (:reason out))))
             (do (u/progress! c) :again))))))
 
 (defn ^:async withdraw!

@@ -283,3 +283,31 @@
         (let [[result p] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks beside} {} tu/seeing-after-look))]
           (is (seq (calls p "look")))
           (is (= {:baked 10 :deposited 6} result)))))))
+
+(defn short-craft
+  "A craft stand-in that ends :need, making loaves in its first call only; calls counts them."
+  [loaves calls]
+  {:check (constantly true) :round (fn [c]
+            (let [n (swap! calls inc)
+                  made (if (= 1 n) loaves 0)]
+              (ctx/end c :condition-failed {:reason :need :short {"wheat" 1}} {:made made :short {"wheat" 1}})))})
+
+(def short-world {:inventory [{:name "wheat" :count 6}] :containers {"10,64,0" [{:name "wheat" :count 9}]} :blocks beside})
+
+(deftest a-craft-short-after-some-bread-counts-as-progress
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)]
+          (await (bake-with-craft short-world (short-craft 2 n)))
+          (is (> @n 1) "went on after the loaves"))))))
+
+(deftest a-craft-short-with-no-bread-stops-the-bake-in-words
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              [result] (await (bake-with-craft short-world (short-craft 0 n)))]
+          (is (= 1 @n))
+          (is (re-find #"craft" (str (:reason result))) (pr-str result))
+          (is (not (re-find #":" (str (:reason result)))) (pr-str result)))))))

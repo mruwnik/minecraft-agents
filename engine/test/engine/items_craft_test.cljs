@@ -224,9 +224,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 1}]})
-              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "partial" :reason "no-item" :made 4 :used #js {} :have #js {"stick" 1} :recipes #js [#js {"oak_planks" 2 "stick" 1}]}))
-              result (await (child-outcome eng job {:item "wooden_pickaxe" :count 8} 8))]
-          (is (= {"oak_planks" 2} (:short result))))))))
+              _ (.override (.-world p) "craft" (fn ^:async f [token args impl]
+                             (await (impl token args))
+                             #js {:status "partial" :reason "no-item" :made 4 :used #js {} :have #js {} :recipes #js [#js {"oak_log" 1}]}))
+              result (await (child-outcome eng job {:item "oak_planks" :count 8 :fetch false} 8))]
+          (is (= {"oak_log" 1} (:short result)))
+          (is (= 4 (:made result)))
+          (is (= :stopped (:status result)) "a partial stop is not done"))))))
 
 (deftest craft-an-arrival-is-not-a-failure
   (async done
@@ -615,3 +619,16 @@
                  (await (end {:inventory [{:name "wheat" :count 3}] :blocks {"10,64,0" "stone"}} {:item "bread" :table table}))))
           (is (= {:event :stopped :kind :nothing-possible :reason :cannot :made 0}
                  (await (end {} {:item "dragon_egg"})))))))))
+
+(deftest a-quote-with-no-recipe-yields-nothing-and-is-finite
+  (let [q ((:quote-of (get registry/jobs job)) {:primitives (tu/fake {}) :args {:item "dragon_egg" :count 1}})]
+    (is (nil? (contract/quote-problem q)) (pr-str q))
+    (is (nil? (get-in q [:yields :items "dragon_egg"])))
+    (is (every? #(js/isFinite %) (get-in q [:uses :time])))))
+
+(deftest a-quote-with-a-full-bag-is-finite-and-still-valid
+  (let [filler (mapv (fn [_] {:name "iron_pickaxe" :count 1}) (range 35))
+        q ((:quote-of (get registry/jobs job)) {:primitives (tu/fake {:inventory (conj filler {:name "oak_log" :count 1})}) :args {:item "oak_planks" :count 4}})]
+    (is (nil? (contract/quote-problem q)) (pr-str q))
+    (is (every? #(js/isFinite %) (get-in q [:uses :time])))
+    (is (= [4 4 4] (get-in q [:yields :items "oak_planks"])))))

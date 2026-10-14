@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [jobs.items.obtain.craft :as obtain-craft]
             [engine.events :as events]
             [engine.expr :as expr]
             [engine.fake :as fake]
@@ -1373,3 +1374,9 @@
     (is (= {:block "stone" :explore true} (:args (fetch/plan-for {:reason :no-tool :block "stone"} o))))
     (is (nil? (fetch/limit-error {:explore {:max-distance 10}})))
     (is (some? (fetch/limit-error {:explore "yes"})))))
+
+(deftest obtain-craft-keeps-the-short-detail-of-a-need-stop
+  (is (= {:short {"stick" 2} :alternatives {"oak_log" ["birch_log"]}}
+         (obtain-craft/stop-why {:reason :need :short {"stick" 2} :alternatives {"oak_log" ["birch_log"]}})))
+  (is (= :no-table (obtain-craft/stop-why {:reason :no-table})))
+  (is (= :declined (obtain-craft/stop-why {}))))

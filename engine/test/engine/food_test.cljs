@@ -903,3 +903,12 @@
 
 (deftest eat-prefers-common-food-over-golden-apple
   (is (= "bread" (eat/best-food [{:name "golden_apple"} {:name "bread"}] false nil 20 20 #{}))))
+
+(deftest get-food-names-a-short-craft-as-short
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 5}] :blocks table-near})]
+          (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "partial" :reason "no-item" :made 0 :used #js {} :have #js {} :recipes #js [#js {"wheat" 3}]}))
+          (await (run-food! eng))
+          (is (= "short" (:reason (first (entries eng :no-bake))))))))))
