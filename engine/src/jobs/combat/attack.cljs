@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.look :as look]
+            [jobs.lib.vantage :as vantage]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
@@ -34,7 +35,7 @@
   - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
   - :nothing-possible :lost: some target was neither killed nor given up on.
   - :limit-reached :timeout (the call's :spend :time, default ::time-s, from the first round; attack.timeout warning).
-  - :condition-failed :absent: no target was present after a 2 s grace for the world's entities to arrive and a look round (a far one is sensed only in view).
+  - :condition-failed :absent: no target was present after a 2 s grace for the world's entities to arrive, a look round and a look from each of four cells 3 blocks round (jobs.lib.vantage; a far or low one is sensed only in view).
   :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
   :absent :wait makes the call wait (condition :no-target) until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
   Creepers get no special handling. The job does not guard the body's health: the survival register sits above it and cuts it.")
@@ -306,6 +307,7 @@
         (and (empty? targets) (empty? seen)) (cond
                                                (< (- now started) absent-grace-ms) (await (wait! c 500))
                                                (await (look/survey-until! c #(seq (candidates c)))) :again
+                                               (await (vantage/step! c #(seq (candidates c)))) :again
                                                :else (finish! c :absent))
         (empty? targets) (if (>= (- now (or last-seen started)) (* 1000 lost-s))
                            (finish! c (settled-reason c))

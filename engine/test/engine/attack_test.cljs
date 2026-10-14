@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.hunt-test :as hunt-test]
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -361,9 +362,20 @@
             (is (finished? s) (str targets))
             (is (= :absent (:reason (done-event s))) (str targets))
             (is (= 1 (count (events-of s :attack.done))) (str targets))
-            (is (every? #(zero? (count (h/calls p %))) ["equip" "moveTo" "attack"]) (str targets))
+            (is (every? #(zero? (count (h/calls p %))) ["equip" "attack"]) (str targets))
             (is (pos? (count (h/calls p "look"))) (str targets " turned before ending absent"))
             (is (pos? (count (h/calls p "wait"))) (str targets))))))))
+
+(deftest a-target-out-of-sight-is-stepped-to-before-the-job-ends-absent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword :entities [{:id 5 :name "cow" :kind "passive" :pos {:x 6 :y 64 :z 0}}]} 20)
+              _ (hunt-test/hide-passives-west-of! (:p s) 2)
+              _ (core/submit! (:eng s) (spec {:targets [5]}) {})
+              _ (await (run-ticks s 60 700))]
+          (is (= [5] (take 1 (attacked s))) "attacked after stepping east to see it")
+          (is (not= :absent (:reason (done-event s)))))))))
 
 (deftest a-target-arriving-within-the-grace-is_attacked
   (async done

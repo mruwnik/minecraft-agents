@@ -36,6 +36,17 @@
     (await (run-ticks s n 700))
     s))
 
+(defn hide-passives-west-of!
+  "Passive mobs are sensed only once the body stands at x or further east, as one below a lip is seen from the edge."
+  [p x]
+  (let [orig (.-entities p)]
+    (set! (.-entities p)
+          (fn [opts]
+            (let [seen (.call orig p opts)]
+              (if (>= (.-x (.-pos (.self p))) x)
+                seen
+                (.filter seen #(not= "passive" (.-kind %)))))))))
+
 (defn attacked [{:keys [p]}] (mapv #(.-id (.-args %)) (h/calls p "attack")))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 (defn done-event [s] (first (events-of s :hunt.done)))
@@ -74,10 +85,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:mob ["cow" "pig"] :keep 0} {:inventory h/sword :entities []} 20))
+        (let [s (await (scenario {:mob ["cow" "pig"] :keep 0} {:inventory h/sword :entities []} 200))
               e (first (events-of s :hunt.batch-done))]
           (is (= 0 (:killed e)))
-          (is (= :too-few (:reason e)) "the first kind's ending")
+          (is (= :keep (:reason e)) "the first kind's ending, after the look-outs")
           (is (seq (events-of s :stopped)) "0 killed ends stopped, not completed")
           (is (finished? s)))))))
 
@@ -125,7 +136,6 @@
         (doseq [[args entities note]
                 [[{:keep 2} [(cow 1 3) (cow 2 4)] "exactly keep"]
                  [{:keep 2} [(cow 1 3)] "fewer than keep"]
-                 [{:keep 0} [] "none at all"]
                  [{:keep 1} [(cow 1 3) (animal 2 "sheep" 2) (animal 3 "sheep" 3)] "other kinds do not count"]
                  [{:keep 1 :radius 10} [(cow 1 3) (cow 2 30)] "outside the radius does not count"]]]
           (let [{:keys [eng p] :as s} (h/setup {:inventory h/sword :entities entities})]
@@ -356,14 +366,10 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[args entities want note]
-                [[{:mob "pig" :keep 0 :radius 24} [(animal 1 "pig" 36)]
-                  {:keep 0 :in-range 0 :radius 24 :nearest 36} "a pig seen past the radius"]
-                 [{:mob "pig" :keep 1 :radius 24} [(animal 1 "pig" 5) (animal 2 "pig" 40)]
+                [[{:mob "pig" :keep 1 :radius 24} [(animal 1 "pig" 5) (animal 2 "pig" 40)]
                   {:keep 1 :in-range 1 :radius 24 :nearest 5} "one in range, keep 1"]
-                 [{:mob "pig" :keep 0 :radius 24} []
-                  {:keep 0 :in-range 0 :radius 24} "none seen at all"]
-                 [{:mob "skeleton" :radius 24} [(animal 1 "skeleton" 32 {:kind "hostile"})]
-                  {:keep 0 :in-range 0 :radius 24 :nearest 32} "a hostile kind keeps none, with none in range to say it is hostile"]]]
+                 [{:mob "pig" :keep 2 :radius 24} [(animal 1 "pig" 5) (animal 2 "pig" 6)]
+                  {:keep 2 :in-range 2 :radius 24 :nearest 5} "keep 2, two in range"]]]
           (let [{:keys [eng seen]} (h/setup {:inventory h/sword :entities entities})
                 _ (await (tu/child-outcome eng 'jobs.combat.hunt args 20))
                 r (last (filter #(= :waiting (:kind %)) @seen))
@@ -371,6 +377,31 @@
             (is (= (assoc want :reason :too-few :mob (:mob args) :killed 0)
                    (select-keys cause [:reason :mob :killed :keep :in-range :radius :nearest])) note)
             (is (= (pos? (:keep want)) (str/includes? (:text cause) "keeping")) note)))))))
+
+;; ------------------------------------------------------------------ heard, not seen
+
+(deftest animals-out-of-sight-are-stepped-to-before-the-hunt-says-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword :entities [(cow 1 6) (cow 2 7) (cow 3 8)]} 20)
+              _ (hide-passives-west-of! (:p s) 2)
+              _ (core/submit! (:eng s) (spec {:count 1 :keep 0 :radius 24}) {})
+              _ (await (run-ticks s 60 700))]
+          (is (= :count (:reason (done-event s))) "the body walked to a look-out, saw the cows and killed one")
+          (is (= 1 (:killed (done-event s)))))))))
+
+(deftest animals-that-stay-out-of-sight-end-the-hunt-after-every-look-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword :entities [(cow 1 6)]} 20)
+              _ (hide-passives-west-of! (:p s) 1000)
+              _ (core/submit! (:eng s) (spec {:count 1 :keep 0 :radius 24}) {})
+              _ (await (run-ticks s 80 700))]
+          (is (finished? s))
+          (is (= 4 (count (h/calls (:p s) "steer"))) "a walk to each of the four look-outs")
+          (is (empty? (attacked s))))))))
 
 ;; ------------------------------------------------------------------ colour
 

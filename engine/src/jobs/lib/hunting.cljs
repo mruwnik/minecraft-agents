@@ -2,7 +2,8 @@
   "The kill-and-collect steps combat.hunt and animals.cull share: the drops table, the attack child call, the
   drop collection and the search wait. Memory keys: :target, :killed, :skipped, :skips, :collecting, :misses."
   (:require [engine.ctx :as ctx]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.vantage :as vantage]))
 
 (def raw-meats
   {"beef" "cooked_beef" "porkchop" "cooked_porkchop" "mutton" "cooked_mutton"
@@ -92,3 +93,12 @@
       (end! c)
       (do (await (ctx/act c :wait #js {:ms 1000}))
           :again))))
+
+(defn ^:async look-further!
+  "Nothing in sight: step to the next look-out (jobs.lib.vantage) and look round there, testing (f). :again, :yield
+  while the walk waits on the world, or nil once every look-out was tried."
+  [c f]
+  (case (await (vantage/step! c f))
+    :partial :yield
+    nil nil
+    :again))

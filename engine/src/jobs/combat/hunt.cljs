@@ -14,7 +14,8 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]
             [jobs.lib.started :as started]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.vantage :as vantage]))
 
 (def doc
   "Kill :count adult animals of the mob kind :mob within :radius, collecting their drops.
@@ -39,7 +40,9 @@
   3. :killed reaching :count ends :count.
   4. At most :keep adults present ends :keep. Skipped animals still count.
   With a :color only unsheared sheep of that colour count and are hunted (the :keep rule applies to them: the last :keep stay).
-  5. No candidate (present, not skipped) ends :none, on the second such round in a row, after a 1 s wait.
+  5. No adult of the kind in sight within :radius (animals heard below a lip are not in sight): the body walks to up to four
+     look-outs 3 blocks round where it started and looks round at each (jobs.lib.vantage), before step 4 or the end below.
+     No candidate (present, not skipped) ends :none, on the second such round in a row, after a 1 s wait.
   6. Otherwise the nearest candidate becomes the :target and is attacked in the same round.
      The target stays until killed or given up on, even when a nearer animal turns up.
   Before the first step it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
@@ -192,10 +195,17 @@
   (let [m (too-few c)]
     (assoc m :killed 0 :text (too-few-text m))))
 
-(defn start-fact
-  "The cause that bars a hunt's first step, or nil: nothing of the :color in range, or :keep or fewer adults."
+(defn unseen-kind?
+  "Whether no adult of the kind is in sight within :radius and not every look-out was tried: animals heard below a lip
+  are looked for before the hunt says there are none."
   [c]
-  (when-not (or (:started (ctx/mem c)) (kinds c))
+  (and (empty? (present-any c)) (not (vantage/done? c))))
+
+(defn start-fact
+  "The cause that bars a hunt's first step, or nil: nothing of the :color in range, or :keep or fewer adults.
+  Nil while none of the kind is in sight and the look-outs are untried: the first steps look for them."
+  [c]
+  (when-not (or (:started (ctx/mem c)) (kinds c) (unseen-kind? c))
     (cond
       (and (:color (:args c)) (empty? (present c))) (no-color c)
       (<= (count (present c)) (keep-of c)) (too-few-cause c))))
@@ -275,6 +285,7 @@
         target (await (hunting/attack! c (attack-opts c)))
         collecting (await (hunting/collect! c :yield))
         (>= (or killed 0) wanted) (finish! c :count)
+        (unseen-kind? c) (or (await (hunting/look-further! c #(seq (present-any c)))) (await (step c)))
         (<= (count (present c)) keep) (finish! c :keep)
         (and (nil? next-target) (seq (spare-rules c))) (finish! c :spared)
         (nil? next-target) (await (hunting/search! c #(finish! % :none)))
