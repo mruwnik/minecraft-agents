@@ -1,13 +1,12 @@
 (ns jobs.forestry.tidy
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.pace :as pace]
-            [jobs.lib.result :as result]
-            [jobs.lib.trees :as trees :refer [default-radius trees-near seen-name drop-filter replant-kind]]
-            ))
+            [jobs.lib.trees :as trees :refer [default-radius trees-near seen-name drop-filter replant-kind]]))
 
 (def doc
   "Fell the part-cut trunks round the body: a natural tree (logs with leaves near the top, as fell-tree reads one)
@@ -19,13 +18,17 @@
   Acts only on trunks it has seen. A trunk with no leaves (a log wall of a build), a tree standing on the ground, and a
   trunk whose lowest log a zone, claim or plan footprint refuses (warn tidy.declined once) are left alone; so is a trunk
   fell-tree digs no log of.
-  Ends after :max-trees trunks, or when none is left in sight. Result {:tidied n}, plus :replant-owed k when k felled trunks were not replanted (no seen ground, or plant-sapling
-  would not run: no sapling and none to fetch); their replant debts stay owed. With nothing to tidy it ends :stopped
-  :nothing-to-tidy. A missing axe, a pillar's blocks or a sapling are fetched by the children (:fetch). The check is always true: a
-  one-off job that finds nothing ends itself :nothing-to-tidy instead of staying queued.")
+  Ends :done {:tidied n} (plus :replant-owed k when k felled trunks were not replanted: no seen ground, or plant-sapling
+  would not run; their replant debts stay owed) after :max-trees trunks or when none is left in sight. With nothing to tidy
+  it ends condition-failed :nothing-to-tidy. A fell child that ends for want of a tool, blocks or food (a need, a limit,
+  :hungry, :night-sheltered) ends the job with that ending (:tidied n in its data), done when trunks were tidied first;
+  a trunk it cannot reach is left. A missing axe, a pillar's blocks or a sapling are fetched by the children (:fetch).
+  The conditions are empty: a one-off job that finds nothing ends itself instead of staying queued.
+  Quote: time by the trunks to fell, at most :max-trees.")
 
 (a/defargs settings
   {::max-trees {:default 8 :doc "The most trunks one tidy run fells." :spec (a/int-in 1 nil)}
+   ::time-s {:default 1200 :doc "Seconds a tidy run may take: the trunks, their drops and replants." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Child calls of one round before it gives the body back with :continue." :spec (a/int-in 1 nil)}
    ::ground-depth {:default 24 :doc "Blocks under a raised log looked down for the ground to replant on." :spec (a/int-in 1 nil)}})
 
@@ -106,11 +109,12 @@
 (defn limit [c] (or (:max-trees (:args c)) (settings/get settings ::max-trees)))
 
 (defn finish!
+  "The ending when no trunk is left to take: done with the count, condition-failed :nothing-to-tidy when none was."
   [c]
   (let [n (:tidied (ctx/mem c) 0)]
     (if (zero? n)
-      (result/stop! c :nothing-to-tidy "no part-cut trunk in sight")
-      (do (ctx/result! c (cond-> {:tidied n} (pos? (:owed (ctx/mem c) 0)) (assoc :replant-owed (:owed (ctx/mem c))))) :done))))
+      (ctx/end c :condition-failed :nothing-to-tidy {:tidied 0})
+      (ctx/end c :done nil (cond-> {:tidied n} (pos? (:owed (ctx/mem c) 0)) (assoc :replant-owed (:owed (ctx/mem c))))))))
 
 (defn next-tree!
   "Choose the next trunk into memory; false when none is left or the limit is reached."
@@ -136,33 +140,58 @@
                             (update :children dissoc :fell :collect :plant)))
     :again))
 
+(def fell-stops
+  "Causes of a fell child's ending that are the body's or the world's, not the trunk's: they end the job."
+  #{:need :tool :free-slots :night-sheltered :hungry})
+
+(defn fell-ended!
+  "What the fell child's ending e means for the trunk: done with logs goes on to collect, done with none leaves the
+  trunk; a stop of the body ends the job (done when trunks were tidied before it), any other ending leaves the trunk."
+  [c e]
+  (let [stop? (or (= :limit-reached (:kind e)) (fell-stops (contract/cause-key e)))]
+    (cond
+      (and (= :done (:kind e)) (pos? (get-in e [:data :logs] 0))) (do (ctx/update-mem! c assoc :phase :collect) :again)
+      stop? (if (pos? (:tidied (ctx/mem c) 0))
+              (finish! c)
+              (ctx/end c (:kind e) (:cause e) {:tidied 0}))
+      :else (end-tree! c true false))))
+
 (defn ^:async step
-  "One piece of the work: :again, :continue (a child waits on the world) or :done."
+  "One piece of the work: :again, :continue (a child waits on the world) or the ending."
   [c]
-  (let [m (ctx/mem c)
-        tree (or (:tree m) (next-tree! c))]
+  (let [tree (or (:tree (ctx/mem c)) (next-tree! c))]
     (if-not tree
       (finish! c)
       (let [phase (:phase (ctx/mem c))
             [_ job cargs] (some #(when (= phase (first %)) %) (phases (:args c) tree))
-            unplantable? (and (= :plant phase) (not (ctx/check-child c phase job cargs)))
-            r (if unplantable? :done (await (ctx/call-child c phase job cargs)))]
+            e (await (ctx/call c phase job cargs))]
         (cond
-          (not= :done r) :continue
-          (= :fell phase)
-          (let [logs (:logs (ctx/child-result c :fell) 0)]
-            (if (zero? logs)
-              (end-tree! c true false)
-              (do (ctx/update-mem! c assoc :phase :collect) :again)))
-          (= :collect phase)
-          (if (:ground tree)
-            (do (ctx/update-mem! c assoc :phase :plant) :again)
-            (end-tree! c false true))
-          :else (end-tree! c false unplantable?))))))
-
-(defn check [_c] true)
+          (= :continue e) :continue
+          (= :fell phase) (fell-ended! c e)
+          (= :collect phase) (if (:ground tree)
+                               (do (ctx/update-mem! c assoc :phase :plant) :again)
+                               (end-tree! c false true))
+          :else (end-tree! c false (not= :done (:kind e))))))))
 
 (defn ^:async round
   [c]
   (let [n (atom 0)]
     (await (pace/steps! c #(if (< (swap! n inc) (settings/get settings ::max-steps)) (step c) :continue)))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def target [:species])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions [])
+
+(defn done?
+  "Never done before the round says so: the trunks left are read at each step."
+  [c]
+  {:done? false :units :trunks :done (:tidied (ctx/mem c) 0) :left 1})
+
+(defn quote-of [c]
+  (let [k (or (:max-trees (:args c)) (settings/get settings ::max-trees))]
+    {:uses {:time [2 (* 15 (min k 2)) (max (settings/get settings ::time-s) (* 30 k))]}
+     :done [0 1 k]}))

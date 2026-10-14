@@ -35,7 +35,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
-          (is (= {:replant-owed 1} (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10} 30)))))))))
+          (is (= {:status :done :replant-owed 1} (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10} 30)))))))))
 
 (deftest a-sapling-carried-is-still-planted
   (async done
@@ -55,9 +55,8 @@
           (core/submit! eng '(jobs.forestry.harvest-wood {:radius 2}) {})
           (await (tu/run-until-empty eng 4))
           (is (= 1 (count (:list (core/state eng)))) "still queued")
-          (is (= [{:reason :no-tree :cause {:reason :no-tree :radius 2}}]
-                 (mapv #(select-keys % [:reason :cause]) (filterv #(= :waiting (:kind %)) @seen)))
-              "one job.waiting naming the reason"))))))
+          (is (= [:no-tree] (distinct (mapv :reason (filterv #(= :holding (:kind %)) @seen))))
+              "it holds still on purpose and says why"))))))
 
 (deftest any-species-wide-radius-no-sapling-ends-with-the-debt-owed
   (async done
@@ -236,15 +235,16 @@
           (is (= 6 (get (lt/inv p) "oak_log")) "both trees felled and collected")
           (is (= 2 (count (filter #(= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z %}))) [0 6]))) "both replanted"))))))
 
-(deftest count-ends-no-tree-when-the-fell-finds-none-to-reach
+(deftest count-ends-with-the-fell-ending-when-the-trees-seen-cannot-be-reached
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})
-              eng (assoc-in eng [:jobs 'jobs.forestry.fell-tree :round] (fn ^:async f [_] :done))
+              eng (assoc-in eng [:jobs 'jobs.forestry.fell-tree :round]
+                            (fn ^:async f [c] (ctx/end c :nothing-possible :tree-unreachable {:columns [[3 0]] :why :walk})))
               r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 60))]
-          (is (= {:status :stopped :reason :no-tree :got 0} (select-keys r [:status :reason :got]))
-              "a felling that finds no tree ends the job instead of starting the next"))))))
+          (is (= {:status :stopped :reason :tree-unreachable :got 0 :why :walk :columns [[3 0]]} (select-keys r [:status :reason :got :why :columns]))
+              "a felling that reaches no tree ends the job with that ending, nothing collected or planted after it"))))))
 
 (deftest count-ends-no-tree-when-the-trees-seen-are-felled
   (async done

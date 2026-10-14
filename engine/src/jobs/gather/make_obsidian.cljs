@@ -1,11 +1,10 @@
 (ns jobs.gather.make-obsidian
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
-            [jobs.lib.result :as result]
             [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]))
 
@@ -15,17 +14,18 @@
   lava cell with seen air above it and a stand cell beside that air (a standable cell with no lava beside it, never over lava):
   it walks to the stand (go-to, which keeps off lava), pours the water at the air cell above the lava, waits for the lava to turn to obsidian,
   scoops the water back up, and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
-  Ends {:status :done :got n} or {:status :stopped :reason r :got n}: :no-bucket (no water bucket and no bucket with water seen),
-  :no-lava (no seen lava with open air above and a safe stand), :pour-failed (two sites in a row where the pour or the conversion failed:
-  moving lava gives cobblestone), :unreachable (the stand could not be walked to), or the mine child's reason (:no-tool ..).")
+  Ends :done {:got n} at :count obsidian gained. Else it ends with :got n in its data: condition-failed :no-bucket (no water bucket and no bucket
+  with water seen) or :no-lava (no seen lava with open air above and a safe stand); nothing-possible :pour-failed (two sites in a row where
+  the pour or the conversion failed: moving lava gives cobblestone) or :unreachable (the stand could not be walked to); the mine child's
+  ending (:no-tool ..) passes up; a limit of the call ends limit-reached.
+  Quote: time by the walk to the stand and the pour; yields the obsidian.")
 
 (a/defargs args
   {:count {:doc "obsidian to get" :spec (a/int-in 1 nil) :default 1}
    :radius {:doc "how far from the body to look for lava, obsidian and water" :spec (a/num-in 1 nil) :default 24}})
 
-(defn check
-  "Passes: the round decides, and ends :stopped with the reason when it cannot make obsidian."
-  [_c] true)
+(a/defargs settings
+  {::time-s {:default 600 :doc "Seconds making obsidian may take: the walks, the pour, the wait for the conversion and the mining." :spec (a/num-in 0 nil)}})
 
 (def mine-fetch {:what #{:tool} :how #{:chest :craft}})
 
@@ -58,8 +58,24 @@
                          {:lava pos :above above :stand stand})))))
          (sort-by #(u/dist here (:stand %))))))
 
-(defn stop! [c reason text]
-  (result/stop! c reason text :got (carried c "obsidian")))
+(defn gained [c] (- (carried c "obsidian") (:base (ctx/mem c) (carried c "obsidian"))))
+
+(defn end
+  "The ending of kind and cause, with the obsidian got so far and a text."
+  [c kind cause text]
+  (ctx/end c kind cause {:got (gained c) :text text}))
+
+(defn ^:async walk!
+  "Walk to within range of pos with a go-to child: :there, :continue (it waits on the world, or a leg that got nearer) or
+  :blocked (it gave up)."
+  [c pos range]
+  (let [e (await (child/call-walk* c :walk {:pos pos :range range :one-way :closed :warn false :retry false
+                                            :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (cond
+      (= :continue e) :continue
+      (and (= :done (:kind e)) (:arrived (:data e))) :there
+      (and (= :done (:kind e)) (:leg (:data e))) :continue
+      :else :blocked)))
 
 (defn ^:async fill-bucket!
   "An empty bucket carried and water seen: walk to the water and scoop it. :again when filled, :blocked when not."
@@ -67,10 +83,10 @@
   (let [water (first (seen-of c ["water"]))]
     (if-not water
       :blocked
-      (let [w (await (near/go-near! c (:pos water) 3))]
+      (let [w (await (walk! c (:pos water) 3))]
         (case w
           :there (if (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos (:pos water) :item "bucket"}))))) :again :blocked)
-          :partial :continue
+          :continue :continue
           :blocked)))))
 
 (defn ^:async pour!
@@ -88,44 +104,64 @@
               (await (ctx/act c :place (clj->js {:pos above :item "bucket"}))))
             (if made? :again :failed))))))
 
+(defn ^:async mine-seen!
+  "The seen obsidian mined with a mine child: :again, :continue while it works, or its ending when it got none."
+  [c got]
+  (let [e (await (ctx/call c :mine 'jobs.gather.mine
+                           {:block "obsidian" :item "obsidian" :count (- (:count (:args c)) got) :fetch mine-fetch :mend false :radius (:radius (:args c))}))]
+    (cond
+      (= :continue e) :continue
+      (> (gained c) got) :again
+      :else (ctx/end c (if (= :done (:kind e)) :nothing-possible (:kind e)) (if (= :done (:kind e)) :mine-failed (:cause e))
+                     {:got got :text (str "the obsidian could not be mined: " (name (or (some-> e :cause :reason) (:cause e) :unknown)))}))))
+
 (defn ^:async step [c]
   (let [{:keys [count]} (:args c)
-        base (:base (ctx/mem c))
-        got (- (carried c "obsidian") base)]
+        got (gained c)]
     (cond
-      (>= got count) (result/finish! c {:got got})
-      (seq (seen-of c ["obsidian"]))
-      (let [st (await (child/run! c :mine 'jobs.gather.mine
-                                  {:block "obsidian" :item "obsidian" :count (- count got) :fetch mine-fetch :mend false :radius (:radius (:args c))}
-                                  {:max-calls 1}))]
-        (if (= :continue st)
-          :continue
-          (let [res (ctx/child-result c :mine)]
-            (if (> (- (carried c "obsidian") base) got)
-              :again
-              (stop! c (or (:reason res) :mine-failed) (str "the obsidian could not be mined: " (name (or (:reason res) :unknown))))))))
-      (>= (:failed (ctx/mem c) 0) 2) (stop! c :pour-failed "water on the lava did not make obsidian twice in a row")
+      (>= got count) (ctx/end c :done nil {:got got})
+      (seq (seen-of c ["obsidian"])) (await (mine-seen! c got))
+      (>= (:failed (ctx/mem c) 0) 2) (end c :nothing-possible :pour-failed "water on the lava did not make obsidian twice in a row")
       (zero? (carried c "water_bucket"))
       (if (pos? (carried c "bucket"))
         (let [r (await (fill-bucket! c))]
           (case r
             :continue :continue
             :again :again
-            (stop! c :no-bucket "no water bucket is carried and no seen water to fill the bucket at")))
-        (stop! c :no-bucket "no water bucket is carried (a bucket is 3 iron plus a seen water source)"))
+            (end c :condition-failed :no-bucket "no water bucket is carried and no seen water to fill the bucket at")))
+        (end c :condition-failed :no-bucket "no water bucket is carried (a bucket is 3 iron plus a seen water source)"))
       :else
       (if-let [site (first (sites c))]
-        (let [w (await (near/go-near! c (:stand site) 1))]
+        (let [w (await (walk! c (:stand site) 1))]
           (case w
-            :partial :continue
+            :continue :continue
             :there (let [r (await (pour! c site))]
                      (if (= :again r)
                        (do (ctx/update-mem! c assoc :failed 0) :again)
                        (do (ctx/update-mem! c #(-> % (update :tried (fnil conj []) (:lava site)) (update :failed (fnil inc 0))))
                            :again)))
-            (stop! c :unreachable (str "could not walk to the stand at " (pr-str (:stand site))))))
-        (stop! c :no-lava "no seen lava with open air above and a safe stand beside it")))))
+            (end c :nothing-possible :unreachable (str "could not walk to the stand at " (pr-str (:stand site))))))
+        (end c :condition-failed :no-lava "no seen lava with open air above and a safe stand beside it")))))
 
 (defn ^:async round [c]
   (ctx/update-mem! c update :base #(or % (carried c "obsidian")))
   (await (pace/steps! c #(step c))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def target [])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions [])
+
+(defn done? [c]
+  (let [n (:count (:args c))
+        got (if (:base (ctx/mem c)) (gained c) 0)]
+    {:done? (>= got n) :units :obsidian :done got :left (max 0 (- n got))}))
+
+(defn quote-of [c]
+  (let [n (or (:count (:args c)) 1)]
+    {:uses {:time [1 (+ 20 (* 6 n)) (max (settings/get settings ::time-s) (+ 40 (* 6 n)))]}
+     :yields {:items {"obsidian" [0 n n]}}
+     :done [0 n n]}))

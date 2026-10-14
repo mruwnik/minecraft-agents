@@ -97,7 +97,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out]} (await (outcome {:blocks (merge (fm/ground [[6 0]]) (part-cut 6)) :inventory [sapling]} {:radius 12}))]
-          (is (= {:tidied 1} out))
+          (is (= {:status :done :tidied 1} out))
           (is (<= 3 (get (lt/inv p) "oak_log" 0))))))))
 
 (deftest max-trees-ends-the-run-after-that-many-trunks
@@ -107,7 +107,7 @@
         (let [{:keys [p out]} (await (outcome {:blocks (merge (fm/ground [[6 0] [10 0]]) (part-cut 6) (part-cut 10))
                                                :inventory [sapling]}
                                               {:radius 12 :max-trees 1}))]
-          (is (= {:tidied 1} out))
+          (is (= {:status :done :tidied 1} out))
           (is (= 1 (count (filter seq [(dug-ys p 6) (dug-ys p 10)])))))))))
 
 (deftest a-replant-that-cannot-be-done-is-owed
@@ -116,7 +116,7 @@
       (fn ^:async t []
         (let [{:keys [p out]} (await (outcome {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))} {:radius 12 :fetch false}))]
           (is (= #{65 66 67} (dug-ys p 6)))
-          (is (= {:tidied 1 :replant-owed 1} out)))))))
+          (is (= {:status :done :tidied 1 :replant-owed 1} out)))))))
 
 (deftest a-trunk-with-no-ground-seen-under-it-is-owed-too
   (async done
@@ -124,4 +124,4 @@
       (fn ^:async t []
         (let [{:keys [p out]} (await (outcome {:blocks (part-cut 6) :inventory [sapling]} {:radius 12}))]
           (is (= [] (fm/places p)))
-          (is (= {:tidied 1 :replant-owed 1} out)))))))
+          (is (= {:status :done :tidied 1 :replant-owed 1} out)))))))
