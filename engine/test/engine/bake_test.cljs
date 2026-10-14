@@ -116,7 +116,7 @@
                                                           (if (= "deposit" (.-direction args))
                                                             #js {:status "full" :moved 0}
                                                             (impl _ args)))))))]
-          (is (= {:baked 10 :deposited 0 :reason "deposit :full"} result))
+          (is (= {:baked 10 :deposited 0 :reason "deposit full"} result))
           (is (= {"bread" 10} (inv p)))
           (is (empty? (calls p "toss")))
           (is (contains? (kinds seen) :bake.deposit-failed)))))))

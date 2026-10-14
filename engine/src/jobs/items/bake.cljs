@@ -125,8 +125,8 @@
       (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
 
       (and (= :done r) (:gave-up out))
-      (stop! c :bake.deposit-failed (str "cannot put the bread away: " (:reason out))
-             (str "deposit " (:reason out)))
+      (stop! c :bake.deposit-failed (str "cannot put the bread away: " (name (:reason out)))
+             (str "deposit " (name (:reason out))))
 
       (contains? #{:done :continue} r)
       (do (ctx/update-mem! c update :deposited (fnil + 0) (max 0 (- bread (carried (:primitives c) "bread"))))
@@ -159,8 +159,8 @@
         out (ctx/child-result c :withdraw)]
     (cond
       (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
-      (and (= :done r) (:gave-up out)) (stop! c :bake.withdraw-failed (str "cannot take the wheat out: " (:reason out))
-                                              (str "withdraw " (:reason out)))
+      (and (= :done r) (:gave-up out)) (stop! c :bake.withdraw-failed (str "cannot take the wheat out: " (name (:reason out)))
+                                              (str "withdraw " (name (:reason out))))
       (= :done r) (do (u/progress! c) :again)
       (= :declined r) (declined! c :withdraw 'jobs.storage.withdraw wargs)
       :else :continue)))
@@ -186,8 +186,8 @@
         (ctx/update-mem! c update :topped (fnil + 0) (max 0 (- (carried p "bread") before)))
         (cond
           (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
-          (and (= :done r) (:gave-up out)) (stop! c :bake.withdraw-failed (str "cannot take the bread out: " (:reason out))
-                                                  (str "withdraw " (:reason out)))
+          (and (= :done r) (:gave-up out)) (stop! c :bake.withdraw-failed (str "cannot take the bread out: " (name (:reason out)))
+                                                  (str "withdraw " (name (:reason out))))
           (= :done r) (finish-done! c)
           (= :declined r) (declined! c :topup 'jobs.storage.withdraw targs)
           :else :continue)))))
