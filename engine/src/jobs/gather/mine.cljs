@@ -419,13 +419,13 @@
     (when (and o (contains? (:what o) :tool)) o)))
 
 (defn ^:async fetch-pickaxe!
-  "A pickaxe is owed: jobs.items.get-tool for the block through jobs.lib.need (:fetch's :how :depth :explore apply).
+  "A pickaxe is owed: jobs.items.get-tool for the block through jobs.lib.need (:fetch's :how and :explore apply).
   :continue while it runs, :again once it got one; else the end: before any dig (no phase) at once, in the dig phase
   the mend first, with :no-tool."
   [c]
   (let [{:keys [block]} (:args c)
         o (fetch-limits c)
-        e (when o (await (need/tool! c {:block block} (select-keys o [:how :depth :explore]))))
+        e (when o (await (need/tool! c {:block block} (select-keys o [:how :explore]))))
         why (when (map? e) (contract/cause-key (or (:because e) e)))]
     (cond
       (= :continue e) :continue
