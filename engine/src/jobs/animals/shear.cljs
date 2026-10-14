@@ -24,11 +24,12 @@
 
   Ends with info shear.done and a warn shear.gave-up unless the reason is :shorn, the data {:reason :shorn [keys]
   :given-up {key reason} :collected n} and the ending by the reason:
-  - :done :shorn: the count was reached, or the sheep ran out after some were shorn.
-  - :condition-failed :shears-broke (the shears were gone after some were shorn), :no-shears (none carried and :fetch false,
+  - :done :shorn: the count was reached. Any stop after at least :least sheep were shorn (default 1; :all =
+    :count, every sheep in radius when nil) is done, with the stop as the data reason.
+  - :nothing-possible :shears-broke (the shears were gone after some, fewer than :least, were shorn).
+  - :condition-failed :no-shears (none carried and :fetch false,
     or the fetch failed: the cause names the shears, :because the fetch's ending), or with nothing shorn :refused / :no-zones
     when the zone rules refused every candidate.
-  - :limit-reached :timeout: the call's :spend :time (default ::time-s) of work, not counting fetching (no collecting).
   - :nothing-possible with nothing shorn: :unreachable if one was given up as unreachable, else :all-sheared (adults present
     but all sheared) or :none.
 
@@ -84,11 +85,16 @@
 (def ending-of
   "The kind and cause of a finish by reason."
   {:shorn [:done nil]
-   :shears-broke [:condition-failed :shears-broke]
+   :shears-broke [:nothing-possible :shears-broke]
    :no-shears [:condition-failed :no-shears]
    :refused [:condition-failed :refused]
-   :no-zones [:condition-failed :no-zones]
-   :timeout [:limit-reached {:line :time :reason :timeout}]})
+   :no-zones [:condition-failed :no-zones]})
+
+(defn least-shorn
+  "Sheep that must be shorn for the run to be done: the call's :least (:all = :count, else what was shorn)."
+  [c]
+  (let [l (:least (ctx/frozen-call c) 1)]
+    (if (= :all l) (or (:count (:args c)) (count (:shorn (ctx/mem c)))) l)))
 
 (defn finish!
   "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), or ending when given
@@ -104,7 +110,9 @@
       (ctx/emit! c :shear.gave-up :warn {:reason reason :text (str "shearing stopped: " (name reason))}))
     (if ending
       (assoc ending :data result)
-      (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
+      (let [[kind cause] (if (and (pos? (count (:shorn m))) (>= (count (:shorn m)) (least-shorn c)))
+                           [:done nil]
+                           (get ending-of reason [:nothing-possible reason]))]
         (ctx/end c kind cause result)))))
 
 (defn go-collect!
@@ -149,7 +157,7 @@
   "End when no sheep is left: collect when any was shorn, else finish with the reason."
   [c]
   (if (seq (:shorn (ctx/mem c)))
-    (go-collect! c :shorn)
+    (go-collect! c (if (>= (count (:shorn (ctx/mem c))) (least-shorn c)) :shorn (none-reason c)))
     (finish! c (none-reason c))))
 
 (defn ^:async shear!
@@ -199,7 +207,7 @@
     (if-not (fetchable? c)
       (end!)
       (let [limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :depth :explore])
-            e (await (u/untimed! c #(need/item! c "shears" 1 limits)))]
+            e (await (need/item! c "shears" 1 limits))]
         (cond
           (= :continue e) :continue
           (= :done (:kind e)) :again
@@ -207,18 +215,15 @@
           :else (finish! c :no-shears e))))))
 
 (defn ^:async step [c]
-  (let [now (ctx/now c)
-        {n :count} (:args c)]
-    (ctx/update-mem! c update :started #(or % now))
-    (let [m (ctx/mem c)
-          cands (candidates c)]
-      (cond
-        (>= (- now (:started m)) (* 1000 (time-limit c))) (finish! c :timeout)
-        (= :collect (:phase m)) (await (collect! c))
-        (not (shears-carried? c)) (await (no-shears! c))
-        (and n (>= (count (:shorn m)) n)) (go-collect! c :shorn)
-        (empty? cands) (out-of-sheep! c)
-        :else (await (engage! c (first cands)))))))
+  (let [{n :count} (:args c)
+        m (ctx/mem c)
+        cands (candidates c)]
+    (cond
+      (= :collect (:phase m)) (await (collect! c))
+      (not (shears-carried? c)) (await (no-shears! c))
+      (and n (>= (count (:shorn m)) n)) (go-collect! c :shorn)
+      (empty? cands) (out-of-sheep! c)
+      :else (await (engage! c (first cands))))))
 
 (defn ^:async round
   "The whole attempt: loop the steps until one ends or yields."

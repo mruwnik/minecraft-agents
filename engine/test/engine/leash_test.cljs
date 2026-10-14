@@ -206,34 +206,6 @@
           (is (nil? (done-event s)))
           (is (= 2 (leads-in-chest s))))))))
 
-(deftest a-fetch-longer-than-timeout-s-does-not-end-timeout
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (h/setup-seeing (chest-world [{:name "lead" :count 2}]) nil)]
-          (perception/pass! (aget (:p s) "perception"))
-          (.override (.-world (:p s)) "transfer"
-                     (fn [token a impl] (swap! (:clock s) + 10000) (impl token a)))
-          (core/submit! (:eng s) (list 'jobs.animals.leash {:mob "cow" :spend {:time 3}}) {})
-          (await (run-ticks s 120 700))
-          (is (finished? s))
-          (is (= :leashed (:reason (done-event s))))
-          (is (= [1] (on-lead s))))))))
-
-(deftest a-stuck-interaction-still-times-out
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (h/setup {:inventory lead :entities [(cow 1 3)]})]
-          (.override (.-world (:p s)) "interact"
-                     (fn [_token _args _impl]
-                       (swap! (:clock s) + 10000)
-                       (js/Promise.resolve #js {:status "out-of-reach"})))
-          (core/submit! (:eng s) (list 'jobs.animals.leash {:mob "cow" :spend {:time 3}}) {})
-          (await (run-ticks s 30 700))
-          (is (finished? s))
-          (is (= :timeout (:reason (done-event s)))))))))
-
 (deftest no-fetch-when-no-animal-is-near
   (async done
     (tu/run-async done

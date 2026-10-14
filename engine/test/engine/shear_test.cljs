@@ -216,19 +216,6 @@
           (is (= :no-shears (:reason (done-event s))))
           (is (= 1 (shears-in-chest s))))))))
 
-(deftest a-fetch-longer-than-timeout-s-does-not-end-timeout
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (h/setup-seeing (chest-world [{:name "shears" :count 1}]) nil)]
-          (perception/pass! (aget (:p s) "perception"))
-          (.override (.-world (:p s)) "transfer"
-                     (fn [token a impl] (swap! (:clock s) + 10000) (impl token a)))
-          (core/submit! (:eng s) (list 'jobs.animals.shear {:timeout-s 3}) {})
-          (await (run-ticks s 120 700))
-          (is (finished? s))
-          (is (= :shorn (:reason (done-event s)))))))))
-
 (deftest no-fetch-when-no-sheep-is-near
   (async done
     (tu/run-async done

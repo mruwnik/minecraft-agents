@@ -486,19 +486,6 @@
           (is (= 2 (count (:fed (done-event s)))))
           (is (= 0 (count-of s "wheat"))))))))
 
-(deftest a-fetch-longer-than-timeout-s-does-not-end-timeout
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (h/setup-seeing (chest-world [{:name "wheat" :count 10}]) nil)]
-          (perception/pass! (aget (:p s) "perception"))
-          (.override (.-world (:p s)) "transfer"
-                     (fn [token a impl] (swap! (:clock s) + 10000) (impl token a)))
-          (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow" :spend {:time 3}}) {})
-          (await (run-ticks s 120 700))
-          (is (finished? s))
-          (is (= :fed (:reason (done-event s)))))))))
-
 (deftest no-fetch-when-no-animal-is-near
   (async done
     (tu/run-async done

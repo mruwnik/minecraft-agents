@@ -26,7 +26,6 @@
   - :done :leashed: an animal is on the lead.
   - :condition-failed :no-lead (no lead carried and none fetched; a listed call with :fetch false waits for one; or the server found none; after a failed fetch the cause names the lead, :because the fetch's ending),
     :refused (others given up, or the zone rules refused the animals) or :no-zones (no zone list was read).
-  - :limit-reached :timeout: the call's :spend :time (default ::time-s) of work, not counting fetching.
   - :nothing-possible when no candidate is left: :unreachable if one was given up as unreachable, else :all-leashed
     (animals present but all led) or :none. The same after three fruitless animals in a row.
 
@@ -86,8 +85,7 @@
   {:leashed [:done nil]
    :no-lead [:condition-failed :no-lead]
    :refused [:condition-failed :refused]
-   :no-zones [:condition-failed :no-zones]
-   :timeout [:limit-reached {:line :time :reason :timeout}]})
+   :no-zones [:condition-failed :no-zones]})
 
 (defn finish!
   "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), or ending when given
@@ -182,22 +180,18 @@
   (if-not (fetchable? c)
     (finish! c :no-lead nil)
     (let [limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :depth :explore])
-          e (await (u/untimed! c #(need/item! c "lead" 1 limits)))]
+          e (await (need/item! c "lead" 1 limits))]
       (cond
         (= :continue e) :continue
         (= :done (:kind e)) :again
         :else (finish! c :no-lead nil e)))))
 
 (defn ^:async step [c]
-  (let [now (ctx/now c)]
-    (ctx/update-mem! c update :started #(or % now))
-    (let [m (ctx/mem c)
-          cands (candidates c)]
-      (cond
-        (>= (- now (:started m)) (* 1000 (time-limit c))) (finish! c :timeout nil)
-        (not (animals/lead-carried? c)) (await (no-lead! c))
-        (empty? cands) (finish! c (none-reason c) nil)
-        :else (await (engage! c (first cands)))))))
+  (let [cands (candidates c)]
+    (cond
+      (not (animals/lead-carried? c)) (await (no-lead! c))
+      (empty? cands) (finish! c (none-reason c) nil)
+      :else (await (engage! c (first cands))))))
 
 (defn ^:async round
   "The whole attempt: loop the steps until one ends or yields."

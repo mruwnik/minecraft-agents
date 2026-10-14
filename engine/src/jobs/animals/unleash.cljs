@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -31,7 +32,6 @@
   the leads carried at the end) and the ending by the reason:
   - :done :unleashed: some animal was freed.
   - :condition-failed :refused (with nothing freed, others given up) or :no-zones (no zone list was read).
-  - :limit-reached :timeout: the call's :spend :time (default ::time-s) from the start (no collecting).
   - :nothing-possible with nothing freed: :unreachable if one was given up as unreachable, else :none (0 freed is
     never done). It also ends after three fruitless animals in a row.
 
@@ -89,8 +89,7 @@
   "The kind and cause of a finish by reason."
   {:unleashed [:done nil]
    :refused [:condition-failed :refused]
-   :no-zones [:condition-failed :no-zones]
-   :timeout [:limit-reached {:line :time :reason :timeout}]})
+   :no-zones [:condition-failed :no-zones]})
 
 (defn finish!
   "Emit the outcome and end the call (ending-of, else nothing-possible). :collected is the leads gained since the call
@@ -208,26 +207,25 @@
       :again)))
 
 (defn ^:async collect! [c]
-  (when-not (:dropped (ctx/mem c))
-    (await (ctx/act c :wait #js {:ms (drop-wait-ms)}))
-    (ctx/update-mem! c assoc :dropped true))
-  (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius (:radius (:args c)) :filter ["lead"]}))]
-    (if (= :continue e)
+  (let [waited (if (:dropped (ctx/mem c))
+                 {:kind :done}
+                 (await (child/pause! c (/ (drop-wait-ms) 1000) :lead-dropping)))]
+    (if (= :continue waited)
       :continue
-      (finish! c (:reason (ctx/mem c))))))
+      (do (ctx/update-mem! c assoc :dropped true)
+          (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius (:radius (:args c)) :filter ["lead"]}))]
+            (if (= :continue e)
+              :continue
+              (finish! c (:reason (ctx/mem c)))))))))
 
 (defn ^:async step [c]
-  (let [now (ctx/now c)]
-    (ctx/update-mem! c #(-> %
-                            (update :started (fn [t] (or t now)))
-                            (update :leads-at-start (fn [n] (or n (leads-carried c))))))
-    (let [m (ctx/mem c)
-          cands (candidates c)]
-      (cond
-        (>= (- now (:started m)) (* 1000 (time-limit c))) (finish! c :timeout)
-        (= :collect (:phase m)) (await (collect! c))
-        (empty? cands) (if (seq (:freed m)) (go-collect! c :unleashed) (finish! c (none-reason c)))
-        :else (await (engage! c (first cands)))))))
+  (ctx/update-mem! c update :leads-at-start (fn [n] (or n (leads-carried c))))
+  (let [m (ctx/mem c)
+        cands (candidates c)]
+    (cond
+      (= :collect (:phase m)) (await (collect! c))
+      (empty? cands) (if (seq (:freed m)) (go-collect! c :unleashed) (finish! c (none-reason c)))
+      :else (await (engage! c (first cands))))))
 
 (defn ^:async round
   "The whole attempt: loop the steps until one ends or yields."
