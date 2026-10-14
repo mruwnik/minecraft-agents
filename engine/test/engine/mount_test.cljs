@@ -1,6 +1,7 @@
 (ns engine.mount-test
   "jobs.movement.mount against the fake world: every mount status maps to a job status."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.core.legacy :as legacy]
             [engine.test-util :as tu]
             [engine.registry :as registry]
             [jobs.movement.mount :as mount]
@@ -21,19 +22,22 @@
 (defn ^:async run [spec args & [mount-status child child-res]]
   (let [p (doto (tu/fake spec) (.setOwner "t"))
         _ (when mount-status (set! (.-mount p) (fn [_ _] (js/Promise.resolve #js {:status mount-status}))))
-        c (cond-> (bare-ctx p args) child (assoc :engine {:jobs registry/jobs} :call-child (fn [_ _ _] (js/Promise.resolve child))
-                                                 :child-result (fn [_] (or child-res {:reason :blocked}))))
+        c (cond-> (bare-ctx p args) child (assoc :engine {:jobs registry/jobs}
+                                                 :call (fn [_ _ _] (js/Promise.resolve
+                                                                    (cond (= :continue child) :continue
+                                                                          (:arrived child-res) {:kind :done :cause nil :data child-res}
+                                                                          :else {:kind :nothing-possible :cause :unreachable :data (or child-res {:reason :blocked})})))))
         r (await (mount/round c))]
-    {:r r :p p :results (filterv #(= :result (first %)) @(:seen c)) :seen @(:seen c)}))
+    {:r r :p p :seen @(:seen c)}))
 
-(defn result-of [{:keys [results]}] (second (last results)))
+(defn result-of [{:keys [r]}] (legacy/result-of r))
 
 (deftest mounts-a-boat-in-reach
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [o (await (run {:entities [boat]} {:id 9}))]
-          (is (= :done (:r o)))
+          (is (= :done (:kind (:r o))))
           (is (= {:status :done :id 9 :vehicle "oak_boat"} (result-of o)))
           (is (some? (vehicle/vehicle-of (.self (:p o)))))
           (is (some #(= :vehicle.mounted (first %)) (:seen o)))
@@ -118,8 +122,7 @@
       (fn ^:async t []
         (let [far (assoc boat :pos {:x 1.5 :y 64 :z 30.5})
               o (await (run {:entities [far]} {:id 9} nil :continue))]
-          (is (= :continue (:r o)))
-          (is (empty? (:results o))))))))
+          (is (= :continue (:r o))))))))
 
 (deftest a-failed-walk-twice-is-unreachable
   (async done
@@ -139,20 +142,16 @@
           (is (= 9 (:id (result-of o))))
           (is (= :gone (:reason (result-of g)))))))))
 
-(defn check-with [spec args]
-  (let [waiting (atom nil)
-        p (tu/fake spec)
-        ok (mount/check {:primitives p :args args :wait waiting})]
-    {:ok ok :why @waiting}))
+(defn condition-with [spec args]
+  (let [c {:primitives (tu/fake spec) :args args :view (fn [] {:data {:entries {}} :now 0}) :root "j1" :slots []}]
+    (or (mount/bad-args c) (mount/no-vehicle c))))
 
-(deftest check-declines-when-no-vehicle-is-in-sight
-  (is (= {:ok false :why :no-vehicle}
-         (update (check-with {:entities []} {:id 9}) :why #(some-> % :reason)))
-      "by id")
-  (is (= :no-vehicle (:reason (:why (check-with {:entities [(dissoc boat :pos)]} {:name "oak_boat"})))) "heard only")
-  (is (true? (:ok (check-with {:entities [boat]} {:id 9}))))
-  (is (true? (:ok (check-with {:entities [boat]} {:name "oak_boat"}))))
-  (is (true? (:ok (check-with {:entities []} {:id "x"}))) "bad args are the round's stop"))
+(deftest conditions-refuse-when-no-vehicle-is-in-sight
+  (is (= :no-vehicle (condition-with {:entities []} {:id 9})) "by id")
+  (is (= :no-vehicle (condition-with {:entities [(dissoc boat :pos)]} {:name "oak_boat"})) "heard only")
+  (is (nil? (condition-with {:entities [boat]} {:id 9})))
+  (is (nil? (condition-with {:entities [boat]} {:name "oak_boat"})))
+  (is (= :bad-args (condition-with {:entities [boat]} {}))))
 
 (deftest a-walk-that-arrives-but-stays-out-of-reach-is-unreachable
   (async done

@@ -1,5 +1,6 @@
 (ns jobs.movement.mount
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
@@ -11,19 +12,24 @@
   Holds the vehicle (jobs.lib.vehicle) while the job lives, so the :mounted trigger does not step the body off:
   the body stays aboard only in manual mode, otherwise the hold ends with the job and the trigger steps it off ~30 s later.
   By :name it prefers a vehicle with no rider.
-  The check waits (:no-vehicle) while none is in sight. The round yields :continue only when the walk waits on the world.
+  Conditions: :bad-args, and at the start :no-vehicle while none is in sight. The round yields :continue only when the walk waits on the world.
 
-  Ends {:status :done :id :vehicle name} (plus :already true when aboard it already), info vehicle.mounted, or
-  {:status :stopped :reason r}: :bad-args, :gone (no such entity in sight), :not-mountable, :occupied, :hand-full
-  (a mob, with an item in hand that cannot be put away), :timeout (the server never seated the body), :unreachable (the walk failed twice),
-  :aboard-other (already on another vehicle), :failed (any other status, with :mount the primitive's).")
+  Ends done (data {:id :vehicle name}, plus :already true when aboard it already), info vehicle.mounted, or
+  condition-failed: :gone (no such entity in sight), :not-mountable, :occupied, :hand-full
+  (a mob, with an item in hand that cannot be put away), :aboard-other (already on another vehicle), or
+  nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed twice),
+  :failed (any other status, data :mount the primitive's).")
 
 (a/defargs args
   {:id {:doc "the entity id of the vehicle or mount (observe entities lists them)" :spec (a/int-in 1 nil) :default nil}
    :name {:doc "instead of :id: the entity name to mount, the nearest in sight" :spec a/name? :default nil}})
 
+(def target [:id :name])
+
 (def reach 2.5)
 (def max-walks 2)
+(def walk-speed "Blocks a second a walk covers, for the quote." 4)
+(def seat-s "Seconds the server takes to seat the body, for the quote." 1)
 
 (defn sensed
   "The entities in sight with a position (heard mobs have none)."
@@ -33,17 +39,30 @@
 (defn entity-of [p id]
   (first (filter #(= id (.-id %)) (sensed p))))
 
-(defn check
-  "Declines while no entity of that :id or :name is in sight; bad args pass for the round to stop on."
+(defn bad-args
+  "The cause :bad-args unless an :id or a :name is given."
+  [c]
+  (let [{:keys [id name]} (:args c)]
+    (when-not (or (and (integer? id) (pos? id)) (string? name)) :bad-args)))
+
+(defn no-vehicle
+  "At the call's start: the cause :no-vehicle while no entity of that :id or :name is in sight."
   [c]
   (let [{:keys [id name]} (:args c)
         p (:primitives c)]
-    (cond
-      (and (nil? id) (string? name))
-      (or (some #(= name (.-name %)) (sensed p)) (ctx/wait c {:reason :no-vehicle :why (str "no " name " in sight")}))
-      (and (integer? id) (pos? id))
-      (or (some? (entity-of p id)) (ctx/wait c {:reason :no-vehicle :why (str "entity " id " not in sight")}))
-      :else true)))
+    (when-not (ctx/frozen-call c)
+      (when-not (if (and (nil? id) (string? name))
+                  (some #(= name (.-name %)) (sensed p))
+                  (some? (entity-of p id)))
+        :no-vehicle))))
+
+(def conditions [[:fn bad-args] [:fn no-vehicle]])
+
+(defn done?
+  "Aboard the wanted vehicle or not; the round ends with its event."
+  [c]
+  (let [aboard (some? (vehicle/vehicle-of (.self (:primitives c))))]
+    {:done? false :units :vehicles :done (if aboard 1 0) :left (if aboard 0 1)}))
 
 (defn nearest-named
   "The id of the nearest sensed entity named name, a free one before an occupied one, or nil."
@@ -54,39 +73,46 @@
              (sort-by (juxt #(pos? (count (.-passengers %))) #(u/dist me (u/pos-of (.-pos %)))))
              first .-id)))
 
-(defn stop! [c id reason & [more]]
+(defn quote-of [c]
+  (let [p (:primitives c)
+        {:keys [id name]} (:args c)
+        id (if (and (nil? id) (string? name)) (nearest-named c name) id)
+        e (when id (entity-of p id))
+        walk-s (if e (/ (max 0 (- (u/dist (u/self-pos c) (u/pos-of (.-pos e))) reach)) walk-speed) 0)]
+    {:uses {:time [seat-s (+ seat-s walk-s) (+ (* 2 seat-s) (* 3 walk-s) 10)]}}))
+
+(defn stop!
+  "End the call without a seat: kind and reason, data the vehicle id and more."
+  [c id kind reason & [more]]
   (ctx/emit! c :vehicle.mount_refused :warn (merge {:id id :reason reason :text (str "cannot mount entity " id ": " (name reason))} more))
-  (ctx/result! c (merge {:status :stopped :id id :reason reason} more))
-  :done)
+  (ctx/end c kind reason (merge {:id id} more)))
 
 (defn done! [c result]
   (ctx/emit! c :vehicle.mounted :info (assoc result :text (str "aboard " (:vehicle result))))
-  (ctx/result! c (assoc result :status :done))
-  :done)
+  (ctx/end c :done nil result))
 
 (defn ^:async round [c]
   (let [{:keys [name] :as a} (:args c)
         id (if (and (nil? (:id a)) (string? name)) (nearest-named c name) (:id a))
         p (:primitives c)]
     (cond
-      (and (nil? (:id a)) (string? name) (nil? id)) (stop! c nil :gone)
-      (not (and (integer? id) (pos? id))) (stop! c id :bad-args)
+      (and (nil? (:id a)) (string? name) (nil? id)) (stop! c nil :condition-failed :gone)
+      (not (and (integer? id) (pos? id))) (stop! c id :condition-failed :bad-args)
       (some? (vehicle/vehicle-of (.self p)))
       (let [v (vehicle/vehicle-of (.self p))]
         (if (= id (:id v))
           (do (vehicle/hold! c) (done! c {:id id :vehicle (:name v) :already true}))
-          (stop! c id :aboard-other {:vehicle (:name v)})))
+          (stop! c id :condition-failed :aboard-other {:vehicle (:name v)})))
       :else
       (loop [fails 0]
         (let [e (entity-of p id)]
           (cond
-            (nil? e) (stop! c id :gone)
+            (nil? e) (stop! c id :condition-failed :gone)
             (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) reach)
-            (let [r (await (child/call-walk c :walk {:pos (u/pos-of (.-pos e)) :range 2 :escalate false}))
-                  res (ctx/child-result c :walk)]
+            (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :escalate false}))]
               (cond
                 (= :continue r) :continue
-                (>= (inc fails) max-walks) (stop! c id :unreachable {:why (:reason res)})
+                (>= (inc fails) max-walks) (stop! c id :nothing-possible :unreachable {:why (contract/cause-key r)})
                 :else (recur (inc fails))))
             :else
             (do (vehicle/hold! c)
@@ -95,10 +121,10 @@
                   (case status
                     "mounted" (done! c {:id id :vehicle (.-name (.-vehicle r))})
                     "already-mounted" (done! c {:id id :vehicle (.-name (.-vehicle r)) :already true})
-                    "gone" (stop! c id :gone)
-                    "not-mountable" (stop! c id :not-mountable)
-                    "occupied" (stop! c id :occupied)
-                    "hand-full" (stop! c id :hand-full)
-                    "timeout" (stop! c id :timeout)
-                    "out-of-reach" (if (>= (inc fails) max-walks) (stop! c id :unreachable) (recur (inc fails)))
-                    (stop! c id :failed {:mount status}))))))))))
+                    "gone" (stop! c id :condition-failed :gone)
+                    "not-mountable" (stop! c id :condition-failed :not-mountable)
+                    "occupied" (stop! c id :condition-failed :occupied)
+                    "hand-full" (stop! c id :condition-failed :hand-full)
+                    "timeout" (stop! c id :nothing-possible :timeout)
+                    "out-of-reach" (if (>= (inc fails) max-walks) (stop! c id :nothing-possible :unreachable) (recur (inc fails)))
+                    (stop! c id :nothing-possible :failed {:mount status}))))))))))

@@ -64,12 +64,15 @@
      (await (run-ticks s n step #(before-tick s %)))
      s)))
 
-(deftest follow-check-wants-a-player-name
-  (are [args ok] (= ok ((:check (get registry/jobs job)) {:args args}))
-    {:player "Steve"} true
-    {:player nil} false
-    {} false
-    {:player 5} false))
+(deftest follow-condition-wants-a-player-name
+  (are [args cause] (= cause (follow/bad-args {:args args}))
+    {:player "Steve"} nil
+    {:player nil} :bad-args
+    {} :bad-args
+    {:player 5} :bad-args))
+
+(defn ended "The result fields a test reads of the follow's ending." [out]
+  (select-keys out [:reason :last-seen]))
 
 (deftest follows-a-player-ten-away
   (async done
@@ -106,7 +109,7 @@
       (fn ^:async t []
         (let [vanish (fn [s i] (when (= 1 i) (swap! (fake/state (:p s)) update :entities subvec 1)))
               {:keys [p out eng] :as s} (await (follow {:entities [(steve 10)]} {:player "Steve" :lost-s 3} 20 1000 vanish))]
-          (is (= {:reason "lost" :last-seen {:x 10 :y 64 :z 0}} @out))
+          (is (= {:reason :lost :last-seen {:x 10 :y 64 :z 0}} (ended @out)))
           (is (every? #{{:x 10 :y 64 :z 0}} (move-targets eng)) "only the last-seen cell is walked to")
           (is (has-event? s :follow.lost)))))))
 
@@ -115,7 +118,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [clock out] :as s} (await (follow {} {:player "Steve"} 10 500))]
-          (is (= {:reason "absent"} @out))
+          (is (= {:reason :absent} (ended @out)))
           (is (<= 2000 (- @clock 1000000)))
           (is (has-event? s :follow.absent)))))))
 
@@ -131,7 +134,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 10 500))]
-          (is (= {:reason "unreachable"} @out))
+          (is (= {:reason :unreachable} (ended @out)))
           (is (= gts/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up")
           (is (has-event? s :follow.unreachable)))))))
 
@@ -140,7 +143,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 1 500))]
-          (is (= {:reason "unreachable"} @out))
+          (is (= {:reason :unreachable} (ended @out)))
           (is (= gts/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up")
           (is (has-event? s :follow.unreachable)))))))
 
@@ -162,4 +165,4 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (follow {:entities [(steve 2)]} {:player "Steve" :timeout-s 3} 20 1000))]
-          (is (= {:reason "timeout"} @out)))))))
+          (is (= {:reason :timeout} (ended @out))))))))

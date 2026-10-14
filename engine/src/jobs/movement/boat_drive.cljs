@@ -1,9 +1,9 @@
 (ns jobs.movement.boat-drive
   (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
-            [jobs.lib.result :as result]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
@@ -15,32 +15,78 @@
   A cell the body has not sensed is looked at first; one it still cannot make out is steered toward all the same, looked at again from each
   new cell on the way, and judged once it is made out (a boat that gets there on a cell never made out is done). Every key is released at the end of a stroke and by a cut.
 
-  Ends {:status :done :pos {:x :y :z} :strokes n}, info boat.driven, or
-  {:status :stopped :reason r}: :bad-args, :not-aboard (on foot: jobs.movement.boat-launch puts the body in a boat), :not-a-boat (another vehicle),
-  :not-water (the cell is not water), :blocked (land in the way: two forward strokes in a row that could not move), :timeout (:max-strokes or :max-s used up,
-  with the distance left), :failed (any other paddle status, with :primitive).
+  Conditions: :bad-args, and at the start :not-aboard (on foot: jobs.movement.boat-launch puts the body in a boat).
+  Ends done (data {:pos {:x :y :z} :strokes n}), info boat.driven, or
+  condition-failed: :not-aboard (got out on the way), :not-a-boat (another vehicle), :not-water (the cell is not water), or
+  nothing-possible: :blocked (land in the way: two forward strokes in a row that could not move), :strokes (:max-strokes used up),
+  :failed (any other paddle status, data :primitive); limit-reached :time (the call's :spend :time used up, data the distance left).
 
   Never :continue.")
 
 (a/defargs args
   {:pos {:doc "the water cell to steer to, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :range {:doc "done when the boat is within this many blocks (horizontally) of the middle of the cell" :spec (a/num-in 0 nil) :default 1.5}
-   :max-strokes {:doc "strokes before giving up" :spec (a/int-in 1 nil) :default 80}
-   :max-s {:doc "seconds before giving up" :spec (a/num-in 0 nil) :default 120}})
+   :max-strokes {:doc "strokes before giving up" :spec (a/int-in 1 nil) :default 80}})
+
+(def target [:pos])
+
+(def defaults {:spend {:time ::time-s}})
+
+(a/defargs settings
+  {::time-s {:default 120 :doc "Seconds a drive may take before it gives up." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
+
+(defn legacy-args
+  "An old caller's :max-s as the call's :spend {:time}."
+  [{:keys [max-s] :as args}]
+  (cond-> (dissoc args :max-s)
+    (and max-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] max-s)))
 
 (def aligned-deg 8)
 (def forward-while-turning-deg 30)
 (def max-turn-ticks 10)
 (def max-forward-ticks 20)
 (def max-blocked 2)
+(def boat-speed "Blocks a second a boat covers, for the quote." 5)
 
 (defn centre-of [{:keys [x z]}] {:x (+ x 0.5) :z (+ z 0.5)})
 
-(defn target [c] (:pos (b/parse (:args c))))
+(defn cell-of-call [c] (:pos (b/parse (:args c))))
 
-(defn check
-  "Passes: the round looks at a cell not sensed yet, steers nearer to one it cannot make out, or stops with the reason."
-  [_c] true)
+(defn bad-args
+  "The cause :bad-args unless :pos names a cell."
+  [c]
+  (when-not (cell-of-call c) :bad-args))
+
+(defn not-aboard
+  "At the call's start: the cause :not-aboard when the body is on foot."
+  [c]
+  (when-not (or (ctx/frozen-call c) (vehicle/mounted? (:primitives c))) :not-aboard))
+
+(def conditions [[:fn bad-args] [:fn not-aboard]])
+
+(defn left-of
+  "Blocks (horizontally) from the vehicle to the middle of the cell, or nil when not aboard."
+  [c]
+  (when-let [cell (cell-of-call c)]
+    (let [e (some-> (vehicle/vehicle-of (.self (:primitives c))) :id)
+          boat (when e (some #(when (= e (.-id %)) %) (array-seq (.entities (:primitives c) #js {:radius 64}))))]
+      (when boat (u/dist (assoc (u/pos-of (.-pos boat)) :y 0) (assoc (centre-of cell) :y 0))))))
+
+(defn done?
+  "Done when the boat is within :range of the cell."
+  [c]
+  (let [left (left-of c)
+        near? (and left (<= left (:range (:args c))))]
+    {:done? false :units :cells :done (if near? 1 0) :left (if near? 0 1)}))
+
+(defn quote-of [c]
+  (let [cell (cell-of-call c)
+        most (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))
+        left (or (left-of c) 20)
+        mean (min most (/ left boat-speed))]
+    (cond-> {:uses {:time [0 mean most]}}
+      cell (assoc :moves-to [(+ (:x cell) 0.5) (:y cell) (+ (:z cell) 0.5)]))))
 
 (defn heading-error
   "Degrees to turn to face bearing from yaw, in (-180, 180]: positive turns right (the yaw grows)."
@@ -67,14 +113,14 @@
 
 (defn ^:async drive! [c]
   (let [p (:primitives c)
-        {:keys [range max-strokes max-s]} (:args c)
-        cell (target c)
-        deadline (+ (js/Date.now) (* 1000 max-s))
+        {:keys [range max-strokes]} (:args c)
+        cell (cell-of-call c)
+        deadline (+ (js/Date.now) (* 1000 (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))))
         goal (some-> cell centre-of)
-        stop! (fn [reason text & more] (apply result/stop! c reason text more))]
+        stop! (fn [kind reason & [data]] (ctx/end c kind reason data))]
     (cond
-      (nil? cell) (stop! :bad-args (:error (b/parse (:args c))))
-      (not (vehicle/mounted? p)) (stop! :not-aboard "the body is not in a boat")
+      (nil? cell) (stop! :condition-failed :bad-args)
+      (not (vehicle/mounted? p)) (stop! :condition-failed :not-aboard)
       :else
       (do
         (vehicle/hold! c)
@@ -83,9 +129,9 @@
                 status (.-status r)]
             (if (not= "ok" status)
               (case status
-                "not-mounted" (stop! :not-aboard "the body is not in a boat")
-                "not-a-boat" (stop! :not-a-boat "the vehicle is not a boat")
-                (stop! :failed (str "paddle: " status) :primitive status))
+                "not-mounted" (stop! :condition-failed :not-aboard)
+                "not-a-boat" (stop! :condition-failed :not-a-boat)
+                (stop! :nothing-possible :failed {:primitive status}))
               (let [{:keys [pos yaw turn-deg speed]} (pose-of r)
                     left (u/dist (assoc pos :y 0) (assoc goal :y 0))
                     here (look/cell-of pos)
@@ -93,12 +139,12 @@
                     _ (when look? (await (sense/look-at! c [(:x cell) (:y cell) (:z cell)])))
                     seen (u/seen-name p cell)]
                 (cond
-                  (and seen (not= "water" seen)) (stop! :not-water (str "the cell is " seen ", not water") :pos cell)
+                  (and seen (not= "water" seen)) (stop! :condition-failed :not-water {:pos cell})
                   (<= left range)
                   (do (ctx/emit! c :boat.driven :info {:pos pos :strokes strokes :text (str "steered the boat to " (:x cell) " " (:y cell) " " (:z cell))})
-                      (result/finish! c {:pos pos :strokes strokes}))
-                  (or (>= strokes max-strokes) (>= (js/Date.now) deadline))
-                  (stop! :timeout (str "the boat is still " (int left) " blocks from the cell after " strokes " strokes") :pos pos :left left)
+                      (ctx/end c :done nil {:pos pos :strokes strokes}))
+                  (>= strokes max-strokes) (stop! :nothing-possible :strokes {:pos pos :left left})
+                  (>= (js/Date.now) deadline) (stop! :limit-reached {:line :time :reason :timeout} {:pos pos :left left})
                   :else
                   (let [s (stroke-for pos yaw goal range turn-deg speed)
                         out (await (paddle! c s))
@@ -106,13 +152,13 @@
                     (cond
                       (= "blocked" st)
                       (if (and (:forward s) (>= (inc blocked) max-blocked))
-                        (stop! :blocked (str "land in the way, " (int left) " blocks from the cell") :pos (js->clj (.-pos out) :keywordize-keys true) :left left)
+                        (stop! :nothing-possible :blocked {:pos (js->clj (.-pos out) :keywordize-keys true) :left left})
                         (recur (inc strokes) (inc blocked) (if look? here looked-from)))
                       (= "ok" st) (recur (inc strokes) 0 (if look? here looked-from))
-                      :else (stop! :failed (str "paddle: " st) :primitive st))))))))))))
+                      :else (stop! :nothing-possible :failed {:primitive st}))))))))))))
 
 (defn ^:async round [c]
-  (let [cell (target c)
+  (let [cell (cell-of-call c)
         p (:primitives c)]
     (when (and cell (vehicle/mounted? p))
       (await (sense/decide! c :boat-drive.cell #(u/seen-name p cell))))

@@ -7,7 +7,8 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.movement.linger-near :as linger-near]))
 
 (def job 'jobs.movement.linger-near)
 
@@ -44,8 +45,8 @@
 
 (defn self-x [p] (.-x (.-pos (.self p))))
 
-(deftest check-wants-a-pos-and-a-positive-wait
-  (are [args ok] (= ok ((:check (get registry/jobs job)) {:args args}))
+(deftest condition-wants-a-pos-and-a-positive-wait
+  (are [args ok] (= ok (nil? (linger-near/bad-args {:args args})))
     {:pos {:x 1 :y 64 :z 0} :wait-s 5} true
     {:pos {:x 1 :y 64 :z 0} :wait-s 0} false
     {:pos {:x 1 :y 64 :z 0}} false
@@ -57,7 +58,7 @@
       (fn ^:async t []
         (let [{:keys [p out eng]} (await (linger {} {:pos {:x 2 :y 64 :z 0} :range 3 :wait-s 3} 12 500))]
           (is (empty? (tu/walk-calls p)))
-          (is (= {:lingered true :reason "waited"} @out))
+          (is (= {:status :done :lingered true} @out))
           (is (empty? (tu/walked-to eng))))))))
 
 (deftest a-far-target-is-walked-to-first
@@ -157,4 +158,4 @@
           (await (run-ticks s 2 5000))
           (is (= :not-done @(:out s)) "one second in range of the two asked for")
           (await (run-ticks s 6 500))
-          (is (= {:lingered true :reason "waited"} @(:out s)) "two seconds held in range ends it"))))))
+          (is (= {:status :done :lingered true} @(:out s)) "two seconds held in range ends it"))))))

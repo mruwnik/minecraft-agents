@@ -1,7 +1,6 @@
 (ns jobs.movement.leave-vehicle
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
 
@@ -10,9 +9,9 @@
   Faces :toward when given, else the nearest dry cell within :radius of the vehicle
   (feet and head air over a solid, non-fluid block), else leaves without a look. The server picks the exit from that look.
   Then it uses the dismount primitive (sneak).
-  On success: info vehicle.left {:pos :landed}, :landed being :dry or :in-water. The result is the same map.
+  On success: info vehicle.left {:pos :landed}, :landed being :dry or :in-water, and the call is done with that map as data.
   A failed dismount is retried in the same run, the wait doubling from :wait-ms up to 1 s. After :max-tries it warns vehicle.dismount_failed {:tries :status}
-  and ends stopped :dismount-failed, with the body still aboard. Never :continue. The :mounted trigger runs it (cooldown persistence: a body still aboard is tried again 30 s later).")
+  and ends nothing-possible :dismount-failed (data :tries :status), with the body still aboard. On foot at the start the call is refused (condition :not-mounted). Never :continue. The :mounted trigger runs it (cooldown persistence: a body still aboard is tried again 30 s later).")
 
 (a/defargs args
   {:toward {:doc "a position {:x :y :z} to face when getting off (its cell's centre); nil picks a dry cell" :spec ::a/pos :default nil}
@@ -20,9 +19,22 @@
    :wait-ms {:doc "the wait after the first failed dismount; it doubles per try, at most 1000" :spec (a/num-in 0 nil) :default 50}
    :radius {:doc "dry cells this many blocks (horizontally) from the vehicle are faced" :spec (a/num-in 0 nil) :default 2}})
 
-(defn check [c]
-  (or (boolean (vehicle/mounted? (:primitives c)))
-      (ctx/wait c {:reason :not-mounted})))
+(defn not-mounted
+  "At the call's start: the cause :not-mounted when the body is on foot."
+  [c]
+  (when-not (or (ctx/frozen-call c) (vehicle/mounted? (:primitives c))) :not-mounted))
+
+(def conditions [[:fn not-mounted]])
+
+(defn done?
+  "Done once the body is off."
+  [c]
+  (let [aboard (boolean (vehicle/mounted? (:primitives c)))]
+    {:done? (not aboard) :units :vehicles :done (if aboard 0 1) :left (if aboard 1 0)}))
+
+(defn quote-of [c]
+  (let [{:keys [max-tries wait-ms]} (:args c)]
+    {:uses {:time [0.1 0.5 (+ 1 (* max-tries (min 1 (/ wait-ms 1000))))]}}))
 
 (defn vehicle-pos
   "Where the ridden entity is, else the body."
@@ -48,17 +60,16 @@
     (loop [tries 0]
       (let [v (vehicle/vehicle-of (.self p))]
         (if-not v
-          :done
+          (ctx/end c :done nil nil)
           (let [yaw (yaw-for c v)
                 r (await (ctx/act c :dismount (clj->js (if (some? yaw) {:yaw yaw} {}))))]
             (if (= "dismounted" (.-status r))
               (let [self (.self p)
                     out {:pos (u/pos-of (.-pos r)) :landed (if (.-inWater self) :in-water :dry)}]
                 (ctx/emit! c :vehicle.left :info out)
-                (ctx/result! c out)
-                :done)
+                (ctx/end c :done nil out))
               (let [tries (inc tries)]
                 (if (< tries max-tries)
                   (do (await (wait! (min 1000 (* wait-ms (bit-shift-left 1 (dec tries)))))) (recur tries))
                   (do (ctx/emit! c :vehicle.dismount_failed :warn {:tries tries :status (.-status r)})
-                      (result/stop! c :dismount-failed (str "could not get off the vehicle: " (.-status r)) :tries tries)))))))))))
+                      (ctx/end c :nothing-possible :dismount-failed {:tries tries :status (.-status r)})))))))))))

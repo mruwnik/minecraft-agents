@@ -1,5 +1,6 @@
 (ns jobs.movement.linger-near
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]))
@@ -27,25 +28,39 @@
 (def idle-ms 500)
 (def max-blocked 3)
 
-(defn check
-  "A position and a positive :wait-s are given."
+(def target [:pos])
+
+(defn bad-args
+  "The cause :bad-args unless a position and a positive :wait-s are given."
   [c]
   (let [{:keys [pos wait-s]} (:args c)]
-    (or (and (some? pos) (number? wait-s) (pos? wait-s))
-        (ctx/wait c {:reason :bad-args :why "needs a position and a positive :wait-s"}))))
+    (when-not (and (some? pos) (number? wait-s) (pos? wait-s)) :bad-args)))
+
+(def conditions [[:fn bad-args]])
+
+(defn done?
+  "Seconds waited in range against :wait-s."
+  [c]
+  (let [wait-s (:wait-s (:args c))
+        done (/ (:waited (ctx/mem c) 0) 1000)]
+    {:done? false :units :seconds :done done :left (max 0 (- wait-s done))}))
+
+(defn quote-of [c]
+  (let [wait-s (:wait-s (:args c))]
+    {:uses {:time [wait-s wait-s (+ wait-s (* 4 wait-s))]}}))
 
 (defn finish!
-  [c result]
+  "Release the hold and end the call."
+  [c kind cause data]
   (ctx/hold-still! c nil)
-  (ctx/result! c result)
-  :done)
+  (ctx/end c kind cause data))
 
 (defn ^:async walk-back!
   "Walk within range of pos: :continue while the child waits or after an arrival or one failure, else the third
   failure in a row ends the job stopped."
   [c pos range]
-  (let [r (await (child/call-walk c :walk {:pos pos :range range :escalate false}))
-        res (ctx/child-result c :walk)]
+  (let [r (await (child/call-walk* c :walk {:pos pos :range range :escalate false}))
+        res (:data r)]
     (cond
       (= :continue r) :continue
       (:arrived res) (do (ctx/update-mem! c assoc :blocked 0) :continue)
@@ -55,7 +70,7 @@
         (if (< blocked max-blocked)
           :continue
           (do (ctx/emit! c :linger.unreachable :warn {:text (str "cannot get within " range " of " (pr-str pos))})
-              (finish! c {:status :stopped :lingered false :reason :unreachable :why (:reason res)})))))))
+              (finish! c :nothing-possible :unreachable {:lingered false :why (when (not= :done (:kind r)) (contract/cause-key r))})))))))
 
 (defn ^:async round
   "One bounded step: in range, end when the waited time is up, else hold still and count the wait; out of range,
@@ -68,7 +83,7 @@
           (await (walk-back! c pos range)))
 
       (>= (:waited (ctx/mem c) 0) (* 1000 wait-s))
-      (finish! c {:lingered true :reason "waited"})
+      (finish! c :done nil {:lingered true})
 
       :else
       (do (ctx/hold-still! c :lingering)

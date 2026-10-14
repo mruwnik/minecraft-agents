@@ -4,7 +4,8 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.library-test :as lt]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.movement.boat-drive :as boat-drive]))
 
 (defn pond
   "Water at y 63 over x in [x0, x1] and z in [z0, z1]."
@@ -52,14 +53,21 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label world args reason]
-                [["on foot" {:blocks lake :entities [(boat-at 2.5 2.5)]} {:pos [10 63 2]} :not-aboard]
-                 ["not a boat" {:blocks lake :entities [(boat-at 2.5 2.5 :name "minecart")] :self {:vehicle 9}} {:pos [10 63 2]} :not-a-boat]
-                 ["no pos" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {} :bad-args]
+                [["not a boat" {:blocks lake :entities [(boat-at 2.5 2.5 :name "minecart")] :self {:vehicle 9}} {:pos [10 63 2]} :not-a-boat]
                  ["the cell is not water" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [10 64 2]} :not-water]
                  ["land in the way" {:blocks (merge (pond 0 10 0 3) (pond 0 10 8 12)) :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [5 63 10]} :blocked]
-                 ["out of strokes" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18] :max-strokes 2} :timeout]]]
+                 ["out of strokes" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18] :max-strokes 2} :strokes]
+                 ["out of time" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18] :spend {:time 0}} :timeout]]]
           (let [{:keys [res]} (await (run world args))]
             (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
+
+(deftest on-foot-or-without-a-cell-the-call-is-refused
+  (let [c (fn [p args] {:primitives p :args args :view (fn [] {:data {:entries {}} :now 0})})
+        foot (tu/fake {:blocks lake :entities [(boat-at 2.5 2.5)]})
+        aboard (tu/fake {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}})]
+    (is (= :not-aboard (boat-drive/not-aboard (c foot {:pos [10 63 2]}))))
+    (is (nil? (boat-drive/not-aboard (c aboard {:pos [10 63 2]}))))
+    (is (= :bad-args (boat-drive/bad-args (c aboard {}))))))
 
 (deftest blocked-boat-stays-on-the-water
   (async done

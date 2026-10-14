@@ -22,8 +22,15 @@
   {:player {:doc "username to follow" :spec a/name? :default nil}
    :range {:doc "stay within this many blocks of the player" :spec (a/num-in 0 nil) :default 3}
    :radius {:doc "how far the player may be and still be seen" :spec (a/num-in 0 nil) :default 64}
-   :lost-s {:doc "give up after the player has been out of sight this long" :spec (a/num-in 0 nil) :default 10}
-   :timeout-s {:doc "stop after this long; nil follows until cancelled" :spec (a/num-in 0 nil) :default nil}})
+   :lost-s {:doc "give up after the player has been out of sight this long" :spec (a/num-in 0 nil) :default 10}})
+
+(def target [:player])
+
+(defn legacy-args
+  "An old caller's :timeout-s as the call's :spend {:time}."
+  [{:keys [timeout-s] :as args}]
+  (cond-> (dissoc args :timeout-s)
+    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
 
 (def absent-grace-ms 2000)
 (def idle-ms 500)
@@ -33,11 +40,12 @@
 (def head-height 1.6)
 (def last-seen-reach 1)
 
-(defn check
-  "A player name is given."
+(defn bad-args
+  "The cause :bad-args unless a player name is given."
   [c]
-  (or (string? (:player (:args c)))
-      (ctx/wait c {:reason :bad-args :why "no player name"})))
+  (when-not (string? (:player (:args c))) :bad-args))
+
+(def conditions [[:fn bad-args]])
 
 (defn find-player
   "The position {:x :y :z} of player named name within radius, or nil."
@@ -65,11 +73,24 @@
   [out blocked self now range]
   (if (or (pos? blocked) (u/within? self now range)) 0 (inc out)))
 
+(defn time-limit "Seconds the call may follow, or nil." [c]
+  (get-in (ctx/frozen-call c) [:spend :time]))
+
+(defn done?
+  "Never done: a follow ends with a cause. Counts the player as met once seen."
+  [c]
+  {:done? false :units :players :done (if (:seen-t (ctx/mem c)) 1 0) :left (if (:seen-t (ctx/mem c)) 0 1)})
+
+(defn quote-of [c]
+  (let [most (or (time-limit c) ##Inf)
+        now (find-player (:primitives c) (:player (:args c)) (:radius (:args c)))]
+    (cond-> {:uses {:time [0 (min 60 most) most]}}
+      now (assoc :moves-to [(:x now) (:y now) (:z now)]))))
+
 (defn finish!
-  "Hand the parent result and return :done."
-  [c result]
-  (ctx/result! c result)
-  :done)
+  "End the call: kind and cause, data the old result fields."
+  [c kind cause & [data]]
+  (ctx/end c kind cause data))
 
 (defn ^:async walk!
   "Walk to pos within range with go-to calls (:leg-s legs while the player moves, then pos is read again with
@@ -80,22 +101,22 @@
   ([c pos range] (walk! c pos range (constantly pos) nil))
   ([c pos range target-now leg-s]
    (loop [pos pos blocked 0 out 0]
-     (let [r (await (child/call-walk c :walk
-                                    (cond-> {:pos pos :range range :doors :shut :escalate false :warn false}
-                                      leg-s (assoc :leg-s leg-s))))
-           res (ctx/child-result c :walk)
-           blocked (if (and (= :done r) (or (:arrived res) (:leg res))) 0 (inc blocked))
+     (let [r (await (child/call-walk* c :walk
+                                     (cond-> {:pos pos :range range :doors :shut :escalate false :warn false}
+                                       leg-s (assoc :leg-s leg-s))))
+           res (:data r)
+           blocked (if (and (= :done (:kind r)) (or (:arrived res) (:leg res))) 0 (inc blocked))
            now (target-now)
            out (next-out out blocked (u/self-pos c) (or now pos) range)]
        (cond
          (= :continue r) :continue
          (>= out max-out)
          (do (ctx/emit! c :follow.out-of-range :warn {:text (str "still out of range of " (:player (:args c)))})
-             (finish! c {:reason "out-of-range"}))
+             (finish! c :nothing-possible :out-of-range))
 
          (>= blocked max-blocked)
          (do (ctx/emit! c :follow.unreachable :warn {:text (str "cannot reach " (:player (:args c)))})
-             (finish! c {:reason "unreachable"}))
+             (finish! c :nothing-possible :unreachable))
 
          (or (nil? now) (u/within? (u/self-pos c) now range)) :continue
          :else (recur now blocked out))))))
@@ -121,11 +142,11 @@
 
       (nil? seen-t)
       (do (ctx/emit! c :follow.absent :info {:text (str (:player (:args c)) " is not here")})
-          (finish! c {:reason "absent"}))
+          (finish! c :condition-failed :absent))
 
       (>= (- now seen-t) lost-ms)
       (do (ctx/emit! c :follow.lost :info {:text (str "lost " (:player (:args c))) :last-seen last-seen})
-          (finish! c {:reason "lost" :last-seen last-seen}))
+          (finish! c :nothing-possible :lost {:last-seen last-seen}))
 
       (u/within? (u/self-pos c) last-seen last-seen-reach)
       (await (idle! c))
@@ -139,11 +160,12 @@
   (let [now (ctx/now c)
         _ (when-not (contains? (ctx/mem c) :started)
             (ctx/update-mem! c assoc :started now))
-        {:keys [player radius timeout-s]} (:args c)
+        {:keys [player radius]} (:args c)
+        timeout-s (time-limit c)
         pos (find-player (:primitives c) player radius)]
     (cond
       (and timeout-s (>= (- now (:started (ctx/mem c))) (* 1000 timeout-s)))
-      (finish! c {:reason "timeout"})
+      (finish! c :limit-reached {:line :time :reason :timeout})
 
       pos
       (do (ctx/update-mem! c assoc :last-seen pos :seen-t now)
