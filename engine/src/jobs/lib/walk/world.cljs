@@ -236,7 +236,7 @@
 (defn default-food [] (settings/get settings ::default-food))
 
 (defn food-of
-  "The food level (0-20) the walk counts on: the job's :food arg (a number), else default-food. go-to fills the arg with the body's own food (jobs.movement.go-to/step!); the walk does not read the body."
+  "The food level (0-20) the walk counts on: the job's :food arg (a number), else default-food. go-to fills the arg with the body's own food (jobs.movement.go-to.settings/step!); the walk does not read the body."
   [c]
   (let [food (:food (:args c))]
     (if (number? food) food (default-food))))

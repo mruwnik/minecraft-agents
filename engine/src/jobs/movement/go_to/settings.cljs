@@ -1,5 +1,5 @@
 (ns jobs.movement.go-to.settings
-  "go-to's settings (keys stay under :jobs.movement.go-to/) and the limits of one call."
+  "go-to's settings (keys stay under :jobs.movement.go-to.settings/) and the limits of one call."
   (:require [engine.args :as a]
             [engine.settings :as settings]))
 
@@ -12,41 +12,41 @@
   100)
 
 (a/defargs settings
-  {:jobs.movement.go-to/max-cut-restarts {:default 3 :doc "Cuts in a row, each sending the body back, before a go-to call gives up :cut-again." :spec (a/int-in 1 nil)}
-   :jobs.movement.go-to/cut-progress {:default 2 :doc "Blocks a go-to's closest approach to its goal must improve to clear its cut count." :spec (a/num-in 0 nil)}
-   :jobs.movement.go-to/max-cut-resets {:default 2 :doc "Times a go-to clears its cut count at a restart that knows of no hostile near the way, per goal; after that a full set of cuts gives up :cut-again whatever is near." :spec (a/int-in 0 nil)}
-   :jobs.movement.go-to/send-back-margin {:default 3 :doc "Blocks farther from the goal than where the cut found the body a go-to restart must begin to count as sent back (knockback and in-place reflexes stay under it)." :spec (a/num-in 0 nil)}
-   :jobs.movement.go-to/surface-air {:default 7.5 :doc "Seconds of air left under which a go-to whose head is under water and whose search goes on (no walk) swims to air first: a body holding still in water sinks while it thinks." :spec (a/num-in 0 nil)}
-   :jobs.movement.go-to/wet-restarts {:default 2 :doc "Times a go-to's search under water may begin afresh (no walk) after its first slice before it swims to air first and plans from there." :spec (a/int-in 0 nil)}
-   :jobs.movement.go-to/dry-radius {:default 6 :doc "Blocks from the body an arrival in water reads for a dry stand (also within :range of the goal)." :spec (a/num-in 0 nil)}
-   :jobs.movement.go-to/dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}
-   :jobs.movement.go-to/climb-rise {:default 16 :doc "Blocks a goal must lie above a body under ground for its go-to to plan no dive (:jobs.movement.go-to/climb-dip)." :spec (a/num-in 0 nil)}
-   :jobs.movement.go-to/climb-dip {:default 24 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (:jobs.movement.go-to/climb-rise) may plan; a way that dives deeper is not walked (:way-dives)." :spec (a/num-in 0 nil)}
-   :jobs.movement.go-to/climb-stair {:default true :doc "Whether a go-to that would give up :way-dives cuts a stair up instead (its escalation, when :escalate allows)." :spec boolean?}
-   :jobs.movement.go-to/night-wait-ms {:default 1000 :doc "Milliseconds a go-to waits before it yields :continue while it holds for day inside a shelter." :spec (a/int-in 0 nil)}
-   :jobs.movement.go-to/plug-wait-ms {:default 180000 :doc "Milliseconds a go-to shut in by its retreat plug holds for a known hostile (:sealed-hostile-near) before it walks on as without the hold." :spec (a/int-in 0 nil)}
-   :jobs.movement.go-to/plug-wait-min-food {:default 6 :doc "Food at or under which a go-to shut in by its retreat plug no longer holds for a hostile: starving beats waiting." :spec (a/num-in 0 20)}
-   :jobs.movement.go-to/plug-wait-min-health {:default 8 :doc "Health at or under which a go-to shut in by its retreat plug no longer holds for a hostile." :spec (a/num-in 0 20)}
-   :jobs.movement.go-to/max-waypoint-misses {:default 3 :doc "Waypoint walks toward a column goal whose ground is only guessed that a call takes while they bring the body no nearer it." :spec (a/int-in 0 nil)}
-   :jobs.movement.go-to/waypoint-gain {:default 2 :doc "Blocks (across) a waypoint must lie nearer a guessed column goal than the body, and a waypoint walk must bring the body nearer, not to be a miss." :spec (a/num-in 1 nil)}
-   :jobs.movement.go-to/way-looks {:default [[6 1] [3 4]] :doc "The looks taken in turn before each waypoint walk: [blocks ahead toward the goal, blocks under the feet] (ahead and a little down: a slope up; close and steeply down: a slope or drop below an edge)." :spec (a/coll-of (a/pred "a pair [ahead down] of numbers >= 0" #(and (sequential? %) (= 2 (count %)) (every? (fn [n] (and (number? n) (>= n 0))) %))))}})
+  {:jobs.movement.go-to.settings/max-cut-restarts {:default 3 :doc "Cuts in a row, each sending the body back, before a go-to call gives up :cut-again." :spec (a/int-in 1 nil)}
+   :jobs.movement.go-to.settings/cut-progress {:default 2 :doc "Blocks a go-to's closest approach to its goal must improve to clear its cut count." :spec (a/num-in 0 nil)}
+   :jobs.movement.go-to.settings/max-cut-resets {:default 2 :doc "Times a go-to clears its cut count at a restart that knows of no hostile near the way, per goal; after that a full set of cuts gives up :cut-again whatever is near." :spec (a/int-in 0 nil)}
+   :jobs.movement.go-to.settings/send-back-margin {:default 3 :doc "Blocks farther from the goal than where the cut found the body a go-to restart must begin to count as sent back (knockback and in-place reflexes stay under it)." :spec (a/num-in 0 nil)}
+   :jobs.movement.go-to.settings/surface-air {:default 7.5 :doc "Seconds of air left under which a go-to whose head is under water and whose search goes on (no walk) swims to air first: a body holding still in water sinks while it thinks." :spec (a/num-in 0 nil)}
+   :jobs.movement.go-to.settings/wet-restarts {:default 2 :doc "Times a go-to's search under water may begin afresh (no walk) after its first slice before it swims to air first and plans from there." :spec (a/int-in 0 nil)}
+   :jobs.movement.go-to.settings/dry-radius {:default 6 :doc "Blocks from the body an arrival in water reads for a dry stand (also within :range of the goal)." :spec (a/num-in 0 nil)}
+   :jobs.movement.go-to.settings/dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}
+   :jobs.movement.go-to.settings/climb-rise {:default 16 :doc "Blocks a goal must lie above a body under ground for its go-to to plan no dive (:jobs.movement.go-to.settings/climb-dip)." :spec (a/num-in 0 nil)}
+   :jobs.movement.go-to.settings/climb-dip {:default 24 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (:jobs.movement.go-to.settings/climb-rise) may plan; a way that dives deeper is not walked (:way-dives)." :spec (a/num-in 0 nil)}
+   :jobs.movement.go-to.settings/climb-stair {:default true :doc "Whether a go-to that would give up :way-dives cuts a stair up instead (its escalation, when :escalate allows)." :spec boolean?}
+   :jobs.movement.go-to.settings/night-wait-ms {:default 1000 :doc "Milliseconds a go-to waits before it yields :continue while it holds for day inside a shelter." :spec (a/int-in 0 nil)}
+   :jobs.movement.go-to.settings/plug-wait-ms {:default 180000 :doc "Milliseconds a go-to shut in by its retreat plug holds for a known hostile (:sealed-hostile-near) before it walks on as without the hold." :spec (a/int-in 0 nil)}
+   :jobs.movement.go-to.settings/plug-wait-min-food {:default 6 :doc "Food at or under which a go-to shut in by its retreat plug no longer holds for a hostile: starving beats waiting." :spec (a/num-in 0 20)}
+   :jobs.movement.go-to.settings/plug-wait-min-health {:default 8 :doc "Health at or under which a go-to shut in by its retreat plug no longer holds for a hostile." :spec (a/num-in 0 20)}
+   :jobs.movement.go-to.settings/max-waypoint-misses {:default 3 :doc "Waypoint walks toward a column goal whose ground is only guessed that a call takes while they bring the body no nearer it." :spec (a/int-in 0 nil)}
+   :jobs.movement.go-to.settings/waypoint-gain {:default 2 :doc "Blocks (across) a waypoint must lie nearer a guessed column goal than the body, and a waypoint walk must bring the body nearer, not to be a miss." :spec (a/num-in 1 nil)}
+   :jobs.movement.go-to.settings/way-looks {:default [[6 1] [3 4]] :doc "The looks taken in turn before each waypoint walk: [blocks ahead toward the goal, blocks under the feet] (ahead and a little down: a slope up; close and steeply down: a slope or drop below an edge)." :spec (a/coll-of (a/pred "a pair [ahead down] of numbers >= 0" #(and (sequential? %) (= 2 (count %)) (every? (fn [n] (and (number? n) (>= n 0))) %))))}})
 
-(defn max-cut-restarts [] (settings/get settings :jobs.movement.go-to/max-cut-restarts))
-(defn max-cut-resets [] (settings/get settings :jobs.movement.go-to/max-cut-resets))
-(defn cut-progress [] (settings/get settings :jobs.movement.go-to/cut-progress))
-(defn send-back-margin [] (settings/get settings :jobs.movement.go-to/send-back-margin))
+(defn max-cut-restarts [] (settings/get settings :jobs.movement.go-to.settings/max-cut-restarts))
+(defn max-cut-resets [] (settings/get settings :jobs.movement.go-to.settings/max-cut-resets))
+(defn cut-progress [] (settings/get settings :jobs.movement.go-to.settings/cut-progress))
+(defn send-back-margin [] (settings/get settings :jobs.movement.go-to.settings/send-back-margin))
 
-(defn surface-air [] (settings/get settings :jobs.movement.go-to/surface-air))
-(defn wet-restarts [] (settings/get settings :jobs.movement.go-to/wet-restarts))
-(defn dry-radius [] (settings/get settings :jobs.movement.go-to/dry-radius))
-(defn dry-walk-rounds [] (settings/get settings :jobs.movement.go-to/dry-walk-rounds))
-(defn night-wait-ms [] (settings/get settings :jobs.movement.go-to/night-wait-ms))
-(defn climb-rise [] (settings/get settings :jobs.movement.go-to/climb-rise))
-(defn climb-dip [] (settings/get settings :jobs.movement.go-to/climb-dip))
-(defn climb-stair [] (settings/get settings :jobs.movement.go-to/climb-stair))
-(defn plug-wait-ms [] (settings/get settings :jobs.movement.go-to/plug-wait-ms))
-(defn plug-wait-min-food [] (settings/get settings :jobs.movement.go-to/plug-wait-min-food))
-(defn plug-wait-min-health [] (settings/get settings :jobs.movement.go-to/plug-wait-min-health))
-(defn max-waypoint-misses [] (settings/get settings :jobs.movement.go-to/max-waypoint-misses))
-(defn waypoint-gain [] (settings/get settings :jobs.movement.go-to/waypoint-gain))
-(defn way-looks [] (settings/get settings :jobs.movement.go-to/way-looks))
+(defn surface-air [] (settings/get settings :jobs.movement.go-to.settings/surface-air))
+(defn wet-restarts [] (settings/get settings :jobs.movement.go-to.settings/wet-restarts))
+(defn dry-radius [] (settings/get settings :jobs.movement.go-to.settings/dry-radius))
+(defn dry-walk-rounds [] (settings/get settings :jobs.movement.go-to.settings/dry-walk-rounds))
+(defn night-wait-ms [] (settings/get settings :jobs.movement.go-to.settings/night-wait-ms))
+(defn climb-rise [] (settings/get settings :jobs.movement.go-to.settings/climb-rise))
+(defn climb-dip [] (settings/get settings :jobs.movement.go-to.settings/climb-dip))
+(defn climb-stair [] (settings/get settings :jobs.movement.go-to.settings/climb-stair))
+(defn plug-wait-ms [] (settings/get settings :jobs.movement.go-to.settings/plug-wait-ms))
+(defn plug-wait-min-food [] (settings/get settings :jobs.movement.go-to.settings/plug-wait-min-food))
+(defn plug-wait-min-health [] (settings/get settings :jobs.movement.go-to.settings/plug-wait-min-health))
+(defn max-waypoint-misses [] (settings/get settings :jobs.movement.go-to.settings/max-waypoint-misses))
+(defn waypoint-gain [] (settings/get settings :jobs.movement.go-to.settings/waypoint-gain))
+(defn way-looks [] (settings/get settings :jobs.movement.go-to.settings/way-looks))

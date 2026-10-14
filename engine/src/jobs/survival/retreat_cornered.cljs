@@ -153,31 +153,31 @@
          first)))
 
 (a/defargs settings
-  {:jobs.survival.retreat/lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat/glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat/glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat/cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat/close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, at its start and again during its search." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat/close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat/hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat/fire-hits {:default 1 :doc "Hits by a ranged mob (the damage's attacker, or an arrow) within hurt-window-s that put a cornered body under fire: cover comes before any fight, and a shooter it has not seen is never weighed as beaten. 0: never." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat/press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat/refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
-(defn glance-reach [] (settings/get settings :jobs.survival.retreat/glance-reach))
+  {:jobs.survival.retreat-cornered/lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
+   :jobs.survival.retreat-cornered/glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
+   :jobs.survival.retreat-cornered/glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
+   :jobs.survival.retreat-cornered/cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
+   :jobs.survival.retreat-cornered/close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, at its start and again during its search." :spec (a/num-in 0 nil)}
+   :jobs.survival.retreat-cornered/close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
+   :jobs.survival.retreat-cornered/hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
+   :jobs.survival.retreat-cornered/fire-hits {:default 1 :doc "Hits by a ranged mob (the damage's attacker, or an arrow) within hurt-window-s that put a cornered body under fire: cover comes before any fight, and a shooter it has not seen is never weighed as beaten. 0: never." :spec (a/int-in 0 nil)}
+   :jobs.survival.retreat-cornered/press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
+   :jobs.survival.retreat-cornered/refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
+(defn glance-reach [] (settings/get settings :jobs.survival.retreat-cornered/glance-reach))
 
-(defn glance-memory [] (settings/get settings :jobs.survival.retreat/glance-memory))
+(defn glance-memory [] (settings/get settings :jobs.survival.retreat-cornered/glance-memory))
 
-(defn cover-gap [] (settings/get settings :jobs.survival.retreat/cover-gap))
+(defn cover-gap [] (settings/get settings :jobs.survival.retreat-cornered/cover-gap))
 
-(defn refuge-gap [] (settings/get settings :jobs.survival.retreat/refuge-gap))
+(defn refuge-gap [] (settings/get settings :jobs.survival.retreat-cornered/refuge-gap))
 
-(defn press-gap [] (settings/get settings :jobs.survival.retreat/press-gap))
+(defn press-gap [] (settings/get settings :jobs.survival.retreat-cornered/press-gap))
 
-(defn close-leg-s [] (settings/get settings :jobs.survival.retreat/close-leg-s))
+(defn close-leg-s [] (settings/get settings :jobs.survival.retreat-cornered/close-leg-s))
 
-(defn close-radius [] (settings/get settings :jobs.survival.retreat/close-radius))
+(defn close-radius [] (settings/get settings :jobs.survival.retreat-cornered/close-radius))
 
-(defn lost-memory-ms [] (settings/get settings :jobs.survival.retreat/lost-memory-ms))
+(defn lost-memory-ms [] (settings/get settings :jobs.survival.retreat-cornered/lost-memory-ms))
 
 (defn ^:async leg-step!
   "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :escalate false, and plans no route deeper or higher than y-margin (16) blocks past body and target;
@@ -324,7 +324,7 @@
   (ctx/update-mem! c flight/count-sweep)
   :again)
 
-(defn hurt-window-s [] (settings/get settings :jobs.survival.retreat/hurt-window-s))
+(defn hurt-window-s [] (settings/get settings :jobs.survival.retreat-cornered/hurt-window-s))
 
 (defn recently-hurt?
   "Whether the body lost health within hurt-window-s."
@@ -343,7 +343,7 @@
                       (recently-hurt? c)
                       (some #(<= (danger-q/mob-distance p %) (press-gap)) near))))))
 
-(defn fire-hits [] (settings/get settings :jobs.survival.retreat/fire-hits))
+(defn fire-hits [] (settings/get settings :jobs.survival.retreat-cornered/fire-hits))
 
 (defn shot?
   "Whether :hurt entry e is a ranged mob's hit: its attacker is one, or the damage is an arrow (the shooter untracked)."

@@ -318,7 +318,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [longest-ms]} (await (settings/with-settings {:jobs.survival.retreat/close-radius 4}
+        (let [{:keys [longest-ms]} (await (settings/with-settings {:jobs.survival.retreat-cornered/close-radius 4}
                                           #(searches-in-flee-leg {:entities [(zombie 7 6 {})]} {} clear-after-6)))]
           (is (>= longest-ms 4000) "a zombie at 6 is outside a close radius of 4"))))))
 
