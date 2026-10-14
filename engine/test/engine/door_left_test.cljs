@@ -279,7 +279,8 @@
           (is (empty? (filter #(= :shut-doors.done (:kind %)) @seen)) "partial is not done")
           (let [e (first (filter #(= :shut-doors.stopped (:kind %)) @seen))]
             (is (= 1 (:shut e)))
-            (is (= [[5 64 0]] (mapv :cell (:left e))))))))))
+            (is (= [[5 64 0]] (mapv :cell (:left e)))))
+          (is (= :left (:reason (first (filter #(= :stopped (:kind %)) @seen)))) "nothing-possible :left"))))))
 
 (def continuing-go-to
   "A go-to whose every round ends :continue, as one waiting on its own child does."

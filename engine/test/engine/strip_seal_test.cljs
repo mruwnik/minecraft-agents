@@ -32,7 +32,7 @@
         (let [env (world)
               p (:p env)
               r (await (run! env args))]
-          (is (= {:status :done :reason :sealed :placed 9} (select-keys r [:status :reason :placed])))
+          (is (= {:status :done :placed 9} (select-keys r [:status :placed])))
           (is (every? #(solid? p %) plane))
           (is (neg? (feet-x p)) "the body ends on the side it was asked to")
           (is (= 1 (bd/carried p "torch")) "the torch in the section is taken")
@@ -48,7 +48,7 @@
               p (:p env)
               _ (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
               r (await (run! env args))]
-          (is (= {:status :done :reason :sealed :placed 9} (select-keys r [:status :reason :placed])))
+          (is (= {:status :done :placed 9} (select-keys r [:status :placed])))
           (is (every? #(solid? p %) plane)))))))
 
 (deftest the-lowest-row-is-placed-before-the-rows-above
@@ -66,7 +66,7 @@
       (fn ^:async t []
         (let [env (world :extra (into {} (map (fn [[x y z]] [(str x "," y "," z) "cobblestone"]) plane)))
               r (await (run! env args))]
-          (is (= {:status :done :reason :sealed :placed 0} (select-keys r [:status :reason :placed])))
+          (is (= :done (:status r)) "done at once: nothing is open")
           (is (empty? (bd/calls (:p env) "place"))))))))
 
 (deftest short-of-blocks-stops-no-blocks-naming-the-shortfall
@@ -83,7 +83,7 @@
       (fn ^:async t []
         (let [env (world :at 4)
               r (await (run! env args))]
-          (is (= :sealed (:reason r)))
+          (is (= :done (:status r)))
           (is (every? #(solid? (:p env) %) plane))
           (is (neg? (feet-x (:p env)))))))))
 
@@ -115,12 +115,13 @@
           (is (= {:status :stopped :reason :blocked :cell [0 64 1]} (select-keys r [:status :reason :cell])))
           (is (= "chest" (bd/block-at (:p env) [0 64 1]))))))))
 
-(deftest bad-args-stop-bad-args
+(deftest bad-args-keep-the-call-from-starting
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (run! (world) {:axis :x :side :from}))]
-          (is (= {:status :stopped :reason :bad-args} (select-keys r [:status :reason]))))))))
+        (let [env (world)
+              waits (await (bd/waiting-after env (list job {:axis :x :side :from}) 3))]
+          (is (= :bad-args (:reason waits))))))))
 
 (deftest section-cells-run-lowest-row-first-with-the-centre-bottom-last
   (let [cells (seal/section [0 64 0] :x 3 3)]

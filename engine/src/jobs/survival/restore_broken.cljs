@@ -7,7 +7,6 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
-            [jobs.lib.result :as result]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
@@ -25,9 +24,11 @@
   max-candidates-checked cells whose put-back cuts the body's way to no other it reaches now; a walk is one go-to call and
   a failed try is repeated until the cell gave up. A cell not restored for now (unsafe, item not carried) keeps its
   entry. The others are forgotten.
-  Ends with one info tidy.restored (the cells put back, none if none were), :done when every cell was settled,
-  else (also when max-passes ran out with cells unvisited) stopped :not-restored {:restored n :failed n}. Never :continue.
-  If cells are left it also emits one warning tidy.not-restored {:cells [{:cell :was :why}]}.
+  Starts only with a :tidy entry pending (condition :nothing-to-restore). Ends with one info tidy.restored (the cells put
+  back, none if none were), :done {:restored n} when every cell was settled, else (also when max-passes ran out with cells
+  unvisited) nothing-possible :not-restored {:restored n :failed n}. A cut run is :continue and goes on from the entries
+  left. If cells are left it also emits one warning tidy.not-restored {:cells [{:cell :was :why}]}. Spends :time
+  (default ::time-s).
   Memory: reads :tidy. Writes :tidy-reported, the cells still waiting, which the :tidy-pending trigger reads
   to warn once per set of cells.")
 
@@ -44,6 +45,8 @@
    ::max-candidates-checked {:default 4 :doc "Waiting cells checked per pass for one whose put-back seals no other." :spec (a/int-in 1 nil)}
    ::max-search-cells {:default 6000 :doc "Cells the walk searches of one pass decision expand at most; a search that would pass it answers unknown." :spec (a/int-in 0 nil)}
    ::max-step-cells-checked {:default 3 :doc "Nearest standable cells checked for a walk when stepping clear of a cell." :spec (a/int-in 1 nil)}
+   ::time-s {:default 300 :doc "Seconds a run may take before it ends." :spec (a/num-in 0 nil)}
+   ::s-per-cell {:default 6 :doc "Seconds a quote counts for one cell: the walk and the put-back." :spec (a/num-in 0 nil)}
    ::max-passes {:default 100 :doc "Steps in one run before it stops." :spec (a/int-in 0 nil)}})
 (defn step-radius [] (settings/get settings ::step-radius))
 
@@ -153,9 +156,25 @@
        (let [p (:primitives c)]
          (and (not @(:enclosed pr)) (reach/enclosed? p #{(vec cell)})))))
 
-(defn check [c]
-  (or (boolean (seq (tidy/entries c)))
-      (ctx/wait c {:reason :nothing-to-restore})))
+(def target [])
+
+(def defaults {:spend {:time ::time-s}})
+
+(defn nothing-to-restore
+  "The cause :nothing-to-restore at the call's start when no :tidy entry is pending."
+  [c]
+  (when-not (or (ctx/frozen-call c) (seq (tidy/entries c))) :nothing-to-restore))
+
+(def conditions [[:fn nothing-to-restore]])
+
+(defn done?
+  "Never done before the report: the cells put back so far against the entries waiting."
+  [c]
+  {:done? false :units :cells :done (count (:restored (ctx/mem c))) :left (count (tidy/entries c))})
+
+(defn quote-of [c]
+  (let [t (* (settings/get settings ::s-per-cell) (count (tidy/entries c)))]
+    {:uses {:time [0 t (max t (settings/get settings ::time-s))]}}))
 
 (defn unsafe?
   "Whether the body should not be busy with other people's blocks now."
@@ -224,9 +243,9 @@
     (ctx/remember! c :tidy-reported {:cells (mapv :cell (tidy/entries c))} tidy/reported-policy)
     (if (or (pos? unvisited) (seq (remove #(= :changed (:why %)) failed)))
       (let [n (+ unvisited (count (remove #(= :changed (:why %)) failed)))]
-        (result/stop! c :not-restored (str n " broken blocks not restored, " (count restored) " restored")
-                      :restored (count restored) :failed n))
-      :done)))
+        (ctx/end c :nothing-possible :not-restored {:restored (count restored) :failed n
+                                                    :text (str n " broken blocks not restored, " (count restored) " restored")}))
+      (ctx/end c :done nil {:restored (count restored)}))))
 
 (defn skip! [c {:keys [cell was]} why]
   (ctx/update-mem! c update :failed (fnil conj []) {:cell cell :was was :why why})
@@ -289,7 +308,7 @@
 (defn ^:async round [c]
   (loop [i 0]
     (cond
-      (not (ctx/alive? c)) :done
+      (not (ctx/alive? c)) :continue
       (<= (max-passes) i) (report! c)
       (= :again (await (pass! c))) (do (await (pace/pace!)) (recur (inc i)))
       :else (report! c))))

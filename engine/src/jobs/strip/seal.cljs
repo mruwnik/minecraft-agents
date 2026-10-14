@@ -2,7 +2,8 @@
   (:require [jobs.lib.choose :as choose]
             [engine.args :as a]
             [engine.ctx :as ctx]
-                        [jobs.lib.blocks :as b]
+            [engine.settings :as settings]
+            [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.found :as found]
             [jobs.lib.pace :as pace]
@@ -19,21 +20,35 @@
   body must end on (:from the lower coordinate, :to the higher). The body works from the stand cell, one step back from
   :at on that side. A body on the far side first walks to it (go-to child); no way there ends :wrong-side.
 
-  Every cell of the section that is not a solid block is closed with a carried :with block (jobs.blocks.place child).
+  Every cell of the section that is not a solid block is closed with a carried block of the call's :use {:blocks} (default the :seal fillers; old :with maps to it; a
+  jobs.blocks.place child).
   Loose things in it (rails, cobwebs, torches, fences, ladders ...) are dug first (jobs.blocks.dig child, no fetch) and
   the drops picked up (torches come back). The rows go up from the bottom, the centre bottom cell last, so the body
   keeps its view. A container in the section is never dug (:blocked). Zones, claims and plans are the place rules'.
 
-  Result {:status :done|:stopped :reason :sealed|:no-blocks|:refused|:unreachable|:wrong-side|:blocked|:bad-args
-  :placed n :cell [x y z] :short n :why}. :done :sealed with :placed 0 means it was already shut. :no-blocks names
-  the cells still open as :short. Events: strip.seal.done (info), strip.seal.stopped (warn).")
+  Ends :done {:placed n} (0 = already shut; strip.seal.done, info). Else strip.seal.stopped (warn) with data {:placed n
+  :cell [x y z] :short n :why}: condition-failed :bad-args, :refused (zones, claims, plans), :blocked (a container in
+  the section); nothing-possible :no-blocks (:short names the cells still open), :unreachable, :wrong-side. Spends
+  :time (default ::time-s).")
+
+(a/defargs settings
+  {::time-s {:default 600 :doc "Seconds a seal may take before it ends." :spec (a/num-in 0 nil)}
+   ::s-per-cell {:default 4 :doc "Seconds a quote counts for one open cell of the section." :spec (a/num-in 0 nil)}})
+
+(def target [:at :axis :side])
+
+(def defaults {:spend {:time ::time-s} :use {:blocks :seal}})
+
+(defn legacy-args
+  "An old caller's :with as the call's :use {:blocks}."
+  [{:keys [with] :as args}]
+  (cond-> (dissoc args :with)
+    (seq with) (update :use #(merge {:blocks (vec with)} %))))
 
 (a/defargs args
   {:at {:doc "the bottom centre cell of the section, [x y z]" :spec ::a/pos :default nil}
    :axis {:doc "the way the corridor runs" :spec #{:x :z} :default nil}
    :side {:doc "the side the body ends on: :from (lower coordinate) or :to" :spec #{:from :to} :default nil}
-   :with {:doc "block items to close with, the first carried is used" :spec (a/coll-of a/item?)
-          :default (choose/fillers :seal)}
    :width {:doc "cells across the corridor" :spec (a/int-in 1 9) :default 3}
    :height {:doc "cells up the corridor" :spec (a/int-in 1 9) :default 3}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
@@ -68,24 +83,30 @@
         cells (for [row (range height) off (sort-by #(- (js/Math.abs %)) offs)] [row off (cell row off)])]
     (mapv #(% 2) (sort-by (fn [[row off]] [(if (and (zero? row) (zero? off)) 1 0) row]) cells))))
 
-(defn bad-args [{:keys [at axis side with]}]
-  (cond
-    (nil? at) "needs :at [x y z]"
-    (nil? axis) "needs :axis :x or :z"
-    (nil? side) "needs :side :from or :to"
-    (empty? with) "needs a block in :with"))
+(defn bad-args [c]
+  (let [{:keys [at axis side]} (:args c)]
+    (cond
+      (nil? at) {:reason :bad-args :why "needs :at [x y z]"}
+      (nil? axis) {:reason :bad-args :why "needs :axis :x or :z"}
+      (nil? side) {:reason :bad-args :why "needs :side :from or :to"})))
+
+(def conditions [[:fn bad-args]])
+
+(def kinds
+  "The kind of ending each stop reason is."
+  {:refused :condition-failed :blocked :condition-failed :no-blocks :nothing-possible :unreachable :nothing-possible :wrong-side :nothing-possible})
 
 (defn finish!
-  [c status reason detail]
-  (let [result (merge {:status status :reason reason :placed (:placed (ctx/mem c) 0)} detail)
-        text (str "seal " (name reason) ": placed " (:placed result)
+  [c kind reason detail]
+  (let [result (merge {:placed (:placed (ctx/mem c) 0)} detail)
+        text (str "seal " (name (or reason :sealed)) ": placed " (:placed result)
                   (when (:short result) (str ", " (:short result) " cells short"))
                   (when (:cell result) (str " at " (pr-str (:cell result)))))]
-    (ctx/result! c result)
-    (ctx/emit! c (if (= :done status) :strip.seal.done :strip.seal.stopped) (if (= :done status) :info :warn) (assoc result :text text))
-    :done))
+    (ctx/emit! c (if (= :done kind) :strip.seal.done :strip.seal.stopped) (if (= :done kind) :info :warn)
+               (assoc result :status (if (= :done kind) :done :stopped) :reason (or reason :sealed) :text text))
+    (ctx/end c kind reason result)))
 
-(defn stop! [c reason detail] (finish! c :stopped reason detail))
+(defn stop! [c reason detail] (finish! c (kinds reason) reason detail))
 
 (defn on-side? [c [x _ z] axis side]
   (let [[fx _ fz] (reach/standing-vec (:primitives c))
@@ -95,7 +116,7 @@
 
 (defn ^:async go-stand! [c at axis side]
   (let [stand-cell (stand at axis side)
-        r (await (child/call-walk c :walk {:pos stand-cell :range 0 :escalate false}))]
+        r (await (child/call-walk* c :walk {:pos stand-cell :range 0 :escalate false}))]
     (cond
       (= :continue r) :continue
       (= stand-cell (reach/standing-vec (:primitives c))) :again
@@ -103,7 +124,7 @@
       :else (stop! c :wrong-side {:cell stand-cell}))))
 
 (defn ^:async collect! [c]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 3}))]
+  (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius 3}))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c dissoc :collect) :again))))
@@ -116,9 +137,14 @@
       :refused (stop! c :refused {:cell cell})
       (stop! c :unreachable {:cell cell :why o}))))
 
+(defn blocks
+  "The block names the call closes with: its :use {:blocks}, else the carried fillers."
+  [c]
+  (or (ctx/use c :blocks) (get-in c [:args :use :blocks]) (choose/default-use c :blocks (get-in defaults [:use :blocks]))))
+
 (defn ^:async place! [c cell open]
-  (let [{:keys [with ignore-zones?]} (:args c)
-        item (b/chosen c with)]
+  (let [{:keys [ignore-zones?]} (:args c)
+        item (b/chosen c (blocks c))]
     (if-not item
       (stop! c :no-blocks {:short open})
       (let [o (await (b/place-cell! c {:x (cell 0) :y (cell 1) :z (cell 2)} item {:ignore-zones? ignore-zones?}))]
@@ -130,26 +156,39 @@
           :need (stop! c :no-blocks {:short open})
           (stop! c :unreachable {:cell cell :why o}))))))
 
-(defn ^:async step! [c]
+(defn open-cells
+  "The cells of the section that are not solid, [cell kind] each."
+  [c]
   (let [{:keys [at axis side width height]} (:args c)
+        p (:primitives c)]
+    (->> (section (at-of at) axis width height)
+         (map (fn [cell] [cell (kind (b/target-name p {:x (cell 0) :y (cell 1) :z (cell 2)} nil))]))
+         (filterv #(not= :solid (second %))))))
+
+(defn ^:async step! [c]
+  (let [{:keys [at axis side]} (:args c)
         at (at-of at)
-        p (:primitives c)
-        named (mapv (fn [cell] [cell (kind (b/target-name p {:x (cell 0) :y (cell 1) :z (cell 2)} nil))])
-                    (section at axis width height))
-        todo (filterv #(not= :solid (second %)) named)
+        todo (open-cells c)
         [cell k] (first todo)]
     (cond
       (:collect (ctx/mem c)) (await (collect! c))
-      (empty? todo) (finish! c :done :sealed {})
+      (empty? todo) (finish! c :done nil {})
       (some #(= :container (second %)) todo) (stop! c :blocked {:cell (first (first (filter #(= :container (second %)) todo)))})
       (not= (stand at axis side) (reach/standing-vec (:primitives c))) (await (go-stand! c at axis side))
       (= :loose k) (await (dig! c cell))
       :else (await (place! c cell (count todo))))))
 
-(defn check [_] true)
+(defn done?
+  [c]
+  (if (bad-args c)
+    {:done? false :units :cells}
+    (let [n (count (open-cells c))]
+      {:done? (zero? n) :units :cells :done (- (* (:width (:args c)) (:height (:args c))) n) :left n})))
+
+(defn quote-of [c]
+  (let [t (* (settings/get settings ::s-per-cell) (if (bad-args c) 0 (count (open-cells c))))]
+    {:uses {:time [0 t (max t (settings/get settings ::time-s))]}}))
 
 (defn ^:async round [c]
-  (if-let [why (bad-args (:args c))]
-    (stop! c :bad-args {:why why})
-    (let [n (atom 0)]
-      (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step! c) :continue))))))
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step! c) :continue)))))

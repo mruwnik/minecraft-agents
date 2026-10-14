@@ -1,6 +1,7 @@
 (ns engine.loot-cart-test
   "jobs.strip.loot-cart against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.blocks-dig-test :as bd]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
@@ -37,7 +38,7 @@
               result (await (child-outcome eng job {:id 50} 12))]
           (is (= {"iron_ingot" 3 "rail" 16 "bread" 2 "chest_minecart" 1} (inv p)))
           (is (empty? (cart-ids p)))
-          (is (= {:collected 22 :items {"iron_ingot" 3 "rail" 16 "bread" 2 "chest_minecart" 1}} result)))))))
+          (is (= {:status :done :collected 22 :items {"iron_ingot" 3 "rail" 16 "bread" 2 "chest_minecart" 1}} result)))))))
 
 (deftest a-cart-by-near-takes-the-nearest-only
   (async done
@@ -48,13 +49,13 @@
           (is (= #{51} (cart-ids p)))
           (is (zero? (get (inv p) "dirt" 0))))))))
 
-(deftest an-absent-cart-stops-gone
+(deftest an-absent-cart-keeps-the-call-from-starting
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {})
-              result (await (child-outcome eng job {:id 77} 6))]
-          (is (= {:status :stopped :reason :gone :why "no chest minecart in sight" :collected 0 :items {}} result))
+        (let [{:keys [eng p clock]} (setup {})
+              waits (await (bd/waiting-after {:eng eng :clock clock} (list job {:id 77}) 3))]
+          (is (= :gone (:reason waits)))
           (is (empty? (inv p))))))))
 
 (deftest a-full-bag-leaves-the-rest-to-the-spill
@@ -68,12 +69,12 @@
           (is (empty? (cart-ids p)))
           (is (= {"iron_ingot" 3 "rail" 16 "bread" 2 "chest_minecart" 1} (inv p))))))))
 
-(deftest a-cart-that-will-not-break-stops
+(deftest a-cart-that-will-not-break-ends-nothing-possible
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:inventory [{:name "iron_sword" :count 1}] :entities [(cart 50 [2 64 0] :invulnerable true)]})]
-          (core/submit! eng (list job {:id 50}) {})
-          (dotimes [_ 15] (await (core/tick! eng)))
+        (let [{:keys [eng p seen]} (setup {:inventory [{:name "iron_sword" :count 1}] :entities [(cart 50 [2 64 0] :invulnerable true)]})
+              result (await (child-outcome eng job {:id 50} 15))]
           (is (= [:cannot-break] (mapv :reason (filter #(= :loot-cart.stopped (:kind %)) @seen))))
+          (is (= {:kind :nothing-possible :cause :cannot-break} (select-keys (:ending result) [:kind :cause])))
           (is (= #{50} (cart-ids p))))))))

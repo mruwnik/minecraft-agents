@@ -7,18 +7,21 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [engine.settings :as settings]))
 
 (def doc
   "Empty a chest minecart and take the cart: walk within reach (jobs.lib.near/go-near!), open it and move every stack into the bag
   (jobs.storage.withdraw's primitives, entity form), then break it (a jobs.combat.attack child) and pick up what falls (a
   jobs.forestry.collect-drops child, radius 4 round the cart): the cart item, and the stacks the bag had no room for.
-  The cart is :id (an entity id) or the nearest chest_minecart within :radius of :near (default the body). It only
-  declines (check waits :danger) while a real danger is near (jobs.lib.danger). A cart in another owner's zone or claim is refused
-  (:ignore-zones? true skips that). Broken-and-gone carts are not looked for again: a restart re-reads the world and goes on from there.
-  Ends {:collected n :items {name n}} (what came into the bag, counted from the inventory at the start), with :full true when
-  the bag had no room for a stack. Or stopped {:status :stopped :reason r :why text :collected n :items {..}}, r being :gone (no such cart in sight),
-  :unreachable (go-near! cannot arrive, or the cart is out of reach), :refused (zones) or :cannot-break (the attack gave up, the cart is still there).")
+  The cart is :id (an entity id) or the nearest chest_minecart within :radius of :near (default the body). It starts
+  only when no real danger is near (jobs.lib.danger) and a cart is in sight (conditions :danger, :gone; start only). A cart in
+  another owner's zone or claim is refused (:ignore-zones? true skips that). Broken-and-gone carts are not looked for again:
+  a restart re-reads the world and goes on from there.
+  Ends :done {:collected n :items {name n}} (what came into the bag, counted from the inventory at the start), with :full true
+  when the bag had no room for a stack. Else condition-failed :gone (the cart vanished) or :refused (zones), nothing-possible
+  :unreachable (go-near! cannot arrive, or the cart is out of reach) or :cannot-break (the attack gave up, the cart is still
+  there), with :why, :collected and :items as data. Spends :time (default ::time-s).")
 
 (a/defargs args
   {:id {:doc "entity id of the chest minecart; nil: the nearest one to :near" :spec number? :default nil}
@@ -26,11 +29,12 @@
    :radius {:doc "blocks round :near the cart is searched for, and round the cart that drops are collected" :spec (a/num-in 0 nil) :default 4}
    :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
 
-(defn check
-  "Declines while a real danger is near."
-  [c]
-  (or (not (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius)))
-      (ctx/wait c {:reason :danger})))
+(a/defargs settings
+  {::time-s {:default 120 :doc "Seconds a loot may take before it ends." :spec (a/num-in 0 nil)}})
+
+(def target [:id :near])
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn carts
   "The chest minecarts in sight within radius of the anchor (:near, else the body), nearest first."
@@ -48,18 +52,35 @@
   (let [now (fetch/stacks->items (u/inventory (:primitives c)))]
     (into {} (keep (fn [[k n]] (let [d (- n (get (:before (ctx/mem c)) k 0))] (when (pos? d) [k d])))) now)))
 
-(defn finish!
-  "End the job with the gained items; extra is merged in (a stop's :status and :reason)."
+(def kinds "The kind of ending each stop reason is." {:gone :condition-failed :refused :condition-failed :unreachable :nothing-possible :cannot-break :nothing-possible})
+
+(defn items-data
+  "The gained items as the job's data; extra is merged in."
   [c extra]
   (let [items (gained c)]
-    (ctx/result! c (merge {:collected (reduce + 0 (vals items)) :items items} (when (:full (ctx/mem c)) {:full true}) extra))
-    :done))
+    (merge {:collected (reduce + 0 (vals items)) :items items} (when (:full (ctx/mem c)) {:full true}) extra)))
+
+(defn finish! [c] (ctx/end c :done nil (items-data c nil)))
 
 (defn stop!
-  "End stopped with a reason keyword and a :why in words."
-  [c reason why]
+  "End with the kind of reason and a :why in words."
+  [c reason why & [extra]]
   (ctx/emit! c :loot-cart.stopped :warn {:reason reason :text (str "loot-cart stopped: " why)})
-  (finish! c {:status :stopped :reason reason :why why}))
+  (ctx/end c (kinds reason) reason (items-data c (merge {:why why} extra))))
+
+(defn start-only [f] (fn [c] (when-not (ctx/frozen-call c) (f c))))
+
+(def conditions
+  [[:fn (start-only (fn [c] (when (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius)) :danger)))]
+   [:fn (start-only (fn [c] (when (empty? (carts c)) :gone)))]])
+
+(defn done?
+  "Never done before the round has run: the items counted are the gain since the first round."
+  [c]
+  {:done? false :units :items :done (if (:before (ctx/mem c)) (reduce + 0 (vals (gained c))) 0)})
+
+(defn quote-of [_c]
+  {:uses {:time [5 20 (settings/get settings ::time-s)]}})
 
 (defn ^:async empty-cart!
   "Move every stack of the cart into the bag. A transfer that moves nothing (no room) ends it with :full."
@@ -78,7 +99,7 @@
 (defn ^:async break-cart!
   "Attack the cart until it is gone: :broken, :continue (the child waits) or :cannot-break."
   [c id]
-  (let [r (await (child/run! c :break 'jobs.combat.attack {:targets [id] :radius 8 :lost-s 0}))]
+  (let [r (await (child/run!* c :break 'jobs.combat.attack {:targets [id] :radius 8 :lost-s 0}))]
     (cond
       (= :continue r) :continue
       (empty? (filter #(= id (:id %)) (carts c))) :broken
@@ -87,7 +108,7 @@
 (defn ^:async collect!
   "Pick up the drops round the cart's place: :done, or :continue while the child waits."
   [c pos]
-  (let [r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius (:radius (:args c)) :near pos}))]
+  (let [r (await (child/run!* c :collect 'jobs.forestry.collect-drops {:radius (:radius (:args c)) :near pos}))]
     (if (= :continue r) :continue :done)))
 
 (defn ^:async round
@@ -100,7 +121,7 @@
         cart (first (carts c))
         pos (or (:pos mem) (:pos cart))]
     (cond
-      (:broken mem) (let [r (await (collect! c pos))] (if (= :continue r) :continue (finish! c nil)))
+      (:broken mem) (let [r (await (collect! c pos))] (if (= :continue r) :continue (finish! c)))
       (nil? cart) (stop! c :gone "no chest minecart in sight")
       :else
       (let [id (:id cart)
@@ -108,7 +129,7 @@
             verdict (access/container-refusal c :take pos)]
         (ctx/update-mem! c assoc :pos pos)
         (if verdict
-          (finish! c (assoc (access/refused-result verdict) :status :stopped))
+          (stop! c :refused "the cart is in another's zone or claim" (dissoc (access/refused-result verdict) :reason :gave-up))
           (let [w (await (near/go-near! c pos 2))]
             (cond
               (= :blocked w) (stop! c :unreachable "cannot walk within reach of the cart")
@@ -125,4 +146,4 @@
                           (= :continue b) :continue
                           (= :cannot-break b) (stop! c :cannot-break "the cart did not break")
                           :else (do (ctx/update-mem! c assoc :broken true)
-                                    (let [r (await (collect! c pos))] (if (= :continue r) :continue (finish! c nil))))))))))))))))
+                                    (let [r (await (collect! c pos))] (if (= :continue r) :continue (finish! c))))))))))))))))

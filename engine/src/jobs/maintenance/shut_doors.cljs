@@ -3,12 +3,12 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
-            [jobs.lib.result :as res]
             [jobs.lib.pass :as pass]
             [jobs.lib.doors :as doors]
             [jobs.lib.access :as access]
             [jobs.lib.world :as known]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [engine.settings :as settings]))
 
 (def doc
   "Shut the doors, gates and trapdoors a walk opened and left open (the job of the door-left trigger,
@@ -26,8 +26,19 @@
   warn. A block that cannot be reached is dropped at once. A block the body stands in the column of, or whose walk was
   interrupted (:walk-interrupted, info only), is left and keeps its entry the same way. A block an animal stands in
   (:animal-in-the-way, info only) keeps its entry untouched and no failure counts, so the trigger tries again at once.
-  Ends done with info shut-doors.done {:shut n :left []} when every block was shut (or none stood open); with any
-  left, stopped :left with warn shut-doors.stopped and {:shut n :left [{:cell :reason}]}.")
+  Needs nothing. Ends :done with info shut-doors.done {:shut n :left []} when every block was shut (or none stood
+  open); with any left, nothing-possible :left with warn shut-doors.stopped, data {:shut n :left [{:cell :reason}]}.
+  Spends :time (default ::time-s).")
+
+(a/defargs settings
+  {::time-s {:default 120 :doc "Seconds a run may take before it ends." :spec (a/num-in 0 nil)}
+   ::s-per-door {:default 6 :doc "Seconds a quote counts for one door: the walk and the clicks." :spec (a/num-in 0 nil)}})
+
+(def target [])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions [])
 
 (a/defargs args
   {:radius {:doc "how far from the body a left block is looked for, in blocks" :spec (a/num-in 0 nil) :default 16}
@@ -58,10 +69,10 @@
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
   [c {:keys [cell]}]
-  (let [r (await (child/call-walk c :walk {:pos cell :range (:reach (:args c)) :doors :never :escalate false}))]
+  (let [r (await (child/call-walk* c :walk {:pos cell :range (:reach (:args c)) :doors :never :escalate false}))]
     (cond
       (= :continue r) :walk-interrupted
-      (and (= :done r) (:arrived (ctx/child-result c :walk))) nil
+      (and (= :done (:kind r)) (:arrived (:data r))) nil
       :else :unreachable)))
 
 (defn ^:async shut-once!
@@ -103,18 +114,26 @@
   (let [result {:shut shut :left left}]
     (if (empty? left)
       (do (ctx/emit! c :shut-doors.done :info (assoc result :text (str "shut " shut " left open by a walk")))
-          (res/finish! c result))
+          (ctx/end c :done nil result))
       (let [text (str "shut " shut " left open by a walk, gave up on " (count left))
             level (if (every? #(= :walk-interrupted (:reason %)) left) :info :warn)]
         (ctx/emit! c :shut-doors.stopped level (assoc result :text text))
-        (res/stop! c :left text :shut shut :left left)))))
+        (ctx/end c :nothing-possible :left (assoc result :text text))))))
+
+(defn done?
+  "Never done before the round has run: the done event reports the count, also of none."
+  [c]
+  {:done? false :units :doors :done (:shut (ctx/mem c) 0)})
+
+(defn quote-of [c]
+  (let [t (* (settings/get settings ::s-per-door) (count (targets c [])))]
+    {:uses {:time [0 t (* 3 t)]}}))
 
 (defn ^:async round [c]
   (loop [shut 0 left []]
     (if-let [target (first (targets c left))]
       (if-let [reason (await (shut-once! c target))]
         (recur shut (conj left (give-up! c target reason)))
-        (recur (inc shut) left))
+        (do (ctx/update-mem! c assoc :shut (inc shut))
+            (recur (inc shut) left)))
       (finish! c shut left))))
-
-(defn check [_c] true)
