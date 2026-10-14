@@ -275,10 +275,10 @@
 
 (defn ^:async inner-wait!
   "One slice of observe's wait under the observer `progress`, watching ids."
-  [{:keys [base]} ids ms get! signal]
+  [{:keys [base danger]} ids ms get! signal]
   (await (observe/wait-observe
           (assoc base :wait-options (observe-request/wait-options {:timeout (str (js/Math.round ms) "ms") :observer "progress"
-                                                                  :watch (clj->js ids) :chatter "addressed" :no-danger (not (:danger r))}))
+                                                                  :watch (clj->js ids) :chatter "addressed" :no-danger (not danger)}))
           get! signal identity)))
 
 (defn fatal? [error] (contains? #{"ABORT_ERR" "EOBSERVERBUSY" "EOBSERVERLIMIT"} (code-of error)))

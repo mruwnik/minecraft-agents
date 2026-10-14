@@ -247,3 +247,16 @@
   (let [text (progress/wake-text {:wake :needs-you :text "hit: health 14" :vitals {:hurt "lost 6 health during the wait (20 -> 14)" :health 14 :food 18}})]
     (is (str/starts-with? text "HURT: lost 6 health"))
     (is (str/includes? text "NOW health 14 food 18"))))
+
+(defn hurt-wake [danger]
+  (with-fixture working-status {:wait-ms 400 :stall-ms 3600000 :danger danger}
+    (fn [f]
+      (js/setTimeout #((:push! f) (ev :body :hurt {:health 14})) 60)
+      (-> (wait! f)
+          (.then (fn [result] (is (= (if danger {:wake :needs-you :text "hit: health 14"} {:wake :timeout :text "no news"}) (select-keys result [:wake :text])) (pr-str (dissoc result :view)))))))))
+
+(deftest a-hit-wakes-the-wait
+  (hurt-wake true))
+
+(deftest no-danger-lets-a-hit-pass
+  (hurt-wake false))
