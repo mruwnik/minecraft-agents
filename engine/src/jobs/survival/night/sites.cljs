@@ -41,6 +41,12 @@
   [c pos reason]
   (ctx/remember! c :night-site {:pos pos :reason reason} site-policy))
 
+(defn forget-failed!
+  "The night is over: forget tonight's failed sites and dig-in's own (:dig-in-futile), so the next night tries them again."
+  [c]
+  (ctx/forget-where! c :night-site (constantly true))
+  (ctx/forget-where! c :dig-in-futile (constantly true)))
+
 (defn failed-here?
   "Whether a site that failed tonight lies within dig-in's futile radius of the feet."
   [c]

@@ -16,7 +16,7 @@
   The bed: the :bed argument, else sh/bed-to-use (seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep, never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
   A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open (shelter.bed_open info) and ends done {:bed-open true}.
   A sleep that ends without sleeping writes :sleep-failed (5 minutes, shelter.sleep_failed warn).
-  A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as :bed-placed outside the body's own zones (info night.bed-placed {:pos :own-zone}). No room, or a failed placement, writes :bed-place-failed (10 minutes, shelter.bed_place_failed warn).
+  A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as :bed-placed outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes, shelter.bed_place_failed warn).
   Walks use :at-night :go. Ends done {:slept true} when asleep, else done {:slept false} (with :bed-open, or nothing to say), :continue while walking or sleeping.")
 
 (a/defargs args
@@ -72,12 +72,20 @@
 
 (def bed-dirs [[1 0] [-1 0] [0 1] [0 -1]])
 
+(def bed-tries
+  "Placements of the carried bed the server may refuse before :bed-place-failed; a foot cell refused twice is left for another row."
+  3)
+
+(defn refused-twice? [c {:keys [x y z]}]
+  (<= 2 (get (:bed-refused (ctx/mem c)) [x y z] 0)))
+
 (defn bed-layout
   "{:stand :foot :head} for a bed set down beside the body: three cells in a row, the body standing at one end (a placed
   bed faces away from the body), the foot next to it, the head after it. All three free (air, with a solid floor that is no container, bed or other kept block, and
   the body's headroom for the stand cell) within 3 cells of the body, the foot and head not in a doorway or another's
   zone, claim or plan footprint (a missing zone list refuses nothing), and roofed within roof-height when roofed? is
-  set. The stand cell nearest the body first (its own cell when it fits); nil when no row fits."
+  set, and not a foot cell the server refused twice. The stand cell nearest the body first (its own cell when it fits); nil
+  when no row fits."
   [c roofed?]
   (let [p (:primitives c)
         roof (:roof-height (:args c))
@@ -99,7 +107,8 @@
                             (air? (update stand :y inc))
                             (free? foot) (free? head) (covered? foot) (covered? head)
                             (permitted? foot) (permitted? head)
-                            (not= foot (sh/feet p)))]
+                            (not= foot (sh/feet p))
+                            (not (refused-twice? c foot)))]
              {:stand stand :foot foot :head head}))))
 
 (defn click-for
@@ -124,22 +133,28 @@
 (defn ^:async put-down-bed!
   "Walk to the layout's stand cell if the body is not on it, then place the carried bed on the foot cell (facing along
   the row) and record it as :bed unless a live :bed is recorded, and as :bed-placed when outside the body's own zones.
-  :continue while walking; the foot cell when a bed block stands there after; else nil."
+  A placement the server refuses is counted (job memory :bed-refused) and tried again while fewer than bed-tries failed.
+  :continue while walking or trying again; the foot cell when a bed block stands there after; else nil."
   [c]
   (let [p (:primitives c)
         item (sh/carried-bed p)
         {:keys [stand foot] :as layout} (await (sense/decide! c ::layout #(or (bed-layout c true) (bed-layout c false))))]
     (when foot
       (if (= stand (sh/feet p))
-        (let [r (await (tidy/place! c foot item false (click-for layout)))]
-          (when (and (= "placed" (.-status r)) (await (bed-visible? c foot)))
-            (places/offer! c :bed foot)
+        (let [r (await (tidy/place! c foot item false (click-for layout)))
+              refused (:bed-refused (ctx/mem c))]
+          (cond
+            (and (not= "placed" (.-status r)) (< (inc (reduce + 0 (vals refused))) bed-tries))
+            (do (ctx/update-mem! c update-in [:bed-refused [(:x foot) (:y foot) (:z foot)]] (fnil inc 0))
+                :continue)
+            (and (= "placed" (.-status r)) (await (bed-visible? c foot)))
             (let [own? (boolean (sh/in-own-zone? p (:world (:engine c)) foot))]
+              (places/offer! c :bed foot)
               (when-not own?
                 (ctx/remember! c :bed-placed {:pos foot} sh/bed-placed-policy))
               (ctx/emit! c :night.bed-placed :info {:pos foot :own-zone own?
-                                                    :text (str "put the carried bed down at " (pr-str foot) (if own? " (in its own zone: it stays)" ", picked up by day unless sleeping in it made it the respawn bed"))}))
-            foot))
+                                                    :text (str "put the carried bed down at " (pr-str foot) (if own? " (in its own zone: it stays)" ", picked up by day unless sleeping in it made it the respawn bed"))})
+              foot)))
         (let [w (await (ctx/call-child c :bed-walk 'jobs.movement.go-to {:pos stand :range 0 :at-night :go}))]
           (when (or (= :continue w) (:arrived (ctx/child-result c :bed-walk))) :continue))))))
 

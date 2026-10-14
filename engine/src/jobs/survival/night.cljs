@@ -74,7 +74,7 @@
   An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed). A respawn bed
   it sees is no bed is written :spawn-lost and warned (spawn_lost) once; its waiting reasons carry :spawn ({:bed pos} or {:lost pos :why}).
   Memory: job memory :enclose (the cave cell being walled in), :sheltered (:slept, :dug-in, :logged-out, :exposed), :log-out-failed, :relocating, :digging (the
-  site of a dig-in in flight), :pit-trapped and leave!'s :dig-out; :roof-walk-failed (no second walk to a roofed place tonight); body memory :night-site (failed sites, forgotten whenever the night ends, at most a day), so a
+  site of a dig-in in flight), :pit-trapped and leave!'s :dig-out; :roof-walk-failed (no second walk to a roofed place tonight); body memory :night-site (failed sites, forgotten whenever the night ends, with dig-in's :dig-in-futile when it ends by day or dug in, at most a day), so a
   firing after a cut does not dig a failed site again.
   Muting :night does not end a running night job: the agent cancels it too.")
 
@@ -352,12 +352,12 @@
     (if log (assoc (spent/summary log) :text (spent/text log "night shelter")) {})))
 
 (defn end-night!
-  "The night is over: forget tonight's failed sites and end, done {:night how}, or stopped :exposed {:sites} when
+  "The night is over: forget tonight's failed sites (sites/forget-failed!) and end, done {:night how}, or stopped :exposed {:sites} when
   nothing sheltered the body."
   [c]
   (let [how (:sheltered (ctx/mem c))
         sites (sites/failed-sites c)]
-    (ctx/forget-where! c :night-site (constantly true))
+    (sites/forget-failed! c)
     (if (= :exposed how)
       (result/stop! c :exposed (str "no shelter tonight: no bed, nobody asleep, no site to dig in, nowhere safer known (" (sites/exposed-why sites) ")")
                     :sites sites :fled (fled c))

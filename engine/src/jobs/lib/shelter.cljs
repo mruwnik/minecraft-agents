@@ -601,15 +601,19 @@
                       (contains? (:cells (reach/room p self)) [(:x cell) (:y cell) (:z cell)]))))))
 
 (defn unlooked-for-bed?
-  "Night, awake, a bed carried or remembered, and a cell beside the feet (floor, feet or head) the body has never seen
-  and has not looked from here (looked-here?): the room checks (shut-in-hut?, walk-leaves-shelter?) would read the room
-  smaller than it is, so look before deciding."
+  "Night, awake, not looked from here (looked-here?), and either a bed carried or remembered with a cell beside the feet
+  (floor, feet or head) never seen (the room checks, shut-in-hut? and walk-leaves-shelter?, would read the room smaller
+  than it is), or the body shut in a hut with no sleep tonight and no :sleep-failed entry (a bed may stand where it has
+  not looked, or have been set down since it saw the cell): look before deciding."
   [p view]
   (let [{:keys [x y z]} (feet p)]
     (boolean (and (night? p) (not (sleeping? p))
-                  (or (some? (carried-bed p)) (some? (mem/place view :bed)))
                   (not (looked-here? p view))
-                  (look/unseen? p (for [dx [-1 0 1] dz [-1 0 1] dy [-1 0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))))))
+                  (or (and (or (some? (carried-bed p)) (some? (mem/place view :bed)))
+                           (look/unseen? p (for [dx [-1 0 1] dz [-1 0 1] dy [-1 0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
+                      (and (zero? (mem/count-in view :slept slept-tonight-ms))
+                           (empty? (mem/entries view :sleep-failed))
+                           (shut-in-hut? p)))))))
 
 (defn breached-home?
   "Whether the roofed body's room has a hole: a :bed-open entry (a bed found open) within breach-near blocks and the body

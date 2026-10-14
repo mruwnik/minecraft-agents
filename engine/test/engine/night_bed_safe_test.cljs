@@ -52,14 +52,9 @@
   (let [{:keys [eng p]} (setup world)]
     (sh/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))
 
-(defn looked!
-  "The night job's look pass from the body's cell, as it remembers it."
-  [eng p]
-  (mem/write! (:store eng) :night-looked {:cell (sh/feet p)} sh/night-looked-policy))
-
 (defn holds? [world]
   (let [{:keys [eng p]} (setup world)
-        _ (looked! eng p)]
+        _ (st/looked-round! eng p)]
     (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))))
 
 (deftest a-buried-body-does-not-use-a-bed-out-in-the-open
@@ -69,7 +64,7 @@
 (deftest a-buried-body-neither-places-a-carried-bed-nor-logs-out-for-a-sleeper
   (let [carrying (assoc (tunnel-world buried-light) :inventory [{:name "red_bed" :count 1}])
         {:keys [eng p]} (setup carrying)]
-    (looked! eng p)
+    (st/looked-round! eng p)
     (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
     (is (false? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))) "mining goes on")))
 
@@ -139,6 +134,34 @@
         _ (blind-above p)]
     (st/know-bed! eng {:x 6 :y 64 :z -1})
     (is (= {:x 6 :y 64 :z -1} (sh/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))))
+
+(defn stale-until-looked
+  "p whose memory of cell (a [x y z] vector) is air until the body looks: a bed set there since it last saw the cell."
+  [p raw [x y z]]
+  (let [seen (.-sensedAt p)]
+    (doto p (aset "sensedAt" (fn [a] (if (and (= [x y z] [(.-x a) (.-y a) (.-z a)]) (empty? (st/calls raw "look")))
+                                       #js {:name "air" :pos a}
+                                       (.call seen p a)))))))
+
+(deftest a-body-in-a-hut-looks-round-once-and-sleeps-in-a-bed-it-had-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p raw]} (setup (hut-night-world {"6,64,1" "red_bed"} {}))
+              _ (stale-until-looked p raw [6 64 1])
+              holds #(sh/night-holds? p (mem/view (:store eng)) {} (constantly true))]
+          (is (true? (holds)) "the trigger holds to look round the hut")
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (is (seq (st/calls raw "look")) "looked")
+          (is (= [{:x 6 :y 64 :z 1}] (mapv st/arg-pos (st/calls raw "sleep"))) "slept in the bed it then saw"))))))
+
+(deftest a-body-in-a-hut-with-no-bed-looks-once-then-the-night-does-not-hold
+  (let [{:keys [eng p]} (setup (hut-night-world {} {}))
+        holds #(sh/night-holds? p (mem/view (:store eng)) {} (constantly true))]
+    (is (true? (holds)))
+    (st/looked-round! eng p)
+    (is (false? (holds)) "looked from this room tonight")))
 
 (defn unseen-hut-world
   "The closed hut, the body in it with nothing seen yet (no sight pass), not the fake's all-seeing sight."

@@ -118,10 +118,12 @@
 (defn bed-trigger-holds?
   "The night condition for the hut with the body at {:x 5 :y 64 :z 0} and a known bed at 6,64,0, after seed!."
   [world seed!]
-  (let [{:keys [eng]} (st/setup {})]
+  (let [{:keys [eng]} (st/setup {})
+        p (tu/fake world)]
     (st/know-bed! eng {:x 6 :y 64 :z 0})
+    (st/looked-round! eng p)
     (seed! eng)
-    (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store eng)) {}))))
+    (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))))
 
 (deftest night-holds-for-a-roofed-body-with-a-bed-it-has-not-slept-in-tonight
   (let [night-world (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night})
@@ -169,9 +171,11 @@
 (deftest night-holds-for-a-roofed-body-carrying-a-bed-and-knowing-none
   (let [world (merge (hut-world {:x 5 :y 64 :z 0} {}) {:time st/night :inventory [{:name "red_bed" :count 1}]})
         holds (fn [world seed!]
-                (let [{:keys [eng]} (st/setup {})]
+                (let [{:keys [eng]} (st/setup {})
+                      p (tu/fake world)]
+                  (st/looked-round! eng p)
                   (seed! eng)
-                  (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store eng)) {}))))]
+                  (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))))]
     (is (true? (holds world (fn [_]))) "a carried bed, none known")
     (is (false? (holds (dissoc world :inventory) (fn [_]))) "no bed carried")
     (is (false? (holds world (fn [eng] (mem/write! (:store eng) :bed-place-failed {} {:cap 1 :ttl 600000})))) "set-up failed lately")
@@ -223,13 +227,14 @@
 ;; ------------------------------------------------------------------ bed review findings (card d9c87329)
 
 (defn holds-with
-  "The night condition in world after seed! ran on a fresh engine's store. Options: :zones and :claims (the
+  "The night condition in world after the night's look pass and seed! ran on a fresh engine's store. Options: :zones and :claims (the
   zone list and claims the trigger reads), :later (ms the clock moves on after seed!)."
   [world seed! & {:keys [zones claims later] :or {zones [] claims [] later 0}}]
   (let [{:keys [eng clock]} (st/setup {})
         kn (ew/of-data {} {} zones)
         p (tu/fake world)]
     (swap! (:state kn) assoc :area-claims {:value claims})
+    (st/looked-round! eng p)
     (seed! eng)
     (swap! clock + later)
     (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {} kn))))
@@ -413,6 +418,60 @@
               (is (= (update foot :y dec) (:against click)) "against the floor under the foot cell")
               (is (< (js/Math.abs (- (:yaw click) (js/Math.atan2 (- dx) (- dz)))) 1e-9) "yaw along the row")
               (is (= "red_bed" head) "the head cell is the one after the foot"))))))))
+
+(defn refuse-bed!
+  "Make the server refuse the carried bed: the first n placements, or with n nil every one on the first foot cell tried."
+  [p n]
+  (let [tries (atom 0) first-foot (atom nil)]
+    (.override (.-world p) "place"
+               (fn ^:async f [token a impl]
+                 (let [pos (st/arg-pos #js {:args a})
+                       refuse? (and (.endsWith (.-item a) "_bed")
+                                    (if n (<= (swap! tries inc) n) (= pos (swap! first-foot #(or % pos)))))]
+                   (if refuse?
+                     #js {:status "failed" :reason "Server refused to place red_bed: the block is still air"}
+                     (await (impl token a))))))))
+
+(defn carried-bed-night
+  "The night job run in the hut with a carried bed the server treats as refuse-bed! says; {:p :seen}."
+  [n ticks]
+  (js/Promise.
+   (fn [resolve]
+     (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {})
+                                                 {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
+       (refuse-bed! p n)
+       (core/submit! eng '(jobs.survival.night) {})
+       (.then (st/tick-n eng ticks) #(resolve {:p p :seen seen}))))))
+
+(deftest a-bed-the-server-refuses-once-is-placed-on-the-next-try
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (carried-bed-night 1 12))
+              [a b] (mapv st/arg-pos (st/calls p "place"))]
+          (is (= a b) "the same foot cell again")
+          (is (= 1 (count (st/calls p "sleep"))))
+          (is (empty? (st/emitted seen :shelter.bed_place_failed))))))))
+
+(deftest a-foot-cell-the-server-keeps-refusing-is-left-for-another-row
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (carried-bed-night nil 16))
+              feet (mapv st/arg-pos (st/calls p "place"))]
+          (is (= 3 (count feet)) "twice on the refused cell, then another")
+          (is (not= (first feet) (last feet)))
+          (is (= 1 (count (st/calls p "sleep"))))
+          (is (empty? (st/emitted seen :shelter.bed_place_failed))))))))
+
+(deftest a-bed-the-server-always-refuses-fails-once-after-three-tries
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (carried-bed-night 99 16))]
+          (is (= 3 (count (st/calls p "place"))))
+          (is (= 1 (count (st/emitted seen :shelter.bed_place_failed))))
+          (is (empty? (st/calls p "sleep"))))))))
 
 (deftest a-gap-in-a-wall-is-a-doorway-and-a-cell-in-the-room-is-not
   (let [p (tu/fake (hut-world {:x 5 :y 64 :z 0} {"5,64,2" "air" "5,65,2" "air"}))]
