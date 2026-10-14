@@ -2,6 +2,7 @@
   "The wedged trigger and the unwedge job against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -90,7 +91,33 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (setup {})]
-          (is (false? ((:check (get registry/jobs unwedge)) {:primitives p :args {}}))))))))
+          (is (= [:not-wedged] (mapv (fn [[_ f]] (f {:primitives p :args {}})) (:conditions (get registry/jobs unwedge))))))))))
+
+(deftest a-wedged-body-is-not-done-and-a-free-one-is
+  (let [done? (fn [world] (:done? ((:done? (get registry/jobs unwedge)) {:primitives (tu/fake world) :args {}})))]
+    (is (false? (done? {:blocks {"0,64,0" "sand"}})))
+    (is (true? (done? {})))))
+
+(deftest unwedge-keeps-two-ways-the-side-step-and-the-dig
+  (is (= [:step :dig] (:ways (get registry/jobs unwedge)))))
+
+(deftest a-block-it-cannot-dig-ends-nothing-possible-with-the-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks (merge boxed {"0,64,0" "bedrock"})})
+              out (atom nil)
+              parent {:check (constantly true)
+                      :round (fn ^:async r [c]
+                               (let [s (await (ctx/call-child c :kid unwedge {}))]
+                                 (reset! out (ctx/child-result c :kid))
+                                 s))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'uw-parent parent))]
+          (core/submit! eng '(uw-parent) {})
+          (await (core/tick! eng))
+          (is (= :nothing-possible (:kind (:ending @out))))
+          (is (= :blocked (:reason (:cause (:ending @out)))))
+          (is (= :cannot (:why (:cause (:ending @out))))))))))
 
 (def stone-sides-but-east
   (into floor (for [[x z] [[-1 0] [0 1] [0 -1]]] [(str x ",64," z) "stone"])))

@@ -4,6 +4,7 @@
   sleeping player in sight): logged out in short stints until morning, then roofed or buried: the queue runs, else
   dig in."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
@@ -371,7 +372,7 @@
           (is (= 1 (count (st/calls p "sleep"))))
           (is (= [] (st/calls p "offline"))))))))
 
-(deftest a-queued-log-out-ends-without-acting-when-another-job-logged-out-meanwhile
+(deftest a-queued-log-out-waits-without-acting-when-another-job-logged-out-meanwhile
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -382,7 +383,7 @@
           (mem/write! (:store eng) :log-out {:ms 30000 :status "ok"} nil)
           (await (tu/run-until-empty eng 3))
           (is (= [] (st/calls p "offline")) "the body was not logged out again")
-          (is (= [] (:list (core/state eng))) "the job ended"))))))
+          (is (= 1 (count (:list (core/state eng)))) "the job waits"))))))
 
 (deftest a-log-out-before-the-submit-does-not-end-it
   (async done
@@ -405,6 +406,48 @@
           (core/submit! eng '(jobs.survival.log-out) {})
           (await (tu/run-until-empty eng 3))
           (is (= [25050] (st/ms-of-offline p))))))))
+
+(defn ^:async log-out-child
+  "The child result of a log-out call from a recording parent, run in world until the parent is done."
+  [world args]
+  (let [{:keys [eng p]} (st/setup world)
+        out (atom nil)
+        parent {:check (constantly true)
+                :round (fn ^:async r [c]
+                         (let [s (await (ctx/call-child c :kid 'jobs.survival.log-out args))]
+                           (reset! out (ctx/child-result c :kid))
+                           s))}
+        eng (assoc eng :jobs (assoc (:jobs eng) 'out-parent parent))]
+    (sleep-count! p 1 2)
+    (core/submit! eng '(out-parent) {})
+    (await (core/tick! eng))
+    @out))
+
+(deftest a-log-out-ends-done-with-how-it-went
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stint (await (log-out-child {:time night} {:offline-ms 20000 :news-ms 0}))]
+          (is (= :done (:status stint)))
+          (is (= "ok" (:how stint))))))))
+
+(deftest a-log-out-needs-night-and-says-so
+  (let [conditions (:conditions (get registry/jobs 'jobs.survival.log-out))
+        cause (fn [world args] (some (fn [[_ f]] (f {:primitives (tu/fake world) :args args :slots [:x]
+                                                     :view (fn [] {:data mem/empty-data :now 0})}))
+                                     conditions))]
+    (is (= :not-night (cause {:time noon} {})))
+    (is (= :offline-forbidden (cause {:time night} {:offline-allowed false})))
+    (is (nil? (cause {:time night} {})))))
+
+(deftest a-log-out-quotes-the-stint-in-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [job (get registry/jobs 'jobs.survival.log-out)
+              q (await ((:quote-of job) {:primitives (tu/fake {:time night}) :args {:offline-ms 20000 :news-ms 3000}}))]
+          (is (nil? (contract/quote-problem q)))
+          (is (<= 3 (second (get-in q [:uses :time])))))))))
 
 ;; ------------------------------------------------------------------ one whole attempt per night
 

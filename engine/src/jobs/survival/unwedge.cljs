@@ -3,7 +3,6 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]
-            [jobs.lib.result :as result]
             [jobs.lib.access :as access]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
@@ -18,22 +17,33 @@
     A block the dig reports :cannot (bedrock) is final; other failed digs (or a dig refused because lava touches
     the cell) count, three in a row are final.
   A final failure warns :unwedge.blocked once, writes an :unwedge-blocked entry (cell, 10 min; the trigger holds
-  its fire for that cell meanwhile) and ends stopped {:reason :blocked :why}: the body holds still, nothing refires.
-  Still wedged after max-passes tries ends stopped :still-wedged. Never :continue.")
+  its fire for that cell meanwhile) and ends nothing-possible {:reason :blocked :why} with data {:cell}: the body
+  holds still, nothing refires.
+  Needs a wedged body: else condition-failed :not-wedged (a listed job waits). Ways :step and :dig (both by default);
+  a way left out is not tried, and a run with no way left ends nothing-possible :no-way.
+  Still wedged after max-passes tries ends nothing-possible :still-wedged. Ends :done once the feet cell is free.
+  Never :continue.
+  Quote: a few passes of ::pass-s.")
 
 (a/defargs args
   {:ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
-(defn check [c]
-  (or (some? (breath/wedged-cell (:primitives c)))
-      (ctx/wait c {:reason :not-wedged})))
+(def target [])
+(def ways [:step :dig])
+(def defaults {:ways #{:step :dig}})
+
+(def conditions [[:fn (fn [c] (when-not (breath/wedged-cell (:primitives c)) :not-wedged))]])
+
+(defn done? [c]
+  (let [wedged (some? (breath/wedged-cell (:primitives c)))]
+    {:done? (not wedged) :units :cells :left (if wedged 1 0)}))
 
 (defn ^:async block!
-  "Give up on cell: warn once, remember it so the trigger stays quiet there. Resolves :done, stopped."
+  "Give up on cell: warn once, remember it so the trigger stays quiet there. Resolves the nothing-possible ending."
   [c cell why]
   (ctx/emit! c :unwedge.blocked :warn {:cell cell :why why :text (str "wedged in a block I cannot dig out of: " (name why))})
   (ctx/remember! c :unwedge-blocked {:cell cell :why why} breath/blocked-policy)
-  (result/stop! c :blocked (str "wedged in a block I cannot dig out of: " (name why)) :why why :cell cell))
+  (ctx/end c :nothing-possible {:reason :blocked :why why} {:cell cell}))
 
 (defn lava-near?
   "Whether lava touches the cell (beside or above it): digging would let it flow in. Water is not refused: a
@@ -43,15 +53,17 @@
         [{:x 1 :y 0 :z 0} {:x -1 :y 0 :z 0} {:x 0 :y 0 :z 1} {:x 0 :y 0 :z -1} {:x 0 :y 1 :z 0}]))
 
 (defn ^:async fail!
-  "One failed dig on cell: final after u/max-failures in a row. Resolves :again or :done (stopped)."
+  "One failed dig on cell: final after u/max-failures in a row. Resolves :again or the blocked ending."
   [c cell why]
   (if (u/count-fail! c) (await (block! c cell (keyword why))) :again))
 
 (defn ^:async dig-feet!
   [c cell]
   (let [p (:primitives c)]
-    (if (lava-near? p cell)
-      (await (fail! c cell "lava"))
+    (cond
+      (not (ctx/way? c :dig)) (ctx/end c :nothing-possible {:reason :no-way :ways (:ways (ctx/frozen-call c))})
+      (lava-near? p cell) (await (fail! c cell "lava"))
+      :else
       (let [block (u/feel-name p cell)
             _ (access/trespass! c "unwedge" (:trespass (access/choose c :dig [[cell]] identity)))
             _ (await (tools/equip-tool! c block {:fast true}))
@@ -62,14 +74,19 @@
           :else (await (fail! c cell status)))))))
 
 (a/defargs settings
-  {::max-passes {:default 8 :doc "Tries (a step or a dig) in one run before it stops." :spec (a/int-in 0 nil)}})
+  {::max-passes {:default 8 :doc "Tries (a step or a dig) in one run before it stops." :spec (a/int-in 0 nil)}
+   ::pass-s {:default 1.5 :doc "Seconds one try (a step or a dig) takes, the quote's unit." :spec (a/num-in 0 nil)}})
 (defn max-passes [] (settings/get settings ::max-passes))
 
+(defn ^:async quote-of [_]
+  (let [t (settings/get settings ::pass-s)]
+    {:uses {:time [t (* 2 t) (* t (max 2 (max-passes)))]}}))
+
 (defn ^:async pass!
-  "One try at the wedged cell: the side step once, else a dig. Resolves :again or :done (stopped)."
+  "One try at the wedged cell: the side step once, else a dig. Resolves :again or an ending."
   [c cell]
   (let [p (:primitives c)
-        side (when-not (:side-tried (ctx/mem c)) (breath/side-cell p (.self p)))]
+        side (when (and (ctx/way? c :step) (not (:side-tried (ctx/mem c)))) (breath/side-cell p (.self p)))]
     (if-not side
       (await (dig-feet! c cell))
       (do (ctx/update-mem! c assoc :side-tried true)
@@ -82,9 +99,9 @@
     (loop [i 0]
       (let [cell (breath/wedged-cell p)]
         (cond
-          (nil? cell) :done
-          (not (ctx/alive? c)) :done
-          (<= (max-passes) i) (result/stop! c :still-wedged "still wedged after several tries")
+          (nil? cell) (ctx/end c :done nil)
+          (not (ctx/alive? c)) (ctx/end c :cut-off :cut)
+          (<= (max-passes) i) (ctx/end c :nothing-possible :still-wedged {:tries i})
           :else (let [r (await (pass! c cell))]
                   (if (= :again r)
                     (do (await (pace/pace!)) (recur (inc i)))

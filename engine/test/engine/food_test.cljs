@@ -1,6 +1,7 @@
 (ns engine.food-test
   "The eat and get-food jobs and the hungry trigger against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.registry :as registry]
             [engine.settings :as settings]
@@ -208,7 +209,71 @@
           (core/submit! eng '(eat-parent) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "eat"))))
-          (is (= {:ate 0 :reason :eat-failed} (select-keys @out [:ate :reason]))))))))
+          (is (= {:ate 0 :reason :eat-failed} (select-keys @out [:ate :reason])))
+          (is (= :nothing-possible (:kind (:ending @out))) "a failed bite is no done"))))))
+
+(defn ^:async ending-of-eat
+  "The ending of a child eat call with args from a recording parent."
+  [world args]
+  (let [{:keys [eng]} (setup world)
+        out (atom nil)
+        parent {:check (constantly true)
+                :round (fn ^:async r [c]
+                         (let [s (await (ctx/call-child c :kid 'jobs.survival.eat args))]
+                           (reset! out (:ending (ctx/child-result c :kid)))
+                           s))}
+        eng (assoc eng :jobs (assoc (:jobs eng) 'eat-parent parent))]
+    (core/submit! eng '(eat-parent) {})
+    (await (core/tick! eng))
+    @out))
+
+(deftest eat-ends-condition-failed-for-an-item-it-refuses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:food 14} :inventory [{:name "rotten_flesh" :count 3} {:name "cobblestone" :count 3}]}
+              bad (await (ending-of-eat world {:item "rotten_flesh"}))
+              rock (await (ending-of-eat world {:item "cobblestone"}))]
+          (is (= {:kind :condition-failed :cause :bad-food} (select-keys bad [:kind :cause])))
+          (is (= {:kind :condition-failed :cause :not-food} (select-keys rock [:kind :cause]))))))))
+
+(deftest eat-needs-hunger-and-food
+  (let [conditions (:conditions (get registry/jobs 'jobs.survival.eat))
+        cause (fn [world] (some (fn [[_ f]] (f {:primitives (tu/fake world) :view (fn [] {:data mem/empty-data :now 0})
+                                                :args {:until 18 :allow-bad false :item nil}}))
+                                conditions))]
+    (is (= :not-hungry (cause {:self {:food 19} :inventory [{:name "bread" :count 2}]})))
+    (is (= :no-food (cause {:self {:food 4} :inventory [{:name "cobblestone" :count 2}]})))
+    (is (nil? (cause {:self {:food 4} :inventory [{:name "bread" :count 2}]})))))
+
+(deftest eat-ends-done-with-the-bites-eaten-and-quotes-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:food 4} :inventory [{:name "bread" :count 5}]}
+              {:keys [eng]} (setup world)
+              out (atom nil)
+              parent {:check (constantly true)
+                      :round (fn ^:async r [c]
+                               (let [s (await (ctx/call-child c :kid 'jobs.survival.eat {:max-bites 2}))]
+                                 (reset! out (ctx/child-result c :kid))
+                                 s))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'eat-parent parent))
+              job (get registry/jobs 'jobs.survival.eat)
+              c {:primitives (tu/fake world) :view (fn [] {:data mem/empty-data :now 0}) :args {:until 18 :allow-bad false :item nil :max-bites nil}}
+              q (await ((:quote-of job) c))]
+          (core/submit! eng '(eat-parent) {})
+          (await (core/tick! eng))
+          (is (= {:status :done :ate 2} (select-keys @out [:status :ate])))
+          (is (nil? (contract/quote-problem q)))
+          (is (pos? (second (get-in q [:uses :time])))))))))
+
+(deftest eat-is-done-when-fed
+  (let [job (get registry/jobs 'jobs.survival.eat)
+        done? (fn [food] (:done? ((:done? job) {:primitives (tu/fake {:self {:food food} :inventory [{:name "bread" :count 2}]})
+                                                :args {:until 18}})))]
+    (is (false? (done? 10)))
+    (is (true? (done? 18)))))
 
 (deftest eat-is-done-when-the-last-food-is-eaten
   (async done

@@ -31,30 +31,32 @@
       (when (and queued out (> (:t out) queued) (#{"ok" "cut"} (:status (:data out))))
         out))))
 
-(defn check [c]
-  (let [p (:primitives c)]
-    (cond
-      (logged-out-meanwhile c) true
-      (= false (:offline-allowed (:args c))) (ctx/wait c {:reason :offline-forbidden})
-      (not (sh/night? p)) (ctx/wait c {:reason :not-night})
-      (sh/log-out-unsupported? (ctx/view c)) (ctx/wait c {:reason :log-out-unsupported})
-      :else true)))
+(def conditions
+  [[:fn #(when (logged-out-meanwhile %) :logged-out-meanwhile)]
+   [:fn #(when (= false (:offline-allowed (:args %))) :offline-forbidden)]
+   [:fn #(when-not (sh/night? (:primitives %)) :not-night)]
+   [:fn #(when (sh/log-out-unsupported? (ctx/view %)) :log-out-unsupported)]])
+
+(def target [])
 
 (defn away-ms [c]
   (let [until-morning (sh/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
     (min (:offline-ms (:args c)) (if (pos? until-morning) until-morning js/Infinity))))
 
+(defn ^:async quote-of [c]
+  (let [s (/ (+ (away-ms c) (:news-ms (:args c))) 1000)]
+    {:uses {:time [0 s s]}}))
+
 (defn ^:async log-out! [c]
   (let [r (await (ctx/act c :offline #js {:ms (away-ms c) :why "logged-out-for-sleeping-player"}))
-        out {:ms (.-ms r) :status (.-status r)}]
-    (when (and (= "ok" (.-status r)) (sh/night? (:primitives c)))
+        how (.-status r)
+        out {:ms (.-ms r) :how how}]
+    (when (and (= "ok" how) (sh/night? (:primitives c)))
       (await (ctx/act c :wait #js {:ms (:news-ms (:args c))})))
-    (ctx/remember! c :log-out out log-out-policy)
-    (ctx/result! c out)
-    :done))
+    (ctx/remember! c :log-out {:ms (.-ms r) :status how} log-out-policy)
+    (case how
+      ("ok" "cut") (ctx/end c :done nil out)
+      "unsupported" (ctx/end c :condition-failed :unsupported out)
+      (ctx/end c :nothing-possible (keyword how) out))))
 
-(defn ^:async round [c]
-  (if-let [out (logged-out-meanwhile c)]
-    (do (ctx/result! c {:ms (:ms (:data out)) :status "already"})
-        :done)
-    (await (log-out! c))))
+(defn ^:async round [c] (await (log-out! c)))

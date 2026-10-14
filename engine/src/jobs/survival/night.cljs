@@ -125,7 +125,7 @@
   [c]
   (hold/busy! c)
   (let [l (await (ctx/call-child c :log-out 'jobs.survival.log-out {}))
-        status (:status (ctx/child-result c :log-out))]
+        status (:how (ctx/child-result c :log-out))]
     (cond
       (= :continue l) :again
       (and (= :done l) (#{"ok" "cut"} status)) (do (when-not (:sheltered (ctx/mem c)) (hold/sheltered! c :logged-out)) :again)

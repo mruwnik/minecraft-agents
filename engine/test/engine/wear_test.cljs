@@ -1,6 +1,7 @@
 (ns engine.wear-test
   "Wearing armour: jobs.lib.armour's plan and jobs.items.wear against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.contract :as contract]
             [jobs.lib.armour :as armour]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -92,7 +93,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out]} (await (wear (stacks "dirt") {:item "dirt"}))]
-          (is (= {:worn [] :reason "not-armour"} @out))
+          (is (= {:worn [] :reason :not-armour} (select-keys @out [:worn :reason])))
+          (is (= :condition-failed (:kind (:ending @out))))
           (is (empty? (worn p))))))))
 
 (deftest a-missing-item-is-refused
@@ -100,4 +102,20 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (wear (stacks "dirt") {:item "iron_helmet"}))]
-          (is (= {:worn [] :reason "no-item"} @out)))))))
+          (is (= {:worn [] :reason :no-item} (select-keys @out [:worn :reason])))
+          (is (= :condition-failed (:kind (:ending @out)))))))))
+
+(deftest nothing-better-than-worn-is-done-before-any-round
+  (let [job (get registry/jobs job)
+        done? (fn [world args] (:done? ((:done? job) {:primitives (tu/fake world) :args args})))]
+    (is (true? (done? (assoc (stacks "iron_helmet") :equipment {:head {:name "diamond_helmet" :count 1}}) {})))
+    (is (false? (done? (stacks "iron_helmet") {})))
+    (is (true? (done? (stacks "dirt") {})) "no armour carried: nothing to put on")))
+
+(deftest wearing-quotes-a-time-per-piece
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [q (await ((:quote-of (get registry/jobs job)) {:primitives (tu/fake (stacks "iron_helmet" "iron_boots")) :args {}}))]
+          (is (nil? (contract/quote-problem q)))
+          (is (pos? (second (get-in q [:uses :time])))))))))
