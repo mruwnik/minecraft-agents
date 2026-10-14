@@ -367,3 +367,30 @@
           (let [flood (let [before @reads] (reach/closed-room? p {:x -6 :y 64 :z 5}) (- @reads before))]
             (is (seq @per-step))
             (is (< (first @per-step) flood) (str "cells read by the first step, fewer than one open room flood (" flood "): " @per-step))))))))
+
+(deftest a-body-in-its-home-room-hit-on-the-run-is-cornered-inside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [homes (atom [])
+              hit cornered/hit-on-the-run!
+              order cornered/escape-order]
+          (set! cornered/hit-on-the-run! (fn [_] true))
+          (set! cornered/escape-order (fn [m] (swap! homes conj (:home? m)) []))
+          (try (await (flee! (hut {:x 5.5 :y 64 :z 0.5} hs/door-states [(zombie 5.5 -0.5 0.4)])))
+               (finally (set! cornered/hit-on-the-run! hit)
+                        (set! cornered/escape-order order)))
+          (is (= true (first @homes)) (str @homes)))))))
+
+(deftest door-sides-left-unjudged-by-a-step-are-judged-on-a-later-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states) [] lone-doors)
+                                          :home false))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              unjudged #(count (filter (comp #{:unjudged} :why) (:dropped (retreat-home/survey c nil %))))
+              counts [(unjudged 0) (unjudged 2) (unjudged 2)]]
+          (is (pos? (first counts)) (str "none judged at first: " counts))
+          (is (apply > counts) (str "each later step judges more: " counts)))))))
