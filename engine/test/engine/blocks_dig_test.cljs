@@ -753,6 +753,27 @@
           (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])) (pr-str result))
           (is (= "air" (block-at p at))))))))
 
+(deftest a-use-list-without-a-harvesting-tool-ends-no-tool-without-fetching
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-seeing {:self body :blocks {"2,64,0" "iron_ore" "-2,64,3" "chest"}
+                                             :containers {"-2,64,3" [{:name "stone_pickaxe" :count 1}]}})
+              e (:ending (await (child-outcome eng job {:pos [2 64 0] :use {:tools ["wooden_pickaxe"]}} 80)))]
+          (is (= {:kind :condition-failed :reason :no-tool} (assoc (select-keys e [:kind]) :reason (:reason (:cause e)))) (pr-str e))
+          (is (nil? (:why (:cause e))) "no fetch was tried")
+          (is (= "iron_ore" (block-at p at))))))))
+
+(deftest a-missing-tool-of-the-use-list-is-the-one-fetched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-seeing {:self body :blocks {"2,64,0" "stone" "-2,64,3" "chest"}
+                                             :containers {"-2,64,3" [{:name "wooden_pickaxe" :count 1}]}})
+              result (await (child-outcome eng job {:pos [2 64 0] :use {:tools ["wooden_pickaxe"]}} 80))]
+          (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])) (pr-str result))
+          (is (= "air" (block-at p at))))))))
+
 (deftest a-tool-no-fetch-finds-ends-condition-failed-no-tool-with-the-fetch-cause
   (async done
     (tu/run-async done

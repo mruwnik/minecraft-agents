@@ -87,12 +87,17 @@
     (cond->> (map :name (u/inventory (:primitives c))) only (filter (set only)))))
 
 (defn needs
-  "What the body lacks to dig block-name with these args: {:tool item} or nil."
+  "What the body lacks to dig block-name with these args: {:tool item} (the cheapest tool of a call-given :use list
+  that harvests it; :tool nil, :listed false when the list names none) or nil."
   [c block-name]
-  (when (and (:need-drop (:args c))
-             (some? (tools/harvest-need (carried-names c) (some-> (.harvestTools (:primitives c) block-name) js->clj))))
-    {:tool (tools/harvest-need (carried-names c)
-                               (some-> (.harvestTools (:primitives c) block-name) js->clj))}))
+  (when (:need-drop (:args c))
+    (let [harvest (some-> (.harvestTools (:primitives c) block-name) js->clj)
+          only (use-tools c)
+          wanted (cond->> harvest only (filter (set only)))]
+      (when (some? (tools/harvest-need (carried-names c) harvest))
+        (if (and only (empty? wanted))
+          {:tool nil :listed false}
+          {:tool (tools/harvest-need (carried-names c) wanted)})))))
 
 (defn room?
   "Room for what block-name drops (b/drops-of, minecraft-data): nothing dropped, a free slot, or a carried stack of
@@ -143,8 +148,10 @@
     (when-not (or error (:dug (b/mem-for c pos)) (b/to-see? c pos))
       (let [block (b/target-name (:primitives c) pos b/hidden-guess)]
         (when (and block (not (b/air block)) (not (b/fluids block)))
-          (when-let [{:keys [tool]} (needs c block)]
-            {:reason :no-tool :needs tool :block block :hint no-tool-hint}))))))
+          (when-let [{:keys [tool listed]} (needs c block)]
+            (if (false? listed)
+              {:reason :no-tool :block block :hint "the :use list names no tool that harvests it"}
+              {:reason :no-tool :needs tool :block block :hint no-tool-hint})))))))
 
 (defn fetch-limits
   "The limits map of :fetch when it allows a tool, else nil."
@@ -318,9 +325,10 @@
   fetch is off or fails (condition-failed :no-tool, :why the fetch's cause)."
   [c tool-problem]
   (let [limits (fetch-limits c)
-        r (when limits (await (need/tool! c {:block (:block tool-problem)} (select-keys limits [:how :depth :explore]))))]
+        what (if (use-tools c) {:item (:needs tool-problem)} {:block (:block tool-problem)})
+        r (when (and limits (:needs tool-problem)) (await (need/tool! c what (select-keys limits [:how :depth :explore]))))]
     (cond
-      (nil? limits) (ctx/end c :condition-failed tool-problem)
+      (or (nil? limits) (nil? (:needs tool-problem))) (ctx/end c :condition-failed tool-problem)
       (= :continue r) :continue
       (= :done (:kind r)) :fetched
       :else (ctx/end c (:kind r) (assoc tool-problem :why (contract/cause-key r))))))
