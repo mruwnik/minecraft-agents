@@ -271,7 +271,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(await (ctx/act ctx :moveTo #js {...}))` | call an acting primitive |
 | `(await (ctx/call-child ctx slot job args))` | run one round of a child (`:done`, `:continue`, `:declined`) |
 | `(await (jobs.lib.child/call-walk ctx slot go-to-args))` | a go-to child round that, when it yields `:continue` waiting for day in a shelter, holds the round still with `:night-sheltered` (or `:sealed-hostile-near`: shut in by its own retreat plug with a hostile near, no `:escalate`; ends after 3 min in all, counted across the parent's go-to children, or at low food or health; the event `go-to.sealed-hostile-near` names the mob, its band and whether it was seen or heard) so jobs show and body.idle name it; every walking parent uses it instead of `ctx/call-child` on go-to (`child/run!` of go-to does the same and returns `:continue` at once; the night, retreat, sleep, extinguish, breathe and dig-niche walks go at night on purpose and stay on `call-child`) |
-| `(await (ctx/call ctx slot job args))` | one round of a child: `:continue` or its ending (Contract jobs) |
+| `(await (ctx/call ctx slot job args))` | one round of a child: `:continue` or its ending (Contract jobs); a call of the same job on the same target args (`:target`) as a frame on its chain ends `:condition-failed` `{:reason :duplicate-call :of frame-id}`, with no round and no `:job-report` entry |
 | `(ctx/end ctx kind cause data?)` | a contract job's ending, returned by its round |
 | `(ctx/way? ctx k)`, `(ctx/use ctx purpose)` | whether the call allows way `k`; the list the call gives for `purpose` |
 | `(ctx/check-child ctx slot job args)` | the child's check, for a parent's check |

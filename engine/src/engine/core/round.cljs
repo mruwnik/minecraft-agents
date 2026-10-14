@@ -254,9 +254,14 @@
                 :round (:round base) :reflex (:reflex base)}]
     (when-not (owner? eng (:token base)) (throw (cut-error)))
     (limits/refuse! eng base)
+    (if-let [dup (ending/duplicate-ending eng base def args)]
+      (do (emit! eng (assoc fields :kind :duplicate_call :ending dup))
+          (reset! child-ending dup)
+          (assoc dup :report {}))
+    (do
     (emit! eng (assoc fields :kind :child_started))
     (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
-      (mem/update-job! store (:root base) slots assoc :args args :children {}))
+      (mem/update-job! store (:root base) slots (fn [m] (let [ident (ending/frame-identity def args)] (cond-> (assoc m :args args :children {}) ident (assoc :contract ident))))))
     (let [t0 (now eng)
           c (child-ctx eng base slot args)
           own-limit #(limits/ending eng (:root base) slots %)
@@ -284,7 +289,7 @@
           (mem/update-job! store (:root base) (:slots base) update :children dissoc slot)
           (when-not done? (reset! child-ending e))
           (limits/check! eng base)
-          e)))))
+          e)))))))
 
 (defn ^:async run-round [eng run inst]
   (let [[def args] (job-of eng inst)
@@ -296,6 +301,8 @@
                          :child-wait child-wait :t0s [t0]})
         own-limit #(limits/ending eng (:id run) [] %)]
     (try
+      (when-let [ident (let [{:keys [op job]} (:spec inst)] (when (and (= :leaf op) (ending/contract-job? def)) (ending/frame-identity (assoc def :sym job) args)))]
+        (mem/update-job! (:store eng) (:id run) [] update :contract merge ident))
       (limits/check! eng c)
       (let [r (or (own-limit nil) (await ((:round def) c)))]
         (assoc (normalize-result (if (or (= :done r) (= :done (:kind r))) r (or (own-limit nil) r)))

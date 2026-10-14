@@ -36,6 +36,27 @@
         (contract/clamp call (:call caller) (contract/remainder caller (- t (nth (:t0s c) (dec (count (:slots c))) t)))))
       [call []])))
 
+;; ctx/quote (part e) refuses a duplicate the same way: duplicate-ending, before it spends anything.
+(defn frame-identity
+  "{:job sym :target args} a frame of def with args is known by: the job and the args its :target names. nil for a
+  def with no symbol."
+  [def args]
+  (when (:sym def) {:job (:sym def) :target (select-keys args (:target def))}))
+
+(defn duplicate-ending
+  "The condition-failed ending of a call of def with args from base, when a frame on base's chain (base itself
+  down to the root) has the same job and target, else nil. Booked nowhere: it is no failure of the way."
+  [eng base def args]
+  (when-let [ident (frame-identity def args)]
+    (let [view (mem/view (:store eng))
+          m (mem/job-mem view (:root base) [])]
+      (some (fn [i]
+              (let [s (subvec (:slots base) 0 i)]
+                (when (= ident (select-keys (:contract (get-in m (mem/slot-path s))) [:job :target]))
+                  (contract/ending :condition-failed
+                                   {:reason :duplicate-call :of (mem/path->id (:root base) s)} nil))))
+            (range (count (:slots base)) -1 -1)))))
+
 (defn freeze!
   "Write the call keys of c's call (call-of) and def's symbol to its frame's :contract; the call has started. A clamped
   call is told with job.budget_clamped."
