@@ -46,7 +46,7 @@
   against at any of them (a void pocket): :no-support-floor with :cell, :tried and :why. A stair down that stops so shuts the cut cell over the missing floor with a carried block (:sealed [cell]), else the stop names it (:open-to [cell]). A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
   (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
 
-  Needs a pickaxe for the blocks it cuts and room for the drops. A call starts only when the first step is not refused by a zone, claim or plan, the args give a length (:steps or :y), the next dig lacks nothing this call cannot get, and, when it was submitted with a :from, the body is still near it (conditions :refused, :bad-args, :no-tool, :no-free-slot, :moved-since-submit; start only). Quote: steps x cells of the step x the time of a cell, ending at the last step.
+  Needs a pickaxe for the blocks it cuts and room for the drops. A call starts only when the first step is not refused by a zone, claim or plan, the args give a length (:steps or :y), the next dig lacks nothing this call cannot get, and, when it was submitted with a :from, the body is still near it (conditions :refused, :no-tool, :no-free-slot, :moved-since-submit; start only). Quote: steps x cells of the step x the time of a cell, ending at the last step.
   - A pack without room is made room in (jobs.storage.make-room child, once per pack content; :make-room), else it ends :no-free-slot.
   - A missing pickaxe is got with jobs.items.get-tool (:fetch, jobs.lib.need), then the body walks back to the cell it stood on and goes on; a fetch that fails, or that changes nothing, is remembered for its :fail-minutes (memory :stair-tool-failed) and the block is dug bare-handed. With :fetch off it ends :no-tool.
 
@@ -95,7 +95,7 @@
 
   Ends :done, or with a cause {:reason r ...detail}: :condition-failed for the facts that bar the next cell (the access
   refusals, :fluid-in-cut :crop :base-block :undercuts-way :unbreakable :no-tool :inventory-full :hazard :lava-exposed :plugged :floor-unseen
-  :no-floor :cave-below :off-stair :no-way-back :bad-args :tool-spent), :nothing-possible for the attempts that
+  :no-floor :cave-below :off-stair :no-way-back :tool-spent), :impossible for :bad-args, :nothing-possible for the attempts that
   failed (:refills :dig-failed :step-failed :no-support-floor :lava-unsealed :water-unplugged). Data {:steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell
   :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
 
@@ -236,7 +236,7 @@
   [[:fn (at-start away)]
    [:fn (at-start (fn [c]
                     (let [t (geo/target-steps (:args c) (reach/standing-vec (:primitives c)))]
-                      (when (map? t) {:reason :bad-args :why (:error t)}))))]
+                      (when (map? t) (contract/impossible {:reason :bad-args :why (:error t)})))))]
    [:fn (at-start (fn [c] (when-let [stop (refusal c)] (assoc (access/refusal-fields [stop]) :reason :refused))))]
    [:fn (at-start unmet)]])
 
@@ -259,7 +259,7 @@
 
 (def facts
   "The stops that name a fact barring the next cell (condition-failed); the others are attempts that failed."
-  #{:bad-args :refused :zone :claim :footprint :no-zones :not-loaded :fluid-in-cut :crop :base-block :undercuts-way :unbreakable
+  #{:refused :zone :claim :footprint :no-zones :not-loaded :fluid-in-cut :crop :base-block :undercuts-way :unbreakable
     :no-tool :tool-spent :no-free-slot :inventory-full :hazard :lava-exposed :plugged :floor-unseen :no-floor :cave-below :off-stair :no-way-back})
 
 (defn finish!
@@ -280,7 +280,7 @@
                             :text (str "stair stopped after " steps " steps: " (name reason)
                                        (some->> (:cell detail) pr-str (str " at "))
                                        (some->> (:why detail) (str ": ")))))
-          (ctx/end c (if (facts reason) :condition-failed :nothing-possible) (assoc detail :reason reason) data)))))
+          (ctx/end c (cond (= :bad-args reason) :impossible (facts reason) :condition-failed :else :nothing-possible) (assoc detail :reason reason) data)))))
 
 (defn ^:async make-room!
   "Run make-room as child :room (no walk away: the stair is one tunnel wide). :continue while it waits, else :again; a

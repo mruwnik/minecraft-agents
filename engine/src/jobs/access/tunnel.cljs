@@ -202,7 +202,7 @@
                  (assoc result :status :stopped :text (str "tunnel stopped: " (name reason) (some->> (:cell detail) pr-str (str " at "))))))
     (cond
       reached? (ctx/end c :done nil result)
-      :else (ctx/end c (if (facts reason) :condition-failed :nothing-possible) cause result))))
+      :else (ctx/end c (cond (= :bad-args reason) :impossible (facts reason) :condition-failed :else :nothing-possible) cause result))))
 
 (defn ending-result
   "The old child result of ending e: its data with a :status and a :reason."

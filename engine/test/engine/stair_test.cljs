@@ -825,7 +825,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (stair! {:blocks ground :call ctx/call} {:dir :down} (fn [_])))]
-          (is (= [:condition-failed :bad-args] [(:kind @out) (contract/cause-key @out)]))
+          (is (= [:impossible :bad-args] [(:kind @out) (contract/cause-key @out)]))
           (is (string? (:why (:cause @out)))))))))
 
 (defn ^:async dig-reached!
@@ -1216,7 +1216,7 @@
           (is (= [:condition-failed :crop] (await (run {:blocks (assoc ground "1,64,0" "wheat")} east (fn [_])))))
           (is (= [:condition-failed :base-block] (await (run {:blocks (assoc ground "1,65,0" "chest")} east (fn [_])))))
           (is (= [:condition-failed :no-zones] (await (run {:blocks ground :zones nil} east (fn [_])))))
-          (is (= [:condition-failed :bad-args] (await (run {:blocks ground} {:dir :down} (fn [_])))))
+          (is (= [:impossible :bad-args] (await (run {:blocks ground} {:dir :down} (fn [_])))))
           (is (= [:condition-failed :no-tool] (await (run {:blocks ground :inventory []} (assoc east :fetch false) (fn [_])))))
           (is (= [:condition-failed :no-free-slot]
                  (await (run {:blocks ground :inventory (into pick (repeat 35 {:name "dirt" :count 64}))} (assoc east :make-room false) (fn [_])))))
