@@ -2,6 +2,7 @@
   "The wall ore of a :stay-level jobs.gather.mine run: a side cut by a child mine run, and the holes dug in the wall
   shut again."
   (:require [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.gather.mine-stay :as stay]
             [jobs.gather.mine.targets :refer [rules-in skip! step-cell]]
@@ -18,7 +19,7 @@
   (ctx/update-mem! c assoc :side-cut cut)
   (let [here (cell-of (u/self-pos c))
         args (-> (:args c)
-                 (dissoc :direction)
+                 (dissoc :direction :from)
                  (assoc :heading heading :tunnel-length steps :count 1 :ore-reach 0 :mend false :fetch false :shaft false :stay-level true))
         r (await (ctx/call c :side 'jobs.gather.mine args))]
     (if (= :continue r)
@@ -28,10 +29,13 @@
             mouth (-> here (update :x + dx) (update :z + dz))
             name-at #(u/seen-name (:primitives c) %)
             open (filterv #(not (rules/solid-floor? name-at %)) [mouth (update mouth :y inc)])
+            took (= :done (:kind r))
             shut (or (empty? open) (await (stay/seal! c (rules-in c) open)))]
-        (ctx/emit! c :mine.side :info {:pos (access/cell pos) :heading heading :steps steps :shut shut
-                                       :text (str "mine took the wall ore at " (str/join "," (access/cell pos)) " by a side cut " steps " " heading
-                                                  (when-not shut "; the cut stays open"))})
+        (ctx/emit! c :mine.side (if took :info :warn)
+                   {:pos (access/cell pos) :heading heading :steps steps :shut shut
+                    :text (str (if took "mine took" "mine did not take") " the wall ore at " (str/join "," (access/cell pos)) " by a side cut " steps " " heading
+                               (when-not took (str ": " (name (or (contract/cause-key r) :unknown))))
+                               (when-not shut "; the cut stays open"))})
         (skip! c pos)
         :again))))
 
