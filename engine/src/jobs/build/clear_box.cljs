@@ -231,6 +231,7 @@
           :dug (ctx/update-mem! c #(-> % (update :tries dissoc t) (update :dug (fnil inc 0))))
           :already-clear (ctx/update-mem! c update :tries dissoc t)
           (:cannot :fluid) (skip! c t :cannot)
+          :unreachable (skip! c t :unreachable)
           (bump! c t :refused))
         :again))))
 

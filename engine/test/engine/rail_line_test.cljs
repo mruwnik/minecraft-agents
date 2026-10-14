@@ -457,17 +457,19 @@
           (is (empty? (h/calls p "dig")) "the dig was never made")
           (is (= [{:pos [10 64 0] :why :shape}] (:breaks (first (h/events-of seen :rail-build.broken))))))))))
 
-(deftest an-unreachable-dig-child-gives-the-cell-up-as-shape
+(deftest an-unreachable-dig-child-is-passed-up-and-the-build-parks
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
-              [result _ p] (await (with-dig-attempt!
-                                   (fn [c _] (dig/unreachable! c :test))
-                                   #(build-route! l-route {} world {:all-carried false})))]
+              [result seen p] (await (with-dig-attempt!
+                                    (fn [c _] (dig/unreachable! c :test))
+                                    #(build-route! l-route {} world {:all-carried false})))]
           (is (not (true? (:ok? result))))
-          (is (= {[10 64 0] :shape} (get-in result [:built :given-up])) (pr-str result))
-          (is (empty? (h/calls p "dig"))))))))
+          (is (nil? (get-in result [:built :given-up [10 64 0]])) (pr-str result))
+          (is (= :not-done result) "the build parks")
+          (is (empty? (h/calls p "dig")))
+          (is (empty? (h/events-of seen :rail-build.broken))))))))
 
 (deftest a-rail-that-cannot-come-out-right-is-given-up-as-shape-after-the-fixes-are-spent
   (async done

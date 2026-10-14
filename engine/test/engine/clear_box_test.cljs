@@ -81,7 +81,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"9,55,1" "dirt"}})
               args {:from {:x 9 :y 55 :z 1} :to {:x 9 :y 55 :z 1}}]
-          (is (= {:dug 0 :skipped {{:x 9 :y 55 :z 1} :refused} :kept 0 :fluids {}} (await (child-outcome eng job args 20))))
+          (is (= {:dug 0 :skipped {{:x 9 :y 55 :z 1} :unreachable} :kept 0 :fluids {}} (await (child-outcome eng job args 20))))
           (is (empty? (calls p "dig"))))))))
 
 (deftest clear-box-equips-the-cheapest-matching-tool-once
