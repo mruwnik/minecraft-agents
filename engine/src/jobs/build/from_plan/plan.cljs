@@ -399,6 +399,21 @@
 
 ;; ------------------------------------------------------------------ check
 
+(def fetch-job 'jobs.build.from-plan)
+
+(defn fetch-key
+  "What a failed fetch is booked under: the item, or [:tool block]."
+  [w]
+  (if (= :no-tool (:reason w)) [:tool (:block w)] (:item w)))
+
+(defn due
+  "w (a :need or :no-tool wait) when the :fetch arg allows its kind and no fetch for it failed in this call, else nil."
+  [c w]
+  (let [o (fetch/opts c fetch-job)]
+    (when (and w o (contains? (:what o) (if (= :no-tool (:reason w)) :tool :item))
+               (not (contains? (:fetch-failed (ctx/mem c)) (fetch-key w))))
+      w)))
+
 (defn tool-of
   "The :no-tool wait for the first open dig whose block cannot be harvested with what is carried, else nil."
   [c cells]
@@ -410,18 +425,15 @@
           (digging cells))))
 
 (defn need-of
-  "The wait of the open cells: the first of the :need waits (items not carried enough) and the :no-tool wait (a
-  pickaxe block to dig without a tool) that a fetch is due for, else the first :need, else the :no-tool, else nil."
+  "The first :need wait (items not carried enough) or :no-tool wait (a pickaxe block to dig without a tool) that a
+  fetch is due for, else nil."
   [c cells]
   (let [mem (ctx/mem c)
         closed (merge (:given-up mem) (:refused mem))
         open (remove #(contains? closed (:pos %)) (into (missing cells) (short-wrong cells)))
-        waits (map (fn [[item n]] {:reason :need :item item :count n}) (shortage open (storage/carried-totals (u/inventory (:primitives c)))))]
-    (let [tool (tool-of c cells)
-          all (cond-> (vec waits) tool (conj tool))]
-      (or (first (filter #(fetch/due c 'jobs.build.from-plan %) all))
-          (first waits)
-          tool))))
+        waits (map (fn [[item n]] {:reason :need :item item :count n}) (shortage open (storage/carried-totals (u/inventory (:primitives c)))))
+        tool (tool-of c cells)]
+    (some #(due c %) (cond-> (vec waits) tool (conj tool)))))
 
 (defn placeable-now?
   "Whether a cell can be placed from what is carried: the fetch for the rest waits until these are in."
@@ -430,8 +442,8 @@
     (boolean (seq (buildable (:cells (planned c)) (storage/carried-totals (u/inventory (:primitives c))) (merge (:given-up mem) (:refused mem)))))))
 
 (defn problem
-  "need-of for the plan as it stands now, nil when the plan is in trouble. While a cell can be placed from what is
-  carried, only a tool is fetched: the items for the rest wait until those are in."
+  "The fetch due for the plan as it stands now, nil when none or the plan is in trouble. While a cell can be placed from
+  what is carried, only a tool is fetched: the items for the rest wait until those are in."
   [c]
   (let [{:keys [cells trouble]} (planned c)]
-    (when-not trouble (if (placeable-now? c) (tool-of c cells) (need-of c cells)))))
+    (when-not trouble (if (placeable-now? c) (due c (tool-of c cells)) (need-of c cells)))))

@@ -2,27 +2,34 @@
   "jobs.build.clear-box and jobs.build.path as contract jobs: they export the contract and end with a kind and a cause
   (0 of N is never done; a partial run carries its counts)."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.build-from-plan-test :as bfp]
+            [engine.harvest-test :as h]
             [engine.clear-box-test :as cbt]
             [engine.contract :as contract]
             [engine.farm-contract-test :as fct :refer [ending-of kc]]
             [engine.path-test :as pt]
+            [engine.core :as core]
             [engine.registry :as registry]
             [engine.test-util :as tu]
+            [jobs.build.from-plan.plan :as plan]
             [jobs.lib.world-files :as ew]))
 
 (defn bad-args [e] [(:kind e) (get-in e [:cause :reason])])
 
-(def jobs '[jobs.build.clear-box jobs.build.path])
+(def from-plan 'jobs.build.from-plan)
+
+(def jobs '[jobs.build.clear-box jobs.build.path jobs.build.from-plan])
 
 (deftest every-build-job-exports-the-contract-and-quotes-validly
   (let [p (tu/fake {:inventory pt/shovel})
-        args {'jobs.build.clear-box cbt/box 'jobs.build.path pt/box}]
+        args {'jobs.build.clear-box cbt/box 'jobs.build.path pt/box 'jobs.build.from-plan {:plan "pen"}}]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
       (is (vector? (:conditions job)) (str sym " has conditions"))
       (is (nil? (:check job)) (str sym " has no old check"))
       (is (vector? (:target job)) (str sym " has a target"))
-      (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args (get args sym)}))) (str sym)))))
+      (when (not= sym from-plan) ; its quote reads the judged plan: the ending tests run it
+        (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args (get args sym)}))) (str sym))))))
 
 ;; ------------------------------------------------------------------ clear-box
 
@@ -105,3 +112,52 @@
               e (await (ending-of env path (assoc pt/box :use {:tools ["diamond_shovel"]}) 30))]
           (is (= :done (:kind e)))
           (is (= #{"diamond_shovel"} (set (map #(.-item (.-args %)) (pt/calls (:p env) "useOn"))))))))))
+
+;; ------------------------------------------------------------------ from-plan
+
+(defn plan-ending
+  "The ending of from-plan with args over the fake world spec and plans (zones default none), at most 300 ticks."
+  ([spec plans args] (plan-ending spec plans args []))
+  ([spec plans args zones] (ending-of (bfp/start spec plans zones) from-plan args 300)))
+
+(deftest from-plan-endings
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen"}))]
+          (is (= :done (:kind e)))
+          (is (= 9 (get-in e [:data :placed]))))
+        (let [e (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen" :least 1}))]
+          (is (= :done (:kind e))))
+        (let [e (await (plan-ending {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1} {:name "torch" :count 1}]}
+                                    {"pen" (bfp/pen-plan)} {:plan "pen" :fetch false}))]
+          (is (= :condition-failed (:kind e)) "all wanted, some placed, material short: not done")
+          (is (= {"oak_fence" 3} (get-in e [:cause :needs])))
+          (is (= 3 (count (get-in e [:data :missing]))))
+          (is (= 6 (get-in e [:data :placed]))))
+        (let [e (await (plan-ending {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1} {:name "torch" :count 1}]}
+                                    {"pen" (bfp/pen-plan)} {:plan "pen" :fetch false :least 2}))]
+          (is (= :done (:kind e)) "a partial run meets its :least"))))))
+
+(deftest from-plan-with-nothing-placed-is-never-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
+              e (await (plan-ending {:inventory bfp/kit :unreachable (map #(apply h/cell-key %) (plan/stand-cells [40 64 0] 64 nil #{}))}
+                                    {"far" plan} {:plan "far"}))]
+          (is (= {:kind :nothing-possible :cause :incomplete} (kc e)))
+          (is (= 0 (get-in e [:data :placed]))))))))
+
+(deftest from-plan-start-facts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [:impossible :plan-trouble] (bad-args (await (plan-ending {:inventory bfp/kit} {} {:plan "nope"})))))
+        (is (= [:impossible :plan-trouble] (bad-args (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen" :part "nope"})))))
+        (is (= {:kind :condition-failed :cause {:reason :no-zones}}
+               (kc (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen"} nil)))))
+        (let [e (await (plan-ending {:inventory []} {"pen" (bfp/pen-plan)} {:plan "pen" :fetch false}))]
+          (is (= :condition-failed (:kind e)))
+          (is (= {:reason :no-items :needs {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1}}
+                 (select-keys (:cause e) [:reason :needs]))))))))

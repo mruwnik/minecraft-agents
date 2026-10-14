@@ -217,16 +217,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [orig ctx/call-child
+        (let [orig ctx/call
               asked (atom [])
               {:keys [eng p]} (b/start (spec [{:name "oak_fence_gate" :count 1}]) {"pen" (ring-plan)} [])]
           (tu/seeing-all p)
-          (set! ctx/call-child (fn [c slot j args]
-                                 (when (= 'jobs.items.obtain j) (swap! asked conj args))
-                                 (orig c slot j args)))
+          (set! ctx/call (fn [c slot j args]
+                           (when (= 'jobs.items.obtain j) (swap! asked conj args))
+                           (orig c slot j args)))
           (try
             (await (tu/child-outcome eng job {:plan "pen"} 300))
-            (finally (set! ctx/call-child orig)))
+            (finally (set! ctx/call orig)))
           (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %))) @asked) (pr-str @asked)))))))
 
 (deftest an-unseen-gate-is-walked-to-not-waited-for-as-an-item

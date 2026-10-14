@@ -3,7 +3,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.spent :as spent]
             [plan.shape :as shape]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
             [jobs.build.from-plan.plan :refer [owed kept-ground shortage left-text shortage-text]]))
@@ -77,11 +76,8 @@
     (str "build of " plan " stopped: placed " placed ", still missing " (count missing) (when (seq left) (str " (" left ")")))))
 
 (defn assoc-fetch-failed
-  "result with :fetch-failed {item {:failed :why}} for each short item whose fetch failed and is still booked."
+  "result with :fetch-failed {item {:failed :why}} for each short item whose fetch failed in this call."
   [c result]
-  (let [fails (into (sorted-map)
-                    (keep (fn [item]
-                            (when-let [f (fetch/failure c [:item [item]])]
-                              [item (select-keys f [:failed :why])])))
-                    (keys (:short result)))]
+  (let [booked (:fetch-failed (ctx/mem c))
+        fails (into (sorted-map) (keep (fn [item] (when-let [f (get booked item)] [item f]))) (keys (:short result)))]
     (cond-> result (seq fails) (assoc :fetch-failed fails))))

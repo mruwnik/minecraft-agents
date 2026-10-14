@@ -19,6 +19,12 @@
 
 (def job 'jobs.build.from-plan)
 
+(defn ^:async child-outcome
+  "tu/child-outcome without the status the adapter adds (the contract test reads the ending)."
+  [eng job args n]
+  (let [r (await (tu/child-outcome eng job args n))]
+    (if (map? r) (cond-> r (= :done (:status r)) (dissoc :status)) r)))
+
 (deftest left-text-names-what-a-build-left
   (are [built text] (= text (plan/left-text built))
     {} ""
@@ -63,7 +69,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start {:inventory kit} {"pen" (pen-plan)})
-              result (await (tu/child-outcome eng job {:plan "pen"} 200))
+              result (await (child-outcome eng job {:plan "pen"} 200))
               order (mapv first (places p))]
           (is (every? #(= "oak_fence" (block p %)) ring))
           (is (= "oak_fence_gate" (block p [3 64 2])))
@@ -90,7 +96,7 @@
                      (fn ^:async f [token args impl]
                        (when (= "observer" (.-item args)) (reset! body-z (.-z (.-pos (.self p)))))
                        (await (impl token args))))
-          (await (tu/child-outcome eng job {:plan "pen"} 200))
+          (await (child-outcome eng job {:plan "pen"} 200))
           (is (> @body-z 2.5)))))))
 
 (defn state-at [p pos] (js->clj (.-properties (.blockAt p (clj->js (zipmap [:x :y :z] pos)))) :keywordize-keys true))
@@ -102,7 +108,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan)})
-              result (await (tu/child-outcome eng job {:plan "pen"} 200))]
+              result (await (child-outcome eng job {:plan "pen"} 200))]
           (is (= "north" (:facing (state-at p [3 64 2]))))
           (is (= [0] (mapv :yaw (clicks p "oak_fence_gate"))))
           (is (= [] (:wrong result))))))))
@@ -114,7 +120,7 @@
         (let [{:keys [eng p seen]} (start {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1}
                                                        {:name "torch" :count 1}]}
                                           {"pen" (pen-plan)})
-              result (await (tu/child-outcome eng job {:plan "pen"} 200))]
+              result (await (child-outcome eng job {:plan "pen"} 200))]
           (is (= 4 (count (filter #(= "oak_fence" (block p %)) ring))))
           (is (= {"oak_fence" 3} (:short result)))
           (is (= 3 (count (filter (set ring) (:missing result)))))
@@ -127,7 +133,7 @@
         (let [built (into {"3,64,2" "oak_fence_gate" "2,65,2" "torch"}
                           (map (fn [[x y z]] [(h/cell-key x y z) "oak_fence"]) (remove #{[4 64 3]} ring)))
               {:keys [eng p]} (start {:blocks built :inventory kit} {"pen" (pen-plan)})
-              result (await (tu/child-outcome eng job {:plan "pen"} 200))]
+              result (await (child-outcome eng job {:plan "pen"} 200))]
           (is (= [[[4 64 3] "oak_fence"]] (places p)))
           (is (= 1 (:placed result))))))))
 
@@ -141,7 +147,7 @@
                        (if (= [4 3] [(.-x (.-pos args)) (.-z (.-pos args))])
                          #js {:status "no-support"}
                          (await (impl token args)))))
-          (let [result (await (tu/child-outcome eng job {:plan "pen"} 200))]
+          (let [result (await (child-outcome eng job {:plan "pen"} 200))]
             (is (= 3 (count (filter #(= [4 64 3] (first %)) (places p)))))
             (is (= {[4 64 3] :no-support} (:given-up result)))
             (is (= 8 (:placed result)))
@@ -153,7 +159,7 @@
       (fn ^:async t []
         (let [plan {:id "far" :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
               {:keys [eng]} (start {:inventory kit :unreachable (map #(apply h/cell-key %) (plan/stand-cells [40 64 0] 64 nil #{}))} {"far" plan})
-              result (await (tu/child-outcome eng job {:plan "far"} 200))]
+              result (await (child-outcome eng job {:plan "far"} 200))]
           (is (= {[40 64 0] :unreachable} (:given-up result)))
           (is (= 0 (:placed result))))))))
 
@@ -163,7 +169,7 @@
       (fn ^:async t []
         (let [plan {:id "far" :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
               {:keys [eng p]} (start {:inventory kit :unloaded ["40,64,0"]} {"far" plan})
-              result (await (tu/child-outcome eng job {:plan "far"} 200))]
+              result (await (child-outcome eng job {:plan "far"} 200))]
           (is (seq (tu/walk-calls p)))
           (is (= {[40 64 0] :unloaded} (:given-up result)))
           (is (= [[40 64 0]] (:missing result))))))))
@@ -178,7 +184,7 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
                                 :world (world/of-data {"near" plan} {} [])})
-              result (await (tu/child-outcome eng job {:plan "near"} 200))]
+              result (await (child-outcome eng job {:plan "near"} 200))]
           (is (seq (h/calls p "look")))
           (is (= {} (:given-up result)))
           (is (= 1 (:placed result))))))))
@@ -209,17 +215,17 @@
         (doseq [[plans args reason] [[{} {:plan "nope"} "no such plan"]
                                      [{"pen" (pen-plan)} {:plan "pen" :part "nope"} "no cells to build"]]]
           (let [{:keys [eng seen]} (start {:inventory kit} plans)
-                result (await (tu/child-outcome eng job args 200))]
+                result (await (child-outcome eng job args 200))]
             (is (= :stopped (:status result)) reason)
             (is (= :plan-trouble (:reason result)) reason)
-            (is (re-find (re-pattern reason) (:text result)) reason)))))))
+            (is (re-find (re-pattern reason) (get-in result [:ending :cause :why])) reason)))))))
 
 (deftest the-check-without-items-waits-naming-the-shortage
   (let [{:keys [eng seen]} (start {:inventory []} {"pen" (pen-plan)})]
     (core/submit! eng (list job {:plan "pen" :fetch false}) {})
     (dotimes [_ 4] (swap! h/clock + 700) (core/tick! eng))
     (is (= [[:no-items "pen" {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1}]]
-           (distinct (map (juxt :reason :plan :needs) (h/events-of seen :waiting)))))))
+           (distinct (map (juxt :reason (comp :plan :cause) (comp :needs :cause)) (h/events-of seen :waiting)))))))
 
 (deftest the-check-judges-the-plan-once-per-window
   (let [n (atom 0)
@@ -275,7 +281,7 @@
       (fn ^:async t []
         (let [shrine (zone "shrine" [4 64 2] [4 64 4] #{})
               {:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan) "other" other-plan} [shrine])
-              result (await (tu/child-outcome eng job {:plan "pen"} 200))]
+              result (await (child-outcome eng job {:plan "pen"} 200))]
           (is (= [{:pos [4 64 3] :reason :footprint :plan "other"}] (:refused result)))
           (is (= "air" (block p [4 64 3])))
           (is (= "oak_fence" (block p [4 64 2])) "the pen's own cell in the shrine is built")
@@ -286,7 +292,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)} [(zone "yard" [2 64 2] [4 65 4] #{:place})])
-              result (await (tu/child-outcome eng job {:plan "pen"} 200))]
+              result (await (child-outcome eng job {:plan "pen"} 200))]
           (is (= 9 (:placed result)))
           (is (= [] (:refused result))))))))
 
@@ -295,7 +301,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan) "other" other-plan})
-              result (await (tu/child-outcome eng job {:plan "pen"} 200))]
+              result (await (child-outcome eng job {:plan "pen"} 200))]
           (is (= [{:pos [4 64 3] :reason :footprint :plan "other"}] (:refused result)))
           (is (= "air" (block p [4 64 3])))
           (is (= 8 (:placed result))))))))
@@ -316,7 +322,7 @@
                        (let [r (await (impl token args))]
                          (world/set-data! w {"pen" (pen-plan) "other" late-plan} {})
                          r)))
-          (let [result (await (tu/child-outcome eng job {:plan "pen"} 200))]
+          (let [result (await (child-outcome eng job {:plan "pen"} 200))]
             (is (= 1 (count (places p))) "the first place goes through and the other plan closes the rest")
             (is (= 1 (:placed result)))
             (is (= 8 (count (:refused result))))
@@ -326,7 +332,7 @@
   "Build the pen with the fluid at 5 64 3 (beside the ring cell 4 64 3) and args: [placed, refused]."
   [fluid args]
   (let [{:keys [eng]} (start {:inventory kit :blocks {"5,64,3" fluid}} {"pen" (pen-plan)})
-        result (await (tu/child-outcome eng job (assoc args :plan "pen") 200))]
+        result (await (child-outcome eng job (assoc args :plan "pen") 200))]
     [(:placed result) (:refused result)]))
 
 (deftest water-beside-is-accepted-by-default-and-lava-beside-is-not
@@ -349,7 +355,7 @@
   "Build plan parts {:id .. :cells .. :want ..} over the blocks with the inventory: [result p seen]."
   [parts blocks inventory]
   (let [{:keys [eng p seen]} (start {:blocks blocks :inventory inventory} {"house" {:id "house" :parts parts}})
-        result (await (tu/child-outcome eng job {:plan "house"} 200))]
+        result (await (child-outcome eng job {:plan "house"} 200))]
     [result p seen]))
 
 (def ground (into {} (for [x (range 0 6) z (range 0 6)] [(h/cell-key x 63 z) "stone"])))
@@ -390,7 +396,7 @@
   [time]
   (let [{:keys [eng p]} (start {:blocks ground :time time :inventory [{:name "white_bed" :count 1}]}
                                {"house" {:id "house" :parts bed-parts}})]
-    (await (tu/child-outcome eng job {:plan "house"} 200))
+    (await (child-outcome eng job {:plan "house"} 200))
     [(mapv (fn [c] (let [a (.-args c)] [(.-x (.-pos a)) (.-y (.-pos a)) (.-z (.-pos a))])) (h/calls p "useOn"))
      (mapv :data (mem/entries (mem/view (:store eng)) :spawn-bed))]))
 
@@ -436,7 +442,7 @@
                      (fn ^:async f [token args impl]
                        (set! (.-yaw (.-click args)) 0)
                        (await (impl token args))))
-          (let [result (await (tu/child-outcome eng job {:plan "house"} 200))]
+          (let [result (await (child-outcome eng job {:plan "house"} 200))]
             (is (= 1 (count (places p))))
             (is (empty? (h/calls p "dig")))
             (is (= [{:pos [3 64 3] :found "oak_stairs[facing=north]" :want "oak_stairs[facing=east]" :placed true}] (:wrong result)))
@@ -447,7 +453,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)} nil)
-              result (await (tu/child-outcome eng job {:plan "pen" :ignore-zones? true} 200))]
+              result (await (child-outcome eng job {:plan "pen" :ignore-zones? true} 200))]
           (is (= 9 (:placed result))))))))
 
 ;; ---------------------------------------------------------------- wrong blocks in wanted cells
@@ -456,7 +462,7 @@
   "Build the pen with the blocks laid and the extra plans, items and args: [result p seen]."
   [blocks inventory plans args]
   (let [{:keys [eng p seen]} (start {:blocks blocks :inventory inventory} (merge {"pen" (pen-plan)} plans))
-        result (await (tu/child-outcome eng job (merge {:plan "pen"} args) 300))]
+        result (await (child-outcome eng job (merge {:plan "pen"} args) 300))]
     [result p seen]))
 
 (deftest a-replaceable-block-in-a-wanted-cell-is-placed-into-directly
@@ -586,7 +592,7 @@
               {:keys [eng seen]} (start {:blocks (into {} (map (fn [[x y z]] [(h/cell-key x y z) "dirt"])) cells)
                                          :inventory [{:name "oak_planks" :count 64}]}
                                         (merge wall guard))
-              result (await (tu/child-outcome eng job {:plan "wall"} 300))
+              result (await (child-outcome eng job {:plan "wall"} 300))
               wrong (first (h/events-of seen :build.wrong))]
           (is (= 30 (count (:wrong result))))
           (is (= 30 (count (:cells wrong))))
@@ -605,7 +611,7 @@
               {:keys [eng p]} (start {:blocks wide-ground :inventory [{:name "dirt" :count 64}]
                                       :self {:pos {:x 2.5 :y 64 :z 2.5}}}
                                      {"box" plan} [])]
-          (await (tu/child-outcome eng job {:plan "box"} 400))
+          (await (child-outcome eng job {:plan "box"} 400))
           (let [pos (.-pos (.self p))]
             (is (not (reach/enclosed? p)))
             (is (not (and (<= 1 (js/Math.floor (.-x pos)) 4) (<= 1 (js/Math.floor (.-z pos)) 4))))))))))
@@ -655,7 +661,7 @@
                                       :self {:pos {:x 7.3 :y 64 :z 3.5}}}
                                      {"arm" plan} [])]
           (no-support-world! p)
-          (let [result (await (tu/child-outcome eng job {:plan "arm"} 400))]
+          (let [result (await (child-outcome eng job {:plan "arm"} 400))]
             (is (= [] (:missing result)))
             (is (= {} (:given-up result)))
             (is (= 2 (:placed result)))
@@ -670,7 +676,7 @@
                                            :self {:pos {:x 3.5 :y 64 :z 6.5}}}
                                           {"float" plan} [])]
           (no-support-world! p)
-          (let [result (await (tu/child-outcome eng job {:plan "float"} 200))]
+          (let [result (await (child-outcome eng job {:plan "float"} 200))]
             (is (empty? (places p)))
             (is (= {[3 66 3] :no-support} (:given-up result)))
             (is (= :stopped (:status result)))
@@ -686,9 +692,9 @@
         (let [{:keys [eng]} (start {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1}
                                                 {:name "torch" :count 1}]}
                                    {"pen" (pen-plan)})
-              short (await (tu/child-outcome eng job {:plan "pen"} 200))
+              short (await (child-outcome eng job {:plan "pen"} 200))
               {eng2 :eng} (start {:inventory kit} {"pen" (pen-plan)})
-              full (await (tu/child-outcome eng2 job {:plan "pen"} 200))]
+              full (await (child-outcome eng2 job {:plan "pen"} 200))]
           (is (= :stopped (:status short)))
           (is (re-find #"still missing 3" (:text short)))
           (is (re-find #"short of oak_fence 3" (:text short)))
@@ -718,7 +724,7 @@
               {:keys [eng]} (start {:blocks ground :inventory [{:name "dirt" :count 64}]
                                     :self {:pos {:x 11.5 :y 65 :z 11.5}}}
                                    {"box" plan} [])
-              result (await (tu/child-outcome eng job {:plan "box"} 600))]
+              result (await (child-outcome eng job {:plan "box"} 600))]
           (is (= [] (:missing result)))
           (is (= {} (:given-up result)))
           (is (= 40 (:placed result))))))))
@@ -741,7 +747,7 @@
               :blocks {fence-chest "chest"} :containers {fence-chest [{:name "oak_fence" :count 7}]}}
         {:keys [eng p]} (start spec {"pen" (pen-plan)})]
     (tu/seeing-all p)
-    {:result (await (tu/child-outcome eng job (merge {:plan "pen"} args) 300)) :p p}))
+    {:result (await (child-outcome eng job (merge {:plan "pen"} args) 300)) :p p}))
 
 (deftest a-cell-inside-the-ground-is-buried-not-unloaded
   (let [block (fn [x y z] [(h/cell-key x y z) "stone"])
@@ -765,7 +771,7 @@
         (let [hill (into {} (for [x (range 0 8) z (range 0 4) y (range 62 (if (<= x 2) 64 65))] [(h/cell-key x y z) "stone"]))
               plan {:id "slope" :parts [{:id "fence" :cells [[1 64 1] [4 64 1]] :want "oak_fence"}]}
               {:keys [eng p]} (start {:blocks hill :inventory [{:name "oak_fence" :count 4}] :self {:pos {:x 2.5 :y 64 :z 2.5}}} {"slope" plan})
-              result (await (tu/child-outcome eng job {:plan "slope" :surface true} 200))]
+              result (await (child-outcome eng job {:plan "slope" :surface true} 200))]
           (is (= "oak_fence" (block p [1 64 1])))
           (is (= "oak_fence" (block p [4 65 1])) "the column on the higher ground")
           (is (= [] (:missing result))))))))
@@ -778,7 +784,7 @@
               canopy (into {} (for [z (range 0 4) y [66 67]] [(h/cell-key 4 y z) "birch_leaves"]))
               plan {:id "wood" :parts [{:id "fence" :cells [[4 64 1]] :want "oak_fence"}]}
               {:keys [eng p]} (start {:blocks (merge hill canopy) :inventory [{:name "oak_fence" :count 2}] :self {:pos {:x 2.5 :y 64 :z 2.5}}} {"wood" plan})
-              _ (await (tu/child-outcome eng job {:plan "wood" :surface true} 200))]
+              _ (await (child-outcome eng job {:plan "wood" :surface true} 200))]
           (is (= "oak_fence" (block p [4 64 1])) "on the ground under the leaves, not on them"))))))
 
 (deftest what-is-carried-is-placed-before-the-rest-is-fetched
@@ -789,7 +795,7 @@
                     :blocks {fence-chest "chest"} :containers {fence-chest [{:name "oak_fence" :count 4}]}}
               {:keys [eng p]} (start spec {"pen" (pen-plan)})
               _ (tu/seeing-all p)
-              result (await (tu/child-outcome eng job {:plan "pen"} 300))
+              result (await (child-outcome eng job {:plan "pen"} 300))
               names (mapv #(.-name %) (.-calls (.-world p)))
               first-place (.indexOf names "place")
               first-take (.indexOf names "transfer")]
@@ -822,7 +828,7 @@
                     :containers {fence-chest [{:name "stone_pickaxe" :count 1}]}}
               {:keys [eng p]} (start spec {"pen" (pen-plan)})
               _ (tu/seeing-all p)
-              result (await (tu/child-outcome eng job {:plan "pen"} 300))]
+              result (await (child-outcome eng job {:plan "pen"} 300))]
           (is (= "oak_fence" (block p [4 64 3])))
           (is (= [] (:wrong result)))
           (is (= {} (:given-up result))))))))
@@ -835,7 +841,7 @@
                     :containers {fence-chest [{:name "stone_pickaxe" :count 1}]}}
               {:keys [eng p]} (start spec {"pen" (pen-plan)})
               _ (tu/seeing-all p)
-              result (await (tu/child-outcome eng job {:plan "pen" :fetch false} 300))]
+              result (await (child-outcome eng job {:plan "pen" :fetch false} 300))]
           (is (= {[4 64 3] :no-tool} (:given-up result)))
           (is (= "stone" (block p [4 64 3]))))))))
 
@@ -847,7 +853,7 @@
               opts (atom [])
               {:keys [eng]} (start {:inventory kit} {"far" plan})
               result (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
-            (fn ^:async b [] (await (tu/child-outcome eng job {:plan "far"} 6)))))]
+            (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 6)))))]
           (is (seq @opts))
           (is (every? #(false? (:escalate %)) @opts) "a walk to a stand never digs through the build")
           (is (every? :zone-tolls @opts))
@@ -862,7 +868,7 @@
               opts (atom [])
               {:keys [eng]} (start {:inventory kit :blocks hole :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
               _ (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
-                         (fn ^:async b [] (await (tu/child-outcome eng job {:plan "far"} 6)))))]
+                         (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 6)))))]
           (is (seq @opts))
           (is (every? :escalate @opts) "shut in by its own dig: go-to may pillar or stair out"))))))
 
@@ -875,7 +881,7 @@
               walks (atom 0)
               {:keys [eng]} (start {:inventory kit :blocks hole :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
               result (await (tu/with-near-stub (fn ^:async f [_ _ _ _] (swap! walks inc) :blocked)
-                              (fn ^:async b [] (await (tu/child-outcome eng job {:plan "far"} 30)))))]
+                              (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 30)))))]
           (is (= :stopped (:status result)))
           (is (= :shut-in (:reason result)))
           (is (re-find #"hole" (:text result)))
@@ -886,7 +892,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)})
-              result (await (tu/child-outcome eng job {:plan "pen"} 1))]
+              result (await (child-outcome eng job {:plan "pen"} 1))]
           (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused []} (dissoc result :spent :spent-at))))))))
 
 (deftest a-place-that-finds-no-item-or-an-occupied-cell-is-given-up-after-the-tries
@@ -896,7 +902,7 @@
         (doseq [status ["no-item" "occupied"]]
           (let [{:keys [eng p]} (start {:inventory kit} {"post" {:id "post" :parts [{:id "p" :cells [[3 64 3]] :want "oak_fence"}]}})
                 _ (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status status}))
-                result (await (tu/child-outcome eng job {:plan "post"} 1))]
+                result (await (child-outcome eng job {:plan "post"} 1))]
             (is (= {[3 64 3] (keyword status)} (:given-up result)) status)
             (is (= 3 (count (places p))) status)))))))
 
@@ -941,7 +947,7 @@
               {:keys [eng p]} (start {:self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,63,0" "dirt"}
                                       :inventory [{:name "oak_planks" :count 4}]}
                                      {"floor" plan})
-              result (await (tu/child-outcome eng job {:plan "floor"} 200))]
+              result (await (child-outcome eng job {:plan "floor"} 200))]
           (is (= [] (:refused result)) "the floor under it is unseen: not a hazard to refuse, a dig to make from beside")
           (is (= "oak_planks" (block p [0 63 0]))))))))
 
@@ -955,7 +961,7 @@
                                       :inventory [{:name "cobblestone" :count 2}] :self {:pos {:x 4 :y 64 :z 3}}}
                                      {"house" {:id "house" :parts [{:id "door" :cells [[3 63 3]] :want :clear}]}})]
           (bd/hiding p #(= [3 62 3] %))
-          (await (tu/child-outcome eng job {:plan "house"} 200))
+          (await (child-outcome eng job {:plan "house"} 200))
           (is (= "air" (block p [3 63 3])) "the plan's cell stays clear")
           (is (= "cobblestone" (block p [3 62 3])) "the lava under it is sealed"))))))
 
@@ -969,7 +975,7 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
                                 :world (world/of-data {"near" plan} {} [])})
-              result (await (tu/child-outcome eng job {:plan "near"} 200))]
+              result (await (child-outcome eng job {:plan "near"} 200))]
           (is (seq (h/calls p "look")))
           (is (= {} (:given-up result)))
           (is (= [] (:missing result)))
@@ -983,7 +989,7 @@
                     :blocks {fence-chest "chest"} :containers {fence-chest [{:name "torch" :count 4}]}}
               {:keys [eng p]} (start spec {"pen" (pen-plan)})
               _ (tu/seeing-all p)
-              result (await (tu/child-outcome eng job {:plan "pen" :fetch {:explore false}} 300))]
+              result (await (child-outcome eng job {:plan "pen" :fetch {:explore false}} 300))]
           (is (= {"oak_fence" 7} (:short result)) "the torch was fetched though the fences could not be")
           (is (= #{"oak_fence"} (set (keys (:fetch-failed result)))))
           (is (= :stopped (:status result)))
@@ -998,9 +1004,15 @@
                     :containers {fence-chest [{:name "stone_pickaxe" :count 1}]}}
               {:keys [eng p seen]} (start spec {"pen" (pen-plan)})
               _ (tu/seeing-all p)
-              result (await (tu/child-outcome eng job {:plan "pen" :fetch {:explore false}} 300))]
+              orig ctx/call
+              tool-calls (atom [])
+              _ (set! ctx/call (fn [c slot j args]
+                                 (when (= 'jobs.items.get-tool j) (swap! tool-calls conj args))
+                                 (orig c slot j args)))
+              result (try (await (child-outcome eng job {:plan "pen" :fetch {:explore false}} 300))
+                          (finally (set! ctx/call orig)))]
           (is (contains? (:fetch-failed result) "oak_fence") (pr-str result))
-          (is (some #(re-find #"tool for stone" (:text %)) (h/events-of seen :fetch.started)) "the pickaxe fetch is not held back")
+          (is (some #(= {:block "stone"} (select-keys % [:block])) @tool-calls) "the pickaxe fetch is not held back")
           (is (= {} (:given-up result))))))))
 
 (deftest cobblestone-with-no-pickaxe-is-mined-with-a-pickaxe-crafted-from-carried-logs
@@ -1011,7 +1023,7 @@
               stone (into {} (for [x [-1 0] z [5 6] [y b] [[63 "andesite"] [64 "stone"]]] [(str x "," y "," z) b]))
               spec {:blocks stone :drops {"stone" "cobblestone"} :inventory [{:name "oak_log" :count 4}]}
               {:keys [eng p]} (start spec {"step" plan})
-              result (await (tu/child-outcome eng job {:plan "step" :fetch {:explore false}} 600))]
+              result (await (child-outcome eng job {:plan "step" :fetch {:explore false}} 600))]
           (is (= "cobblestone" (block p [3 64 3])) (pr-str (select-keys result [:short :fetch-failed :text])))
           (is (= "cobblestone" (block p [4 64 3])))
           (is (= [] (:missing result))))))))
@@ -1020,17 +1032,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [orig ctx/call-child
+        (let [orig ctx/call
               seen (atom [])
               spec {:inventory [{:name "oak_fence_gate" :count 1}]}
               {:keys [eng p]} (start spec {"pen" (pen-plan)})]
           (tu/seeing-all p)
-          (set! ctx/call-child (fn [c slot j args]
-                                 (when (= 'jobs.items.obtain j) (swap! seen conj args))
-                                 (orig c slot j args)))
+          (set! ctx/call (fn [c slot j args]
+                           (when (= 'jobs.items.obtain j) (swap! seen conj args))
+                           (orig c slot j args)))
           (try
-            (await (tu/child-outcome eng job {:plan "pen"} 300))
-            (finally (set! ctx/call-child orig)))
+            (await (child-outcome eng job {:plan "pen"} 300))
+            (finally (set! ctx/call orig)))
           (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %))) @seen) (pr-str @seen)))))))
 
 (deftest stand-levels-are-the-cells-first-then-the-bodys-when-near
@@ -1082,7 +1094,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks wood-ground :inventory [{:name "birch_planks" :count 8} {:name "birch_stairs" :count 2}]}
                                      {"wall" (wall-plan "planks" "wooden_stairs")})
-              result (await (tu/child-outcome eng job {:plan "wall" :fetch false} 300))]
+              result (await (child-outcome eng job {:plan "wall" :fetch false} 300))]
           (is (= "birch_planks" (block p [10 64 0])))
           (is (= "birch_stairs" (block p [12 64 0])))
           (is (= "birch" (:wood result)))
@@ -1094,7 +1106,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks wood-ground :inventory [{:name "birch_planks" :count 8}]}
                                      {"wall" (wall-plan "oak_planks" "oak_stairs")})
-              result (await (tu/child-outcome eng job {:plan "wall" :fetch false} 300))]
+              result (await (child-outcome eng job {:plan "wall" :fetch false} 300))]
           (is (= "air" (block p [10 64 0])))
           (is (nil? (:wood result))))))))
 
@@ -1104,8 +1116,8 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (start {:blocks (assoc wood-ground "9,64,2" "spruce_log") :inventory []}
                                         {"wall" (wall-plan "planks" "wooden_stairs")})
-              _ (await (tu/child-outcome eng job {:plan "wall" :fetch false} 100))]
-          (is (= [{"spruce_planks" 2 "spruce_stairs" 1}] (distinct (map :needs (h/events-of seen :waiting))))))))))
+              _ (await (child-outcome eng job {:plan "wall" :fetch false} 100))]
+          (is (= [{"spruce_planks" 2 "spruce_stairs" 1}] (distinct (map (comp :needs :cause) (h/events-of seen :waiting))))))))))
 
 (deftest a-generic-want-matches-another-species-standing-there
   (async done
@@ -1113,7 +1125,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks (assoc wood-ground "10,64,0" "oak_planks") :inventory [{:name "birch_planks" :count 8} {:name "birch_stairs" :count 2}]}
                                      {"wall" (wall-plan "planks" "wooden_stairs")})
-              result (await (tu/child-outcome eng job {:plan "wall" :fetch false} 300))]
+              result (await (child-outcome eng job {:plan "wall" :fetch false} 300))]
           (is (= "oak_planks" (block p [10 64 0])) "left, not dug")
           (is (= "birch_planks" (block p [11 64 0]))))))))
 
@@ -1124,7 +1136,7 @@
         (let [plan {:id "row" :parts [{:id "fence" :cells [[2 64 2] [3 64 2] [4 64 2] [5 64 2] [6 64 2] [7 64 2]]
                                        :want [:any "oak_fence" "spruce_fence"]}]}
               {:keys [eng p seen]} (start {:inventory [{:name "oak_fence" :count 2} {:name "spruce_fence" :count 10}]} {"row" plan})
-              result (await (tu/child-outcome eng job {:plan "row"} 200))]
+              result (await (child-outcome eng job {:plan "row"} 200))]
           (is (empty? (h/events-of seen :fetch.started)) "nothing is fetched: a listed choice is carried")
           (is (= 6 (:placed result)))
           (is (= {} (:short result)))

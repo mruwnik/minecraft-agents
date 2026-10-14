@@ -2,7 +2,12 @@
   (:require [jobs.lib.child :as child]
             [engine.args :as a]
             [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
+            [jobs.farm.common :as common]
+            [jobs.lib.need :as need]
+            [jobs.lib.started :as started]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
@@ -35,7 +40,7 @@
   the whole item. A :clear cell holding a block that is not replaceable and no container is dug (nothing carried
   needed). Crops and trees are not this job's.
   Its walks never dig through the build, except from a hole the body stands in (2 or more levels walled): they may climb out.
-  One call works until the plan is built or nothing more applies (:continue only while a walk or fetch waits). Every
+  One call works until the plan is built or nothing more applies (it yields only while a walk or fetch waits). Every
   step re-reads the plan and the world, then takes the first step that applies:
   0. A place that would shut the body in (it has a way out and would have none) is held back; the body first walks
      out of the plan's footprint (go-to child), then places from outside. Held back :give-up times, a cell is given
@@ -62,23 +67,25 @@
   :lava-adjacent). A cell with an untaken one is refused as :hazard.
   :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
   fill; it is not listed :wrong.
-  Result: {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
-  :want}] :refused [...] :fetch-failed {item {:failed :why}}}. A build that leaves cells missing ends :stopped (:reason :incomplete, :text naming the
-  missing count and what it left); only a complete one has no :status. For a block placed in the wrong state, :found names the state it came out in.
+  Ends with data {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
+  :want}] :refused [...] :fetch-failed {item {:failed :why}}}: done when nothing is missing or the cells placed meet
+  the call's :least (default :all); else with :text naming the missing count and what it left: nothing-possible
+  :incomplete when cells were given up, condition-failed {:reason :no-items :needs} when items are short, condition-failed
+  :refused when the rules refuse the rest, nothing-possible :shut-in. For a block placed in the wrong state, :found names the state it came out in.
   Events: build.done (info), build.short, build.gave-up, build.refused and build.wrong (warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
-  The job declines (one build.declined warn naming the plan and the reason):
-  - while no zone list has been read (it waits :plan-trouble).
-  A plan that is missing, unreadable or has no cells to build (in :part) ends the job at once: stopped, :reason :plan-trouble,
-  with the cause in :text (after the one warn), so a held job never blocks the queue.
+  Start facts (one build.declined warn naming the plan and the reason): no zone list read (unless :ignore-zones?) is a
+  failed condition {:reason :no-zones}, also later in the call; a plan that is missing, unreadable or has no cells to
+  build (in :part) is impossible {:reason :plan-trouble :why text}; at the start, with nothing to place, dig, fetch or
+  look at, a failed condition {:reason :no-items :needs {item n}}.
   Wood: a generic wood want (jobs.build.wood: planks, logs, wooden_stairs, wooden_slabs, wooden_doors, wooden_fences,
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
   else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
   When cells are missing but none of their blocks is carried and none can be fetched, the job waits (:no-items with :needs).
   Material: while cells wait for an item not carried (and not given up or refused), each round fetches it, once no cell can be placed from what is carried (:fetch,
-  jobs.lib.fetch with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is skipped for the next); a pickaxe block to dig without a pickaxe fetches the tool the same way
+  jobs.lib.need with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is not asked again in the call); a pickaxe block to dig without a pickaxe fetches the tool the same way
   (jobs.items.get-tool). With :fetch false, or once a fetch failed, the build goes on with what is carried and ends
-  :short as before (the stop text and :fetch-failed name each failed fetch and why), a pickaxe block given up :no-tool.")
+  short (the text and :fetch-failed name each failed fetch and why), a pickaxe block given up :no-tool.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
@@ -86,29 +93,60 @@
    :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
    :give-up {:doc "refused places or failed walks after which a cell is given up" :spec (a/int-in 1 nil) :default 3}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
-   :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.fetch): true, a set of kinds or a map of limits; false builds with what is carried" :spec fetch/option? :default {:explore true}}
+   :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.need): true, a set of kinds or a map of limits; false builds with what is carried" :spec fetch/option? :default {:explore true}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :surface {:doc "put each column of the plan on the ground the body has seen there: the column's lowest cell stands on the ground's top, the rest keep their height above it (an unseen column stays as planned); for a pen on a slope" :spec boolean? :default false}
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :spec boolean? :default false}})
 
-(defn check
-  "Passes while there is something to build, dig, fetch or look at, and for a plan that can never be built (the round
-  ends it :stopped :plan-trouble). Otherwise it waits (:plan-trouble while no zone list is read, or :no-items
-  with the {item n} still needed). The plan's cells are judged once per check-cache window."
+(def target [:plan :part])
+(def defaults {:least :all})
+
+(a/defargs settings
+  {::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
+
+(defn judged-plan
+  "planned, judged once per check-cache window."
   [c]
-  (let [{:keys [cells trouble]} (check-cache/cached c :planned #(planned c))
-        p (:primitives c)]
+  (check-cache/cached c :planned #(planned c)))
+
+(defn plan-problem
+  "No zone list read: a failed condition. A plan that is missing, unreadable or has no cells to build (in :part) is
+  impossible: the cause is {:reason :plan-trouble :why text}."
+  [c]
+  (let [{:keys [trouble]} (judged-plan c)]
     (cond
-      (and trouble (= no-zones trouble)) (ctx/wait c {:reason :plan-trouble :why trouble})
-      trouble true
-      (or (:begun (ctx/mem c))
-          (empty? (owed cells))
-          (seq (buildable cells (storage/carried-totals (u/inventory p)) {}))
-          (seq (digging cells))
-          (seq (unseen cells (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))))
-          (when-let [w (need-of c cells)] (some? (fetch/due c 'jobs.build.from-plan w)))) true
-      :else (ctx/wait c {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
-                         :needs (into {} (shortage (owed cells) (storage/carried-totals (u/inventory p))))}))))
+      (nil? trouble) nil
+      (= no-zones trouble) {:reason :no-zones}
+      :else (contract/impossible {:reason :plan-trouble :why trouble}))))
+
+(defn no-items
+  "{:reason :no-items :plan :part :needs} when there is nothing to build, dig, fetch or look at: the cells' items are
+  not carried and no fetch is due."
+  [c]
+  (let [{:keys [cells trouble]} (judged-plan c)
+        carried (storage/carried-totals (u/inventory (:primitives c)))]
+    (when-not (or trouble
+                  (empty? (owed cells))
+                  (seq (buildable cells carried {}))
+                  (seq (digging cells))
+                  (seq (unseen cells (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))))
+                  (some? (need-of c cells)))
+      {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
+       :needs (into {} (shortage (owed cells) carried))})))
+
+(def conditions [[:fn plan-problem] [:fn (started/at-start no-items)]])
+
+(defn done?
+  "Counts only (the round ends the call with its data): the cells placed and the cells still owed."
+  [c]
+  (let [{:keys [cells trouble]} (judged-plan c)]
+    {:done? false :units :cells :done (:placed (ctx/mem c) 0) :left (if trouble 0 (count (owed cells)))}))
+
+(defn quote-of [c]
+  (let [{:keys [cells trouble]} (judged-plan c)
+        n (if trouble 0 (count (owed cells)))
+        s (* n (settings/get settings ::cell-s))]
+    {:uses {:time [(* 0.5 s) s (* 4 s)]} :done [0 n n]}))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -293,14 +331,14 @@
   2)
 
 (defn hole-blocked!
-  "Count a failed walk from a hole; at hole-walks of them in a row stop the build :shut-in (:done), else :again."
+  "Count a failed walk from a hole; at hole-walks of them in a row end the build :shut-in, else :again."
   [c]
   (ctx/update-mem! c update :hole-blocked (fnil inc 0))
   (if (< (:hole-blocked (ctx/mem c)) hole-walks)
     :again
-    (do (ctx/result! c {:status :stopped :reason :shut-in :placed (:placed (ctx/mem c) 0)
-                        :text (str "build of " (:plan (:args c)) " stopped: the body is shut in a hole and cannot climb out")})
-        :done)))
+    (ctx/end c :nothing-possible :shut-in
+             {:placed (:placed (ctx/mem c) 0)
+              :text (str "build of " (:plan (:args c)) " stopped: the body is shut in a hole and cannot climb out")})))
 
 (defn ^:async walk-to!
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
@@ -334,14 +372,29 @@
               (if (= :partial w) :continue :again)))))))
 
 
+(defn result-data
+  "What the build left (text/summary), with the failed fetches of the call and what it spent."
+  [c cells]
+  (merge (assoc-fetch-failed c (summary c cells (ctx/mem c) (:sturdy-ground (:args c))))
+         (some-> (spent/log c) spent/summary)))
+
+(defn ending-of
+  "The ending of a build with nothing more to do: done when nothing is missing or the placed cells meet the call's
+  :least; else by what holds the rest back: given-up cells (nothing-possible :incomplete), items not carried and not
+  fetched (condition-failed :no-items), cells refused by the rules (condition-failed :refused)."
+  [c {:keys [placed missing short given-up refused] :as result}]
+  (let [data (assoc result :text (stopped-text (:plan (:args c)) result))]
+    (cond
+      (or (empty? missing) (common/enough? c placed (+ placed (count missing)))) (ctx/end c :done nil result)
+      (seq given-up) (ctx/end c :nothing-possible :incomplete data)
+      (seq short) (ctx/end c :condition-failed {:reason :no-items :needs short} data)
+      (seq refused) (ctx/end c :condition-failed :refused data)
+      :else (ctx/end c :nothing-possible :incomplete data))))
+
 (defn finish! [c cells]
-  (let [result (merge (assoc-fetch-failed c (summary c cells (ctx/mem c) (:sturdy-ground (:args c))))
-                      (some-> (spent/log c) spent/summary))]
+  (let [result (result-data c cells)]
     (announce! c result)
-    (ctx/result! c (if (seq (:missing result))
-                     (assoc result :status :stopped :reason :incomplete :text (stopped-text (:plan (:args c)) result))
-                     result))
-    :done))
+    (ending-of c result)))
 
 (defn spawn-cell
   "By day, the foot cell of a bed the plan wants that stands built, when no respawn bed is known and the spawn was not
@@ -400,16 +453,44 @@
               (ctx/update-mem! c retry-walks (u/self-pos c) true)
               (if (= before (ctx/mem c)) (finish! c cells) :again)))))
 
+(defn book-failed!
+  "Book the failed fetch for wait w (not asked again in this call) and warn fetch.failed."
+  [c w e]
+  (let [cause (:cause e)
+        failed (if (map? cause) (or (:why cause) (:reason cause)) (contract/cause-key e))]
+    (ctx/update-mem! c #(-> (dissoc % :fetching) (assoc-in [:fetch-failed (plan/fetch-key w)] {:failed failed})))
+    (ctx/emit! c :fetch.failed :warn {:for (:reason w) :failed failed
+                                      :text (str "could not fetch " (or (:item w) (str "a tool for " (:block w))) ": " (name failed))})))
+
+(defn ^:async fetch-step!
+  "Fetch what the plan lacks (jobs.lib.need) when a fetch is due: :continue while the child waits on the world, :again
+  once it ended (a failed one is booked, a limit ends the build), nil when nothing is due."
+  [c]
+  (when-let [w (plan/problem c)]
+    (let [o (select-keys (fetch/opts c plan/fetch-job) [:how :explore])
+          key (plan/fetch-key w)
+          what (or (:item w) (str "a tool for " (:block w)))
+          _ (when-not (= key (:fetching (ctx/mem c)))
+              (ctx/update-mem! c assoc :fetching key)
+              (ctx/emit! c :fetch.started :info {:for (:reason w) :args (select-keys w [:item :block])
+                                                 :text (str "fetching " what " for " (name (:reason w)))}))
+          e (await (if (= :need (:reason w))
+                     (need/item! c (:item w) (:count w) o)
+                     (need/tool! c {:block (:block w)} o)))]
+      (cond
+        (= :continue e) :continue
+        (= :done (:kind e)) (do (ctx/update-mem! c dissoc :fetching)
+                                (ctx/emit! c :fetch.done :info {:for (:reason w) :text (str "fetched " what)})
+                                :again)
+        (#{:limit-reached :cut-off} (:kind e)) (ctx/end c (:kind e) (:cause e) (result-data c (:cells (planned c))))
+        :else (do (book-failed! c w e) :again)))))
+
 (defn ^:async step [c]
   (let [{:keys [trouble wood]} (planned c)]
-    (cond
-      (= no-zones trouble) :declined
-      trouble (do (ctx/result! c {:status :stopped :reason :plan-trouble :text (str "plan " (:plan (:args c)) " cannot be built: " trouble)})
-                  :done)
-      :else
-      (do (when-not (:begun (ctx/mem c)) (ctx/update-mem! c assoc :begun true))
-          (when (and wood (nil? (:wood (ctx/mem c)))) (ctx/update-mem! c assoc :wood wood))
-          (or (await (fetch/fetch! c 'jobs.build.from-plan problem))
+    (if trouble
+      (ctx/end c :condition-failed (if (= no-zones trouble) {:reason :no-zones} {:reason :plan-trouble :why trouble}) nil)
+      (do (when (and wood (nil? (:wood (ctx/mem c)))) (ctx/update-mem! c assoc :wood wood))
+          (or (await (fetch-step! c))
               (let [cells (:cells (planned c))]
                 (settle-placing! c cells)
                 (await (build-step! c cells))))))))
