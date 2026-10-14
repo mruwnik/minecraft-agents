@@ -1,7 +1,10 @@
 (ns jobs.build.pen
   (:require [engine.args :as a] [jobs.lib.fetch :as fetch]
             [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.child :as child]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.look :as look]
             [jobs.lib.pen :as pen]
@@ -16,23 +19,25 @@
   The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.
   With :surface (default) each column of the plan is put on the ground the body has seen there, so a pen on a slope follows it.
   Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :give-up :accept pass through, and its rules
-  (zones, other plans' footprints, materials, cuts) apply. Phase 2 checks the pen over that box with
-  jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
+  (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
+  gate (a jobs.movement.go-to child to the cell outside it) and jobs.animals.shut-gate shuts it. Phase 3 checks the pen
+  over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
   Nothing is placed that the plan does not ask for. A leak left after the build is a hole in the plan, or a cell
   the build refused, gave up on or lacked material for.
-  Always ends :done with {:closed? :reason :cells :leaks :gates :built {:placed :missing :short :given-up
-  :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start.
-  Closed gives info pen-build.done. Not closed gives one warn pen-build.leaky naming the leaks {:pos :why}
-  (:gap :open-gate :climb :open :unloaded; at most 12) and what the build left (:refused, :given-up, :short).
-  Declines:
-  - with a pen-build.declined warn naming the cells when the ring steps more than 1 between neighbouring fences, or a
-    gate is more than 1 above the ground of an inside neighbour (animals will not step down 2), unless :uneven? true.
-  - with one pen-build.declined warn while the plan is missing, unreadable, has no cells (in :part), has no
-    fence cells, or no zone list has been read (unless :ignore-zones?).
-  - without a warn when nothing is missing and the pen already holds. Nothing is rebuilt after a restart: the
-    world is the memory.
-  When the builder waits (e.g. :no-items while materials are not carried), the check also waits.
-  Once begun, the check stays true.")
+  Needs: the plan, a zone list (unless :ignore-zones?), and the blocks of the fence (fetched by the builder unless
+  :fetch false). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
+  :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start.
+  The pen ends with the body outside and the gate shut.
+  Endings: done when the pen holds (info pen-build.done); nothing-possible with the :reason as cause when it does not
+  (one warn pen-build.leaky naming the leaks {:pos :why} (:gap :open-gate :climb :open :unloaded; at most 12) and what
+  the build left (:refused, :given-up, :short)); nothing-possible :inside when the body cannot get out of the finished
+  pen. The builder's own condition-failed ending (:no-items, :refused, :no-zones) is this job's.
+  Start facts (one pen-build.declined warn naming the cells or the reason):
+  - impossible {:reason :plan-trouble :why text}: the plan is missing, unreadable, has no cells (in :part), has no fence
+    cells, or its ring steps more than 1 between neighbouring fences, or a gate is more than 1 above the ground of an
+    inside neighbour (animals will not step down 2), unless :uneven? true.
+  - condition-failed {:reason :no-zones}: no zone list has been read (unless :ignore-zones?).
+  A pen already sound is done at once with nothing placed. Nothing is rebuilt after a restart: the world is the memory.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
@@ -117,7 +122,7 @@
                     (when-not (barrier-box cells) "the plan has no fence, wall or gate cells")
                     (when-not (:uneven? (:args c))
                       (when-let [bad (seq (uneven cells (plan/top-fn c)))] (uneven-text bad)))
-                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
+                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) plan/no-zones))]
     (if-not trouble
       {:cells cells}
       (do (ctx/warn-once! c [plan trouble] :pen-build.declined
@@ -141,15 +146,34 @@
 (defn build-args [c]
   (select-keys (:args c) [:plan :part :reach :give-up :accept :fetch :ignore-zones? :surface]))
 
-;; ------------------------------------------------------------------ check
+;; ------------------------------------------------------------------ conditions
 
-(defn check [c]
-  (let [{:keys [cells trouble]} (planned c)]
+(def target [:plan :part])
+
+(defn judged-plan
+  "planned, once per check-cache window."
+  [c]
+  (check-cache/cached c :planned #(planned c)))
+
+(defn plan-problem
+  "No zone list read: a failed condition. A plan that cannot be worked is impossible."
+  [c]
+  (let [{:keys [trouble]} (judged-plan c)]
     (cond
-      trouble (ctx/wait c {:reason :plan-trouble :why trouble})
-      (:phase (ctx/mem c)) true
-      (sound? c cells) (ctx/wait c {:reason :already-sound})
-      :else (boolean (ctx/check-child c :build 'jobs.build.from-plan (build-args c))))))
+      (nil? trouble) nil
+      (= plan/no-zones trouble) {:reason :no-zones}
+      :else (contract/impossible {:reason :plan-trouble :why trouble}))))
+
+(def conditions [[:fn plan-problem]])
+
+(defn done?
+  "Counts only (the round ends the call with its data): the cells still owed."
+  [c]
+  (let [{:keys [cells trouble]} (judged-plan c)]
+    {:done? false :units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))}))
+
+(defn ^:async quote-of [c]
+  (select-keys (await (ctx/quote c 'jobs.build.from-plan (build-args c))) [:uses :yields]))
 
 ;; ------------------------------------------------------------------ rounds
 
@@ -157,7 +181,7 @@
   (str (name why) " " (pr-str [(:x pos) (:y pos) (:z pos)])))
 
 (defn finish!
-  "Read the pen, emit the outcome, hand the answer to the parent and end."
+  "Read the pen, emit the outcome and end: done when it holds, else nothing-possible with the reason."
   [c cells]
   (let [plan (:plan (:args c))
         built (:built (ctx/mem c))
@@ -165,36 +189,82 @@
         result (assoc answer :built built)
         left (plan/left-text built)]
     (if (:closed? answer)
-      (ctx/emit! c :pen-build.done :info {:plan plan :cells (:cells answer) :placed (:placed built)
-                                          :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))})
-      (ctx/emit! c :pen-build.leaky :warn
-                 (merge {:plan plan :reason (:reason answer) :leaks (:leaks answer)
-                         :refused (:refused built) :given-up (:given-up built) :short (:short built)
-                         :text (str "pen of " plan " is not closed (" (name (:reason answer)) "): "
-                                    (str/join ", " (map leak-text (:leaks answer)))
-                                    (when (seq left) (str "; " left)))}
-                        (select-keys answer [:leaks-total]))))
-    (ctx/result! c result)
-    :done))
+      (do (ctx/emit! c :pen-build.done :info {:plan plan :cells (:cells answer) :placed (:placed built)
+                                              :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))})
+          (ctx/end c :done nil result))
+      (do (ctx/emit! c :pen-build.leaky :warn
+                     (merge {:plan plan :reason (:reason answer) :leaks (:leaks answer)
+                             :refused (:refused built) :given-up (:given-up built) :short (:short built)
+                             :text (str "pen of " plan " is not closed (" (name (:reason answer)) "): "
+                                        (str/join ", " (map leak-text (:leaks answer)))
+                                        (when (seq left) (str "; " left)))}
+                            (select-keys answer [:leaks-total])))
+          (ctx/end c :nothing-possible (:reason answer) result)))))
 
 (defn ^:async build-step!
-  "One round of the builder as the child; its result is kept when it ends and the phase moves to the check."
+  "One round of the builder as the child; the phase moves to the exit when its round ended with its data (done, or it
+  left cells refused, given up or short: the check reports them as leaks); an ending of its conditions, or of a limit, is
+  this job's."
   [c]
-  (let [r (await (ctx/call-child c :build 'jobs.build.from-plan (build-args c)))]
-    (when (= :done r)
-      (ctx/update-mem! c assoc :phase :check :built (ctx/child-result c :build)))
-    (if (= :done r) :again r)))
+  (let [r (await (ctx/call c :build 'jobs.build.from-plan (build-args c)))]
+    (cond
+      (or (= :continue r) (= :cut-off (:kind r))) :continue
+      (or (= :done (:kind r)) (and (:data r) (#{:nothing-possible :condition-failed} (:kind r)))) (do (ctx/update-mem! c assoc :phase :exit :built (:data r))
+                                                 :again)
+      :else (ctx/end c (:kind r) (:cause r)))))
+
+(defn inside?
+  "Whether the body's column is in the box (a little above or below it too)."
+  [box self]
+  (let [[x y z] (map #(int (js/Math.floor %)) [(:x self) (:y self) (:z self)])]
+    (and (<= (:x (:min box)) x (:x (:max box)))
+         (<= (:z (:min box)) z (:z (:max box)))
+         (<= (- (:y (:min box)) 2) y (+ (:y (:max box)) 2)))))
+
+(defn exit-cell
+  "The cell {:x :y :z} just outside the box beside a gate of cells, or nil without a gate on the box's edge."
+  [box cells]
+  (first (for [{[x y z] :pos :keys [want]} cells
+               :when (gate? want)
+               [nx nz] [[(inc x) z] [(dec x) z] [x (inc z)] [x (dec z)]]
+               :when (not (inside? box {:x nx :y y :z nz}))]
+           {:x nx :y y :z nz})))
+
+(defn ^:async exit-step!
+  "While the body is inside the box: walk out beside the gate. Then on to shutting the gate, or the check if the body
+  was never inside. Nothing-possible :inside when it cannot get out."
+  [c cells]
+  (let [box (barrier-box cells)]
+    (if-not (inside? box (u/self-pos c))
+      (do (ctx/update-mem! c assoc :phase (if (:exited (ctx/mem c)) :shut :check))
+          :again)
+      (if-let [out (exit-cell box cells)]
+        (let [r (await (child/call-walk* c :exit {:pos out :range 0 :escalate false}))]
+          (cond
+            (= :continue r) :continue
+            (= :done (:kind r)) (do (ctx/update-mem! c assoc :exited true) :again)
+            :else (ctx/end c :nothing-possible {:reason :inside :why "the walk out of the pen failed"} {:built (:built (ctx/mem c))})))
+        (ctx/end c :nothing-possible {:reason :inside :why "the pen has no gate to leave by"} {:built (:built (ctx/mem c))})))))
+
+(defn ^:async shut-step!
+  "Shut the plan's gates the walk out left open, then on to the check."
+  [c]
+  (let [r (await (ctx/call c :shut 'jobs.animals.shut-gate {:plan (:plan (:args c))}))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c assoc :phase :check) :again))))
 
 (defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)
-        phase (:phase (ctx/mem c))]
+        phase (or (:phase (ctx/mem c)) :build)]
     (cond
-      trouble :declined
+      trouble (ctx/end c :condition-failed {:reason :plan-trouble :why trouble})
+      (= :exit phase) (await (exit-step! c cells))
+      (= :shut phase) (await (shut-step! c))
       (= :check phase) (do (await (look/survey! c)) (finish! c cells)) ; cells behind the body are not seen until it looks
-      :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
-                (await (build-step! c))))))
+      :else (await (build-step! c)))))
 
 (defn ^:async round
-  "The whole attempt: build, then check the pen, in steps (pace/steps!); :continue only while the builder waits."
+  "The whole attempt: build, walk out, shut the gate, check the pen, in steps (pace/steps!); :continue only while a child waits."
   [c]
   (await (pace/steps! c (fn ^:async s [] (await (step c))))))

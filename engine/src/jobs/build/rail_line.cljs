@@ -3,7 +3,9 @@
             [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
-            [jobs.lib.declined :as declined]
+            [engine.contract :as contract]
+            [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.started :as started]
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.lib.placement :as placement]
@@ -29,22 +31,23 @@
   2. :switch turns on every planned lever that is off (jobs.access.toggle as a child, once per lever).
   3. :check runs plan.rail/judge-line over the world. A sturdy block where the plan wants bed or buffer fill is
      no fault.
-  Always ends :done with {:ok? :breaks :hazards :built {:placed :missing :short :given-up :wrong :refused}}.
-  :hazards lists falling beds (gravel, sand). Sound gives info rail-build.done. Not sound gives one warn
-  rail-build.broken with :breaks {:pos :why} (:gap :shape :unlit :lit-brake :no-bed :blocked :wet :no-buffer
-  :launch-trap :unloaded; at most 12) and what the build left (:refused :given-up :short).
-  A line that is sound already ends at once with rail-build.done (placed 0).
-  The job declines with one rail-build.declined warn (:plan :reason) while:
-  - the plan is missing or unreadable (:plan).
-  - its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails).
-  - no zone list has been read (:no-zones).
-  - a cell still to build is refused by the access rules (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]).
-  - a cell wanting a redstone block holds another block (:source-blocked, :cells). The builder never digs, so on
-    natural ground put a torch or lever in the plan, or use a raised bed.
-  With :all-carried (the default) it also waits, with one rail-build.short warn {item n}, until the items for
-  every cell still to build are carried. An :any want counts every choice carried. Only cells seen empty are owed;
-  the warn's :up-to {item n} counts the unseen cells too. With :all-carried false it builds what is carried.
-  Once begun the check stays true. A restart resumes in the phase it was in: the world is the memory.")
+  Needs: the plan, a zone list (unless :ignore-zones?), and the items for every cell still to build carried (unless
+  :all-carried false). Returns, as the data of its ending, {:ok? :breaks :hazards :built {:placed :missing :short
+  :given-up :wrong :refused}}. :hazards lists falling beds (gravel, sand).
+  Endings: done when the line is sound (info rail-build.done; a line sound already is done at once, placed 0);
+  nothing-possible :broken when it is not (one warn rail-build.broken with :breaks {:pos :why} (:gap :shape :unlit
+  :lit-brake :no-bed :blocked :wet :no-buffer :launch-trap :unloaded; at most 12) and what the build left (:refused
+  :given-up :short)).
+  Start facts (one rail-build.declined warn (:plan :reason) each):
+  - impossible: the plan is missing or unreadable (:plan); its rail cells are not one chain (:not-a-line, :why
+    :gap|:branch|:two-chains|:loop|:no-rails); a cell wanting a redstone block holds another block (:source-blocked,
+    :cells; the builder never digs, so on natural ground put a torch or lever in the plan, or use a raised bed).
+  - condition-failed: no zone list has been read (:no-zones); a cell still to build is refused by the access rules
+    (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :all-carried (the default) items for
+    the cells still to build are not all carried (:short, one rail-build.short warn {item n}; an :any want counts every
+    choice carried; only cells seen empty are owed, the warn's :up-to {item n} counts the unseen cells too). With
+    :all-carried false it builds what is carried.
+  A restart resumes in the phase it was in: the world is the memory.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
@@ -153,26 +156,54 @@
                                     ": the cell holds ground and this job never digs; put a torch or lever in the plan, "
                                     "or lay the line on a raised bed")]
                       (decline! c {:reason :source-blocked :cells blocked :text text})
-                      {:reason :source-blocked :why text})
+                      {:reason :source-blocked :cells blocked :why text})
       (seq no) (let [text (str "cells refused: " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) no)))]
                  (decline! c {:reason :refused :refused no :text text})
-                 {:reason :refused :why text})
+                 {:reason :refused :refused no :why text})
       (and all-carried (seq short))
       (let [text (str "short of " (plan/shortage-text short))]
         (ctx/warn-once! c [plan :short] :rail-build.short
                         {:plan plan :part part :short short :up-to (up-to-of owed carried)
                          :text (str "rail build of " plan " waits: " text)})
-        {:reason :short :why text}))))
+        {:reason :short :short short :why text}))))
 
-;; ------------------------------------------------------------------ check
+;; ------------------------------------------------------------------ conditions
 
-(defn check [c]
-  (let [{:keys [cells trouble]} (planned c)]
+(def target [:plan :part])
+
+(defn judged-plan
+  "planned, once per check-cache window."
+  [c]
+  (check-cache/cached c :planned #(planned c)))
+
+(defn plan-problem
+  "No zone list read: a failed condition. A plan that is missing or no line is impossible."
+  [c]
+  (let [{:keys [trouble]} (judged-plan c)]
     (cond
-      trouble (ctx/wait c {:reason :plan-trouble :why (:text trouble)})
-      (not (declined/check c)) false
-      (or (:phase (ctx/mem c)) (sound? c cells)) true
-      :else (if-let [why (not-ready c cells)] (ctx/wait c why) true))))
+      (nil? trouble) nil
+      (= :no-zones (:reason trouble)) {:reason :no-zones}
+      :else (contract/impossible (dissoc trouble :text)))))
+
+(defn ready-problem
+  "Why a line not yet begun and not sound may not be begun (not-ready): a blocked source is impossible, the rest failed
+  conditions."
+  [c]
+  (let [{:keys [cells trouble]} (judged-plan c)]
+    (when-not (or trouble (sound? c cells))
+      (when-let [why (check-cache/cached c :ready #(not-ready c cells))]
+        (if (= :source-blocked (:reason why)) (contract/impossible why) why)))))
+
+(def conditions [[:fn plan-problem] [:fn (started/at-start ready-problem)]])
+
+(defn done?
+  "Counts only (the round ends the call with its data): the cells placed and the cells still owed."
+  [c]
+  (let [{:keys [cells trouble]} (judged-plan c)]
+    {:done? false :units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))}))
+
+(defn ^:async quote-of [c]
+  (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :reach :give-up :accept :ignore-zones?]))) [:uses :yields]))
 
 ;; ------------------------------------------------------------------ rounds
 
@@ -201,12 +232,14 @@
              cells)))
 
 (defn ^:async switch-step!
-  "Switch on the next planned lever that is off (once each), then move on to the proof."
+  "Switch on the next planned lever that is off (once each, whatever the child ends), then move on to the proof."
   [c cells]
   (if-let [{:keys [pos]} (first (unlit-levers c cells))]
-    (let [r (await (declined/call-child! c :lever 'jobs.access.toggle {:pos pos :state :on}))]
-      (when (= :done r) (ctx/update-mem! c update :switched (fnil conj []) pos))
-      (if (= :done r) :again r))
+    (let [r (await (ctx/call c :lever 'jobs.access.toggle {:pos pos :state :on}))]
+      (if (= :continue r)
+        :continue
+        (do (ctx/update-mem! c update :switched (fnil conj []) pos)
+            :again)))
     (do (ctx/update-mem! c assoc :phase :check)
         :again)))
 
@@ -243,14 +276,13 @@
                   :text (str "rail line " plan " is broken: "
                              (str/join ", " (map break-text (take (max-breaks) (:breaks proof))))
                              (when (seq left) (str "; " left)))}))
-    (ctx/result! c (assoc proof :built built))
-    :done))
+    (ctx/end c (if (:ok? proof) :done :nothing-possible) (when-not (:ok? proof) :broken) (assoc proof :built built))))
 
 (defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)
         phase (:phase (ctx/mem c))]
     (cond
-      trouble :declined
+      trouble (ctx/end c :condition-failed (dissoc trouble :text))
       (= :check phase) (finish! c cells)
       (= :switch phase) (await (switch-step! c cells))
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
@@ -260,5 +292,4 @@
   "The whole attempt: build, switch the levers, prove the line, in steps (pace/steps!); :continue only while a walk, a dig
   or a lever child waits on the world."
   [c]
-  (declined/begin! c)
   (await (pace/steps! c (fn ^:async s [] (await (step c))))))

@@ -6,8 +6,7 @@
             [engine.registry :as registry]
             [engine.build-from-plan-test :as b]
             [engine.harvest-test :as ht]
-            [engine.hostile-test :as h]
-            [engine.pen-build-test :as pen]))
+            [engine.hostile-test :as h]))
 
 (defn waiting-reason
   "Submit job with args in an empty world, tick once; the :reason of the job.waiting event, or nil."
@@ -16,14 +15,6 @@
     (core/submit! eng (list job args) {})
     (core/tick! eng)
     (some #(when (= :waiting (:kind %)) (:reason %)) @seen)))
-
-(defn waiting-event
-  "Like waiting-reason: the job.waiting events' fields, as a vector."
-  [job args]
-  (let [{:keys [eng seen]} (h/setup {})]
-    (core/submit! eng (list job args) {})
-    (core/tick! eng)
-    (filterv #(= :waiting (:kind %)) @seen)))
 
 (def box {:min {:x 0 :y 60 :z -5} :max {:x 8 :y 70 :z 5}})
 
@@ -35,16 +26,6 @@
     'jobs.animals.tend {:box box :target 4} :nothing-to-do
     'jobs.combat.attack {:targets ["zombie"] :absent :wait} :no-target))
 
-(deftest build-checks-say-why-they-decline
-  (are [job] (= :plan-trouble (waiting-reason job {:plan "no-such-plan"}))
-    'jobs.build.pen
-    'jobs.build.rail-line))
-
-(deftest plan-trouble-waits-carry-the-text
-  (are [job] (= "no such plan" (:why (first (waiting-event job {:plan "no-such-plan"}))))
-    'jobs.build.pen
-    'jobs.build.rail-line))
-
 (defn waits-in-world
   "Submit job with args over the fake world spec and plans, tick a few times: the job.waiting events."
   [job args spec plans]
@@ -55,8 +36,7 @@
 
 (deftest world-checks-say-why-they-decline
   (are [job args spec plans reason] (= [reason] (mapv :reason (waits-in-world job args spec plans)))
-    'jobs.build.from-plan {:plan "pen" :fetch false} {:inventory []} {"pen" (b/pen-plan)} :no-items
-    'jobs.build.pen {:plan "pen"} (pen/spec pen/kit pen/built-pen) {"pen" (pen/ring-plan)} :already-sound))
+    'jobs.build.from-plan {:plan "pen" :fetch false} {:inventory []} {"pen" (b/pen-plan)} :no-items))
 
 (deftest bad-argument-checks-say-why-they-decline
   (are [job reason] (= reason (waiting-reason job {}))

@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.build-from-plan-test :as b]
             [engine.core :as core]
+            [engine.farm-contract-test :refer [ending-of kc]]
             [engine.harvest-test :as h]
             [engine.memory :as mem]
             [jobs.blocks.dig :as dig]
@@ -16,6 +17,11 @@
             [plan.shape :as shape]))
 
 (def job 'jobs.build.rail-line)
+
+(defn ^:async outcome
+  "The data of the job's ending as a ctx/call child of a recording parent in at most n ticks, :not-done while it has not ended."
+  [eng job args n]
+  (if-let [e (await (ending-of {:eng eng} job args n))] (:data e) :not-done))
 
 (deftest rail-line-has-no-dig-arg
   (is (not (contains? (:args (get registry/jobs job)) :dig))))
@@ -46,7 +52,7 @@
   "Run the job as a child over the world spec and plans: [result seen p]."
   [world-spec plans args & [zones]]
   (let [{:keys [eng p seen]} (b/start world-spec plans (or zones []))
-        result (await (tu/child-outcome eng job (merge {:plan "line"} args) 400))]
+        result (await (outcome eng job (merge {:plan "line"} args) 400))]
     [result seen p]))
 
 (defn props [p [x y z]] (js->clj (.-properties (.blockAt p #js {:x x :y y :z z})) :keywordize-keys true))
@@ -226,7 +232,7 @@
   "Build the line, break the rail at x 7, then submit the job with args: [seen p]."
   [args]
   (let [{:keys [eng p seen]} (b/start (spec "stone" 63 (kit {})) {"line" (line-plan {})} [])]
-    (await (tu/child-outcome eng job {:plan "line"} 400))
+    (await (outcome eng job {:plan "line"} 400))
     (fake/remove-block! p [7 64 0])
     (core/submit! eng (list job (merge {:plan "line"} args)) {})
     (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
@@ -311,7 +317,7 @@
   "Build the plan of the waypoints over the world: [result seen p eng]."
   [waypoints opts world args & [zones]]
   (let [{:keys [eng p seen]} (b/start world {"line" (route-plan waypoints opts)} (or zones []))
-        result (await (tu/child-outcome eng job (merge {:plan "line"} args) 900))]
+        result (await (outcome eng job (merge {:plan "line"} args) 900))]
     [result seen p eng]))
 
 (defn shape-of [p [x y z]] (:shape (props p [x y z])))
@@ -490,7 +496,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (b/start (route-world l-route {} flat-top) {"line" (route-plan l-route {})} [])]
-          (await (tu/child-outcome eng job {:plan "line"} 900))
+          (await (outcome eng job {:plan "line"} 900))
           (fake/remove-block! p [19 64 0])
           (core/submit! eng (list job {:plan "line" :all-carried false}) {})
           (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
@@ -526,20 +532,44 @@
 
 ;; ---------------------------------------------------------------- the wait reason
 
-(deftest the-wait-reason-is-the-one-ready-found-not-a-default
+(deftest a-line-not-ready-waits-with-the-reason-and-one-that-can-never-be-built-is-impossible
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[world plans zones reason text]
-                [[(spec "stone" 63 (kit {:power :block})) {"line" (line-plan {:power :block})} [] :source-blocked #"redstone block"]
-                 [(spec "stone" 63 (kit {})) {"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} [] :refused #"footprint"]
-                 [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail 2"]
-                 [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :plan-trouble #"no zone list"]
-                 [(spec "stone" 63 (kit {})) {} [] :plan-trouble #"no such plan"]]]
+                [[(spec "stone" 63 (kit {})) {"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} [] :refused #"footprint"]
+                 [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail"]
+                 [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :no-zones #"no-zones"]]]
           (let [r (await (declines world plans {:plan "line"} zones))
                 w (first (:waits r))]
             (is (= reason (:reason w)) (str reason))
-            (is (re-find text (str (:why w))) (str reason " " (pr-str w)))))))))
+            (is (re-find text (str (:text w))) (str reason " " (pr-str w)))))
+        (doseq [[world plans reason]
+                [[(spec "stone" 63 (kit {:power :block})) {"line" (line-plan {:power :block})} :source-blocked]
+                 [(spec "stone" 63 (kit {})) {"line" holed-plan} :not-a-line]
+                 [(spec "stone" 63 (kit {})) {} :plan]]]
+          (let [e (await (ending-of (b/start world plans []) job {:plan "line"} 10))]
+            (is (= [:impossible reason] [(:kind e) (get-in e [:cause :reason])]) (str reason))))))))
+
+(deftest the-rail-line-job-exports-the-contract
+  (let [j (get registry/jobs job)]
+    (is (vector? (:conditions j)))
+    (is (nil? (:check j)))
+    (is (= [:plan :part] (:target j)))
+    (is (fn? (:quote-of j)))))
+
+(deftest a-sound-line-is-done-and-a-broken-one-is-nothing-possible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as w} (b/start (spec "stone" 63 (kit {})) {"line" (line-plan {})} [])
+              built (await (ending-of w job {:plan "line"} 400))]
+          (is (= {:kind :done :cause nil} (kc built)))
+          (is (true? (get-in built [:data :ok?])))
+          (fake/remove-block! p [7 64 0])
+          (let [broken (await (ending-of w job {:plan "line" :all-carried false} 400))]
+            (is (= {:kind :nothing-possible :cause :broken} (kc broken)))
+            (is (= [{:pos [7 64 0] :why :gap}] (get-in broken [:data :breaks])))))))))
 
 (deftest the-walk-to-a-stand-never-escalates
   (async done
@@ -558,6 +588,6 @@
       (fn ^:async t []
         (let [opts {:power :lever}
               {:keys [eng p]} (b/start (spec "stone" 63 (kit opts)) {"line" (line-plan opts)} [])
-              result (await (tu/child-outcome eng job {:plan "line"} 1))]
+              result (await (outcome eng job {:plan "line"} 1))]
           (is (true? (:ok? result)))
           (is (true? (:powered (props p [3 64 0])))))))))

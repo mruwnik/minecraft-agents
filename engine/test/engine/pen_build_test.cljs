@@ -4,6 +4,9 @@
             [engine.build-from-plan-test :as b]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.fake :as fake]
+            [engine.farm-contract-test :refer [ending-of kc]]
+            [engine.registry :as registry]
             [engine.harvest-test :as h]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
@@ -36,11 +39,11 @@
 (def built-pen (assoc built-ring "3,64,2" "oak_fence_gate"))
 
 (defn ^:async build!
-  "Run the job as a child over the world spec and plans: [result seen p]."
+  "Run the job as a child over the world spec and plans: [data seen p ending]."
   [world-spec plans args & [zones]]
-  (let [{:keys [eng p seen]} (b/start world-spec plans (or zones []))
-        result (await (tu/child-outcome eng job (merge {:plan "pen"} args) 300))]
-    [result seen p]))
+  (let [{:keys [eng p seen] :as w} (b/start world-spec plans (or zones []))
+        e (await (ending-of w job (merge {:plan "pen"} args) 300))]
+    [(:data e) seen p e]))
 
 (defn kinds-of [seen kind] (h/events-of seen kind))
 
@@ -72,6 +75,56 @@
           (is (= "oak_fence_gate" (h/block-at p 3 64 2)))
           (is (= 1 (count (kinds-of seen :pen-build.done))))
           (is (empty? (kinds-of seen :pen-build.leaky))))))))
+
+;; ---------------------------------------------------------------- the contract
+
+(deftest the-pen-job-exports-the-contract
+  (let [j (get registry/jobs job)]
+    (is (vector? (:conditions j)))
+    (is (nil? (:check j)))
+    (is (= [:plan :part] (:target j)))
+    (is (fn? (:quote-of j)))))
+
+(deftest a-closed-pen-is-done-and-a-leaky-one-is-nothing-possible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ _ _ closed] (await (build! (spec kit) {"pen" (ring-plan)} {}))
+              [_ _ _ leaky] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {}))]
+          (is (= {:kind :done :cause nil} (kc closed)))
+          (is (true? (get-in closed [:data :closed?])))
+          (is (= {:kind :nothing-possible :cause :leak} (kc leaky)))
+          (is (= :leak (get-in leaky [:data :reason]))))))))
+
+(deftest a-plan-that-cannot-work-is-impossible-and-no-zone-list-is-a-failed-condition
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stone {:id "pen" :parts [{:id "s" :cells [[2 64 2]] :want "stone"}]}]
+          (doseq [[plans zones kind reason]
+                  [[{} [] :impossible :plan-trouble]
+                   [{"pen" stone} [] :impossible :plan-trouble]
+                   [{"pen" (ring-plan)} nil :condition-failed :no-zones]]]
+            (let [e (await (ending-of (b/start (spec kit) plans zones) job {:plan "pen"} 10))]
+              (is (= [kind reason] [(:kind e) (get-in e [:cause :reason])])))))))))
+
+;; ---------------------------------------------------------------- the body ends outside
+
+(defn body-cell [p] (mapv #(int (js/Math.floor %)) (get-in @(fake/state p) [:self :pos])))
+
+(deftest a-body-inside-the-finished-pen-leaves-by-the-gate-and-shuts-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [world [(assoc (spec kit built-pen) :self {:pos [3.5 64 3.5]})
+                       (assoc (spec kit) :self {:pos [3.5 64 3.5]})]]
+          (let [{:keys [p] :as w} (b/start world {"pen" (ring-plan)} [])
+                e (await (ending-of w job {:plan "pen"} 300))
+                [x _ z] (body-cell p)]
+            (is (= :done (:kind e)) (pr-str (kc e)))
+            (is (not (and (<= 2 x 4) (<= 2 z 4))) (str "body at " (body-cell p)))
+            (is (= "oak_fence_gate" (h/block-at p 3 64 2)))
+            (is (true? (get-in e [:data :closed?])) "the gate is shut: an open gate is a leak")))))))
 
 ;; ---------------------------------------------------------------- leaks
 
@@ -118,8 +171,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (b/start (spec kit) {"pen" (ring-plan)} nil)
-              result (await (tu/child-outcome eng job {:plan "pen" :ignore-zones? true} 300))]
+        (let [{:keys [p] :as w} (b/start (spec kit) {"pen" (ring-plan)} nil)
+              result (:data (await (ending-of w job {:plan "pen" :ignore-zones? true} 300)))]
           (is (true? (:closed? result)))
           (is (= "oak_fence" (h/block-at p 4 64 3))))))))
 
@@ -127,8 +180,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (b/start (spec kit) {"pen" (ring-plan) "other" b/other-plan} [])
-              result (await (tu/child-outcome eng job {:plan "pen"} 300))
+        (let [{:keys [p seen] :as w} (b/start (spec kit) {"pen" (ring-plan) "other" b/other-plan} [])
+              result (:data (await (ending-of w job {:plan "pen"} 300)))
               [warn] (kinds-of seen :pen-build.leaky)]
           (is (= "air" (h/block-at p 4 64 3)))
           (is (= :leak (:reason result)))
@@ -159,14 +212,14 @@
      :done (count (kinds-of seen :pen-build.done))
      :listed (:list (core/state eng))}))
 
-(deftest a-sound-pen-declines-and-nothing-is-done
+(deftest a-sound-pen-places-nothing-and-is-done
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (declines (spec kit built-pen) {"pen" (ring-plan)} {:plan "pen"}))]
           (is (= 0 (:places r)))
           (is (= [] (:declined r)))
-          (is (= 0 (:done r))))))))
+          (is (= 1 (:done r))))))))
 
 (deftest a-built-but-leaky-pen-is-worked-so-the-leak-is-reported
   (async done
@@ -203,15 +256,15 @@
           (is (= [{:plan "pen" :reason "the plan cannot be read: unreadable EDN: eof"}]
                  (mapv #(select-keys % [:plan :reason]) (kinds-of seen :pen-build.declined)))))))))
 
-(deftest nothing-carried-waits-through-the-builder-without-a-warn
+(deftest nothing-carried-and-no-fetch-ends-condition-failed-without-a-warn
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (b/start (spec []) {"pen" (ring-plan)} [])]
-          (core/submit! eng (list job {:plan "pen" :fetch false}) {})
-          (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
+        (let [{:keys [p seen] :as w} (b/start (spec []) {"pen" (ring-plan)} [])
+              e (await (ending-of w job {:plan "pen" :fetch false} 40))]
           (is (empty? (h/calls p "place")))
-          (is (= [0 [:no-items]] [(count (kinds-of seen :build.declined)) (vec (distinct (map :reason (kinds-of seen :waiting))))])))))))
+          (is (= [:condition-failed :no-items] [(:kind e) (get-in e [:cause :reason])]))
+          (is (empty? (kinds-of seen :build.declined))))))))
 
 (deftest the-default-fetch-explores-for-fences-that-are-short
   (async done
@@ -219,13 +272,13 @@
       (fn ^:async t []
         (let [orig ctx/call
               asked (atom [])
-              {:keys [eng p]} (b/start (spec [{:name "oak_fence_gate" :count 1}]) {"pen" (ring-plan)} [])]
+              {:keys [p] :as w} (b/start (spec [{:name "oak_fence_gate" :count 1}]) {"pen" (ring-plan)} [])]
           (tu/seeing-all p)
           (set! ctx/call (fn [c slot j args]
                            (when (= 'jobs.items.obtain j) (swap! asked conj args))
                            (orig c slot j args)))
           (try
-            (await (tu/child-outcome eng job {:plan "pen"} 300))
+            (await (ending-of w job {:plan "pen"} 300))
             (finally (set! ctx/call orig)))
           (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %))) @asked) (pr-str @asked)))))))
 
@@ -265,8 +318,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (b/start (spec kit) {"pen" (ring-plan)} [])
-              result (await (tu/child-outcome eng job {:plan "pen"} 1))]
+        (let [w (b/start (spec kit) {"pen" (ring-plan)} [])
+              result (:data (await (ending-of w job {:plan "pen"} 1)))]
           (is (true? (:closed? result))))))))
 
 ;; ---------------------------------------------------------------- uneven

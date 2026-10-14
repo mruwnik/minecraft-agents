@@ -11,7 +11,7 @@
   Placing, access rules, refusals, give-ups and the result are jobs.build.from-plan's functions over this job's
   memory. Every dig and place asks jobs.lib.access.rules right before it acts."
   (:require [jobs.lib.access.rules :as rules]
-            [jobs.lib.declined :as declined]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
@@ -150,7 +150,7 @@
   "Dig the rail at pos through the jobs.blocks.dig child (hazards, tidy record, tool, drops) if the rules agree, and
   count one fix when it is dug. Water beside is taken as :accept says, lava never. A hazard or a failed dig counts a
   :shape failure, and so does a cell already clear that the plan still reads as a wrong rail (the next round re-reads it).
-  Resolves to the child's :continue or :declined, or :continue when the cell cannot be reached (the build parks), else :again."
+  Resolves to :continue while the child waits or the cell cannot be reached (the build parks), else :again."
   [c pos]
   (let [v (rules/may-dig? (assoc (plan/rules-input c) :cell pos))
         [x y z] pos
@@ -161,15 +161,12 @@
     (if-not (:ok v)
       (do (ctx/update-mem! c plan/refuse pos (select-keys v [:reason :zone :plan :claim]))
           :again)
-      (let [r (await (declined/call-child! c :dig 'jobs.blocks.dig args))]
-        (if (#{:continue :declined} r)
-          r
-          (let [{:keys [dug reason]} (ctx/child-result c :dig)]
-            (cond
-              dug (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0))
-              (= :unreachable reason) nil
-              :else (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c))))
-            (if (= :unreachable reason) :continue :again)))))))
+      (let [r (await (ctx/call c :dig 'jobs.blocks.dig args))]
+        (cond
+          (= :continue r) :continue
+          (= :unreachable (contract/cause-key r)) :continue
+          (and (= :done (:kind r)) (:dug (:data r))) (do (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0)) :again)
+          :else (do (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c))) :again))))))
 
 (defn ^:async fix-step!
   "Deal with the settled wrong rail at pos: give up as :shape once the fixes are spent, else dig it (walking into

@@ -1,5 +1,5 @@
 ;; Card eda1e677 (carded 8e79cb89): jobs.build.pen with a plan whose fence ring has a gap (cell [10 0 12] is not in the plan, and
-;; nothing is placed that the plan does not ask for) ends :done with :closed? false, one warn pen-build.leaky naming the leak
+;; nothing is placed that the plan does not ask for) ends nothing-possible :leak (data :closed? false), one warn pen-build.leaky naming the leak
 ;; (:reason :leak), and no pen-build.done. Should-succeed: the full ring closes (pen-build.done :closed). Should-fail: the gap.
 {:defaults
  {:tags [:build :pen] :time :any
