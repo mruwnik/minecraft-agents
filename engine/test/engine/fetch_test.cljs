@@ -27,6 +27,17 @@
 
 (def sight-opts {:radius 16 :ray-deg 2})
 
+(def fetch-driver
+  "A job whose only work is jobs.lib.fetch/fetch! for a pickaxe to dig stone: the failure-memory tests drive the lib
+  through it, as no contract job calls fetch! for a tool any more."
+  {:args {:fetch {:default true}}
+   :check (constantly true)
+   :round (fn ^:async fetch-driver [c]
+            (let [r (await (fetch/fetch! c 'fetch-driver
+                                         #(when-not (some (fn [i] (= "wooden_pickaxe" (.-name i))) (.-inventory (.self (:primitives %))))
+                                            {:reason :no-tool :block "stone"})))]
+              (if (= :continue r) :continue :done)))})
+
 (defn start
   "An engine over a fake world on an andesite floor, seeing through perception (one sight pass first), with zones."
   ([world zones] (start world zones sight-opts))
@@ -35,7 +46,7 @@
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor (assoc world :floor-block "andesite"))
         p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc sight :now #(deref clock))))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+        eng (core/create {:primitives p :jobs (assoc registry/jobs (quote fetch-driver) fetch-driver) :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
@@ -71,7 +82,7 @@
 
 (defn equip-spec [extra] (list 'jobs.items.equip (merge {:item "wooden_pickaxe"} extra)))
 
-(defn mine-spec [extra] (list 'jobs.gather.mine (merge {:block "stone" :count 1} extra)))
+(defn driver-spec [extra] (list 'fetch-driver extra))
 
 (defn stopped-reasons [s] (mapv :reason (events-of s :stopped)))
 
@@ -248,17 +259,17 @@
           (is (empty? (transfers s)))
           (is (= [:no-tool] (stopped-reasons s))))))))
 
-(deftest a-failure-is-remembered-and-a-second-mine-does-not-look-again
+(deftest a-failure-is-remembered-and-a-second-fetch-does-not-look-again
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "dirt" :count 3}]}) [own-zone])]
-          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
+          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
           (await (run-ticks s 25))
           (is (= 1 (count (inspects s))) "the chest was looked into once")
           (is (empty? (transfers s)))
           (is (= 1 (count (events-of s :fetch.failed))))
-          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
+          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
           (await (run-ticks s 15))
           (is (= 1 (count (inspects s))) "not again within the failure's time")
           (is (= 1 (count (events-of s :fetch.failed)))))))))
@@ -268,11 +279,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {}) [own-zone])]
-          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
+          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
           (await (run-ticks s 25))
           (is (= 1 (count (events-of s :fetch.failed))))
           (swap! (fake/state (:p s)) fake/give "oak_log" 4)
-          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
+          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
           (await (run-ticks s 60))
           (is (= 1 (count (events-of s :fetch.failed))) "no second failure: the fetch ran again")
           (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
@@ -282,10 +293,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {}) [own-zone])]
-          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
+          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
           (await (run-ticks s 25))
           (swap! (fake/state (:p s)) fake/give "dirt" 4)
-          (core/submit! (:eng s) (mine-spec {:fetch true}) {})
+          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
           (await (run-ticks s 25))
           (is (= 1 (count (events-of s :fetch.failed))))
           (is (nil? (get (inv s) "wooden_pickaxe"))))))))
@@ -295,11 +306,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "dirt" :count 3}]}) [own-zone])]
-          (core/submit! (:eng s) (mine-spec {:fetch {:fail-minutes 1}}) {})
+          (core/submit! (:eng s) (driver-spec {:fetch {:fail-minutes 1}}) {})
           (await (run-ticks s 25))
           (is (= 1 (count (events-of s :fetch.failed))))
           (swap! (:clock s) + 70000)
-          (core/submit! (:eng s) (mine-spec {:fetch {:fail-minutes 1}}) {})
+          (core/submit! (:eng s) (driver-spec {:fetch {:fail-minutes 1}}) {})
           (await (run-ticks s 25))
           (is (= 2 (count (events-of s :fetch.failed))) "tried again after the minute"))))))
 
