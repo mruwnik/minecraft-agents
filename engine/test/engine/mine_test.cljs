@@ -1920,7 +1920,7 @@
 (defn ^:async as-child
   "Run the job with args under a contract parent (ctx/call) for n ticks; {:s setup :out the child's ending :fetch the get-tool calls}.
   get-tool is a stub that records its args and, when give is set, hands over that pickaxe (else stops :no-source)."
-  [args world give n & [{:keys [move-to before]}]]
+  [args world give n & [{:keys [move-to before jobs]}]]
   (let [s (start {:world world})
         _ (when before (before s))
         out (atom nil)
@@ -1940,7 +1940,7 @@
                 :round (fn ^:async mining-parent [c]
                          (let [e (await (ctx/call c :kid 'jobs.gather.mine args))]
                            (if (= :continue e) :continue (do (reset! out e) :done))))}
-        eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'mining-parent parent 'jobs.items.get-tool stub))]
+        eng (assoc (:eng s) :jobs (merge (assoc (:jobs (:eng s)) 'mining-parent parent 'jobs.items.get-tool stub) jobs))]
     (core/submit! eng '(mining-parent) {})
     (dotimes [_ n]
       (swap! (:clock s) + 700)
@@ -2678,3 +2678,36 @@
         (let [{:keys [out]} (await (as-child {:block "sand" :count 6} {:blocks (merge floor sand-patch) :self {:food 2}} nil 5
                                              {:before #(mem/write! (:store (:eng %)) :hungry {:food 2} {:cap 10 :ttl 3600000})}))]
           (is (= [:limit-reached :food :hungry] [(:kind out) (:line (:cause out)) (contract/cause-key out)]) (pr-str out)))))))
+
+(deftest a-run-that-got-its-count-but-not-home-ends-nothing-possible-not-home
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [setup (atom nil)
+              real (get-in (start {:world {}}) [:eng :jobs 'jobs.movement.go-to])
+              no-walk (assoc real :round (fn ^:async go-to [c]
+                                   (if (< (:x (:pos (:args c))) 2)
+                                     (do (swap! (fake/state (:p @setup)) assoc-in [:self :pos] [6.5 64 0.5])
+                                         (ctx/end c :nothing-possible {:reason :unreachable} {}))
+                                     (await ((:round real) c)))))
+              {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :tunnel-length 0}
+                                             {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} nil 300
+                                             {:jobs {'jobs.movement.go-to no-walk} :before #(reset! setup %)}))]
+          (is (= [:nothing-possible :not-home 1] [(:kind out) (contract/cause-key out) (:got (:data out))]) (pr-str out)))))))
+
+(deftest a-pickaxe-that-breaks-in-the-dig-phase-with-none-to-fetch-ends-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (assoc (rock-world {}) :inventory [{:name "stone_pickaxe" :count 1 :durability 4 :max 131}])
+              n (atom 0)
+              {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :mend false} w nil 120
+                                             {:before (fn [s]
+                                                        (let [world (.-world (:p s))]
+                                                          (.override world "dig"
+                                                                     (fn ^:async f [token a impl]
+                                                                       (let [r (await (impl token a))]
+                                                                         (when (= 3 (swap! n inc))
+                                                                           (swap! (.. world -state) assoc :inventory []))
+                                                                         r)))))}))]
+          (is (= [:condition-failed :no-tool] [(:kind out) (contract/cause-key out)]) (pr-str out)))))))
