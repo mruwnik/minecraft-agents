@@ -18,9 +18,9 @@
          [:job (jobs.build.path {:from #at [18 -1 18] :to #at [20 -1 20]})]]
    :expect [{:event {:source :job :kind :path.done :data {:pathed 9}} :within-s 80 :of-job true}]
    :after [[:block [19 -1 19] "dirt_path"]]}
-  {:name "no-shovel-and-no-fetch-fails"
+  {:name "no-shovel-and-no-fetch-waits"
    :act [[:job (jobs.build.path {:from #at [18 -1 18] :to #at [20 -1 20] :fetch false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool :cause {:kind "shovel"}}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool :cause {:kind "shovel"}}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :path.done} :for-s 20}]
    :after [[:not-block [19 -1 19] "dirt_path"]]}
   {:name "stone-cell-is-skipped"
@@ -37,6 +37,6 @@
                                      #at [18 -1 20] #at [19 -1 20] #at [20 -1 20]]
                      :want [:any "cobblestone"]}]}]
    :act [[:job (jobs.build.path {:from #at [18 -1 18] :to #at [20 -1 20]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :refused}} :within-s 30 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :path.done} :for-s 20}]
    :after [[:not-block [19 -1 19] "dirt_path"]]}]}

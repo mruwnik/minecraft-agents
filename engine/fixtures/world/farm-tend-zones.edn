@@ -3,7 +3,7 @@
 ;; with the cells skipped :no-hoe instead of an endless :continue. Floor y -1 is the ground layer; wheat at y 0, water beside.
 ;; Should-succeed: control with an own ripe cell is harvested (cut 1) while the foreign one stays ripe; a hoe with 1 durability left
 ;; tills one cell, breaks, and the rest are skipped :no-hoe (till.done).
-;; Should-fail: only the foreign ripe cell: tend ends condition-failed and cuts nothing (no farm-tend.done).
+;; Should-fail: only the foreign ripe cell: tend waits and cuts nothing (no farm-tend.done).
 ;; The till case stands at x 9.5 so cell x 10 is strictly nearest (at 10.5 cells 10 and 11 tie and the one tilled before the hoe breaks is arbitrary).
 {:defaults
  {:tags [:farm :tend :till :jobs]
@@ -16,7 +16,7 @@
             [:set [10 0 16] "wheat[age=7]"]]
    :plans [{:id "other" :parts [{:id "f" :cells [#at [10 0 16]] :want [:any "wheat"]}]}]
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :nothing-to-do}} :within-s 30 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :farm-tend.done} :for-s 30}]
    :after [[:block [10 0 16] "wheat[age=7]"]]}
   {:name "own-ripe-cell-harvested-foreign-one-left-standing"

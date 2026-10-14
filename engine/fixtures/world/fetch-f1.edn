@@ -16,13 +16,13 @@
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 60 :of-job true}
             {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 80 :of-job true}]
    :after [[:block [18 0 19] "air"] [:item "wooden_pickaxe" 1] [:item "cobblestone" 1]]}
-  {:name "dig-without-fetch-stops-no-tool"
+  {:name "dig-without-fetch-waits-no-tool"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 20 :until {:source :job :kind :stopped}}
-            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 20 :until {:source :job :kind :stopped}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-tool}}}
+            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
    :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
   {:name "chest-never-seen-not-used"
    :blocks [[:fill [13 0 18] [15 2 20] "stone" :outline]
