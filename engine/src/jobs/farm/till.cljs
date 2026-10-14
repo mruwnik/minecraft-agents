@@ -6,28 +6,34 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as b]
+            [jobs.farm.common :as common]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
-            [jobs.lib.toll-cells :as tc]
-            [jobs.lib.world :as known]))
+            [jobs.lib.places :as places]
+            [jobs.lib.toll-cells :as tc]))
 
 (def doc
   "Hoe dirt, grass_block or dirt_path into farmland over a set of ground cells, given as the box :from/:to or
   the square :center/:radius (at most 256 cells). Water nearby is not its concern.
-  Needs a hoe: without one it fetches one (jobs.lib.fetch, child :fetch) while cells wait; with :fetch false, or
-  after a failed fetch, the check waits :no-tool (kind hoe) and cells left without a hoe are skipped :no-hoe. Ground cover over a cell (grass, ferns, flowers, snow layer) is dug first with
-  a jobs.blocks.dig child. If that child declines or gives up, it counts a try.
+  Needs a hoe: the call's :use {:tools [..]} names the ones it may use (default every carried hoe); with none carried it
+  fetches one (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as the :because, tilled and skipped
+  in the data), with :fetch false the call is refused {:reason :no-tool :kind \"hoe\"}. Ground cover over a cell (grass,
+  ferns, flowers, snow layer) is dug first with a jobs.blocks.dig child; a cover dig that does not clear it counts a try.
   Cells are skipped with a reason: :not-tillable, :covered (something else above), :not-permitted (zone rules),
   :unreachable, :gone, :refused (the hoe failed twice), :no-hoe (the hoe is gone) or :cover-stuck (two failed cover
   digs).
   With :for-plan (the id of the plan the cells belong to) that plan's own footprint does not refuse a cell. Zones
   and the footprints of other plans are checked when a cell is chosen and again before the hoe or cover dig.
-  The job declines while no zone list has been read, unless :ignore-zones? is true, and before its first round when
-  every tillable cell is refused (wait :refused); cells refused later are skipped :not-permitted.
-  Result: {:tilled n :skipped {pos reason}}; with none tilled and cells skipped it is {:status :stopped :reason r}, r the one skip reason or :nothing-tilled when mixed.")
+  Refused before it starts, as failed conditions (with a till.declined warn for the zone ones): {:reason :bad-args :why},
+  {:reason :no-zones} (no zone list read, unless :ignore-zones?), {:reason :refused :zones ..} (every tillable cell is
+  refused) and the hoe above.
+  Ends with data {:tilled n :skipped {pos reason}}: done when it tilled some (the least accepted is :least, cells) or had
+  nothing to till; with none tilled and cells skipped, condition-failed for :not-tillable, :covered, :not-permitted, :gone
+  and :no-hoe, else nothing-possible (:unreachable, :refused, :cover-stuck), the cause the one skip reason or
+  :nothing-tilled when mixed. done? counts the cells tilled this call and the cells left.")
 
 (a/defargs args
   {:from {:doc "box corner (inclusive); with :to, any order" :spec ::a/pos :default nil}
@@ -35,7 +41,7 @@
    :center {:doc "centre of a square of cells at its y; with :radius" :spec ::a/pos :default nil}
    :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :spec (a/int-in 0 7) :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :fetch {:doc "get a hoe when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}
+   :fetch {:doc "get a hoe when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :no-tool" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -71,10 +77,36 @@
       (throw (ex-info (str "till covers " n " cells, at most " (max-cells)) {:cells n})))
     (vec (for [x (span xa xb) y (span ya yb) z (span za zb)] {:x x :y y :z z}))))
 
+(def target [:from :to :center :radius])
+(def defaults {:use {:tools :till}})
+
 (defn hoe-of
   "The name of a carried item ending in _hoe, or nil."
   [p]
   (some #(when (.endsWith (:name %) "_hoe") (:name %)) (u/inventory p)))
+
+(defn listed
+  "The hoes the call names (:use {:tools [..]}) as a set, or nil when it names none (the engine's default list is not given)."
+  [c]
+  (let [l (get-in (:args c) [:use :tools])]
+    (when (vector? l) (set l))))
+
+(defn hoe
+  "The name of a carried hoe the call may use, or nil."
+  [c]
+  (let [only (listed c)]
+    (some #(when (and (.endsWith (:name %) "_hoe") (or (nil? only) (only (:name %)))) (:name %)) (u/inventory (:primitives c)))))
+
+(defn fetch-opts
+  "The limits {:how :depth :explore} for fetching a hoe, nil when :fetch does not allow tools."
+  [c]
+  (when-let [o (fetch/opts c 'jobs.farm.till)]
+    (when (contains? (:what o) :tool) (select-keys o [:how :depth :explore]))))
+
+(defn hoe-wanted
+  "What the fetch gets: a listed hoe by name, else any hoe."
+  [c]
+  (if-let [l (listed c)] {:item (first (sort l))} {:kind "hoe"}))
 
 (defn pending
   "[[pos block-name-or-nil] ...] of the cells not skipped and not farmland."
@@ -116,34 +148,47 @@
 
 (def no-hoe {:reason :no-tool :kind "hoe"})
 
-(defn problem
-  "The :no-tool wait for a hoe while none is carried and cells are left to till, else nil."
-  [c]
-  (when (and (nil? (hoe-of (:primitives c))) (seq (pending c)))
-    no-hoe))
+(defn decline
+  "Fields (a cause) of a pre-start refusal of every tillable cell by zones, claims or plans, with one till.declined warn."
+  [c fields]
+  (ctx/warn-once! c [:access :refused] :till.declined
+                  (assoc fields :text (str "till declined: every target is refused by " (access/refusal-text fields))))
+  fields)
 
-(defn check
-  "True when nothing is pending (the round can finish), a wait without a hoe (after the fetch, if any), and false while no zone list has been
-  read (unless :ignore-zones?). Before the first round it also declines when every tillable cell is refused by a
-  zone, claim or plan. Bad args wait :bad-args with a :why. Walks the cells lazily and stops at the first one
-  that needs work, reading each cell at most once."
+(defn problem
+  "Why the call cannot run now, a cause map, or nil: bad args, no zone list read (unless :ignore-zones?), before the
+  first round every tillable cell refused by a zone, claim or plan, and (before the first round) cells to till with no hoe that may be fetched.
+  Walks the cells lazily and stops at the first one that needs work, reading each cell at most once."
   [c]
   (let [cs (try (cells (:args c))
-                (catch :default e (ex-message e)))
-        in (access/zone-input c {:except (:for-plan (:args c))})
-        refuse (when-not (or (started? c) (:ignore-zones? in))
-                 (fn [pos] (let [v (rules/social-verdict :dig (assoc in :cell (access/cell pos)))]
-                             (when (gate/refused? v) v))))]
+                (catch :default e (ex-message e)))]
     (if (string? cs)
-      (ctx/wait c {:reason :bad-args :why cs})
-      (and (or (:ignore-zones? (:args c)) (some? (known/zones c))
-               (access/decline! c :till.declined "till" {:reason :no-zones}))
-           (let [{:keys [todo? work? verdicts]} (survey c cs refuse)]
-             (cond
-               (and (seq verdicts) (not work?))
-               (access/decline! c :till.declined "till" (assoc (access/refusal-fields verdicts) :reason :refused))
+      {:reason :bad-args :why cs}
+      (let [in (access/zone-input c {:except (:for-plan (:args c))})
+            refuse (when-not (or (started? c) (:ignore-zones? in))
+                     (fn [pos] (let [v (rules/social-verdict :dig (assoc in :cell (access/cell pos)))]
+                                 (when (gate/refused? v) v))))]
+        (or (common/no-zones c :till.declined "till")
+            (let [{:keys [todo? work? verdicts]} (survey c cs refuse)]
+              (cond
+                (and (seq verdicts) (not work?)) (decline c (assoc (access/refusal-fields verdicts) :reason :refused))
+                (and todo? (not (started? c)) (nil? (hoe c)) (nil? (fetch-opts c))) no-hoe)))))))
 
-               :else (or (not todo?) (some? (hoe-of (:primitives c))) (fetch/check c 'jobs.farm.till no-hoe))))))))
+(def conditions [[:fn problem]])
+
+(defn done?
+  "Counts only (the round ends the call with its data): the cells tilled this call and the cells left to till."
+  [c]
+  (let [cs (try (cells (:args c)) (catch :default _ nil))]
+    {:done? false :units :cells :done (count (:tilled (ctx/mem c))) :left (if cs (count (pending c)) 0)}))
+
+(defn quote-of [c]
+  (let [cs (try (cells (:args c)) (catch :default _ nil))
+        p (:primitives c)
+        n (count (remove #(= "farmland" (u/seen-name p %)) cs))
+        h (hoe c)]
+    {:uses (cond-> {:time [(* 0.5 n) (* 2 n) (* 10 n)]} (and h (pos? n)) (assoc :wear {h [n n n]}))
+     :done [0 n n]}))
 
 (defn skip!
   "Record the cells as skipped with reason and emit one :till.skipped each."
@@ -174,14 +219,35 @@
   (let [me (u/self-pos c)]
     (apply min-key #(u/dist me (first %)) todo)))
 
+(def condition-skips
+  "Skip reasons that name a cell or a hoe that is not there to use; any other skip is nothing-possible."
+  #{:not-tillable :covered :not-permitted :gone :no-hoe})
+
 (defn nothing-tilled
-  "Stopped outcome for a run that tilled nothing: the one skip reason, or :nothing-tilled when they are mixed."
+  "The cause (the one skip reason, :nothing-tilled when they are mixed) and text of a run that tilled nothing."
   [skipped]
   (let [counts (frequencies (vals skipped))
         reason (if (= 1 (count counts)) (key (first counts)) :nothing-tilled)
         text (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) counts)))]
-    {:status :stopped :reason reason
-     :text (if (= :no-hoe reason) "no hoe, nothing tilled" (str "nothing tilled: " text))}))
+    [reason (if (= :no-hoe reason) "no hoe, nothing tilled" (str "nothing tilled: " text))]))
+
+(defn result-of
+  "The data of the call's ending: what is tilled and skipped so far."
+  [c]
+  (let [mem (ctx/mem c)]
+    {:tilled (count (:tilled mem)) :skipped (:skipped mem {})}))
+
+(defn conclude!
+  "The ending of a run with no cell left to work. Done when it tilled enough (or had nothing to skip); else the cause is
+  the skip reason(s)."
+  [c]
+  (let [{:keys [tilled skipped] :as result} (result-of c)]
+    (ctx/emit! c :till.done :info {:tilled tilled :skipped (count skipped)
+                                   :text (str "tilled " tilled ", skipped " (count skipped))})
+    (if (or (empty? skipped) (common/enough? c tilled (+ tilled (count skipped))))
+      (ctx/end c :done nil result)
+      (let [[reason text] (if (pos? tilled) [:partial (str "tilled " tilled ", skipped " (count skipped))] (nothing-tilled skipped))]
+        (ctx/end c (if (condition-skips reason) :condition-failed :nothing-possible) reason (assoc result :text text))))))
 
 (defn ^:async till-step!
   "One step: skip what cannot be tilled, else walk to the nearest cell, clear ground cover above it or use the hoe on it."
@@ -194,27 +260,18 @@
           _ (when (seq unpermitted) (skip! c unpermitted :not-permitted))
           bad? (into (set bad) unpermitted)
           cands (remove (fn [[pos _]] (bad? pos)) todo)
-          hoe (hoe-of p)]
+          tool (hoe c)]
       (cond
-        (empty? cands)
-        (let [mem (ctx/mem c)
-              tilled (count (:tilled mem))
-              skipped (:skipped mem {})]
-          (ctx/emit! c :till.done :info {:tilled tilled :skipped (count skipped)
-                                         :text (str "tilled " tilled ", skipped " (count skipped))})
-          (ctx/result! c (cond-> {:tilled tilled :skipped skipped}
-                           (and (zero? tilled) (seq skipped))
-                           (merge (nothing-tilled skipped))))
-          :done)
+        (empty? cands) (conclude! c)
 
-        (nil? hoe)
+        (nil? tool)
         (do (skip! c (map first cands) :no-hoe) :again)
 
         :else
         (let [[target _] (nearest c cands)
-              w (await (near/go-near! c target 3 {:tolls (tc/walk-tolls c (near/cell-of target))}))]
+              w (await (common/walk! c target 3 {:tolls (tc/walk-tolls c (:pos (places/parse-pos target)))}))]
           (case w
-            :partial :continue
+            :continue :continue
             :blocked (do (bump! c target :unreachable) :again)
             (let [above-pos (update target :y inc)
                   above (u/seen-name p above-pos)]
@@ -226,17 +283,18 @@
                 (do (skip! c [target] :not-permitted) :again)
 
                 (ground-cover above)
-                (let [r (await (ctx/call-child c :cover 'jobs.blocks.dig (cover-args c above-pos)))]
-                  (when (or (= :declined r)
-                            (and (= :done r) (not (#{:dug :already-clear} (:reason (ctx/child-result c :cover))))))
-                    (bump! c target :cover-stuck))
-                  :again)
+                (let [e (await (ctx/call c :cover 'jobs.blocks.dig (cover-args c above-pos)))]
+                  (cond
+                    (= :continue e) :continue
+                    (not (and (= :done (:kind e)) (#{:dug :already-clear} (:reason (:data e)))))
+                    (do (bump! c target :cover-stuck) :again)
+                    :else :again))
 
                 (not (or (nil? above) (air above)))
                 (do (skip! c [target] :covered) :again)
 
                 :else
-                (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item hoe :face "up"}))
+                (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item tool :face "up"}))
                       status (.-status r)]
                   (cond
                     (and (= "used" status) (= "farmland" (some-> (.-after r) .-name)))
@@ -247,11 +305,23 @@
                     :else (bump! c target :refused))
                   :again)))))))))
 
+(defn ^:async hoe!
+  "Get a hoe when none may be used and cells are left: nil when one is carried (or came), :continue while the fetch waits
+  on the world, else the ending of the call: done when enough is tilled already, else the fetch's kind and cause."
+  [c]
+  (when (and (nil? (hoe c)) (seq (pending c)))
+    (let [e (await (need/tool! c (hoe-wanted c) (fetch-opts c)))]
+      (cond
+        (= :continue e) :continue
+        (= :done (:kind e)) nil
+        (common/enough? c (count (:tilled (ctx/mem c))) (count (cells (:args c)))) (conclude! c)
+        :else (ctx/end c (:kind e) (:cause e) (result-of c))))))
+
 (defn ^:async round
   "The whole attempt: fetch a hoe when none is carried, then loop the steps (skip what cannot be tilled, walk to the
   nearest cell, clear ground cover above it or use the hoe on it) until the cells are done; :continue only while a walk
   or fetch waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async s []
-                          (or (await (fetch/fetch! c 'jobs.farm.till problem))
+                          (or (await (hoe! c))
                               (await (till-step! c)))))))

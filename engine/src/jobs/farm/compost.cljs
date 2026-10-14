@@ -1,22 +1,24 @@
 (ns jobs.farm.compost
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.farm.common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.places :as places]
             [jobs.lib.toll-cells :as tc]))
 
 (def doc
   "Feed a composter what a farm cannot use and collect the bone meal it makes.
-  Walks to the composter, feeds it, empties it when full and picks up the bone meal.
-  Ends when :times bone meal is taken, nothing is left to feed, there is no composter,
-  or three failures in a row.
-  Result: {:fed {name n} :bone-meal n}, plus :reason (:no-composter, :nothing-to-feed, :gave-up) when it stopped early.
+  Walks to the composter (a go-to child), feeds it, empties it when full and picks up the bone meal.
   Zones: a composter in another owner's zone or claim, or inside a plan's footprint, is not used (it counts as a
-  :harvest). The job warns compost.declined once, with :reason :refused (or :no-zones when no zone list was read).
-  :ignore-zones? true skips the check.")
+  :harvest), with a compost.declined warn once (:reason :refused). :ignore-zones? true skips the check.
+  Refused before it starts as a failed condition: {:reason :no-zones} (no zone list read, unless :ignore-zones?).
+  Ends when :times bone meal is taken (done), nothing is left to feed, there is no composter, or three failures in a row.
+  Data {:fed {name n} :bone-meal n :level}, plus :reason when it stopped early. Stopped early with at least :least bone meal
+  taken (default 1) it is done; with less it is condition-failed :no-composter or :nothing-to-feed, or nothing-possible
+  :gave-up. done? counts the bone meal taken.")
 
 (a/defargs args
   {:at {:doc "the composter position; the nearest composter within :radius when nil" :spec ::a/pos :default nil}
@@ -60,7 +62,26 @@
                  (let [spare (- (get held n 0) (get reserve n 0))]
                    (when (pos? spare) [n spare])))))))
 
-(defn check [_c] true)
+(def target [:at])
+
+(defn problem
+  "The cause {:reason :no-zones} while no zone list has been read, else nil."
+  [c]
+  (common/no-zones c :compost.declined "compost"))
+
+(def conditions [[:fn problem]])
+
+(defn done?
+  "Counts only (the round ends the call with its data): the bone meal taken and the rest of :times."
+  [c]
+  (let [taken (:taken (ctx/mem c) 0)]
+    {:done? false :units :bone-meal :done taken :left (max 0 (- (:times (:args c)) taken))}))
+
+(defn quote-of [c]
+  (let [times (:times (:args c))]
+    {:yields {:items {"bone_meal" [0 times times]}}
+     :uses {:time [2 (* 40 times) (* 200 times)]}
+     :done [0 times times]}))
 
 (defn level-of [b]
   (or (some-> b .-properties .-level) 0))
@@ -81,14 +102,20 @@
          first)))
 
 (defn finish!
-  "End the job with result data; extra fields merged in."
+  "End the call. Taking :times bone meal is done; an early stop (extra's :reason) is done when it took the call's least,
+  else the reason is the cause: condition-failed for :no-composter and :nothing-to-feed, nothing-possible :gave-up."
   [c extra]
-  (let [m (ctx/mem c)]
-    (ctx/result! c (merge {:fed (:fed m {}) :bone-meal (:taken m 0)} extra))
-    :done))
+  (let [m (ctx/mem c)
+        taken (:taken m 0)
+        data (merge {:fed (:fed m {}) :bone-meal taken} extra)
+        reason (:reason extra)]
+    (cond
+      (nil? reason) (ctx/end c :done nil data)
+      (and (pos? taken) (common/enough? c taken (:times (:args c)))) (ctx/end c :done nil data)
+      :else (ctx/end c (if (= :gave-up reason) :nothing-possible :condition-failed) reason data))))
 
 (defn strike!
-  "Count a failure; :again until the third in a row, then warn and :done."
+  "Count a failure; :again until the third in a row, then warn and end :gave-up."
   [c level]
   (let [strikes (inc (:strikes (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :strikes strikes)
@@ -141,9 +168,9 @@
               (finish! c {:level level}))
 
             :else
-            (let [w (await (near/go-near! c pos 3 {:tolls (tc/walk-tolls c (near/cell-of pos))}))]
+            (let [w (await (common/walk! c pos 3 {:tolls (tc/walk-tolls c (:pos (places/parse-pos pos)))}))]
               (case w
-                :partial :continue
+                :continue :continue
                 :blocked (strike! c level)
                 (cond
                   (not (composter-allowed? c pos))

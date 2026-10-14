@@ -449,7 +449,7 @@
               [r s] (await (child-result 'jobs.farm.till {:from {:x 2 :y 63 :z 2} :to {:x 3 :y 63 :z 2} :for-plan "mix"}
                                          (world-of (ground "dirt" wheat-cells) {:inventory [(item "stone_hoe" 1)]})
                                          {"mix" (plan-of)} [zone] 20))]
-          (is (= {:tilled 1 :skipped {{:x 3 :y 63 :z 2} :not-permitted}} r))
+          (is (= {:tilled 1 :skipped {{:x 3 :y 63 :z 2} :not-permitted}} (dissoc r :status)))
           (is (= ["farmland" "dirt"] [(block-at s 2 63 2) (block-at s 3 63 2)])))
         (let [plan {:id "mix" :parts [{:id "far" :cells [[8 64 0]] :want {:crop "wheat"}}]}
               s (setup (world-of (ground "dirt" [[8 0]]) {:inventory [(item "stone_hoe" 1)]}) {"mix" plan} [])

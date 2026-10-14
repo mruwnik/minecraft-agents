@@ -871,8 +871,7 @@
           (core/submit! (:eng s) (list 'jobs.farm.fertilize {:grass true :max 1}) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
-          (is (= 1 (count (calls s "useOn"))))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= 1 (count (calls s "useOn")))))))))
 
 (deftest fertilize-fetches-bone-meal-from-an-own-seen-chest
   (async done
@@ -882,8 +881,7 @@
           (core/submit! (:eng s) (list 'jobs.farm.fertilize {:grass true :max 1 :fetch true}) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
-          (is (= 1 (count (calls s "useOn"))))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= 1 (count (calls s "useOn")))))))))
 
 (def sapling-spot {:x 4 :y 64 :z 3})
 

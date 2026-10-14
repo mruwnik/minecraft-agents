@@ -7,7 +7,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [jobs.lib.util :as u]
-            [engine.test-util :as tu :refer [run-until-empty child-outcome]]
+            [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.farm.find-spot :as fs]
             [jobs.lib.surface :as surface]))
@@ -22,6 +22,12 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn kinds [seen kind] (filterv #(= kind (:kind %)) @seen))
+
+(defn ^:async child-outcome
+  "tu/child-outcome without the status and ending the adapter adds."
+  [eng job args n]
+  (let [r (await (tu/child-outcome eng job args n))]
+    (if (map? r) (dissoc r :status :ending) r)))
 
 (def job 'jobs.farm.find-spot)
 

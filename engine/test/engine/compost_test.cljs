@@ -168,9 +168,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:inventory (inv "wheat_seeds" 10) :blocks comp-block} (ew/of-data {} {} nil))
-              result (await (child-outcome eng job {:at at :items ["wheat_seeds"]} 40))]
-          (is (= :no-composter (:reason result)))
+        (let [{:keys [eng p seen]} (setup {:inventory (inv "wheat_seeds" 10) :blocks comp-block} (ew/of-data {} {} nil))]
+          (core/submit! eng (list job {:at at :items ["wheat_seeds"]}) {})
+          (await (tu/run-until-empty eng 10))
+          (is (empty? (calls p "useOn")))
+          (is (= 1 (count (:list (core/state eng)))) "waits, does not end")
           (is (= [:no-zones] (mapv :reason (kinds seen :compost.declined)))))))))
 
 (deftest compost-looks-around-before-it-says-there-is-no-composter

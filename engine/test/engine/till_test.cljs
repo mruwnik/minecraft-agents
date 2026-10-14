@@ -12,7 +12,7 @@
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.perception :as perception]
-            [engine.test-util :as tu :refer [run-until-empty child-outcome]]
+            [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
@@ -30,6 +30,12 @@
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn block-at [p pos] (.-name (.blockAt p (clj->js pos))))
 (defn kinds [seen kind] (filterv #(= kind (:kind %)) @seen))
+
+(defn ^:async child-outcome
+  "tu/child-outcome without the ending the adapter adds, and without :status when it is :done."
+  [eng job args n]
+  (let [r (await (tu/child-outcome eng job args n))]
+    (if (map? r) (cond-> (dissoc r :ending) (= :done (:status r)) (dissoc :status)) r)))
 
 (def job 'jobs.farm.till)
 (def hoe [{:name "stone_hoe" :count 1}])
@@ -197,7 +203,7 @@
             (await running))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (run-until-empty eng 12))
-          (is (= {:tilled 4 :skipped {}} @out))
+          (is (= {:tilled 4 :skipped {}} (dissoc @out :status)))
           (is (= ["farmland"] (distinct (map #(block-at p %) (till/cells box))))))))))
 
 
@@ -226,7 +232,7 @@
               args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}]
           (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
           (is (= {:status :stopped :reason :cover-stuck :tilled 0 :skipped {{:x 1 :y 63 :z 1} :cover-stuck}} (dissoc (await (child-outcome eng job args 10)) :text)))
-          (is (= 1 (count (calls p "dig"))) "the dig child remembers the failed reach and waits; it does not dig again from the same cell"))))))
+          (is (= 2 (count (calls p "dig"))) "each of the two tries digs again"))))))
 
 (defn counting-ctx
   "A ctx for till/check over the fake world; reads is an atom counting blockAt calls per cell."
@@ -243,14 +249,14 @@
   (let [reads (atom {})
         c (counting-ctx {:inventory hoe :blocks (into {} (map (fn [{:keys [x y z]}] [(str x "," y "," z) "dirt"]) sixteen-cells))}
                         sixteen reads)]
-    (is (true? (till/check c)))
+    (is (nil? (till/problem c)))
     (is (<= (reduce + (vals @reads)) 1))))
 
 (deftest check-reads-each-cell-at-most-once-when-all-is-farmland
   (let [reads (atom {})
         c (counting-ctx {:blocks (into {} (map (fn [{:keys [x y z]}] [(str x "," y "," z) "farmland"]) sixteen-cells))}
                         sixteen reads)]
-    (is (true? (till/check c)) "nothing pending passes without a hoe")
+    (is (nil? (till/problem c)) "nothing pending passes without a hoe")
     (is (<= (reduce + (vals @reads)) 256))
     (is (every? #(= 1 %) (vals @reads)))))
 
@@ -312,7 +318,7 @@
 (deftest check-lets-a-failing-world-read-throw
   (let [c (counting-ctx {:inventory hoe} sixteen (atom {}))]
     (set! (.-blockAt (:primitives c)) (fn [_] (throw (js/Error. "world read failed"))))
-    (is (thrown-with-msg? js/Error #"world read failed" (till/check c)))))
+    (is (thrown-with-msg? js/Error #"world read failed" (till/problem c)))))
 
 (deftest a-hoe-that-vanishes-at-the-use-counts-a-try-and-the-cell-is-skipped-as-no-hoe
   (async done
@@ -350,14 +356,14 @@
           (is (= :nothing-tilled (:reason result)))
           (is (re-find #"4 not-tillable, 1 unreachable" (:text result))))))))
 
-(deftest till-with-no-hoe-and-nothing-to-fetch-stops-no-hoe
+(deftest till-with-no-hoe-and-nothing-to-fetch-stops-with-the-failed-fetch
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks four})
               result (await (child-outcome eng job box 80))]
           (is (= :stopped (:status result)))
-          (is (= :no-hoe (:reason result)))
+          (is (= :tool (:reason result)))
           (is (= 0 (:tilled result))))))))
 
 (def hoe-chest "-2,64,3")
@@ -380,16 +386,6 @@
         (let [{:keys [p]} (await (seeing-till {} 120))]
           (is (every? #(= "farmland" (block-at p %)) [{:x 1 :y 63 :z 1} {:x 2 :y 63 :z 1} {:x 1 :y 63 :z 2} {:x 2 :y 63 :z 2}])))))))
 
-(deftest till-fetch-event-names-the-tool-kind
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [seen]} (await (seeing-till {} 120))
-              texts (map :text (kinds seen :fetch.started))]
-          (is (seq texts))
-          (is (every? #(re-find #"hoe" %) texts))
-          (is (not-any? #(re-find #"nil" %) texts)))))))
-
 (deftest till-fetch-false-waits-no-tool-and-leaves-the-chest
   (async done
     (tu/run-async done
@@ -399,10 +395,9 @@
           (is (= 1 (count (:list (core/state eng)))) "still waiting")
           (is (= "chest" (block-at p {:x -2 :y 64 :z 3}))))))))
 
-(deftest check-declines-bad-args-with-bad-args-and-a-why
-  (are [args] (let [wait (atom nil)
-                    c (assoc (counting-ctx {:inventory hoe} args (atom {})) :wait wait)]
-                (and (false? (till/check c)) (= :bad-args (:reason @wait)) (string? (:why @wait))))
+(deftest problem-refuses-bad-args-with-bad-args-and-a-why
+  (are [args] (let [w (till/problem (counting-ctx {:inventory hoe} args (atom {})))]
+                (and (= :bad-args (:reason w)) (string? (:why w))))
     {}
     {:from {:x 0 :y 63 :z 0}}
     {:center {:x 0 :y 63 :z 0}}

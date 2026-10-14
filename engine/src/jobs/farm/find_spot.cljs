@@ -3,10 +3,10 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.surface :as surface :refer [open?]]
+            [jobs.farm.common :as common]
             [jobs.farm.till :as till]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [clojure.string :as str]))
 
@@ -15,14 +15,15 @@
   open sky and nearness to :center. It tries patches nearest-first and stops once :limit flat open-sky ones are found (with water within 4, when water is in range).
   A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks anything.
   A scan reads at most about 30000 blocks, then settles for the best spots so far.
-  With :walk true it then walks to the best spot.
-  Result: {:spot pos-or-nil :spots [...] :walked bool}, :spots best first up to :limit, each {:pos :score :level :work
+  With :walk true it then walks to the best spot (a go-to child).
+  Ends with data {:spot pos-or-nil :spots [...] :walked bool}: done with the spots, nothing-possible :none (no patch found)
+  or :unreachable (spots found, the walk failed; :walked false). :spots best first up to :limit, each {:pos :score :level :work
   :water-share :sky :away :y}; the info find-spot.found lists them all. A pos is the north-west corner at ground level.
   Score = level (% of the patch's cells at its commonest ground height y, 0-100) + 25 x water-share + 15 for open sky,
   less :work (sum of blocks the other cells are off y, at most 40) and :away / 4 (blocks from :center, at most 30).
   A spot with level under 100 has cells to level or build up. :farmable is the % of its cells whose ground a hoe makes
   farmland of (dirt, grass, path, coarse or rooted dirt); every missing tenth costs 4 points.
-  :reason is :none (no patch found) or :unreachable (walk failed).")
+  Needs nothing; it reads only what the body has seen and looks around once when no water is in sight.")
 
 (a/defargs args
   {:w {:doc "patch width (x), 1 to 16" :spec (a/int-in 1 16) :default 5}
@@ -173,7 +174,12 @@
   [p a from]
   (:found (scan-rows p a from {:next-ring 0 :found []} ##Inf)))
 
-(defn check [_c] true)
+(def target [:center :w :h])
+(def conditions [])
+
+(defn quote-of [c]
+  (let [{:keys [range walk]} (merge (into {} (map (fn [[k v]] [k (:default v)])) args) (:args c))]
+    {:uses {:time [0.1 1 (+ 20 (if walk (* 4 range) 0))]}}))
 
 (defn spot-text [{:keys [pos score level work water-share sky away]}]
   (str "x " (:x pos) " y " (:y pos) " z " (:z pos) " score " score " (level " level "% work " work " water "
@@ -224,16 +230,16 @@
                 (or (:spots (ctx/mem c)) (scan-step! c a)))]
     (cond
       (= :again found) :again
-      (nil? found) (do (ctx/result! c {:spot nil :reason :none}) :done)
+      (nil? found) (ctx/end c :nothing-possible :none {:spot nil :reason :none})
       :else
       (let [pos (:pos (first found))
             result {:spot pos :spots found}]
         (if-not (:walk a)
-          (do (ctx/result! c (assoc result :walked false)) :done)
-          (case (await (near/go-near! c (update pos :y inc) 2 {:zone-tolls true}))
-            :partial :continue
-            :blocked (do (ctx/result! c (assoc result :walked false :reason :unreachable)) :done)
-            (do (ctx/result! c (assoc result :walked true)) :done)))))))
+          (ctx/end c :done nil (assoc result :walked false))
+          (case (await (common/walk! c (update pos :y inc) 2 {:zone-tolls true}))
+            :continue :continue
+            :blocked (ctx/end c :nothing-possible :unreachable (assoc result :walked false :reason :unreachable))
+            (ctx/end c :done nil (assoc result :walked true))))))))
 
 (defn ^:async round
   "The whole attempt: scan slice after slice, then the walk; :continue only while the walk waits on the world."

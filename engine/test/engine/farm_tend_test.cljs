@@ -444,6 +444,15 @@
     (is (= {:till {:skipped :nothing-to-till}}
            (:report (steps/plan decide/decide [:till] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {}))))))
 
+(deftest a-contract-child-refused-before-it-started-counts-as-declined
+  (are [r refused] (= refused (tend/refused? r))
+    {:status :stopped :reason :no-zones :ending {:kind :condition-failed :cause {:reason :no-zones}}} true
+    {:status :stopped :reason :no-composter :ending {:kind :condition-failed :cause :no-composter :data {:fed {}}}} false
+    {:status :stopped :reason :unreachable :ending {:kind :nothing-possible :cause :unreachable}} false
+    {:status :done :tilled 2} false)
+  (is (= {:till {:skipped :declined}}
+         (:report (tend/after-child {:report {}} :till {:from {:x 1 :y 63 :z 1}} :declined nil)))))
+
 ;; ------------------------------------------------------------------ zones
 
 (defn ^:async first-check

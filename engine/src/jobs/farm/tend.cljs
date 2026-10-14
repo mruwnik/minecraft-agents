@@ -380,6 +380,11 @@
     (assoc child-args :ignore-zones? true)
     child-args))
 
+(defn refused?
+  "Whether child result r is a contract child's refusal before it started (condition-failed, no data): it counts as declined."
+  [r]
+  (and (= :condition-failed (get-in r [:ending :kind])) (empty? (get-in r [:ending :data]))))
+
 (defn ^:async work
   "One child call, or the report when no step is left: :again after a child ended, :continue while one waits."
   [c]
@@ -393,7 +398,8 @@
             _ (ctx/update-mem! c assoc :call-args (:args call))
             outcome (await (ctx/call-child c step (:job call) (with-zone-opt-out c step (:args call))))]
         (when (#{:done :declined} outcome)
-          (ctx/update-mem! c after-child step (:args call) outcome (when (= :done outcome) (ctx/child-result c step))))
+          (let [r (when (= :done outcome) (ctx/child-result c step))]
+            (ctx/update-mem! c after-child step (:args call) (if (refused? r) :declined outcome) r)))
         (if (= :continue outcome) :continue :again)))))
 
 (defn ^:async step

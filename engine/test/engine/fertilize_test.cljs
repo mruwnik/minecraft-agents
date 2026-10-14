@@ -6,7 +6,7 @@
             [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.test-util :as tu :refer [child-outcome]]
+            [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
@@ -22,6 +22,12 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn age [p k] (get (:ages @(fake/state p)) (fake/parse-cell k)))
+
+(defn ^:async child-outcome
+  "tu/child-outcome without the ending the adapter adds, and without :status when it is :done."
+  [eng job args n]
+  (let [r (await (tu/child-outcome eng job args n))]
+    (if (map? r) (cond-> (dissoc r :ending) (= :done (:status r)) (dissoc :status)) r)))
 
 (def job 'jobs.farm.fertilize)
 (def meal [{:name "bone_meal" :count 20}])
@@ -75,14 +81,14 @@
           (is (nil? (core/tick! eng)) "no bone meal: not yet")
           (is (empty? (calls p "useOn"))))))))
 
-(deftest fertilize-refuses-a-crop-that-stays-unchanged-and-finishes
+(deftest fertilize-refuses-a-crop-that-stays-unchanged-and-stops-refused
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory meal :blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}})]
           (.override (.-world p) "useOn"
                      (fn ^:async f [_ _ _] #js {:status "unchanged" :consumed 0}))
-          (is (= {:used 0} (await (child-outcome eng job {} 10))))
+          (is (= {:used 0 :status :stopped :reason :refused} (await (child-outcome eng job {} 10))))
           (is (= 1 (count (calls p "useOn")))))))))
 
 (deftest fertilize-at-touches-only-that-crop
@@ -136,10 +142,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup two-wheat (ew/of-data {} {} nil))
-              r (await (child-outcome eng job {} 10))]
-          (is (= {:used 0} r))
+        (let [{:keys [eng p seen]} (setup two-wheat (ew/of-data {} {} nil))]
+          (core/submit! eng (list job {}) {})
+          (await (tu/run-until-empty eng 10))
           (is (empty? (calls p "useOn")))
+          (is (= 1 (count (:list (core/state eng)))) "waits, does not end")
           (is (= [:no-zones] (mapv :reason (kinds seen :fertilize.declined)))))))))
 
 (deftest fertilize-finds-an-unripe-crop-past-many-nearer-ripe-ones
