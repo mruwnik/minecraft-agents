@@ -67,11 +67,12 @@
 (defn setup
   "An engine over the site with every child of the job stubbed. results: job symbol -> (fn [ctx]) giving the child's result,
   the default being success."
-  [& {:keys [results inventory dir pos plans fail-smelt]}]
+  [& {:keys [results inventory dir pos plans fail-smelt entities triggers]}]
   (let [results (atom results)
         furnaces (atom {})
         p (tu/seeing-all (tu/fake {:self {:pos (or pos {:x 0 :y -27 :z 10})} :blocks (cond-> site-blocks pos (assoc "0,63,100" "stone" "12,63,100" "stone" "12,59,100" "stone"))
-                                   :inventory (or inventory [{:name "torch" :count 32} {:name "iron_pickaxe" :count 1}])}))
+                                   :inventory (or inventory [{:name "torch" :count 32} {:name "iron_pickaxe" :count 1}])
+                                   :entities (or entities [])}))
         calls (atom [])
         defaults {'jobs.build.from-plan {:placed 5}
                   'jobs.survival.set-spawn {:status :completed}
@@ -101,7 +102,7 @@
         clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         eng (core/create {:primitives p :jobs (assoc (merge registry/jobs stubs) 'jobs.movement.go-to go-to 'jobs.items.smelt (smelt-stub p calls furnaces fail-smelt))
-                          :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock)
+                          :triggers (or triggers triggers/all) :dir (or dir (tu/tmp-dir)) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
                           :world (world/of-data (merge {"base" plan} plans) {"field-base" blueprint} [])})]
     (mem/write! (:store eng) :home {:pos old-home} mem/place-policy)
@@ -291,3 +292,38 @@
           (is (= :done (:status r)))
           (is (= ["no-fuel" "no-fuel"] (mapv :reason (:smelt-failed r))))
           (is (= 2 (count (called env 'jobs.items.smelt))) "once per furnace, no retry loop"))))))
+
+(defn ends [r] [(:kind (:ending r)) (:cause (:ending r))])
+
+(deftest the-ending-kind-follows-the-stop-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [no-torches (await (start! (setup :inventory [{:name "iron_pickaxe" :count 1}]) args))
+              seal-fails (await (start! (setup :results {'jobs.strip.seal {:status :stopped :reason :no-blocks}}) args))
+              done (await (start! (setup) args))]
+          (is (= [:condition-failed :no-torches] (ends no-torches)))
+          (is (= :strip (:phase no-torches)) "the data keeps the phase it stopped in")
+          (is (= [:nothing-possible :child-failed] (ends seal-fails)) "a child that stopped on its own reason is no failed condition")
+          (is (= {:child "jobs.strip.seal" :because :no-blocks} (select-keys seal-fails [:child :because])))
+          (is (= :done (:status done)))
+          (is (= {:sealed 2 :stripped 1} (:segments done))))))))
+
+(deftest a-call-without-site-or-base-or-at-for-a-new-site-is-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [no-site (await (start! (setup) (dissoc args :site)))
+              no-base (await (start! (setup) (dissoc args :base)))
+              no-at (await (start! (setup) (dissoc args :at)))]
+          (is (= [[:impossible :bad-args] [:impossible :bad-args] [:impossible :bad-args]]
+                 (mapv (juxt (comp :kind :ending) :reason) [no-site no-base no-at]))))))))
+
+(deftest a-danger-near-in-the-strip-phase-holds-the-strip-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :triggers {} :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 0 :y -27 :z 13} :health 20 :visible true}])
+              r (await (start! env args))]
+          (is (= :not-done r) "the job yields every round")
+          (is (= ["from-plan" "set-spawn" "set-place" "get-tool"] (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))) "the base phases ran, no corridor"))))))

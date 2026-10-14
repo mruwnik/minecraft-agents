@@ -1,17 +1,18 @@
 (ns jobs.strip.site
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.lib.access :as access]
-            [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.danger :as danger]
             [jobs.lib.look :as look]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.shafts :as shafts]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.started :as started]
             [jobs.lib.strip :as strip]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
@@ -42,9 +43,12 @@
           storage.haul from the base chests to the main storage (not with :haul false).
   :restore  :home and the respawn bed back to :was (also on any stop). The torches the corridor took back are
           carried.
-  Ends {:status :done :segments {state n} :taken {class n} :hauled {item n} :smelted {raw-item n} :smelt-failed [{:furnace :reason}]}, or {:status :stopped :reason r :phase p}:
-  :child-failed (:child the job, :because its reason), :bad-plan, :no-site, :no-shears, :unreachable, :base-full,
-  :food-short, :trips-exhausted. The check waits :danger in the strip phase. Events: strip.site.done (info), strip.site.stopped (warn).")
+  Needs :site and :base (a new site also :at), else impossible :bad-args. A start in the strip phase with a real danger near
+  waits (:danger), and a running strip phase yields while one is near.
+  Ends :done with data {:segments {state n} :taken {class n} :hauled {item n} :smelted {raw-item n} :smelt-failed [{:furnace :reason}]},
+  or condition-failed (:bad-plan :no-site :no-shears :no-torches :food-short :base-full, or :child-failed when the child's
+  ending was a failed condition) or nothing-possible (:unreachable :trips-exhausted, other :child-failed) with the same data and
+  :phase, :child and :because (the child's reason) for a child. Events: strip.site.done (info), strip.site.stopped (warn).")
 
 (a/defargs args
   {:site {:doc "the site's name, the key of its memory" :spec a/name? :default nil}
@@ -63,11 +67,16 @@
    :danger-check {:doc "wait while a real danger is near in the strip phase" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
 
+(a/defargs settings
+  {::time-s {:default 7200 :doc "Seconds a strip of one site may take: base, descent, every segment, trips and the haul." :spec (a/num-in 0 nil)}})
+
 (def kind :strip/sites)
 (def policy {:cap 1 :ttl :forever})
 (def max-sites 4)
 (def trip-reasons #{:bag-full :food-short :no-torches :no-tool})
 (def settled #{:stripped :sealed :skipped})
+(def condition-reasons "Stop reasons that end condition-failed: a fact of the base, the bag or the site. The rest are nothing-possible."
+  #{:bad-plan :no-site :no-shears :no-torches :food-short :base-full})
 
 (defn sites [c] (or (:data (ctx/latest c kind)) {}))
 (defn site [c] (get (sites c) (:site (:args c))))
@@ -82,23 +91,24 @@
 
 (defn vec3 [v] (let [{:keys [x y z]} (a/cell v)] [x y z]))
 
-(defn check [c]
-  (or (not (:danger-check (:args c)))
-      (not= :strip (:phase (site c)))
-      (not (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius)))
-      (ctx/wait c {:reason :danger})))
+(defn danger-wait?
+  "Whether a real danger is near in the strip phase and :danger-check asks to wait for it."
+  [c]
+  (and (:danger-check (:args c))
+       (= :strip (:phase (site c)))
+       (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius))))
 
 (defn counts [s] (frequencies (map :state (vals (:segments s)))))
 
 (defn ^:async call!
-  "Run a child to its end: :continue while it waits on the world, else its result (a declined child is {:status :stopped}
-  with its wait reason; a danger decline is :continue, the check waits for it)."
+  "Run a child one round: :continue while it waits on the world (a danger decline too: the round yields for the reflex),
+  else its result as an old parent reads it, {:status :stopped :reason its cause :ending e} when it did not end :done."
   [c slot job args]
-  (let [r (await (child/run! c slot job args))]
-    (cond (= :continue r) :continue
-          (and (= :declined r) (= :danger (:reason (b/child-wait c slot job args)))) :continue
-          (= :declined r) {:status :stopped :reason (or (:reason (b/child-wait c slot job args)) :declined)}
-          :else (or (ctx/child-result c slot) {}))))
+  (let [e (await (ctx/call c slot job args))]
+    (cond (= :continue e) :continue
+          (= :danger (contract/cause-key e)) :continue
+          (= :done (:kind e)) (assoc (:data e) :status :done)
+          :else (assoc (:data e) :status :stopped :reason (if (map? (:cause e)) (contract/cause-key e) (or (:cause e) (:kind e))) :ending e))))
 
 (defn failed? [res] (boolean (or (= :stopped (:status res)) (:gave-up res) (false? (:ok res)))))
 
@@ -142,7 +152,8 @@
     (ctx/update-mem! c assoc :stopping (merge {:reason reason :phase (:phase s)} fields))
     :again))
 
-(defn child-stop! [c failure] (stop! c :child-failed {:child (:child failure) :because (:reason failure)}))
+(defn child-stop! [c failure]
+  (stop! c :child-failed {:child (:child failure) :because (:reason failure) :child-kind (get-in failure [:ending :kind])}))
 
 (defn spot [plan name]
   (some (fn [[k v]] (when (str/ends-with? k (str "/" name)) v)) (:spots plan)))
@@ -238,10 +249,11 @@
   [c s]
   (let [{:keys [top to-y heading id]} (shaft-for c s)
         above? (and top (> (:y (u/self-pos c)) (inc to-y)))
-        w (await (near/go-near! c (if above? top (vec3 (:at s))) (if above? 1 2) {:escalate (not above?)}))]
+        cell (if above? top (vec3 (:at s)))
+        w (await (child/call-walk* c :enter {:pos cell :range (if above? 1 2) :escalate (not above?)}))]
     (cond
-      (= :partial w) :continue
-      (= :blocked w) (stop! c :unreachable {:cell (if above? top (vec3 (:at s)))})
+      (= :continue w) :continue
+      (not= :done (:kind w)) (stop! c :unreachable {:cell cell})
       above? (let [f (await (run-all! c [[:stair 'jobs.access.stair {:dir :down :heading heading :y to-y :through id :stock-torches false
                                                                        :ignore-zones? (:ignore-zones? (:args c))}]]))]
                (cond (= :continue f) :continue f (child-stop! c f) :else :again))
@@ -378,13 +390,19 @@
              [:home 'jobs.memory.forget-place {:name "home"}])]
     spawn-bed (conj [:spawn 'jobs.survival.set-spawn {:bed (vec3 spawn-bed)}])))
 
-(defn finish! [c status fields]
+(defn finish!
+  "End the call: done, or stopped with fields, whose :reason is the cause."
+  [c status fields]
   (let [s (site c)
-        res (merge {:status status :segments (counts s) :taken (:taken s {}) :hauled (:hauled s {}) :smelted (:smelted s {}) :smelt-failed (:smelt-failed s [])} fields)]
-    (ctx/result! c res)
+        {:keys [reason child-kind] :as fields} fields
+        data (merge {:segments (counts s) :taken (:taken s {}) :hauled (:hauled s {}) :smelted (:smelted s {}) :smelt-failed (:smelt-failed s [])}
+                    (dissoc fields :reason :child-kind))
+        text (str "strip site " (:site (:args c)) " " (name status) " " (pr-str (counts s)))]
     (ctx/emit! c (if (= :done status) :strip.site.done :strip.site.stopped) (if (= :done status) :info :warn)
-               (assoc res :text (str "strip site " (:site (:args c)) " " (name status) " " (pr-str (counts s)))))
-    :done))
+               (assoc (merge data (select-keys fields [:reason])) :text text))
+    (if (= :done status)
+      (ctx/end c :done nil data)
+      (ctx/end c (if (or (condition-reasons reason) (= :condition-failed child-kind)) :condition-failed :nothing-possible) reason data))))
 
 (defn ^:async restore! [c s]
   (let [f (when (:was s) (await (run-all! c (restore-steps (:was s)))))]
@@ -412,10 +430,32 @@
         :done (finish! c :done {})))))
 
 (defn ^:async round [c]
-  (let [{:keys [site at base shaft]} (:args c)]
-    (cond
-      (not (and site base)) (finish! c :stopped {:reason :bad-args :why "needs :site and :base"})
-      (and (not (jobs.strip.site/site c)) (nil? at)) (finish! c :stopped {:reason :bad-args :why "a new site needs :at"})
-      :else (do (when-not (jobs.strip.site/site c)
-                  (save! c (constantly {:at at :base base :shaft shaft :phase :base :segments {} :trips 0 :smelt-failed []})))
-                (await (pace/steps! c #(step! c)))))))
+  (when-not (site c)
+    (let [{:keys [at base shaft]} (:args c)]
+      (save! c (constantly {:at at :base base :shaft shaft :phase :base :segments {} :trips 0 :smelt-failed []}))))
+  (await (pace/steps! c #(if (danger-wait? c) :continue (step! c)))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def target [:site])
+
+(def defaults {:spend {:time ::time-s}})
+
+(defn bad-args
+  "Never possible: no :site or :base, and a new site without :at (that one only at the call's start, the site is saved after)."
+  [c]
+  (let [{:keys [at base] id :site} (:args c)]
+    (cond (not (and id base)) (contract/impossible {:reason :bad-args :why "needs :site and :base"})
+          (and (nil? at) (not (ctx/frozen-call c)) (nil? (site c)))
+          (contract/impossible {:reason :bad-args :why "a new site needs :at"}))))
+
+(def conditions [[:fn bad-args] [:fn (started/at-start (fn [c] (when (danger-wait? c) :danger)))]])
+
+(defn done?
+  "Never done before the round says so: the last phase restores the home and writes the result."
+  [c]
+  (let [states (map :state (vals (:segments (site c))))]
+    {:done? false :units :segments :done (count (filter settled states)) :left (count (remove settled states))}))
+
+(defn quote-of [c]
+  {:uses {:time [1 (* 120 (max 1 (count (:segments (site c))))) (settings/get settings ::time-s)]}})
