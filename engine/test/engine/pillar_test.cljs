@@ -31,6 +31,13 @@
 (deftest the-first-block-goes-under-the-feet
   (is (= {:step :place :cell base :item "dirt"} (step))))
 
+(deftest blocks-are-short-by-the-carried-list-alone
+  (are [carried short] (= short (pillar/blocks-short carried ["dirt" "cobblestone"] 6))
+    {} 6
+    {"oak_planks" 9} 6
+    {"dirt" 1} nil
+    {"cobblestone" 1} nil))
+
 (deftest done-at-the-height
   (is (= {:step :done} (step :feet [0 70 0])))
   (is (= {:step :done} (step :feet [0 66 0] :height 2))))

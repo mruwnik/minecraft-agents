@@ -208,16 +208,20 @@
   (let [w (atom nil)]
     (when (false? (submitted/away-wait (assoc c :wait w))) @w)))
 
+(defn blocks-short
+  "How many blocks a pillar of height lacks when none of items is carried, else nil. Asked of the carried list alone: the
+  cells above the head are not looked at yet at the call's start, and an unseen one reads as rock."
+  [carried items height]
+  (when-not (item-to-use nil carried items) height))
+
 (defn too-few-blocks
   "At the call's start: the cause when no listed block is carried (:short blocks missing), else nil. Run short part
   way, the round gives up with its pillar and ledger settled."
   [c]
   (when-not (ctx/frozen-call c)
-    (let [feet (pl/feet-cell c)
-          l (ledger/reconcile (ledger/open-entries (ctx/view c)) (access/sensed-at (:primitives c) nil))
-          step (step-now c l feet (or (:base (ctx/mem c)) feet))]
-      (when (= :too-few-blocks (:reason step))
-        {:reason :too-few-blocks :short (:short step) :items (blocks-of c)}))))
+    (let [items (blocks-of c)]
+      (when-let [short (blocks-short (pl/carried (:primitives c)) items (:height (:args c)))]
+        {:reason :too-few-blocks :short short :items items}))))
 
 (defn moved-since-submit [c] (when-not (ctx/frozen-call c) (away c)))
 

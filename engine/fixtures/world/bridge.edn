@@ -1,7 +1,7 @@
 ;; Card 973c6b31: jobs.access.bridge builds a 1-wide row over a gap and jobs.access.cleanup takes it back.
 ;; A 5-wide, 1-deep pit at x 9..13 (floor cells y -1 turned to air) between the body's ground at x 8 and ground from x 14.
 ;; Should succeed: bridge 5 (bridge.done :built 5, body on the far ground side), then cleanup removes the row.
-;; Should fail: a foreign plan footprint on the row (:footprint, nothing placed), no blocks with :fetch false (waits
+;; Should fail: a foreign plan footprint on the row (:footprint, nothing placed), no blocks with :fetch false (gives up
 ;; :too-few-blocks), stone at head height ahead (:blocked, nothing placed).
 {:defaults
  {:tags [:access :jobs]
@@ -26,11 +26,11 @@
    :expect [{:event {:source :job :kind :bridge.gave-up :data {:reason :footprint :built 0}} :within-s 40 :of-job true}]
    :after [[:not-block [9 -1 16] "dirt"]]
    :limit-s 50}
-  {:name "no-blocks-without-fetch-waits-too-few"
+  {:name "no-blocks-without-fetch-gives-up-too-few"
    :body {:inventory []}
    :act [[:job (jobs.access.bridge {:heading :east :length 5 :fetch false :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :too-few-blocks :short 5}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :bridge.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :too-few-blocks :short 5}}}]
+   :expect [{:event {:source :job :kind :bridge.gave-up :data {:reason :too-few-blocks :short 5 :built 0}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :bridge.done} :for-s 30 :until {:source :job :kind :bridge.gave-up}}]
    :limit-s 40}
   {:name "low-ceiling-ahead-is-blocked"
    :blocks [[:set [9 1 16] "stone"]]
