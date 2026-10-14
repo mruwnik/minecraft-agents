@@ -100,7 +100,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world {} [{:name "stone_pickaxe" :count 1}]) [f/own-zone])]
-          (await (obtain! s {:item "raw_iron" :how #{:craft :gather} :explore false} 6))
+          (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore false} 6))
           (let [w (first (filter #(= :no-source (:reason %)) (f/events-of s :waiting)))]
             (is (some? w))
             (is (re-find #"raw_iron \(from deepslate_iron_ore/iron_ore\)" (str (get-in w [:cause :why])))))
@@ -111,7 +111,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world {} [{:name "stone_pickaxe" :count 1}]) [f/own-zone])]
-          (await (obtain! s {:item "raw_iron" :how #{:craft :gather} :explore true} 4))
+          (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 4))
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
           (is (seq (mine-events s)) "the mine child ran"))))))
 
@@ -129,7 +129,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world {} [{:name "wooden_pickaxe" :count 1}]) [f/own-zone])]
-          (await (obtain! s {:item "cobblestone" :count 3 :how #{:gather} :explore true} 6))
+          (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather} :explore true} 6))
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
           (is (seq (mine-events s)) "the mine child ran"))))))
 
@@ -138,7 +138,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (assoc-in (ore-world {} []) [:self :health] 0.5) [f/own-zone])]
-          (await (obtain! s {:item "oak_log" :count 2 :how #{:gather} :explore true} 8))
+          (await (obtain! s {:item "oak_log" :count 2 :ways #{:gather} :explore true} 8))
           (is (empty? (f/events-of s :obtain.exploring)) "no search walk at 0.5 hp")
           (is (some #(= :low-health (:reason %)) (f/events-of s :waiting))))))))
 
@@ -151,7 +151,7 @@
             (swap! (fake/state (:p s)) assoc :pitch pitch)
             (perception/pass! (aget (:p s) "perception")))
           (is (some? (sh/night-sheltered (:p s) nil)) "sheltered at the start")
-          (await (obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :how #{:gather} :explore true} 8))
+          (await (obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 8))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is seen")
           (is (some #(= :night-sheltered (:reason %)) (f/events-of s :waiting))))))))
 
@@ -160,7 +160,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world {"1,64,2" "furnace"} [{:name "raw_iron" :count 3} {:name "coal" :count 1}]) [f/own-zone])]
-          (await (obtain! s {:item "iron_ingot" :count 3 :how #{:craft :gather}} 6))
+          (await (obtain! s {:item "iron_ingot" :count 3 :ways #{:craft :smelt :gather}} 6))
           (is (seq (f/calls s "furnace")) "the furnace was used")
           (is (and (zero? (get (f/inv s) "iron_ingot" 0)) (zero? (get (f/inv s) "raw_iron" 0))) "the raw iron is in the furnace, no ingot yet")
           (.advance (.-world (:p s)) 2000)
@@ -178,7 +178,7 @@
                                      {:name "crafting_table" :count 1}])
                          [])
               _ (swap! (fake/state (:p s)) assoc-in [:recipes "iron_pickaxe"] {:count 1 :needs {"iron_ingot" 3 "stick" 2} :table true})]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_pickaxe" :minutes 1 :explore false}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_pickaxe" :spend {:time 60} :explore false}) {})
           (loop [i 0]
             (await (f/run-ticks s 20))
             (.advance (.-world (:p s)) 2000)
@@ -194,7 +194,7 @@
       (fn ^:async t []
         (let [logs f/tree-blocks
               s (f/start (ore-world (merge logs {"1,64,2" "furnace"}) []) [f/own-zone])]
-          (await (obtain! s {:any-of ["coal" "charcoal"] :how #{:craft :gather}} 60))
+          (await (obtain! s {:any-of ["coal" "charcoal"] :ways #{:craft :smelt :gather}} 60))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
           (is (seq (f/calls s "dig")) "a log was felled for the charcoal"))))))
 
@@ -208,7 +208,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world {"1,64,2" "furnace"} [{:name "oak_log" :count 1} {:name "spruce_planks" :count 4}]) [f/own-zone])]
-          (await (obtain! s {:item "charcoal" :how #{:craft :gather}} 6))
+          (await (obtain! s {:item "charcoal" :ways #{:craft :smelt :gather}} 6))
           (is (= ["spruce_planks"] (keep :fuel (f/events-of s :smelt.loaded))) "the carried planks kind is the fuel, not coal or the first wood")
           (.advance (.-world (:p s)) 2000)
           (await (f/run-ticks s 200))
@@ -226,7 +226,7 @@
       (fn ^:async t []
         (let [s (f/start (assoc (f/bare [{:name "iron_nugget" :count 27} {:name "oak_log" :count 2}])
                                   :recipes {"iron_ingot" {:count 1 :needs {"iron_nugget" 9} :table true}}) [])]
-          (await (obtain! s {:item "iron_ingot" :count 1 :how [:craft]} 80))
+          (await (obtain! s {:item "iron_ingot" :count 1 :ways [:craft :smelt]} 80))
           (is (empty? (f/listed s)))
           (is (= 1 (get (f/inv s) "iron_ingot"))))))))
 

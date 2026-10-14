@@ -60,18 +60,6 @@
 
 (def defaults {:ways (set ways)})
 
-(def how-ways {:chest :chest :craft :craft :gather :gather})
-
-(defn legacy-args
-  "An old caller's :how as :ways, :minutes as :spend {:time}; :chain and
-  :depth go (a nested call for the same tool is the engine's :duplicate-call). A :how that is not a list of sources
-  stays, refused."
-  [{:keys [how minutes] :as args}]
-  (cond-> (dissoc args :minutes :chain :depth)
-    (or (nil? how) (and (coll? how) (every? how-ways how))) (dissoc :how)
-    (and (coll? how) (every? how-ways how) (nil? (:ways args))) (assoc :ways (set (map how-ways how)))
-    (and minutes (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] (* 60 minutes))))
-
 (defn ways-of [c] (set (or (:ways (ctx/frozen-call c)) (:ways (:args c)) (:ways defaults))))
 
 (defn obtain-args [c names]

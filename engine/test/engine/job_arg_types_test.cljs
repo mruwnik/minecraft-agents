@@ -13,7 +13,7 @@
                 '(jobs.farm.tend {:box {:min {:x 0 :y 63 :z 0} :max {:x 1 :y 64 :z 1}} :keep [1 2]})
                 '(jobs.farm.tend {:box {:x "a"}})
                 '(jobs.items.obtain {:any-of true})
-                '(jobs.items.obtain {:item "stick" :how "chest"})
+                '(jobs.items.obtain {:item "stick" :ways "chest"})
                 '(jobs.storage.deposit {:items true})
                 '(jobs.storage.deposit {:keep [1 2]})
                 '(jobs.storage.withdraw {:items true})
@@ -27,7 +27,7 @@
 
 (deftest well-formed-list-args-pass
   (doseq [form ['(jobs.combat.attack {:targets ["zombie"] :weapons ["sword"]})
-                '(jobs.items.obtain {:item "stick" :how #{:chest :craft}})
+                '(jobs.items.obtain {:item "stick" :ways #{:chest :craft :smelt}})
                 '(jobs.storage.deposit {:items ["stick"] :keep {"bread" 3}})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
 

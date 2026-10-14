@@ -39,7 +39,7 @@
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [20 0 22] [22 1 23] "stone"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
-         [:job (jobs.items.get-tool {:item "stone_pickaxe" :how #{:chest :craft}})]]
+         [:job (jobs.items.get-tool {:item "stone_pickaxe" :ways #{:chest :craft}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:not [:contains "nothing seen to gather"]]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0] [:block [20 0 22] "stone"]]}]}

@@ -44,13 +44,6 @@
           (is (nil? (contract/quote-problem q)))
           (is (= ##Inf (get-in q [:uses :time 2])) "a gather has no most"))))))
 
-(deftest old-callers-how-minutes-chain-and-depth-become-call-keys
-  (is (= {:item "stick" :ways #{:craft :smelt} :spend {:time 120}}
-         ((export 'jobs.items.obtain :legacy-args) {:item "stick" :how #{:craft} :minutes 2 :chain ["wooden_pickaxe"] :depth 3})))
-  (is (= {:item "stick" :ways #{:chest}} ((export 'jobs.items.obtain :legacy-args) {:item "stick" :how [:chest]})))
-  (is (= {:kind "pickaxe" :ways #{:chest :gather} :spend {:time 180}}
-         ((export 'jobs.items.get-tool :legacy-args) {:kind "pickaxe" :how #{:chest :gather} :chain ["stick"] :minutes 3 :depth 2}))))
-
 (deftest planks-crafted-from-a-carried-log-are-done-with-what-was-got
   (async done
     (tu/run-async done

@@ -131,7 +131,7 @@
                   pen [{:name "linden-west-pen" :owner "Fake" :min [0 60 -3] :max [20 70 3]}]
                   s (h/setup {:inventory inv :entities [(sheep 1 3 "white") (sheep 2 6 "white") (sheep 3 8 "white") (sheep 4 10 "white")]}
                              50 (ew/of-data {} {} pen))]
-              (core/submit! (:eng s) '(jobs.items.obtain {:any-of ["white_bed"] :count 1 :how #{:craft :gather}}) {})
+              (core/submit! (:eng s) '(jobs.items.obtain {:any-of ["white_bed"] :count 1 :ways #{:craft :smelt :gather}}) {})
               (dotimes [_ 40]
                 (swap! (:clock s) + 700)
                 (await (core/tick! (:eng s))))

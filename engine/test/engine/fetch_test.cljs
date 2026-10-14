@@ -76,11 +76,11 @@
 (defn stopped-reasons [s] (mapv :reason (events-of s :stopped)))
 
 (defn no-source-events
-  "The :no-source waits and endings: a call that looked around ends, one that could not (no chests allowed) waits."
-  [s]
-  (filterv #(= :no-source (:reason %)) (concat (events-of s :waiting) (events-of s :stopped))))
+  "The :no-source endings of kind (:stopped: a call that looked around; :waiting: one that could not, no chests allowed)."
+  [s kind]
+  (filterv #(= :no-source (:reason %)) (events-of s kind)))
 
-(defn no-source-why [s] (some #(or (:why %) (get-in % [:cause :why])) (no-source-events s)))
+(defn no-source-why [s kind] (some #(or (:why %) (get-in % [:cause :why])) (no-source-events s kind)))
 
 (defn dig-spec [extra] (list 'jobs.blocks.dig (merge {:pos [2 64 3]} extra)))
 
@@ -513,9 +513,9 @@
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 3}) {})
           (await (run-ticks s 5))
           (is (empty? (inspects s)) "no chest seen: no look either")
-          (is (= 1 (count (no-source-events s))))
-          (is (re-find #"no seen chest that may hold dirt" (no-source-why s)))
-          (is (re-find #"no recipe makes dirt" (no-source-why s))))))))
+          (is (= 1 (count (no-source-events s :stopped))))
+          (is (re-find #"no seen chest that may hold dirt" (no-source-why s :stopped)))
+          (is (re-find #"no recipe makes dirt" (no-source-why s :stopped))))))))
 
 (deftest obtain-cobblestone-wait-names-the-missing-pickaxe
   (async done
@@ -524,16 +524,16 @@
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at)) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3 :explore false}) {})
           (await (run-ticks s 5))
-          (is (re-find #"pickaxe" (no-source-why s))))))))
+          (is (re-find #"pickaxe" (no-source-why s :stopped))))))))
 
 (deftest obtain-craft-wait-names-the-short-ingredient
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at) (assoc :inventory [{:name "stick" :count 1}])) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :how #{:craft}}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :ways #{:craft :smelt}}) {})
           (await (run-ticks s 5))
-          (is (re-find #"needs 2 stick, have 1" (no-source-why s))))))))
+          (is (re-find #"needs 2 stick, have 1" (no-source-why s :stopped))))))))
 
 (deftest obtain-any-of-takes-the-first-name-the-chest-holds
   (async done
@@ -577,7 +577,7 @@
         (let [s (start (update (world {}) :blocks dissoc chest-at) [own-zone])
               id (core/submit! (:eng s) (list 'jobs.items.get-tool {:block "stone" :explore false}) {})]
           (await (run-ticks s 5))
-          (is (= 1 (count (no-source-events s))))
+          (is (= 1 (count (no-source-events s :stopped))))
           (is (empty? (inspects s))))))))
 
 (deftest stock-is-remembered-after-a-withdraw
@@ -667,7 +667,7 @@
       (fn ^:async t []
         (let [s (start (bare [{:name "dirt" :count 5}]) [own-zone])
               id (await (get-tool! s {:kind "pickaxe" :explore false} 6))]
-          (is (= 1 (count (no-source-events s))))
+          (is (= 1 (count (no-source-events s :stopped))))
           (is (empty? (calls s "craft"))))))))
 
 (deftest a-stone-pickaxe-without-cobblestone-fails-no-source
@@ -676,7 +676,7 @@
       (fn ^:async t []
         (let [s (start (bare [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 2} {:name "oak_log" :count 3}]) [own-zone])
               id (await (get-tool! s {:item "stone_pickaxe" :explore false} 6))]
-          (is (= 1 (count (no-source-events s)))))))))
+          (is (= 1 (count (no-source-events s :stopped)))))))))
 
 (deftest a-stone-pickaxe-whose-gather-finds-no-stone-ends-no-source
   (async done
@@ -703,8 +703,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (bare [{:name "oak_log" :count 12}]) [own-zone])
-              id (await (get-tool! s {:kind "pickaxe" :how #{:chest}} 6))]
-          (is (= 1 (count (no-source-events s))))
+              id (await (get-tool! s {:kind "pickaxe" :ways #{:chest}} 6))]
+          (is (= 1 (count (no-source-events s :stopped))))
           (is (empty? (calls s "craft"))))))))
 
 (deftest a-craft-that-does-nothing-three-times-ends-no-source
@@ -981,16 +981,16 @@
         (let [s (start (bare []) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore false}) {})
           (await (run-ticks s 6))
-          (is (= 1 (count (no-source-events s))))
-          (is (re-find #"nothing seen to gather" (no-source-why s)))
-          (is (re-find #"pass :explore true to search for it" (no-source-why s))))))))
+          (is (= 1 (count (no-source-events s :stopped))))
+          (is (re-find #"nothing seen to gather" (no-source-why s :stopped)))
+          (is (re-find #"pass :explore true to search for it" (no-source-why s :stopped))))))))
 
 (deftest obtain-gather-is-off-when-how-leaves-it-out
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (update (bare []) :blocks merge tree-blocks) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :how #{:craft :chest}}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :ways #{:craft :smelt :chest}}) {})
           (await (run-ticks s 10))
           (is (empty? (calls s "dig"))))))))
 
@@ -1027,7 +1027,7 @@
         (let [s (start (bare []) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"}) {})
           (await (run-ticks s 6))
-          (is (= 1 (count (no-source-events s))))
+          (is (= 1 (count (no-source-events s :stopped))))
           (is (empty? (calls s "dig"))))))))
 
 (deftest obtain-sapling-gather-is-off-when-how-leaves-it-out
@@ -1035,7 +1035,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (update (bare []) :blocks merge leaf-blocks) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling" :how #{:chest :craft}}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling" :ways #{:chest :craft :smelt}}) {})
           (await (run-ticks s 10))
           (is (empty? (calls s "dig"))))))))
 
@@ -1046,9 +1046,9 @@
         (let [s (start (update (bare []) :blocks merge tree-blocks) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe" :explore false}) {})
           (await (run-ticks s 10))
-          (is (= 1 (count (no-source-events s))))
+          (is (= 1 (count (no-source-events s :stopped))))
           (is (empty? (calls s "dig")) "no tree felled for a chain that then lacks stone")
-          (let [why (no-source-why s)]
+          (let [why (no-source-why s :stopped)]
             (is (re-find #"cobblestone \(from stone\)" why))
             (is (not (re-find #"log" why)) "the log that is seen is not named")))))))
 
@@ -1282,7 +1282,7 @@
                       (perception/pass! (aget (:p s) "perception")))]
           (await (with-explore-stub s {:reason :found :found [{:what "oak_log" :pos [24 64 2]}]} walk!
                    (fn ^:async body [seen]
-                     (await (get-tool! s {:kind "pickaxe" :how #{:craft :gather}} 160))
+                     (await (get-tool! s {:kind "pickaxe" :ways #{:craft :gather}} 160))
                      (is (= 1 (count @seen)) "no log within 16: one search")
                      (is (empty? (listed s)))
                      (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (inv s) (last (events-of s :stopped))))))))))))
@@ -1293,7 +1293,7 @@
       (fn ^:async t []
         (let [s (start (bare []) [own-zone])
               id (await (get-tool! s {:item "stone_pickaxe" :explore false} 6))]
-          (is (= 1 (count (no-source-events s)))))))))
+          (is (= 1 (count (no-source-events s :stopped)))))))))
 
 (deftest a-stone-pickaxe-with-no-pickaxe-gets-a-wooden-one-first-from-seen-logs
   (async done
@@ -1322,3 +1322,8 @@
          (obtain-craft/stop-why {:kind :condition-failed :cause {:reason :need :short {"stick" 2}}
                                  :data {:made 0 :short {"stick" 2} :alternatives {"oak_log" ["birch_log"]}}})))
   (is (= :no-table (obtain-craft/stop-why {:kind :condition-failed :cause {:reason :no-table}}))))
+
+(deftest fetch-limits-become-the-childs-call-keys
+  (is (= {:ways #{:craft :smelt :gather} :spend {:time 120}} (fetch/child-limits 'jobs.items.obtain {:how #{:craft :gather} :minutes 2 :depth 3})))
+  (is (= {:ways #{:chest :gather}} (fetch/child-limits 'jobs.items.get-tool {:how #{:chest :gather}})))
+  (is (= {} (fetch/child-limits 'jobs.items.get-tool {:depth 3}))))

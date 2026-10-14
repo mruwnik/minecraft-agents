@@ -44,6 +44,14 @@
   "The limits of :fetch true."
   {:what kinds :how sources :depth 7 :minutes 10 :fail-minutes 10})
 
+(defn child-limits
+  "The call keys of limits o for a fetch child job: :how as :ways (an obtain's :craft brings :smelt), :minutes as
+  :spend {:time}. :depth is no child key (the engine refuses a duplicate call)."
+  [job {:keys [how minutes]}]
+  (cond-> {}
+    how (assoc :ways (set (cond-> how (and (= job 'jobs.items.obtain) (contains? how :craft)) (conj :smelt))))
+    minutes (assoc :spend {:time (* 60 minutes)})))
+
 (def limit-keys [:what :how :depth :minutes :fail-minutes :explore])
 
 (defn limit-error
@@ -252,7 +260,7 @@
   that declines while its furnace cooks too), :again after it ended or failed."
   [c pl]
   (let [{:keys [job key opts]} pl
-        args (merge (:args pl) (select-keys opts [:depth :minutes :how :fail-minutes]))
+        args (merge (:args pl) (child-limits job opts) (select-keys opts [:fail-minutes]))
         pl (assoc pl :args args)]
     (when-not (= key (:fetching (ctx/mem c)))
       (ctx/update-mem! c #(cond-> (assoc % :fetching key)

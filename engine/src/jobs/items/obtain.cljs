@@ -77,17 +77,6 @@
 
 (def defaults {:ways (set ways) :spend {:time ::time-s}})
 
-(def how-ways {:chest [:chest] :craft [:craft :smelt] :gather [:gather]})
-
-(defn legacy-args
-  "An old caller's :how as :ways (:craft brings :smelt), :minutes as :spend {:time}; :chain and :depth go (a nested
-  call for the same item is the engine's :duplicate-call). A :how that is not a list of sources stays, refused."
-  [{:keys [how minutes] :as args}]
-  (cond-> (dissoc args :minutes :chain :depth)
-    (or (nil? how) (and (coll? how) (every? how-ways how))) (dissoc :how)
-    (and (coll? how) (every? how-ways how) (nil? (:ways args))) (assoc :ways (set (mapcat how-ways how)))
-    (and minutes (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] (* 60 minutes))))
-
 (defn source-cause
   "nil when a way would start: a usable seen chest that might hold one of the names, a chain made from what is
   carried, a gather of seen raw needs, or a search for unseen ones. Else the cause: the gather child's own decline,

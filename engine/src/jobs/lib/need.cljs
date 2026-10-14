@@ -3,7 +3,7 @@
   read its ending. tool!, item! and blocks! resolve to :continue while the child waits on the world, else to the ending
   to return or read: :done as the child gave it; any other with the cause {:reason :need|:tool|:free-slots ..} naming
   what was wanted, the child's ending as its :because, the kind kept (a limit stays a limit). A duplicate call is
-  the engine's refusal, not a depth option. Options {:slot :how :depth :explore} pass on to the fetch job.
+  the engine's refusal, not a depth option. Options {:slot :how :explore} pass on to the fetch job.
 
   A fetch that ended :done, asked again with nothing of what it got used up since, ends condition-failed
   {:why :not-solved}: the child does not cure the caller's need. :return? true keeps the cell the body stood on when
@@ -12,6 +12,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]))
 
 (def full-reasons "Fetch endings that mean the bag has no room." #{:inventory-full :bag-full})
@@ -51,9 +52,7 @@
 (defn ^:async fetch!
   [c job args cause-reason wanted {:keys [slot how depth explore return?]}]
   (let [slot (or slot :need)
-        args (cond-> (assoc args :explore (boolean explore))
-               how (assoc :how how)
-               depth (assoc :depth depth))
+        args (merge (assoc args :explore (boolean explore)) (fetch/child-limits job {:how how}))
         want [job args]
         fresh? (nil? (get-in (ctx/mem c) [:children slot]))]
     (if (and fresh? (repeat-done? c want))
