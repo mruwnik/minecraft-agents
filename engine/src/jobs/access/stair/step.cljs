@@ -17,6 +17,7 @@
             [jobs.lib.lava :as lava]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
+            [jobs.lib.walk :as walk]
             [plan.shape :as shape]))
 
 (defn judged-in
@@ -37,17 +38,31 @@
         (when (unknown? (:primitives c) cell) (await (look-at! c cell)))
         (recur (rest cells))))))
 
+(def lean-reach "How far from its cell's centre toward the next cell the body leans to see that cell's floor (blocks)." 0.3)
+
+(defn ^:async lean!
+  "Walk the body inside its own cell (feet) toward next, lean-reach from the centre: from the back of the cell the edge
+  of its own floor hides a floor below ahead."
+  [c [fx _ fz :as feet] [nx _ nz :as next]]
+  (when (and feet next)
+    (await (walk/centre! c (+ fx 0.5 (* lean-reach (js/Math.sign (- nx fx)))) (+ fz 0.5 (* lean-reach (js/Math.sign (- nz fz))))))))
+
 (defn ^:async judge!
   "stop-of for the step about to be taken. A floor still unseen once the cut is open gets one more look (memory
-  :floor-looked) and is judged again, so a glance that missed is not a final stop."
+  :floor-looked), then a look after a lean toward it (memory :floor-leaned), each judged again, so a glance that
+  missed is not a final stop."
   [c in cells accept]
-  (let [stop (cells/stop-of (judged-in c in) cells accept)
-        cell (:cell stop)]
-    (if (and (= :floor-unseen (:reason stop)) (not= cell (:floor-looked (ctx/mem c))))
-      (do (ctx/update-mem! c assoc :floor-looked cell)
-          (await (look-at! c cell))
-          (cells/stop-of (judged-in c in) cells accept))
-      stop)))
+  (loop [tries [:floor-looked :floor-leaned]]
+    (let [stop (cells/stop-of (judged-in c in) cells accept)
+          cell (:cell stop)
+          k (first tries)]
+      (cond
+        (or (nil? k) (not= :floor-unseen (:reason stop))) stop
+        (= cell (k (ctx/mem c))) (recur (rest tries))
+        :else (do (ctx/update-mem! c assoc k cell)
+                  (when (= :floor-leaned k) (await (lean! c (:feet in) (:next cells))))
+                  (await (look-at! c cell))
+                  (recur (rest tries)))))))
 
 (defn ^:async peek!
   "Before digging cell: when it is still unknown, look at it once (memory :peeked) and give :again so the step is

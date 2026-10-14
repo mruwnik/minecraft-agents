@@ -193,8 +193,9 @@
           :else cell)))))
 
 (defn ^:async step-down!
-  "One step of the stair down: the jobs.access.stair child and what its ending means for the descent."
-  [c n level?]
+  "One step of the stair down: the jobs.access.stair child and what its ending means for the descent. A stop that blocks only
+  this heading (heading-stops) turns the stair, at any step (turn-heading!; a step taken clears the headings tried)."
+  [c level?]
   (let [_ (when-not (get-in (ctx/mem c) [:descent :top])
             (ctx/update-mem! c update :descent assoc :top (access/cell (cell-of (u/self-pos c))) :top-heading (keyword (:heading (ctx/mem c)))))
         r (await (ctx/call c :stair 'jobs.access.stair
@@ -206,14 +207,15 @@
     (cond
       (= :continue r) :continue
       (= :done (:status res))
-      (do (ctx/update-mem! c update :descent (fn [d] (assoc d :steps (+ (:steps d 0) (or (:steps res) 1)) :bottom-y (js/Math.floor (:y (u/self-pos c))) :at (:at res))))
+      (do (ctx/update-mem! c #(-> % (dissoc :tried-headings)
+                                  (update :descent (fn [d] (assoc d :steps (+ (:steps d 0) (or (:steps res) 1)) :bottom-y (js/Math.floor (:y (u/self-pos c))) :at (:at res))))))
           :again)
       (and (= :off-stair (:reason res)) (< (get-in (ctx/mem c) [:descent :restairs] 0) (max-restairs)))
       (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair finds the body off its line (" (:why res) "); it starts a new stair here")})
           (ctx/update-mem! c #(-> % (update :children dissoc :stair) (update :descent (fn [d] (-> d (dissoc :top :at) (update :restairs (fnil inc 0)))))))
           :again)
       :else (let [stop (or (:reason res) :declined)]
-              (if (and (zero? n) (heading-stops stop) (turn-heading! c stop))
+              (if (and (heading-stops stop) (turn-heading! c stop))
                 :again
                 (do (ctx/update-mem! c update :descent assoc :stop stop)
                     (if level? (stair-stopped! c) (no-stone! c))))))))
@@ -222,7 +224,8 @@
   "One step of the stair down (jobs.access.stair child, :steps 1) along the tunnel heading; the next round looks round and scans.
   The body first walks back onto the stair (back-on-stair!); one that cannot ends the dig phase :not-back.
   To the tunnel level: a torch first when one is due (stair-torch-due?), :fetch passed on; the stair stopping ends the descent there.
-  For stone: :fetch true; at :descend-limit steps, or when the stair stops, ends :no-stone-found."
+  For stone: :fetch true; at :descend-limit steps, or when the stair stops, ends :no-stone-found. Either way a heading-stop
+  turns the stair first (step-down!)."
   [c]
   (let [n (:steps (:descent (ctx/mem c)) 0)
         level? (to-level? c)
@@ -237,4 +240,4 @@
                                  (ctx/emit! c :mine.own-zone :warn {:zone (:name (stair-in-own-zone? c))
                                                                     :text (str "mine's stair stops at the edge of its own zone " (:name (stair-in-own-zone? c)))})
                                  (if level? (stair-stopped! c) (to-mend! c :own-zone)))
-      :else (await (step-down! c n level?)))))
+      :else (await (step-down! c level?)))))

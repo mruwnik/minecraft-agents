@@ -66,7 +66,7 @@
   - :hazard: a hazard not in :accept (below).
   - :off-stair: the body is off the stair line and max-returns walks back onto it (go-to children) are used up.
   - :lava-exposed: lava beside an open cell of the step (or in one) with :on-lava :stop.
-  - :floor-unseen: the floor of the step is still unseen once its cut is open and looked at once more.
+  - :floor-unseen: the floor of the step is still unseen once its cut is open, looked at once more and again after a lean toward it.
   - :lava-unsealed: that lava could not be filled (:on-lava :seal, the default): the place child's outcome in :place,
     or still lava after max-seals places (a seal, then one reseal when lava flows back). The body first steps back to the stair's cell before (:backed-off) and
     digs no more.

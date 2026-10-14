@@ -55,15 +55,15 @@
 
 (defn turn-heading!
   "Turn the run to the next of the four headings not yet tried (memory :tried-headings), forgetting the stop and the tunnel
-  begun on the old one; info mine.turned. A tunnel of steps > 0 is kept as a leg (memory :legs, :spent) and the way back along
-  it is not a heading. False (nothing changed) when a heading arg was given or all are tried."
+  begun on the old one; info mine.turned. A tunnel of steps > 0 is kept as a leg (memory :legs, :spent); the way back along
+  it, or up the stair down, is not a heading. False (nothing changed) when a heading arg was given or all are tried."
   [c stop]
   (let [m (ctx/mem c)
         {:keys [heading direction]} (:args c)
         {:keys [steps] :as tunnel} (:tunnel m)
         mid? (pos? (or steps 0))
         tried (cond-> (conj (set (:tried-headings m)) (:heading m))
-                mid? (conj (opposite (:heading m))))
+                (or mid? (pos? (:steps (:descent m) 0))) (conj (opposite (:heading m))))
         cycle ["north" "east" "south" "west"]
         order (map #(nth cycle (mod (+ (.indexOf cycle (:heading m)) %) 4)) (range 1 4))
         to (first (remove tried order))]

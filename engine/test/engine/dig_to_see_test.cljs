@@ -274,6 +274,39 @@
           (is (= :done (:status @out)) (pr-str @out))
           (is (= 3 (:steps @out))))))))
 
+(defn floor-seen-after-lean!
+  "p whose cell floor reads unknown until a look after the body stepped (steer) toward it: from the back of its cell the
+  edge of its own floor hides the floor below ahead."
+  [p floor]
+  (let [leaned (atom false)
+        seen (atom false)
+        steer (.-steer p)
+        look (.-look p)
+        sensed-at (.-sensedAt p)]
+    (aset p "steer" (fn [token args] (reset! leaned true) (.call steer p token args)))
+    (aset p "look" (fn [token args]
+                     (let [pos (.-pos args)]
+                       (when (and @leaned (= floor [(js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos))]))
+                         (reset! seen true))
+                       (.call look p token args))))
+    (aset p "sensedAt" (fn [pos]
+                         (if (and (not @seen) (= floor [(.-x pos) (.-y pos) (.-z pos)]))
+                           #js {:unknown true :pos pos}
+                           (.call sensed-at p pos))))
+    p))
+
+;; Sorrel j3047: standing against the riser at the back of its stair cell, the body looked at the next floor twice and
+;; stopped :floor-unseen; the line from its eye to that floor crossed the edge of its own floor.
+(deftest stair-leans-toward-a-floor-its-looks-missed-and-looks-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [open (apply dissoc ground (for [y [64 65 66]] (str "1," y ",0")))
+              p (floor-seen-after-lean! (sensing {:blocks open}) [1 63 0])
+              {:keys [out]} (await (tick-out! (setup p 'jobs.access.stair stair-east)))]
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (= 3 (:steps @out))))))))
+
 (deftest tunnel-passes-its-fetch-to-the-stair-child-for-items-only
   (is (= {:what #{:item}} (tunnel/stair-fetch true)))
   (is (= {:what #{:item}} (tunnel/stair-fetch #{:tool :item})))

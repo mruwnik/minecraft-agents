@@ -1283,6 +1283,24 @@
           (is (empty? (remove (fn [[_ y z :as cell]] (or (> y 63) (zero? z) (= [9 58 1] cell))) (dug-cells s))) "every cell below the start but the ore is on the line z 0")
           (is (= 58 (second (:origin (:tunnel (done-event s)))))))))))
 
+;; Sorrel j3047/j3050: a stair step that stopped mid-descent (:floor-unseen) ended the descent, and the tunnel ran 30+
+;; blocks above :level. A table in the third step stands in for the stop.
+(deftest a-step-blocked-mid-descent-turns-the-stair-and-goes-on-down-to-the-level
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (merge (dissoc (cells "stone" (range -12 13) (range 50 68) (range -4 13)) "0,64,0" "0,65,0")
+                                    {"0,61,3" "crafting_table"})
+                     :drops {"stone" "cobblestone"}
+                     :inventory (into pickaxe [{:name "torch" :count 8}])}
+              s (start {:world world})]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :level 58 :tunnel-length 3 :mend false}) {})
+          (await (run-ticks s 600))
+          (is (= "south" (:from (first (events-of s :mine.turned)))) (pr-str (map :text (events-of s :mine.turned))))
+          (is (empty? (events-of s :mine.descent-stopped)) (pr-str (map :text (events-of s :mine.descent-stopped))))
+          (is (= "crafting_table" (block-at s 0 61 3)))
+          (is (= 58 (second (:origin (:tunnel (done-event s)))))))))))
+
 (def shaft-plan
   "A mineshaft by Miles: its top is the body's start cell, a stair east down to y 60."
   (-> {:id "s" :kind :mineshaft :parts [{:id "stair" :stair {:from [0 64 0] :heading :east :to-y 60} :want :clear}]}
