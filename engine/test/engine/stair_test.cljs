@@ -637,7 +637,7 @@
               "go-to's stair: the floor goes into the scaffold ledger")
           (is (= [] (scaffold (await (stair! {:blocks cave-gap :inventory inv} up-east (fn [_])))))
               "another caller's stair keeps its floor")
-          (is (= [] (await (settings/with-settings {:jobs.access.stair/take-back-floors? false}
+          (is (= [] (await (settings/with-settings {:jobs.access.stair.limits/take-back-floors? false}
                              (fn ^:async kept [] (scaffold (await (stair! {:blocks cave-gap :inventory inv} noted (fn [_]))))))))
               "the setting keeps go-to's floor too"))))))
 
