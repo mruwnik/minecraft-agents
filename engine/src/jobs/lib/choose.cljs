@@ -39,27 +39,32 @@
                 (food/food-reserve inv)
                 (whole-of (:avoid (overrides c chooser))))))
 
+(def kind-purposes
+  "Tool purposes besides [:dig block]: the tool kinds that serve each."
+  {:attack ["sword" "axe"] :till ["hoe"] :shear ["shears"]})
+
 (defn tools-for
-  "See the ns doc. Only the purpose [:dig block] exists; any other throws."
+  "See the ns doc. The purposes are [:dig block] and the kind purposes of kind-purposes ([:attack], [:till],
+  [:shear]); any other throws."
   ([c purpose amount] (tools-for c purpose amount nil))
   ([c [what block :as purpose] amount opts]
-   (when-not (and (= :dig what) (string? block))
+   (when-not (or (and (= :dig what) (string? block)) (kind-purposes what))
      (throw (js/Error. (str "tools-for: unknown purpose " (pr-str purpose)))))
    (let [p (:primitives c)
-         harvest (some-> (.harvestTools p block) js->clj)
-         ok (set harvest)
-         wanted (kind/tool-kind block)
+         dig? (= :dig what)
+         ok (if dig? (set (some-> (.harvestTools p block) js->clj)) #{})
+         wanted (if dig? [(kind/tool-kind block)] (kind-purposes what))
          held (reserved c :tools)
          prefer (:prefer (overrides c :tools))
          rank-in (fn [name] (let [i (.indexOf prefer name)] (if (neg? i) (count prefer) i)))
          order (fn [t] [(rank-in (:name t))
                         (if (:fast opts) (- (weapon/weapon-rank (:name t))) (weapon/cheap-rank (:name t)))
                         (or (:durability t) whole)])
-         fit (fn [k] (->> (u/inventory p)
-                          (filter #(and (kind/of-kind? (:name %) k) (or (empty? ok) (ok (:name %)))))
+         fit (fn [ks] (->> (u/inventory p)
+                          (filter #(and (some (partial kind/of-kind? (:name %)) ks) (or (empty? ok) (ok (:name %)))))
                           (remove #(contains? held (:name %)))
                           (remove #(zero? (or (:durability %) whole)))))
-         usable (sort-by order (or (seq (fit wanted)) (some-> (kind/fallback-kind wanted) fit)))
+         usable (sort-by order (or (seq (fit wanted)) (some-> (kind/fallback-kind (first wanted)) vector fit)))
          uses (mapv (fn [t] {:item (:name t) :uses-left (or (:durability t) whole)}) usable)]
      {:list uses
       :short (max 0 (- amount (transduce (map :uses-left) + 0 uses)))})))
@@ -108,13 +113,30 @@
   [blocks max-value]
   (filterv #(<= (:value (cost/item-value [{:name % :count 1}])) max-value) blocks))
 
+(defn use-spec?
+  "Whether {purpose spec} names a chooser default-use knows: {:tools :dig}, {:tools <kind purpose>} or
+  {:blocks <filler purpose>}."
+  [purpose spec]
+  (case purpose
+    :tools (boolean (or (= :dig spec) (kind-purposes spec)))
+    :blocks (contains? filler-purposes spec)
+    false))
+
 (defn default-use
   "The item names a call's :use gets for purpose when the job's defaults name chooser spec for it (the :use/default
-  hook): nil when the call's args do not say what the chooser is for. Only {:tools :dig} (the args' :block, else the
-  block at :pos) exists; any other throws."
+  hook; see use-spec?). {:tools :dig} is the tools for the args' :block, else the block at :pos, and throws when
+  the args give neither; {:tools :attack|:till|:shear} the carried tools of that purpose; {:blocks :build|...} the
+  carried fillers of that purpose. nil when the list is not known yet (the block at :pos is hidden). An unknown
+  spec throws."
   [c purpose spec]
-  (when-not (= [:tools :dig] [purpose spec])
+  (when-not (use-spec? purpose spec)
     (throw (js/Error. (str "default :use: unknown chooser " (pr-str {purpose spec})))))
-  (let [{:keys [block pos]} (:args c)
-        block (or block (when pos (blocks/target-name (:primitives c) pos blocks/hidden-guess)))]
-    (when block (mapv :item (:list (tools-for c [:dig block] 1))))))
+  (if (= :blocks purpose)
+    (mapv :item (:list (fillers-for c spec 1)))
+    (if (not= :dig spec)
+      (mapv :item (:list (tools-for c [spec] 1)))
+      (let [{:keys [block pos]} (:args c)]
+        (when-not (or block pos)
+          (throw (js/Error. "default :use {:tools :dig}: the args give neither :block nor :pos")))
+        (when-let [block (or block (blocks/target-name (:primitives c) pos blocks/hidden-guess))]
+          (mapv :item (:list (tools-for c [:dig block] 1))))))))

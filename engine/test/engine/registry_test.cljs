@@ -2,7 +2,8 @@
   (:require [cljs.test :refer [deftest is]]
             [engine.expr :as expr]
             [engine.registry :as registry]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.lib.choose :as choose]))
 
 (def migrated
   '#{jobs.survival.breathe jobs.survival.unwedge jobs.survival.extinguish
@@ -119,3 +120,13 @@
                 '(jobs.survival.dig-niche {:reach 32})
                 '(jobs.farm.till {:center [0 64 0] :radius 0})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
+
+(deftest every-default-use-names-a-chooser-that-exists
+  (doseq [[sym job] registry/jobs
+          [purpose spec] (:use (:defaults job))]
+    (is (choose/use-spec? purpose spec) (str sym " defaults :use " (pr-str {purpose spec})))))
+
+(deftest an-unknown-use-spec-is-not-known
+  (is (not (choose/use-spec? :tools :swim)))
+  (is (not (choose/use-spec? :blocks :nonsense)))
+  (is (not (choose/use-spec? :food :build))))

@@ -9,7 +9,8 @@
             [engine.events :as events]
             [engine.expr :as expr]
             [engine.memory :as mem]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.lib.choose :as choose]))
 
 (deftest an-ending-names-its-cause-keyword
   (are [e k] (= k (contract/cause-key e))
@@ -164,6 +165,29 @@
           (core/submit! eng '(digger {:block "stone" :use {:tools ["iron_pickaxe"]}}) {})
           (await (core/tick! eng))
           (is (= ["iron_pickaxe"] (:dig-use @world)) "an explicit :use wins"))))))
+
+(def purposes
+  [[{:blocks :build} [{:name "dirt" :count 4} {:name "diamond" :count 1} {:name "oak_planks" :count 2}] {} {:blocks ["dirt" "oak_planks"]}]
+   [{:blocks :seal} [{:name "dirt" :count 4} {:name "cobblestone" :count 2}] {} {:blocks ["cobblestone" "dirt"]}]
+   [{:tools :attack} [(pick "iron_pickaxe" 100) (pick "stone_sword" 20)] {} {:tools ["stone_sword"]}]
+   [{:tools :till} [(pick "iron_hoe" 100)] {} {:tools ["iron_hoe"]}]
+   [{:tools :shear} [(pick "shears" 100)] {} {:tools ["shears"]}]])
+
+(deftest a-default-use-covers-every-filler-and-tool-purpose
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[use-defaults inventory args expected] purposes]
+          (let [job {:conditions [] :defaults {:use use-defaults}
+                     :round (fn [c] (swap! world assoc :call (ctx/frozen-call c)) (ctx/end c :done nil))}
+                {:keys [eng]} (setup {'purposed job} nil inventory)]
+            (core/submit! eng (list 'purposed args) {})
+            (await (core/tick! eng))
+            (is (= expected (:use (:call @world))) (pr-str use-defaults))))))))
+
+(deftest a-dig-default-without-a-block-or-pos-says-so
+  (is (thrown-with-msg? js/Error #"neither :block nor :pos"
+                        (choose/default-use {:args {} :primitives (tu/fake {})} :tools :dig))))
 
 (deftest a-listed-job-waits-on-its-conditions-then-any-ending-ends-it
   (async done
