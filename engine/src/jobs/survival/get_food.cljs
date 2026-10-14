@@ -530,7 +530,7 @@
     (cond
       (= :continue st) :continue
       (>= (:made res 0) 1) :again
-      :else (let [reason (or (:reason res) "short")]
+      :else (let [reason (or (some-> (:reason res) name) "short")]
               (ctx/remember! c :no-bake {:reason reason} no-bake-policy)
               (ctx/emit! c :food.no-bake :info {:text (str "cannot bake bread: " reason)})
               nil))))

@@ -100,7 +100,7 @@
                   (and (= :done r) (pos? (:made res 0))) :again
 
                   ;; the seen table cannot be reached: plan again without it, so a carried or new table is put down
-                  (and (#{"unreachable" "no-table"} (:reason res)) (not (:table-unreachable mem)))
+                  (and (#{:unreachable :no-table} (:reason res)) (not (:table-unreachable mem)))
                   (do (ctx/update-mem! c assoc-in [:craft :table-unreachable] true) :again)
 
                   ;; the craft child ran its own rounds and made nothing: another child of the same step would repeat them

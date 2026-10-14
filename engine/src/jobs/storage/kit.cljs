@@ -257,7 +257,7 @@
 (defn absorb
   "{:mem m :end reason :fail reason} after the child call finished with res. Pure."
   [mem call res stacks inv]
-  (let [reason (:reason res)
+  (let [reason (when-not (:short res) (some-> (:reason res) name))
         top (peek (:steps mem))]
     (case (:for call)
       (:get :food-get)

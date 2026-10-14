@@ -2,7 +2,11 @@
   (:require [clojure.string :as str]
             [engine.args :as a]
             [jobs.items.shortfall :as craft]
+            [jobs.items.recipes :as recipes]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.game :as game]
+            [engine.settings :as settings]
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
@@ -10,6 +14,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
@@ -18,19 +23,26 @@
 
 (def doc
   "Craft :count more of :item. 2x2 recipes work anywhere. Bigger ones need a crafting table: :table, else the
-  nearest within :radius, else the nearest seen within :far (up to 64), walking there when out of reach (a carried table is put down instead, with no :table, also with :fetch false; a seen table the walk cannot reach is left, and the carried or a fetched table is put down).
+  nearest within :radius, else the nearest seen within :far (up to 64), walking there when out of reach (a go-to child;
+  a carried table is put down instead, with no :table, also with :fetch false; a seen table the walk cannot reach is
+  left, and the carried or a fetched table is put down).
   The count carried at the start is kept in memory and the target is that plus :count, so a cut or a partial
   batch loses nothing.
-  Ends with {:made n}, the number of items gained (plus :spent, :spent-at and a :text when it put a table down). When it stops short it adds :short {name n} (an ingredient ran
-  out) or :reason (\"no-table\", \"not-a-table\", \"unreachable\", \"full\", the cannot reason, or the failed
-  status), after a warn, and its status is stopped. A full bag first runs one jobs.storage.make-room child (once a call). One call is the whole craft: it walks (a go-to child) and crafts
-  again until the count is carried or it stops; it yields only while go-to waits on the world.
-  An ingredient that runs out is fetched (jobs.lib.fetch: a jobs.items.obtain child for each missing item) and the
-  craft goes on (a further fetch for each batch while the last one led to more made), unless :fetch is false or the fetch failed: then it stops with :short and a :text. With no table in reach a
-  carried one is put down beside the body, else one is fetched (a crafting_table obtain child) and put down, the same
-  way; :fetch false or a failed fetch stops with :reason \"no-table\".
-  A table this call put down is dug up again when it ends (stopped short too), unless :keep-table, it stands in an area of the body's own or a zone refuses
-  the dig. No table is put in a cell of a stair or tunnel the body cut (memory :stair-way, :tunnel-way).")
+  Needs: an item name (condition :bad-args).
+  Ends :done with {:made n}, the number of items gained (plus :spent, :spent-at and a :text when it put a table down).
+  Stopping short it ends with :made as well: condition-failed with the cause :need (data :short {name n}, an ingredient
+  ran out, and :alternatives), :no-table, :not-a-table, :unreachable or :full (the bag is full and one
+  jobs.storage.make-room child freed nothing), or nothing-possible with :cannot (data :detail, the reason the game
+  gives) or :craft-failed (three failed crafts in a row, data :detail the status); each after a warn or info.
+  One call is the whole craft: it walks (a go-to child) and crafts again until the count is carried or it stops; it
+  yields only while a child waits on the world.
+  An ingredient that runs out is got with a jobs.items.obtain child (jobs.lib.need) and the craft goes on (a
+  further fetch for each batch while the last one led to more made), unless :fetch is false or the fetch failed: then
+  it ends :need with a :text. With no table in reach a carried one is put down beside the body, else one is fetched
+  (an obtain child for a crafting_table) and put down, the same way; :fetch false or a failed fetch ends :no-table.
+  A table this call put down is dug up again when it ends (stopped short too), unless :keep-table, it stands in an area
+  of the body's own or a zone refuses the dig. No table is put in a cell of a stair or tunnel the body cut (memory
+  :stair-way, :tunnel-way).")
 
 (a/defargs args
   {:item {:doc "item name to craft" :spec a/item? :default nil}
@@ -42,11 +54,48 @@
    :keep-table {:doc "leave a table this call put down standing; false: it is dug up again when the call ends" :spec boolean? :default false}
    :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}})
 
-(defn check
-  "An item name is given."
+(a/defargs settings
+  {::time-s {:default 120 :doc "Seconds a craft may take: the walk, the batches and the table." :spec (a/num-in 0 nil)}
+   ::batch-s {:default 0.5 :doc "Mean seconds one batch of a craft takes, for the quote." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
+(defn batch-s [] (settings/get settings ::batch-s))
+
+(def target [:item])
+
+(def defaults {:spend {:time ::time-s}})
+
+(defn bad-args
+  "The cause when no item name is given."
   [c]
-  (or (string? (:item (:args c)))
-      (ctx/wait c {:reason :bad-args :why "no item name"})))
+  (when-not (string? (:item (:args c)))
+    {:reason :bad-args :why "no item name"}))
+
+(def conditions [[:fn bad-args]])
+
+(defn done?
+  "Progress only: the round that sees the target carried also picks up a table it put down and ends."
+  [c]
+  (let [{:keys [item count]} (:args c)
+        have (storage/carried (u/inventory (:primitives c)) item)
+        start (:start (ctx/mem c) have)
+        made (max 0 (- have start))]
+    {:done? false :units :items :done made :left (max 0 (- count made))}))
+
+(defn quote-of
+  "P: the cheapest recipe for :count more of :item from what is carried. It uses its ingredients (net of the item
+  itself, a least of 0 since another recipe may serve) and yields at least :count."
+  [c]
+  (let [{:keys [item count]} (:args c)
+        p (:primitives c)
+        rs (get (recipes/recipes-for (game/version-of p)) item)
+        st {:have (storage/carried-totals (u/inventory p))}
+        r (first (sort-by #(recipes/short-count st % (recipes/ceil-div count (:count %))) rs))
+        batches (if r (recipes/ceil-div count (:count r)) 0)
+        mean (+ 1 (* batches (batch-s)))]
+    (cond-> {:uses {:time [(* batches (batch-s)) mean (max mean (time-s))]}}
+      r (assoc-in [:yields :items item] [count (* batches (:count r)) (* batches (:count r))])
+      (seq (dissoc (:needs r) item))
+      (assoc-in [:uses :items] (into {} (map (fn [[k v]] [k [0 (* v batches) (* v batches)]])) (dissoc (:needs r) item))))))
 
 (defn cell-vec [pos] (mapv #(js/Math.floor %) [(:x pos) (:y pos) (:z pos)]))
 
@@ -78,20 +127,30 @@
          (when (seq skip) (str "; the table at " (str/join ", " (map #(str "[" (str/join " " %) "]") (sort skip))) " cannot be reached"))
          (when why (str "; " why)))))
 
+(def condition-reasons "Stops that read as a failed condition, the others as nothing possible." #{:need :no-table :not-a-table :unreachable :full})
+
 (defn finish!
-  "Hand the parent a result, made so far plus extra (a stop when extra is not empty: :status :stopped), and return :done."
+  "Keep the ending in memory (a cut during the table pick-up goes on with it) and return it: done with the made count, or
+  the stop extra names by its :reason (a condition-failed or nothing-possible ending, extra's other fields and the made
+  count as data)."
   [c made extra]
-  (let [placed (spent/log c)]
-    (ctx/result! c (cond-> (merge {:made made} extra)
-                     (seq extra) (assoc :status :stopped)
-                     (seq placed) (merge (spent/summary placed) {:text (spent/text placed "crafting table")}))))
-  :done)
+  (let [placed (spent/log c)
+        reason (:reason extra)
+        data (cond-> (merge {:made made} (dissoc extra :reason))
+               (seq placed) (merge (spent/summary placed) {:text (spent/text placed "crafting table")}))
+        e (cond
+            (nil? reason) (ctx/end c :done nil data)
+            (condition-reasons reason) (ctx/end c :condition-failed (cond-> {:reason reason} (:short extra) (assoc :short (:short extra))) data)
+            :else (ctx/end c :nothing-possible reason data))]
+    (ctx/update-mem! c assoc :ended e)
+    e))
 
 (defn give-up!
   "u/fail!: :again until the third failure in a row, then finish with the made count and the reason."
-  [c made reason]
-  (let [r (u/fail! c :craft.gave-up (str "craft gave up: " reason))]
-    (if (= :done r) (finish! c made {:reason reason}) :again)))
+  ([c made reason] (give-up! c made reason nil))
+  ([c made reason extra]
+   (let [r (u/fail! c :craft.gave-up (str "craft gave up: " (name reason) (when-let [d (:detail extra)] (str " " d))))]
+     (if (= :done r) (finish! c made (assoc extra :reason reason)) :again))))
 
 (def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
 
@@ -170,11 +229,11 @@
   (loop []
     (when-let [cell (or (:spot-digging (ctx/mem c)) (first (dig-spot-cells c)))]
       (ctx/update-mem! c assoc :spot-digging cell)
-      (let [r (await (ctx/call-child c :spot-dig 'jobs.blocks.dig {:pos cell :collect false :need-drop false :fetch false :on-fluid :fail}))]
+      (let [r (await (ctx/call c :spot-dig 'jobs.blocks.dig {:pos cell :collect false :need-drop false :fetch false :on-fluid :fail}))]
         (if (= :continue r)
           :continue
           (do (ctx/update-mem! c #(-> % (dissoc :spot-digging) (update :spot-dug (fnil conj #{}) cell)))
-              (if (and (= :done r) (:dug (ctx/child-result c :spot-dig)))
+              (if (and (= :done (:kind r)) (:dug (:data r)))
                 (do (await (ctx/act c :look (clj->js {:pos {:x (+ (:x cell) 0.5) :y (- (:y cell) 0.5) :z (+ (:z cell) 0.5)}})))
                     (look/see! c)
                     (when (and (b/air (u/seen-name (:primitives c) cell)) (solid? (u/seen-name (:primitives c) (update cell :y dec))))
@@ -191,10 +250,23 @@
   (pos? (storage/carried (u/inventory (:primitives c)) "crafting_table")))
 
 (defn table-problem
-  "The :need wait for a crafting table while one is wanted and none is carried, else nil."
+  "The crafting table to get while one is wanted and none is carried, else nil."
   [c]
   (when (and (:want-table (ctx/mem c)) (not (carried-table? c)))
-    {:reason :need :item "crafting_table" :count 1}))
+    {:item "crafting_table" :count 1}))
+
+(defn ^:async fetch!
+  "Get what (problem c) names with jobs.items.obtain children (jobs.lib.need) until nothing is due any more: nil (the item
+  arrived, the fetch failed or :fetch is off; the craft judges where it stands), :continue while a child waits."
+  [c problem]
+  (loop []
+    (when-let [{:keys [item count]} (and (:fetch (:args c)) (problem c))]
+      (let [e (await (need/item! c item count {:slot (keyword (str "need-" item))}))]
+        (cond
+          (= :continue e) :continue
+          (not= :done (:kind e)) nil
+          (ctx/alive? c) (do (await (pace/pace!)) (recur))
+          :else :continue)))))
 
 (defn table-why! [c why] (ctx/update-mem! c assoc :table-why why) nil)
 
@@ -210,16 +282,17 @@
       :else
       (do
         (ctx/update-mem! c assoc :table-spot spot)
-        (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item "crafting_table" :pos spot :fetch false}))]
+        (let [r (await (ctx/call c :place 'jobs.blocks.place {:item "crafting_table" :pos spot :fetch false}))]
           (if (= :continue r)
             :continue
-            (let [res (ctx/child-result c :place)]
+            (do
               (ctx/update-mem! c dissoc :table-spot)
-              (if (and (= :done r) (:placed res))
+              (if (and (= :done (:kind r)) (:placed (:data r)))
                 (do (ctx/update-mem! c #(-> % (assoc :table spot :table-placed spot) (dissoc :want-table)))
                     (spent/note! c "crafting_table" spot)
                     :again)
-                (table-why! c (str "the carried crafting_table could not be put down: " (or (:reason res) "placing it failed")))))))))))
+                (table-why! c (str "the carried crafting_table could not be put down: "
+                                   (if (= :done (:kind r)) "placing it failed" (name (contract/cause-key r)))))))))))))
 
 (declare craft-act! settle!)
 
@@ -228,7 +301,7 @@
   ran, nil when it was tried before."
   [c]
   (when-not (:room-tried (ctx/mem c))
-    (let [r (await (ctx/call-child c :room 'jobs.storage.make-room {}))]
+    (let [r (await (ctx/call c :room 'jobs.storage.make-room {}))]
       (if (= :continue r)
         :continue
         (do (ctx/update-mem! c assoc :room-tried true)
@@ -240,10 +313,10 @@
   it run as one urgent section (ctx/atomic :craft), so a reflex does not leave the table unused; the
   follow-up on the craft's status (settle!) is outside it."
   [c]
-  (let [o (fetch/opts c 'jobs.items.craft)]
+  (let [o (:fetch (:args c))]
     (when-not (:table-tried (ctx/mem c))
       (when (and o (not (carried-table? c))) (ctx/update-mem! c assoc :want-table true))
-      (let [f (when (:want-table (ctx/mem c)) (await (fetch/fetch! c 'jobs.items.craft table-problem)))
+      (let [f (when (:want-table (ctx/mem c)) (await (fetch! c table-problem)))
             r (when (and (nil? f) (carried-table? c))
                 (await (ctx/atomic c :urgent :craft
                                    (fn ^:async place-and-craft []
@@ -260,7 +333,7 @@
   (or (await (table-fetch! c))
       (let [text (no-table-text c (:radius (:args c)))]
         (ctx/emit! c :craft.no-table :warn {:text text})
-        (finish! c made (cond-> {:reason (if (seq (unreachable-tables c)) "unreachable" "no-table")}
+        (finish! c made (cond-> {:reason (if (seq (unreachable-tables c)) :unreachable :no-table)}
                           (or (seq (unreachable-tables c)) (:table-why (ctx/mem c))) (assoc :text text))))))
 
 (defn ^:async reach-table!
@@ -284,22 +357,22 @@
       :else
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table 3)
-            (if handed? (give-up! c made "unreachable") :again)
-            (let [r (await (child/call-walk c :walk {:pos table :range 3 :escalate false :warn false :retry false :zone-tolls true}))]
+            (if handed? (give-up! c made :unreachable) :again)
+            (let [r (await (child/call-walk* c :walk {:pos table :range 3 :escalate false :warn false :retry false :zone-tolls true}))]
               (cond
                 (= :continue r) :continue
-                (:arrived (ctx/child-result c :walk)) :again
-                arg? (give-up! c made "unreachable")
+                (:arrived (:data r)) :again
+                arg? (give-up! c made :unreachable)
                 :else (do (ctx/update-mem! c #(-> % (update :unreachable-tables (fnil conj #{}) (cell-vec table)) (dissoc :table)))
                           (or (await (table-fetch! c)) :again)))))))))
 
 (defn problem
-  "The :need wait for the first ingredient of the last shortage still not carried up to the amount it needed, else nil."
+  "The first ingredient of the last shortage still not carried up to the amount it needed, as {:item :count}, else nil."
   [c]
   (let [have (u/inventory (:primitives c))]
     (some (fn [[name want]]
             (let [n (storage/carried have name)]
-              (when (< n want) {:reason :need :item name :count (- want n)})))
+              (when (< n want) {:item name :count (- want n)})))
           (:wants (ctx/mem c)))))
 
 (defn ^:async short!
@@ -310,9 +383,9 @@
   [c item r made]
   (let [{:keys [short] :as shortage} (craft/no-item (js->clj (.-recipes r)) (js->clj (.-have r)))
         have (js->clj (.-have r))]
-    (when (and (seq short) (fetch/opts c 'jobs.items.craft) (not (contains? (:fetched (ctx/mem c)) [made short])))
+    (when (and (seq short) (:fetch (:args c)) (not (contains? (:fetched (ctx/mem c)) [made short])))
       (ctx/update-mem! c assoc :wants (into {} (map (fn [[name n]] [name (+ n (get have name 0))])) short)))
-    (let [f (when (seq (:wants (ctx/mem c))) (await (fetch/fetch! c 'jobs.items.craft problem)))]
+    (let [f (when (seq (:wants (ctx/mem c))) (await (fetch! c problem)))]
       (cond
         f f
         (and (seq (:wants (ctx/mem c))) (nil? (problem c)))
@@ -322,7 +395,7 @@
         (do (ctx/update-mem! c dissoc :wants)
             (let [text (str "craft " item " is missing " (pr-str short))]
               (ctx/emit! c :craft.short :info {:text text})
-              (finish! c made (assoc shortage :text text))))))))
+              (finish! c made (assoc shortage :reason :need :text text))))))))
 
 (defn ^:async craft-act!
   "The craft call alone (no follow-up): the target is carried already -> finish!'s result, else {:r the primitive's
@@ -373,14 +446,14 @@
                                                             (await (reach-table! c made))))
                         (not= "not-a-table" (.-reason r)) (await (reach-table! c made))
                         (:table (:args c)) (do (ctx/emit! c :craft.no-table :warn {:text (str "not a crafting table: " (pr-str table))})
-                                               (finish! c made {:reason "not-a-table"}))
+                                               (finish! c made {:reason :not-a-table}))
                         :else (do (ctx/update-mem! c dissoc :table) :again))
         "full" (or (await (room! c))
                    (do (ctx/emit! c :craft.full :warn {:text "inventory is full and make-room freed nothing"})
-                       (finish! c made {:reason "full"})))
+                       (finish! c made {:reason :full})))
         "cannot" (do (ctx/emit! c :craft.cannot :warn {:text (str "cannot craft " item ": " (.-reason r))})
-                     (finish! c made {:reason (.-reason r)}))
-        (give-up! c made status)))))
+                     (finish! c made {:reason :cannot :detail (.-reason r)}))
+        (give-up! c made :craft-failed {:detail status})))))
 
 (defn ^:async pick-up!
   "Dig up the table this call put down, once, unless :keep-table, a zone or claim refuses the dig or it stands in an area of this body's own
@@ -393,7 +466,7 @@
             (access/in-own-area? c cell)
             (not (:ok (access/may? c :dig cell))))
       :done
-      (let [r (await (ctx/call-child c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail}))]
+      (let [r (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail}))]
         (if (= :continue r)
           :continue
           (do (ctx/update-mem! c assoc :picked-up true)
@@ -410,8 +483,10 @@
       (await (settle! c (await (craft-act! c)))))))
 
 (defn ^:async round
-  "The whole craft in one call: step! until it is done or stopped, then pick-up!."
+  "The whole craft in one call: step! until it ends, then pick-up!; the ending."
   [c]
   (await (pace/steps! c (fn ^:async craft-step []
-                          (let [r (await (step! c))]
-                            (if (= :done r) (await (pick-up! c)) r))))))
+                          (let [r (or (:ended (ctx/mem c)) (await (step! c)))]
+                            (if (contract/ending? r)
+                              (if (= :continue (await (pick-up! c))) :continue r)
+                              r))))))
