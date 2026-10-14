@@ -50,7 +50,7 @@
         (let [{:keys [result p seen]} (await (outcome (merge {:blocks composter} (stacks "oak_leaves")) use-on
                                                       {:pos {:x 2 :y 63 :z 0} :item "oak_leaves"}))]
           (is (true? (:used result)))
-          (is (nil? (:status result)))
+          (is (= :done (:status result)))
           (is (= 1 (count (calls p "useOn"))))
           (is (= 1 (count (kinds seen :blocks.use-on.done)))))))))
 

@@ -2,6 +2,8 @@
   "jobs.blocks.place against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [box]]
@@ -13,13 +15,27 @@
 (def body {:pos {:x 0 :y 64 :z 0}})
 (def cobble [{:name "cobblestone" :count 4}])
 
+(defn ^:async ending-of
+  "Run job with args as a ctx/call child of a recording parent, at most n ticks: the child's {:kind :cause} (nil when
+  it does not end)."
+  [env args n]
+  (let [out (atom nil)
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [e (await (ctx/call c :kid job args))]
+                           (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) :done))))}
+        eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
+    (core/submit! eng '(recording-parent) {})
+    (await (tu/run-until-empty eng n))
+    @out))
+
 (deftest a-carried-block-is-placed-in-reach
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (bd/setup {:self body :inventory cobble})
               result (await (bd/child-outcome eng job {:pos [2 64 0] :item "cobblestone"} 5))]
-          (is (= {:placed true :pos at :item "cobblestone" :reason :placed :block {:name "cobblestone" :state {}}} result))
+          (is (= {:placed true :pos at :item "cobblestone" :reason :placed :block {:name "cobblestone" :state {}}} (dissoc result :status)))
           (is (= "cobblestone" (bd/block-at p at)))
           (is (= 3 (bd/carried p "cobblestone")))
           (is (= 1 (count (filter #(= :blocks.place.done (:kind %)) @seen)))))))))
@@ -51,14 +67,24 @@
             (is (= :failed (:reason result)))
             (is (re-find why (str (:why result))) (.-status r))))))))
 
-(deftest any-of-places-the-first-carried
+(deftest a-use-list-places-the-first-carried-and-any-of-is-its-old-spelling
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (bd/setup {:self body :inventory [{:name "dirt" :count 1}]})
-              result (await (bd/child-outcome eng job {:pos at :any-of ["cobblestone" "dirt"]} 5))]
-          (is (= {:placed true :item "dirt"} (select-keys result [:placed :item])))
-          (is (= "dirt" (bd/block-at p at))))))))
+        (doseq [args [{:use {:blocks ["cobblestone" "dirt"]}} {:any-of ["cobblestone" "dirt"]}]]
+          (let [{:keys [eng p]} (bd/setup {:self body :inventory [{:name "dirt" :count 1}]})
+                result (await (bd/child-outcome eng job (assoc args :pos at) 5))]
+            (is (= {:placed true :item "dirt"} (select-keys result [:placed :item])) (pr-str args))
+            (is (= "dirt" (bd/block-at p at)))))))))
+
+(deftest with-neither-item-nor-list-it-places-a-carried-filler
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :inventory cobble})
+              result (await (bd/child-outcome eng job {:pos at} 5))]
+          (is (= {:placed true :item "cobblestone"} (select-keys result [:placed :item])))
+          (is (= "cobblestone" (bd/block-at p at))))))))
 
 (deftest a-cell-out-of-reach-is-walked-to-first
   (async done
@@ -69,13 +95,14 @@
           (is (:placed result))
           (is (= "cobblestone" (bd/block-at p {:x 12 :y 64 :z 0}))))))))
 
-(deftest a-zone-appearing-during-the-walk-declines-the-place
+(deftest a-zone-appearing-during-the-walk-ends-the-place
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (bd/zone-on-first-step (bd/setup {:self body :inventory cobble}))
-              r (await (bd/waiting-after env (list job {:pos [12 64 0] :item "cobblestone"}) 2))]
-          (is (= {:reason :not-allowed :by :zone :zone "farm"} (select-keys r [:reason :by :zone])))
+              e (await (ending-of env {:pos [12 64 0] :item "cobblestone"} 5))]
+          (is (= :condition-failed (:kind e)))
+          (is (= {:reason :not-allowed :by :zone :zone "farm"} (select-keys (:cause e) [:reason :by :zone])))
           (is (empty? (bd/calls (:p env) "place")))
           (is (= 4 (bd/carried (:p env) "cobblestone"))))))))
 
@@ -104,9 +131,9 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:reason :need :item "cobblestone" :pos at}
-               (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :item "cobblestone" :fetch false}) 3))))
+               (:cause (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :item "cobblestone" :fetch false}) 3)))))
         (is (= {:reason :need :any-of ["cobblestone" "dirt"] :pos at}
-               (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :any-of ["cobblestone" "dirt"] :fetch false}) 3))))))))
+               (:cause (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :use {:blocks ["cobblestone" "dirt"]} :fetch false}) 3)))))))))
 
 (deftest a-solid-block-in-the-cell-ends-occupied
   (async done
@@ -115,7 +142,23 @@
         (let [env (bd/setup {:self body :blocks {"2,64,0" "stone" "2,63,0" "stone"} :inventory cobble})]
           (let [r (await (bd/child-outcome (:eng env) job {:pos at :item "cobblestone"} 5))]
             (is (= {:placed false :reason :occupied :block "stone"} (select-keys r [:placed :reason :block]))))
-          (is (empty? (bd/calls (:p env) "dig"))))))))
+          (is (empty? (bd/calls (:p env) "dig"))))
+        (let [env (bd/setup {:self body :blocks {"2,64,0" "stone" "2,63,0" "stone"} :inventory cobble})
+              e (await (ending-of env {:pos at :item "cobblestone"} 3))]
+          (is (= {:kind :condition-failed :cause {:reason :occupied :block "stone"}} e)))))))
+
+(deftest a-failed-place-is-nothing-possible-and-a-held-block-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory cobble})
+              _ (.override (.-world (:p env)) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason "no"}))
+              e (await (ending-of env {:pos at :item "cobblestone"} 3))]
+          (is (= {:kind :nothing-possible :cause {:reason :failed :primitive "failed"}} e)))
+        (let [env (bd/setup {:self body :blocks {"2,64,0" "cobblestone"} :inventory cobble})]
+          (core/submit! (:eng env) (list job {:pos at :item "cobblestone"}) {})
+          (await (tu/run-until-empty (:eng env) 5))
+          (is (some #(= :completed (:kind %)) @(:seen env))))))))
 
 (defn done-text [seen]
   (:text (first (filter #(= :blocks.place.done (:kind %)) @seen))))
@@ -140,7 +183,7 @@
       (fn ^:async t []
         (let [env (bd/setup {:self body :inventory cobble :zones [bd/farm-zone]})]
           (is (= {:reason :not-allowed :pos at :by :zone :zone "farm" :owner "Miles"}
-                 (await (bd/waiting-after env (list job {:pos at :item "cobblestone"}) 3)))))
+                 (:cause (await (bd/waiting-after env (list job {:pos at :item "cobblestone"}) 3))))))
         (let [{:keys [eng p]} (bd/setup {:self body :inventory cobble :zones [bd/farm-zone]})
               result (await (bd/child-outcome eng job {:pos at :item "cobblestone" :ignore-zones? true} 5))]
           (is (:placed result))
@@ -153,20 +196,20 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:reason :own-body :pos {:x 0 :y 64 :z 0}}
-               (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [0 64 0] :item "cobblestone"}) 3))))))))
+               (:cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [0 64 0] :item "cobblestone"}) 3)))))))))
 
 (deftest a-cell-with-nothing-to-place-against-waits-no-support
   (async done
     (tu/run-async done
       (fn ^:async t []
         (is (= {:reason :no-support :pos {:x 2 :y 67 :z 0}}
-               (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [2 67 0] :item "cobblestone"}) 3))))))))
+               (:cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [2 67 0] :item "cobblestone"}) 3)))))))))
 
 (deftest no-item-named-ends-with-bad-args
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (bd/setup {:self body :inventory cobble})]
+        (let [{:keys [eng]} (bd/setup {:self body})]
           (is (= {:placed false :reason :bad-args} (select-keys (await (bd/child-outcome eng job {:pos at} 3)) [:placed :reason]))))))))
 
 (deftest a-cell-of-the-bodys-own-plan-is-placed-another-bodys-plan-refuses
@@ -178,7 +221,7 @@
               other (bd/setup {:self body :inventory cobble :plans {"hut" (shape/with-author plan "Miles")}})]
           (is (:placed (await (bd/child-outcome (:eng own) job {:pos at :item "cobblestone"} 5))))
           (is (= {:reason :not-allowed :by :footprint :plan "hut"}
-                 (select-keys (await (bd/waiting-after other (list job {:pos at :item "cobblestone"}) 3)) [:reason :by :plan]))))))))
+                 (select-keys (:cause (await (bd/waiting-after other (list job {:pos at :item "cobblestone"}) 3))) [:reason :by :plan]))))))))
 
 (deftest a-far-cell-is-walked-to-and-placed-in-one-call
   (async done
@@ -188,15 +231,15 @@
           (is (await (bd/ended-in-one-tick? env (list job {:pos [12 64 0] :item "cobblestone"}))))
           (is (= "cobblestone" (bd/block-at (:p env) {:x 12 :y 64 :z 0}))))))))
 
-(deftest a-walk-that-fails-twice-in-one-call-waits-unreachable
+(deftest a-walk-that-fails-twice-in-one-call-ends-unreachable
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [walks (atom 0)
               env (bd/failing-walks (bd/setup {:self body :inventory cobble}) walks)
-              r (await (bd/waiting-after env (list job {:pos [12 64 0] :item "cobblestone"}) 2))]
-          (is (= 2 @walks) "one more try, then it declines")
-          (is (= {:reason :unreachable :why :no-path} (select-keys r [:reason :why]))))))))
+              e (await (ending-of env {:pos [12 64 0] :item "cobblestone"} 5))]
+          (is (= 2 @walks) "one more try, then it ends")
+          (is (= {:kind :condition-failed :cause {:reason :unreachable :why :no-path}} e)))))))
 
 (deftest a-cut-at-the-place-is-resumed-and-the-block-placed-once
   (async done
@@ -217,12 +260,12 @@
           (is (await (bd/ended-in-one-tick? env (list job {:pos [2 64 0] :item "cobblestone"}))))
           (is (= "cobblestone" (bd/block-at (:p env) at))))))))
 
-(deftest the-support-vanishing-during-the-walk-declines-the-place
+(deftest the-support-vanishing-during-the-walk-ends-the-place
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (bd/after-walks (bd/setup {:self body :inventory cobble}) #(fake/remove-block! % [12 63 0]))
-              r (await (bd/waiting-after env (list job {:pos [12 64 0] :item "cobblestone"}) 2))]
+              r (:cause (await (ending-of env {:pos [12 64 0] :item "cobblestone"} 5)))]
           (is (= :no-support (:reason r)))
           (is (empty? (bd/calls (:p env) "place")) "walked, then refused: nothing placed"))))))
 
@@ -303,3 +346,42 @@
         (let [{:keys [eng]} (pen-env)
               allowed (await (bd/child-outcome eng use-on {:pos [10 63 0] :enter-pens true} 40))]
           (is (not= :unreachable (:reason allowed))))))))
+
+(deftest a-use-on-ends-by-its-click-status
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[status kind cause] [["used" :done nil]
+                                     ["no-item" :condition-failed {:reason :no-item}]
+                                     ["unchanged" :nothing-possible {:reason :unchanged}]]]
+          (let [env (bd/setup {:self body :inventory cobble})
+                _ (.override (.-world (:p env)) "useOn" (fn ^:async f [_ _ _] #js {:status status}))
+                out (atom nil)
+                parent {:check (constantly true)
+                        :round (fn ^:async r [c]
+                                 (let [e (await (ctx/call c :kid use-on {:pos at}))]
+                                   (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) :done))))}
+                eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
+            (core/submit! eng '(recording-parent) {})
+            (await (tu/run-until-empty eng 5))
+            (is (= {:kind kind :cause cause} (update @out :cause identity)) status)))))))
+
+(deftest a-quote-of-place-and-use-on-grows-with-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory cobble})
+              out (atom [])
+              parent {:check (constantly true)
+                      :round (fn ^:async r [c]
+                               (doseq [[j args] [[job {:pos at :item "cobblestone"}] [job {:pos [30 64 0] :item "cobblestone"}]
+                                                 [use-on {:pos [30 64 0]}]]]
+                                 (swap! out conj (await (ctx/quote c j args))))
+                               :done)}
+              eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
+          (core/submit! eng '(recording-parent) {})
+          (await (tu/run-until-empty eng 5))
+          (let [[near far use] @out]
+            (is (= {"cobblestone" [1 1 1]} (get-in near [:uses :items])))
+            (is (< (second (get-in near [:uses :time])) (second (get-in far [:uses :time]))))
+            (is (< (second (get-in near [:uses :time])) (second (get-in use [:uses :time]))))))))))

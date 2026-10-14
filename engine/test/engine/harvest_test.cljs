@@ -488,7 +488,7 @@
           (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
           (let [result (await (child-outcome eng job {} 100))]
             (is (= [{:x 3 :y 64 :z 0}] (:bare result)))
-            (is (= 1 (count (place-calls-at p 3))) "blocks.place remembers the unreachable cell while the body stays")))))))
+            (is (= 3 (count (place-calls-at p 3))) "harvest counts the tries in its own memory, one place call each")))))))
 
 (deftest one-call-cuts-and-replants-every-crop-in-reach
   (async done

@@ -146,7 +146,7 @@
           (core/submit! (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone"}) {})
           (await (run-ticks s 40))
           (is (= "cobblestone" (block-at s 1 64 1)))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= 1 (count (filter #(= :need (:slot %)) (events-of s :child_started))))))))))
 
 (deftest stair-by-default-fetches-a-pickaxe
   (async done

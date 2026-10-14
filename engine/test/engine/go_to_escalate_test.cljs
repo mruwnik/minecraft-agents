@@ -852,7 +852,7 @@
         (let [calls* (atom 0)
               place (get registry/jobs 'jobs.blocks.place)
               ;; the wait pre-check passes (odd calls), the child's own check declines (even calls)
-              flaky (assoc place :check (fn [c] (or (odd? (swap! calls* inc)) (do (ctx/wait c :flaky) false))))
+              flaky (assoc place :conditions [[:fn (fn [_] (when-not (odd? (swap! calls* inc)) :flaky))]])
               {:keys [out p seen eng]} (with-redefs [registry/jobs (assoc registry/jobs 'jobs.blocks.place flaky)]
                                          (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
                                                           'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign)))

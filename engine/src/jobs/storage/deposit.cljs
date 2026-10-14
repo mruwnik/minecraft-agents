@@ -157,13 +157,14 @@
                 (u/progress! c)
                 :again)
             (= :continue r) :continue
-            (= :declined r) (let [why (:reason (b/child-wait c :place 'jobs.blocks.place pargs))]
-                              (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
-                              (ctx/emit! c :deposit.no-chest :warn {:text (str "cannot place a new storage chest at " (pr-str (storage/cell-of spot)) ": " (name (or why :not-ready)))})
-                              (cond
-                                (= :need why) (stop! c "no-chest-item")
-                                (seq (chest-spots c pool)) :again
-                                :else (stop! c "no-chest-spot")))
+            (or (= :declined r) (#{:need :unreachable} (:reason out)))
+            (let [why (if (= :declined r) (:reason (b/child-wait c :place 'jobs.blocks.place pargs)) (:reason out))]
+              (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
+              (ctx/emit! c :deposit.no-chest :warn {:text (str "cannot place a new storage chest at " (pr-str (storage/cell-of spot)) ": " (name (or why :not-ready)))})
+              (cond
+                (= :need why) (stop! c "no-chest-item")
+                (seq (chest-spots c pool)) :again
+                :else (stop! c "no-chest-spot")))
             :else
             (do (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
                 (give-up! c :chest_unusable "could not place a new storage chest" "no-chest-spot"))))))))

@@ -2,52 +2,51 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.contract :as contract]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
+            [jobs.lib.choose :as choose]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.placement :as placement]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [engine.game :as game]))
 
 (def doc
-  "Place one block at :pos ([x y z] or {:x :y :z}): :item, or the first carried of :any-of. One call is the
-  whole attempt: fetch a missing item (:fetch), clear the cell, walk into reach (one jobs.movement.go-to call),
-  place. It yields :continue only when a child waits on the world.
+  "Place one block at :pos ([x y z] or {:x :y :z}): :item, or the first carried of :use {:blocks [names]} (default: the
+  carried building blocks, jobs.lib.choose :build). One call is the whole attempt: fetch a missing item (:fetch), clear
+  the cell, walk into reach (one jobs.movement.go-to call), place. It yields :continue only when a child waits on the world.
 
-  The check waits with a reason (ctx/wait; job.waiting and observe show it) and places nothing when:
-  - {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}: the item is not carried.
+  Needs: the item carried (or fetchable, :fetch). Conditions, which keep the job listed and waiting (ctx/wait; job.waiting
+  and observe show the cause) and place nothing when:
+  - {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}: not carried and :fetch is off.
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the place. :for-plan's own footprint does not. :ignore-zones? skips the rule.
   - {:reason :own-body :pos}: the body stands in the cell (not for seeds, carpets and the like: no collision).
   - {:reason :no-support :pos}: no solid neighbour to place against (not for boats).
-  - {:reason :unreachable :pos :why kw}: the go-to child gave up. The wait lasts while the body stands where it
-    gave up.
   - {:reason :not-loaded :pos}.
-  - While a plant is being cleared, the jobs.blocks.dig child's own wait reason.
 
-  A plant, flower or snow layer in the cell (jobs.lib.blocks/clearable) is dug first with a jobs.blocks.dig
-  child (no tool needed, the drop is not collected). Out of reach, the round walks within 3 cells (go-to child).
-  In reach it places through jobs.lib.tidy/place!, so a block placed in another's zone with :ignore-zones? is
-  recorded for jobs.survival.restore-broken.
+  A plant, flower or snow layer in the cell (jobs.lib.blocks/clearable) is dug first with a jobs.blocks.dig child (no tool
+  needed, the drop is not collected). Out of reach, the round walks within 3 cells (go-to child). In reach it places
+  through jobs.lib.tidy/place!, so a block placed in another's zone with :ignore-zones? is recorded for
+  jobs.survival.restore-broken.
 
-  Ends with info blocks.place.done and {:placed true|false :pos :item :reason}; a placed block carries :block
-  {:name :state} as the place act reported it. :reason is :placed or :already
-  (the cell holds the block: nothing done): done. Stopped ({:status :stopped}, :placed false): :occupied (another
-  block fills the cell), :clear-failed (the plant could not be dug), :bad-args (with a blocks.place.declined
-  warn) or :failed (the primitive refused, with its status as :primitive and why as :why: its reason text, else one from its status). Declined, the check then waits: :unreachable (the walk failed twice or the place is out of reach), a zone
-  or other cell reason that appeared during the call, or an item still missing after the fetch (:need). The caller
-  decides whether to try again.
+  Returns an ending and info blocks.place.done with {:placed true|false :pos :item :reason}; a placed block carries :block
+  {:name :state} as the place act reported it. Done: :reason :placed, or :already (the cell holds the block, nothing
+  done). condition-failed: :occupied (another block fills the cell), :bad-args (with a blocks.place.declined warn),
+  :need (the item is missing after the fetch; the fetch's ending is its :because), :unreachable (the walk failed twice
+  or the place is out of reach, :why), or a cell reason that appeared during the call (the conditions' causes).
+  nothing-possible: :clear-failed (the plant could not be dug) or :failed (the primitive refused: :primitive its status,
+  :why its reason text, else one from its status). The caller decides whether to try again.
 
-  :fetch (default true; jobs.lib.fetch; false waits :need): a :need wait is not waited out. The call runs jobs.items.obtain for one
-  of the item (child :fetch), then place. A failed fetch is remembered for :fail-minutes; meanwhile the check waits
-  :need with {:fetch {:failed reason ...}}.")
+  :fetch (default true; jobs.lib.fetch limits): a missing item is fetched with jobs.items.obtain (one of it); false
+  waits :need. :any-of is the old spelling of :use {:blocks}.")
 
 (a/defargs args
   {:pos {:doc "the cell to fill, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
-   :item {:doc "the block item to place" :spec a/item? :default nil}
-   :any-of {:doc "block items, the first carried one is placed (instead of :item)" :spec (a/coll-of a/item?) :default nil}
+   :item {:doc "the block item to place; nil: the first carried of the call's :use {:blocks}" :spec a/item? :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :enter-pens {:doc "true: the walk to the cell may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
@@ -55,17 +54,33 @@
    :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :spec map? :default nil}
    :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
 
-(defn wanted [{:keys [item any-of]}]
-  (vec (if item [item] any-of)))
+(def target [:pos])
+(def defaults {:use {:blocks :build}})
+
+(defn legacy-args
+  "An old caller's :any-of names as the call's :use {:blocks}."
+  [{:keys [any-of] :as args}]
+  (cond-> (dissoc args :any-of)
+    (seq any-of) (update :use #(merge {:blocks (vec any-of)} %))))
+
+(defn wanted
+  "The block names the call places: :item, else the call's :use {:blocks}, else (before the call starts) the carried
+  building blocks the default would list."
+  [c]
+  (vec (if-let [item (:item (:args c))]
+         [item]
+         (or (ctx/use c :blocks)
+             (get-in (:args c) [:use :blocks])
+             (choose/default-use c :blocks (get-in defaults [:use :blocks]))))))
 
 (defn parse
-  "{:pos :items [names]} of the args, or {:error text}."
-  [args]
-  (let [{:keys [pos error]} (b/parse args)
-        items (wanted args)]
+  "{:pos :items [names]} of the call, or {:error text}."
+  [c]
+  (let [{:keys [pos error]} (b/parse (:args c))
+        items (wanted c)]
     (cond
       error {:error error}
-      (not (and (seq items) (every? string? items))) {:error "needs :item, or :any-of [names]"}
+      (not (and (seq items) (every? string? items))) {:error "needs :item, or a :use {:blocks [names]} listing one"}
       :else {:pos pos :items items})))
 
 (defn needs
@@ -74,6 +89,11 @@
   (let [carried (set (map :name (u/inventory (:primitives c))))]
     (when-not (some carried items)
       (if (= 1 (count items)) {:item (first items)} {:any-of items}))))
+
+(defn fetching?
+  "Whether a missing item is fetched (the :fetch arg allows items)."
+  [c]
+  (some-> (fetch/opts c 'jobs.blocks.place) :what (contains? :item)))
 
 (defn clear-args
   "The jobs.blocks.dig args for clearing the plant at pos."
@@ -111,10 +131,10 @@
   (boolean (and (seq items) (every? #(re-find #"_(boat|raft)$" %) items))))
 
 (defn problem
-  "Why the job cannot run now: a wait reason map (see doc), or nil. Bad args and a cell already holding the block
-  pass: the round ends them."
+  "Why the job cannot run now: a cause map (see doc), or nil. Bad args and a cell already holding the block
+  pass: the round ends them. A missing item is no problem while it is fetched."
   [c]
-  (let [{:keys [pos items error]} (parse (:args c))]
+  (let [{:keys [pos items error]} (parse c)]
     (when-not error
       (let [p (:primitives c)
             block (b/target-name p pos "air")
@@ -127,41 +147,49 @@
           (= :own-body (:reason v)) {:reason :own-body :pos pos}
           (= :not-replaceable (:reason v)) nil
           (not (:ok v)) {:reason (:reason v) :pos pos}
-          :else (or (when-let [n (needs c items)] (assoc n :reason :need :pos pos))
-                    (when-not (or (boats? items) (b/support? p pos) (b/unseen-near? p pos)) {:reason :no-support :pos pos})
-                    (b/unreachable-wait c (b/mem-for c pos) pos)
-                    (when (clears? c block) (b/child-wait c :clear 'jobs.blocks.dig (clear-args c pos)))))))))
+          :else (or (when-not (fetching? c) (when-let [n (needs c items)] (assoc n :reason :need :pos pos)))
+                    (when-not (or (boats? items) (b/support? p pos) (b/unseen-near? p pos)) {:reason :no-support :pos pos})))))))
 
-(defn check [c]
-  (if-let [r (problem c)]
-    (fetch/check c 'jobs.blocks.place r)
-    true))
+(def conditions [[:fn problem]])
 
-(defn finish! [c result]
+(defn done?
+  "Counts only: the end of a call that finds the block there already is the round's, which tells :already."
+  [c]
+  (let [{:keys [pos items error]} (parse c)
+        n (if (and (not error) (some #{(b/target-name (:primitives c) pos "air")} items)) 1 0)]
+    {:done? false :units :blocks :done n :left (- 1 n)}))
+
+(defn quote-of [c]
+  (let [{:keys [pos items error]} (parse c)
+        walk (if (or error (b/in-reach? c pos)) 0 (u/eye-dist (u/self-pos c) pos))]
+    {:uses (cond-> {:time [0.5 (+ 1 (/ walk 4)) (+ 10 walk)]}
+             (= 1 (count items)) (assoc :items {(first items) [1 1 1]}))}))
+
+(defn finish!
+  "End the call with kind and cause: the info event, then the ending with result as its data."
+  [c kind cause result]
   (let [text (str (if (:placed result) "placed " "did not place ") (:item result) " at " (pr-str (b/cell (:pos result)))
                   (when-not (:placed result)
                     (str ": " (name (:reason result)) (when (:block result) (str " by " (:block result)))
                          (when (string? (:why result)) (str " (" (:why result) ")")))))]
     (ctx/emit! c :blocks.place.done :info (assoc result :text text))
-    (ctx/result! c result)
-    :done))
+    (ctx/end c kind cause result)))
 
 (defn stop!
-  "finish! for a place that did not happen and could not: result :status :stopped."
-  [c result]
-  (finish! c (assoc result :status :stopped)))
+  "finish! for a place that did not happen and could not: the cause is the result's :reason with what it names."
+  [c kind result]
+  (finish! c kind (select-keys result [:reason :block :primitive]) result))
 
 (defn ^:async clear!
   "One jobs.blocks.dig call on the plant at pos. Resolves to :cleared, :continue (the dig waits on the world) or the
-  end of the job (:done, stopped :clear-failed)."
+  ending (nothing-possible :clear-failed)."
   [c pos items]
-  (let [r (await (ctx/call-child c :clear 'jobs.blocks.dig (clear-args c pos)))
-        res (ctx/child-result c :clear)]
+  (let [e (await (ctx/call c :clear 'jobs.blocks.dig (clear-args c pos)))]
     (cond
-      (= :continue r) :continue
-      (and (= :done r) (#{:dug :already-clear} (:reason res))) :cleared
-      :else (stop! c {:placed false :pos pos :item (first items) :reason :clear-failed
-                      :block (:block res) :why (or (:reason res) (:reason (b/child-wait c :clear 'jobs.blocks.dig (clear-args c pos))))}))))
+      (= :continue e) :continue
+      (= :done (:kind e)) :cleared
+      :else (stop! c :nothing-possible {:placed false :pos pos :item (first items) :reason :clear-failed
+                                        :block (get-in e [:data :block]) :why (contract/cause-key e)}))))
 
 (defn refusal-why
   "Why the primitive refused: its reason text, else one from its status."
@@ -174,72 +202,87 @@
         (str "the primitive answered " (.-status r)))))
 
 (defn ^:async place!
-  "Place the chosen item. Resolves to :done (finished) or :unreachable (the primitive says out of reach)."
+  "Place the chosen item. Resolves to the ending, or :unreachable (the primitive says out of reach)."
   [c pos items]
   (let [item (b/chosen c items)
         click (:click (:args c))
         r (await (tidy/place! c pos item false (some-> click placement/js-click)))
         status (.-status r)]
     (case status
-      "placed" (finish! c (cond-> {:placed true :pos pos :item item :reason :placed}
-                            (.-placed r) (assoc :block {:name (.-name (.-placed r))
-                                                        :state (js->clj (.-properties (.-placed r)) :keywordize-keys true)})))
+      "placed" (finish! c :done nil (cond-> {:placed true :pos pos :item item :reason :placed}
+                                      (.-placed r) (assoc :block {:name (.-name (.-placed r))
+                                                                  :state (js->clj (.-properties (.-placed r)) :keywordize-keys true)})))
       "unreachable" :unreachable
-      (stop! c {:placed false :pos pos :item item :reason :failed :primitive status :why (refusal-why r)}))))
+      (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed :primitive status :why (refusal-why r)}))))
 
 (a/defargs settings
-  {::max-walks {:default 2 :doc "Failed walks of one call before it declines :unreachable." :spec (a/int-in 0 nil)}
+  {::max-walks {:default 2 :doc "Failed walks of one call before it ends :unreachable." :spec (a/int-in 0 nil)}
    ::max-steps {:default 12 :doc "Walks, clears and fetches of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
 (defn max-walks [] (settings/get settings ::max-walks))
 (defn max-steps [] (settings/get settings ::max-steps))
 
-(defn unreachable!
-  "Remember why the cell cannot be reached from here; the check waits on it while the body stays. :declined."
-  [c why]
-  (b/unreachable! c why)
-  :declined)
+(defn unreachable
+  "The condition-failed :unreachable ending, why a keyword."
+  [c pos items why]
+  (ctx/end c :condition-failed {:reason :unreachable :why why}
+           {:placed false :pos pos :item (first items) :reason :unreachable :why why}))
+
+(defn ^:async fetch!
+  "Get one of the missing items with the fetch limits of the call: :continue, :done (got it) or the ending."
+  [c items]
+  (let [o (select-keys (fetch/opts c 'jobs.blocks.place) [:how :depth :explore])
+        e (await (if (= 1 (count items)) (need/item! c (first items) 1 o) (need/blocks! c items 1 o)))]
+    (cond (= :continue e) :continue
+          (= :done (:kind e)) :done
+          :else e)))
+
+(defn refusal
+  "The ending when the cell turned unfit during the call (a zone, a hazard, the body in it), else nil."
+  [c]
+  (let [w (problem c)]
+    (when (contains? b/cell-reasons (:reason w))
+      (ctx/end c :condition-failed w))))
 
 (defn ^:async attempt!
   "The whole place: fetch the item if due, clear a plant, walk into reach, place. A walk that fails or leaves the cell
-  out of reach is tried once more, then the job declines :unreachable."
+  out of reach is tried once more, then the call ends :unreachable."
   [c pos items]
   (loop [fails 0 steps 0]
     (let [_ (await (b/see-target! c pos))
           block (b/target-name (:primitives c) pos "air")
           full (occupied-by c pos items)
           already (some #{block} items)
-          r (when-not (or full already) (await (fetch/fetch! c 'jobs.blocks.place problem)))
-          block (if r block (b/target-name (:primitives c) pos "air"))]
+          lacking? (and (not full) (not already) (nil? (b/chosen c items)))
+          fetched (when (and lacking? (fetching? c) (< steps (max-steps))) (await (fetch! c items)))]
       (cond
-        full (stop! c {:placed false :pos pos :item (first items) :reason :occupied :block full})
-        r r
-        already (finish! c {:placed false :pos pos :item block :reason :already})
+        full (stop! c :condition-failed {:placed false :pos pos :item (first items) :reason :occupied :block full})
+        already (finish! c :done nil {:placed false :pos pos :item block :reason :already})
         (>= steps (max-steps)) :continue
+        (= :done fetched) (recur fails (inc steps))
+        fetched fetched
         (clears? c block)
         (let [w (await (clear! c pos items))]
-          (cond (= :cleared w) (recur fails (inc steps))
-                :else w))
+          (if (= :cleared w) (recur fails (inc steps)) w))
         (not (b/in-reach? c pos))
-        (let [w (await (b/walk! c pos))]
+        (let [w (await (b/walk!* c pos))]
           (cond
             (= :continue w) :continue
             (= :arrived w) (recur fails (inc steps))
-            (>= (inc fails) (max-walks)) (unreachable! c (:unreachable w))
+            (>= (inc fails) (max-walks)) (unreachable c pos items (or (get-in w [:data :why]) (contract/cause-key w)))
             :else (recur (inc fails) (inc steps))))
-        (nil? (b/chosen c items))
-        :declined
-        (b/refused-now c (problem c)) :declined
+        lacking? (finish! c :condition-failed (assoc (needs c items) :reason :need :pos pos)
+                          {:placed false :pos pos :item (first items) :reason :need})
         :else
-        (let [d (await (place! c pos items))]
-          (if (= :done d)
-            :done
-            (unreachable! c :out-of-reach)))))))
+        (or (refusal c)
+            (let [d (await (place! c pos items))]
+              (if (= :unreachable d)
+                (unreachable c pos items :out-of-reach)
+                d)))))))
 
 (defn ^:async round [c]
-  (let [{:keys [pos items error]} (parse (:args c))]
+  (let [{:keys [pos items error]} (parse c)]
     (if error
       (do (ctx/emit! c :blocks.place.declined :warn {:reason :bad-args :text (str "blocks.place " error)})
-          (ctx/result! c {:status :stopped :placed false :reason :bad-args :text error})
-          :done)
+          (ctx/end c :condition-failed {:reason :bad-args :text error} {:placed false :reason :bad-args :text error}))
       (do (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
           (await (attempt! c pos items))))))
