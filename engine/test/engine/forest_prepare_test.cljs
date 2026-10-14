@@ -690,6 +690,23 @@
           (is (= [[3 64 0 "oak_sapling"]] (places p)))
           (is (= (expect {:planted 1}) result)))))))
 
+(deftest a-cell-whose-headroom-stays-unseen-after-the-look-waits-saying-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec (world {"3,64,0" "cobblestone"} (item "iron_pickaxe" 1) (item "oak_sapling" 1))
+              p (tu/seeing-after-look (tu/fake-on-floor spec))
+              {:keys [seen eng]} (start spec {"forest" one-cell} (tu/tmp-dir) p)
+              hidden? #(= 65 (.-y %))
+              seen-at (.-seenBlockAt p)
+              sensed-at (.-sensedAt p)]
+          (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (seen-at pos))))
+          (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (sensed-at pos))))
+          (core/submit! eng (list job {:plan "forest"}) {})
+          (await (ticks eng 20))
+          (is (= [] (digs p)))
+          (is (= [:cells-unloaded] (vec (waiting-reasons seen)))))))))
+
 (deftest ground-under-the-feet-is-replaced-from-beside
   (async done
     (tu/run-async done

@@ -103,7 +103,7 @@
 (def blocked-states
   "The cell states that hold a cell back, worst first, with the wait reason each gives."
   [[:wrong :cells-wrong] [:no-soil :cells-no-soil] [:wet :cells-wet] [:no-tool :cells-no-tool] [:cramped :cells-cramped]
-   [:short :cells-short]])
+   [:short :cells-short] [:unloaded :cells-unloaded] [:unsupported :cells-unsupported]])
 
 (defn blocked-reason
   "Why no cell can be worked, as a wait reason naming the worst state and its cells; nil when none is held back."
