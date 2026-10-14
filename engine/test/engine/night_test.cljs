@@ -1131,7 +1131,8 @@
           (tu/seeing-after-look p)
           (await (st/tick-n eng 6))
           (is (empty? (st/calls p "sleep")) "no sleep on an occupied bed")
-          (is (= :bed-occupied (:reason (:waiting (job-api/summary eng id))))))))))
+          (is (= 1 (count (:list (core/state eng)))) "the call holds for the bed")
+          (is (nil? (:done (job-api/summary eng id)))))))))
 
 (deftest a-room-not-yet-looked-at-is-looked-at-before-the-carried-bed-has-no-room
   (async done

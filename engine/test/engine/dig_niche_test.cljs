@@ -252,7 +252,7 @@
       (fn ^:async t []
         (let [{:keys [seen] :as s} (setup [] {:inventory []})]
           (await (run! s {}))
-          (is (contains? (kinds-seen seen) :fetch.started))
+          (is (some #(and (= :child_started (:kind %)) (= :need (:slot %))) @seen) "a tool is asked for")
           (is (= :no-tool (:reason (failed seen)))))))))
 
 (deftest flat-ground-without-a-pickaxe-is-still-no-site
@@ -268,15 +268,15 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen] :as s} (setup [] {:inventory []})
-              orig ctx/call-child
+              orig ctx/call
               n (atom 0)]
           (core/submit! eng (list 'jobs.survival.dig-niche {}) {})
-          (set! ctx/call-child (fn [c slot job args]
-                                 (if (= :fetch slot)
-                                   (do (swap! n inc) (js/Promise.resolve :continue))
-                                   (orig c slot job args))))
+          (set! ctx/call (fn [c slot job args]
+                           (if (= :need slot)
+                             (do (swap! n inc) (js/Promise.resolve :continue))
+                             (orig c slot job args))))
           (try (await (core/tick! eng))
-               (finally (set! ctx/call-child orig)))
+               (finally (set! ctx/call orig)))
           (is (= 1 @n) "one fetch round per scheduler round, no busy loop")
           (is (nil? (failed seen)))
           (is (= 1 (count (:list (core/state eng)))) "the job yielded and is still there"))))))

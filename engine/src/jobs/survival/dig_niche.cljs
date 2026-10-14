@@ -11,8 +11,8 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.seal :as seal]
-            [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.spent :as spent]
@@ -28,13 +28,17 @@
   both sides, the back) that the carried tools harvest, with no fluid or falling block (sand, gravel) in or round it,
   walks there (go-to), digs the four cells (opening first, head before feet), steps to the far cell and places one block
   at each opening cell (feet, then head) from the blocks the dig dropped or carried ones.
-  Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.fetch) runs jobs.items.get-tool
-  for it, else, or when that fails, it stops :no-tool.
-  Declines (waiting) with :day or :already-sealed (not while it is cutting: a niche in progress is roofed). Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.lib.dig-in-leave/leave! digs
-  the door out by day), or stopped :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks, :place-failed (a mob in the door cell is waited out first, :dig-in-cells/mob-wait-ticks), :no-progress (over max-steps rounds), or :fluid / :open-shell (what a dug cell
-  laid open: fluid in or beside the niche, a shell cell that is not solid). Rock the body has not looked into reads stone
+  Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.need) runs jobs.items.get-tool
+  for it, else, or when that fails, it ends :no-tool.
+  Conditions (at the start only): night, else condition-failed :day. A body already roofed is done. Done {:pos :door [feet head cells plugged]}
+  with a :shelter entry {:pos :door} (jobs.lib.dig-in-leave/leave! digs the door out by day). Facts of the site are condition-failed:
+  :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :no-blocks, and what a dug cell
+  laid open: :fluid (in or beside the niche), :open-shell (a shell cell that is not solid). Tries that failed are nothing-possible:
+  :unreachable, :dig-failed, :place-failed (a mob in the door cell is waited out first, :dig-in-cells/mob-wait-ticks), :no-progress
+  (over max-steps rounds); the data is {:text}. Rock the body has not looked into reads stone
   (dig-in-cells/rock-name); after each dig it looks at the cells laid open and waits a lava flow delay.
-  Events: dig-niche.sealed (info).")
+  Events: dig-niche.sealed (info).
+  Quote: time by the walk and six cells (four dug, two plugged); done 1 shelter.")
 
 (a/defargs args
   {:reach {:doc "how far from the body to look for a face, 1 to 32" :spec (a/int-in 1 32) :default 16}
@@ -43,18 +47,37 @@
    :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :spec fetch/option? :default true}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :spec (a/int-in 1 32) :default sh/default-roof-height}})
 
-(defn check
-  "Night and no roof over the body; a decline says why (ctx/wait): :day or :already-sealed."
+(defn start-fact
+  "The fact that bars starting, or nil: :day."
   [c]
-  (let [p (:primitives c)]
-    (cond
-      (not (sh/night? p)) (ctx/wait c {:reason :day})
-      (and (not (:site (ctx/mem c))) (sh/roofed? p (:roof-height (:args c)))) (ctx/wait c {:reason :already-sealed :pos (sh/feet p)})
-      :else true)))
+  (when (and (not (ctx/frozen-call c)) (not (sh/night? (:primitives c)))) :day))
+
+(def conditions [[:fn start-fact]])
+
+(def target [])
 
 (a/defargs settings
   {::max-steps {:default 40 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}
-   ::dig-reach {:default 4 :doc "How far from a cell the body digs it without walking closer." :spec (a/int-in 0 nil)}})
+   ::dig-reach {:default 4 :doc "How far from a cell the body digs it without walking closer." :spec (a/int-in 0 nil)}
+   ::time-s {:default 120 :doc "Seconds a niche may take." :spec (a/num-in 0 nil)}
+   ::cell-s {:default 2 :doc "Seconds one cell takes to dig or plug, for the quote." :spec (a/num-in 0 nil)}
+   ::walk-s {:default 5 :doc "Seconds the walk to the face takes, for the quote." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
+
+(def defaults {:spend {:time ::time-s}})
+
+(defn done?
+  "Roofed before this call cut anything, or once the niche is plugged."
+  [c]
+  (let [m (ctx/mem c)
+        d (and (sh/roofed? (:primitives c) (:roof-height (:args c))) (or (:ended m) (nil? (:site m))))]
+    {:done? (boolean d) :units :shelters :done (if d 1 0) :left (if d 0 1)}))
+
+(defn quote-of [c]
+  (let [roofed (:done? (done? c))
+        cell-s (settings/get settings ::cell-s)
+        mean (if roofed 0 (+ (settings/get settings ::walk-s) (* 6 cell-s)))]
+    {:uses {:time [0 mean (max (* 3 mean) (time-s))]} :done [0 1 1]}))
 (defn max-steps [] (settings/get settings ::max-steps))
 
 
@@ -174,18 +197,22 @@
     (when-let [open (first (filter #(some-> (u/seen-name p %) (as-> n (not (solid/solid? n)))) (shell-cells stand dir)))]
       {:reason :open-shell :text (str (u/seen-name p open) " in the shell of the niche")})))
 
+(def fact-stops
+  "The stops that name a fact of the site or the body (condition-failed); the others are tries that failed (nothing-possible)."
+  #{:no-site :no-tool :refused :no-blocks :fluid :open-shell})
+
 (defn fail! [c reason text]
   (let [site (:site (ctx/mem c))]
     (ctx/update-mem! c dissoc :site :plug-since)
     (ctx/emit! c :dig_niche_failed :warn {:reason reason :site site :text text}))
-  (result/stop! c reason text))
+  (ctx/end c (if (fact-stops reason) :condition-failed :nothing-possible) reason {:text text}))
 
 (defn ^:async go!
   "One go-to to cell; :continue while it waits, :arrived, or :failed."
   [c slot cell]
-  (let [w (await (ctx/call-child c slot 'jobs.movement.go-to {:pos cell :range 0 :at-night :go}))]
-    (cond (= :continue w) :continue
-          (:arrived (ctx/child-result c slot)) :arrived
+  (let [e (await (child/call-walk* c slot {:pos cell :range 0 :at-night :go}))]
+    (cond (= :continue e) :continue
+          (= :done (:kind e)) :arrived
           :else :failed)))
 
 (defn ^:async dig-step! [c cell]
@@ -223,7 +250,18 @@
                                                  :text (str "shut in a niche in the hillside for the night"
                                                             (some->> (spent/text placed "niche plug") (str ": ")))}
                                                 (spent/summary placed)))
-    (result/finish! c (merge {:pos feet :door door} (spent/summary placed)))))
+    (ctx/update-mem! c assoc :ended true)
+    (ctx/end c :done nil (merge {:pos feet :door door} (spent/summary placed)))))
+
+(defn ^:async fetch-tool!
+  "Get the tool for the block of w (jobs.lib.need) when :fetch allows a tool: :continue while it works, :again once
+  it got one, nil when it did not or may not."
+  [c w]
+  (let [o (fetch/opts c 'jobs.survival.dig-niche)]
+    (when (and o (contains? (:what o) :tool))
+      (let [e (await (need/tool! c {:block (:block w)} (select-keys o [:how :depth :explore])))]
+        (cond (= :continue e) :continue
+              (= :done (:kind e)) :again)))))
 
 (defn ^:async step [c]
   (let [p (:primitives c)
@@ -237,7 +275,7 @@
       (if refused?
         (fail! c :refused "every hillside or wall that would do is another's (zone, claim or plan)")
         (let [w (some->> (:site (scan* p reach ok? false)) (tool-wait p))
-              r (when w (await (fetch/step! c 'jobs.survival.dig-niche w)))]
+              r (when w (await (fetch-tool! c w)))]
           (cond
             r r
             w (fail! c :no-tool (str "no tool for the " (:block w) " of the hillside"))
