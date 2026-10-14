@@ -14,6 +14,7 @@
             [agent-tools.plans :as plans]
             [agent-tools.say :as say]
             [agent-tools.time :as time-tool]
+            [agent-tools.quote :as quote]
             [agent-tools.triggers :as triggers]
             [agent-tools.world :as world]
             [agent-tools.storage-compat :as compat]
@@ -81,6 +82,9 @@
   (compat/to-js (clojure.set/rename-keys (observe-request/request-for (vec argv)) {:socket-path :socketPath})))
 (defn observe-main [argv] (observe/main! (vec argv)))
 
+(def quote-usage quote/usage)
+(defn quote-request-for [argv] (compat/to-js (quote/request-for (vec argv))))
+(defn quote-main [argv] (quote/main! (vec argv)))
 (def triggers-usage triggers/usage)
 (defn triggers-request-for [argv] (compat/to-js (triggers/request-for (vec argv))))
 (defn triggers-main [argv] (triggers/main! (vec argv)))

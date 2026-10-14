@@ -1,12 +1,14 @@
 (ns engine.event-api
   "The engine's private HTTP API on a local Unix socket (mode 0600). The wire format is EDN.
-  GET   /snapshot, /status, /inventory, /seen, /chests, /events, /job, /jobs, /results, /triggers, /catalog, /settings
+  GET   /snapshot, /status, /inventory, /seen, /chests, /events, /job, /jobs, /results, /triggers, /catalog, /quote, /settings
   POST  /jobs and /triggers (changes), /attention/resolve, /chat, /settings/reload, /settings/set, /settings/unset
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [engine.args :as a]
             [clojure.string :as str]
             [cljs.reader :as reader]
             [engine.core :as core]
+            [engine.core.quote :as quote]
+            [engine.core.round :as round]
             [engine.chat :as chat]
             [engine.expr :as expr]
             [engine.events :as events]
@@ -374,9 +376,11 @@
     "job" (let [sym (symbol name)
                 entry (get (:jobs eng) sym)]
             (when entry
-              {:ok true :kind :job :name sym
-               :doc (short-text (:doc entry) (setting "catalog-doc-limit"))
-               :args (bounded-value (a/described sym (:args entry)) 0 (volatile! catalog-args-budget))}))
+              (merge
+               (select-keys entry [:target :ways :defaults])
+               {:ok true :kind :job :name sym
+                :doc (short-text (:doc entry) (setting "catalog-doc-limit"))
+                :args (bounded-value (a/described sym (:args entry)) 0 (volatile! catalog-args-budget))})))
     "trigger" (let [id (keyword name)
                     entry (get (:triggers eng) id)]
                 (when entry
@@ -384,6 +388,22 @@
                    :job (:job entry) :args (bounded-value (:args entry) 0 (volatile! 64))
                    :persistence (:persistence entry) :cooldown-s (:cooldown-s entry)}))
     nil))
+
+(defn ^:async quote-view
+  "A promise of the answer to GET /quote: job name's quote for args-text (EDN text of its args, or nil), as {:ok true
+  :job :quote}, else {:ok false :reason :unknown-job|:bad-args|:quote-failed}."
+  [eng name args-text]
+  (let [sym (symbol name)
+        args (try (if (str/blank? args-text) {} (reader/read-string args-text)) (catch :default _ ::bad))]
+    (cond
+      (not (contains? (:jobs eng) sym)) {:ok false :reason :unknown-job :job sym}
+      (not (map? args)) {:ok false :reason :bad-args :message "args must be one EDN map"}
+      :else (try (let [[def args] (update (expr/leaf (:jobs eng) sym args) 0 assoc :sym sym)
+                       base {:root "quote" :slots [] :chain [] :token nil :args {} :round 0 :t0s []}]
+                   {:ok true :job sym
+                    :quote (await (quote/quote! eng base def args nil false #(round/quote-ctx eng base def args % false)))})
+                 (catch :default e
+                   {:ok false :reason (if (:form (ex-data e)) :bad-args :quote-failed) :message (short-text (ex-message e) 500)})))))
 
 (defn catalog-list [eng kind prefix offset limit]
   (let [name-of (fn [x] (if (keyword? x) (name x) (str x)))
@@ -521,6 +541,17 @@
                                 (respond! res 200 entry)
                                 (bad! res 404 :capability-not-found))
                               (respond! res 200 (catalog-list eng kind prefix offset limit)))
+                            (bad! res 400 :bad-query)))
+
+                        (and (= method "GET") (= pathname "/quote"))
+                        (let [params (.-searchParams url)
+                              name (.get params "name")
+                              args (.get params "args")]
+                          (if (and (string? name) (re-matches #"jobs(?:\.[a-z][a-z0-9-]*)+" name) (<= (count name) 120)
+                                   (or (nil? args) (<= (count args) 8000)))
+                            (-> (quote-view eng name args)
+                                (.then #(respond! res (if (:ok %) 200 400) %))
+                                (.catch #(engine-failed! eng res %)))
                             (bad! res 400 :bad-query)))
 
                         (and (= method "GET") (= pathname "/events"))

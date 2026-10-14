@@ -540,7 +540,8 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /chests?max=` | chest stock the body saw (memory `:fetch/stock`, kept 6 h, latest per chest), nearest first with `:pos`, `:distance`, `:age-ms`, `:items {name n}`; max capped at 64; read-only (`observe <agent> chests`) |
 | `GET /job?id=` | one job's parsed spec, args, state, linked requests; a finished job answers its recorded outcome (`:finished? true :status :result :ended-at`) from the results record: the last `engine.core.base/recent-results-limit` (100) ended listed jobs and `reflex-results-limit` (20) reflex jobs, in `results.edn`, not in the state or `/snapshot` |
 | `GET /results?ids=j1,j2` | the recorded outcomes of up to 32 job ids |
-| `GET /catalog?kind=jobs\|triggers&prefix=` / `kind=job\|trigger&name=` | names page / one description |
+| `GET /catalog?kind=jobs\|triggers&prefix=` / `kind=job\|trigger&name=` | names page / one description (a contract job's also `:target :ways :defaults`) |
+| `GET /quote?name=jobs.x&args=<EDN map>` | the job's quote for a call with those args; runs no round |
 | `GET /settings` | every key `{:value :layer :doc}` plus `:game-rate`, `:rate-source`, `:frozen?`, `:physics-ms` |
 | `POST /settings/reload` / `/settings/set` `{:key :value}` / `/settings/unset` `{:key}` | re-read the files / validate and write the key in the body's `settings.edn`, then reload; 409 `{:ok false :reason}` on refusal |
 | `GET /triggers[?id=]` | the register with live mute/move/cooldown/backoff state (`?id=` adds `:explain`) |
@@ -806,6 +807,7 @@ node engine/tools/observe.mjs Bob --world test --wait [--timeout 30s] [--watch j
 node engine/tools/observe.mjs Bob --world test job j17 | result j17
 node engine/tools/observe.mjs Bob --world test events [--until death] [--kinds died,hurt] [--job j17] [--level debug] [--since 10m] [--before SEQ] [--limit 20]   # past events, newest page first, oldest first within it; :next-before pages back; a post-mortem is `events --until death`
 node engine/tools/observe.mjs Bob --world test catalog jobs jobs.farm. --limit 10 | catalog job <name> | catalog trigger <name>
+node engine/tools/quote.mjs Bob --world test jobs.movement.go-to '{:pos {:x 1 :y 64 :z 2}}'   (also jobs.primitive.*)
 node engine/tools/observe.mjs Bob --world test inventory [--slots] | equipment
 node engine/tools/observe.mjs Bob --world test settings [--changed] [--raw] | settings reload | settings set :jobs.x/key <edn> | settings unset :jobs.x/key   # keys with layer and the game rate; dashboard popup has the same
 node engine/tools/entities.mjs Bob --world test [--type zombie --radius 32 --player Alex --limit 20]

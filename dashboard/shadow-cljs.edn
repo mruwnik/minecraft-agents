@@ -126,6 +126,9 @@
                                :observeMain agent-tools.api/observe-main
                                :ednWrite agent-tools.api/edn-write
                                :ednRead agent-tools.api/edn-read
+                               :quoteUsage agent-tools.api/quote-usage
+                               :quoteRequestFor agent-tools.api/quote-request-for
+                               :quoteMain agent-tools.api/quote-main
                                :triggersUsage agent-tools.api/triggers-usage
                                :triggersRequestFor agent-tools.api/triggers-request-for
                                :triggersMain agent-tools.api/triggers-main

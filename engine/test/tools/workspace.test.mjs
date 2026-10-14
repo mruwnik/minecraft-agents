@@ -12,8 +12,8 @@ import { readEDN, keyword } from './edn.mjs'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const cli = path.join(repo, 'engine/tools/workspace.mjs')
-const commands = ['observe', 'jobs', 'triggers', 'say', 'entities', 'drive', 'world', 'map', 'plans', 'blueprints', 'world-changes', 'time', 'snapshot', 'goal', 'progress']
-const bodyTools = new Set(['observe', 'jobs', 'triggers', 'say', 'entities', 'drive', 'world', 'snapshot', 'goal', 'progress'])
+const commands = ['observe', 'jobs', 'quote', 'triggers', 'say', 'entities', 'drive', 'world', 'map', 'plans', 'blueprints', 'world-changes', 'time', 'snapshot', 'goal', 'progress']
+const bodyTools = new Set(['observe', 'jobs', 'quote', 'triggers', 'say', 'entities', 'drive', 'world', 'snapshot', 'goal', 'progress'])
 function fixture (t) {
   const dir = fs.mkdtempSync('/tmp/ws-')
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))

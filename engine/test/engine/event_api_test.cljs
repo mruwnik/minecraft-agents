@@ -2,6 +2,8 @@
   (:require [cljs.test :refer [async deftest is testing]]
             [cljs.reader :as reader]
             [engine.chat :as chat]
+            [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.event-api :as event-api]
             [engine.events :as events]
             [engine.job-api :as job-api]
@@ -523,3 +525,32 @@
 (deftest event-payload-values-stay-bounded
   (let [bounded (event-api/bounded-value wide-args 0 (volatile! 64))]
     (is (true? (:truncated bounded)))))
+
+(deftest catalog-entry-shows-target-ways-and-defaults
+  (let [eng {:jobs {'jobs.demo.go {:doc "go" :args {} :target [:pos] :ways [:walk :stair] :defaults {:spend {:time 30} :least 1}}
+                    'jobs.demo.old {:doc "old" :args {}}}}
+        entry (event-api/catalog-entry eng "job" "jobs.demo.go")]
+    (is (= [:pos] (:target entry)))
+    (is (= [:walk :stair] (:ways entry)))
+    (is (= {:spend {:time 30} :least 1} (:defaults entry)))
+    (is (not-any? #(contains? (event-api/catalog-entry eng "job" "jobs.demo.old") %) [:target :ways :defaults]))))
+
+(def quoted-job
+  {:conditions [] :args {:pos {:doc "where" :default nil}} :target [:pos]
+   :quote-of (fn [_] {:uses {:time [1 2 3]}})
+   :round (fn [c] (ctx/end c :done nil))})
+
+(deftest quote-view-asks-a-job-for-its-quote
+  (async done
+    (let [eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now (constantly 1000) :jobs {'jobs.demo.q quoted-job} :triggers {}
+                            :events (events/make {:body "Fake"})})]
+      (-> (js/Promise.all #js [(event-api/quote-view eng "jobs.demo.q" "{:pos {:x 1 :y 64 :z 2}}")
+                               (event-api/quote-view eng "jobs.demo.q" nil)
+                               (event-api/quote-view eng "jobs.demo.nope" nil)
+                               (event-api/quote-view eng "jobs.demo.q" "{:pos")])
+          (.then (fn [[ok no-args unknown bad]]
+                   (is (= {:ok true :job 'jobs.demo.q :quote {:uses {:time [1 2 3]}}} ok))
+                   (is (true? (:ok no-args)))
+                   (is (= :unknown-job (:reason unknown)))
+                   (is (= :bad-args (:reason bad)))
+                   (done)))))))
