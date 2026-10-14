@@ -1,25 +1,27 @@
 (ns jobs.animals.lure-to
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.animals.herd-run :as hr]
-            [jobs.animals.herd-trip :as ht]
             [jobs.animals.escort :as escort]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.pen-gate :as pg]
+            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]))
 
 (def doc
   "Walk to :pos with one animal of type :mob following the breeding food held in hand (wheat for cows, sheep and goats,
   carrots for pigs, seeds for chickens; jobs.lib.animals/breeding-food), then put the food away. No lead is needed.
-  A one-shot order that starts and ends itself. Each step it keeps a :gate-held entry fresh for every planned gate seen open within 10 blocks of :pos, so the pen-gate trigger does not shut the gate it leads the animal through. Declines (waits) with :no-mob or :no-destination until both are given;
-  a started job always passes.
+  A one-shot order that starts and ends itself. Each step it keeps a :gate-held entry fresh for every planned gate seen open within 10 blocks of :pos, so the pen-gate trigger does not shut the gate it leads the animal through. Without :mob or :pos it can never start (impossible :no-mob, :no-destination).
 
   A body that holds none of the food first gets it (a jobs.items.obtain child, unless :fetch is false); when none can
-  be got the job ends :no-food. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
+  be got the job ends condition-failed :no-food. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
   it), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
   jobs.animals.lead-to (doors left open for the animal and shut afterwards). After each leg the animal is looked at:
   unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it and the first look of the wait emits info
@@ -39,7 +41,8 @@
   Every result gives :distance: the animal's, or its last sighting's when it is unseen.
   - :no-animal (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
     :unreachable (a walk gave up), :timeout (:timeout-s from the first round, not the food fetch).
-  Every reason but :arrived ends the job :stopped with a :text.
+  Endings: :arrived is done; :no-food is condition-failed; :timeout is limit-reached (the call's :spend :time, default
+  ::timeout-s); the rest are nothing-possible with the reason as the cause. Every reason but :arrived carries a :text.
 
   Zones: an animal standing in another owner's zone or claim is not lured (:ignore-zones? true skips the check).")
 
@@ -50,24 +53,46 @@
    :range {:doc "how close to :pos counts as there" :spec (a/num-in 0 nil) :default 2}
    :radius {:doc "animals within this many blocks of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
    :watch-radius {:doc "how far from the body the lured animal is looked for" :spec (a/num-in 0 nil) :default 64}
-   :timeout-s {:doc "seconds from the first round (not the food fetch) before the job gives up" :spec (a/num-in 0 nil) :default 180}
    :fetch {:doc "get the food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
    :uuid {:doc "lead only this animal (its uuid, as the entities tool shows; the id when it has none); nothing else takes its place" :spec string? :default nil}
    :include-penned? {:doc "also lure animals standing in a closed pen" :default false :spec boolean?}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
+
+(a/defargs settings
+  {::timeout-s {:default 180 :doc "Seconds from the first round (not the food fetch) before the lure gives up." :spec (a/num-in 0 nil)}})
+(defn timeout-s [] (settings/get settings ::timeout-s))
 
 (def near-spot "An animal this close (flat) to :pos counts as :near." 6)
 (def arrive-slack "Without :box the animal arrives when it is within :range plus this many blocks (flat) of :pos: it follows the food a few blocks behind." 3)
 (def lure-reach "The body walks this close to the animal before it leads the way." 6)
 (def max-equips "Tries to get the food into the hand before the job ends :no-hold." 3)
 
-(defn check [c]
+(def target [:mob :pos])
+
+(def defaults {:spend {:time ::timeout-s}})
+
+(defn start-fact
+  "Impossible without :mob or a destination."
+  [c]
   (let [{:keys [mob pos]} (:args c)]
     (cond
-      (:started (ctx/mem c)) true
-      (nil? mob) (ctx/wait c :no-mob)
-      (nil? pos) (ctx/wait c :no-destination)
-      :else true)))
+      (nil? mob) (contract/impossible :no-mob)
+      (nil? pos) (contract/impossible :no-destination))))
+
+(def conditions "Starts while the order is complete (start-fact)." [[:fn (started/at-start start-fact)]])
+
+(defn time-limit "Seconds the lure may take." [c]
+  (or (get-in (ctx/frozen-call c) [:spend :time]) (timeout-s)))
+
+(defn quote-of [c]
+  (let [most (time-limit c)]
+    {:uses {:time [0 (min most 60) most]}}))
+
+(defn done?
+  "Whether the animal arrived."
+  [c]
+  (let [arrived? (= :arrived (:ending (ctx/mem c)))]
+    {:done? false :units :animals :done (if arrived? 1 0) :left (if arrived? 0 1)}))
 
 (defn skipped-text
   "What kept the animals seen within radius from being lured: babies, those on a lead, the zone rules."
@@ -114,6 +139,12 @@
      :last-seen-dist (some->> last-seen (u/flat-dist me))
      :nearest (when near {:key (animals/key-of near) :dist (u/flat-dist me (u/pos-of (.-pos near))) :leashed (animals/leashed? near)})}))
 
+(def ending-of
+  "The kind and cause of a lure that ended for reason, else nothing-possible with the reason as the cause."
+  {:arrived [:done nil]
+   :no-food [:condition-failed :no-food]
+   :timeout [:limit-reached {:line :time :reason :timeout}]})
+
 (defn ^:async conclude!
   "Put the food away, emit the outcome, hand it to the parent and end the job."
   [c reason]
@@ -132,8 +163,8 @@
       (ctx/emit! c :lure-to.done :info (assoc result :text (str "lure-to done: " (name reason))))
       (when-not ok?
         (ctx/emit! c :lure-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
-      (ctx/result! c (cond-> result (not ok?) (assoc :status :stopped :text (stop-text c reason)))))
-    :done))
+      (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
+        (ctx/end c kind cause (cond-> result (not ok?) (assoc :text (stop-text c reason))))))))
 
 (defn finish! [c reason]
   (ctx/update-mem! c assoc :ending reason)
@@ -183,8 +214,12 @@
   [c]
   (if-not (fetch/opts c 'jobs.animals.lure-to)
     (finish! c :no-food)
-    (do (await (fetch/fetch-untimed! c (quote jobs.animals.lure-to) ht/lure-problem))
-        (if (animals/food-carried (:primitives c) (:mob (:args c))) :again (finish! c :no-food)))))
+    (let [limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :explore])
+          e (await (need/blocks! c (get animals/breeding-food (:mob (:args c))) 1 limits))]
+      (cond
+        (= :continue e) :yield
+        (animals/food-carried (:primitives c) (:mob (:args c))) :again
+        :else (finish! c :no-food)))))
 
 (defn ^:async start!
   "Hold the food, walk up to the nearest animal and send the walk on its way."
@@ -267,15 +302,14 @@
 
 (defn ^:async step [c]
   (hold-gates! c)
-  (let [now (ctx/now c)
-        {:keys [timeout-s]} (:args c)]
+  (let [now (ctx/now c)]
     (ctx/update-mem! c update :started #(or % now))
     (let [{:keys [phase started]} (ctx/mem c)
           a (when (:animal (ctx/mem c)) (escort/animal-now c))]
       (when a (ctx/update-mem! c #(-> % (dissoc :unseen-since) (assoc :last-seen (u/pos-of (.-pos a))))))
       (cond
         (:ending (ctx/mem c)) (await (escort/close-up! c conclude!))
-        (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
+        (>= (- now started) (* 1000 (time-limit c))) (finish! c :timeout)
         (nil? phase) (do (ctx/update-mem! c assoc :method :lure :origin (u/self-pos c) :phase :start) :again)
         (= :start phase) (await (u/untimed! c #(start! c)))
         (nil? a) (if-let [next-one (successor c)]

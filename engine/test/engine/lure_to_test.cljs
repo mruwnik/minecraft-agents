@@ -135,7 +135,7 @@
 (def end-reasons
   "Cheap stubs for the reasons a lure can end with: [reason args hook], the hook given the fake primitives and a steer counter."
   [[:no-hold {} (fn [p _] (.override (.-world p) "equip" (fn [_ _ _] (js/Promise.resolve #js {:status "equipped"}))))]
-   [:timeout {:timeout-s 0} (fn [_ _] nil)]
+   [:timeout {:spend {:time 0}} (fn [_ _] nil)]
    [:lost {} (fn [p steers]
                (.override (.-world p) "steer"
                           (fn [token a impl]

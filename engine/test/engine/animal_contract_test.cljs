@@ -30,7 +30,8 @@
                       ['jobs.animals.cull {:mob "cow" :keep 1}]
                       ['jobs.animals.shut-gate {}]
                       ['jobs.animals.tend {:box {:min {:x 0 :y 60 :z 0} :max {:x 4 :y 70 :z 4}}}]
-                      ['jobs.animals.lead-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]]]
+                      ['jobs.animals.lead-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]
+                      ['jobs.animals.lure-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]]]
     (is (some? (:conditions (job sym))) (str sym " has conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
@@ -244,3 +245,16 @@
                  (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos}) (assoc world :entities [(cow-at 1 3 {:trail 9})])))))
           (is (= {:event :stopped :kind :limit-reached :reason :timeout}
                  (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos :spend {:time 0}}) world)))))))))
+
+(deftest lure-to-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:floor tu/walk-floor :inventory wheat :entities [(cow-at 1 3)]}
+              lure (fn [args world] (ending (list 'jobs.animals.lure-to (merge {:mob "cow" :pos far-pos} args)) world))]
+          (is (= {:event :completed} (select-keys (await (lure {} world)) [:event])))
+          (is (= {:event :stopped :kind :impossible :reason :no-mob} (await (ending (list 'jobs.animals.lure-to {:pos far-pos}) world))))
+          (is (= {:event :stopped :kind :impossible :reason :no-destination} (await (ending '(jobs.animals.lure-to {:mob "cow"}) world))))
+          (is (= {:event :stopped :kind :condition-failed :reason :no-food} (await (lure {} (assoc world :inventory [])))))
+          (is (= {:event :stopped :kind :nothing-possible :reason :no-animal} (await (lure {} (assoc world :entities [])))))
+          (is (= {:event :stopped :kind :limit-reached :reason :timeout} (await (lure {:spend {:time 0}} world)))))))))
