@@ -317,7 +317,7 @@ along the straight line could hold (`maxDropDown` 3: none hurts).
 
 **Old and contract jobs together (engine.core.legacy).** An old job through `ctx/call` ends with the ending its
 check, round and result map to; a decline after its first round with a `legacy/short-waits` reason (`:cooking`, `:night-sheltered`, `:torches-cooking`, `:chunks-loading`) is `:continue`, the
-child kept, `job.child_ended` naming the wait, for at most `:engine.core.round/short-wait-rounds` in a row (then condition-failed `:why :wait-too-long`); any other decline is condition-failed. A contract job through `call-child` answers `:declined` or `:done` with its ending in
+child kept, `job.child_ended` naming the wait, for at most `:engine.core.round/short-wait-ms` since the wait began (then condition-failed `:why :wait-too-long`); any other decline is condition-failed. A contract job through `call-child` answers `:declined` or `:done` with its ending in
 the child-result. A `legacy-args` export maps an old caller's options to call keys.
 
 **call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while

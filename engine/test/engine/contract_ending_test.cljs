@@ -459,22 +459,23 @@
           (await (core/tick! eng))
           (is (= {:kind :condition-failed :cause :no-source} (ending)) "any other decline ends it"))))))
 
-(deftest a-short-wait-is-bounded
+(deftest a-short-wait-is-bounded-by-time
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {'calls-waiting (calls-waiting waits-on)})
+        (let [{:keys [eng clock]} (setup {'calls-waiting (calls-waiting waits-on)})
               ending #(let [e (:old-ending @world)] (if (map? e) (select-keys e [:kind :cause]) e))]
           (core/submit! eng '(calls-waiting) {})
           (reset! world {})
           (await (core/tick! eng))
           (swap! world assoc :wait :cooking)
-          (await (settings/with-settings {:engine.core.round/short-wait-rounds 2}
+          (await (settings/with-settings {:engine.core.round/short-wait-ms 1000}
                    (fn ^:async bounded []
                      (await (core/tick! eng))
-                     (is (= :continue (ending)))
+                     (swap! clock + 600)
                      (await (core/tick! eng))
-                     (is (= :continue (ending)))
+                     (is (= :continue (ending)) "many rounds, little time")
+                     (swap! clock + 600)
                      (await (core/tick! eng))
                      (is (= {:kind :condition-failed :cause {:reason :cooking :why :wait-too-long}} (ending)))))))))))
 

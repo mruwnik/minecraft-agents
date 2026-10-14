@@ -255,16 +255,16 @@
         (assoc c :quote-call call :left (constantly (contract/left {:call call} 0)) :job-ways (:ways def))))))
 
 (a/defargs settings
-  {:engine.core.round/short-wait-rounds
-   {:default 600 :spec (a/int-in 1 nil)
-    :doc "Consecutive rounds an old child under ctx/call may yield on a short wait (legacy/short-waits) before its caller sees condition-failed :wait-too-long."}})
+  {:engine.core.round/short-wait-ms
+   {:default 900000 :spec (a/int-in 1 nil)
+    :doc "How long an old child under ctx/call may keep yielding on a short wait (legacy/short-waits) before its caller sees condition-failed :wait-too-long."}})
 
 (defn ^:async old-round
   "One round of old job def as the ctx/call child c (its id child-id) at slots under parent base: :continue or its
   ending (engine.core.legacy). Its check runs every round, as under call-child. A decline before the child's first
   round (counted in its frame) ends it condition-failed; so does one after it unless its wait reason is a short
   wait (legacy/short-waits): then :continue, the child and its memory kept, the wait put in waited, up to
-  short-wait-rounds in a row."
+  short-wait-ms since the wait began."
   [eng base c child-id def slots waited]
   (let [wait (atom nil)
         child-wait (:child-wait base)
@@ -272,14 +272,15 @@
         store (:store eng)
         frame (fn [] (mem/job-mem (mem/view store) (:root base) slots))
         rounds (:call/rounds (frame) 0)
-        note! (fn [rounds* waits*] (mem/update-job! store (:root base) slots assoc :call/rounds rounds* :call/waits waits*))
+        note! (fn [rounds* since*] (mem/update-job! store (:root base) slots assoc :call/rounds rounds* :call/wait-since since*))
         failed (fn [w] (legacy/ending-of :declined nil w))
         short-wait (fn [w rounds]
                      (cond
                        (not (legacy/short-waits (:reason w))) (failed w)
-                       (>= (:call/waits (frame) 0) (settings/get settings :engine.core.round/short-wait-rounds))
+                       (> (- ((:now eng)) (or (:call/wait-since (frame)) ((:now eng))))
+                          (settings/get settings :engine.core.round/short-wait-ms))
                        (failed (assoc w :why :wait-too-long))
-                       :else (do (reset! waited w) (note! rounds (inc (:call/waits (frame) 0))) :continue)))]
+                       :else (do (reset! waited w) (note! rounds (or (:call/wait-since (frame)) ((:now eng)))) :continue)))]
     (swap! results dissoc child-id)
     (reset! child-wait nil)
     (if-not ((:check def) (assoc c :wait wait))
@@ -290,7 +291,7 @@
         (when (= status :error) (throw error))
         (let [e (if (= :declined status)
                   (short-wait @child-wait (inc rounds))
-                  (do (note! (inc rounds) 0)
+                  (do (note! (inc rounds) nil)
                       (legacy/ending-of status (get @results child-id) nil)))]
           (swap! results dissoc child-id)
           (reset! child-wait nil)
