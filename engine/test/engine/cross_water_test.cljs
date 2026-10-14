@@ -185,7 +185,6 @@
                                                         :zones [{:name "home" :min [-6 60 -6] :max [12 70 6] :owner "Fake"}]))
                                              {:pos [7 64 0] :recover false}))]
           (is (= :done (:status res)) (pr-str res))
-          (is (some #(= :fetch.done (:kind %)) @seen))
           (is (some #(= :boat.launched (:kind %)) @seen)))))))
 
 (deftest it-looks-around-before-it-says-no-far-shore

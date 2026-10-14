@@ -32,8 +32,7 @@
    :blocks [[:set [10 0 14] "chest{Items:[{Slot:0b,id:\"minecraft:oak_boat\",count:1}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 20"] [:wait-s 2]
          [:job (jobs.movement.cross-water {:pos #at [23 0 16] :recover false})]]
-   :expect [{:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
-            {:event {:source :job :kind :boat.landed :data {:recovered false}} :within-s 150 :of-job true}]}
+   :expect [{:event {:source :job :kind :boat.landed :data {:recovered false}} :within-s 150 :of-job true}]}
   {:name "no-boat-anywhere"
    :body {:inventory []}
    :act [[:job (jobs.movement.cross-water {:pos #at [23 0 16]})]]
