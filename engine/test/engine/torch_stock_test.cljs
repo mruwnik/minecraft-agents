@@ -2,7 +2,6 @@
   "jobs.lib.trip/torches-ready!: a stair down that carries few torches stocks up first, or says it digs dark."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
-            [engine.settings :as settings]
             [engine.mine-test :as mt]
             [engine.stair-test :as st]
             [engine.test-util :as tu]
@@ -86,7 +85,7 @@
               [ev] (st/events-of s :torch.no-stock)]
           (is (= :done (:status @(:out s))))
           (is (= :no-source (:reason ev)))
-          (is (= "no-furnace-seen" (:craft (:tried ev))))
+          (is (= :no-furnace-seen (:craft (:tried ev))))
           (is (re-find #"8 cobblestone" (:text ev)) "the text says what would make a furnace")
           (is (not (re-find #"no coal or logs" (:text ev))) "11 logs are carried"))))))
 
@@ -102,28 +101,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (stair-with-cooking! east))
-              [ev] (st/events-of s :torch.waiting)]
+        (let [s (await (stair-with-cooking! east))]
           (is (empty? (st/events-of s :torch.no-stock)) "the smelt is waited for")
-          (is (= :cooking (:reason ev)))
           (is (contains? (kinds s) :torch.stocked)))))))
-
-(deftest a-smelt-that-outlasts-the-wait-bound-lets-the-dig-go-on-dark-and-says-so
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (st/setup log-world east tu/seeing-all)
-              {:keys [eng clock]} s]
-          (await (settings/with-settings {:jobs.lib.trip/torch-wait-s 5}
-                   (fn ^:async run []
-                     (loop [i 0]
-                       (when (and (< i 300) (seq (:list (core/state eng))))
-                         (swap! clock + 500)
-                         (await (core/tick! eng))
-                         (recur (inc i)))))))
-          (let [[ev] (st/events-of s :torch.no-stock)]
-              (is (= :waited-out (:torches ev)))
-            (is (re-find #"still cooking" (:text ev)))))))))
 
 (deftest the-torch-stocking-trip-to-a-far-chest-does-not-move-the-tunnel
   (async done

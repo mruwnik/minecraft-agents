@@ -157,3 +157,21 @@
     (and (:input state) (:fuel state)) :not-smeltable
     (:input state) :out-of-fuel
     :else :done))
+
+(def products
+  "{input output} of made-from, for what a load yields."
+  (into {} (map (fn [[out in]] [in out])) made-from))
+
+(defn product-of
+  "What the furnace makes of item (a log makes charcoal), or nil when it is not known."
+  [item]
+  (if (re-find #"_(log|wood)$" item) "charcoal" (get products item)))
+
+(defn load-figures
+  "What a load from the pockets comes to, for a quote: plan-load into an empty furnace, plus :product; or {:give-up r}.
+  m: :carried, :item :count :fuel as the args give them."
+  [{:keys [carried item] :as m}]
+  (let [state {:kind "furnace" :input nil :fuel nil :output nil :burn {:left 0 :total 0}}
+        input (input-of item carried)
+        r (plan-load (assoc m :state state :item input))]
+    (cond-> r (not (:give-up r)) (assoc :product (product-of (:item r))))))

@@ -46,7 +46,7 @@
   check declines :cooking until the furnace is :ready, then the next call gives the ingots; :fail makes it stop with that reason."
   [p calls furnaces fail]
   (let [key-of (comp pr-str :furnace :args)]
-    (assoc (get registry/jobs 'jobs.items.smelt)
+    (assoc (dissoc (get registry/jobs 'jobs.items.smelt) :conditions :target :done? :quote-of)
            :check (fn [c] (or (not= :cooking (:phase (get @furnaces (key-of c)))) (do (ctx/wait c {:reason :cooking}) false)))
            :round (fn ^:async smelt-round [c]
                     (swap! calls conj ['jobs.items.smelt (:args c)])

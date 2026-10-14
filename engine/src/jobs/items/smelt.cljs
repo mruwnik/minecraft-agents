@@ -1,56 +1,61 @@
 (ns jobs.items.smelt
   (:require [clojure.string :as str]
-            [jobs.lib.game-facts :as facts]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.items.craft :as craft]
+            [jobs.items.smelt.fetch :as sf]
             [jobs.items.smelt.plan :as sp]
             [jobs.lib.access :as access]
+            [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
-            [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.need :as need]
             [jobs.lib.places :as places]
-            [jobs.lib.storage :as storage]))
+            [jobs.lib.storage :as storage]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Smelt :count of an item in a furnace, blast furnace or smoker without standing by it.
   :item may be a list, and with :item nil and two or more raw foods or ores carried every one of them is cooked: one child
-  smelt per item, in order, each with the same :count; the result is {:smelted n :wanted n :items {item result}} (stopped,
-  with the first item's reason, when nothing was smelted; :failed names the items that gave up).
+  smelt per item, in order, each with the same :count; the data is {:smelted n :wanted n :items {item result}} (:failed
+  names the items that gave up; ended with the first item's cause when nothing was smelted).
   The first round walks to the furnace, reads it, takes any output already there (it does not count) and loads
   the input and the fuel. Fuel is worked out from the count: in a furnace one fuel item smelts 8 items for coal
   or charcoal, 1.5 for overworld wood (crimson and warped do not burn), 0.5 for a stick (twice that in a blast furnace or smoker). It is taken from what is carried when :fuel is nil, coal and charcoal first.
-  The job then ends its round and waits (check reason :cooking, with :furnace and :ready-at) so the body can do
-  other jobs. The next round takes the output.
-  The wait is decided by the clock: ready-at is now plus the cook time of the items loaded (200 ticks each in a
-  furnace, 100 in the other two) plus a margin. The check wakes the job early once :unlit-from has passed and
-  the furnace block is no longer lit or no longer a furnace. It reads only memory, the clock and one block. A
+  The job then yields (:continue) until the cook is due, so the body can do other jobs; the next round takes the output.
+  Due is decided by the clock: ready-at is now plus the cook time of the items loaded (200 ticks each in a
+  furnace, 100 in the other two) plus a margin. It is also due once :unlit-from has passed and the furnace block is
+  no longer lit or no longer a furnace. A yielding round reads only memory, the clock and one block. A
   woken round that finds the cook unfinished waits again from the furnace's own bars.
   What is owed is kept in memory before the load, so a restart or cut neither loses the output nor loads twice.
-  With :fetch (default true; jobs.lib.fetch) what is missing is fetched first by obtain children: the input, the
-  fuel (the :fuel item, else coal or charcoal, else planks of any wood, sized by what one item of it smelts), and, when no furnace
-  is seen, a furnace (a carried one is put down beside the body, else one is fetched and put down). A fetch that
-  finds nothing leaves the reason below (no-item, no-fuel, no-furnace-seen). :fetch false skips all of it.
-  Result: {:smelted n :wanted n}: :wanted is the count this job loaded and :smelted what came of it; input
-  already in the furnace and the output already there do not count. Plus :reason and :status :stopped after a warn (smelt.gave-up) when it gives up:
-  - no-furnace-seen (no :furnace given and none seen), furnace-not-placed (one is carried and could not be put down; :why says why), no-furnace, not-a-furnace, furnace-gone (broken or
-    replaced meanwhile), output-gone (input and output both gone), unreachable.
-  - no-item, nothing-smeltable, not-smeltable (this kind of furnace cannot cook it, also found when it never lit).
-  - no-fuel, unknown-fuel, rejected-fuel, out-of-fuel (leftover input is taken back), fuel-busy (the fuel slot
-    holds another fuel).
-  - furnace-busy (the input slot holds another item that is not cooking; one that is cooking is waited out, its output taken, then the load goes in), furnace-full, inventory-full (the output stays in the
-    furnace).
-  - \"refused\" (with :zones, :claims): the furnace is in another owner's zone or claim and does not allow
-    :put (loading) or :take (collecting, or the output already there). Nothing is loaded or taken. :ignore-zones? true skips the check.")
+  Needs: the input, the fuel (the :fuel item, else coal or charcoal, else planks of any wood, sized by what one item of it
+  smelts) and a furnace. With :fetch (default true; jobs.lib.need) what is missing is fetched first by obtain
+  children, and, when no furnace is seen, a carried furnace is put down beside the body, else one is fetched and put
+  down. A fetch that finds nothing leaves the cause below (no-item, no-fuel, no-furnace-seen), the fetch's ending
+  its :because. :fetch false skips all of it. Starts only with an item some furnace cooks (condition :not-smeltable;
+  an output such as cooked_chicken names its input). Quote: the cook time of the count (a furnace; half in the other
+  two), the input and fuel items, the product; open-ended when no furnace is given or seen.
+  Ends :done with {:smelted n :wanted n}: :wanted is the count this job loaded and :smelted what came of it; input
+  already in the furnace and the output already there do not count. A give-up warns (smelt.gave-up) and ends with the
+  cause named and the same data (0 of N is never :done):
+  - condition-failed: no-furnace-seen (no :furnace given and none seen), no-furnace, not-a-furnace, furnace-gone (broken or
+    replaced meanwhile), no-item, nothing-smeltable, not-smeltable (this kind of furnace cannot cook it, also found when
+    it never lit), no-fuel, unknown-fuel, rejected-fuel, fuel-busy (the fuel slot holds another fuel), furnace-busy (the
+    input slot holds another item that is not cooking; one that is cooking is waited out, its output taken, then the
+    load goes in), furnace-full, inventory-full (the output stays in the furnace), refused (with :zones, :claims: the
+    furnace is in another owner's zone or claim and does not allow :put or :take; nothing is loaded or taken;
+    :ignore-zones? true skips the check).
+  - nothing-possible: furnace-not-placed (one is carried and could not be put down; :why says why), out-of-fuel
+    (leftover input is taken back), output-gone (input and output both gone), unreachable, or the furnace's own status.")
 
 (a/defargs args
   {:furnace {:doc "furnace, blast furnace or smoker position [x y z] or {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :spec ::a/pos :default nil}
    :item {:doc "what to smelt, or a list of them (an input; a product such as cooked_chicken or iron_ingot means its input, charcoal the carried log there is most of; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil, or every raw food and ore carried when there are several" :spec (a/or-of a/item? (a/coll-of a/item?)) :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
-   :fetch {:doc "get a missing input, fuel or furnace (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends with the reason" :spec fetch/option? :default true}
+   :fetch {:doc "get a missing input, fuel or furnace (jobs.lib.need): true, a set of kinds or a map of limits; false ends with the reason" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -75,7 +80,7 @@
         left (- (* (get-in state [:input :count] 0) per) (get-in state [:cook :done] 0))]
     (+ (slack-ms) (settings/ticks->ms (max 0 left)))))
 
-;; ------------------------------------------------------------------ the check
+;; ------------------------------------------------------------------ the call
 
 (def furnace-block? #{"furnace" "blast_furnace" "smoker"})
 
@@ -106,7 +111,8 @@
              (false? (some-> (.-properties block) .-lit))))))
 
 (defn due?
-  "Whether the cook of the job memory m is due: see check."
+  "Whether the cook of the job memory m is due: no furnace chosen yet, nothing loaded yet, the clock past ready-at, or since
+  :unlit-from the furnace block unlit or gone."
   [c m]
   (let [furnace (or (:furnace (:args c)) (:furnace m))
         now (ctx/now c)]
@@ -114,16 +120,6 @@
         (nil? (:ready-at m))
         (>= now (:ready-at m))
         (and (>= now (:unlit-from m)) (needs-attention? (:primitives c) furnace)))))
-
-(defn check
-  "The cook is due: no furnace chosen yet (the round chooses one), nothing loaded yet, or the clock passed ready-at,
-  or since :unlit-from the furnace block is unlit or gone. Else it waits with reason :cooking. Memory, the clock and
-  one block: no window is opened. A job smelting several items asks the same of the child that is cooking."
-  [c]
-  (let [m (ctx/mem c)
-        m (if-let [slot (:active m)] (get-in m [:children slot]) m)]
-    (or (due? c m)
-        (ctx/wait c {:reason :cooking :furnace (or (:furnace (:args c)) (:furnace m)) :ready-at (:ready-at m)}))))
 
 ;; ------------------------------------------------------------------ the round
 
@@ -134,30 +130,55 @@
     (js->clj r :keywordize-keys true)))
 
 (defn wait-until!
-  "Remember when to look again and end the round."
+  "Remember when to look again and yield."
   [c ms]
   (let [now (ctx/now c)]
     (ctx/update-mem! c assoc :ready-at (+ now ms) :unlit-from (+ now (grace-ms)))
     :continue))
 
-(defn finish!
-  "Hand the parent what was smelted and return :done."
+(defn cooking?
+  "Whether a load is owed and its cook is not due: the round only yields."
+  [c]
+  (let [m (ctx/mem c)]
+    (and (some? (:owed m)) (some? (:ready-at m)) (not (due? c m)))))
+
+(def condition-reasons
+  "Give-ups that name a missing or wrong fact; any other ends nothing-possible."
+  #{"no-furnace-seen" "no-furnace" "not-a-furnace" "furnace-gone" "no-item" "nothing-smeltable" "not-smeltable" "no-fuel"
+    "unknown-fuel" "rejected-fuel" "fuel-busy" "furnace-busy" "furnace-full" "inventory-full" "refused"})
+
+(defn results
+  "What came of the load: {:smelted n :wanted n} plus extra."
   [c extra]
   (let [m (ctx/mem c)]
-    (ctx/result! c (merge {:smelted (max 0 (- (:got m 0) (:base (:owed m) 0)))
-                           :wanted (- (:count (:owed m) 0) (:base (:owed m) 0))}
-                          extra))
-    :done))
+    (merge {:smelted (max 0 (- (:got m 0) (:base (:owed m) 0)))
+            :wanted (- (:count (:owed m) 0) (:base (:owed m) 0))}
+           extra)))
+
+(defn end-with
+  "The ending for give-up reason (a string), cause the keyword of it unless given, data the job's result fields."
+  ([c reason data] (end-with c reason (keyword (str/replace reason " " "-")) data))
+  ([c reason cause data]
+   (ctx/end c (if (condition-reasons reason) :condition-failed :nothing-possible) cause data)))
+
+(defn finish!
+  "End :done with what was smelted; a load of which nothing came is output-gone, never done."
+  [c extra]
+  (let [r (results c extra)]
+    (if (and (pos? (:wanted r)) (zero? (:smelted r)))
+      (do (ctx/emit! c :smelt.gave-up :warn {:reason "output-gone" :text "smelt gave up: output-gone"})
+          (end-with c "output-gone" r))
+      (ctx/end c :done nil r))))
 
 (defn stop!
-  "Warn and finish with a reason; block is the block the body saw where the furnace should be, why the cause when the reason alone misleads."
+  "Warn and end with a cause; block is the block the body saw where the furnace should be, why the cause when the reason alone misleads."
   ([c reason] (stop! c reason nil nil))
   ([c reason block] (stop! c reason block nil))
   ([c reason block why]
    (ctx/emit! c :smelt.gave-up :warn (cond-> {:reason reason :text (str "smelt gave up: " reason (when block (str " (saw " block ")")) (when why (str ": " why)))}
                                        block (assoc :block block)
                                        why (assoc :why why)))
-   (finish! c (cond-> {:reason reason :status :stopped} why (assoc :why why)))))
+   (end-with c reason (results c (when why {:why why})))))
 
 (defn ^:async stop-back!
   "Give up after a load: leftover input goes back to the pockets first."
@@ -166,11 +187,11 @@
   (stop! c reason))
 
 (defn refuse!
-  "End with reason \"refused\": the furnace is in another's zone or claim; one smelt.gave-up warn names them."
+  "End refused: the furnace is in another's zone or claim; one smelt.gave-up warn names them."
   [c verdict]
   (let [fields (access/refusal-fields [verdict])]
     (ctx/emit! c :smelt.gave-up :warn (assoc fields :reason "refused" :text (str "smelt gave up: refused by " (access/refusal-text fields))))
-    (finish! c (assoc (select-keys fields [:zones :claims :reason]) :status :stopped))))
+    (end-with c "refused" (assoc (select-keys fields [:zones :claims]) :reason :refused) (results c nil))))
 
 (defn give-up!
   "Count a failed round in a row: :continue until u/max-failures, then stop with the reason."
@@ -180,7 +201,7 @@
     :continue))
 
 (defn ^:async load!
-  "Put the planned input and fuel in. :continue when they are in, else the reason it gives up."
+  "Put the planned input and fuel in. :continue when they are in, else the ending it gives up with."
   [c state plan]
   (let [{:keys [item count fuel]} plan
         m (ctx/mem c)
@@ -263,10 +284,30 @@
               (do (ctx/emit! c :smelt.done :info {:text (str "smelted " (:got m)) :smelted (:got m)})
                   (finish! c {}))))))
 
+(defn ^:async reach!
+  "Walk until the body is within 3 cells of the furnace, as a go-to child: :there, :partial (it waits on the world, or
+  got nearer: yield) or :blocked (it gave up)."
+  [c pos]
+  (let [cell (near/cell-of pos)]
+    (cond
+      (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
+                      :blocked)
+      (u/within? (u/self-pos c) cell 3) :there
+      :else (let [r (await (child/call-walk* c :walk {:pos cell :range 3 :doors :shut :dangers true :zone-tolls true :escalate true
+                                                      :one-way :closed :warn false :retry false
+                                                      :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+                  res (:data r)]
+              (cond
+                (= :continue r) :partial
+                (not= :done (:kind r)) :blocked
+                (:arrived res) :there
+                (:leg res) :partial
+                :else :blocked)))))
+
 (defn ^:async round-at!
   "Reach the furnace, read it, then load (first) or collect."
   [c furnace owed?]
-  (case (await (near/go-near! c furnace 3 {:zone-tolls true}))
+  (case (await (reach! c furnace))
     :partial :continue
     :blocked (give-up! c "unreachable")
     (let [state (await (visit! c "read" {}))]
@@ -289,104 +330,7 @@
       (refuse! c v)
       (await (round-at! c furnace owed?)))))
 
-(defn refuse-item!
-  "End stopped: no furnace cooks :item, so no furnace is looked for. One smelt.gave-up warn names it."
-  [c item]
-  (ctx/emit! c :smelt.gave-up :warn {:reason "not-smeltable" :item item
-                                     :text (str "smelt gave up: not-smeltable, no furnace cooks " item)})
-  (finish! c {:reason "not-smeltable" :item item :status :stopped}))
-
-;; ------------------------------------------------------------------ fetch: input, fuel, furnace
-
-(defn want-count
-  "How many items are to be smelted: :count, else what is carried of the input (at least 1 when nothing is)."
-  [c item]
-  (let [have (storage/carried (carried c) item)]
-    (or (:count (:args c)) (max 1 have))))
-
-(defn fuel-capacity
-  "How many items the carried fuel (only :fuel when given) would smelt."
-  [c item]
-  (let [{:keys [fuel]} (:args c)]
-    (transduce (comp (filter #(and (not= item (:name %)) (or (nil? fuel) (= fuel (:name %)))))
-                     (keep #(some-> (sp/fuel-per-unit "furnace" (:name %)) (* (:count %)))))
-               + 0 (carried c))))
-
-(defn stage-problem
-  "The :need wait of the fetch stage in memory (:input or :fuel) while it is unmet, else nil."
-  [c]
-  (let [item (sp/input-of (:item (:args c)) (carried c))
-        n (when item (want-count c item))]
-    (when item
-      (case (:fetch-stage (ctx/mem c))
-        :input (let [need (- n (storage/carried (carried c) item))]
-                 (when (pos? need) {:reason :need :item item :count need}))
-        (:fuel :wood-fuel)
-        (let [fuel (:fuel (:args c))
-              names (cond fuel [fuel] (= :fuel (:fetch-stage (ctx/mem c))) (fetch-fuels) :else (fetch-wood-fuels))
-              short (- n (fuel-capacity c item))
-              need (js/Math.ceil (/ short (sp/fuel-per-unit "furnace" (first names))))]
-          (when (and (pos? short) (not (and fuel (= :wood-fuel (:fetch-stage (ctx/mem c))))))
-            (if fuel
-              {:reason :need :item fuel :count need}
-              {:reason :need :any-of names :count need})))
-        nil))))
-
-(defn ^:async fetch-stages!
-  "Before the first load: fetch the missing input, then the missing fuel, once each. :continue while a fetch child
-  waits, :done for a bad :fetch arg, else nil."
-  [c]
-  (when (and (fetch/opts c 'jobs.items.smelt) (nil? (:owed (ctx/mem c))))
-    (loop [[stage & more] (remove #(contains? (:fetch-done (ctx/mem c)) %) [:input :fuel :wood-fuel])]
-      (when stage
-        (ctx/update-mem! c assoc :fetch-stage stage)
-        (let [r (await (fetch/fetch! c 'jobs.items.smelt stage-problem))]
-          (if (nil? r)
-            (do (ctx/update-mem! c update :fetch-done (fnil conj #{}) stage)
-                (recur more))
-            r))))))
-
-(defn furnace-problem
-  "The :need wait for a furnace while one is wanted and none is carried, else nil."
-  [c]
-  (when (and (:want-furnace (ctx/mem c)) (not (pos? (storage/carried (carried c) "furnace"))))
-    {:reason :need :item "furnace" :count 1}))
-
-(defn ^:async place-furnace!
-  "Put the carried furnace down beside the body (jobs.blocks.place child; craft/spot! finds the cell) and make it the
-  furnace of this job. :again once it stands, :continue while a child waits, nil when it could not be put down (memory
-  :furnace-refusal says why)."
-  [c]
-  (let [spot (or (:furnace-spot (ctx/mem c)) (await (craft/spot! c)))]
-    (cond
-      (= :continue spot) :continue
-      (nil? spot) (do (ctx/update-mem! c assoc :furnace-refusal "no free cell beside the body to put it on")
-                      nil)
-      :else
-      (do (ctx/update-mem! c assoc :furnace-spot spot)
-          (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item "furnace" :pos spot :fetch false}))]
-            (if (= :continue r)
-              :continue
-              (let [res (ctx/child-result c :place)]
-                (ctx/update-mem! c dissoc :furnace-spot)
-                (if (and (= :done r) (:placed res))
-                  (do (ctx/update-mem! c #(-> % (assoc :furnace spot) (dissoc :want-furnace)))
-                      (places/offer! c :furnace spot)
-                      (ctx/emit! c :smelt.furnace :info {:furnace spot :text (str "put a furnace down at " (:x spot) " " (:y spot) " " (:z spot))})
-                      :again)
-                  (do (ctx/update-mem! c assoc :furnace-refusal (str (or (:why res) (some-> (:reason res) name) "it was not placed")))
-                      nil)))))))))
-
-(defn ^:async furnace-fetch!
-  "With no furnace seen: put a carried one down, else fetch one and put it down. Once per smelt. :again / :continue,
-  nil when there is nothing to do."
-  [c]
-  (when (and (fetch/opts c 'jobs.items.smelt) (not (:furnace-tried (ctx/mem c))))
-    (when-not (pos? (storage/carried (carried c) "furnace")) (ctx/update-mem! c assoc :want-furnace true))
-    (let [f (when (:want-furnace (ctx/mem c)) (await (fetch/fetch! c 'jobs.items.smelt furnace-problem)))
-          r (when (and (nil? f) (pos? (storage/carried (carried c) "furnace"))) (await (place-furnace! c)))]
-      (when-not (or f r) (ctx/update-mem! c #(-> % (dissoc :want-furnace) (assoc :furnace-tried true))))
-      (or f r))))
+;; ------------------------------------------------------------------ the round, with the fetches
 
 (defn ^:async round-fetched
   "The round once the missing input and fuel are fetched."
@@ -399,7 +343,7 @@
           (ctx/emit! c :smelt.furnace :info {:furnace pos :text (str "smelting at the furnace seen at " (:x pos) " " (:y pos) " " (:z pos))})
           (await (round-with c pos)))
       (or (await (look/survey! c :cell))
-          (let [f (await (furnace-fetch! c))]
+          (let [f (await (sf/furnace-fetch! c))]
             (case f
               nil (if-let [why (and (pos? (storage/carried (carried c) "furnace")) (:furnace-refusal (ctx/mem c)))]
                     (stop! c "furnace-not-placed" nil (str "a furnace is carried but could not be put down: " why))
@@ -408,13 +352,14 @@
               f))))))
 
 (defn ^:async item-round
-  "One bounded step: reach the furnace, read it, then load (first) or collect. Without a :furnace the first round
-  chooses the nearest seen one (kept in memory); with none in view it looks around once from where it stands (the
-  four headings, level and down, a sight pass after each) and chooses again; none seen after that ends no-furnace-seen."
+  "One bounded step: yield while the cook is not due, else reach the furnace, read it, then load (first) or collect.
+  Without a :furnace the first round chooses the nearest seen one (kept in memory); with none in view it looks around
+  once from where it stands (the four headings, level and down, a sight pass after each) and chooses again; none seen
+  after that ends no-furnace-seen."
   [c]
-  (cond
-    (and (nil? (:owed (ctx/mem c))) (:item (:args c)) (not (sp/smeltable? (sp/input-of (:item (:args c)) (carried c))))) (refuse-item! c (:item (:args c)))
-    :else (or (await (fetch-stages! c)) (await (round-fetched c)))))
+  (if (cooking? c)
+    :continue
+    (or (await (sf/fetch-stages! c (fetch-fuels) (fetch-wood-fuels))) (await (round-fetched c)))))
 
 (defn raw-carried
   "The raw foods and ores carried, by name."
@@ -439,14 +384,20 @@
         smelted (reduce + (map #(:smelted % 0) (vals results)))
         wanted (reduce + (map #(:wanted % 0) (vals results)))
         failed (into {} (keep (fn [[i r]] (when (:reason r) [i (:reason r)]))) results)
-        out (cond-> {:smelted smelted :wanted wanted :items results}
-              (seq failed) (assoc :failed failed)
-              (zero? smelted) (assoc :status :stopped :reason (get failed (first items) "nothing-smeltable")))]
+        data (cond-> {:smelted smelted :wanted wanted :items results}
+               (seq failed) (assoc :failed failed))]
     (ctx/emit! c :smelt.batch-done (if (zero? smelted) :warn :info)
                {:smelted smelted :wanted wanted :failed failed
                 :text (str "smelted " smelted " of " wanted " (" (str/join ", " items) ")")})
-    (ctx/result! c out)
-    :done))
+    (if (zero? smelted)
+      (end-with c (get failed (first items) "nothing-smeltable") data)
+      (ctx/end c :done nil data))))
+
+(defn batch-entry
+  "The result kept for one item of a batch from its child's ending e: the data, with :reason when it did not end done."
+  [e]
+  (cond-> (merge {:smelted 0 :wanted 0} (:data e))
+    (not= :done (:kind e)) (assoc :reason (name (contract/cause-key e)))))
 
 (defn ^:async batch-round
   "One child smelt after another, one per item; :continue while a child waits on its cook."
@@ -455,14 +406,12 @@
     (let [done (:batch (ctx/mem c))
           item (first (remove #(contains? done %) items))]
       (if-not item
-        (do (ctx/update-mem! c dissoc :active) (finish-batch! c items))
-        (let [slot (keyword (str "item-" item))
-              _ (ctx/update-mem! c assoc :active slot)
-              out (await (ctx/call-child c slot 'jobs.items.smelt (assoc (:args c) :item item)))]
-          (if (= :done out)
-            (do (ctx/update-mem! c assoc-in [:batch item] (ctx/child-result c slot))
-                (recur))
-            :continue))))))
+        (finish-batch! c items)
+        (let [e (await (ctx/call c (keyword (str "item-" item)) 'jobs.items.smelt (assoc (:args c) :item item)))]
+          (if (= :continue e)
+            :continue
+            (do (ctx/update-mem! c assoc-in [:batch item] (batch-entry e))
+                (recur))))))))
 
 (defn ^:async round
   "One bounded step of the one item, or one child smelt after another for several items."
@@ -470,3 +419,55 @@
   (if-let [items (batch-items c)]
     (await (batch-round c items))
     (await (item-round c))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def target [:item])
+
+(defn not-smeltable
+  "At the call's start: the cause when the :item is one no furnace cooks, else nil."
+  [c]
+  (let [item (:item (:args c))]
+    (when (and item (not (coll? item)) (not (ctx/frozen-call c)) (not (sp/smeltable? (sp/input-of item (carried c)))))
+      {:reason :not-smeltable :item item})))
+
+(def conditions [[:fn not-smeltable]])
+
+(defn done?
+  "What was smelted against what the load asked, in items. Never :done? itself: the round ends the job."
+  [c]
+  (let [m (ctx/mem c)
+        smelted (if (:batch m)
+                  (transduce (map #(:smelted % 0)) + 0 (vals (:batch m)))
+                  (max 0 (- (:got m 0) (:base (:owed m) 0))))
+        wanted (if (:batch m)
+                 (transduce (map #(:wanted % 0)) + 0 (vals (:batch m)))
+                 (- (:count (:owed m) 0) (:base (:owed m) 0)))]
+    {:done? false :units :items :done smelted :left (max 0 (- wanted smelted))}))
+
+(defn quote-items
+  "The items a quote is made for: the :item list, the one item, or the raw foods and ores carried."
+  [c]
+  (let [item (:item (:args c))]
+    (cond (coll? item) item
+          item [item]
+          :else (let [r (raw-carried c)] (if (seq r) r [nil])))))
+
+(defn quote-of
+  "The cook time of the items a load puts in, those items, the fuel and the product; open-ended when no furnace is given
+  or seen."
+  [c]
+  (let [{:keys [furnace count fuel]} (:args c)
+        figs (keep #(let [f (sp/load-figures {:carried (carried c) :item % :count count :fuel fuel})]
+                      (when-not (:give-up f) f))
+                   (quote-items c))
+        n (if (seq figs) (transduce (map :count) + 0 figs) (or count 1))
+        cook (/ (settings/ticks->ms (* n (sp/cook-ticks "furnace"))) 1000)
+        walk (if furnace 20 60)
+        figure (fn [k] [k k k])
+        add (fn [m item k] (cond-> m item (update item #(mapv + (or % [0 0 0]) (figure k)))))
+        items (reduce (fn [m f] (-> m (add (:item f) (:count f)) (add (get-in f [:fuel :item]) (get-in f [:fuel :count] 0)))) {} figs)
+        yields (reduce (fn [m f] (add m (:product f) (:count f))) {} figs)]
+    (cond-> {:uses {:time [(+ walk (/ cook 2)) (+ walk cook) (if (or furnace (nearest-furnace c nil)) (+ walk cook 120) ##Inf)]}}
+      (seq items) (assoc-in [:uses :items] items)
+      (seq yields) (assoc :yields {:items yields}))))

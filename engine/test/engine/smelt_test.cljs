@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.blocks-dig-test :as bd]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -189,47 +190,6 @@
   (is (= (+ (smelt/slack-ms) (* 50 (- 300 120))) (smelt/wait-ms "smoker" {:input {:count 3} :cook {:done 120 :total 100}})))
   (is (= (+ (smelt/slack-ms) (* 50 150)) (smelt/wait-ms "blast_furnace" {:input {:count 2} :cook {:done 50 :total 100}})))
   (is (= (+ (smelt/slack-ms) (* 50 600)) (smelt/wait-ms "furnace" {:input {:count 3} :cook nil})) "no bar: the whole cook"))
-
-;; ------------------------------------------------------------------ the check
-
-(def spot {:x 1 :y 64 :z 0})
-
-(defn check-of
-  "The job's check on a ctx holding memory m at time now, over a primitives whose block at spot is named block-name
-  (a furnace by default) and has properties props; none when props is nil."
-  ([m now props] (check-of m now props "furnace"))
-  ([m now props block-name]
-   (let [at (fn [_] (when props #js {:name block-name :properties (clj->js props)}))
-         p #js {:blockAt at :sensedAt at}]
-     (boolean (smelt/check {:args {:furnace spot} :primitives p :root "j1" :slots []
-                            :view (fn [] {:now now :data {:policies {(mem/job-kind "j1") mem/job-policy}
-                                                         :entries {(mem/job-kind "j1") [{:t now :data m}]}}})})))))
-
-(deftest the-check-runs-the-first-round-at-once
-  (is (true? (check-of {} 1000 {:lit false}))))
-
-(deftest the-check-declines-while-it-cooks
-  (are [now props expected] (= expected (check-of {:owed {:item "raw_iron" :count 3} :ready-at 100000 :unlit-from 7000} now props))
-    1000 {:lit true} false
-    1000 {:lit false} false
-    6999 {:lit false} false
-    7000 {:lit false} true
-    7000 {:lit true} false
-    7000 nil false
-    99999 {:lit true} false
-    100000 {:lit true} true
-    100000 nil true))
-
-(deftest the-check-wakes-for-a-furnace-that-is-no-longer-one
-  (are [now block-name expected] (= expected (check-of {:owed {:item "raw_iron" :count 3} :ready-at 100000 :unlit-from 7000} now {:lit true} block-name))
-    6999 "air" false
-    7000 "air" true
-    7000 "chest" true
-    7000 "smoker" false
-    7000 "blast_furnace" false))
-
-(deftest without-a-furnace-the-first-round-runs-to-choose-one
-  (is (true? (boolean (smelt/check {:args {:furnace nil} :root "j1" :slots [] :view (fn [] {:now 0 :data {}})})))))
 
 ;; ------------------------------------------------------------------ against the fake world
 
@@ -656,13 +616,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:smelted 3 :wanted 3} (await (result-of base-world {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))))
-        (is (= {:smelted 3 :wanted 3}
+        (is (= {:smelted 3 :wanted 3 :status :done} (await (result-of base-world {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))))
+        (is (= {:smelted 3 :wanted 3 :status :done}
                (await (result-of (assoc base-world :furnaces {pos-key {:input {:name "raw_iron" :count 2}}})
                                  {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3})))
             "input already in the furnace is not counted")
-        (is (= {:smelted 0 :wanted 0 :reason "no-furnace" :status :stopped}
-               (await (result-of (dissoc base-world :blocks) {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))))))))
+        (is (= {:smelted 0 :wanted 0 :reason :no-furnace :status :stopped}
+               (select-keys (await (result-of (dissoc base-world :blocks) {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))
+                            [:smelted :wanted :reason :status])))))))
 
 ;; ------------------------------------------------------------------ no :furnace: the nearest one seen
 ;; The fake body stands at 0,64,0 facing south (+z): what lies ahead is seen.
@@ -698,7 +659,7 @@
           (is (nil? (:input (get (:furnaces @(fake/state p)) [0 64 7]))))
           (is (= {:x -1 :y 64 :z 4} (:furnace (first (of-kind seen :smelt.furnace))))
               "the chosen furnace is told")
-          (is (= [:cooking] (mapv :reason (of-kind seen :waiting))) "while it cooks the job says why it waits"))))))
+          (is (= 1 (count (:list (core/state eng)))) "while it cooks the job yields, listed"))))))
 
 (deftest without-a-furnace-or-item-it-uses-the-nearest-one-that-cooks-what-is-carried
   (async done
@@ -746,16 +707,26 @@
           (is (= {:name "chicken" :count 1} (:input (furnace-of p))))
           (is (nil? (:reason result))))))))
 
-(deftest an-item-no-furnace-cooks-is-refused-first-and-ends-stopped
+(defn ^:async ending-by-call
+  "Run the job (args) as a ctx/call child of a recording parent, a few ticks: the child's ending and the primitives."
+  [world args]
+  (let [{:keys [eng p]} (setup world)
+        out (atom nil)
+        parent {:check (constantly true)
+                :round (fn ^:async recording-round [c]
+                         (let [e (await (ctx/call c :kid 'jobs.items.smelt args))]
+                           (if (= :continue e) e (do (reset! out e) :done))))}
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+    (core/submit! eng '(recording-parent) {})
+    (await (ticks eng 3))
+    [@out p]))
+
+(deftest an-item-no-furnace-cooks-is-refused-first-and-ends-condition-failed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks {pos-key "furnace"} :inventory [{:name "coal" :count 2}]})
-              result (await (bd/child-outcome eng 'jobs.items.smelt {:item "diamond" :count 1} 3))
-              gave-up (first (of-kind seen :smelt.gave-up))]
-          (is (= {:status :stopped :reason "not-smeltable"} (select-keys result [:status :reason])))
-          (is (= "diamond" (:item gave-up)))
-          (is (re-find #"diamond" (:text gave-up)))
+        (let [[e p] (await (ending-by-call {:blocks {pos-key "furnace"} :inventory [{:name "coal" :count 2}]} {:item "diamond" :count 1}))]
+          (is (= {:kind :condition-failed :cause {:reason :not-smeltable :item "diamond"}} (select-keys e [:kind :cause])))
           (is (empty? (calls p "furnace"))))))))
 
 (deftest a-give-up-with-nothing-smelted-ends-stopped
@@ -839,7 +810,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[r p] (await (fetched-run {:inventory (conj iron-and-coal {:name "furnace" :count 1})} {:item "raw_iron" :count 3}))]
-          (is (= {:smelted 3 :wanted 3} r))
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])))
           (is (nil? (get (inv-of p) "furnace")))
           (is (= 1 (count (furnaces-at p)))))))))
 
@@ -854,7 +825,7 @@
       (fn ^:async t []
         (let [[r _ seen] (await (fetched-run {:inventory (conj iron-and-coal {:name "furnace" :count 1})} {:item "raw_iron" :count 3}
                                              {'jobs.blocks.place refusing-place}))]
-          (is (= "furnace-not-placed" (:reason r)) "not 'no-furnace-seen': a furnace is carried")
+          (is (= :furnace-not-placed (:reason r)) "not 'no-furnace-seen': a furnace is carried")
           (is (re-find #"footprint" (str (:why (first (of-kind seen :smelt.gave-up)))))))))))
 
 (deftest a-missing-furnace-is-fetched-from-a-seen-chest
@@ -864,7 +835,7 @@
         (let [[r p] (await (fetched-run {:inventory iron-and-coal :blocks {"-2,64,3" "chest"}
                                          :containers {"-2,64,3" [{:name "furnace" :count 1}]}}
                                         {:item "raw_iron" :count 3}))]
-          (is (= {:smelted 3 :wanted 3} r))
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])))
           (is (= 1 (count (furnaces-at p)))))))))
 
 (deftest missing-fuel-is-fetched-from-a-seen-chest
@@ -874,7 +845,7 @@
         (let [[r _p] (await (fetched-run {:blocks {pos-key "furnace" "-2,64,3" "chest"} :inventory [{:name "raw_iron" :count 5}]
                                           :containers {"-2,64,3" [{:name "coal" :count 4}]}}
                                          {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))]
-          (is (= {:smelted 3 :wanted 3} r)))))))
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted]))))))))
 
 (deftest a-missing-input-is-fetched-from-a-seen-chest
   (async done
@@ -883,7 +854,7 @@
         (let [[r _p] (await (fetched-run {:blocks {pos-key "furnace" "-2,64,3" "chest"} :inventory [{:name "coal" :count 3}]
                                           :containers {"-2,64,3" [{:name "raw_iron" :count 4}]}}
                                          {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))]
-          (is (= {:smelted 3 :wanted 3} r)))))))
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted]))))))))
 
 (deftest fetch-false-keeps-the-old-reasons
   (async done
@@ -892,11 +863,11 @@
         (let [chest {"-2,64,3" "chest"}
               run (fn [world args] (fetched-run world (assoc args :fetch false)))
               furnace {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}]
-          (is (= "no-fuel" (:reason (first (await (run {:blocks {pos-key "furnace" "-2,64,3" "chest"} :inventory [{:name "raw_iron" :count 5}]
+          (is (= :no-fuel (:reason (first (await (run {:blocks {pos-key "furnace" "-2,64,3" "chest"} :inventory [{:name "raw_iron" :count 5}]
                                                          :containers {"-2,64,3" [{:name "coal" :count 4}]}} furnace))))))
-          (is (= "no-item" (:reason (first (await (run {:blocks {pos-key "furnace" "-2,64,3" "chest"} :inventory [{:name "coal" :count 3}]
+          (is (= :no-item (:reason (first (await (run {:blocks {pos-key "furnace" "-2,64,3" "chest"} :inventory [{:name "coal" :count 3}]
                                                          :containers {"-2,64,3" [{:name "raw_iron" :count 4}]}} furnace))))))
-          (is (= "no-furnace-seen" (:reason (first (await (run {:blocks chest :inventory iron-and-coal
+          (is (= :no-furnace-seen (:reason (first (await (run {:blocks chest :inventory iron-and-coal
                                                                 :containers {"-2,64,3" [{:name "furnace" :count 1}]}}
                                                                {:item "raw_iron" :count 3})))))))))))
 
@@ -905,9 +876,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [furnace {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}]
-          (is (= "no-fuel" (:reason (first (await (fetched-run {:blocks {pos-key "furnace"} :inventory [{:name "raw_iron" :count 5}]} furnace))))))
-          (is (= "no-item" (:reason (first (await (fetched-run {:blocks {pos-key "furnace"} :inventory [{:name "coal" :count 3}]} furnace))))))
-          (is (= "no-furnace-seen" (:reason (first (await (fetched-run {:inventory iron-and-coal} {:item "raw_iron" :count 3})))))))))))
+          (is (= :no-fuel (:reason (first (await (fetched-run {:blocks {pos-key "furnace"} :inventory [{:name "raw_iron" :count 5}]} furnace))))))
+          (is (= :no-item (:reason (first (await (fetched-run {:blocks {pos-key "furnace"} :inventory [{:name "coal" :count 3}]} furnace))))))
+          (is (= :no-furnace-seen (:reason (first (await (fetched-run {:inventory iron-and-coal} {:item "raw_iron" :count 3})))))))))))
 
 (deftest missing-fuel-falls-back-to-any-wood
   (async done
@@ -916,7 +887,7 @@
         (let [world {:blocks {pos-key "furnace" "-2,64,3" "chest"} :inventory [{:name "raw_iron" :count 8}]
                      :containers {"-2,64,3" [{:name "birch_planks" :count 8}]}}
               [r _p] (await (fetched-run world {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 8}))]
-          (is (= {:smelted 8 :wanted 8} r)))))))
+          (is (= {:smelted 8 :wanted 8} (select-keys r [:smelted :wanted]))))))))
 
 (deftest carried-logs-of-any-wood-are-the-fuel
   (async done
@@ -924,7 +895,7 @@
       (fn ^:async t []
         (let [world {:blocks {pos-key "furnace"} :inventory [{:name "raw_iron" :count 8} {:name "birch_log" :count 6}]}
               [r _p] (await (fetched-run world {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 8}))]
-          (is (= {:smelted 8 :wanted 8} r)))))))
+          (is (= {:smelted 8 :wanted 8} (select-keys r [:smelted :wanted]))))))))
 
 (deftest a-furnace-is-crafted-from-carried-cobblestone
   (async done
@@ -934,7 +905,7 @@
                                          :recipes {"furnace" {:count 1 :needs {"cobblestone" 8} :table true}}
                                          :inventory (conj iron-and-coal {:name "cobblestone" :count 8})}
                                         {:item "raw_iron" :count 3}))]
-          (is (= {:smelted 3 :wanted 3} r))
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])))
           (is (= 1 (count (furnaces-at p)))))))))
 
 ;; ------------------------------------------------------------------ several items in one call
@@ -975,3 +946,87 @@
           (is (= ["read" "load"] (ops p)) "the first item is loaded")
           (await (ticks eng 3))
           (is (= ["read" "load"] (ops p)) "while it cooks the batch is left alone"))))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def contract-args {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3})
+
+(deftest smelt-exports-the-contract
+  (let [job (get registry/jobs 'jobs.items.smelt)]
+    (is (some? (:conditions job)))
+    (is (nil? (:check job)) "no old check: cooking is a :continue of the round")
+    (is (= [:item] (:target job)))
+    (is (some? (:done? job)))))
+
+(deftest the-quote-has-the-cook-time-the-items-and-the-product
+  (let [job (get registry/jobs 'jobs.items.smelt)
+        quote-of (fn [n] ((:quote-of job) {:primitives (tu/fake-on-floor base-world) :args (assoc contract-args :count n)}))
+        q3 (quote-of 3)]
+    (is (nil? (contract/quote-problem q3)))
+    (is (< (get-in (quote-of 1) [:uses :time 1]) (get-in q3 [:uses :time 1])) "more items cook longer")
+    (is (= [3 3 3] (get-in q3 [:uses :items "raw_iron"])))
+    (is (= [1 1 1] (get-in q3 [:uses :items "coal"])))
+    (is (= [3 3 3] (get-in q3 [:yields :items "iron_ingot"])))))
+
+(deftest the-quote-plan-sizes-the-fuel-and-names-the-product
+  (is (= {:item "raw_iron" :count 3 :fuel {:item "coal" :count 1} :product "iron_ingot"}
+         (smelt-plan/load-figures {:carried (inv "raw_iron" 5 "coal" 3) :item "raw_iron" :count 3})))
+  (is (= {:give-up "no-fuel"} (select-keys (smelt-plan/load-figures {:carried (inv "raw_iron" 5) :item "raw_iron"}) [:give-up]))))
+
+(deftest an-item-no-furnace-cooks-fails-the-start-condition
+  (let [job (get registry/jobs 'jobs.items.smelt)
+        cause (fn [item] (some (fn [[_ f]] (f {:primitives (tu/fake-on-floor base-world) :args {:item item} :view (fn [] {:now 0 :data {}}) :root "j" :slots []})) (:conditions job)))]
+    (is (= :not-smeltable (:reason (cause "diamond"))))
+    (is (nil? (cause "raw_iron")))
+    (is (nil? (cause "iron_ingot")) "a product names its input")))
+
+(deftest a-give-up-before-any-load-is-a-failed-condition-with-the-reason-as-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (tu/each-async
+                gave-up-rows
+                (fn ^:async one [[label world item reason]]
+                  (let [{:keys [eng]} (setup world)
+                        r (await (bd/child-outcome eng 'jobs.items.smelt (assoc contract-args :item item) 8))]
+                    (is (= :condition-failed (get-in r [:ending :kind])) label)
+                    (is (= (keyword reason) (:reason r)) label)
+                    (is (zero? (:smelted r 0)) label)))))))))
+
+(deftest a-fire-that-went-out-with-no-fuel-is-nothing-possible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks {pos-key "furnace"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 1}]}
+              {:keys [eng p clock]} (setup world)
+              out (atom nil)
+              parent {:check (constantly true)
+                      :round (fn ^:async rec [c]
+                               (let [r (await (ctx/call-child c :kid 'jobs.items.smelt contract-args))]
+                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                 r))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks eng 1))
+          (advance! p 200)
+          (put-out! p)
+          (swap! clock + 40000)
+          (await (ticks eng 1))
+          (swap! clock + 7000)
+          (await (ticks eng 3))
+          (is (= :nothing-possible (get-in @out [:ending :kind])))
+          (is (= :out-of-fuel (:reason @out)))
+          (is (= 1 (:smelted @out))))))))
+
+(deftest while-it-cooks-a-round-is-a-yield-that-leaves-the-furnace-alone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup base-world)]
+          (core/submit! eng iron-job {})
+          (await (ticks eng 1))
+          (dotimes [_ 3]
+            (swap! clock + 1000)
+            (await (ticks eng 1)))
+          (is (= ["read" "load"] (ops p)))
+          (is (= 1 (count (:list (core/state eng)))) "still listed, not ended"))))))
