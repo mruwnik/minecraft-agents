@@ -105,7 +105,7 @@
                                      (cond-> {:pos pos :range range :doors :shut :escalate false :warn false}
                                        leg-s (assoc :leg-s leg-s))))
            res (:data r)
-           blocked (if (and (= :done (:kind r)) (or (:arrived res) (:leg res))) 0 (inc blocked))
+           blocked (if (or (:arrived res) (:leg res)) 0 (inc blocked))
            now (target-now)
            out (next-out out blocked (u/self-pos c) (or now pos) range)]
        (cond

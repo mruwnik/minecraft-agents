@@ -125,6 +125,21 @@
           (is (empty? (g/events-of r :go-to.over-budget)))
           (is (= :unreachable (:reason @out))))))))
 
+(deftest the-call-keys-are-the-floor-and-the-damage-cap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [call {:pos [40 60 0] :ways #{:walk} :food 10}
+              low (await (go-heal! (world {:health 13}) (assoc call :floor {:health 1}) false))
+              floor (await (go-heal! (world {:health 13}) (assoc call :floor {:health 12}) false))
+              capped (await (go-heal! (world {:health 13 :food 20}) (assoc call :food 20 :floor {:health 1} :spend {:health 0}) true))]
+          (is (= 60 (y-of (:p low))) "a floor of 1 goes over the budget")
+          (is (= 1 (count (g/events-of low :go-to.over-budget))))
+          (is (= 64 (y-of (:p floor))) "a floor of 12 is never crossed")
+          (is (= {:why :needs-health :kind :limit-reached} {:why (:why @(:out floor)) :kind (:kind (:ending (meta @(:out floor))))}))
+          (is (= 64 (y-of (:p capped))) ":spend :health 0 takes no drop")
+          (is (empty? (g/events-of capped :go-to.waiting-health))))))))
+
 (deftest the-food-defaults-to-the-bodys-own-and-the-caller-overrides-it
   (async done
     (tu/run-async done

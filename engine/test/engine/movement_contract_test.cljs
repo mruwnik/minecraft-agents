@@ -1,7 +1,7 @@
 (ns engine.movement-contract-test
   "movement.go-to, follow, linger-near, mount, leave-vehicle and boat-drive as contract jobs: they export the contract,
   quote validly, and end with a kind and a cause."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.events :as events]
@@ -116,13 +116,36 @@
     (is (some? (:conditions j)))
     (is (nil? (:check j)) "no old check")
     (is (= [:pos :place] (:target j)) "a go-to may call go-to to another place")
-    (is (= [:walk :clear-path :pillar :stair :dig-out] (:ways j)))))
+    (is (= [:walk :clear-seal :clear-path :pillar :stair :dig-out] (:ways j)))))
 
-(deftest go-to-old-escalate-becomes-the-ways
-  (is (= {:pos [1 64 1] :ways #{:walk}} (go-to/legacy-args {:pos [1 64 1] :escalate false})))
-  (is (= {:pos [1 64 1]} (go-to/legacy-args {:pos [1 64 1] :escalate true})))
-  (is (= {:pos [1 64 1] :ways #{:walk :stair}} (go-to/legacy-args {:pos [1 64 1] :escalate false :ways #{:walk :stair}}))
-      "ways given win"))
+(deftest go-to-old-args-become-the-call-keys
+  (are [old call] (= (merge {:pos [1 64 1]} call) (go-to/legacy-args (merge {:pos [1 64 1]} old)))
+    {:escalate false} {:ways #{:walk :clear-seal}}
+    {:escalate true} {}
+    {:clear-seal false} {:ways #{:walk :clear-path :pillar :stair :dig-out}}
+    {:escalate false :clear-seal false} {:ways #{:walk}}
+    {:clear-seal true} {}
+    {:escalate false :ways #{:walk :stair}} {:ways #{:walk :stair}}
+    {:min-health 12} {:floor {:health 12}}
+    {:allow-over-budget true} {:floor {:health 1}}
+    {:allow-over-budget false} {}
+    {:allow-over-budget true :min-health 9} {:floor {:health 9}}
+    {:max-damage 3} {:spend {:health 3}}
+    {:leg-s 5} {:spend {:time 5}}
+    {:leg-s 5 :max-damage 0} {:spend {:time 5 :health 0}}
+    {:leg-s 5 :spend {:time 9}} {:spend {:time 9}}
+    {:min-health 12 :floor {:health 4}} {:floor {:health 4}}))
+
+(deftest go-to-reads-its-walk-limits-from-the-call
+  (are [given frozen limits] (= limits (go-to/walk-limits given frozen 12))
+    {} {} {}
+    {:floor {:health 14}} {:floor {:health 14}} {:min-health 14}
+    {:floor {:health 1}} {:floor {:health 1}} {:allow-over-budget true}
+    {:floor {:health 0}} {:floor {:health 0}} {:allow-over-budget true}
+    {:floor {:health 1}} {:floor {:health 6}} {:min-health 6}
+    {} {:floor {:health 6}} {}
+    {} {:floor {:health 15}} {:min-health 15}
+    {:spend {:health 2 :time 4}} {:spend {:health 1 :time 0}} {:max-damage 2 :leg-s 4}))
 
 (deftest go-to-endings
   (async done

@@ -2,7 +2,9 @@
   "go-to's ways, the methods a call may use to reach its goal, and the escalation steps each allows."
   (:require [engine.ctx :as ctx]))
 
-(def ways [:walk :clear-path :pillar :stair :dig-out])
+(def ways
+  "The ways in order; :clear-seal takes the body's own ledger blocks back from round a goal it cannot reach."
+  [:walk :clear-seal :clear-path :pillar :stair :dig-out])
 
 (def way-steps
   "The escalation steps (jobs.lib.escape/choose and go-to's own) of each way that changes the world. A walk to the

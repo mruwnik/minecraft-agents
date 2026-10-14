@@ -20,22 +20,24 @@
              (and (= :off-plan status) partial)))))
 
 (def why-kinds
-  "The ending kind of a give-up by its :why, when not :nothing-possible: a fact about the goal, or a bound of the call."
+  "The ending kind of a give-up by its :why, when not :nothing-possible: a fact about the goal, or a line of the call."
   {:goal-dangerous :condition-failed :goal-unloaded :condition-failed
-   :needs-health :limit-reached :leg-search-spent :limit-reached :explore-spent :limit-reached})
+   :needs-health :limit-reached :leg-search-spent :limit-reached})
 
 (def why-lines "The limit line of a limit-reached give-up." {:needs-health :health :leg-search-spent :time})
 
 (def refusal-kinds "The ending kind of a refusal other than :condition-failed." {:no-way :nothing-possible})
 
 (defn ending
-  "The ending of result, the call's result map: arrived (or a leg walked) is :done; a give-up (:reason :unreachable) is
+  "The ending of result, the call's result map: arrived is :done; a leg walked (:leg) is limit-reached {:reason :leg
+  :line :time}; a give-up (:reason :unreachable) is
   of the kind its :why maps to (why-kinds, else :nothing-possible) with the cause {:reason :unreachable :why ..} (and
   :line for a limit); a refusal is :condition-failed (refusal-kinds aside) with its reason as the cause. The result
   less :status and :reason is the ending's data, so an old caller (child-result) reads what it read before."
   [c {:keys [status reason why] :as result}]
   (let [data (dissoc result :status :reason)]
     (cond
+      (:leg result) (ctx/end c :limit-reached {:reason :leg :line :time} data)
       (not= :stopped status) (ctx/end c :done nil data)
       (not= :unreachable reason) (ctx/end c (refusal-kinds reason :condition-failed) reason data)
       :else (ctx/end c (why-kinds why :nothing-possible)

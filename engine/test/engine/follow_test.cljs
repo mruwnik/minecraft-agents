@@ -155,6 +155,14 @@
           (is (<= (Math/abs (- 10 (self-x p))) 3) "in range after the first round")
           (is (= :not-done @out)))))))
 
+(deftest a-leg-that-got-nearer-is-no-blocked-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (follow {:entities [(steve 150)] :floor [-30 -10 160 10]} {:player "Steve" :radius 200} 1 500))]
+          (is (< 5 (self-x p)) (str "legs on toward the player, at " (self-x p)))
+          (is (not (has-event? s :follow.unreachable))))))))
+
 (deftest the-out-of-range-count-is-against-where-the-target-stands-after-the-walk
   (is (= 0 (follow/next-out 2 1 {:x 0 :y 64 :z 0} {:x 30 :y 64 :z 0} 3)) "blocked resets")
   (is (= 0 (follow/next-out 2 0 {:x 8 :y 64 :z 0} {:x 9 :y 64 :z 0} 3)) "in range of where the player is now")

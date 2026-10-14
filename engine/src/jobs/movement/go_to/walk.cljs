@@ -24,6 +24,7 @@
             [jobs.movement.go-to.settings :refer [dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain dry-radius max-blocked max-searching]]
             [jobs.movement.go-to.torch :as torch :refer [dark-end fetch-torches! round-unknown]]
             [jobs.movement.go-to.unstick :as unstick]
+            [jobs.movement.go-to.way-steps :as ways]
             [jobs.movement.go-to.climb :as climb]))
 
 (defn ^:async arrived!
@@ -165,7 +166,7 @@
   mouth): one jobs.access.cleanup child takes them back. True when it ran, so the walk is planned again."
   [c pos result]
   (let [near {:pos {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))} :radius seal-clear-radius}]
-    (when (and (:clear-seal (:args c)) (#{:goal-enclosed :goal-cut-off :exhausted :ladder-gap} (:reason result)) (not (:seal-cleared (ctx/mem c)))
+    (when (and (ways/way? c :clear-seal) (#{:goal-enclosed :goal-cut-off :exhausted :ladder-gap} (:reason result)) (not (:seal-cleared (ctx/mem c)))
                (seq (ledger/near-of (ledger/open-entries (ctx/view c)) near)))
       (ctx/update-mem! c assoc :seal-cleared true)
       (await (ctx/call c :seal-cleanup 'jobs.access.cleanup {:job :all :near near}))

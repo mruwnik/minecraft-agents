@@ -301,8 +301,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[k bad] [[:min-health 0] [:min-health 21] [:min-health "x"] [:max-damage -1] [:max-damage "x"]]]
-          (is (re-find (re-pattern (str k " must be a number")) (refusal {:pos [6 64 0] k bad})) (pr-str [k bad])))
+        (doseq [[k bad line] [[:min-health "x" ":floor"] [:max-damage -1 ":spend"] [:max-damage "x" ":spend"]]]
+          (is (re-find (re-pattern (str line " must be a map")) (refusal {:pos [6 64 0] k bad})) (pr-str [k bad])))
         (doseq [args [{:min-health 1} {:min-health 20} {:max-damage 0} {:max-damage 5.5}]]
           (let [{:keys [out]} (await (go! {:blocks flat} (assoc args :pos [6 64 0])))]
             (is (= {:arrived true} @out) (pr-str args))))))))
@@ -1080,6 +1080,8 @@
       (fn ^:async t []
         (let [{:keys [out p]} (await (go! {:blocks flat} {:pos [35 64 0] :range 0 :leg-s 1}))]
           (is (= {:arrived false :leg true} (select-keys @out [:arrived :leg])) "a leg, not an arrival or a give-up")
+          (is (= {:kind :limit-reached :cause {:reason :leg :line :time}} (select-keys (:ending (meta @out)) [:kind :cause]))
+              "the leg's time spent")
           (is (< 0 (first (at p)) 35) (str "moved on toward the goal, at " (at p))))
         (let [{:keys [out p]} (await (go! {:blocks flat} {:pos [35 64 0] :range 0}))]
           (is (= {:arrived true} @out) "without :leg-s the whole way is walked")

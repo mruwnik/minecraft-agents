@@ -2,12 +2,12 @@
   "go-to when the damage budget (jobs.lib.cost/damage-budget) is why no way was found (the plan's :damage-refused): heal
   first, then go over the budget, so a walk still arrives unless it truly cannot.
   - A body that can heal (heal-way) waits: with food of 18 or more it regenerates (info go-to.waiting-health {:health},
-    :continue after a one second wait), with a carried food it eats first (a jobs.survival.eat child). Healing that gains
+    :continue after a one second wait), with a carried food it eats first (a jobs.survival.eat child, ctx/call). Healing that gains
     no hp in heal-stall-s stops.
-  - A body that cannot heal, or whose healing stalled, goes over the budget only when the caller allows it
-    (:allow-over-budget; mem :over-budget; info go-to.over-budget {:health}): the walks then plan with the survivable
-    budget, all but 1 hp. Not with a :min-health (a caller's floor is never crossed) or a :max-damage (a caller's cap):
-    those, a call that does not allow it, and a body that still has no way, give up :needs-health."
+  - A body that cannot heal, or whose healing stalled, goes over the budget only when the call's :floor :health is 1 or
+    less (go-to's walk-limits; mem :over-budget; info go-to.over-budget {:health}): the walks then plan with the
+    survivable budget, all but 1 hp. Not with a higher floor (never crossed) or a :spend :health (a cap): those, a call
+    that does not allow it, and a body that still has no way, give up :needs-health."
   (:require [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as health]
@@ -76,7 +76,7 @@
   (let [now (ctx/now c)]
     (ctx/update-mem! c assoc :heal (next-state st (:health body) now (when (= :eat way) {:ate true})))
     (if (= :eat way)
-      (await (ctx/call-child c :eat 'jobs.survival.eat {:until foods/top-up-food}))
+      (await (ctx/call c :eat 'jobs.survival.eat {:until foods/top-up-food}))
       (do (when-not st
             (ctx/emit! c :go-to.waiting-health :info {:health (:health body) :food (:food body)
                                                       :text (str "waiting to heal (" (:health body) " hp) before a drop it cannot afford")}))

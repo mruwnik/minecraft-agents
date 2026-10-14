@@ -3,6 +3,7 @@
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.health :as cost-health]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
             [jobs.lib.walk.search :as wsearch]
@@ -29,14 +30,17 @@
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
-  - Refused at submit (or the caller's call-child throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :landing that is not a map of block names to numbers, a :gait that is not :auto, :walk or :sneak, a :min-health outside 1-20, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}}.
+  - Refused at submit (or the caller's call-child throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :landing that is not a map of block names to numbers, a :gait that is not :auto, :walk or :sneak, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}}.
   - Ends condition-failed at once, before any walk, with the cause :bad-pos (a :pos outside the world), :bad-name (a
     :place that is not a valid name), :unknown-place (no recorded position) or :unsupported (a body with no pathWorld
     sensing), after a :refused warn; data {:arrived false :text}. A call whose :ways leave out :walk ends
     nothing-possible :no-way.
-  - Ways (:ways, all by default): :walk, and the escalations that change the world: :pillar (a pillar, a gap filled
-    with a block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out
-    (out of its own shelter). An old caller's :escalate false is :ways #{:walk} (legacy-args).
+  - Ways (:ways, all by default): :walk, and those that change the world: :clear-seal (its own ledger blocks round a
+    goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
+    block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
+    its own shelter). Old callers' args (legacy-args): :escalate false is :ways #{:walk :clear-seal}, :clear-seal false
+    drops :clear-seal, :min-health is :floor {:health}, :allow-over-budget :floor {:health 1}, :max-damage :spend
+    {:health}, :leg-s :spend {:time}.
   - A listed go-to waits (its condition, before it starts) while it would wait on the night or a retreat plug (below);
     once started such a wait is a :continue yield, kept in its memory as :hold for a parent's jobs.lib.child walk.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
@@ -44,11 +48,12 @@
     to, or not at all while it goes on; every iteration awaits a pace-ms timer. A goal in unloaded land is walked
     toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
     an escalation or put-back child, or healing, is waiting on the world. Each fruitless round that plans again says so (info go-to.retrying: reason, try).
-  - A drop or plant that costs hp is planned only within a damage budget (jobs.lib.cost/damage-budget: the health over :min-health,
-    default 12, less 1, at most :max-damage). When that budget is why no way was found, the body that can heal waits (info
-    go-to.waiting-health, :continue; it eats a carried food first when hungry), and one that cannot heal or whose healing
-    stalled goes over it, down to 1 hp (info go-to.over-budget) only with :allow-over-budget; otherwise, and with a
-    :min-health or :max-damage given, it gives up :why :needs-health. See jobs.movement.go-to.health.
+  - A drop or plant that costs hp is planned only within a damage budget (jobs.lib.cost/damage-budget: the health over
+    the call's :floor :health, default 12, less 1, at most its :spend :health; a caller's floor counts only above 12
+    unless this call gives one, walk-limits). When that budget is why no way was found, the body that can heal waits
+    (info go-to.waiting-health, :continue; it eats a carried food first when hungry), and one that cannot heal or whose
+    healing stalled goes over it, down to 1 hp (info go-to.over-budget) only with a given :floor :health of 1 or less;
+    otherwise, and with a higher floor or a :spend :health, it gives up :why :needs-health. See jobs.movement.go-to.health.
   - :unknown true (default false) plans over what the body has seen or felt only: a cell it never saw is unknown (air to
     the body), a floor it never saw is stepped onto only after the walk stops to look at it (jobs.lib.walk.sight), and
     only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). A map overrides the
@@ -69,9 +74,10 @@
     go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
   - A walk with no escalating way from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not beyond the near band, 8 blocks, nor while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min, in all across the go-to children of one root job) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
-  - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
-    walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
-    for a caller chasing a moving target to call again; a leg that got no nearer goes on as any round.
+  - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
+    :spend :time of n walks one leg of at most n s and, when it got more than 1 block nearer, ends limit-reached
+    {:reason :leg :line :time}, data {:arrived false :leg true}, for a caller chasing a moving target to call again; a
+    leg that got no nearer goes on as any round, and a search that goes on past n s gives up :leg-search-spent.
   - An arrival in water walks on to the nearest seen dry stand within :range and ::dry-radius of the body (settings), once
     a call, a short walk of its own; with none, or that walk failing, it ends {:arrived true :in-water true} with an info
     go-to.in-water saying which. :leave-water false keeps an arrival in water. Under water with its search going on (no
@@ -101,8 +107,8 @@
     left to jobs.access.cleanup. Its children (ctx/call) walk with :ways #{:walk}. Jobs that must not change the world
     on the way pass :ways #{:walk}: a shut-in body then gives up with :shut-in true and says so in the text.
   - Gives up with an :unreachable warn and the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
-    words ...}: limit-reached for :needs-health (:line :health), :leg-search-spent (:line :time) and :explore-spent;
-    condition-failed for :goal-dangerous and :goal-unloaded; else nothing-possible. :why is the planner's
+    words ...}: limit-reached for :needs-health (:line :health) and :leg-search-spent (:line :time); condition-failed
+    for :goal-dangerous and :goal-unloaded; else (:explore-spent too) nothing-possible. :why is the planner's
     reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :goal-on-magma, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
     (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back by 3 cuts, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach in between (in-place cuts do not count or break it); a restart that knows of no hostile within the hostile-near radius of the way ahead clears the count instead; an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause, :nearest-hostile-at its cell, or {:direction :band} when only heard) or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
@@ -153,7 +159,6 @@
    :fetch {:doc "get torches for :place-torches when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false: give up instead" :spec fetch/option? :default true}
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :spec boolean? :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
-   :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); 12 when absent; a floor the walk never crosses, not even when it goes over its budget" :spec (a/num-in 1 20) :default nil}
    :food {:doc "the food level (0-20) the walk counts on for its damage budget, its sprinting and whether it can heal by waiting (18 or more regenerates); default the body's own" :spec (a/num-in 0 20) :default nil}
    :fall-margin {:doc "hp the falls of a walk may cost over the plan before an info go-to damage-mismatch" :spec (a/num-in 0 nil) :default wwatch/fall-margin}
    :flee-factor {:doc "danger price: a known mob the body would flee costs this times its hp a second (jobs.lib.cost.danger)" :spec (a/num-in 0 nil) :default (:flee cost/danger-stances)}
@@ -161,19 +166,15 @@
    :danger-max-rate {:doc "danger price: hp a second one known danger costs at most; above the default it also raises the total of all dangers a second (planner dangerCap)" :spec a/pos-num? :default cost/danger-max-rate}
    :danger-shape {:doc (str "danger price: {:sensed|:remembered|:creeper {:close :radius}} blocks, full within :close, none past :radius; only the terms given replace the default (" (str/join ", " (map (fn [[k {:keys [close radius]}]] (str (name k) " " close " " radius)) cost/danger-default-shape)) ")") :spec (a/valid-by "a map of :sensed, :remembered or :creeper to {:close :radius} numbers >= 0, :close under :radius" cost/danger-shape-problem) :default nil}
    :hp-seconds {:doc "seconds an hp costs at full health when the planner weighs a drop or a plant's prick against a longer way (more at low health)" :spec a/pos-num? :default cost/hp-seconds}
-   :allow-over-budget {:doc "when the damage budget is why no way is found and the body cannot heal, go over it, down to 1 hp; false: give up :needs-health" :spec boolean? :default false}
-   :max-damage {:doc "hp at most a walk may spend on drops and plants that hurt (0: none), under the :min-health budget" :spec (a/num-in 0 nil) :default nil}
    :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :spec (a/or-of (a/num-in 0 nil) false?) :default 1}
    :y-margin {:doc "blocks the walk's search may reach above the higher and below the lower of body and goal (default 96): a route dipping deeper, such as through deep caves, is not planned; nil: as default" :spec (a/int-in 0 nil) :default nil}
    :costs {:doc (str "map of price name to seconds, overriding the planner's price of a move (jobs.lib.cost.planner: " (str/join " " (map name (keys cost/planner-names))) "); a price left out keeps the planner's default; :lethal-air is no price: 1 lets a plan drown the body when no other way exists, else such a plan is refused (:why :air-lethal)" ) :spec (a/valid-by "a map of planner price name to a number of seconds >= 0" cost/planner-costs-problem) :default nil}
    :landing {:doc "map of block name to the share of a fall's damage a landing on it takes (0.2: 80% off), negative: a bounce, no damage but settle time (only onto a pad in view, bouncing blocks or a wall all round, not under :gait :sneak; else the full fall); entries override the defaults hay_block 0.2, honey_block 0.2 and slime_block -1" :spec (a/valid-by "a map of block name to a number" cost/landing-problem) :default nil}
    :gait {:doc "how the body walks: :auto (sprints on long straight runs and over gaps, as the walker does), :walk (never sprints: no gap jump over 2 or more), :sneak (slow, never sprints; holds sneak on level steps so it never walks off an edge, lets go for a planned drop, gap, climb or water); nil: the body's :walk-settings :gait, else :auto" :spec #{:auto :walk :sneak} :default nil}
    :goal-danger {:doc "when the goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)" :spec #{:wait :end "wait" "end"} :default :wait}
-   :clear-seal {:doc "false: never start a jobs.access.cleanup child for ledger blocks around an unreachable goal (cleanup's own walks, which would nest cleanup in go-to in cleanup without end)" :spec boolean? :default true}
    :keep-out {:doc "cells the walk treats as solid, [{:x :y :z}]: no way through them is planned (jobs.lib.pen-entry gives a block job the gates of pens holding animals)" :spec (a/valid-by "a list of {:x :y :z} of whole numbers" (fn [cells] (when-not (and (sequential? cells) (every? #(and (map? %) (every? integer? (map % [:x :y :z]))) cells)) "keep-out is a list of {:x :y :z} of whole numbers"))) :default nil}
    :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :spec boolean? :default false}
-   :leg-s {:doc "walk one leg of at most this many seconds (0.1 to 120), then end {:arrived false :leg true} so the caller can re-aim at a moving target (a search that goes on past them ends :no-path :leg-search-spent); nil: the whole way" :spec (a/num-in 0.1 120) :default nil}
-   :leg-alert-within {:doc "with :leg-alert-s: blocks within which a hostile that attacks at close range (not a ranged mob or an enderman; a creeper counts), or a loss of health since the call began, shortens a leg's search to :leg-alert-s seconds from its start" :spec (a/num-in 0 nil) :default nil}
+   :leg-alert-within {:doc "with :leg-alert-s and a :spend :time leg: blocks within which a hostile that attacks at close range (not a ranged mob or an enderman; a creeper counts), or a loss of health since the call began, shortens a leg's search to :leg-alert-s seconds from its start" :spec (a/num-in 0 nil) :default nil}
    :leg-alert-s {:doc "seconds a search may last once the :leg-alert-within alert is on (0.1 to 120)" :spec (a/num-in 0.1 120) :default nil}
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land" :spec #{:open :closed} :default :open}
    :detour {:doc "false: under ground, walk a found way however long; true: one over mostly unseen cells and longer than the bound of jobs.movement.go-to.detour for a goal that near is not walked (:why :detour)" :spec boolean? :default true}
@@ -220,10 +221,37 @@
 (def defaults {:least :all})
 
 (defn legacy-args
-  "An old caller's :escalate false as the call's :ways #{:walk}; ways it gives win."
-  [{:keys [escalate] :as args}]
-  (cond-> (dissoc args :escalate)
-    (and (false? escalate) (nil? (:ways args))) (assoc :ways #{:walk})))
+  "An old caller's args as call keys (see the doc's Ways); call keys it gives win."
+  [{:keys [escalate clear-seal min-health allow-over-budget max-damage leg-s] :as args}]
+  (let [ways (or (:ways args) (when (false? escalate) #{:walk :clear-seal}))
+        ways (cond-> ways (false? clear-seal) (-> (or (set ways/ways)) set (disj :clear-seal)))
+        floor (or min-health (when allow-over-budget 1))
+        given #(nil? (get-in args %))]
+    (cond-> (dissoc args :escalate :clear-seal :min-health :allow-over-budget :max-damage :leg-s)
+      ways (assoc :ways ways)
+      (and floor (given [:floor :health])) (assoc-in [:floor :health] floor)
+      (and (some? max-damage) (given [:spend :health])) (assoc-in [:spend :health] max-damage)
+      (and (some? leg-s) (given [:spend :time])) (assoc-in [:spend :time] leg-s))))
+
+(defn walk-limits
+  "The walk's {:min-health :allow-over-budget :max-damage :leg-s} from the call keys given and frozen (with a caller's
+  floor): the frozen floor :health, a caller's only above default-floor, is :min-health; a given floor of 1 or less that
+  stays so is :allow-over-budget; the given :spend :health and :time are :max-damage and :leg-s (a caller's remainder
+  is the engine's to enforce, not a shorter leg)."
+  [given frozen default-floor]
+  (let [g (get-in given [:floor :health])
+        f (or (get-in frozen [:floor :health]) g)
+        {:keys [health time]} (:spend given)]
+    (cond-> {}
+      (and f (if g (> f 1) (> f default-floor))) (assoc :min-health f)
+      (and g (<= f 1)) (assoc :allow-over-budget true)
+      (some? health) (assoc :max-damage health)
+      (some? time) (assoc :leg-s time))))
+
+(defn with-limits
+  "c with walk-limits in its args, where the walk code (jobs.lib.walk.world/walk-settings) reads them."
+  [c]
+  (update c :args merge (walk-limits (:args c) (ctx/frozen-call c) (cost-health/default-min-health))))
 
 (def conditions
   "A listed go-to not yet started waits while wait-reason holds; a started call, or a child, yields instead (attempt)."
@@ -297,8 +325,9 @@
 (defn ^:async round
   "attempt, then (unless it waits on a child) the off-hand torch goes back whatever the outcome, a throw too (rethrown),
   and the planner's kept state is released. A cut ends the call without either."
-  [c]
-  (let [r (try (await (attempt c))
+  [c0]
+  (let [c (with-limits c0)
+        r (try (await (attempt c))
                (catch :default e
                  (when (ctx/alive? c) (await (torch/return-torch! c)))
                  (throw e)))]

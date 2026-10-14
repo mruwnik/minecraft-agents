@@ -281,6 +281,7 @@
               walked (reduce + (map #(dist-to [(:x (:from %)) 0 (:z (:from %))] [(:x (:to %)) 0 (:z (:to %))]) (moved eng)))]
           (is (= {:arrived false :reason :unreachable :why :explore-spent} (select-keys @out [:arrived :reason :why]))
               (str "result " @out " walks: " (mapv (juxt :status :from :to) (moved eng))))
+          (is (= :nothing-possible (:kind (:ending (meta @out)))) "no way found within the blocks it may explore")
           (is (< 40 (:explored @out) 100) (str "result " @out))
           (is (< walked 100) (str "walks: " (mapv (juxt :status :to) (moved eng)))))))))
 
