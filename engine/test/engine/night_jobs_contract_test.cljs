@@ -170,3 +170,35 @@
           (await (tu/run-until-empty eng 5))
           (is (= [:bed-open] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end"))))))
+
+(deftest bed-down-exports-the-contract-and-quotes-validly
+  (let [job (get registry/jobs 'jobs.survival.bed-down)]
+    (is (some? (:conditions job)))
+    (is (nil? (:check job)))
+    (is (some? (:done? job)))
+    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (spawn-world {}) :view (constantly {:data {} :now 0}) :args {} :quote-call {:spend {:time 60}}}))))))
+
+(deftest bed-down-start-facts-are-conditions
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [:condition-failed :not-night]
+               (ending-of (await (call! (spawn-world {:time st/noon :blocks {"6,64,0" "red_bed"}}) 'jobs.survival.bed-down {} (constantly nil))))))
+        (is (= [:condition-failed :no-bed]
+               (ending-of (await (call! (spawn-world {}) 'jobs.survival.bed-down {} (constantly nil))))))))))
+
+(deftest bed-down-beside-an-open-bed-is-condition-failed-bed-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e (await (call! (spawn-world {:blocks {"2,64,0" "red_bed"}}) 'jobs.survival.bed-down {} (constantly nil)))]
+          (is (= [:condition-failed :bed-open] (ending-of e)))
+          (is (true? (:bed-open (:data e)))))))))
+
+(deftest bed-down-putting-a-carried-bed-down-ends-done-slept
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e (await (call! (spawn-world {:inventory [{:name "red_bed" :count 1}]}) 'jobs.survival.bed-down {} (constantly nil)))]
+          (is (= :done (:kind e)))
+          (is (true? (:slept (:data e)))))))))

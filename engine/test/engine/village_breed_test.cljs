@@ -77,19 +77,13 @@
 (def pair [(villager 1 3) (villager 2 5)])
 (def args {:target 3 :wait-s 3})
 
-(deftest check-wants-a-target-of-two-or-more
-  (are [a ok] (= ok (boolean ((:check (get registry/jobs job)) {:args a :primitives nil :mem (constantly {})})))
-    {:target nil} false
-    {:target 1} false
-    {:target 3} true))
-
 (deftest a-met-target-is-done-without-feeding
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out]} (await (breed {:entities (conj pair (villager 3 6 {:baby true})) :inventory bread} args 20 identity))]
           (is (= {:population 3 :target 3 :births 0} (select-keys @out [:population :target :births])))
-          (is (nil? (:status @out)))
+          (is (= :done (:status @out)))
           (is (empty? (tosses p))))))))
 
 (deftest two-adults-are-fed-three-bread-each-and-a-birth-completes-it
@@ -98,7 +92,7 @@
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (breed {:entities pair :inventory bread} args 80 #(feeding % 2)))]
           (is (= {:population 3 :target 3 :births 1} (select-keys @out [:population :target :births])))
-          (is (nil? (:status @out)))
+          (is (= :done (:status @out)))
           (is (= 2 (count (tosses p))))
           (is (= ["bread" "bread"] (map #(.-item (.-args %)) (tosses p))))
           (is (= [3 3] (map #(.-count (.-args %)) (tosses p))))
@@ -109,28 +103,22 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out] :as s} (await (breed {:entities pair :inventory bread} args 120 #(feeding % 0)))]
-          (is (= "no-births" (:reason @out)))
+          (is (= :no-births (:reason @out)))
           (is (= :stopped (:status @out)))
           (is (= 0 (:births @out)))
           (is (gave? s :breed.gave-up)))))))
 
-(deftest fewer-than-two-adults-is-no-pair
+(deftest fewer-than-two-adults-or-no-food-never-starts
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [es [[(villager 1 3)] [(villager 1 3) (villager 2 5 {:baby true})] []]]
-          (let [{:keys [p out]} (await (breed {:entities es :inventory bread} args 30 identity))]
-            (is (= "no-pair" (:reason @out)))
+        (doseq [[es inv a] [[[(villager 1 3)] bread args]
+                            [[(villager 1 3) (villager 2 5 {:baby true})] bread args]
+                            [[] bread args]
+                            [pair nil (assoc args :fetch false)]]]
+          (let [{:keys [p out]} (await (breed {:entities es :inventory inv} a 30 identity))]
+            (is (= :not-done @out) "a condition, not a stop: the job is not started")
             (is (empty? (tosses p)))))))))
-
-(deftest no-food-and-no-fetch-yields-without-tossing
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p out] :as s} (await (breed {:entities pair} (assoc args :fetch false) 15 #(feeding % 2)))]
-          (is (= :not-done @out))
-          (is (gave? s :breed.waiting) "it says what it waits for")
-          (is (empty? (tosses p))))))))
 
 (deftest an-adult-walking-into-view-is-not-a-birth
   (async done
@@ -139,7 +127,7 @@
         (let [{:keys [out]} (await (breed {:entities pair :inventory bread} {:target 4 :wait-s 3} 80
                                           #(feeding % 2 :entity (villager 9 6))))]
           (is (= 0 (:births @out)))
-          (is (= "no-births" (:reason @out))))))))
+          (is (= :no-births (:reason @out))))))))
 
 (deftest food-the-villager-does-not-take-is-a-fruitless-attempt
   (async done
@@ -147,7 +135,7 @@
       (fn ^:async t []
         (let [{:keys [p out]} (await (breed {:entities (mapv #(villager % (+ 2 %)) (range 1 7)) :inventory [{:name "bread" :count 40}]}
                                             {:target 9 :wait-s 3} 400 #(feeding % 0 :taken false)))]
-          (is (= "no-births" (:reason @out)))
+          (is (= :no-births (:reason @out)))
           (is (= 0 (:births @out)))
           (is (pos? (count (tosses p)))))))))
 
@@ -156,7 +144,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (breed {:entities pair} args 200 identity))]
-          (is (= "no-food" (:reason @out)))
+          (is (= :no-food (:reason @out)))
           (is (= :stopped (:status @out))))))))
 
 (deftest three-fruitless-attempts-stop-no-births
@@ -165,7 +153,7 @@
       (fn ^:async t []
         (let [{:keys [out seen]} (await (breed {:entities (mapv #(villager % (+ 2 %)) (range 1 9)) :inventory [{:name "bread" :count 40}]}
                                                {:target 12 :wait-s 1} 600 #(feeding % 0)))]
-          (is (= "no-births" (:reason @out)))
+          (is (= :no-births (:reason @out)))
           (is (some #(re-find #"three attempts" (str (:text %))) @seen)))))))
 
 (deftest a-restart-mid-wait-keeps-the-baby-baseline

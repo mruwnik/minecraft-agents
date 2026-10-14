@@ -1,10 +1,12 @@
 (ns engine.cross-water-test
   "jobs.movement.cross-water against the fake world: launch, drive to the far shore, land and take the boat back."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.library-test :as lt]
+            [engine.seek-contract-test :as seek]
             [engine.test-util :as tu]
             [jobs.movement.cross-water :as cw]))
 
@@ -63,17 +65,29 @@
           (is (= :done (:status res)) (pr-str res))
           (is (= 7 (:x (:land res))) "a cell on the far side"))))))
 
-(deftest stops-with-the-reason
+(defn ^:async waits-on
+  "How a listed cross-water call over world ends: {:event :waiting :reason} for a start fact that does not hold now."
+  [world args]
+  (await (seek/ending-of #(:p (lt/setup world)) (list 'jobs.movement.cross-water args))))
+
+(deftest start-facts-are-conditions
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[label w args reason]
-                [["a given cell that is no shore" world {:pos [9 64 0]} :no-far-shore]
-                 ["no shore far enough" world {:min-cross 60} :no-far-shore]
-                 ["no water within :radius of the body" world {:pos [7 64 0] :radius 1} :not-water]
-                 ["no boat and none to fetch" (dissoc world :inventory) {:pos [7 64 0]} :no-boat]]]
-          (let [{:keys [res]} (await (run w args))]
-            (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
+        (doseq [[label w args expected]
+                [["a given cell that is no shore" world {:pos [9 64 0]} {:event :waiting :reason :no-far-shore}]
+                 ["no shore far enough" world {:min-cross 60} {:event :waiting :reason :no-far-shore}]
+                 ["no water within :radius of the body" world {:pos [7 64 0] :radius 1} {:event :waiting :reason :not-water}]
+                 ["an item that is no boat" world {:pos [7 64 0] :item "stick"} {:event :stopped :kind :impossible :reason :bad-args}]]]
+          (is (= expected (await (waits-on w args))) label))))))
+
+(deftest no-boat-and-none-to-fetch-is-condition-failed-no-boat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res]} (await (run (dissoc world :inventory) {:pos [7 64 0]}))]
+          (is (= {:status :stopped :reason :no-boat} (select-keys res [:status :reason])) (pr-str res))
+          (is (= :condition-failed (:kind (:ending res)))))))))
 
 (deftest an-unloaded-given-cell-is-crossed-toward-then-given-up
   (async done
@@ -135,7 +149,7 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run-saved world far))]
           (is (= {:status :stopped :reason :not-landed} (select-keys res [:status :reason])) (pr-str res))
-          (is (= :not-aboard (get-in res [:cause :reason])) "the cause names the landing's stop"))))))
+          (is (= :not-aboard (contract/cause-key (:because (:ending res)))) "the cause names the landing's stop"))))))
 
 (deftest on-foot-on-the-far-shore-after-a-restart-is-done
   (async done
@@ -163,7 +177,7 @@
       (fn ^:async t []
         (let [{:keys [res seen]} (await (run (assoc-in aboard-world [:entities 0 :drops] []) {:pos [7 64 0]}))]
           (is (= {:status :stopped :reason :recover-failed} (select-keys res [:status :reason])) (pr-str res))
-          (is (= :not-collected (get-in res [:cause :cause :reason])) (pr-str res))
+          (is (= :not-collected (contract/cause-key (:because (:because (:ending res))))) (pr-str res))
           (is (some #(= :boat.landed (:kind %)) @seen)))))))
 
 (deftest no-boat-carries-the-launch-cause
@@ -172,7 +186,7 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run (dissoc world :inventory) {:pos [7 64 0]}))]
           (is (= :no-boat (:reason res)) (pr-str res))
-          (is (= {:child :launch :reason :need} (select-keys (:cause res) [:child :reason])) (pr-str res)))))))
+          (is (= :need (contract/cause-key (:because (:ending res)))) (pr-str res)))))))
 
 (deftest a-boat-in-a-chest-is-fetched-then-the-crossing-goes-on
   (async done

@@ -22,7 +22,8 @@
                       ['jobs.movement.boat-drive {:pos [10 63 2]}]
                       ['jobs.movement.boat-launch {}]
                       ['jobs.movement.boat-launch {:action :recover}]
-                      ['jobs.movement.boat-land {:recover true}]]]
+                      ['jobs.movement.boat-land {:recover true}]
+                      ['jobs.movement.cross-water {:pos [7 64 0]}]]]
     (is (some? (:conditions (job sym))) (str sym " has conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (some? (:done? (job sym))) (str sym " has done?"))

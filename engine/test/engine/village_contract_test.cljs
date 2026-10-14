@@ -11,7 +11,8 @@
 (defn job [sym] (get registry/jobs sym))
 
 (deftest each-job-exports-the-contract-and-quotes-validly
-  (doseq [[sym args] [['jobs.village.feed {:villager "v-1" :count 2}]
+  (doseq [[sym args] [['jobs.village.breed {:target 3}]
+                      ['jobs.village.feed {:villager "v-1" :count 2}]
                       ['jobs.village.trade {:villager "v-1" :buy "bread" :count 2}]
                       ['jobs.village.roll {:villager "v-1" :pos [2 64 0] :item "lectern" :want "enchanted_book"}]]]
     (is (some? (:conditions (job sym))) (str sym " has conditions"))
@@ -41,6 +42,18 @@
                (await (ends '(jobs.village.feed {:villager "v-1" :fetch false}) {:entities [(villager [])]}))))
         (is (= {:event :waiting :reason :bad-args}
                (await (ends '(jobs.village.feed {:villager "v-1" :item "diamond"}) {:inventory bread}))))))))
+
+(deftest breed-start-facts-are-conditions
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :kind :impossible :reason :bad-args}
+               (await (ends '(jobs.village.breed {}) {}))))
+        (is (= {:event :waiting :reason :no-pair}
+               (await (ends '(jobs.village.breed {:target 3}) {:entities [(villager [])] :inventory bread}))))
+        (is (= {:event :waiting :reason :no-food}
+               (await (ends '(jobs.village.breed {:target 3 :fetch false})
+                             {:entities [(villager [] {:uuid "v-1" :pos {:x 3 :y 64 :z 0}}) (villager [] {:id 2 :uuid "v-2" :pos {:x 5 :y 64 :z 0}})]}))))))))
 
 (deftest trade-ends-with-a-kind-and-a-cause
   (async done

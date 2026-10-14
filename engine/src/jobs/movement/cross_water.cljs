@@ -2,9 +2,10 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
+            [jobs.movement.boat-launch :as launch]
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
-            [jobs.lib.result :as result]
             [jobs.lib.sense :as sense]
             [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]
@@ -16,13 +17,14 @@
   the far shore, step off facing the land, and with :recover take the boat back). A body already aboard skips the launch.
   The far shore is :pos (a land cell: it must be a seen shore), else a seen shore within :radius of the body, at least :min-cross blocks away, with water between it and the body
   (not the start bank): the one nearest :goal when given, else the farthest.
-  A given :pos is looked at first; one the body still cannot make out is crossed toward all the same (boat-land drives nearer to it). Ends {:status :done :land {:x :y :z} :boat id :recovered bool}, info boat.landed (from boat-land), or
-  {:status :stopped :reason r}: :bad-args, :not-water (no water in sight to launch on), :no-far-shore (:pos is no shore, or none far enough is in sight),
-  :no-boat (none carried and none could be fetched; :cause from the launch), :boat-not-seen (the placed boat is not in sight), the launch's other stops (:refused, :no-support,
-  :unreachable, :occupied, :board-failed, :failed; :cause names the child),
-  the landing's stops (:blocked, :drive-failed, :not-landed, :recover-failed, :no-shore; :cause names the child).
-  Resumes safely: aboard it goes on to the landing; on foot after the launch it lets boat-land finish or recover, and ends :done only when the body stands on the far shore
-  (else :not-landed).
+  A given :pos is looked at first; one the body still cannot make out is crossed toward all the same (boat-land drives nearer to it).
+  Impossible: :bad-args (:pos names no cell, :item is no boat). Conditions at the start (a listed call waits on them; the engine looks round once first): :no-far-shore (:pos is no shore,
+  or none far enough is in sight), :not-water (no water in sight to launch on, unless already aboard). A restart with a crossing under way skips them.
+  Ends done (data {:land {:x :y :z} :boat id :recovered bool}), info boat.landed (from boat-land), or the failed child's kind with its ending as the :because:
+  condition-failed :no-boat (none carried and none could be fetched), :boat-not-seen (the placed boat is not in sight), the launch's other causes (:refused, :no-support,
+  :unreachable, :occupied, :board-failed, :failed) and the landing's (:blocked, :drive-failed, :not-landed, :recover-failed, :no-shore); or nothing-possible :not-landed (on foot after the launch, not on the far shore).
+  Resumes safely: aboard it goes on to the landing; on foot after the launch it lets boat-land finish or recover, and ends done only when the body stands on the far shore
+  (else :not-landed). Quote: time by the straight distance to the far shore.
 
   Never :continue except when a child waits on the world.")
 
@@ -39,9 +41,11 @@
 
 (defn given-pos [c] (when (:pos (:args c)) (:pos (b/parse (:args c)))))
 
-(defn check
-  "Passes: the round looks for the far shore and stops with the reason when there is none."
-  [_c] true)
+(def target [:pos :goal])
+
+(a/defargs settings
+  {::boat-speed {:default 5 :doc "Blocks a second the boat covers, for the quote." :spec (a/num-in 0 nil)}
+   ::launch-s {:default 24 :doc "Seconds the launch and the landing take besides the drive, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn water-between?
   "Whether a seen water cell lies on the straight line from `from` to the spot's land cell, at the spot's water level."
@@ -87,72 +91,97 @@
   [c land]
   (<= (u/dist (u/self-pos c) (vehicle/centre land)) 1.5))
 
-(defn chain
-  "result/cause-of for a stopped result res of a contract child: its ending's cause key, nested with the endings it was :because of."
-  [slot res]
-  (letfn [(nest [slot e]
-            (cond-> {:child slot :reason (contract/cause-key e)}
-              (:because e) (assoc :cause (nest :because (:because e)))))]
-    (if-let [e (:ending res)]
-      (nest slot e)
-      (result/cause-of slot res))))
+(defn failure
+  "This call's ending for a child's ending r that is no :done: its kind (an impossible one is nothing-possible here) and
+  its cause, renamed by `renames`; a limit keeps the child's cause."
+  [c r renames]
+  (let [kind (if (#{:condition-failed :limit-reached} (:kind r)) (:kind r) :nothing-possible)
+        key (contract/cause-key r)]
+    (ctx/end c kind (if (= :limit-reached kind) (:cause r) (get renames key key)) nil)))
 
 (defn ^:async land! [c land]
   (let [{:keys [recover]} (:args c)
-        args {:pos land :recover recover}
-        r (await (ctx/call-child c :land 'jobs.movement.boat-land args))
-        res (or (ctx/child-result c :land)
-                (when (= :declined r) (some-> (b/child-wait c :land 'jobs.movement.boat-land args) (assoc :status :stopped))))]
+        r (await (ctx/call c :land 'jobs.movement.boat-land {:pos land :recover recover}))]
     (cond
       (= :continue r) :continue
-      (and (= :done r) (not= :stopped (:status res)))
+      (= :done (:kind r))
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
-          (result/finish! c (select-keys res [:land :boat :recovered])))
+          (ctx/end c :done nil (select-keys (:data r) [:land :boat :recovered])))
       ;; on foot after the launch with the landing already done: done only if the body is on the far shore
-      (and (crossing c) (= :not-aboard (:reason res)) (on-shore? c land))
+      (and (crossing c) (= :not-aboard (contract/cause-key r)) (on-shore? c land))
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
-          (result/finish! c {:land land :recovered false}))
-      (and (crossing c) (= :not-aboard (:reason res)))
+          (ctx/end c :done nil {:land land :recovered false}))
+      (and (crossing c) (= :not-aboard (contract/cause-key r)))
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
-          (result/stop! c :not-landed "on foot, but not on the far shore"
-                        :cause (chain :land res)))
+          (ctx/end c :nothing-possible :not-landed {:land land}))
       :else
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
-          (result/stop! c (or (:reason res) :failed) (or (:text res) (get-in res [:ending :cause :hint]) "could not land on the far shore")
-                        :cause (when res (chain :land res)))))))
+          (failure c r {})))))
 
 (defn ^:async launch! [c spot]
   (let [{:keys [item]} (:args c)
-        r (await (ctx/call-child c :launch 'jobs.movement.boat-launch {:action :launch :item item}))
-        res (ctx/child-result c :launch)]
+        r (await (ctx/call c :launch 'jobs.movement.boat-launch {:action :launch :item item}))]
     (cond
       (= :continue r) :continue
-      (and (= :done r) (not= :stopped (:status res)))
+      (= :done (:kind r))
       (do (ctx/remember! c crossing-kind {:job (:root c) :land (:land spot)} crossing-policy)
           (await (land! c (:land spot))))
-      :else
-      (result/stop! c (get launch-stops (:reason res) (or (:reason res) :failed))
-                    (or (:text res) "could not launch a boat")
-                    :cause (when res (chain :launch res))))))
+      :else (failure c r launch-stops))))
+
+(defn spot-of
+  "The far-shore spot the body would cross to now: {:land :water}, a given cell still not made out ({:land cell}), or nil."
+  [c]
+  (let [[spot reads] (sense/decide #(target-spot c))]
+    (or spot (when (and (given-pos c) (or (seq (:cells reads)) (nil? (u/seen-name (:primitives c) (given-pos c)))))
+               {:land (given-pos c)}))))
+
+(defn bad-args
+  "Impossible: a :pos that names no cell, or an :item that is no boat."
+  [c]
+  (let [{:keys [pos item]} (:args c)]
+    (when (or (and pos (nil? (given-pos c)))
+              (and item (not (launch/boat-name? item))))
+      (contract/impossible {:reason :bad-args :why "needs a cell :pos and a boat :item"}))))
+
+(defn start-fact
+  "At the start of a crossing not yet under way: the cause :no-far-shore with no spot to cross to, :not-water with no
+  water in sight to launch on from the shore (the engine looks round once first)."
+  [c]
+  (when-not (or (ctx/frozen-call c) (crossing c))
+    (let [cause (cond
+                  (nil? (spot-of c)) {:reason :no-far-shore :text (if (given-pos c) "the given cell is no seen shore" "no far shore in sight")}
+                  (and (not (vehicle/mounted? (:primitives c))) (not (water-in-sight? c))) {:reason :not-water :text "no water in sight to launch a boat on"})]
+      (cond-> cause (and cause (not (look/surveyed? c))) contract/look-first))))
+
+(def conditions [[:fn bad-args] [:fn start-fact]])
+
+(defn done?
+  "Done once the body stands on the far shore of the crossing under way."
+  [c]
+  (let [saved (crossing c)
+        d (if (and saved (not (vehicle/mounted? (:primitives c))) (on-shore? c (:land saved))) 1 0)]
+    {:done? false :units :crossings :done d :left (- 1 d)}))
+
+(defn quote-of [c]
+  (let [land (or (given-pos c) (:land (spot-of c)))
+        d (if land (u/dist (u/self-pos c) (vehicle/centre land)) (:radius (:args c)))
+        s (+ (settings/get settings ::launch-s) (/ d (settings/get settings ::boat-speed)))]
+    {:uses {:time [s s (* 3 s)]}}))
 
 (defn ^:async round [c]
   (let [p (:primitives c)
         mounted (vehicle/mounted? p)
         saved (crossing c)]
-    (cond
-      (and (:pos (:args c)) (nil? (given-pos c))) (result/stop! c :bad-args (:error (b/parse (:args c))))
-      saved (await (land! c (:land saved)))
-      :else
+    (if saved
+      (await (land! c (:land saved)))
       (let [spot (await (sense/decide! c :cross-water.shore #(target-spot c)))
-            [_ reads] (sense/decide #(target-spot c))
             ;; a given far shore still not made out after the look: cross toward it, the landing drives nearer
-            spot (or spot (when (and (given-pos c) (or (seq (:cells reads)) (nil? (u/seen-name p (given-pos c)))))
-                            {:land (given-pos c)}))]
+            spot (or spot (spot-of c))]
         (cond
           (and (or (nil? spot) (not (water-in-sight? c))) (not (look/surveyed? c)))
           (await (look/survey! c)) ; a shore or water behind the body is not seen until it looks
 
-          (nil? spot) (result/stop! c :no-far-shore (if (given-pos c) "the given cell is no seen shore" "no far shore in sight"))
+          (nil? spot) (ctx/end c :condition-failed :no-far-shore {:text (if (given-pos c) "the given cell is no seen shore" "no far shore in sight")})
           mounted (await (land! c (:land spot)))
-          (not (water-in-sight? c)) (result/stop! c :not-water "no water in sight to launch a boat on")
+          (not (water-in-sight? c)) (ctx/end c :condition-failed :not-water)
           :else (await (launch! c spot)))))))
