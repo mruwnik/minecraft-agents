@@ -1141,7 +1141,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (update (bare []) :blocks merge tree-blocks) :unreachable (vec (keys tree-blocks))) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore true}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore {:max-legs 2}}) {})
           (await (run-ticks s 300))
           (is (seq (events-of s :obtain.exploring)) "it walked to look for another tree")
           (is (<= (count (events-of s :obtain.exploring)) 3) "bounded")
