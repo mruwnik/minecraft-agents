@@ -11,6 +11,7 @@
             [engine.seek-contract-test :as sc]
             [engine.test-util :as tu]
             [jobs.survival.block-arrow-gap :as gap]
+            [jobs.survival.extinguish :as extinguish]
             [jobs.survival.fight-back :as fight-back]))
 
 (defn job [sym] (get registry/jobs sym))
@@ -26,6 +27,17 @@
   (is (= {:range 4 :use {:tools ["_sword"]}} (fight-back/legacy-args {:range 4 :weapons ["_sword"]})))
   (is (= {:range 4 :use {:tools ["iron_sword"]}} (fight-back/legacy-args {:range 4 :use {:tools ["iron_sword"]}})))
   (is (= {:radius 8 :use {:blocks ["dirt"]}} (gap/legacy-args {:radius 8 :blocks ["dirt"]}))))
+
+(deftest an-empty-weapons-list-means-no-weapons
+  (is (= {:use {:tools []}} (fight-back/legacy-args {:weapons []}))))
+
+(deftest a-decline-keeps-the-given-up-counts
+  (let [m (atom {:children {:fight {:blocked {1 3}}}})
+        c {:update-mem (fn [f args] (swap! m #(apply f % args)))}
+        res {:status :stopped :memory {:blocked {7 3} :no-damage {8 3}}}]
+    (is (true? (fight-back/restore-memory! c :fight res)))
+    (is (= {:blocked {7 3} :no-damage {8 3}} (get-in @m [:children :fight])))
+    (is (nil? (fight-back/restore-memory! c :fight {:status :done})))))
 
 (defn ^:async fight [args world]
   (await (sc/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) (list 'jobs.survival.fight-back args))))
@@ -102,3 +114,32 @@
       (fn ^:async t []
         (is (= {:event :stopped :kind :condition-failed :reason :hostile-near}
                (await (burn-end {:self {:onFire true} :blocks (et/floor 8) :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]}))))))))
+
+(deftest a-cut-extinguish-round-is-done-not-continue
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= :done (await (extinguish/round {:alive? (constantly false)}))))))))
+
+(deftest extinguish-places-the-cover-block-the-call-names
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (et/setup {:self {:onFire true}
+                                        :inventory [{:name "cobblestone" :count 4} {:name "netherrack" :count 4}]
+                                        :blocks (merge (et/floor 8) {"1,64,0" "lava"})})]
+          (core/submit! eng '(jobs.survival.extinguish {:use {:blocks ["netherrack"]}}) {})
+          (await (core/tick! eng))
+          (is (= ["netherrack"] (mapv :item (map et/call-args (et/calls p "place"))))))))))
+
+(deftest block-arrow-gap-places-the-block-the-call-names
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (gt/setup [] {:entities [gt/pit-skeleton]
+                              :inventory [{:name "cobblestone" :count 4} {:name "netherrack" :count 4}]
+                              :blocks (merge gt/ground gt/pit gt/shell)})]
+          (await (gt/run-job! s {:use {:blocks ["netherrack"]}}))
+          (let [items (map #(:item (et/call-args %)) (et/calls (:p s) "place"))]
+            (is (seq items))
+            (is (= #{"netherrack"} (set items)))))))))

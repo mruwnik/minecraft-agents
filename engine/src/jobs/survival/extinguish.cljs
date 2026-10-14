@@ -36,7 +36,7 @@
      (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends :limit-reached :still-burning.
   A walk that is blocked (boxed in, perhaps by its own covers) goes through a go-to from then on (it pillars, stairs or digs
   out when shut in); a go-to still working is not a failure. Three failures (no safe cell, or a go-to that fails, with its reason) give an extinguish_stuck warning and end :nothing-possible :stuck.
-  Still burning after max-passes passes ends :limit-reached :still-burning. Never :continue, bar a cut round.
+  Still burning after max-passes passes ends :limit-reached :still-burning. Never :continue.
   The cover blocks are the call's :use :blocks (default the carried :cover fillers of jobs.lib.choose).
   Memory: writes :extinguish {:pos :cause} each pass (cap 20, one hour),
   and lava seen within :scan-radius as :hazard entries (cap 50, six hours) for retreat logic.")
@@ -454,7 +454,7 @@
 (defn ^:async round [c]
   (loop [i 0]
     (cond
-      (not (ctx/alive? c)) :continue
+      (not (ctx/alive? c)) :done
       (<= (max-passes) i) (still-burning c "still burning after many tries")
       :else (let [r (await (pass! c))]
               (case r

@@ -48,7 +48,7 @@
   "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}."
   [{:keys [weapons] :as args}]
   (cond-> (dissoc args :weapons)
-    (and (seq weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))))
+    (and (some? weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))))
 
 (defn reach [] (settings/get settings ::reach))
 (defn ranged-chase [] (settings/get settings ::ranged-chase))
