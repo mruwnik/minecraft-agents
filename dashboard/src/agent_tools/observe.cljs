@@ -410,6 +410,14 @@
 (defn checkpoint-file [request]
   (.join path (bodies/worlds-dir (:state request)) (:world request) "observers" (:agent request) "agent.edn"))
 
+(defn with-catalog-more
+  "A catalog list page with a line saying how many names are left and the --offset for them."
+  [path text]
+  (let [page (when (str/starts-with? path "/catalog?") (try (data/read-edn text) (catch :default _ nil)))]
+    (if-let [more-at (:next-offset page)]
+      (str (line text) "; " (- (:total page) more-at) " more, use --offset " more-at "\n")
+      text)))
+
 (defn respond!
   "Print the engine's answer the way the request asked for it; a promise of the exit code. A job the scheduler
   no longer holds is answered from the retained event history."
@@ -447,7 +455,7 @@
             (.then (constantly (if (false? (:ok result)) 1 0)))))
 
       :else
-      (-> (output (line text)) (.then (constantly (if (<= 200 status 299) 0 1)))))))
+      (-> (output (line (with-catalog-more path text))) (.then (constantly (if (<= 200 status 299) 0 1)))))))
 
 (defn main!
   "Run the command; a promise of the exit code. Options (for tests): :output (text -> promise or nil), :request-fn."

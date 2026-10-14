@@ -15,7 +15,7 @@
 
 (defn usage-for [prefix]
   "Build the usage string with the given invocation prefix (e.g., 'jobs.mjs' or './bin/jobs')."
-  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--survive-death] [--next | --now] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
+  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.storage.deposit {:items [\"bread\"]})' [--hold] [--survive-death] [--next | --now] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
        "While manual control holds the body (drive.mjs take) only the driver's one job runs (world.mjs submit): others stay :queued and list/submit say who holds it; drive.mjs <body> release frees it.\n"
        "A job that depends on where the body stands (access.stair, access.bridge, access.pillar, gather.mine) gets :from (the body's position at submit) added to its args; if the body is then over 6 blocks from it when the job starts, the job waits :moved-since-submit (something moved the body meanwhile) instead of running there. Give :here true in the args to run wherever the body is.\n"
        "submit appends the job to the end of the list (jobs take turns). --hold makes the job hold the body: no other job gets a round until it ends or fails (reflexes still come first).\n"
@@ -82,7 +82,8 @@
       (when-not (#{:list :show :submit :cancel :cancel-all :retry :resolve} op)
         (throw (js/Error. "unknown operation")))
       (when (or (seq extra) (if no-argument? (some? arg) (nil? arg)))
-        (throw (js/Error. (str (name op) (if no-argument? " takes no argument" " needs exactly one argument")))))
+        (throw (js/Error. (str (name op) (if no-argument? " takes no argument" " needs exactly one argument")
+                         (when spec-op? (str "; " spec-example))))))
       (when (and (not mutating?) (:request-id values))
         (throw (js/Error. "--request-id requires a mutation")))
       (when (and (= op :resolve) (:request-id values))

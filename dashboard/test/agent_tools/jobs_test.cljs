@@ -400,6 +400,11 @@
   (is (re-find #"observe\.mjs.*catalog job" jobs/usage))
   (is (re-find #"queues behind a running reflex" jobs/usage)))
 
+(deftest submit-usage-and-argument-errors-show-the-list-form
+  (is (str/includes? (jobs/usage-for "./bin/jobs") "submit '(jobs."))
+  (is (not (str/includes? jobs/usage "<EDN-spec>")))
+  (is (re-find #"\(jobs\.[a-z.-]+ \{" (str (jobs/request-for ["B" "--world" "w" "submit" "jobs.a.b" "{}"])))))
+
 (deftest usage-says-jobs-wait-under-manual-control
   (is (re-find #"manual control" jobs/usage)))
 

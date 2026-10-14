@@ -22,6 +22,13 @@
     (is (str/starts-with? raw "usage: observe.mjs <agent> --world <world>"))
     (is (str/starts-with? bin "usage: ./bin/observe <agent> --world <world>"))))
 
+(deftest a-truncated-catalog-page-says-how-to-get-the-rest
+  (let [page "{:ok true :kind :jobs :items [\"a\"] :total 45 :next-offset 20}\n"]
+    (is (str/includes? (observe/with-catalog-more "/catalog?kind=jobs&prefix=&limit=20&offset=0" page) "25 more, use --offset 20"))
+    (is (= "{:ok true :items [] :total 1 :next-offset nil}\n"
+           (observe/with-catalog-more "/catalog?kind=jobs" "{:ok true :items [] :total 1 :next-offset nil}\n")))
+    (is (= "x\n" (observe/with-catalog-more "/status" "x\n")))))
+
 (defn finish!
   "Report an unexpected rejection as a failure, then end the async test."
   [done promise]
