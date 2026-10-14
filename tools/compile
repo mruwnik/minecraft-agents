@@ -109,13 +109,15 @@ start_server() {
 }
 
 # A worktree's server start waits up to ~2 min for a server slot: do it before queueing, under a lock of its own, so the
-# global compile lock is never held meanwhile. The start lock keeps two compiles from both starting a server; the queued
-# part then finds the server running.
+# global compile lock is never held meanwhile. The start lock keeps two compiles from both starting a server (taken only
+# when none runs, re-checked inside); the queued part then finds the server running.
 if [ "$stop" = 0 ] && [ "$(cd "$repo" && git rev-parse --git-dir)" != "$(cd "$repo" && git rev-parse --git-common-dir)" ]; then
-  exec 8>>"$lock.start"
-  flock 8
-  server_pid >/dev/null || start_server
-  exec 8>&-
+  if ! server_pid >/dev/null; then  # a running server needs no start lock: another worktree's cold start would hold it for minutes
+    exec 8>>"$lock.start"
+    flock 8
+    server_pid >/dev/null || start_server
+    exec 8>&-
+  fi
 fi
 
 mkdir -p "$queue"
