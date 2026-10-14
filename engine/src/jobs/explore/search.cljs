@@ -30,7 +30,7 @@
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
   in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
   counted in :max-legs) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
-  left the round yields for 2 s, up to :load-wait-s (a body just logged in has no chunks
+  left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, up to :load-wait-s (a body just logged in has no chunks
   yet), then the search ends :not-loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck); until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
@@ -194,11 +194,6 @@
        (map (fn [n] (cond-> {:what (:what n) :pos (:pos n) :noted true :by (:by n)} (:id n) (assoc :id (:id n)))))))
 
 ;; ------------------------------------------------------------------ the body
-
-(defn waiting?
-  "Whether job memory m says the job waits at now for leg columns to load."
-  [m now]
-  (> (:wait-until m 0) now))
 
 (defn no-target
   "At the call's start: the cause :no-target while no target is named."
@@ -411,7 +406,8 @@
                 (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
                 (empty? unloaded) (finish! c :not-found :distance)
                 (< waited (* 1000 (:load-wait-s (:args c))))
-                (do (ctx/update-mem! c assoc :waiting-since (- now waited) :wait-until (+ now (wait-ms)))
+                (do (ctx/update-mem! c assoc :waiting-since (- now waited))
+                    (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))
                     :continue)
                 :else (do (ctx/update-mem! c update :failed (fnil into []) unloaded)
                           (finish! c :not-found :not-loaded)))))))
@@ -430,6 +426,4 @@
       :else (await (step! c)))))
 
 (defn ^:async round [c]
-  (if (waiting? (ctx/mem c) (ctx/now c))
-    (do (ctx/hold-still! c :chunks-loading) :continue)
-    (await (pace/steps! c #(search-step! c)))))
+  (await (pace/steps! c #(search-step! c))))

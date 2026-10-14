@@ -9,10 +9,8 @@
             [engine.events :as events]
             [engine.expr :as expr]
             [engine.memory :as mem]
-            [engine.settings :as settings]
             [engine.test-util :as tu]
-            [jobs.lib.choose :as choose]
-            [jobs.lib.declined :as declined]))
+            [jobs.lib.choose :as choose]))
 
 (deftest an-ending-names-its-cause-keyword
   (are [e k] (= k (contract/cause-key e))
@@ -465,40 +463,6 @@
           (is (= {:status :done :ending {:kind :done :cause nil}}
                  (select-keys (:data (last (job-ev seen :child_ended))) [:status :ending]))))))))
 
-(def furnace
-  {:check (fn [c] (or (:cooked @world) (ctx/wait c {:reason :cooking})))
-   :round (constantly :done)})
-
-(def cooks
-  "An old job whose smelt child waits while the furnace cooks: its round declines, its check waits with :cooking."
-  {:check declined/check
-   :round (fn ^:async cooks [c]
-            (declined/begin! c)
-            (ctx/update-mem! c update :rounds (fnil inc 0))
-            (let [r (await (declined/call-child! c :smelt furnace {}))]
-              (when (= :done r) (ctx/result! c {:rounds (:rounds (ctx/mem c))}))
-              r))})
-
-(deftest an-old-childs-short-wait-under-ctx-call-yields-and-keeps-the-child
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'calls-cook {:conditions []
-                                                      :round (fn ^:async calls-cook [c]
-                                                               (swap! world assoc :old-ending (await (ctx/call c :kid cooks {})))
-                                                               :continue)}})]
-          (core/submit! eng '(calls-cook) {})
-          (await (core/tick! eng))
-          (is (= :continue (:old-ending @world)) "the round declined while cooking")
-          (await (core/tick! eng))
-          (is (= :continue (:old-ending @world)) "the check waits while cooking")
-          (is (= :cooking (get-in (last (job-ev seen :child_ended)) [:data :reason])) "child_ended names the wait")
-          (swap! world assoc :cooked true)
-          (await (core/tick! eng))
-          (is (= {:kind :done :cause nil :data {:rounds 2}} (dissoc (:old-ending @world) :report))
-              "the second round finds the first's memory"))))))
-
-
 (def waits-on
   "An old job whose check waits with the reason in :wait of the world, its round yielding."
   {:check (fn [c] (or (not (:wait @world)) (ctx/wait c {:reason (:wait @world)})))
@@ -509,42 +473,20 @@
                            (swap! world assoc :old-ending (await (ctx/call c :kid job {})))
                            :continue)})
 
-(deftest an-old-childs-check-declining-after-its-first-round-is-a-short-wait-only-for-declared-reasons
+(deftest an-old-childs-check-declining-after-its-first-round-is-condition-failed-whatever-the-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {'calls-waiting (calls-waiting waits-on)})
-              ending #(let [e (:old-ending @world)] (if (map? e) (select-keys e [:kind :cause]) e))]
-          (core/submit! eng '(calls-waiting) {})
-          (reset! world {})
-          (await (core/tick! eng))
-          (is (= :continue (ending)))
-          (swap! world assoc :wait :cooking)
-          (await (core/tick! eng))
-          (is (= :continue (ending)) "a declared short wait")
-          (swap! world assoc :wait :no-source)
-          (await (core/tick! eng))
-          (is (= {:kind :condition-failed :cause :no-source} (ending)) "any other decline ends it"))))))
-
-(deftest a-short-wait-is-bounded-by-time
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng clock]} (setup {'calls-waiting (calls-waiting waits-on)})
-              ending #(let [e (:old-ending @world)] (if (map? e) (select-keys e [:kind :cause]) e))]
-          (core/submit! eng '(calls-waiting) {})
-          (reset! world {})
-          (await (core/tick! eng))
-          (swap! world assoc :wait :cooking)
-          (await (settings/with-settings {:engine.core.round/short-wait-ms 1000}
-                   (fn ^:async bounded []
-                     (await (core/tick! eng))
-                     (swap! clock + 600)
-                     (await (core/tick! eng))
-                     (is (= :continue (ending)) "many rounds, little time")
-                     (swap! clock + 600)
-                     (await (core/tick! eng))
-                     (is (= {:kind :condition-failed :cause {:reason :cooking :why :wait-too-long}} (ending)))))))))))
+        (doseq [reason [:cooking :no-source]]
+          (let [{:keys [eng]} (setup {'calls-waiting (calls-waiting waits-on)})
+                ending #(let [e (:old-ending @world)] (if (map? e) (select-keys e [:kind :cause]) e))]
+            (core/submit! eng '(calls-waiting) {})
+            (reset! world {})
+            (await (core/tick! eng))
+            (is (= :continue (ending)))
+            (swap! world assoc :wait reason)
+            (await (core/tick! eng))
+            (is (= {:kind :condition-failed :cause reason} (ending)) "a pause is a noop child, never a decline")))))))
 
 (deftest an-old-child-with-saved-memory-but-no-round-yet-declining-at-once-is-condition-failed
   (async done

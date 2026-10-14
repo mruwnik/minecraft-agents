@@ -236,7 +236,7 @@ require `engine.registry`.
   Triggers). Anything else, or a throw, is a failure: the job stays listed, marked failed, with a `job.failed` warn, and
   the scheduler skips it until `retry!` clears the mark. A reflex job that fails is dropped. A cut is never a failure.
 - A round works at its goal for as long as it can do useful work; `:continue` means yield (nothing useful to do now,
-  e.g. waiting for crops or daylight), not "next step". Holding still on purpose is declared with `ctx/hold-still!`.
+  e.g. waiting for crops or daylight), not "next step". An intentional pause is a `jobs.time.noop` child (`child/pause!`); it counts against the job's budget.
 - **args**: `(a/defargs args {key {:doc :default :spec}})` (Args above); the engine merges the spec's args over the defaults. Undeclared keys are refused.
 
 ### Job expressions
@@ -319,8 +319,7 @@ Unwinding frames act unchecked (cleanup); frames further out are still checked. 
 along the straight line could hold (`maxDropDown` 3: none hurts).
 
 **Old and contract jobs together (engine.core.legacy).** An old job through `ctx/call` ends with the ending its
-check, round and result map to; a decline after its first round with a `legacy/short-waits` reason (`:cooking`, `:night-sheltered`, `:torches-cooking`, `:chunks-loading`) is `:continue`, the
-child kept, `job.child_ended` naming the wait, for at most `:engine.core.round/short-wait-ms` since the wait began (then condition-failed `:why :wait-too-long`); any other decline is condition-failed. A contract job through `call-child` answers `:declined` or `:done` with its ending in
+check, round and result map to; any decline is condition-failed (a pause is a `jobs.time.noop` child, never a decline). A contract job through `call-child` answers `:declined` or `:done` with its ending in
 the child-result. A `legacy-args` export maps an old caller's options to call keys.
 
 **call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
@@ -675,6 +674,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `movement.boat-land` `{:pos :radius :max-spots :recover}` | Brings the boat the body is in to the nearest seen shore (a stand cell with water beside it at the block's level; `:pos` names the land cell), via `boat-drive`, then `leave-vehicle` facing the land; `:recover` then takes the boat back (`boat-launch :recover`); info `boat.landed`; a given `:pos` not made out is driven nearer once; stopped `:bad-args`, `:not-aboard`, `:no-shore`, `:blocked`, `:drive-failed`, `:not-landed`, `:recover-failed` |
 | `movement.cross-water` `{:pos :goal :radius :min-cross :item :recover}` | Crosses water by boat: `boat-launch` (a boat not carried is fetched; skipped when already aboard), then `boat-land` with `:pos` the far shore and `:recover` (default true: the boat comes along). The far shore is `:pos` (must be a seen shore) else a seen shore within `:radius`, at least `:min-cross` away and across water from the body: nearest `:goal` if given, else the farthest; on foot after a restart it is `:done` only on the far shore (else `:not-landed`); a given `:pos` not made out is crossed toward; stopped `:bad-args`, `:no-far-shore`, `:not-water`, `:no-boat` (launch found none), `:boat-not-seen`, the launch's and landing's stops (with `:cause`). A job for callers/travel to choose; go-to never boats |
 | `time.wait-for-day`, `time.wait-for-dusk` | Done once it is day / evening; a failed condition waits `:day-not-come` / `:dusk-not-come`; quote: ticks left at the game rate |
+| `time.noop` | An intentional pause (`jobs.lib.child/pause!`): `:wait` acts for `:seconds`, holding `:why`, in one round, so reflexes cut in and the time counts on the caller; a cut pause waits what is left |
 
 **Survival (reflex and need jobs)**
 

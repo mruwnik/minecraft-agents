@@ -17,6 +17,12 @@
   []
   (js/Promise. (fn [resolve] (js/setTimeout resolve pace-ms))))
 
+(defn pause!
+  "An intentional pause of seconds, holding still with why: a jobs.time.noop child in slot :pause, so reflexes still
+  cut in and the time counts on the caller. Resolves to its ending."
+  [c seconds why]
+  (ctx/call c :pause 'jobs.time.noop {:seconds seconds :why why}))
+
 (defn ^:async walk-reason
   "call-walk-reason with the child call fn (ctx/call-child, or ctx/call for the ending-returning versions): the reason
   is the :hold the go-to child keeps in its memory while it yields."

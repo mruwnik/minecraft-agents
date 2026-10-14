@@ -250,10 +250,10 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[bed expect-wait?] [[{:x 150 :y 64 :z 0} true] [outside false]]]
-          (let [{:keys [eng]} (st/setup (night-hut {}))
-                id (core/submit! eng (list 'jobs.survival.sleep {:bed bed}) {})]
+          (let [{:keys [eng seen]} (st/setup (night-hut {}))]
+            (core/submit! eng (list 'jobs.survival.sleep {:bed bed}) {})
             (await (ticks eng 4))
-            (is (= expect-wait? (= :night-sheltered (:reason (waiting-of eng id)))) (pr-str bed))))))))
+            (is (= expect-wait? (some? (some #{:night-sheltered} (map :reason (st/emitted seen :holding))))) (pr-str bed))))))))
 
 (deftest a-queued-craft-does-not-walk-out-of-the-hut-to-a-table-at-night
   (async done

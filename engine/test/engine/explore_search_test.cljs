@@ -26,12 +26,13 @@
   (memoize (fn [r] (tu/box (- r) 63 (- r) r 63 r "grass_block"))))
 
 (defn setup
-  "An engine over the fake world spec (ground of radius ground-r added, default 64) with a notes store for body Fake in a temp world folder."
+  "An engine over the fake world spec (ground of radius ground-r added, default 64) with a notes store for body Fake in a temp world folder; a :wait act moves the clock by its ms."
   [spec & [ground-r]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
         p (tu/fake (update (dissoc spec :cone? :zones) :blocks #(merge (ground (or ground-r 64)) %)))
+        _ (.override (.-world p) "wait" (fn [token a impl] (swap! clock + (.-ms a)) (impl token a)))
         p (if (:cone? spec)
             (let [w (perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))]
               (.setOwner p "Fake")
@@ -296,7 +297,7 @@
       (fn ^:async t []
         (let [s (setup {:unloaded ring-1-cells} 28)]
           (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 20}) {})
-          (dotimes [_ 20] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+          (dotimes [_ 8] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
           (is (not (finished? s)) "still waiting for the chunks")
           (is (= [] (walks s)))
           (swap! (fake/state (:p s)) assoc :unloaded #{})
@@ -460,12 +461,6 @@
     (is (nil? (search/no-target {:args {:target "diamond_block"}}))))
   (with-redefs [ctx/frozen-call (constantly {:least 1})]
     (is (nil? (search/no-target {:args {:target nil}})) "a started call runs on")))
-
-(deftest it-waits-only-until-the-wait-is-over
-  (are [m now expected] (= expected (search/waiting? m now))
-    {} 5000 false
-    {:wait-until 6000} 5000 true
-    {:wait-until 6000} 6000 false))
 
 (deftest ore-the-body-has-not-seen-is-neither-found-nor-noted
   (async done

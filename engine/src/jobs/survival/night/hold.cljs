@@ -1,6 +1,7 @@
 (ns jobs.survival.night.hold
   "The night's holds: hold still on purpose, eating or cooking first, and the bookkeeping of what the night did."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.foods :as foods]
             [jobs.lib.shelter :as sh]
@@ -63,7 +64,7 @@
     (ctx/hold-still! c nil)
     (await (ctx/call-child c :food 'jobs.survival.get-food {}))
     (ctx/hold-still! c reason))
-  (await (ctx/act c :wait #js {:ms hold-ms}))
+  (await (child/pause! c (/ hold-ms 1000) reason))
   :again)
 
 (defn busy!

@@ -19,7 +19,8 @@
             [jobs.movement.go-to.settings :refer [max-cut-resets night-wait-ms]]
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.walk :as walk]
-            [jobs.movement.go-to.way-steps :as ways]))
+            [jobs.movement.go-to.way-steps :as ways]
+            [jobs.lib.child :as child]))
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
@@ -301,14 +302,14 @@
                   (ctx/update-mem! c assoc :night-said true)
                   (ctx/emit! c :go-to.night-sheltered :info
                              (assoc night :text (str "night: waiting for day in its shelter (" (name (:shelter night)) ") instead of walking out"))))
-                (await (ctx/act c :wait #js {:ms (night-wait-ms) :why :night-sheltered}))
+                (await (child/pause! c (/ (night-wait-ms) 1000) :night-sheltered))
                 :continue)
       plug (do (when-not (:plug-said (ctx/mem c))
                  (ctx/update-mem! c assoc :plug-said true)
                  (ctx/emit! c :go-to.sealed-hostile-near :info
                             (assoc (select-keys plug [:mob :band :sensed])
                                    :text (str "sealed in: waiting for a " (name (:sensed plug)) " " (:mob plug) " (" (name (:band plug)) ") to go"))))
-               (await (ctx/act c :wait #js {:ms (night-wait-ms) :why (:reason plug)}))
+               (await (child/pause! c (/ (night-wait-ms) 1000) (:reason plug)))
                :continue)
       :else
       (let [state (note-restart! c pos)
