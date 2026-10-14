@@ -160,7 +160,7 @@
       :yield
       (let [res (ctx/child-result c :leash)]
         (if-not (= :leashed (:reason res))
-          (finish! c (:reason res))
+          (finish! c (get-in res [:ending :data :reason] (:reason res)))
           (do (ctx/update-mem! c assoc :animal (:animal res) :still-led true :phase :walk)
               :again))))))
 

@@ -4,29 +4,30 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
 (def doc
   "Put a lead on one animal of type :mob (such as \"cow\") within :radius and end. A one-shot order that starts and
-  ends itself. The check always passes, so a cut job resumes.
+  ends itself; a cut job resumes.
 
   One call is the whole run. It takes the nearest animal that is not on anyone's lead, not given up on and not in :skip (uuids or
   ids). The body walks to within 3 blocks (doors :shut, each leg bounded by :walk-timeout-s) and uses the lead
-  it carries (fetching one first when none is carried and an animal waits, jobs.lib.fetch, unless :fetch is false). The use counts only when the sensing then shows the animal on this body's lead. Animals are
+  it carries (fetching one first when none is carried and an animal waits, jobs.lib.need, unless :fetch is false). The use counts only when the sensing then shows the animal on this body's lead. Animals are
   tracked by uuid, by id when it has none.
 
   An animal is given up on when its walk is blocked or two attempts were out of reach (:unreachable), nothing
   happened (:no-effect), it vanished (:gone), the server said it cannot (:cannot), the use failed (:failed) or
   the lead did not show afterwards (:unconfirmed).
 
-  Ends with info leash.done and a warn leash.gave-up unless the reason is :leashed. Result {:reason :animal key
-  :id entity-id :given-up {key reason}}. Reasons:
-  - :leashed: an animal is on the lead.
-  - :no-lead: no lead carried (and none fetched), or the server found none.
-  - :timeout: :timeout-s of work, not counting fetching.
-  - When no candidate is left: :unreachable if one was given up as unreachable, else :refused (others given
-    up, or the zone rules refused the animals; :no-zones when no zone list was read), :all-leashed (animals present but all led) or :none.
-  - The same reasons after three fruitless animals in a row.
+  Ends with info leash.done and a warn leash.gave-up unless the reason is :leashed. The data {:reason :animal key
+  :id entity-id :given-up {key reason}} and the ending by the reason:
+  - :done :leashed: an animal is on the lead.
+  - :condition-failed :no-lead (no lead carried and none fetched, or the server found none; after a failed fetch the cause names the lead, :because the fetch's ending),
+    :refused (others given up, or the zone rules refused the animals) or :no-zones (no zone list was read).
+  - :limit-reached :timeout: the call's :spend :time (default ::time-s) of work, not counting fetching.
+  - :nothing-possible when no candidate is left: :unreachable if one was given up as unreachable, else :all-leashed
+    (animals present but all led) or :none. The same after three fruitless animals in a row.
 
   Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is not led (taking it out of the zone) (warn
   leash.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
@@ -37,21 +38,56 @@
    :center {:doc "where :radius is measured from; the body's own spot when nil" :spec ::a/pos :default nil}
    :skip {:doc "keys (uuids, else ids) of animals never to leash" :spec (a/coll-of (a/or-of string? number?)) :default []}
    :walk-timeout-s {:doc "bound of one walk towards the animal" :spec (a/num-in 0 nil) :default 5}
-   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :spec (a/num-in 0 nil) :default 30}
-   :fetch {:doc "get a lead when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-lead" :spec fetch/option? :default true}
+   :fetch {:doc "get a lead when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-lead" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
-  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+  {::time-s {:default 30 :doc "Seconds of working with the animals (not fetching) before leashing gives up." :spec (a/num-in 0 nil)}
+   ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
-(defn check [_c] true)
+(def target [:mob])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions
+  "None wait: no lead with :fetch off ends the first round (finish! :no-lead), so a queued order never blocks the queue."
+  [])
+
+(defn legacy-args
+  "An old caller's :timeout-s as the call's :spend {:time}."
+  [{:keys [timeout-s] :as args}]
+  (cond-> (dissoc args :timeout-s)
+    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
+
+(defn time-limit "Seconds the call may work." [c]
+  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+
+(defn quote-of [c]
+  (let [most (time-limit c)]
+    {:uses {:time [0 (min most 10) most]}}))
+
+(defn done?
+  "The animals led against the one asked. Never :done? itself: the run ends with its event and data."
+  [c]
+  (let [n (if (:leashed (ctx/mem c)) 1 0)]
+    {:done? false :units :animals :done n :left (- 1 n)}))
+
+(def ending-of
+  "The kind and cause of a finish by reason."
+  {:leashed [:done nil]
+   :no-lead [:condition-failed :no-lead]
+   :refused [:condition-failed :refused]
+   :no-zones [:condition-failed :no-zones]
+   :timeout [:limit-reached {:line :time :reason :timeout}]})
 
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
-  [c reason animal]
+  "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), or ending when given
+  (a failed fetch's)."
+  [c reason animal & [ending]]
   (let [result {:reason reason
                 :animal (some-> animal animals/key-of)
                 :id (some-> animal .-id)
@@ -59,8 +95,11 @@
     (ctx/emit! c :leash.done :info (assoc result :text (str "leash done: " (name reason))))
     (when (not= :leashed reason)
       (ctx/emit! c :leash.gave-up :warn {:reason reason :text (str "leashing stopped: " (name reason))}))
-    (ctx/result! c result)
-    :done))
+    (when (= :leashed reason) (ctx/update-mem! c assoc :leashed true))
+    (if ending
+      (assoc ending :data result)
+      (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
+        (ctx/end c kind cause result)))))
 
 (defn herd [c]
   (let [{:keys [mob radius center]} (:args c)
@@ -126,29 +165,31 @@
       (>= (:in-row (ctx/mem c) 0) (max-in-row)) (finish! c (none-reason c) nil)
       :else :again)))
 
-(defn problem
-  "The need wait for a lead while none is carried and an animal waits, else nil."
+(defn fetchable?
+  "Whether a lead is to be fetched now: none carried, an animal waits and :fetch allows it."
   [c]
-  (when (and (not (animals/lead-carried? c)) (seq (candidates c)))
-    {:reason :need :item "lead"}))
+  (and (fetch/parse-arg (:fetch (:args c))) (not (animals/lead-carried? c)) (seq (candidates c))))
 
 (defn ^:async no-lead!
   "No lead carried: fetch one when :fetch allows and an animal waits, else end :no-lead. Resolves to :again once it
   arrived, else the round's result."
   [c]
-  (if-not (and (fetch/opts c 'jobs.animals.leash) (problem c))
+  (if-not (fetchable? c)
     (finish! c :no-lead nil)
-    (or (await (fetch/fetch-untimed! c 'jobs.animals.leash problem))
-        (if (problem c) (finish! c :no-lead nil) :again))))
+    (let [limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :depth :explore])
+          e (await (u/untimed! c #(need/item! c "lead" 1 limits)))]
+      (cond
+        (= :continue e) :continue
+        (= :done (:kind e)) :again
+        :else (finish! c :no-lead nil e)))))
 
 (defn ^:async step [c]
-  (let [now (ctx/now c)
-        {:keys [timeout-s]} (:args c)]
+  (let [now (ctx/now c)]
     (ctx/update-mem! c update :started #(or % now))
     (let [m (ctx/mem c)
           cands (candidates c)]
       (cond
-        (>= (- now (:started m)) (* 1000 timeout-s)) (finish! c :timeout nil)
+        (>= (- now (:started m)) (* 1000 (time-limit c))) (finish! c :timeout nil)
         (not (animals/lead-carried? c)) (await (no-lead! c))
         (empty? cands) (finish! c (none-reason c) nil)
         :else (await (engage! c (first cands)))))))

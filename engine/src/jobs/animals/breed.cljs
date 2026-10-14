@@ -4,16 +4,17 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
 (def doc
   "Feed :count animals of type :mob (such as \"cow\") within :radius so that they breed. A one-shot order that
-  ends itself. The check always passes, so a cut job resumes.
+  ends itself; a cut job resumes.
 
   One call is the whole run. It takes the nearest adult not yet fed, refused or given up on. The body walks to within 3 blocks
   (like go-to it opens a shut gate or door on the way and shuts it behind, so a gated pen is entered and its gate
   left shut; a pen with no way in is :unreachable). It then feeds the first breeding
-  food of the mob that it carries, fetching one first when none is carried and animals wait (jobs.lib.fetch, one
+  food of the mob that it carries, fetching one first when none is carried and animals wait (jobs.lib.need, one
   per animal still to feed, unless :fetch is false) (jobs.lib.animals/breeding-food: wheat for cows, sheep, goats and
   mooshrooms; carrot, potato or beetroot for pigs; seeds for chickens; carrot, golden carrot or dandelion for
   rabbits; flowers for bees). Babies are never fed.
@@ -24,16 +25,16 @@
   - Given up: :unreachable (walk blocked, or two feedings out of reach), :gone, :cannot, :failed, or :baby
     (the food was eaten without love; a baby the sensing missed, warn breed.baby).
 
-  Ends with info breed.done and a warn breed.gave-up unless the reason is :fed. Result {:reason :fed [keys]
-  :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand}. Reasons:
-  - :fed: :count animals were fed.
-  - :timeout: :timeout-s of work, not counting fetching.
-  - :unknown-mob: no breeding food is known for :mob.
-  - :bees-indoors: bees at night or in rain.
-  - :no-food: none carried (and none fetched), or it ran out.
-  - When no candidate is left, or fewer than two adults stand near before the first feeding: :unreachable if one
-    was given up as unreachable, else :unpaired (odd number fed), :refused (some refused, none ate; or :no-zones, the zone rules refused the adults) or :too-few.
-  - The same reasons after three fruitless animals in a row.
+  Ends with info breed.done and a warn breed.gave-up unless the reason is :fed. The data {:reason :fed [keys]
+  :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand} and the ending by the reason:
+  - :done :fed: :count animals were fed.
+  - :condition-failed :unknown-mob (no breeding food is known for :mob), :bees-indoors (bees at night or in rain),
+    :no-food (none carried and none fetched, or it ran out; after a failed fetch the cause names the food, :because
+    the fetch's ending), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
+    :refused (some refused, none ate) or :no-zones (the zone rules refused the adults).
+  - :limit-reached :timeout: the call's :spend :time (default ::time-s) of work, not counting fetching.
+  - :nothing-possible :unreachable (one was given up as unreachable) or :unpaired (an odd number fed), when no
+    candidate is left. The same after three fruitless animals in a row.
 
   Animals follow a body holding their food, so the hand is given back. Before the first feeding the job notes
   what the hand holds. When it ends it equips that item again if still carried, else empties the hand. :hand is
@@ -51,17 +52,54 @@
    :count {:doc "animals to feed" :spec (a/int-in 1 nil) :default 2}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :walk-timeout-s {:doc "bound of one walk towards an animal" :spec (a/num-in 0 nil) :default 5}
-   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :spec (a/num-in 0 nil) :default 120}
-   :fetch {:doc "get breeding food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
+   :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
-  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+  {::time-s {:default 120 :doc "Seconds of working with the animals (not fetching) before breeding gives up." :spec (a/num-in 0 nil)}
+   ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
-(defn check [_c] true)
+(def target [:mob])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions
+  "None wait: a call that cannot feed (no food with :fetch off, unknown mob, too few adults) ends in its first round."
+  [])
+
+(defn legacy-args
+  "An old caller's :timeout-s as the call's :spend {:time}."
+  [{:keys [timeout-s] :as args}]
+  (cond-> (dissoc args :timeout-s)
+    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
+
+(defn time-limit "Seconds the call may work." [c]
+  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+
+(defn quote-of [c]
+  (let [most (time-limit c)]
+    {:uses {:time [0 (min most (* 15 (:count (:args c) 2))) most]}}))
+
+(defn done?
+  "The animals fed against :count. Never :done? itself: the run ends with its event and data."
+  [c]
+  (let [fed (count (:fed (ctx/mem c)))]
+    {:done? false :units :animals :done fed :left (max 0 (- (:count (:args c) 2) fed))}))
+
+(def ending-of
+  "The kind and cause of a finish by reason."
+  {:fed [:done nil]
+   :unknown-mob [:condition-failed :unknown-mob]
+   :bees-indoors [:condition-failed :bees-indoors]
+   :no-food [:condition-failed :no-food]
+   :too-few [:condition-failed :too-few]
+   :refused [:condition-failed :refused]
+   :no-zones [:condition-failed :no-zones]
+   :timeout [:limit-reached {:line :time :reason :timeout}]})
 
 (defn ^:async restore-hand!
   "Put the hand back as note-hand! found it. Resolves to :restored, :emptied
@@ -97,8 +135,9 @@
       (ctx/remember! c (keyword "bred" (:mob (:args c))) {:fed fed}))))
 
 (defn ^:async finish!
-  "Put the hand back, emit the outcome, hand it to the parent and end the job."
-  [c reason]
+  "Put the hand back, emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), or
+  ending when given (a failed fetch's)."
+  [c reason & [ending]]
   (let [hand (await (hand-result c))
         m (ctx/mem c)
         {:keys [mob radius]} (:args c)
@@ -115,8 +154,10 @@
     (ctx/emit! c :breed.done :info (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", " seen)))
     (when (not= :fed reason)
       (ctx/emit! c :breed.gave-up :warn {:reason reason :text (str "breeding stopped: " (name reason) " (" seen ")")}))
-    (ctx/result! c result)
-    :done))
+    (if ending
+      (assoc ending :data result)
+      (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
+        (ctx/end c kind cause result)))))
 
 (defn candidates
   "The adults within radius not fed, refused or given up on, nearest first."
@@ -195,40 +236,47 @@
     (and (= "bee" (:mob (:args c)))
          (or (not (true? (.-isDay s))) (true? (.-raining s))))))
 
-(defn problem
-  "The need wait for breeding food while none is carried, animals are there to feed and :count is not reached, else nil."
+(defn fetchable?
+  "Whether breeding food is to be fetched now: none carried, animals are there to feed, :count is not reached and :fetch
+  allows it."
   [c]
   (let [{:keys [mob radius] n :count} (:args c)
         fed (count (:fed (ctx/mem c)))
         p (:primitives c)]
-    (when (and (contains? animals/breeding-food mob)
-               (< fed n)
-               (nil? (animals/food-carried p mob))
-               (not (bees-indoors? c))
-               (or (pos? fed) (>= (count (animals/adults p mob radius)) 2))
-               (seq (candidates c)))
-      {:reason :need :any-of (get animals/breeding-food mob) :count (- n fed)})))
+    (boolean
+     (and (fetch/parse-arg (:fetch (:args c)))
+          (contains? animals/breeding-food mob)
+          (< fed n)
+          (nil? (animals/food-carried p mob))
+          (not (bees-indoors? c))
+          (or (pos? fed) (>= (count (animals/adults p mob radius)) 2))
+          (seq (candidates c))))))
 
 (defn ^:async fetch-food!
   "No food carried: fetch it when :fetch allows and animals wait, else end :no-food. Resolves to :again once food
   arrived, else the round's result."
   [c]
-  (if-not (and (fetch/opts c 'jobs.animals.breed) (problem c))
+  (if-not (fetchable? c)
     (await (finish! c :no-food))
-    (or (await (fetch/fetch-untimed! c 'jobs.animals.breed problem))
-        (if (problem c) (await (finish! c :no-food)) :again))))
+    (let [{:keys [mob] n :count} (:args c)
+          limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :depth :explore])
+          e (await (u/untimed! c #(need/blocks! c (get animals/breeding-food mob) (- n (count (:fed (ctx/mem c)))) limits)))]
+      (cond
+        (= :continue e) :continue
+        (= :done (:kind e)) :again
+        :else (await (finish! c :no-food e))))))
 
 (defn ^:async step
   "One walk or feeding, or the end."
   [c]
   (let [now (ctx/now c)
-        {:keys [mob timeout-s] n :count} (:args c)]
+        {:keys [mob] n :count} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
     (let [m (ctx/mem c)
           food (animals/food-carried (:primitives c) mob)
           cands (candidates c)]
       (cond
-        (>= (- now (:started m)) (* 1000 timeout-s)) (await (finish! c :timeout))
+        (>= (- now (:started m)) (* 1000 (time-limit c))) (await (finish! c :timeout))
         (not (contains? animals/breeding-food mob)) (await (finish! c :unknown-mob))
         (bees-indoors? c) (await (finish! c :bees-indoors))
         (>= (count (:fed m)) n) (await (finish! c :fed))

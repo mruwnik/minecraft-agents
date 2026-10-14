@@ -67,7 +67,7 @@
     (cond
       (nil? res) :continue
       (= :leashed (:reason res)) (start-trip! c (:animal res))
-      (and (empty? (:brought m)) (empty? (:given-up m))) (finish! c (:reason res))
+      (and (empty? (:brought m)) (empty? (:given-up m))) (finish! c (get-in res [:ending :data :reason] (:reason res)))
       :else (finish! c nil))))
 
 (defn lead-possible?

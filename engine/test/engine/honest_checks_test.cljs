@@ -29,7 +29,6 @@
 
 (deftest animal-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
-    'jobs.animals.pen-check {} :no-pen
     'jobs.animals.tend {:target 4} :no-box
     'jobs.animals.tend {:box box :target 4} :nothing-to-do
     'jobs.animals.herd {:target 4} :no-mob-or-box

@@ -9,7 +9,10 @@
             [engine.registry :as registry]
             [engine.seek-contract-test :as seek]
             [engine.test-util :as tu]
+            [jobs.animals.breed :as breed]
+            [jobs.animals.leash :as leash]
             [jobs.animals.shear :as shear]
+            [jobs.animals.unleash :as unleash]
             [jobs.combat.hunt :as hunt]
             [jobs.food.fish :as fish]
             [jobs.lib.world-files :as world]))
@@ -19,7 +22,11 @@
 (deftest each-job-exports-the-contract-and-quotes-validly
   (doseq [[sym args] [['jobs.food.fish {:count 2}]
                       ['jobs.animals.shear {:count 2}]
-                      ['jobs.combat.hunt {:mob "cow" :count 2}]]]
+                      ['jobs.combat.hunt {:mob "cow" :count 2}]
+                      ['jobs.animals.leash {:mob "cow"}]
+                      ['jobs.animals.unleash {}]
+                      ['jobs.animals.breed {:mob "cow" :count 2}]
+                      ['jobs.animals.pen-check {:at [2 64 2]}]]]
     (is (some? (:conditions (job sym))) (str sym " has conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
@@ -32,7 +39,10 @@
   (is (= {:mob "cow" :use {:tools ["iron_sword"]}} (hunt/legacy-args {:mob "cow" :use {:tools ["iron_sword"]} :weapons ["_axe"]})))
   (is (= {:count 1 :spend {:time 9}} (fish/legacy-args {:count 1 :timeout-s 9})))
   (is (= {:count 1 :spend {:time 9}} (shear/legacy-args {:count 1 :timeout-s 9})))
-  (is (= {:count 1 :spend {:time 4}} (shear/legacy-args {:count 1 :timeout-s 9 :spend {:time 4}}))))
+  (is (= {:count 1 :spend {:time 4}} (shear/legacy-args {:count 1 :timeout-s 9 :spend {:time 4}})))
+  (is (= {:mob "cow" :spend {:time 9}} (leash/legacy-args {:mob "cow" :timeout-s 9})))
+  (is (= {:spend {:time 9}} (unleash/legacy-args {:timeout-s 9})))
+  (is (= {:mob "cow" :spend {:time 9}} (breed/legacy-args {:mob "cow" :timeout-s 9}))))
 
 ;; ------------------------------------------------------------------ fish
 
@@ -124,3 +134,62 @@
             (dotimes [_ 4] (swap! clock + 700) (await (core/tick! eng)))
             (core/shutdown! eng)
             (is (= want (some-> (first (h/calls p "equip")) .-args .-item)) (pr-str args))))))))
+
+;; ------------------------------------------------------------------ leash, unleash, breed, pen-check
+
+(defn cow-at [id x & [more]]
+  (merge {:id id :uuid (str "u" id) :name "cow" :kind "passive" :pos {:x x :y 64 :z 0}} more))
+
+(def lead [{:name "lead" :count 2}])
+(def wheat [{:name "wheat" :count 4}])
+
+(defn ^:async ending
+  [spec world]
+  (await (seek/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) spec)))
+
+(deftest leashing-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.leash {:mob "cow"}) {:inventory lead :entities [(cow-at 1 2)]})) [:event])))
+        (doseq [[args world kind reason]
+                [[{:fetch false} {:entities [(cow-at 1 2)]} :condition-failed :no-lead]
+                 [{} {:inventory lead :entities []} :nothing-possible :none]
+                 [{} {:inventory lead :entities [(cow-at 1 2 {:leashed true :leashHolder 99})]} :nothing-possible :all-leashed]
+                 [{:spend {:time 0}} {:inventory lead :entities [(cow-at 1 2)]} :limit-reached :timeout]]]
+          (is (= {:event :stopped :kind kind :reason reason} (await (ending (list 'jobs.animals.leash (merge {:mob "cow"} args)) world)))))))))
+
+(deftest unleashing-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.unleash {}) {:entities [(cow-at 1 2 {:leashed true :leashedToMe true})]})) [:event])))
+        (is (= {:event :stopped :kind :nothing-possible :reason :none}
+               (await (ending '(jobs.animals.unleash {}) {:entities [(cow-at 1 2)]}))) "nobody on a lead: 0 freed is not done")
+        (is (= {:event :stopped :kind :limit-reached :reason :timeout}
+               (await (ending '(jobs.animals.unleash {:spend {:time 0}}) {:entities [(cow-at 1 2 {:leashed true :leashedToMe true})]}))))))))
+
+(deftest breeding-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.breed {:mob "cow"}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
+        (doseq [[args world kind reason]
+                [[{:fetch false} {:entities [(cow-at 1 2) (cow-at 2 3)]} :condition-failed :no-food]
+                 [{} {:inventory wheat :entities [(cow-at 1 2)]} :condition-failed :too-few]
+                 [{:mob "rock"} {:inventory wheat :entities []} :condition-failed :unknown-mob]
+                 [{:spend {:time 0}} {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]} :limit-reached :timeout]]]
+          (is (= {:event :stopped :kind kind :reason reason} (await (ending (list 'jobs.animals.breed (merge {:mob "cow"} args)) world)))))))))
+
+(deftest a-pen-check-answers-closed-as-done-and-a-leaky-pen-as-a-failed-condition
+  (let [ground (into {} (for [x (range -10 16) z (range -10 16)] [(str x ",63," z) "stone"]))
+        ring (into {} (for [x (range -1 6) z (range -1 6) :when (or (#{-1 5} x) (#{-1 5} z))] [(str x ",64," z) "oak_fence"]))
+        w (fn [more] {:self {:pos {:x 2 :y 64 :z 2}} :blocks (merge ground ring more)})]
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.pen-check {:at [2 64 2]}) (w {}))) [:event])))
+          (is (= {:event :stopped :kind :condition-failed :reason :leak}
+                 (await (ending '(jobs.animals.pen-check {:at [2 64 2] :max-cells 100}) (w {"2,64,-1" "air"})))))
+          (is (= {:event :stopped :kind :condition-failed :reason :no-pen}
+                 (await (ending '(jobs.animals.pen-check {}) (w {}))))))))))

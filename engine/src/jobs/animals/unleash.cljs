@@ -7,7 +7,7 @@
 
 (def doc
   "Take the lead off the animals within :radius that are on this body's lead or tied to a fence knot, and pick
-  the leads up again. A one-shot order that starts and ends itself. The check always passes.
+  the leads up again. A one-shot order that starts and ends itself; a cut job resumes.
 
   :mob limits it to one kind (any when nil), :animal to one animal by uuid (any when nil).
 
@@ -26,14 +26,14 @@
   Unless :collect is false the job then waits 0.8 s for the drops and runs jobs.forestry.collect-drops for the
   leads in :radius.
 
-  Ends with info unleash.done and a warn unleash.gave-up unless the reason is :unleashed. Result {:reason :freed
-  [keys] :given-up {key reason} :collected n :leads n}. :collected is the leads gained since the call began,
-  :leads the leads carried at the end. Reasons:
-  - :unleashed: some animal was freed.
-  - :timeout: :timeout-s from the start of the call (no collecting).
-  - With nothing freed: :unreachable if one was given up as unreachable, else :refused (others given up) or
-    :none.
-  - It also ends after three fruitless animals in a row.
+  Ends with info unleash.done and a warn unleash.gave-up unless the reason is :unleashed. The data {:reason :freed
+  [keys] :given-up {key reason} :collected n :leads n} (:collected is the leads gained since the call began, :leads
+  the leads carried at the end) and the ending by the reason:
+  - :done :unleashed: some animal was freed.
+  - :condition-failed :refused (with nothing freed, others given up) or :no-zones (no zone list was read).
+  - :limit-reached :timeout: the call's :spend :time (default ::time-s) from the start (no collecting).
+  - :nothing-possible with nothing freed: :unreachable if one was given up as unreachable, else :none (0 freed is
+    never done). It also ends after three fruitless animals in a row.
 
   Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is left on its lead (warn
   unleash.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
@@ -43,17 +43,18 @@
    :animal {:doc "uuid (or id) of the one animal to free; any when nil" :spec (a/or-of string? number?) :default nil}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 8}
    :walk-timeout-s {:doc "bound of one walk towards the click" :spec (a/num-in 0 nil) :default 5}
-   :timeout-s {:doc "seconds from the start of the call before the job gives up" :spec (a/num-in 0 nil) :default 30}
    :collect {:doc "pick up the leads afterwards" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
-  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+  {::time-s {:default 30 :doc "Seconds from the start of the call before unleashing gives up." :spec (a/num-in 0 nil)}
+   ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}
    ::knot-margin {:default 12 :doc "Blocks around the knot searched for the animal." :spec (a/int-in 0 nil)}
    ::settle-ms {:default 250 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
    ::settle-tries {:default 6 :doc "Looks at the animal before it counts as settled." :spec (a/int-in 0 nil)}
    ::drop-wait-ms {:default 800 :doc "How long the body waits for a dropped item, in ms." :spec (a/int-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 (def knot-name "leash_knot")
@@ -62,14 +63,38 @@
 (defn settle-tries [] (settings/get settings ::settle-tries))
 (defn drop-wait-ms [] (settings/get settings ::drop-wait-ms))
 
-(defn check [_c] true)
+(def target [:mob :animal])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions "None wait: an order with nobody on a lead ends the first round." [])
+
+(defn legacy-args
+  "An old caller's :timeout-s as the call's :spend {:time}."
+  [{:keys [timeout-s] :as args}]
+  (cond-> (dissoc args :timeout-s)
+    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
+
+(defn time-limit "Seconds the call may work." [c]
+  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+
+(defn quote-of [c]
+  (let [most (time-limit c)]
+    {:uses {:time [0 (min most 10) most]}}))
 
 (defn leads-carried [c]
   (reduce + (map :count (filter #(= "lead" (:name %)) (u/inventory (:primitives c))))))
 
+(def ending-of
+  "The kind and cause of a finish by reason."
+  {:unleashed [:done nil]
+   :refused [:condition-failed :refused]
+   :no-zones [:condition-failed :no-zones]
+   :timeout [:limit-reached {:line :time :reason :timeout}]})
+
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job. :collected is the leads gained since the call began,
-  so a lead picked up the moment it dropped counts too."
+  "Emit the outcome and end the call (ending-of, else nothing-possible). :collected is the leads gained since the call
+  began, so a lead picked up the moment it dropped counts too."
   [c reason]
   (let [m (ctx/mem c)
         leads (leads-carried c)
@@ -81,8 +106,8 @@
     (ctx/emit! c :unleash.done :info (assoc result :text (str "unleash done: " (name reason) ", freed " (count (:freed m)))))
     (when (not= :unleashed reason)
       (ctx/emit! c :unleash.gave-up :warn {:reason reason :text (str "unleashing stopped: " (name reason))}))
-    (ctx/result! c result)
-    :done))
+    (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
+      (ctx/end c kind cause result))))
 
 (defn go-collect! [c reason]
   (if-not (:collect (:args c))
@@ -107,6 +132,11 @@
                         (or (nil? animal) (= animal (animals/key-of %)))
                         (not (contains? skip (animals/key-of %)))))
          (animals/allowed c :unleash.declined "unleash" :take))))
+
+(defn done?
+  "The animals freed. Never :done? itself: the run ends with its event and data."
+  [c]
+  {:done? false :units :animals :done (count (:freed (ctx/mem c))) :left (count (candidates c))})
 
 (defn knot-of
   "The leash_knot entity the animal is tied to, or nil when it is not seen."
@@ -181,21 +211,20 @@
   (when-not (:dropped (ctx/mem c))
     (await (ctx/act c :wait #js {:ms (drop-wait-ms)}))
     (ctx/update-mem! c assoc :dropped true))
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (:radius (:args c)) :filter ["lead"]}))]
-    (if-not (= :done r)
+  (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius (:radius (:args c)) :filter ["lead"]}))]
+    (if (= :continue e)
       :continue
       (finish! c (:reason (ctx/mem c))))))
 
 (defn ^:async step [c]
-  (let [now (ctx/now c)
-        {:keys [timeout-s]} (:args c)]
+  (let [now (ctx/now c)]
     (ctx/update-mem! c #(-> %
                             (update :started (fn [t] (or t now)))
                             (update :leads-at-start (fn [n] (or n (leads-carried c))))))
     (let [m (ctx/mem c)
           cands (candidates c)]
       (cond
-        (>= (- now (:started m)) (* 1000 timeout-s)) (finish! c :timeout)
+        (>= (- now (:started m)) (* 1000 (time-limit c))) (finish! c :timeout)
         (= :collect (:phase m)) (await (collect! c))
         (empty? cands) (if (seq (:freed m)) (go-collect! c :unleashed) (finish! c (none-reason c)))
         :else (await (engage! c (first cands)))))))
