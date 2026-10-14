@@ -86,7 +86,8 @@
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]] :want [:any "stone"]}]}]
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 1})]]
-   :expect [{:event {:source :job :kind :stair.declined :data {:reason :refused}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stair.done} :for-s 20}]
    :after [[:block [17 1 16] "stone"]]
    :limit-s 90}
   ;; step 2 from (17 1 16) cuts (17 3 16) (18 3 16) (18 2 16); (18 1 16) is the kept floor, never cut

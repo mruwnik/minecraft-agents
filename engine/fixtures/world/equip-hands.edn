@@ -1,4 +1,4 @@
-;; Cards db7aa152, 76ce6829: jobs.items.equip holds a carried item in the main or off hand; a missing or misspelt item is refused with a reason.
+;; Cards db7aa152, 76ce6829: jobs.items.equip holds a carried item in the main or off hand; a missing item waits :no-item, a misspelt one stops impossible :unknown-item.
 {:defaults
  {:tags [:items :equip]
   :plot {:height 8}
@@ -14,8 +14,8 @@
    :expect [{:event {:source :job :kind :equip.done :data {:item "shield" :hand "off"}} :within-s 20 :of-job true}]}
   {:name "no-item"
    :act [[:job (jobs.items.equip {:item "diamond_pickaxe" :fetch false})]]
-   :expect [{:event {:source :job :kind :equip.refused :data {:reason :no-item}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-item}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :equip.done} :for-s 10}]}
   {:name "unknown-item"
    :act [[:job (jobs.items.equip {:item "iron_pickaxx"})]]
-   :expect [{:event {:source :job :kind :equip.refused :data {:reason :unknown-item}} :within-s 20 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :unknown-item}} :within-s 20 :of-job true}]}]}
