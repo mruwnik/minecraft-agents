@@ -633,7 +633,7 @@
           (let [{:keys [s out]} (await (as-child {:block "stone" :count 2} {:blocks (cells "stone" [3 4] [64] [0]) :inventory [{:name "stone_pickaxe" :count 1 :durability left :max 131}]} nil 10))]
             (is (zero? (dig-count s)))
             (is (= :no-tool (:reason (done-event s))))
-            (is (= [:limit-reached :wear :no-tool] [(:kind out) (:line (:cause out)) (contract/cause-key out)]) (pr-str out))))))))
+            (is (= [:condition-failed :no-tool] [(:kind out) (contract/cause-key out)]) (pr-str out))))))))
 
 (deftest a-pickaxe-with-uses-to-spare-digs
   (async done
@@ -1920,8 +1920,9 @@
 (defn ^:async as-child
   "Run the job with args under a contract parent (ctx/call) for n ticks; {:s setup :out the child's ending :fetch the get-tool calls}.
   get-tool is a stub that records its args and, when give is set, hands over that pickaxe (else stops :no-source)."
-  [args world give n & [{:keys [move-to]}]]
+  [args world give n & [{:keys [move-to before]}]]
   (let [s (start {:world world})
+        _ (when before (before s))
         out (atom nil)
         fetched (atom [])
         stub {:ways [:chest :craft :gather] :check (constantly true)
@@ -2669,3 +2670,11 @@
     (is (nil? (contract/quote-problem q)) (pr-str q))
     (is (= [0 3 3] (get-in q [:yields :items "sand"])))
     (is (fn? (:done? def)))))
+
+(deftest hunger-ends-limit-reached-on-the-food-line
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (as-child {:block "sand" :count 6} {:blocks (merge floor sand-patch) :self {:food 2}} nil 5
+                                             {:before #(mem/write! (:store (:eng %)) :hungry {:food 2} {:cap 10 :ttl 3600000})}))]
+          (is (= [:limit-reached :food :hungry] [(:kind out) (:line (:cause out)) (contract/cause-key out)]) (pr-str out)))))))

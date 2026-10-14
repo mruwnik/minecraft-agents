@@ -52,7 +52,7 @@
   - The head in water (jobs.lib.breath/head-under?) before a dig: no more digging, warn mine.flooded; before the first dig the job ends
     {:got 0 :reason :flooded}, later the dig phase ends :flooded and the body walks home.
   - Every carried tool that digs the block down to 3 uses (jobs.lib.trip/spent-tool?, no spare was had) ends the same way, :reason :no-tool,
-    before the last one breaks deep down (limit-reached on :wear).
+    before the last one breaks deep down.
   - A pickaxe block (jobs.lib.tool-kind/tool-kind) with no *_pickaxe carried, at the start or later (the pick broke),
     gets one with jobs.items.get-tool through jobs.lib.need first (unless :fetch is false). Nothing got: before any dig it ends at once, warn mine.no-tool,
     {:got 0 :reason :no-tool :tool <kind needed: pickaxe, sword, shears>} (:why the fetch's cause); in the dig phase the mend and walk home follow with
@@ -160,8 +160,8 @@
   tunnel goes on (with :tunnel-length 0 the dig phase ends :refused).
 
   Ends :done when :got meets :count (or the call's :least; default :all) and the body got home. Else the cause is
-  {:reason r} (:tool, :why): condition-failed for the facts :none :wet :refused :own-zone :no-shaft :flooded :hungry
-  :no-tool, limit-reached {:line :wear} for a worn last tool, nothing-possible for the tries that failed (:no-drops
+  {:reason r} (:tool, :why): condition-failed for the facts :none :wet :refused :own-zone :no-shaft :flooded
+  :no-tool (also a worn last tool), limit-reached {:line :food} for :hungry, nothing-possible for the tries that failed (:no-drops
   :gave-up :tunnel-length :tunnel-stopped :no-stone-found :spent-on-mend :not-home :not-back :zone-exit). 0 of :count
   is never done. Quote: about ::item-s s an item, open-ended; yields up to :count of the item.
 
@@ -500,7 +500,7 @@
       (and (contains? #{nil :dig} (:phase m)) (not (tools/can-harvest? (:primitives c) (:block (:args c))))) (await (fetch-pickaxe! c))
 
       (and (contains? #{nil :dig} (:phase m)) (trip/spent-tool? (:primitives c) (:block (:args c))))
-      (do (ctx/update-mem! c assoc :tool-spent true :end-cause {:tool (tools/needed-kind (:primitives c) (:block (:args c))) :why :spent})
+      (do (ctx/update-mem! c assoc :end-cause {:tool (tools/needed-kind (:primitives c) (:block (:args c))) :why :spent})
           (if (nil? (:phase m)) (no-tool! c :spent) (to-mend! c :no-tool)))
 
       (and (nil? (:phase m)) (tools/can-harvest? (:primitives c) (:block (:args c))) (:pre-start m) (not (at-pre-start? c))) (await (back-to-pre-start! c))

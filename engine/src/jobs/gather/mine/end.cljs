@@ -44,7 +44,7 @@
 (def facts
   "End reasons that name a fact (condition-failed); the other reasons short of the count are tries that failed
   (nothing-possible)."
-  #{:none :wet :refused :own-zone :no-shaft :flooded :hungry :no-tool})
+  #{:none :wet :refused :own-zone :no-shaft :flooded :no-tool})
 
 (defn wanted
   "The items the call needs for :done: :count, or the call's :least when that is a number."
@@ -55,13 +55,13 @@
 
 (defn end-run
   "The ending of a run with data {:got n :reason r ..}, the old result fields: :done when :got meets wanted and the
-  body got home, else by reason a kind: a worn last tool (memory :tool-spent) limit-reached on :wear, a fact
-  condition-failed, any other nothing-possible. The cause is {:reason r} with :tool and :why when the data has them."
+  body got home, else by reason a kind: :hungry limit-reached on the food line, a fact (a worn last tool
+  is :no-tool) condition-failed, any other nothing-possible. The cause is {:reason r} with :tool and :why when the data has them."
   [c {:keys [got reason] :as data}]
   (let [cause (merge {:reason reason} (select-keys data [:tool :why]))]
     (cond
       (and (not= :not-home reason) (>= got (wanted c))) (ctx/end c :done nil data)
-      (and (= :no-tool reason) (:tool-spent (ctx/mem c))) (ctx/end c :limit-reached (assoc cause :line :wear) data)
+      (= :hungry reason) (ctx/end c :limit-reached (assoc cause :line :food) data)
       (facts reason) (ctx/end c :condition-failed cause data)
       :else (ctx/end c :nothing-possible cause data))))
 
