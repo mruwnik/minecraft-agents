@@ -1,30 +1,32 @@
 (ns jobs.build.clear-box
-  (:require [engine.settings :as settings]
+  (:require [clojure.string :as str]
+            [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.farm.common :as common]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
-            [jobs.lib.step-off :as step-off]
-            [jobs.lib.world :as known]))
+            [jobs.lib.step-off :as step-off]))
 
 (def doc
   "Dig out a box from the top down (site levelling, demolition). Beds, containers and fluids are kept (:keep adds
   more block names). The box is :from and :to, each {:x :y :z} or [x y z], at most 400 cells.
   Each cell is dug by a jobs.blocks.dig child: it walks in reach, holds the best carried tool and picks up the
   drop. No tool is needed (a block whose tool is missing is dug and its drop lost). While the child waits on
-  the body (:inventory-full) the job waits with the same reason.
+  the body (:inventory-full) the job yields :continue.
   Zones and plans: loaded cells that a zone or an active plan's footprint refuses are skipped for good (reason
   :zone or :footprint, one clear-box.refused info per round). The chosen cell is checked again before the dig.
   A dig hazard not in :accept counts a try (reason :hazard after two).
-  The job declines:
-  - on a missing corner or too many cells (clear-box.declined {:reason :bad-args}).
-  - before the first round when every pending cell is refused (clear-box.declined {:reason :refused :zones
-    :plans}).
-  - when no zone list has been read (clear-box.declined {:reason :no-zones}), also in the middle of the job.
-  Result: {:dug n :skipped {pos reason} :kept n :fluids {name count}}.")
+  Refused before it starts: {:reason :bad-args :why} (impossible: a missing corner or too many cells), as failed
+  conditions {:reason :no-zones} (no zone list read, unless :ignore-zones?, also in the middle of the job) and
+  {:reason :refused :zones :plans} (every pending cell is refused, before the first round).
+  Ends with data {:dug n :skipped {pos reason} :kept n :fluids {name count}}: done when it dug some (the least accepted
+  is :least, cells) or had nothing to dig; with none dug and cells skipped, condition-failed for :zone, :footprint and
+  :cannot, else nothing-possible (:unreachable, :hazard, :refused), the cause the one skip reason or :nothing-dug when
+  mixed. done? counts the cells dug this call and the cells left.")
 
 (a/defargs args
   {:from {:doc "box corner (inclusive); any order; [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
@@ -36,7 +38,8 @@
 
 (a/defargs settings
   {::max-cells {:default 400 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
-   ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
+   ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}
+   ::cell-s {:default 1.5 :doc "Mean seconds one cell takes (walk, dig, pick up, pace), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
 (defn max-tries [] (settings/get settings ::max-tries))
 (def air #{"air" "cave_air" "void_air"})
@@ -113,27 +116,36 @@
   [c]
   (boolean (some #(contains? (ctx/mem c) %) [:dug :skipped :cell-tries :target])))
 
-(defn decline-box!
-  "Warn once clear-box.declined {:reason :bad-args} naming the box's problem; waits with it."
+(defn problem
+  "Why the call cannot run now, or nil. A missing corner or too big a box is impossible. Otherwise a cause map: no zone
+  list read (unless :ignore-zones?), also in the middle of the job, and before the first round every pending cell
+  refused by a zone or plan."
   [c]
-  (let [text (box-error (:args c))]
-    (ctx/warn-once! c [:access :bad-args] :clear-box.declined {:reason :bad-args :text text})
-    (ctx/wait c {:reason :bad-args :why text})))
+  (if-let [text (box-error (:args c))]
+    (contract/impossible {:reason :bad-args :why text})
+    (or (common/no-zones c :clear-box.declined "clear-box")
+        (when-not (started? c)
+          (let [{:keys [allowed refused]} (sort-out c (pending c))]
+            (when (and (empty? allowed) (seq refused))
+              (let [fields (assoc (access/refusal-fields (map second refused)) :reason :refused)]
+                (ctx/warn-once! c [:access :refused] :clear-box.declined
+                                (assoc fields :text (str "clear-box declined: every target is refused by " (access/refusal-text fields))))
+                fields)))))))
 
-(defn check
-  "Declines without a zone list, and before the first round when every pending cell is refused."
+(def target [:from :to])
+(def conditions [[:fn problem]])
+
+(defn done?
+  "Counts only (the round ends the call with its data): the cells dug this call and the cells left to dig."
   [c]
-  (cond
-    (and (not (started? c)) (box-error (:args c))) (decline-box! c)
-    (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :clear-box.declined "clear-box" {:reason :no-zones})
-    (:target (ctx/mem c)) (let [w (blocks/child-wait c :dig 'jobs.blocks.dig (dig-args c (:target (ctx/mem c))))]
-                            (if (blocks/body-wait? w) (ctx/wait c w) true))
-    (started? c) true
-    :else (let [{:keys [allowed refused]} (sort-out c (pending c))]
-            (if (and (empty? allowed) (seq refused))
-              (access/decline! c :clear-box.declined "clear-box"
-                               (assoc (access/refusal-fields (map second refused)) :reason :refused))
-              true))))
+  {:done? false :units :cells :done (:dug (ctx/mem c) 0) :left (if (box-error (:args c)) 0 (count (pending c)))})
+
+(defn quote-of [c]
+  (let [p (:primitives c)
+        n (if (box-error (:args c)) 0 (count (remove #(air (u/seen-name p %)) (cells (:args c)))))
+        s (* n (settings/get settings ::cell-s))]
+    {:uses {:time [(* 0.5 s) s (* 4 s)]}
+     :done [0 n n]}))
 
 (defn skip! [c pos reason]
   (ctx/update-mem! c update :skipped assoc pos reason)
@@ -162,7 +174,7 @@
         fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)]
     #{{:x fx :y (dec fy) :z fz} {:x fx :y fy :z fz} {:x fx :y (inc fy) :z fz}}))
 
-(defn target
+(defn top-cell
   "The pending [pos name] at the highest y among the loaded cells not under the
   body's feet, nearest the body; with none loaded, the nearest unloaded one.
   Under-foot cells are picked only when nothing else is pending (nil then)."
@@ -191,23 +203,47 @@
       (bump! c (first (apply min-key #(u/dist me (first %)) todo)) :unreachable))
     :again))
 
-(defn finish! [c]
+(def condition-skips
+  "Skip reasons that name a cell the job may not or cannot dig; any other skip is nothing-possible."
+  #{:zone :footprint :cannot})
+
+(defn nothing-dug
+  "The cause (the one skip reason, :nothing-dug when they are mixed) and text of a run that dug nothing."
+  [skipped]
+  (let [counts (frequencies (vals skipped))
+        reason (if (= 1 (count counts)) (key (first counts)) :nothing-dug)]
+    [reason (str "nothing dug: " (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) counts))))]))
+
+(defn finish!
+  "The ending of a run with no cell left to work. Done when it dug enough (or had nothing to skip); else the cause is
+  the skip reason(s)."
+  [c]
   (let [mem (ctx/mem c)
         everything (named c)
         keep (:keep (:args c) [])
         kept (count (filter (fn [[_ n]] (and (not (fluids n)) (not (air n)) (kept? keep n))) everything))
         wet (frequencies (filter fluids (map second everything)))
         skipped (:skipped mem {})
-        dug (:dug mem 0)]
+        dug (:dug mem 0)
+        result {:dug dug :skipped skipped :kept kept :fluids wet}]
     (ctx/emit! c :clear-box.done :info {:dug dug :skipped (count skipped)
                                         :text (str "dug " dug ", skipped " (count skipped))})
-    (ctx/result! c {:dug dug :skipped skipped :kept kept :fluids wet})
-    :done))
+    (if (or (empty? skipped) (common/enough? c dug (+ dug (count skipped))))
+      (ctx/end c :done nil result)
+      (let [[reason text] (if (pos? dug) [:partial (str "dug " dug ", skipped " (count skipped))] (nothing-dug skipped))]
+        (ctx/end c (if (condition-skips reason) :condition-failed :nothing-possible) reason (assoc result :text text))))))
+
+(defn declined?
+  "Whether the dig child's ending e is a refusal at its start (no data), not a dig that failed."
+  [e]
+  (and (= :condition-failed (:kind e)) (nil? (:data e))))
+
+(defn wait-of [e] (let [cause (:cause e)] (if (map? cause) cause {:reason cause})))
 
 (defn declined!
-  "Book the cell t whose dig child declined with wait reason w: a body reason or an unloaded cell keeps it (the
-  check waits on it), a refusal or a missing zone list skips or leaves it, a hazard counts a try, anything else skips
-  it as :unreachable."
+  "Book the cell t whose dig child was refused with cause w: a body reason or an unloaded cell keeps it (the job yields
+  :continue), a refusal or a missing zone list skips or leaves it, a hazard counts a try, anything else skips it as
+  :unreachable."
   [c t w]
   (when-not (or (blocks/body-wait? w) (= :not-loaded (:reason w)))
     (ctx/update-mem! c dissoc :target)
@@ -220,20 +256,19 @@
 (defn ^:async dig!
   "One round of the dig child on the target cell t; book its end. A refused dig counts a try (:refused after two)."
   [c t]
-  (let [args (dig-args c t)
-        r (await (ctx/call-child c :dig 'jobs.blocks.dig args))]
-    (case r
-      :continue :continue
-      :declined (declined! c t (blocks/child-wait c :dig 'jobs.blocks.dig args))
-      (let [res (ctx/child-result c :dig)]
-        (ctx/update-mem! c dissoc :target)
-        (case (:reason res)
-          :dug (ctx/update-mem! c #(-> % (update :cell-tries dissoc t) (update :dug (fnil inc 0))))
-          :already-clear (ctx/update-mem! c update :cell-tries dissoc t)
-          (:cannot :fluid) (skip! c t :cannot)
-          :unreachable (skip! c t :unreachable)
-          (bump! c t :refused))
-        :again))))
+  (let [e (await (ctx/call c :dig 'jobs.blocks.dig (dig-args c t)))]
+    (cond
+      (= :continue e) :continue
+      (declined? e) (declined! c t (wait-of e))
+      :else
+      (do (ctx/update-mem! c dissoc :target)
+          (case (if (= :done (:kind e)) (:reason (:data e)) (contract/cause-key e))
+            :dug (ctx/update-mem! c #(-> % (update :cell-tries dissoc t) (update :dug (fnil inc 0))))
+            :already-clear (ctx/update-mem! c update :cell-tries dissoc t)
+            (:cannot :fluid) (skip! c t :cannot)
+            :unreachable (skip! c t :unreachable)
+            (bump! c t :refused))
+          :again))))
 
 (defn ^:async step
   "One step: a round of the dig child on the cell under way (until it has picked up the drop), else skip the
@@ -245,11 +280,11 @@
       (when (seq refused) (skip-refused! c refused))
       (if (empty? allowed)
         (finish! c)
-        (if-let [[pos n] (target c allowed)]
+        (if-let [[pos n] (top-cell c allowed)]
           (if (nil? n)
-            (let [w (await (near/go-near! c pos 3 {:zone-tolls true}))]
+            (let [w (await (common/walk! c pos 3 {:zone-tolls true}))]
               (when (= :blocked w) (bump! c pos :unreachable))
-              (if (or (= :partial w) (and (= :there w) (nil? (u/seen-name (:primitives c) pos)))) :continue :again))
+              (if (or (= :continue w) (and (= :there w) (nil? (u/seen-name (:primitives c) pos)))) :continue :again))
             (do (ctx/update-mem! c assoc :target pos)
                 (await (dig! c pos))))
           (await (step-off! c allowed)))))))

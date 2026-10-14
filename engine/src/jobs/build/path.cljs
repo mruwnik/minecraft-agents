@@ -2,40 +2,45 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.farm.common :as common]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
-            [jobs.lib.toll-cells :as tc]
-            [jobs.lib.world :as known]))
+            [jobs.lib.places :as places]
+            [jobs.lib.toll-cells :as tc]))
 
 (def doc
   "Shovel grass_block, dirt, coarse_dirt, podzol, mycelium or rooted_dirt into dirt_path over a set of ground cells,
   given as the box :from/:to or the square :center/:radius (at most 256 cells).
-  Needs a shovel: without one it fetches one (jobs.lib.fetch, child :fetch) while cells wait; with :fetch false, or
-  after a failed fetch, the check waits :no-tool (kind shovel) and cells left without a shovel are skipped :no-shovel.
+  Needs a shovel: the call's :use {:tools [..]} names the ones it may use (default every carried shovel); with none
+  carried it fetches one (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as the :because, pathed
+  and skipped in the data), with :fetch false the call is refused {:reason :no-tool :kind \"shovel\"}.
   Ground cover over a cell (grass, ferns, snow layer) is dug first with a jobs.blocks.dig child. If that child
   declines or gives up, it counts a try.
   Cells are skipped with a reason: :not-pathable, :covered (something else above), :not-permitted (zone rules),
   :unreachable, :gone, :refused (the shovel failed twice), :no-shovel or :cover-stuck (two failed cover digs). A cell
   that already is a path is left alone and not counted.
   Zones and the footprints of plans are checked when a cell is chosen and again before the shovel or cover dig.
-  The job declines while no zone list has been read, unless :ignore-zones? is true, and before its first round when
-  every pathable cell is refused (wait :refused); cells refused later are skipped :not-permitted.
-  Bad cell args wait :bad-args with a :why.
-  Result: {:pathed n :skipped {pos reason}}; with none pathed and cells skipped it is {:status :stopped :reason r}, r the
-  one skip reason or :nothing-pathed when mixed.")
+  Refused before it starts: {:reason :bad-args :why} (impossible: the cells args are wrong), as failed conditions
+  {:reason :no-zones} (no zone list read, unless :ignore-zones?), {:reason :refused :zones ..} (every pathable cell is
+  refused) and the shovel above.
+  Ends with data {:pathed n :skipped {pos reason}}: done when it pathed some (the least accepted is :least, cells) or had
+  nothing to path; with none pathed and cells skipped, condition-failed for :not-pathable, :covered, :not-permitted, :gone
+  and :no-shovel, else nothing-possible (:unreachable, :refused, :cover-stuck), the cause the one skip reason or
+  :nothing-pathed when mixed. done? counts the cells pathed this call and the cells left.")
 
 (a/defargs args
   {:from {:doc "box corner (inclusive); with :to, any order" :spec ::a/pos :default nil}
    :to {:doc "opposite box corner (inclusive)" :spec ::a/pos :default nil}
    :center {:doc "centre of a square of cells at its y; with :radius" :spec ::a/pos :default nil}
    :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :spec (a/int-in 0 7) :default nil}
-   :fetch {:doc "get a shovel when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}
+   :fetch {:doc "get a shovel when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :no-tool" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -47,6 +52,8 @@
 (def air #{"air" "cave_air" "void_air"})
 (defn max-tries [] (settings/get settings ::max-tries))
 (def no-shovel {:reason :no-tool :kind "shovel"})
+(def target [:from :to :center :radius])
+(def defaults {:use {:tools :shovel}})
 
 (defn span [a b] (range (min a b) (inc (max a b))))
 (defn span-size [a b] (inc (js/Math.abs (- a b))))
@@ -65,10 +72,28 @@
       (throw (ex-info (str "path covers " n " cells, at most " (max-cells)) {:cells n})))
     (vec (for [x (span xa xb) y (span ya yb) z (span za zb)] {:x x :y y :z z}))))
 
-(defn shovel-of
-  "The name of a carried item ending in _shovel, or nil."
-  [p]
-  (some #(when (.endsWith (:name %) "_shovel") (:name %)) (u/inventory p)))
+(defn listed
+  "The shovels the call names (:use {:tools [..]}) as a set, or nil when it names none (the engine's default list is not given)."
+  [c]
+  (let [l (get-in (:args c) [:use :tools])]
+    (when (vector? l) (set l))))
+
+(defn shovel
+  "The name of a carried shovel the call may use, or nil."
+  [c]
+  (let [only (listed c)]
+    (some #(when (and (.endsWith (:name %) "_shovel") (or (nil? only) (only (:name %)))) (:name %)) (u/inventory (:primitives c)))))
+
+(defn fetch-opts
+  "The limits {:how :depth :explore} for fetching a shovel, nil when :fetch does not allow tools."
+  [c]
+  (when-let [o (fetch/opts c 'jobs.build.path)]
+    (when (contains? (:what o) :tool) (select-keys o [:how :depth :explore]))))
+
+(defn shovel-wanted
+  "What the fetch gets: a listed shovel by name, else any shovel."
+  [c]
+  (if-let [l (listed c)] {:item (first (sort l))} {:kind "shovel"}))
 
 (defn pending
   "[[pos block-name-or-nil] ...] of the cells not skipped and not already a path."
@@ -99,25 +124,38 @@
                        (pending c))]
     (when (and (seq verdicts) (every? #(not= ::open %) verdicts)) verdicts)))
 
-(defn check
-  "True when nothing is pending (the round can finish) or a shovel is carried (fetched first, if any); a wait without
-  a shovel; declines while no zone list has been read (unless :ignore-zones?) and, before the first round, when every
-  pathable cell is refused."
+(defn problem
+  "Why the call cannot run now, or nil. Bad cells args are impossible. Otherwise a cause map: no zone list read (unless
+  :ignore-zones?), before the first round every pathable cell refused by a zone, claim or plan, and (before the first
+  round) cells to path with no shovel that may be fetched."
   [c]
   (let [cs (try (cells (:args c)) (catch :default e (ex-message e)))]
     (if (string? cs)
-      (ctx/wait c {:reason :bad-args :why cs})
-      (and (or (:ignore-zones? (:args c)) (some? (known/zones c))
-               (access/decline! c :path.declined "path" {:reason :no-zones}))
-           (if-let [vs (and (not (started? c)) (not (:ignore-zones? (:args c))) (refused-all c))]
-             (access/decline! c :path.declined "path" (assoc (access/refusal-fields vs) :reason :refused))
-             (or (empty? (pending c)) (some? (shovel-of (:primitives c))) (fetch/check c 'jobs.build.path no-shovel)))))))
+      (contract/impossible {:reason :bad-args :why cs})
+      (or (common/no-zones c :path.declined "path")
+          (when-let [vs (and (not (started? c)) (not (:ignore-zones? (:args c))) (refused-all c))]
+            (let [fields (assoc (access/refusal-fields vs) :reason :refused)]
+              (ctx/warn-once! c [:access :refused] :path.declined
+                              (assoc fields :text (str "path declined: every target is refused by " (access/refusal-text fields))))
+              fields))
+          (when (and (seq (pending c)) (not (started? c)) (nil? (shovel c)) (nil? (fetch-opts c)))
+            no-shovel)))))
 
-(defn problem
-  "The :no-tool wait for a shovel while none is carried and cells are left to path, else nil."
+(def conditions [[:fn problem]])
+
+(defn done?
+  "Counts only (the round ends the call with its data): the cells pathed this call and the cells left to path."
   [c]
-  (when (and (nil? (shovel-of (:primitives c))) (seq (pending c)))
-    no-shovel))
+  (let [cs (try (cells (:args c)) (catch :default _ nil))]
+    {:done? false :units :cells :done (count (:pathed (ctx/mem c))) :left (if cs (count (pending c)) 0)}))
+
+(defn quote-of [c]
+  (let [cs (try (cells (:args c)) (catch :default _ nil))
+        p (:primitives c)
+        n (count (remove #(= "dirt_path" (u/seen-name p %)) cs))
+        s (shovel c)]
+    {:uses (cond-> {:time [(* 0.5 n) (* 2 n) (* 10 n)]} (and s (pos? n)) (assoc :wear {s [n n n]}))
+     :done [0 n n]}))
 
 (defn skip! [c poss reason]
   (ctx/update-mem! c update :skipped #(into (or % {}) (map (fn [p] [p reason])) poss))
@@ -139,29 +177,40 @@
   (merge (select-keys (:args c) [:ignore-zones?])
          {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block}}))
 
+(def condition-skips
+  "Skip reasons that name a cell or a shovel that is not there to use; any other skip is nothing-possible."
+  #{:not-pathable :covered :not-permitted :gone :no-shovel})
+
 (defn nothing-pathed
-  "Stopped outcome for a run that pathed nothing: the one skip reason, or :nothing-pathed when they are mixed."
+  "The cause (the one skip reason, :nothing-pathed when they are mixed) and text of a run that pathed nothing."
   [skipped]
   (let [counts (frequencies (vals skipped))
         reason (if (= 1 (count counts)) (key (first counts)) :nothing-pathed)
         text (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) counts)))]
-    {:status :stopped :reason reason
-     :text (if (= :no-shovel reason) "no shovel, nothing pathed" (str "nothing pathed: " text))}))
+    [reason (if (= :no-shovel reason) "no shovel, nothing pathed" (str "nothing pathed: " text))]))
 
-(defn finish! [c]
-  (let [mem (ctx/mem c)
-        pathed (count (:pathed mem))
-        skipped (:skipped mem {})]
+(defn result-of
+  "The data of the call's ending: what is pathed and skipped so far."
+  [c]
+  (let [mem (ctx/mem c)]
+    {:pathed (count (:pathed mem)) :skipped (:skipped mem {})}))
+
+(defn conclude!
+  "The ending of a run with no cell left to work. Done when it pathed enough (or had nothing to skip); else the cause is
+  the skip reason(s)."
+  [c]
+  (let [{:keys [pathed skipped] :as result} (result-of c)]
     (ctx/emit! c :path.done :info {:pathed pathed :skipped (count skipped)
                                    :text (str "pathed " pathed ", skipped " (count skipped))})
-    (ctx/result! c (cond-> {:pathed pathed :skipped skipped}
-                     (and (zero? pathed) (seq skipped)) (merge (nothing-pathed skipped))))
-    :done))
+    (if (or (empty? skipped) (common/enough? c pathed (+ pathed (count skipped))))
+      (ctx/end c :done nil result)
+      (let [[reason text] (if (pos? pathed) [:partial (str "pathed " pathed ", skipped " (count skipped))] (nothing-pathed skipped))]
+        (ctx/end c (if (condition-skips reason) :condition-failed :nothing-possible) reason (assoc result :text text))))))
 
-(defn ^:async shovel!
+(defn ^:async use-shovel!
   "Use the shovel on target and book the outcome."
-  [c target shovel]
-  (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item shovel :face "up"}))
+  [c target tool]
+  (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item tool :face "up"}))
         status (.-status r)]
     (cond
       (and (= "used" status) (= "dirt_path" (some-> (.-after r) .-name)))
@@ -174,10 +223,10 @@
 
 (defn ^:async work!
   "Walk to target and clear the cover above it, or shovel it."
-  [c target shovel]
+  [c target tool]
   (let [p (:primitives c)
-        w (await (near/go-near! c target 3 {:tolls (tc/walk-tolls c (near/cell-of target))}))]
-    (if (= :partial w)
+        w (await (common/walk! c target 3 {:tolls (tc/walk-tolls c (:pos (places/parse-pos target)))}))]
+    (if (= :continue w)
       :continue
       (let [above-pos (update target :y inc)
             above (u/seen-name p above-pos)]
@@ -187,14 +236,15 @@
           (and (ground-cover above) (not (permitted? c :dig above-pos))) (do (skip! c [target] :not-permitted) :again)
 
           (ground-cover above)
-          (let [r (await (ctx/call-child c :cover 'jobs.blocks.dig (cover-args c above-pos)))]
-            (when (or (= :declined r)
-                      (and (= :done r) (not (#{:dug :already-clear} (:reason (ctx/child-result c :cover))))))
-              (bump! c target :cover-stuck))
-            :again)
+          (let [e (await (ctx/call c :cover 'jobs.blocks.dig (cover-args c above-pos)))]
+            (cond
+              (= :continue e) :continue
+              (not (and (= :done (:kind e)) (#{:dug :already-clear} (:reason (:data e)))))
+              (do (bump! c target :cover-stuck) :again)
+              :else :again))
 
           (not (or (nil? above) (air above))) (do (skip! c [target] :covered) :again)
-          :else (await (shovel! c target shovel)))))))
+          :else (await (use-shovel! c target tool)))))))
 
 (defn ^:async path-step!
   "One step: skip what cannot be pathed, else work the cell nearest the body."
@@ -206,17 +256,31 @@
           _ (when (seq unpermitted) (skip! c unpermitted :not-permitted))
           bad? (into (set bad) unpermitted)
           cands (remove (fn [[pos _]] (bad? pos)) todo)
-          shovel (shovel-of (:primitives c))
+          tool (shovel c)
           me (u/self-pos c)]
       (cond
-        (empty? cands) (finish! c)
-        (nil? shovel) (do (skip! c (map first cands) :no-shovel) :again)
-        :else (await (work! c (first (apply min-key #(u/dist me (first %)) cands)) shovel))))))
+        (empty? cands) (conclude! c)
+        (nil? tool) (do (skip! c (map first cands) :no-shovel) :again)
+        :else (await (work! c (first (apply min-key #(u/dist me (first %)) cands)) tool))))))
+
+(defn ^:async fetch-shovel!
+  "Get a shovel when none may be used and cells are left: nil when one is carried (or came), :continue while the fetch
+  waits on the world, else the ending of the call: done when enough is pathed already, else the fetch's kind and cause."
+  [c]
+  (when (and (nil? (shovel c)) (seq (pending c)))
+    (let [e (if-let [o (fetch-opts c)]
+              (await (need/tool! c (shovel-wanted c) o))
+              {:kind :condition-failed :cause no-shovel})]
+      (cond
+        (= :continue e) :continue
+        (= :done (:kind e)) nil
+        (common/enough? c (count (:pathed (ctx/mem c))) (count (cells (:args c)))) (conclude! c)
+        :else (ctx/end c (:kind e) (:cause e) (result-of c))))))
 
 (defn ^:async round
   "The whole attempt: fetch a shovel when none is carried, then loop the steps until the cells are done; :continue only
   while a walk or fetch waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async s []
-                          (or (await (fetch/fetch! c 'jobs.build.path problem))
+                          (or (await (fetch-shovel! c))
                               (await (path-step! c)))))))

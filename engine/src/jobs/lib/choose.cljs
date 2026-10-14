@@ -41,10 +41,10 @@
 
 (def kind-purposes
   "Tool purposes besides [:dig block]: the tool kinds that serve each."
-  {:attack ["sword" "axe"] :till ["hoe"] :shear ["shears"]})
+  {:attack ["sword" "axe"] :till ["hoe"] :shovel ["shovel"] :shear ["shears"]})
 
 (defn tools-for
-  "See the ns doc. The purposes are [:dig block] and the kind purposes of kind-purposes ([:attack], [:till],
+  "See the ns doc. The purposes are [:dig block] and the kind purposes of kind-purposes ([:attack], [:till], [:shovel],
   [:shear]); any other throws."
   ([c purpose amount] (tools-for c purpose amount nil))
   ([c [what block :as purpose] amount opts]
@@ -127,7 +127,7 @@
 (defn default-use
   "The item names a call's :use gets for purpose when the job's defaults name chooser spec for it (the :use/default
   hook; see use-spec?). {:tools :dig} is the tools for the args' :block, else the block at :pos, and throws when
-  the args give neither; {:tools :attack|:till|:shear} the carried tools of that purpose; {:blocks :build|...} the
+  the args give neither; {:tools :attack|:till|:shovel|:shear} the carried tools of that purpose; {:blocks :build|...} the
   carried fillers of that purpose. nil when the list is not known yet (the block at :pos is hidden). An unknown
   spec throws."
   [c purpose spec]

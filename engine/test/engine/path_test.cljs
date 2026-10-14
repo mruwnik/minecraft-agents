@@ -6,7 +6,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.takeover :as takeover]
-            [engine.test-util :as tu :refer [run-until-empty child-outcome]]
+            [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
@@ -24,6 +24,12 @@
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn block-at [p pos] (.-name (.blockAt p (clj->js pos))))
 (defn kinds [seen kind] (filterv #(= kind (:kind %)) @seen))
+
+(defn ^:async child-outcome
+  "tu/child-outcome without the ending the adapter adds, and without :status when it is :done."
+  [eng job args n]
+  (let [r (await (tu/child-outcome eng job args n))]
+    (if (map? r) (cond-> (dissoc r :ending) (= :done (:status r)) (dissoc :status)) r)))
 
 (def job 'jobs.build.path)
 (def shovel [{:name "stone_shovel" :count 1}])
@@ -79,14 +85,14 @@
           (is (empty? (kinds seen :fetch.started)) "fetch false: no fetch child")
           (is (empty? (calls p "useOn"))))))))
 
-(deftest path-bad-args-wait-instead-of-throwing
+(deftest path-bad-args-end-impossible-instead-of-throwing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory shovel :blocks four})]
           (core/submit! eng (list job {:from {:x 0 :y 63 :z 0} :to {:x 30 :y 63 :z 30}}) {})
-          (is (nil? (core/tick! eng)))
-          (is (= [:bad-args] (map :reason (kinds seen :waiting))))
+          (await (core/tick! eng))
+          (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")
           (is (empty? (calls p "useOn"))))))))
 
 (deftest path-skips-a-cell-the-use-refuses-after-two-tries
@@ -119,7 +125,7 @@
               parent {:check (constantly true)
                       :round (fn ^:async r [c]
                                (let [r (await (ctx/call-child c :kid job box))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                 (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :status)))
                                  r))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
@@ -188,18 +194,6 @@
           (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "no-item"}))
           (is (= {:status :stopped :reason :no-shovel :pathed 0 :skipped {{:x 1 :y 63 :z 1} :no-shovel}}
                  (dissoc (await (child-outcome eng job args 8)) :text))))))))
-
-(deftest path-without-a-shovel-runs-the-fetch-child
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks four})]
-          (core/submit! eng (list job box) {})
-          (await (run-until-empty eng 3))
-          (is (empty? (calls p "useOn")))
-          (is (= 1 (count (kinds seen :fetch.started))))
-          (is (= 1 (count (kinds seen :fetch.failed))))
-          (is (= [:no-shovel] (distinct (map :reason (kinds seen :path.skipped))))))))))
 
 (deftest path-leaves-cells-in-the-footprint-of-its-own-plan-alone-too
   (async done

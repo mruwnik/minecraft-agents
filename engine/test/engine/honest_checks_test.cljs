@@ -96,7 +96,6 @@
 
 (deftest survival-and-maintenance-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
-    'jobs.build.clear-box {} :bad-args
     'jobs.gather.mine {} :no-block
     'jobs.movement.leave-vehicle {} :not-mounted
     'jobs.survival.breathe {} :not-underwater

@@ -8,7 +8,7 @@
             [engine.takeover :as takeover]
             [engine.fake :as fake]
             [engine.blocks-dig-test :as bd]
-            [engine.test-util :as tu :refer [run-until-empty child-outcome]]
+            [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.build.clear-box :as clear-box]))
@@ -27,6 +27,12 @@
 (defn kinds [seen kind] (filterv #(= kind (:kind %)) @seen))
 (defn dug-ys [p] (mapv #(.-y (.-pos (.-args %))) (calls p "dig")))
 (defn held-items [p] (mapv #(.-item (.-args %)) (calls p "equip")))
+
+(defn ^:async child-outcome
+  "tu/child-outcome without the ending, status, reason and text the adapter adds (the contract test reads the ending)."
+  [eng job args n]
+  (let [r (await (tu/child-outcome eng job args n))]
+    (if (map? r) (dissoc r :ending :status :reason :text) r)))
 
 (def job 'jobs.build.clear-box)
 (def box {:from {:x 1 :y 64 :z 1} :to {:x 2 :y 65 :z 2}})
@@ -125,7 +131,7 @@
               parent {:check (constantly true)
                       :round (fn ^:async r [c]
                                (let [r (await (ctx/call-child c :kid job box))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                 (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :status)))
                                  r))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
@@ -152,7 +158,7 @@
               parent {:check (constantly true)
                       :round (fn ^:async r [c]
                                (let [r (await (ctx/call-child c :kid job far))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                 (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :status)))
                                  r))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
@@ -284,29 +290,26 @@
 
 (def full-inventory (mapv (fn [i] {:name (str "item_" i) :count 1}) (range 36)))
 
-(deftest clear-box-with-a-full-inventory-waits-inventory-full
+(deftest clear-box-with-a-full-inventory-yields-and-digs-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks eight :inventory full-inventory})
               id (core/submit! eng (list job box) {})]
           (dotimes [_ 4] (await (core/tick! eng)))
-          (is (= :inventory-full (:reason (core/waiting eng id))))
+          (is (= 1 (count (:list (core/state eng)))) "still listed, yielding")
           (is (empty? (calls p "dig"))))))))
 
-(deftest clear-box-walk-to-an-unloaded-cell-is-go-near-and-a-waiting-walk-is-no-failure
+(deftest clear-box-walk-to-an-unloaded-cell-that-does-not-arrive-gives-nothing-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [far {:from {:x 30 :y 64 :z 30} :to {:x 31 :y 64 :z 30}}
-              calls* (atom [])
-              {:keys [eng]} (setup {:blocks {"30,64,30" "dirt" "31,64,30" "dirt"} :floor [-5 -5 35 35]
-                                    :unloaded ["30,64,30" "31,64,30"]})
-              result (await (tu/with-near-stub (fn ^:async f [_ pos r o] (swap! calls* conj [r o]) :partial)
-            (fn ^:async b [] (await (child-outcome eng job far 8)))))]
-          (is (seq @calls*))
-          (is (every? #(= 3 (first %)) @calls*))
-          (is (= :not-done result) "a waiting walk gives nothing up"))))))
+              {:keys [eng p]} (setup {:blocks {"30,64,30" "dirt" "31,64,30" "dirt"} :floor [-5 -5 35 35]
+                                      :unloaded ["30,64,30" "31,64,30"]})
+              result (await (child-outcome eng job far 8))]
+          (is (= :not-done result) "a waiting walk gives nothing up")
+          (is (empty? (calls p "dig"))))))))
 
 (deftest clear-box-clears-the-whole-box-in-one-round
   (async done
@@ -317,7 +320,7 @@
               parent {:check (constantly true)
                       :round (fn ^:async r [c]
                                (let [r (await (ctx/call-child c :kid job box))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                 (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :status)))
                                  r))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
