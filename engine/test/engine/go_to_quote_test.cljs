@@ -1,10 +1,10 @@
-(ns engine.path-preview-test
-  "jobs.movement.path-preview against the fake world: plans like go-to, walks nowhere."
+(ns engine.go-to-quote-test
+  "go-to's quote against the fake world: the planner's route to the goal, asked as ./bin/quote asks it, walks nowhere."
   (:require [cljs.test :refer [deftest is are async]]
-            [engine.expr :as expr]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.event-api :as event-api]
             [engine.events :as events]
             [engine.memory :as mem]
             [jobs.lib.world-files :as world-files]
@@ -13,52 +13,48 @@
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
             [jobs.lib.near :as near]
-            [jobs.movement.path-preview :as pp]))
+            [jobs.movement.go-to.preview :as pv]))
 
-(def job 'jobs.movement.path-preview)
+(defn ^:async quote-reply
+  "eng's answer to GET /quote for go-to with args (what ./bin/quote prints)."
+  [eng args]
+  (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str args))))
 
 (defn ^:async preview
-  "Run the job as a child of a recording parent over the fake world (body at 0 64 1); {:out the result :p primitives :seen
-  events}. opts: :places {name pos} written to memory, :markers shared markers, :no-path-world true."
+  "Ask go-to's quote over the fake world (body at 0 64 1); {:out its :route :quote :reply the /quote answer :p primitives}.
+  opts: :places {name pos} written to memory, :markers shared markers, :no-path-world true."
   [blocks args & [{:keys [places markers no-path-world]}]]
   (let [clock (atom 1000000)
-        [seen sink] (tu/legacy-capture-sink)
+        [_ sink] (tu/legacy-capture-sink)
         p (tu/fake {:blocks blocks :self {:pos {:x 0 :y 64 :z 1}}})
         dir (tu/tmp-dir)
         _ (when markers (fs/writeFileSync (path/join dir "places.json") (js/JSON.stringify (clj->js markers))))
         _ (when no-path-world (set! (.-pathWorld p) nil))
         w (when markers (world-files/open {:plans-dir (path/join dir "plans") :blueprint-dir (path/join dir "bps")
                                            :zones-file (path/join dir "zones.edn") :emit (fn [_])}))
-        out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
-        eng (core/create (cond-> {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
+        eng (core/create (cond-> {:primitives p :jobs registry/jobs
                                   :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                            w (assoc :world w)))]
     (doseq [[k pos] places] (mem/write! (:store eng) k {:pos pos} mem/place-policy))
-    (core/submit! eng '(recording-parent) {})
-    (loop [i 0]
-      (when (and (< i 200) (seq (:list (core/state eng))))
-        (swap! clock + 500)
-        (await (core/tick! eng))
-        (recur (inc i))))
-    {:out @out :p p :seen seen}))
+    (let [reply (await (quote-reply eng args))]
+      {:out (get-in reply [:quote :route]) :quote (:quote reply) :reply reply :p p})))
 
 (defn pos-of [p] (let [q (.-pos (.self p))] [(.-x q) (.-y q) (.-z q)]))
 
-(deftest a-found-route-is-reported-and-not-walked
+(deftest a-found-route-is-quoted-and-not-walked
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (preview (floor 0 0 11 2) {:pos [10 64 1] :range 0}))]
-          (is (= :completed (:status out)))
+        (let [{:keys [out quote p]} (await (preview (floor 0 0 11 2) {:pos [10 64 1] :range 0}))
+              [least mean most] (get-in quote [:uses :time])]
           (is (true? (:found out)))
           (is (= 10 (js/Math.round (:length out))))
           (is (pos? (:seconds out)))
+          (is (= (:seconds out) least) "the least time is the planner's")
+          (is (<= least mean most))
+          (is (js/isFinite most))
+          (is (= [10 64 1] (:moves-to quote)))
           (is (string? (:summary out)))
           (is (pos? (:steps out)))
           (is (= [10 64 1] (last (:waypoints out))))
@@ -73,15 +69,37 @@
             (is (true? (:found out)) (str n " " (pr-str out)))
             (is (= [10 63 1] (last (:waypoints out))) n)))))))
 
-(deftest a-goal-with-no-way-is-stopped-with-a-reason
+(deftest a-goal-with-no-way-says-why-and-its-time-has-no-bound
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (preview (merge (floor 0 0 3 2) (floor 8 0 11 2)) {:pos [10 64 1] :range 0}))]
-          (is (= :stopped (:status out)))
+        (let [{:keys [out quote]} (await (preview (merge (floor 0 0 3 2) (floor 8 0 11 2)) {:pos [10 64 1] :range 0}))]
           (is (false? (:found out)))
           (is (= :partial (:reason out)) "the island is out of reach: the plan only gets nearer")
-          (is (number? (:near out))))))))
+          (is (number? (:near out)))
+          (is (= ##Inf (nth (get-in quote [:uses :time]) 2))))))))
+
+(deftest a-walk-only-call-with-no-way-quotes-no-time-at-all
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shut-in (dissoc (merge (floor -1 -1 11 3) (box -1 64 0 1 66 2 "stone")) "0,64,1" "0,65,1")
+              walk (:quote (await (preview shut-in {:pos [10 64 1] :range 0 :ways #{:walk}})))
+              any (:quote (await (preview shut-in {:pos [10 64 1] :range 0})))]
+          (is (false? (:found (:route walk))))
+          (is (nil? (:partial (:route walk))) (pr-str (:route walk)))
+          (is (= ##Inf (first (get-in walk [:uses :time]))) "walking alone never gets out")
+          (is (js/isFinite (first (get-in any [:uses :time]))) "digging out may"))))))
+
+(deftest a-partial-route-keeps-a-least-and-has-no-most
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [quote]} (await (preview (merge (floor 0 0 3 2) (floor 8 0 11 2)) {:pos [10 64 1] :range 0 :ways #{:walk}}))
+              [least mean most] (get-in quote [:uses :time])]
+          (is (js/isFinite least) "the goal may lie past what is loaded")
+          (is (< least mean))
+          (is (= ##Inf most)))))))
 
 (deftest drop-cost-false-takes-no-two-block-drop
   (async done
@@ -105,30 +123,33 @@
           (is (= 1 (count (:waypoints cheap))))
           (is (> (count (:waypoints dear)) 1)))))))
 
-(deftest bad-shaped-args-are-refused-at-submit
-  (are [args re] (re-find re (expr/problem registry/jobs (list 'jobs.movement.path-preview args)))
-    {:pos [2 64 1] :drop-cost -1} #":drop-cost must be a number >= 0 or false, got -1"
-    {:pos [5 64 1] :tolls [{:x 1}]} #":tolls must be a list of \{:x :y :z :factor\}"
-    {:pos [20 64 1] :costs {:swim-h 0.1}} #":costs must be a map of planner price name"
-    {:pos [20 64 1] :costs {:exit 0}} #":costs must be a map of planner price name"))
+(deftest bad-shaped-args-are-refused-as-bad-args
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args re] [[{:pos [2 64 1] :drop-cost -1} #":drop-cost must be a number >= 0 or false, got -1"]
+                           [{:pos [5 64 1] :tolls [{:x 1}]} #":tolls must be a list of \{:x :y :z :factor\}"]
+                           [{:pos [20 64 1] :costs {:swim-h 0.1}} #":costs must be a map of planner price name"]]]
+          (let [{:keys [reply]} (await (preview (floor 0 0 11 2) args))]
+            (is (= :bad-args (:reason reply)) (pr-str args))
+            (is (re-find re (str (:message reply))) (pr-str reply))))))))
 
-(deftest every-refusal-carries-found-false-and-the-reason
+(deftest every-refusal-carries-found-false-the-reason-and-no-time
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world (floor 0 0 11 2)
-              refused (fn ^:async refused [args opts] (:out (await (preview world args opts))))
+              refused (fn ^:async refused [args opts] (await (preview world args opts)))
               pos (await (refused {:pos [1 -9999 1]} nil))
               place (await (refused {:place :mine} nil))
               sensing (await (refused {:pos [5 64 1]} {:no-path-world true}))]
-          (doseq [[out reason] [[pos :bad-pos] [place :unknown-place] [sensing :unsupported]]]
-            (is (= :stopped (:status out)) (str reason))
+          (doseq [[{:keys [out quote]} reason] [[pos :bad-pos] [place :unknown-place] [sensing :unsupported]]]
             (is (false? (:found out)) (str reason))
             (is (= reason (:reason out)))
             (is (string? (:text out)) (str reason))
-            (is (not (contains? out :arrived)) (str reason))))))))
+            (is (= [##Inf ##Inf ##Inf] (get-in quote [:uses :time])) (str reason))))))))
 
-(deftest a-place-is-previewed-from-memory-and-from-a-shared-marker
+(deftest a-place-is-quoted-from-memory-and-from-a-shared-marker
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -147,7 +168,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (preview (floor 0 0 6 2) {:pos [30 64 1] :range 0}))]
-          (is (= :stopped (:status out)))
           (is (false? (:found out)))
           (is (= :partial (:reason out)))
           (is (pos? (:steps (:partial out))))
@@ -159,16 +179,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen]} (await (preview (floor 0 0 80 80) {:pos [400 64 40] :range 0}))
-              reports (filter #(= :path-preview (:kind %)) @seen)
-              nodes (:nodes (first reports))]
-          (is (= :stopped (:status out)))
-          (is (= 1 (count reports)) "one plan, one report")
-          (is (pos? nodes))
-          (is (<= nodes 200000) "the planner's maxNodes bounds the plan: no budgeted rounds, no unbounded search"))))))
+        (let [{:keys [out]} (await (preview (floor 0 0 80 80) {:pos [400 64 40] :range 0}))]
+          (is (false? (:found out)))
+          (is (pos? (:nodes out)))
+          (is (<= (:nodes out) 200000) "the planner's maxNodes bounds the plan"))))))
 
-(deftest the-food-arg-defaults-to-the-body-not-to-20
-  (is (nil? (get-in pp/args [:food :default]))))
+(deftest a-search-past-the-quote-deadline-is-cut
+  (let [c {:quote-deadline 10 :view (fn [] {:now 20})}]
+    (is (false? (ctx/alive? (pv/with-deadline c))))
+    (is (true? (ctx/alive? (pv/with-deadline (assoc c :quote-deadline 30)))))))
 
 (defn pond
   "Land at y 63 from x 0 to 20 and z -10 to 10, with a pond of water over x 5-15 and z -8 to 8 (stone beneath at y 61)."
@@ -189,23 +208,18 @@
           (is (re-find #"swims" (:summary cheap)) "cheap water: straight across")
           (is (< (:seconds cheap) (:seconds default))))))))
 
-(deftest args-list-the-landing-options
-  (is (contains? pp/args :landing))
-  (is (re-find #":landing" pp/doc))
-  (is (re-find #"refused at submit" pp/doc)))
-
 (deftest a-route-reports-the-hp-its-drowning-costs
   (let [steps [{:x 0 :y 64 :z 0 :move :walk} {:x 1 :y 64 :z 0 :move :swim}]
         path (fn [drown] #js {:seconds 2 :summary "" :cost #js {:seconds 2 :drown drown}})]
-    (is (= 4.5 (:drown (pp/route steps (path 4.5)))))
-    (is (not (contains? (pp/route steps (path 0)) :drown)))))
+    (is (= 4.5 (:drown (pv/route steps (path 4.5)))))
+    (is (not (contains? (pv/route steps (path 0)) :drown)))))
 
 (deftest unknown-names-a-dark-drop-only-for-a-reason-go-to-would-give-up-on
   (let [dark {:x 1 :y 62 :z 0}
         report (fn [plan]
                  (with-redefs [near/with-sight (fn [result _ _] (assoc result :dark-best dark))
-                               pp/u-dist (fn [_ _] 5)]
-                   (pp/report nil plan {:x 9 :y 61 :z 0} nil true)))]
+                               pv/u-dist (fn [_ _] 5)]
+                   (pv/report nil plan {:x 9 :y 61 :z 0} nil true)))]
     (are [plan reason] (= reason (:reason (report plan)))
       {:status "none" :r #js {:reason nil}} :unseen-floor-dark
       {:status "none" :r #js {:reason nil :damageRefused true}} nil

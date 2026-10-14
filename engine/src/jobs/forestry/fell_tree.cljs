@@ -405,12 +405,14 @@
 
 (defn done? [_c] {:done? false :units :trees :done 0 :left 1})
 
-(defn quote-of [c]
+(defn ^:async quote-of
+  "The walk to the tree's base as go-to quotes it, then 3 s and 1.5 s a log."
+  [c]
   (let [{:keys [species radius at]} (:args c)
         t (if at (tree-at (:primitives c) at) (tree-near (:primitives c) radius species))
         n (if t (count (log/tree-logs c radius t)) 0)
-        d (if t (u/dist (u/self-pos c) (:base t)) 0)
-        least (+ 2 (* 0.3 d))
-        mean (+ least 3 (* 1.5 n))]
+        [wl wm] (or (when t (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos (:base t) :range 2})) [:uses :time])) [0 0])
+        least (+ 2 wl)
+        mean (+ 2 wm 3 (* 1.5 n))]
     (cond-> {:uses {:time [least mean (max mean (time-s))]} :done [0 1 1]}
       t (assoc :yields {:items {(str (:species t) "_log") [0 n n]}}))))

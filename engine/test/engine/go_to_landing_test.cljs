@@ -1,9 +1,9 @@
 (ns engine.go-to-landing-test
-  "go-to's :landing (block name -> share of a fall's damage), seen through path-preview (the fake world does not walk deep drops):
+  "go-to's :landing (block name -> share of a fall's damage), seen through its quote (the fake world does not walk deep drops):
   a hay landing is planned where a stone one is not, a caller's entries win, bad ones are refused."
   (:require [cljs.test :refer [deftest is async]]
             [engine.expr :as expr]
-            [engine.path-preview-test :as pt]
+            [engine.go-to-quote-test :as pt]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [floor box]]))
 
@@ -31,7 +31,7 @@
         (is (true? (await (found? "stone" {:landing {"stone" 0}}))) "stone priced as a soft landing")))))
 
 (deftest a-bad-landing-is-refused-at-submit
-  (doseq [job ['jobs.movement.go-to 'jobs.movement.path-preview]
+  (doseq [job ['jobs.movement.go-to]
           bad [{"no_such_block" 0.2} {"hay_block" "soft"} [1]]]
     (is (re-find #":landing must be a map of block name to a number"
                  (expr/problem registry/jobs (list job (assoc args :landing bad))))

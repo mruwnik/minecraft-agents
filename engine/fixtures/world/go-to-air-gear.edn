@@ -63,7 +63,7 @@
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 116 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 116 :until {:source :job :kind :result}}]
    :after [[:body-near [41.5 1 8.5] 3]]}
-  ;; the dry run of the 18 s turtle dive reports no :drown (the grace drowns nothing); the body stands on stone with its head
+  ;; go-to's quote (dry run) of the 18 s turtle dive reports no :drown (the grace drowns nothing); the body stands on stone with its head
   ;; out (a body sunk to the shaft's floor has its head under water, and a dive begun under water counts no grace)
   {:name "turtle-helmet-dive-18s-preview-has-no-drown"
    :blocks [[:fill [3 0 7] [42 4 9] "stone"]
@@ -71,9 +71,9 @@
             [:fill [4 2 8] [4 3 8] "air"] [:fill [41 2 8] [41 3 8] "air"]
             [:fill [5 2 8] [40 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:wait-s 1]
-         [:job (jobs.movement.path-preview {:pos #at [41 1 8] :range 1})]]
-   :expect [{:event {:source :job :kind :path-preview :data {:found true}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :path-preview :data {:drown [:any]}} :for-s 30 :until {:source :job :kind :path-preview}}]}
+         [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [41 1 8] :range 1}] {:ok true :quote {:route {:found true :drown nil}}}]]
+   :expect [{:no-event {:level :error} :for-s 2}]
+   :after [[:body-near [4.5 1 8.5] 1]]}
   ;; should fail: no gear, 20 s under water against 15 s of air
   {:name "bare-head-dive-20s-refused"
    :blocks [[:fill [3 0 7] [46 4 9] "stone"]

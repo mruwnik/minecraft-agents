@@ -10,7 +10,7 @@
             [jobs.lib.util :as u]))
 
 (defn dark-end?
-  "True when a fruitless round with a :dark-best is given up as :unseen-floor-dark (go-to, path-preview): :no-path for no reason,
+  "True when a fruitless round with a :dark-best is given up as :unseen-floor-dark (go-to, its quote): :no-path for no reason,
   :exhausted, :goal-unloaded or :start-enclosed, or :off-plan with a partial; never when the search was damage-refused or
   the round failed for a reason of its own (stuck, health, air, ...)."
   [{:keys [status reason partial damage-refused dark-best]}]

@@ -209,7 +209,7 @@
 (def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until})
 (def after-kinds #{:block :not-block :any-not-block :body-near :body-far :item :entities :memory :file})
 (def http-ops #{:submit :cancel :cancel-all :take :release})
-(def cli-tools #{"jobs" "drive" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints"})
+(def cli-tools #{"jobs" "drive" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints" "quote"})
 
 (defn step-problem?
   "Whether an :act step has a kind or shape the runner cannot run (kinds without extra shape are only checked by name)."

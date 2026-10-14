@@ -3,6 +3,7 @@
   kind and a cause (0 of N is never done); the pillar is a child of the felling."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
+            [engine.event-api :as event-api]
             [engine.farm-contract-test :refer [ending-of]]
             [engine.fell-tree-test :as ft]
             [engine.forest-maintain-test :as fm]
@@ -15,16 +16,32 @@
 
 (def jobs '[jobs.forestry.fell-tree jobs.forestry.fell-from-pillar])
 
+(defn ^:async quote-of [eng sym args]
+  (:quote (await (event-api/quote-view eng (str sym) (pr-str args)))))
+
 (deftest both-jobs-export-the-contract-and-quote-validly
-  (let [s (fm/start ft/tall {})
-        args {'jobs.forestry.fell-tree {:radius 10}
-              'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}}]
-    (doseq [sym jobs
-            :let [job (get registry/jobs sym)]]
-      (is (vector? (:conditions job)) (str sym " has conditions"))
-      (is (nil? (:check job)) (str sym " has no old check"))
-      (is (vector? (:target job)) (str sym " has a target"))
-      (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (:p s) :args (get args sym)}))) (str sym)))))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fm/start ft/tall {})
+              args {'jobs.forestry.fell-tree {:radius 10}
+                    'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}}]
+          (doseq [sym jobs
+                  :let [job (get registry/jobs sym)]]
+            (is (vector? (:conditions job)) (str sym " has conditions"))
+            (is (nil? (:check job)) (str sym " has no old check"))
+            (is (vector? (:target job)) (str sym " has a target"))
+            (is (nil? (contract/quote-problem (await (quote-of (:eng s) sym (get args sym))))) (str sym))))))))
+
+(deftest fell-trees-walk-is-go-tos-quote
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start ft/tall {})
+              walk (await (quote-of eng 'jobs.movement.go-to {:pos [6 64 0] :range 2}))
+              fell (await (quote-of eng 'jobs.forestry.fell-tree {:radius 10}))]
+          (is (js/isFinite (first (get-in walk [:uses :time]))))
+          (is (= (+ 2 (first (get-in walk [:uses :time]))) (first (get-in fell [:uses :time])))))))))
 
 (defn ^:async fell-ending
   "The ending of job with args on a fresh world of spec, in at most n ticks (nil when it does not end)."

@@ -6,7 +6,7 @@
             [engine.fake :as fake]
             [engine.go-to-test :as gt]
             [engine.memory :as mem]
-            [engine.path-preview-test :as pt]
+            [engine.go-to-quote-test :as pt]
             [engine.perception :as perception]
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [box floor]]

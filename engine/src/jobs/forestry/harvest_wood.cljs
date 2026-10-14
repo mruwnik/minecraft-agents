@@ -207,8 +207,8 @@
   [c]
   {:done? false :units :logs :done (max 0 (- (logs-carried c) (:logs-before (ctx/mem c) (logs-carried c)))) :left (or (:count (:args c)) 1)})
 
-(defn quote-of [c]
-  (let [e (fell-tree/quote-of (assoc c :args (fell-args (:args c))))
+(defn ^:async quote-of [c]
+  (let [e (await (fell-tree/quote-of (assoc c :args (fell-args (:args c)))))
         trees (max 1 (min 8 (quot (or (:count (:args c)) 3) 3)))
         t (:time (:uses e))
         scale #(* trees (+ % 6))]

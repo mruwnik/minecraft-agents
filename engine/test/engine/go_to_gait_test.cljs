@@ -1,12 +1,12 @@
 (ns engine.go-to-gait-test
-  "go-to's :gait (:auto, :walk, :sneak), seen through path-preview and body-policy: :walk never sprints, :sneak plans at sneak
+  "go-to's :gait (:auto, :walk, :sneak), seen through its quote and body-policy: :walk never sprints, :sneak plans at sneak
   speed, never sprints, and holds sneak on level steps only (released for drops, gaps, climbs, water, in the air); the body
   setting is the default, the arg wins."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.expr :as expr]
             [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
-            [engine.path-preview-test :as pt]
+            [engine.go-to-quote-test :as pt]
             [engine.planner-fixture :as pf]
             [engine.registry :as registry]
             [engine.stairs-physics-test :as sp]
@@ -82,7 +82,7 @@
 (deftest a-bad-gait-is-refused-at-submit
   (doseq [bad [:run "walk" 3]]
     (is (re-find #":gait must be one of :auto, :sneak, :walk"
-                 (expr/problem registry/jobs (list 'jobs.movement.path-preview {:pos [30 64 1] :gait bad})))
+                 (expr/problem registry/jobs (list 'jobs.movement.go-to {:pos [30 64 1] :gait bad})))
         (pr-str bad))))
 
 (defn policy [setting args]

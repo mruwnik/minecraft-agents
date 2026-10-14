@@ -6,6 +6,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.go-to-test :as gt]
+            [engine.event-api :as event-api]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.go-to-doors-test :as gd]
@@ -446,13 +447,25 @@
                                             {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))]
           (is (= "torch" (get-in @(fake/state p) [:equipment "offHand" :name]))))))))
 
-(deftest path-preview-with-unknown-shows-the-dark-drop-go-to-would-refuse
+(defn ^:async quote-route
+  "go-to's quote :route for args over the sensed-only world spec, after setup (as run-job's)."
+  [spec args setup]
+  (let [orig js/Math.random
+        {:keys [w] :as world} (sensed-only spec)
+        _ (set! js/Math.random (constantly 0.5))
+        _ (setup world)
+        eng (core/create {:primitives w :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (constantly 1000000) :backoff false
+                          :events (events/make {:body "Fake" :sinks [] :now (constantly 1000000)})})]
+    (try (get-in (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str args))) [:quote :route])
+         (finally (set! js/Math.random orig)))))
+
+(deftest go-to-quote-with-unknown-shows-the-dark-drop-go-to-would-refuse
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [preview (fn [args] (run-job 'jobs.movement.path-preview in-tunnel (merge {:pos [9 61 0] :range 1} args) dark-and-looked))
-              seen-all (:out (await (preview {})))
-              masked (:out (await (preview {:unknown true})))]
+        (let [preview (fn [args] (quote-route in-tunnel (merge {:pos [9 61 0] :range 1} args) dark-and-looked))
+              seen-all (await (preview {}))
+              masked (await (preview {:unknown true}))]
           (is (true? (:found seen-all)) (pr-str seen-all))
           (is (= [false :unseen-floor-dark] [(:found masked) (:reason masked)]) (pr-str masked))
           (is (= {:x 1 :y 62 :z 0} (select-keys (:dark-best masked) [:x :y :z])) (pr-str masked)))))))

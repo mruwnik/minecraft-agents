@@ -15,6 +15,7 @@
             [jobs.movement.go-to.cut :refer [approaches cut-loop? nearest-hostile note-restart! start-attempt! way-hostiles]]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.holds :refer [night-wait plug-since plug-wait wait-reason]]
+            [jobs.movement.go-to.preview :as preview]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.settings :refer [max-cut-resets night-wait-ms]]
             [jobs.movement.go-to.torch :as torch]
@@ -138,6 +139,11 @@
     walks no found way longer than ::detour/ratio times the distance to its goal at the call's start (at least
     ::detour/floor blocks) when half or more of its cells were never seen: it gives up :why :detour with :route,
     :straight and :allowed (blocks) before it sets out. :detour false walks it. See jobs.movement.go-to.detour.
+  - Its quote (./bin/quote) is a dry run: one plan from where the body stands with the call's args, nothing walked,
+    opened or dug. :uses :time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
+    changes the world: ##Inf), :health the planned damage, :moves-to the goal cell, and :route {:found :length :seconds
+    :summary :steps :moves :doors :waypoints :damage :drown :nodes}, or {:found false :reason :near :partial} (:reason
+    as :why, :bad-pos and other refusals, :late past the quote deadline); with :unknown :unseen-floors and :dark-best.
   - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
   - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
@@ -260,6 +266,14 @@
   "c with walk-limits in its args, where the walk code (jobs.lib.walk.world/walk-settings) reads them."
   [c]
   (update c :args merge (walk-limits (:args c) (ctx/frozen-call c) (cost-health/default-min-health))))
+
+(defn ^:async quote-of
+  "The planner's route to the goal from where the body stands, with this call's policy, costs, dangers, tolls and
+  limits, walked nowhere (go-to.preview): time from its seconds, health its planned damage, :moves-to the goal cell,
+  :route what the planner found."
+  [c]
+  (let [c (with-limits (with-body-food c))]
+    (preview/quote-of-route (await (preview/route! c)) (ways/escalating? c))))
 
 (def conditions
   "A listed go-to not yet started waits while wait-reason holds; a started call, or a child, yields instead (attempt)."

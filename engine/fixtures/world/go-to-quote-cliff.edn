@@ -1,4 +1,4 @@
-;; jobs.movement.path-preview (cards b34b1359, ee7d7b5e, 6a1a0fc3): the dry run follows the body's fall policy like go-to.
+;; go-to's quote (cards b34b1359, ee7d7b5e, 6a1a0fc3, 4b8bb3de): the dry run follows the body's fall policy like go-to.
 ;; A 5 high platform, the body on top, the goal on the floor past its edge, no other way down: feather falling IV finds the
 ;; 5 block drop (0.96 hp), plain boots do not (2 hp over :max-damage 1.5; the default budget at full health would pay it): found false. The body never moves.
 {:defaults
@@ -9,13 +9,13 @@
   :body {:at [8.5 5 16.5]}
   :limit-s 40}
  :cases
- [{:name "preview-finds-a-5-drop-with-feather-falling"
+ [{:name "quote-finds-a-5-drop-with-feather-falling"
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
-         [:job (jobs.movement.path-preview {:pos #at [22 0 16] :range 1 :max-damage 1.5})]]
-   :expect [{:event {:source :job :kind :path-preview :data {:found true}} :within-s 30 :of-job true}]
+         [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1 :spend {:health 1.5}}] {:ok true :quote {:route {:found true}}}]]
+   :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [8.5 5 16.5] 1]]}
-  {:name "preview-finds-no-5-drop-in-plain-boots"
+  {:name "quote-finds-no-5-drop-in-plain-boots"
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
-         [:job (jobs.movement.path-preview {:pos #at [22 0 16] :range 1 :max-damage 1.5})]]
-   :expect [{:event {:source :job :kind :path-preview :data {:found false}} :within-s 30 :of-job true}]
+         [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1 :spend {:health 1.5}}] {:ok true :quote {:route {:found false}}}]]
+   :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [8.5 5 16.5] 1]]}]}

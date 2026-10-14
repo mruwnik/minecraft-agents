@@ -3,7 +3,10 @@
   with a kind and a cause (0 of N is never done); a child's failed ending is read, not taken for success."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
+            [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.event-api :as event-api]
+            [engine.events :as events]
             [engine.fake :as fake]
             [engine.farm-contract-test :refer [ending-of]]
             [engine.forest-maintain-test :as fm]
@@ -17,14 +20,19 @@
 (def jobs '[jobs.forestry.harvest-wood jobs.forestry.tidy jobs.gather.make-obsidian])
 
 (deftest the-three-jobs-export-the-contract-and-quote-validly
-  (let [p (tu/fake {})]
-    (doseq [sym jobs
-            :let [job (get registry/jobs sym)]]
-      (is (vector? (:conditions job)) (str sym " has conditions"))
-      (is (nil? (:check job)) (str sym " has no old check"))
-      (is (vector? (:target job)) (str sym " has a target"))
-      (is (fn? (:done? job)) (str sym " has done?"))
-      (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {:radius 10}}))) (str sym)))))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [eng (core/create {:primitives (tu/fake {}) :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (constantly 0)
+                                :events (events/make {:body "Fake" :sinks [] :now (constantly 0)})})]
+          (doseq [sym jobs
+                  :let [job (get registry/jobs sym)]]
+            (is (vector? (:conditions job)) (str sym " has conditions"))
+            (is (nil? (:check job)) (str sym " has no old check"))
+            (is (vector? (:target job)) (str sym " has a target"))
+            (is (fn? (:done? job)) (str sym " has done?"))
+            (is (nil? (contract/quote-problem (:quote (await (event-api/quote-view eng (str sym) "{:radius 10}")))))
+                (str sym))))))))
 
 ;; ------------------------------------------------------------------ harvest-wood
 

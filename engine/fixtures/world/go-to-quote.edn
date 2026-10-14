@@ -1,4 +1,4 @@
-;; jobs.movement.path-preview (card ee7d7b5e): a dry run of go-to. Same plot as doors-go-to: a stone wall across it at x 16
+;; go-to's quote (./bin/quote; cards ee7d7b5e, 4b8bb3de): a dry run of go-to. Same plot as doors-go-to: a stone wall across it at x 16
 ;; with one door in it, the body 6 west, the goal 6 east. The preview plans through the door and opens nothing; with
 ;; :doors :never the door is a wall, there is no way round, and it says :found false with a reason. The body never moves.
 {:defaults
@@ -10,11 +10,11 @@
   :body {:at [10.5 0 16.5]}
   :limit-s 30}
  :cases
- [{:name "preview-plans-through-a-door-and-opens-nothing"
-   :act [[:job (jobs.movement.path-preview {:pos #at [22 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :path-preview :data {:found true}} :within-s 20 :of-job true}]
+ [{:name "quote-plans-through-a-door-and-opens-nothing"
+   :act [[:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1}] {:ok true :quote {:route {:found true}}}]]
+   :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 1]]}
-  {:name "preview-with-doors-never-finds-no-way-and-says-why"
-   :act [[:job (jobs.movement.path-preview {:pos #at [22 0 16] :range 1 :doors :never})]]
-   :expect [{:event {:source :job :kind :path-preview :data {:found false}} :within-s 20 :of-job true}]
+  {:name "quote-with-doors-never-finds-no-way-and-says-why"
+   :act [[:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1 :doors :never}] {:ok true :quote {:route {:found false}}}]]
+   :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 1]]}]}
