@@ -7,6 +7,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.torch :as ltorch]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
@@ -67,13 +68,21 @@
     (when-not (off-hand-torch? c)
       (ctx/forget-where! c kind (constantly true)))))
 
-(def torch-need "The wait :place-torches fetches for when no torch is carried." {:reason :need :item "torch" :count 4})
-(def torch-fetch-key [:item ["torch"]])
+(def fetch-failed-kind "Body memory: the last time a torch fetch failed, so a later call does not try again at once." :go-to/torch-fetch-failed)
+(def fetch-failed-ttl-ms 600000)
+(def torch-count "How many torches a fetch asks for." 4)
+
+(defn fetch-opts
+  "The need options of the torch fetch under the :fetch arg: nil when :fetch is off."
+  [c]
+  (some-> (fetch/opts c 'jobs.movement.go-to) (select-keys [:how :depth :explore]) (assoc :slot :need-torch)))
+
+(defn torch-fetching? [c] (boolean (:torch-fetching (ctx/mem c))))
 
 (defn torch-fetch-open?
   "Whether :place-torches may still fetch torches this call: :fetch is on, none was fetched yet, none failed lately."
   [c]
-  (boolean (and (fetch/opts c 'jobs.movement.go-to) (not (:torch-fetched (ctx/mem c))) (nil? (fetch/failure c torch-fetch-key)))))
+  (boolean (and (fetch-opts c) (not (:torch-fetched (ctx/mem c))) (nil? (ctx/latest c fetch-failed-kind)))))
 
 (defn light-ok
   "The planner's lightOk: (fn [x y z]) true where a torch may go at a takeoff (x y z its feet): the feet or the head cell
@@ -95,12 +104,18 @@
       u)))
 
 (defn ^:async fetch-torches!
-  "A walk that reached a floor to light with no torch carried: fetch torches once a call (jobs.lib.fetch), :continue while
-  the fetch child waits, else :again (the next round plans without torches when none came)."
+  "A walk that reached a floor to light with no torch carried: fetch torches once a call (jobs.lib.need, a child),
+  :continue while it waits, else :again (the next round plans without torches when none came; a failure is booked in
+  body memory for fetch-failed-ttl-ms)."
   [c]
-  (if (torch-fetch-open? c)
-    (do (ctx/update-mem! c assoc :torch-fetched true)
-        (or (await (fetch/step! c 'jobs.movement.go-to torch-need)) :again))
+  (if (or (torch-fetching? c) (torch-fetch-open? c))
+    (do (ctx/update-mem! c assoc :torch-fetched true :torch-fetching true)
+        (let [e (await (need/item! c "torch" torch-count (fetch-opts c)))]
+          (when-not (= :continue e)
+            (ctx/update-mem! c dissoc :torch-fetching)
+            (when-not (= :done (:kind e))
+              (ctx/remember! c fetch-failed-kind {:why (some-> e :cause :why)} {:cap 1 :ttl fetch-failed-ttl-ms})))
+          (if (= :continue e) :continue :again)))
     :again))
 
 (defn dark-end
@@ -111,5 +126,5 @@
   (if (end/dark-end? result)
     (cond-> {:status :no-path :reason :unseen-floor-dark :dark-best (:dark-best result)}
       (and (:place-torches (:args c)) (zero? (ltorch/torches-held (:primitives c))))
-      (assoc :torches (if (fetch/failure c torch-fetch-key) :fetch-failed :none)))
+      (assoc :torches (if (ctx/latest c fetch-failed-kind) :fetch-failed :none)))
     result))

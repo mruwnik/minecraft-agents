@@ -51,7 +51,7 @@
     (wworld/warn-bad-settings! c)
     (pen-entry/warn-left-open! c pos (:doors (:args c)))
     (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done :own-way-top :detour-from) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
-                          (not (:fetching m)) (dissoc :torch-fetched :fetched)
+                          (not (:torch-fetching m)) (dissoc :torch-fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)

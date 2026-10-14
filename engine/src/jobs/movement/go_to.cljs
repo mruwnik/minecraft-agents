@@ -66,7 +66,7 @@
   - :place-torches true (with :unknown; default false) may light such a dark floor instead: the planner prices a torch
     (jobs.lib.cost/light-cost, or :unknown's :light-cost) where it can stand on the takeoff, in no other owner's zone or
     claim; the walk stops there, places one (an off-hand stack goes back to the inventory first; info walk.torch-placed) and
-    walks on once it sees the floor. With none carried it fetches torches once a call (:fetch, default true; jobs.lib.fetch);
+    walks on once it sees the floor. With none carried it fetches torches once a call (:fetch, default true; a jobs.lib.need child);
     with none and no fetch it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
@@ -162,7 +162,7 @@
    :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :spec boolean? :default true}
    :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth overrides their prices and depths (jobs.lib.cost/unknown-prices), :light-cost the seconds of a torch :place-torches places; false: plan over the world as it is" :spec (a/valid-by "true, false or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth :light-cost to numbers >= 0" wworld/unknown-problem) :default false}
    :place-torches {:doc "with :unknown: light a dark floor it cannot see with a torch from the inventory, placed at the takeoff (priced by jobs.lib.cost/light-cost, or :unknown's :light-cost), fetching torches when none is carried (:fetch); false: never place one" :spec boolean? :default false}
-   :fetch {:doc "get torches for :place-torches when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false: give up instead" :spec fetch/option? :default true}
+   :fetch {:doc "get torches for :place-torches when none is carried (a jobs.lib.need child): true, a set of kinds or a map of limits; false: give up instead" :spec fetch/option? :default true}
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :spec boolean? :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
    :food {:doc "the food level (0-20) the walk counts on for its damage budget, its sprinting and whether it can heal by waiting (18 or more regenerates); default the body's own" :spec (a/num-in 0 20) :default nil}
@@ -214,7 +214,7 @@
       (:escalation m) (await (esc/escalation-round! c pos))
       (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
                             (await (esc/escalate! c pos nil)))
-      :else (or (when (:fetching m) (await (fetch/step! c 'jobs.movement.go-to torch/torch-need)))
+      :else (or (when (:torch-fetching m) (await (torch/fetch-torches! c)))
                 (await (walk/walk! c pos
                               (cond (and (= :guess (:column-open m)) (not (:column-near m))) (max (:range (:args c)) column/approach-range)
                                     :else (:range (:args c)))

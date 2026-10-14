@@ -3,6 +3,7 @@
   there (carried, or fetched once), then walked once seen; the planner prices the torch (jobs.lib.cost/light-cost, a
   caller's :unknown :light-cost overrides). Without the option nothing is placed or fetched."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.fake :as fake]
             [engine.go-to-sensed-test :as gs]
             [engine.memory :as mem]
@@ -131,8 +132,7 @@
                                                         dark-with-torch-light))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
           (is (re-find #"no torch" (str (:text out))) (str (:text out)))
-          (is (empty? (torch-cells p)))
-          (is (empty? (filter #(= :fetch.started (:kind %)) seen))))))))
+          (is (empty? (torch-cells p))))))))
 
 (deftest go-to-with-no-torch-fetches-torches-once
   (async done
@@ -141,10 +141,7 @@
         (let [{:keys [out seen]} (await (gs/run-go-to (assoc shielded :inventory [])
                                                       {:pos below :range 1 :escalate false :unknown true
                                                        :place-torches true :ignore-zones? true}
-                                                      dark-with-torch-light))
-              started (filter #(= :fetch.started (:kind %)) seen)]
-          (is (= 1 (count started)) (pr-str (map :kind seen)))
-          (is (= "torch" (get-in (first started) [:args :item])))
+                                                      dark-with-torch-light))]
           (is (= :unseen-floor-dark (:why out)) (str "nothing to fetch torches from " (pr-str out)))
           (is (re-find #"could not fetch" (str (:text out))) (str (:text out))))))))
 
@@ -166,8 +163,7 @@
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= 1 (count (torch-cells p))) (pr-str (torch-cells p)))
-          (is (= 3 (torches-held p)))
-          (is (empty? (filter #(= :fetch.started (:kind %)) seen)) "it had torches"))))))
+          (is (= 3 (torches-held p))))))))
 
 (deftest go-to-places-a-torch-it-holds-in-the-off-hand
   (async done
@@ -179,8 +175,7 @@
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= 1 (count (torch-cells p))))
-          (is (= 3 (torches-held p)))
-          (is (empty? (filter #(= :fetch.started (:kind %)) seen))))))))
+          (is (= 3 (torches-held p))))))))
 
 ;; ---------------------------------------------------------------- zones, prices, failures
 
@@ -258,24 +253,45 @@
    :emit (fn [kind _ _] (swap! emitted conj kind))
    :call-child (fn [_ _ _] (js/Promise.resolve :continue))})
 
-(deftest a-later-calls-torch-fetch-is-not-booked-unsolved
+(defn fail-entry [mem*] {(mem/job-kind "j1") [{:t 1000000 :data @mem*}]})
+
+(deftest a-torch-fetch-is-a-need-child-that-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (gs/sensed-only (assoc shielded :inventory []))
-              mem* (atom {:fetched [gtorch/torch-fetch-key gtorch/torch-need]})
-              emitted (atom [])
-              c (stub-ctx p mem* emitted {:place-torches true :unknown true :fetch true})]
-          (gcut/start-attempt! c {:x 9 :y 61 :z 0})
-          (is (= :continue (await (gtorch/fetch-torches! c))) (pr-str @emitted))
-          (is (not-any? #{:fetch.failed} @emitted))
-          (is (some #{:fetch.started} @emitted)))))))
+              mem* (atom {})
+              calls (atom [])
+              c (assoc (stub-ctx p mem* (atom []) {:place-torches true :unknown true :fetch true})
+                       :call (fn [slot def args] (swap! calls conj [slot (:item args) (:count args)]) (js/Promise.resolve :continue)))]
+          (is (= :continue (await (gtorch/fetch-torches! c))))
+          (is (= [[:need-torch "torch" 4]] @calls))
+          (is (true? (:torch-fetching @mem*)) "step! re-enters it while the child waits"))))))
 
-(deftest a-call-fetches-torches-once
+(deftest a-failed-torch-fetch-is-booked-in-body-memory
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (gs/sensed-only (assoc shielded :inventory []))
+              mem* (atom {})
+              booked (atom [])
+              c (assoc (stub-ctx p mem* (atom []) {:place-torches true :unknown true :fetch true})
+                       :call (fn [_ _ _] (js/Promise.resolve (contract/ending :condition-failed {:reason :need} nil)))
+                       :remember (fn [kind _ policy] (swap! booked conj [kind (:ttl policy)])))]
+          (is (= :again (await (gtorch/fetch-torches! c))))
+          (is (= [[gtorch/fetch-failed-kind gtorch/fetch-failed-ttl-ms]] @booked))
+          (is (not (:torch-fetching @mem*))))))))
+
+(deftest a-call-fetches-torches-once-and-not-after-a-recent-failure
   (let [{:keys [p]} (gs/sensed-only (assoc shielded :inventory []))
-        c (stub-ctx p (atom {:torch-fetched true}) (atom []) {:place-torches true :unknown true :fetch true})]
-    (is (false? (gtorch/torch-fetch-open? c)))
-    (is (true? (gtorch/torch-fetch-open? (stub-ctx p (atom {}) (atom []) {:place-torches true :unknown true :fetch true}))))))
+        args {:place-torches true :unknown true :fetch true}
+        open? #(gtorch/torch-fetch-open? %)]
+    (is (false? (open? (stub-ctx p (atom {:torch-fetched true}) (atom []) args))))
+    (is (true? (open? (stub-ctx p (atom {}) (atom []) args))))
+    (is (false? (open? (stub-ctx p (atom {}) (atom []) (assoc args :fetch false)))))
+    (is (false? (open? (assoc (stub-ctx p (atom {}) (atom []) args)
+                              :view (fn [] {:now 1000000 :data {:entries {gtorch/fetch-failed-kind [{:t 1000000 :data {}}]}
+                                                                 :policies {gtorch/fetch-failed-kind {:cap 1 :ttl gtorch/fetch-failed-ttl-ms}}}})))))))
 
 (deftest a-callers-light-cost-prices-the-torch
   (let [{:keys [p]} (gs/sensed-only shielded)
@@ -295,9 +311,7 @@
                                                          :place-torches true :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
-          (is (= 1 (count (filter #(= :fetch.started (:kind %)) seen))) (pr-str (map :kind seen)))
-          (is (empty? (filter #(= :fetch.failed (:kind %)) seen)))
           (is (= 1 (count (torch-cells p))) "one torch on the takeoff")
-          (is (= 3 (torches-held p)) "gtorch/torch-need (4) taken from the chest, one placed")
+          (is (= 3 (torches-held p)) "4 torches taken from the chest, one placed")
           (is (= 4 (get-in @(fake/state p) [:containers [-2 64 0] 0 :count])) "the other four stay in the chest")
           (is (= 1 (count (filter #(= :walk.torch-placed (:kind %)) seen)))))))))
