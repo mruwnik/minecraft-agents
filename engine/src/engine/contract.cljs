@@ -171,7 +171,7 @@
 (defn freeze
   "The call keys of a call to a job with ways and defaults (settings resolved): given (the args) over the defaults,
   :spend, :floor and :use line by line; :ways all of the job's when neither says; :least 1; :deadline the caller's
-  call's. :use from the defaults names a chooser, filled later, so only given lists count."
+  call's. :use from the defaults names a chooser, filled by engine.core.ending/fill-use, so only given lists count."
   [{:keys [ways defaults]} given caller]
   (let [defaults (cond-> (dissoc defaults :use) (seq ways) (update :ways #(set (or % ways))))
         call (reduce (fn [m k]

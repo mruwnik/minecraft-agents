@@ -291,7 +291,8 @@
 (def hook-keys
   "Every hook the engine calls, and what for."
   {:world/open "the world store over a world folder's files (engine.main)"
-   :world/blank "an empty world store (engine.core, when none is given)"})
+   :world/blank "an empty world store (engine.core, when none is given)"
+   :use/default "the list a call's :use gets for a purpose its job's defaults name a chooser for (engine.core.ending)"})
 
 (defn hook-defs
   "The hooks, resource jobs/hooks.edn: {hook-key qualified-fn-symbol}, checked: every key of hook-keys given, no

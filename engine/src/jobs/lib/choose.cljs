@@ -7,6 +7,7 @@
   (fillers-for c purpose amount) answers {:list [{:item name :count n}] :short n} the same way for the blocks a
   purpose places (:build :shelter :pillar :climb :cover :seal), in the purpose's order (common first). Zones judge cells, not items: the caller asks them for the cell it digs."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
             [jobs.lib.cost.weapon :as weapon]
@@ -106,3 +107,14 @@
   "The blocks worth at most max-value each by jobs.lib.cost/item-value."
   [blocks max-value]
   (filterv #(<= (:value (cost/item-value [{:name % :count 1}])) max-value) blocks))
+
+(defn default-use
+  "The item names a call's :use gets for purpose when the job's defaults name chooser spec for it (the :use/default
+  hook): nil when the call's args do not say what the chooser is for. Only {:tools :dig} (the args' :block, else the
+  block at :pos) exists; any other throws."
+  [c purpose spec]
+  (when-not (= [:tools :dig] [purpose spec])
+    (throw (js/Error. (str "default :use: unknown chooser " (pr-str {purpose spec})))))
+  (let [{:keys [block pos]} (:args c)
+        block (or block (when pos (blocks/target-name (:primitives c) pos blocks/hidden-guess)))]
+    (when block (mapv :item (:list (tools-for c [:dig block] 1))))))

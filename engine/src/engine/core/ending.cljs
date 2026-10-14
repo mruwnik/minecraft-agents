@@ -7,6 +7,7 @@
             [engine.core.base :refer [cut-error now owner?]]
             [engine.core.limits :as limits]
             [engine.ctx :as ctx]
+            [engine.hooks :as hooks]
             [engine.memory :as mem]
             [engine.settings :as settings]))
 
@@ -24,6 +25,18 @@
   [cause]
   (cond-> {:reason (contract/cause-key {:kind :condition-failed :cause cause})} (map? cause) (assoc :cause cause)))
 
+(defn fill-use
+  "call with a list in :use for each purpose def's defaults name a chooser for and the call gives none, from the
+  :use/default hook."
+  [c def call]
+  (reduce (fn [call [purpose spec]]
+            (if (contains? (:use call) purpose)
+              call
+              (if-let [items ((:use/default hooks/all) c purpose spec)]
+                (assoc-in call [:use purpose] items)
+                call)))
+          call (:use (:defaults def))))
+
 (defn call-of
   "The call keys c's call is frozen with: its args over def's defaults (settings keys read) and the caller's call,
   clamped to the caller's remainder (engine.contract/clamp). [call lines], lines the clamp changed."
@@ -31,7 +44,7 @@
   (let [view ((:view c))
         caller (when (seq (:slots c)) (:contract (mem/job-mem view (:root c) (pop (:slots c)))))
         defaults (contract/resolve-settings (:defaults def) #(settings/get (:settings def) %))
-        call (contract/freeze (assoc def :defaults defaults) (:args c) (:call caller))]
+        call (fill-use c def (contract/freeze (assoc def :defaults defaults) (:args c) (:call caller)))]
     (if (:call caller)
       (let [t (now (:engine c))]
         (contract/clamp call (:call caller) (contract/remainder caller (- t (nth (:t0s c) (dec (count (:slots c))) t)))))

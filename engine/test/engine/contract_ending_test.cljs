@@ -55,11 +55,11 @@
 
 (def world (atom {}))
 
-(defn setup [jobs & [triggers]]
+(defn setup [jobs & [triggers inventory]]
   (reset! world {})
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
-        eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers (or triggers {})
+        eng (core/create {:primitives (tu/fake (if inventory {:inventory inventory} {})) :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers (or triggers {})
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :seen seen :clock clock}))
 
@@ -145,6 +145,25 @@
           (let [ended (last (job-ev seen :child_ended))]
             (is (= [:done :done] [(:status (:data ended)) (get-in ended [:data :ending :kind])]))
             (is (map? (get-in ended [:data :report])))))))))
+
+(def digger
+  {:conditions [] :defaults {:use {:tools :dig}}
+   :round (fn [c] (swap! world assoc :dig-use (ctx/use c :tools) :dig-call (ctx/frozen-call c)) (ctx/end c :done nil))})
+
+(defn pick [name left] {:name name :count 1 :durability left :max-durability 250})
+
+(deftest a-default-use-is-the-choosers-list-at-call-start-and-a-given-one-wins
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'digger digger} nil [(pick "stone_pickaxe" 12) (pick "iron_pickaxe" 180)])]
+          (core/submit! eng '(digger {:block "stone"}) {})
+          (await (core/tick! eng))
+          (is (= ["stone_pickaxe" "iron_pickaxe"] (:dig-use @world)))
+          (is (= {:tools ["stone_pickaxe" "iron_pickaxe"]} (:use (:dig-call @world))))
+          (core/submit! eng '(digger {:block "stone" :use {:tools ["iron_pickaxe"]}}) {})
+          (await (core/tick! eng))
+          (is (= ["iron_pickaxe"] (:dig-use @world)) "an explicit :use wins"))))))
 
 (deftest a-listed-job-waits-on-its-conditions-then-any-ending-ends-it
   (async done
