@@ -1022,3 +1022,6 @@
           (is (= [false :exhausted] ((juxt :arrived :why) @out)) (pr-str @out))
           (is (= [[:exhausted 1] [:exhausted 2]] (mapv (juxt :reason :try) (events-of seen :go-to.retrying)))
               (pr-str (events-of seen :go-to.retrying))))))))
+
+(deftest an-approach-walk-may-take-back-its-own-seal
+  (is (= #{:walk :clear-seal} (:ways (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false true))))))

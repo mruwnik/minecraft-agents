@@ -127,6 +127,7 @@
     {:clear-seal true} {}
     {:escalate false :ways #{:walk :stair}} {:ways #{:walk :stair}}
     {:min-health 12} {:floor {:health 12}}
+    {:min-health 1} {:floor {:health 1}}
     {:allow-over-budget true} {:floor {:health 1}}
     {:allow-over-budget false} {}
     {:allow-over-budget true :min-health 9} {:floor {:health 9}}

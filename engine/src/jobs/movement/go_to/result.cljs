@@ -138,7 +138,7 @@
            :goal-dangerous (str "the goal is in danger: " (str/replace (str mob) "_" " ") " " mob-distance " blocks from it, a mob the body would flee")
            :moved-while-searching "the body was pushed about while the path was searched"
            :needs-health (str "a way exists but costs " hp-cost " hp, more than the " hp-budget " hp the body may spend"
-                           (if (= :full heal) " at full health (healing cannot help; only :allow-over-budget or a lower :min-health lets it go)" ", and it cannot heal first"))
+                           (if (= :full heal) " at full health (healing cannot help; only a :floor {:health 1}, or a lower :floor :health, lets it go)" ", and it cannot heal first"))
            :air "every way there under water runs out of air"
            :air-lethal "every way there under water would drown the body to death"
            :one-way "the way back is one-way"

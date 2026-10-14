@@ -104,7 +104,7 @@
           (is (= 64 (y-of p)) "still on the plateau")
           (is (= {:why :needs-health :heal :full :health 20 :hp-cost 8 :hp-budget 7}
                  (select-keys @out [:why :heal :health :hp-cost :hp-budget])))
-          (is (re-find #"full health" (:text @out))))))))
+          (is (re-find #"full health.*:floor \{:health 1\}" (:text @out))))))))
 
 (deftest a-callers-floor-is-never-crossed
   (async done

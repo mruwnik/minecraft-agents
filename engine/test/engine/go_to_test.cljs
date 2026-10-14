@@ -307,6 +307,18 @@
           (let [{:keys [out]} (await (go! {:blocks flat} (assoc args :pos [6 64 0])))]
             (is (= {:arrived true} @out) (pr-str args))))))))
 
+(deftest go-to-refuses-a-floor-or-leg-out-of-range-before-walking
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [args [{:floor {:health 21}} {:min-health 21} {:spend {:time 0}} {:spend {:time 0.05}} {:spend {:time 121}} {:leg-s 0}]]
+          (let [{:keys [out p]} (await (go! {:blocks flat} (assoc args :pos [6 64 0])))]
+            (is (= {:status :stopped :arrived false :reason :bad-args} (select-keys @out [:status :arrived :reason])) (pr-str args))
+            (is (= [0 64 0] (at p)) (pr-str args))))
+        (doseq [args [{:floor {:health 20}} {:spend {:time 0.1}} {:spend {:time 120}}]]
+          (let [{:keys [out]} (await (go! {:blocks flat} (assoc args :pos [6 64 0])))]
+            (is (not= :bad-args (:reason @out)) (pr-str args))))))))
+
 (deftest go-to-accepts-doors
   (async done
     (tu/run-async done

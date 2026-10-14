@@ -32,15 +32,15 @@
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
   - Refused at submit (or the caller's call-child throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :landing that is not a map of block names to numbers, a :gait that is not :auto, :walk or :sneak, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}}.
   - Ends condition-failed at once, before any walk, with the cause :bad-pos (a :pos outside the world), :bad-name (a
-    :place that is not a valid name), :unknown-place (no recorded position) or :unsupported (a body with no pathWorld
-    sensing), after a :refused warn; data {:arrived false :text}. A call whose :ways leave out :walk ends
+    :place that is not a valid name), :unknown-place (no recorded position), :unsupported (a body with no pathWorld
+    sensing) or :bad-args (a given :floor :health over 20, a :spend :time outside 0.1-120), after a :refused warn; data {:arrived false :text}. A call whose :ways leave out :walk ends
     nothing-possible :no-way.
   - Ways (:ways, all by default): :walk, and those that change the world: :clear-seal (its own ledger blocks round a
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
     block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
     its own shelter). Old callers' args (legacy-args): :escalate false is :ways #{:walk :clear-seal}, :clear-seal false
-    drops :clear-seal, :min-health is :floor {:health}, :allow-over-budget :floor {:health 1}, :max-damage :spend
-    {:health}, :leg-s :spend {:time}.
+    drops :clear-seal, :min-health is :floor {:health} (1 too: heal first, then over budget), :allow-over-budget
+    :floor {:health 1}, :max-damage :spend {:health}, :leg-s :spend {:time}.
   - A listed go-to waits (its condition, before it starts) while it would wait on the night or a retreat plug (below);
     once started such a wait is a :continue yield, kept in its memory as :hold for a parent's jobs.lib.child walk.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
@@ -103,7 +103,7 @@
     through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;
     its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
     go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
-    left to jobs.access.cleanup. Its children (ctx/call) walk with :ways #{:walk}. Jobs that must not change the world
+    left to jobs.access.cleanup. Its walk child (ctx/call) has :ways #{:walk :clear-seal}. Jobs that must not change the world
     on the way pass :ways #{:walk}: a shut-in body then gives up with :shut-in true and says so in the text.
   - Gives up with an :unreachable warn and the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
     words ...}: limit-reached for :needs-health (:line :health) and :leg-search-spent (:line :time); condition-failed
@@ -232,6 +232,14 @@
       (and (some? max-damage) (given [:spend :health])) (assoc-in [:spend :health] max-damage)
       (and (some? leg-s) (given [:spend :time])) (assoc-in [:spend :time] leg-s))))
 
+(defn limits-refusal
+  "The refusal {:reason :bad-args :message} of the call's given :floor :health or :spend :time, nil when in range."
+  [{:keys [floor spend]}]
+  (let [h (:health floor) t (:time spend)]
+    (cond
+      (and h (> h 20)) {:reason :bad-args :message (str ":floor :health must be 0 to 20, got " h)}
+      (and t (not (<= 0.1 t 120))) {:reason :bad-args :message (str ":spend :time must be 0.1 to 120 s (one leg), got " t)})))
+
 (defn walk-limits
   "The walk's {:min-health :allow-over-budget :max-damage :leg-s} from the call keys given and frozen (with a caller's
   floor): the frozen floor :health, a caller's only above default-floor, is :min-health; a given floor of 1 or less that
@@ -280,7 +288,7 @@
   [c0]
   (let [u (:unknown (:args c0))
         c (cond-> c0 u (assoc :unknown (wworld/unknown-spec (when (map? u) u))))
-        refusal (args-refusal c)
+        refusal (or (limits-refusal (:args c)) (args-refusal c))
         night (when-not refusal (night-wait c))
         plug (when-not (or refusal night) (plug-wait c))
         goal (when-not (or refusal night plug) (:pos (aim/target c)))
