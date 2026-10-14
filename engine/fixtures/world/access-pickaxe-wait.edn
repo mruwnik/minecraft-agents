@@ -12,21 +12,21 @@
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :stair.done} :within-s 90 :of-job true}]
    :after [[:body-near [19.5 7 16.5] 1.5] [:block [17 9 16] "air"] [:block [19 7 16] "air"]]}
-  {:name "stair-down-no-pickaxe-waits"
+  {:name "stair-down-no-pickaxe-stops-no-tool"
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :fetch false})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :stair.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :stair.done} :for-s 30 :until {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}}}]
    :after [[:not-block [17 9 16] "air"] [:not-block [17 8 16] "air"]]}
   {:name "tunnel-with-pickaxe"
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
    :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
    :expect [{:event {:source :job :kind :tunnel.done} :within-s 120 :of-job true}]
    :limit-s 150}
-  {:name "tunnel-no-pickaxe-waits-once"
+  {:name "tunnel-no-pickaxe-stops-once"
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
    :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :tunnel.done} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :tunnel.done} :for-s 40 :until {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}}}]
    :after [[:not-block [16 9 16] "air"]]}
   {:name "stair-stops-at-crop"
    :blocks [[:set [17 9 16] "farmland[moisture=7]"] [:set [17 10 16] "wheat[age=7]"]]

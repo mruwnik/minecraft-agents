@@ -1,6 +1,6 @@
 ;; Card 8e09b650: jobs.farm.fertilize :grass true uses bone meal once on each seen open grass block. Grass plot, 3 bone meal carried,
 ;; :max 3, radius 6 round the middle. Should-succeed: bone meal is spent (fertilize.done used >= 1, count down). Should-fail: a plot of
-;; plain dirt has no open grass: ends used 0 and keeps its bone meal; without bone meal and :fetch false the job waits :need.
+;; plain dirt has no open grass: ends used 0 and keeps its bone meal; without bone meal and :fetch false the job ends condition-failed :need.
 {:defaults
  {:tags [:farm :fertilize :jobs] :time :any
   :plot {:height 8 :floor "grass_block"}
@@ -15,8 +15,8 @@
    :plot {:floor "dirt"}
    :expect [{:event {:source :job :kind :fertilize.done :data {:used 0}} :within-s 40 :of-job true}]
    :after [[:item "bone_meal" 3]]}
-  {:name "no-bone-meal-fetch-false-waits-need"
+  {:name "no-bone-meal-fetch-false-stops-need"
    :body {:inventory []}
    :act [[:job (jobs.farm.fertilize {:grass true :radius 6 :max 3 :fetch false})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :need :item "bone_meal"}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :fertilize.done} :for-s 20 :until {:source :job :kind :waiting :data {:reason :need}}}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :need}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :fertilize.done} :for-s 20 :until {:source :job :kind :stopped}}]}]}

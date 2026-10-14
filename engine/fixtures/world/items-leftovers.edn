@@ -1,5 +1,5 @@
 ;; Card 0663315e: the items leftovers. bake (wheat chest to bread through the table) and the reasoned endings of enchant and
-;; get-tool: enchant without a table or without lapis gives up with its reason (enchant.gave-up), get-tool with an unknown block
+;; get-tool: enchant without a table gives up (enchant.gave-up), without lapis it stops condition-failed :need, get-tool with an unknown block
 ;; name is refused :bad-args (it was read as a block the hand harvests). The bake "declined child" ending needs a child whose check
 ;; fails three rounds and the enchant unknown-status ending a window answer the server never gives: unit tests only.
 ;; Should-succeed: bake 9 wheat to 3 bread. Should-fail: bake without a table, enchant with no table, enchant with no lapis, get-tool unknown block.
@@ -26,12 +26,12 @@
    :act [[:job (jobs.items.enchant {:item "diamond_pickaxe"})]]
    :expect [{:event {:source :job :kind :enchant.gave-up :data {:reason "no-table"}} :within-s 40 :of-job true}]
    :after [[:item "diamond_pickaxe" 1]]}
-  {:name "enchant-without-lapis-gives-up-no-lapis"
+  {:name "enchant-without-lapis-stops-need-lapis"
    :blocks [[:set [19 0 16] "enchanting_table"]]
    :body {:inventory [["diamond_pickaxe" 1]]}
    :act [[:rcon "xp set $BODY 30 levels"]
          [:job (jobs.items.enchant {:item "diamond_pickaxe"})]]
-   :expect [{:event {:source :job :kind :enchant.gave-up :data {:reason "no-lapis"}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :need :cause {:item "lapis_lazuli"}}} :within-s 60 :of-job true}]
    :after [[:item "diamond_pickaxe" 1]]}
   {:name "get-tool-unknown-block-is-bad-args"
    :act [[:job (jobs.items.get-tool {:block "not_a_block"})]]
