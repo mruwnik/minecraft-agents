@@ -1,7 +1,8 @@
 (ns engine.core.ending
   "Contract jobs (a job that exports conditions; engine.contract) as the engine runs them: wrap gives the job a check
   (a listed job waits while its conditions fail, until it starts) and a round that checks the conditions, freezes the
-  call keys at the first round, asks done? and adds :because to the ending the job's round returns."
+  call keys at the first round, asks done? (and, at the first round, its quote for the least check) and adds
+  :because to the ending the job's round returns."
   (:require [engine.contract :as contract]
             [engine.core.base :refer [cut-error now owner?]]
             [engine.core.limits :as limits]
@@ -36,7 +37,6 @@
         (contract/clamp call (:call caller) (contract/remainder caller (- t (nth (:t0s c) (dec (count (:slots c))) t)))))
       [call []])))
 
-;; ctx/quote (part e) refuses a duplicate the same way: duplicate-ending, before it spends anything.
 (defn frame-identity
   "{:job sym :target args} a frame of def with args is known by: the job and the args its :target names. nil for a
   def with no symbol."
@@ -44,18 +44,20 @@
   (when (:sym def) {:job (:sym def) :target (select-keys args (:target def))}))
 
 (defn duplicate-ending
-  "The condition-failed ending of a call of def with args from base, when a frame on base's chain (base itself
-  down to the root) has the same job and target, else nil. Booked nowhere: it is no failure of the way."
+  "The condition-failed ending of a call or quote of def with args from base, when a frame on base's chain (base
+  itself down to the root) or a quote base's quote is asked under ((:quoting base), [[ident id] ...]) has the same
+  job and target, else nil. Booked nowhere: it is no failure of the way."
   [eng base def args]
   (when-let [ident (frame-identity def args)]
     (let [view (mem/view (:store eng))
-          m (mem/job-mem view (:root base) [])]
-      (some (fn [i]
-              (let [s (subvec (:slots base) 0 i)]
-                (when (= ident (select-keys (:contract (get-in m (mem/slot-path s))) [:job :target]))
-                  (contract/ending :condition-failed
-                                   {:reason :duplicate-call :of (mem/path->id (:root base) s)} nil))))
-            (range (count (:slots base)) -1 -1)))))
+          m (mem/job-mem view (:root base) [])
+          dup #(contract/ending :condition-failed {:reason :duplicate-call :of %} nil)]
+      (or (some (fn [[q id]] (when (= ident q) (dup id))) (rseq (or (:quoting base) [])))
+          (some (fn [i]
+                  (let [s (subvec (:slots base) 0 i)]
+                    (when (= ident (select-keys (:contract (get-in m (mem/slot-path s))) [:job :target]))
+                      (dup (mem/path->id (:root base) s)))))
+                (range (count (:slots base)) -1 -1))))))
 
 (defn freeze!
   "Write the call keys of c's call (call-of) and def's symbol to its frame's :contract; the call has started. A clamped
@@ -81,16 +83,21 @@
   (if-let [cause (or (conditions-cause c (:conditions def))
                      (when-not (started? c) (limits/floor-cause c #(first (call-of c def)))))]
     (contract/ending :condition-failed cause nil)
-    (do (when-not (started? c) (freeze! c def))
-        (let [d (contract/done? def c)]
-          (if (:done? d)
-            (assoc (contract/ending :done nil nil) :report (contract/progress d))
+    (let [fresh? (not (started? c))
+          c (assoc c :job-ways (:ways def))]
+      (when fresh? (freeze! c def))
+      (let [d (contract/done? def c)]
+        (if (:done? d)
+          (assoc (contract/ending :done nil nil) :report (contract/progress d))
+          (if-let [cause (when (and fresh? (:quote-of def))
+                           (contract/least-cause (ctx/frozen-call c) (await ((:quote c) def (:args c) nil true)) d))]
+            (contract/ending :nothing-possible cause nil)
             (let [r (await ((:round def) c))]
               (cond
                 (= :continue r) :continue
                 (contract/ending? r) (finish def c r)
                 :else (throw (js/Error. (str "a contract job's round returned " (pr-str r)
-                                             ", not :continue or an ending (ctx/end)"))))))))))
+                                             ", not :continue or an ending (ctx/end)")))))))))))
 
 (defn check
   "A contract job waits while the body is below a floor of its call (enforced limits); a started one runs on (any

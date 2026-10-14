@@ -188,7 +188,11 @@
 
 (a/defargs settings
   {::enforce-limits {:default false :spec boolean?
-                     :doc "Whether a crossed limit ends the job :limit-reached; off, job.limit_would_end is told instead."}})
+                     :doc "Whether a crossed limit ends the job :limit-reached; off, job.limit_would_end is told instead."}
+   ::default-time-s {:default 30 :spec (a/num-in 0 nil)
+                     :doc "The mean time a job with no quote-of and no reports quotes."}
+   ::quote-s {:default 2 :spec (a/num-in 0 nil)
+              :doc "The wall-clock budget of a quote asked with no quote deadline; past it the quote's time is ##Inf."}})
 
 (defn used
   "What a frame's :contract state has used of each spend line, its time in s with extra-ms (the round in flight's)."
@@ -203,6 +207,12 @@
     (into {} (map (fn [[k v]]
                     [k (if (map? v) (into {} (map (fn [[n x]] [n (left (get-in u [k n]) x)])) v) (left (get u k) v))]))
           (get-in state [:call :spend]))))
+
+(defn left
+  "What is left of the call of a frame's :contract state: {:spend (remainder) :floor :deadline}, extra-ms as for used."
+  [state extra-ms]
+  (let [{:keys [floor deadline]} (:call state)]
+    (cond-> {:spend (remainder state extra-ms)} floor (assoc :floor floor) deadline (assoc :deadline deadline))))
 
 (defn crossings
   "Each line of a frame's :contract state that is crossed, as [limit cause, amount]: {:used n}, the body's {:health n}
@@ -269,3 +279,54 @@
   "Whether error e must pass a job's catch-all on up: a cut or a limit."
   [e]
   (and (instance? js/Error e) (contains? #{"cut" "limit"} (.-code e))))
+
+;; ------------------------------------------------------------------ quotes
+
+(def too-expensive "The quote of a quote that ran past its deadline." {:uses {:time [##Inf ##Inf ##Inf]}})
+
+(defn figure? [x] (and (vector? x) (= 3 (count x)) (every? number? x) (apply <= x)))
+
+(defn quote-problem
+  "Why q is no quote {:uses {:time :health :food fig :items {name fig} :wear {tool fig}} :yields {:items {name fig}}
+  :done fig :moves-to [x y z]}, each fig [least mean most], or nil."
+  [q]
+  (let [{:keys [uses yields]} q
+        figs (concat (keep #(get uses %) [:time :health :food]) (vals (:items uses)) (vals (:wear uses))
+                     (vals (:items yields)) (keep :done [q]))]
+    (cond
+      (not (map? q)) "not a map"
+      (seq (remove figure? figs)) "a figure not [least mean most] with least <= mean <= most")))
+
+(defn default-quote
+  "The quote of a job with no quote-of: time (0, the mean time of reports, else guess-s, ##Inf)."
+  [reports guess-s]
+  (let [ts (keep #(get-in % [:uses :time]) reports)]
+    {:uses {:time [0 (if (seq ts) (/ (reduce + ts) (count ts)) guess-s) ##Inf]}}))
+
+(defn least-cause
+  "{:reason :least :least :most} when quote q's most :done is short of call's :least (:all: done?'s :left, d), else
+  nil; a quote with no :done passes."
+  [call q d]
+  (let [most (some-> (:done q) (nth 2))
+        least (:least call)
+        want (if (= :all least) (:left d) least)]
+    (when (and most (number? want) (< most want)) {:reason :least :least least :most most})))
+
+(defn breaks
+  "The first line quote q's least crosses, given left ({:spend :floor :deadline}, ctx/left), the body's levels and
+  now: {:line :least :left}, or nil. A least of ##Inf crosses a line that is not set too."
+  [q {:keys [spend floor deadline]} levels now]
+  (let [u (:uses q)
+        over (fn [line fig room]
+               (let [l (first fig)]
+                 (when (and l (or (= ##Inf l) (and room (> l room)))) {:line line :least l :left room})))
+        room (fn [k] (let [s (get spend k)
+                           f (get floor k)
+                           above (when (and f (number? (get levels k))) (- (get levels k) f))]
+                       (if (and s above) (min s above) (or s above))))]
+    (or (over :time (:time u) (:time spend))
+        (when deadline (over :deadline (:time u) (/ (- deadline now) 1000)))
+        (over :health (:health u) (room :health))
+        (over :food (:food u) (room :food))
+        (some (fn [[k what]] (some (fn [[n fig]] (some-> (over k fig (get-in spend [k n])) (assoc what n))) (get u k)))
+              [[:items :item] [:wear :tool]]))))

@@ -274,6 +274,9 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(await (ctx/call ctx slot job args))` | one round of a child: `:continue` or its ending (Contract jobs); a call of the same job on the same target args (`:target`) as a frame on its chain ends `:condition-failed` `{:reason :duplicate-call :of frame-id}`, with no round and no `:job-report` entry |
 | `(ctx/end ctx kind cause data?)` | a contract job's ending, returned by its round |
 | `(ctx/way? ctx k)`, `(ctx/use ctx purpose)` | whether the call allows way `k`; the list the call gives for `purpose` |
+| `(ctx/left ctx)` | what is left of the call's limits: `{:spend {line n} :floor {line n} :deadline ms}` |
+| `(await (ctx/quote ctx job args quote-deadline?))` | what a call would use and yield (Quotes), or the `:duplicate-call` ending |
+| `(await (ctx/next-way ctx quote-of-way thing?))` | `{:way k :dropped {way why}}`, the next way to try (Quotes) |
 | `(ctx/check-child ctx slot job args)` | the child's check, for a parent's check |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
@@ -297,6 +300,12 @@ a finished job's goes to body memory `:job-report` (cap 256).
 `defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round. A failing
 condition ends `:condition-failed`, `done?` ends `:done`; endings are `{:kind :cause :because :report :data}`. A
 started frame left without an ending (its root ends or is dropped, its parent clears its slot) gets `:cut-off`.
+
+**Quotes (engine.core.quote).** `{:uses {:time fig :health fig :food fig :items {name fig} :wear {tool fig}} :yields
+{:items {name fig}} :done fig :moves-to [x y z]}`, fig `[least mean most]` (`##Inf` allowed, `:done` in `done?` units).
+`quote-of` runs token-less with the would-be call and `ctx/left`; none: time `(0, mean :job-report time, ##Inf)`. Past
+the quote deadline time is `##Inf`. At the first round a quote whose most `:done` is short of `:least` ends
+`:nothing-possible` `{:reason :least}`.
 
 **Limits (engine.core.limits).** A child's limits are clamped to its caller's; acts and call boundaries check the chain.
 `:engine.contract/enforce-limits` off (default): `job.limit_would_end` once per crossed frame and line (`:used`, `:health`,

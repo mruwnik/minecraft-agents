@@ -9,13 +9,14 @@
             [engine.core.ending :as ending]
             [engine.core.legacy :as legacy]
             [engine.core.limits :as limits]
+            [engine.core.quote :as quote]
             [engine.core.tally :as tally]
             [engine.contract :as contract]
             [engine.chat :as chat]
             [engine.memory :as mem]
             ["crypto" :as crypto]))
 
-(declare call call-child)
+(declare call call-child quote-ctx)
 
 (defn ^:async act!
   "Every acting primitive call from a job: check the ownership token, save
@@ -87,6 +88,9 @@
                                       :chain chain :round round :reflex reflex :memory kind}))]
     {:engine eng :primitives (:primitives eng) :token token :args args :id id
      :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base) :t0s (:t0s base)
+     :quote-deadline (:quote-deadline base)
+     :left #(let [t (now eng)]
+              (contract/left (:contract (mem/job-mem (mem/view store) root slots)) (- t (nth (:t0s base) (count slots) t))))
      :section-depth (:section-depth base) :held (:held base) :section-closed #(limits/section-closed! eng base)
      :view #(mem/view store)
      :update-mem (fn [f more]
@@ -114,6 +118,9 @@
      :note-walk (fn [status moved] (record-act! eng base :walk #js {:status status} moved))
      :call-child (fn [slot def child-args] (call-child eng base slot def child-args))
      :call (fn [slot def child-args] (call eng base child-ending slot def child-args))
+     :quote (fn [def quote-args deadline self?]
+              (quote/quote! eng base def quote-args deadline self? #(quote-ctx eng base def quote-args % self?)))
+     :next-way quote/next-way
      :child-ending child-ending
      :result (fn [data] (check!) (swap! results assoc id data))
      :child-result (fn [slot] (get @results (mem/path->id root (conj slots slot))))
@@ -224,6 +231,21 @@
           (limits/check! eng base)
           status)))))
 
+(defn quote-ctx
+  "The ctx def's quote-of gets for a call with args under base, qd the quote deadline: token-less, so it cannot act,
+  call or write. self?: base's own frame. Otherwise a child's in a slot of its own, carrying the would-be call keys
+  (:quote-call) and what is left of them, and the call in :quoting for the duplicate check of quotes below it."
+  [eng base def args qd self?]
+  (let [b (assoc base :token nil :quote-deadline qd)]
+    (if self?
+      (assoc (make-ctx eng b) :job-ways (:ways def))
+      (let [slot ::quote
+            ident (ending/frame-identity def args)
+            id (mem/path->id (:root base) (conj (:slots base) slot))
+            c (child-ctx eng (cond-> b ident (update :quoting (fnil conj []) [ident id])) slot args)
+            call (first (ending/call-of c def))]
+        (assoc c :quote-call call :left (constantly (contract/left {:call call} 0)) :job-ways (:ways def))))))
+
 (defn ^:async old-round
   "One round of old job def as the ctx/call child c (its id child-id) under parent base: :continue or its ending
   (engine.core.legacy). Its check runs every round, as under call-child."
@@ -289,7 +311,7 @@
           (tally/remember! eng (:sym def) (some->> (:target def) (select-keys args)) (:report e))
           (cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended)
           (mem/update-job! store (:root base) (:slots base) update :children dissoc slot)
-          (when-not done? (reset! child-ending e))
+          (when-not done? (reset! child-ending e) (quote/book-failure! eng base e))
           (limits/check! eng base)
           e)))))))
 

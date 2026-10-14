@@ -1,6 +1,6 @@
 (ns engine.ctx
   "Helpers a job's check and round call on their ctx. See README.md, section ctx."
-  (:refer-clojure :exclude [use])
+  (:refer-clojure :exclude [quote use])
   (:require [engine.contract :as contract]
             [engine.expr :as expr]
             [engine.memory :as mem]))
@@ -27,9 +27,15 @@
 ;; ------------------------------------------------------------------ the contract (engine.contract)
 
 (defn frozen-call
-  "The call keys of this contract job's call, frozen at its first round; nil before it starts."
+  "The call keys of this contract job's call, frozen at its first round (in a quote ctx, the would-be call's); nil
+  before it starts."
   [ctx]
-  (get-in (mem/job-mem ((:view ctx)) (:root ctx) (:slots ctx)) [:contract :call]))
+  (or (:quote-call ctx) (get-in (mem/job-mem ((:view ctx)) (:root ctx) (:slots ctx)) [:contract :call])))
+
+(defn left
+  "What is left of the call's limits: {:spend {line remainder} :floor {line level} :deadline ms}."
+  [ctx]
+  ((:left ctx)))
 
 (defn way?
   "Whether the call allows way k."
@@ -102,6 +108,26 @@
   [ctx slot job args]
   (let [[def args] (child-job ctx job args)]
     ((:call ctx) slot def args)))
+
+(defn quote
+  "A promise of what job (a definition map, or a job namespace symbol) expects to use and yield for a call with args:
+  {:uses {:time [least mean most] :health .. :food .. :items {name fig} :wear {tool fig}} :yields {:items {name fig}}
+  :done fig :moves-to [x y z]} (:done in the job's done? units), ##Inf allowed; or the condition-failed :duplicate-call
+  ending when the call would be refused. Runs its quote-of export under a quote ctx (no acts, calls or writes), else
+  time (0, the mean of its :job-report times or ::contract/default-time-s, ##Inf). quote-deadline: wall-clock ms,
+  never past this ctx's :quote-deadline (default ::contract/quote-s from now); asked or answered past it, time is ##Inf."
+  ([ctx job args] (engine.ctx/quote ctx job args nil))
+  ([ctx job args quote-deadline]
+   (let [[def args] (child-job ctx job args)]
+     ((:quote ctx) def args quote-deadline false))))
+
+(defn next-way
+  "A promise of {:way k :dropped {way why}}: the first of this contract job's ways, in its ways order, that the call
+  allows, has not failed on thing this call and whose quote crosses no line of left by its least; :way nil when none.
+  (quote-of-way way) is a quote, a promise of one, an ending (dropped with its cause) or nil (passes). A child ending
+  other than :done after next-way chose a way books that way as failed on thing. Quotes cost: ask when choosing."
+  ([ctx quote-of-way] (next-way ctx quote-of-way nil))
+  ([ctx quote-of-way thing] ((:next-way ctx) ctx quote-of-way thing)))
 
 (defn result!
   "Hand data to the parent as this job's result. Only the round that ends
