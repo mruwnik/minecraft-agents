@@ -113,3 +113,11 @@
           (is (= :need (:cause (kc (await (ending-of (assoc w :inventory [{:name "lapis_lazuli" :count 3}]) 'jobs.items.enchant {:item "iron_sword"}))))) "no item")
           (is (= :no-lapis (:cause (kc (await (ending-of w 'jobs.items.enchant {:item "iron_sword" :fetch false}))))))
           (is (= :no-item (:cause (kc (await (ending-of (assoc w :inventory [{:name "lapis_lazuli" :count 3}]) 'jobs.items.enchant {:item "iron_sword" :fetch false})))))))))))
+
+(deftest wear-and-pick-up-loose-facts-are-conditions-so-a-root-job-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (true? (await (waits? (stacks "dirt") 'jobs.items.wear {:item "dirt"}))) "no armour piece")
+        (is (true? (await (waits? (stacks "dirt") 'jobs.items.wear {:item "iron_helmet"}))) "not carried")
+        (is (true? (await (waits? {} 'jobs.items.pick-up-loose {}))) "no loose item in sight")))))

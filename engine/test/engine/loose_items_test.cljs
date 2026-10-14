@@ -162,22 +162,23 @@
             (is (= :info (:level (first picked))))
             (is (= 1 (:collected (first picked))))))))))
 
-(deftest the-job-alone-ends-stopped-when-nothing-is-worth-it
+(deftest the-job-alone-waits-when-nothing-is-worth-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (world dirt-down))
               r (await (tu/child-outcome eng 'jobs.items.pick-up-loose {} 20))]
-          (is (= {:status :stopped :reason :nothing-worth-it :collected 0} (dissoc r :text :ending)))
-          (is (= :condition-failed (get-in r [:ending :kind])))
+          (is (= :not-done r))
           (is (= 0 (carried p "dirt"))))))))
 
-(deftest the-stop-text-says-why-nothing-was-taken
+(deftest the-wait-text-says-why-nothing-was-taken
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [text (fn ^:async text* [w args]
-                     (:text (await (tu/child-outcome (:eng (setup w)) 'jobs.items.pick-up-loose args 20))))
+                     (let [s (setup w)]
+                       (await (tu/child-outcome (:eng s) 'jobs.items.pick-up-loose args 6))
+                       (get-in (first (filterv #(= :waiting (:kind %)) @(:seen s))) [:cause :hint])))
               far (await (text (world log-ten-off) {:radius 8}))
               unworthy (await (text (world dirt-down) {}))
               none (await (text (world) {}))]
@@ -186,28 +187,17 @@
           (is (re-find #"dirt not worth the detour" unworthy) "what was seen and why it was left")
           (is (re-find #"no loose item" none)))))))
 
-(deftest a-declined-run-leaves-what-it-saw-so-a-disagreeing-trigger-cannot-repeat
+(deftest a-held-job-with-nothing-worth-it-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup (world dirt-down))
-              eng (update-in eng [:triggers :loose-items] assoc :when (constantly true))]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :loose-items}]}"))
-          (dotimes [_ 4] (await (core/tick! eng)))
-          (is (= [12] (into [] (mapcat (comp :ids :data)) (mem/entries (mem/view (:store eng)) loose/left-kind)))))))))
-
-(deftest a-held-job-with-nothing-worth-it-ends-and-frees-the-queue
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup (world dirt-down))
-              held (core/submit! eng '(jobs.items.pick-up-loose) {:hold? true})
-              behind (core/submit! eng '(jobs.items.pick-up-loose) {})]
+        (let [{:keys [eng seen]} (setup (world dirt-down))]
+          (core/submit! eng '(jobs.items.pick-up-loose) {:hold? true})
+          (core/submit! eng '(jobs.items.pick-up-loose) {})
           (dotimes [_ 6] (await (core/tick! eng)))
-          (is (empty? (:list (core/state eng))) "both ended; the held one did not block the one behind it")
-          (is (= [[held :nothing-worth-it] [behind :nothing-worth-it]]
-                 (mapv (juxt :job :reason) (filterv #(= :stopped (:kind %)) @seen))))
-          (is (empty? (filterv #(= :waiting (:kind %)) @seen))))))))
+          (is (= 2 (count (:list (core/state eng)))))
+          (is (empty? (filterv #(= :stopped (:kind %)) @seen)))
+          (is (= #{:nothing-worth-it} (into #{} (map :reason) (filterv #(= :waiting (:kind %)) @seen)))))))))
 
 (deftest register-args-cut-the-running-job-at-most-once
   (async done

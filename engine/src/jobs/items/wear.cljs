@@ -10,7 +10,7 @@
   the pockets. Without it, the best carried piece goes into each slot that is empty or worn with a weaker one
   (leather < golden < turtle helmet < chainmail < iron < diamond < netherite).
   Needs nothing; done? holds when nothing carried is better than what is worn.
-  Ends :done with {:worn [{:item :slot}]}, info wear.done. A named item that is no armour piece or not carried ends
+  Ends :done with {:worn [{:item :slot}]}, info wear.done. A named item that is no armour piece or not carried is a condition (a listed call waits); a started call ends
   condition-failed :not-armour or :no-item with warn wear.refused. A piece the server does not take ends
   nothing-possible :failed with the pieces worn so far and :server-status, warn wear.failed.
   Quote: time per piece to put on.")
@@ -23,13 +23,19 @@
 
 (def target [:item])
 
-(def conditions [])
-
 (defn plan-of
   "armour/plan for c: worn pieces and carried item names read from the body."
   [c]
   (let [p (:primitives c)]
     (armour/plan (armour/worn-of (.-equipment (.self p))) (map :name (u/inventory p)) (:item (:args c)))))
+
+(defn refused
+  "The cause :not-armour or :no-item when the named :item cannot be put on."
+  [c]
+  (let [{:keys [ok reason]} (plan-of c)]
+    (when-not ok reason)))
+
+(def conditions [[:fn refused]])
 
 (defn done?
   "Nothing to put on (a refused item is not done)."

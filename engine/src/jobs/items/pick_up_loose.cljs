@@ -12,8 +12,8 @@
   One jobs.forestry.collect-drops child takes them by entity id; its go-to leaves what it cannot reach. Items not
   picked up are remembered (:loose-left) for :left-s; so are the seen items when it finds none worth it, so a
   reflex that judged otherwise cannot fire it again for them. One info event loose-items.picked {:collected :items :left}.
-  Ends :done with data {:collected n :items [names] :left [ids]}. With nothing worth it it ends condition-failed
-  :nothing-worth-it at once (a held run never blocks the queue), the text naming the radius, what within it was left
+  Ends :done with data {:collected n :items [names] :left [ids]}. With nothing worth it a listed call waits
+  (condition :nothing-worth-it); a started one ends condition-failed :nothing-worth-it, the text naming the radius, what within it was left
   and why, and the nearest item seen beyond it; with items picked at but none taken, nothing-possible :none-taken.
   Quote: the items worth it in sight, a second of walking each.")
 
@@ -29,7 +29,6 @@
 
 (def defaults {:least 1})
 
-(def conditions [])
 
 (def s-per-item "Seconds a quote counts to fetch one item." 2)
 
@@ -49,6 +48,15 @@
               (str/join ", " (map (fn [[n why]] (str n " " (if (= :not-worth why) "not worth the detour" (name why)))) left)))
          (str "no loose item in sight within " radius " blocks"))
        (when beyond (str "; nearest beyond: " (:name beyond) " " (:distance beyond) " blocks away (a larger :radius takes it)"))))
+
+(defn nothing-worth-it
+  "The cause :nothing-worth-it while no loose item in sight is worth picking up (a listed call waits for loot)."
+  [c]
+  (let [p (:primitives c) view (ctx/view c) w (:world (:engine c))]
+    (when (empty? (loose/candidates p view w (:args c) (:root c)))
+      {:reason :nothing-worth-it :hint (stop-text (loose/explain p view w (:args c) (:root c)))})))
+
+(def conditions [[:fn nothing-worth-it]])
 
 (defn quote-of
   [c]

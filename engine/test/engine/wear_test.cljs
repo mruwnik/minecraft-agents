@@ -88,22 +88,22 @@
           (is (= {"head" "diamond_helmet"} (worn p)))
           (is (= #{"iron_helmet"} (carried p))))))))
 
-(deftest a-named-non-armour-item-is-refused-with-a-reason
+(deftest a-named-non-armour-item-waits-on-its-condition
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (wear (stacks "dirt") {:item "dirt"}))]
-          (is (= {:worn [] :reason :not-armour} (select-keys @out [:worn :reason])))
-          (is (= :condition-failed (:kind (:ending @out))))
+        (let [{:keys [p eng out]} (await (wear (stacks "dirt") {:item "dirt"}))]
+          (is (= :not-done @out) "the round never ran")
+          (is (seq (:list (core/state eng))))
           (is (empty? (worn p))))))))
 
-(deftest a-missing-item-is-refused
+(deftest a-missing-item-waits-on-its-condition
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (wear (stacks "dirt") {:item "iron_helmet"}))]
-          (is (= {:worn [] :reason :no-item} (select-keys @out [:worn :reason])))
-          (is (= :condition-failed (:kind (:ending @out)))))))))
+        (let [{:keys [eng out]} (await (wear (stacks "dirt") {:item "iron_helmet"}))]
+          (is (= :not-done @out) "the round never ran")
+          (is (seq (:list (core/state eng)))))))))
 
 (deftest nothing-better-than-worn-is-done-before-any-round
   (let [job (get registry/jobs job)

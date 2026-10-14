@@ -12,11 +12,11 @@
   Holds the vehicle (jobs.lib.vehicle) while the job lives, so the :mounted trigger does not step the body off:
   the body stays aboard only in manual mode, otherwise the hold ends with the job and the trigger steps it off ~30 s later.
   By :name it prefers a vehicle with no rider.
-  Conditions: :bad-args, and at the start :no-vehicle while none is in sight. The round yields :continue only when the walk waits on the world.
+  Conditions: :bad-args, and at the start :no-vehicle while none is in sight and :aboard-other while on another vehicle (a listed call waits). The round yields :continue only when the walk waits on the world.
 
   Ends done (data {:id :vehicle name}, plus :already true when aboard it already), info vehicle.mounted, or
   condition-failed: :gone (no such entity in sight), :not-mountable, :occupied, :hand-full
-  (a mob, with an item in hand that cannot be put away), :aboard-other (already on another vehicle), or
+  (a mob, with an item in hand that cannot be put away), :aboard-other (got on another vehicle on the way), or
   nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed twice),
   :failed (any other status, data :mount the primitive's).")
 
@@ -56,7 +56,6 @@
                   (some? (entity-of p id)))
         :no-vehicle))))
 
-(def conditions [[:fn bad-args] [:fn no-vehicle]])
 
 (defn done?
   "Aboard the wanted vehicle or not; the round ends with its event."
@@ -72,6 +71,18 @@
              (filter #(= name (.-name %)))
              (sort-by (juxt #(pos? (count (.-passengers %))) #(u/dist me (u/pos-of (.-pos %)))))
              first .-id)))
+
+(defn aboard-other
+  "At the call's start: the cause :aboard-other while the body sits in a vehicle other than the wanted one."
+  [c]
+  (when-not (ctx/frozen-call c)
+    (let [{:keys [id name]} (:args c)
+          v (vehicle/vehicle-of (.self (:primitives c)))
+          wanted (if (and (nil? id) (string? name)) (nearest-named c name) id)]
+      (when (and v (not= wanted (:id v)))
+        {:reason :aboard-other :vehicle (:name v)}))))
+
+(def conditions [[:fn bad-args] [:fn no-vehicle] [:fn aboard-other]])
 
 (defn quote-of [c]
   (let [p (:primitives c)

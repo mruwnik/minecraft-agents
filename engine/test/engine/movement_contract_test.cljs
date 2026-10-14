@@ -163,3 +163,19 @@
           (is (= {:event :stopped :kind :nothing-possible :reason :unreachable} (dissoc e :cause)))
           (is (= :unreachable (:reason (:cause e))) (pr-str e))
           (is (keyword? (:why (:cause e))) "the planner's reason"))))))
+
+(defn ^:async waits?
+  "Whether job sym with args, submitted as a root job in world, is still listed (waiting on a condition) after 12 ticks."
+  [world sym args]
+  (let [eng (core/create {:primitives (tu/seeing-all (tu/fake-on-floor world)) :jobs registry/jobs :dir (tu/tmp-dir)})]
+    (core/submit! eng (list sym args) {})
+    (await (tu/run-until-empty eng 12))
+    (boolean (seq (:list (core/state eng))))))
+
+(deftest boat-drive-on-foot-and-mount-aboard-other-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (true? (await (waits? {:entities [boat]} 'jobs.movement.boat-drive {:pos [10 63 2]}))) "on foot")
+        (is (true? (await (waits? {:self {:vehicle 5} :entities [boat (assoc boat :id 5 :name "minecart")]}
+                                  'jobs.movement.mount {:id 9}))) "aboard another vehicle")))))

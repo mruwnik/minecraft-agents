@@ -61,13 +61,13 @@
           (let [{:keys [res]} (await (run world args))]
             (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
 
-(deftest on-foot-ends-not-aboard-at-once-and-never-waits
+(deftest on-foot-waits-for-a-boat
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [res seen]} (await (run {:blocks lake :entities [(boat-at 2.5 2.5)]} {:pos [10 63 2]}))]
-          (is (= {:status :stopped :reason :not-aboard} (select-keys res [:status :reason])) (pr-str res))
-          (is (empty? (filterv #(= :waiting (:kind %)) @seen))))))))
+          (is (= :not-done res))
+          (is (= [:not-aboard] (distinct (map :reason (filterv #(= :waiting (:kind %)) @seen))))))))))
 
 (deftest blocked-boat-stays-on-the-water
   (async done
