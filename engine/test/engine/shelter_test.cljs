@@ -588,16 +588,26 @@
       (fn ^:async t []
         (doseq [[world futile reason]
                 [[{:time noon :blocks floor} [] {:reason :day}]
-                 [{:time night :blocks (assoc floor "0,66,0" "stone")} [] {:reason :roofed-not-enclosed :pos {:x 0 :y 64 :z 0}}]
-                 [{:time night :blocks (merge floor bed-room (tu/box -1 63 -1 7 63 1 "stone"))} [] {:reason :already-sealed :pos {:x 0 :y 64 :z 0}}]
+                 [{:time night :blocks (assoc floor "0,66,0" "stone")} [] {:reason :roofed-not-enclosed :cause {:reason :roofed-not-enclosed :pos {:x 0 :y 64 :z 0}}}]
                  [{:time night :blocks floor} [{:pos {:x 0 :y 64 :z 0} :reason :no-floor}]
-                  {:reason :futile :pos {:x 0 :y 64 :z 0} :why :no-floor}]
-                 [{:time night :blocks floor} [{:pos {:x 0 :y 63 :z 0}}] {:reason :futile :pos {:x 0 :y 63 :z 0}}]]]
+                  {:reason :futile :cause {:reason :futile :pos {:x 0 :y 64 :z 0} :why :no-floor}}]
+                 [{:time night :blocks floor} [{:pos {:x 0 :y 63 :z 0}}] {:reason :futile :cause {:reason :futile :pos {:x 0 :y 63 :z 0}}}]]]
           (let [{:keys [eng seen]} (setup world)]
             (doseq [f futile] (mem/write! (:store eng) :dig-in-futile f {:cap 5 :ttl 600000}))
             (core/submit! eng '(jobs.survival.dig-in) {})
             (await (tick-n eng 2))
-            (is (= [reason] (mapv #(select-keys % [:reason :pos :why]) (emitted seen :waiting))) (pr-str world futile))))))))
+            (is (= [reason] (mapv #(select-keys % [:reason :cause]) (emitted seen :waiting))) (pr-str world futile))))))))
+
+(deftest a-submitted-dig-in-in-a-shut-room-is-done-and-places-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks (merge floor bed-room (tu/box -1 63 -1 7 63 1 "stone"))})]
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 4))
+          (is (empty? (calls p "place")))
+          (is (empty? (emitted seen :waiting)))
+          (is (empty? (emitted seen :stopped))))))))
 
 (def stone-pit {"0,63,0" "stone" "0,62,0" "stone" "0,61,0" "stone" "0,60,0" "stone" "1,64,0" "stone"})
 
