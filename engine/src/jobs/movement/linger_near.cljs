@@ -10,7 +10,7 @@
 (def doc
   "Stay within :range of :pos for :wait-s seconds, for a wait that needs the body near (leaf decay before the drops
   despawn, crop growth, a birth). Needs :pos and a positive :wait-s (else declined at submit).
-  Each round: within range it holds still (declared hold :lingering) for 500 ms and yields :continue; out of range
+  Each round: within range it pauses (a noop child holding :lingering) for 500 ms and yields :continue; out of range
   (pushed away, or at the start) it walks back with a go-to child (:escalate false).
   Ends with a result:
   - {:lingered true :reason \"waited\"} when :wait-s of time in range has been waited, with the body in range.
@@ -86,7 +86,6 @@
       (finish! c :done nil {:lingered true})
 
       :else
-      (do (ctx/hold-still! c :lingering)
-          (await (ctx/act c :wait #js {:ms idle-ms}))
+      (do (await (child/pause! c (/ idle-ms 1000) :lingering))
           (ctx/update-mem! c update :waited (fnil + 0) idle-ms)
           :continue))))

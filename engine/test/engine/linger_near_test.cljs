@@ -159,3 +159,15 @@
           (is (= :not-done @(:out s)) "one second in range of the two asked for")
           (await (run-ticks s 6 500))
           (is (= {:status :done :lingered true} @(:out s)) "two seconds held in range ends it"))))))
+
+(deftest the-wait-in-range-is-a-noop-pause-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pauses (atom [])
+              stub {:check (constantly true)
+                    :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
+              s (setup {} {:pos {:x 2 :y 64 :z 0} :range 3 :wait-s 30} {'jobs.time.noop stub})]
+          (await (run-ticks s 4 500))
+          (is (= [{:seconds 0.5 :why :lingering}] (distinct @pauses)) "each look is a pause child, not a bare wait act")
+          (is (empty? (filter #(= "wait" (.-name %)) (.-calls (.-world (:p s))))) "no bare wait act"))))))

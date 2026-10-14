@@ -2,6 +2,11 @@
   "jobs.animals.lead-to against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.events :as events]
+            [engine.registry :as registry]
+            [engine.triggers :as triggers]
+            [jobs.lib.world-files :as ew]
             [engine.fake :as fake]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
@@ -730,3 +735,22 @@
           (is (finished? s))
           (is (not= :unreachable (:reason (done-event s))))
           (is (= :unleashed (:reason (done-event s)))))))))
+
+(deftest waiting-for-a-lagging-cow-is-a-noop-pause-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pauses (atom [])
+              stub {:check (constantly true)
+                    :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
+              clock (atom 1000000)
+              [_ sink] (tu/legacy-capture-sink)
+              p (tu/fake-on-floor {:floor h/flight-floor :inventory lead :entities [(cow 1 3 {:trail 9})]})
+              now (tu/act-clock clock p call-ms)
+              eng (core/create {:primitives p :jobs (assoc registry/jobs 'jobs.time.noop stub) :triggers triggers/all
+                                :dir (tu/tmp-dir) :now now :world (ew/of-data {} {} [])
+                                :events (events/make {:body "Fake" :sinks [sink] :now now})})
+              s {:eng eng :clock clock :p p}]
+          (await (submit s {} 1))
+          (is (seq @pauses) "the wait is a pause child")
+          (is (= #{{:seconds (/ escort/wait-look-ms 1000) :why :waiting-for-animal}} (set @pauses))))))))

@@ -2,6 +2,7 @@
   "jobs.survival.extinguish and the burning trigger against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.zones-survival-test :as zs]
             [engine.fake :as fake]
             [engine.events :as events]
@@ -840,3 +841,26 @@
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
           (is (= [] (calls p "moveTo")) "no walk to a cell behind the wall"))))))
+
+(def noop-stub
+  "A jobs.time.noop stand-in that records each pause asked of it and ends at once."
+  (fn [pauses]
+    {:check (constantly true)
+     :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}))
+
+(deftest standing-off-the-fire-waits-in-noop-pause-children
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pauses (atom [])
+              clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake {:self {:onFire true} :blocks (floor 8)}))
+              eng (core/create {:primitives p :jobs (assoc registry/jobs 'jobs.time.noop (noop-stub pauses))
+                                :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (swap! clock + 1)
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= [] (calls p "wait")) "no bare wait act")
+          (is (= #{{:seconds (/ (extinguish/stand-wait-ms) 1000) :why :burning-wait}} (set @pauses))))))))

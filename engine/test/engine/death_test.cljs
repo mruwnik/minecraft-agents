@@ -3,6 +3,8 @@
   trigger and the recover-drops job against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.events :as events]
+            [jobs.lib.world-files :as ew]
             [engine.ctx :as ctx]
             [engine.expr :as expr]
             [engine.fake :as fake]
@@ -624,6 +626,31 @@
           (js/setTimeout (fn [] (swap! clock + 500) (mem/write! (:store eng) :respawned {:pos {:x 0 :y 64 :z 0}}) (swap! clock + 3000)) 120)
           (await (core/tick! eng))
           (is (some #(and (= :holding (:kind %)) (= :respawning (:reason %))) @seen)))))))
+
+(def noop-stub
+  "A jobs.time.noop stand-in that records each pause asked of it and ends at once."
+  (fn [pauses]
+    {:check (constantly true)
+     :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}))
+
+(deftest recover-drops-waits-for-the-respawn-in-noop-pause-children
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pauses (atom [])
+              clock (atom 1000000)
+              [_ sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake-on-floor {:floor tu/walk-floor :entities drops}))
+              eng (core/create {:primitives p :jobs (assoc registry/jobs 'jobs.time.noop (noop-stub pauses))
+                                :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                :world (ew/of-data {} {} [])
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (die-unrespawned! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (js/setTimeout (fn [] (swap! clock + 500) (mem/write! (:store eng) :respawned {:pos {:x 0 :y 64 :z 0}}) (swap! clock + 3000)) 120)
+          (await (core/tick! eng))
+          (is (seq @pauses))
+          (is (= #{:respawning} (set (map :why @pauses)))))))))
 
 (deftest recover-drops-gives-up-waiting-when-the-window-closes
   (async done

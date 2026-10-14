@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
+            [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.survival.eat :as eat]
@@ -257,10 +258,9 @@
   (ctx/update-mem! c dissoc :pour-waits :water-waits :returned))
 
 (defn ^:async burning-wait!
-  "Hold still on purpose for ms."
+  "Pause on purpose for ms (a noop child holding :burning-wait)."
   [c ms]
-  (ctx/hold-still! c :burning-wait)
-  (await (ctx/act c :wait (clj->js {:ms ms}))))
+  (await (child/pause! c (/ ms 1000) :burning-wait)))
 
 (defn ^:async scoop-pass
   "The water was poured at cell. Wait while burning (up to max-pour-waits), nil after that so the pass tries
@@ -328,11 +328,10 @@
     (ctx/update-mem! c assoc :stand-waits waits)
     (when (= 1 waits)
       (ctx/emit! c :extinguish_wait :info {:text "no water near; standing still off the fire until it goes out"}))
-    (ctx/hold-still! c :burning-wait)
     (when (and food (< (.-food (.self p)) (eat-below)))
       (await (ctx/act c :equip #js {:item food}))
       (await (ctx/act c :eat #js {:item food})))
-    (await (ctx/act c :wait (clj->js {:ms (stand-wait-ms)})))
+    (await (burning-wait! c (stand-wait-ms)))
     (cond
       (clear? c) :done
       (>= waits (max-stand-waits)) (still-burning c "still burning after standing still off the fire")

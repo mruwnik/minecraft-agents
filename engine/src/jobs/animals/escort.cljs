@@ -203,8 +203,7 @@
                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
       :again
       :yield)
-    (do (ctx/hold-still! c :waiting-for-animal)
-        (await (ctx/act c :wait #js {:ms wait-look-ms}))
+    (do (await (child/pause! c (/ wait-look-ms 1000) :waiting-for-animal))
         (ctx/hold-still! c nil)
         :again))))
 

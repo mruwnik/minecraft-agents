@@ -87,6 +87,7 @@
    ::deep-reach {:default 24 :doc "How far aside of a deep pile the walk goes on before the stair down is cut." :spec (a/num-in 0 nil)}
    ::stair-step-s {:default 3 :doc "Seconds one block of a stair down and its run is reckoned to take, against the despawn window left." :spec (a/num-in 0 nil)}
    ::killer-guard-ms {:default 60000 :doc "How long after a death its killer is assumed to still stand at the pile; later only the hostiles the body knows of count." :spec (a/num-in 0 nil)}
+   ::pause-s {:default 1 :doc "Seconds one wait for the respawn, the settling or a kit fetch pauses (jobs.time.noop) before it looks again." :spec (a/num-in 0 nil)}
    ::danger-memory-ms {:default 150000 :doc "How long a skip for danger is remembered: the died trigger rests and the job waits (:danger-remembered) for that death, then the danger is weighed anew. A skip for the assumed killer alone lasts only while the killer guard does." :spec (a/num-in 0 nil)}
    ::hold-at-night {:default true :doc "At night a body that stands in a shelter (a roof, a closed room, underground) does not walk out of it for the pile: the run ends :declined (:night) and the died trigger tries again, by day if the pile is still there." :spec boolean?}
    ::open-night-radius {:default 48 :doc "At night a body under the open sky does not walk farther than this for the pile: the run ends :declined (:night) so the night reflex shelters it where it stands; the trip resumes by day while the pile lasts." :spec (a/num-in 0 nil)}
@@ -94,6 +95,7 @@
 (defn seal-radius [] (settings/get settings ::seal-radius))
 (defn killer-guard-ms [] (settings/get settings ::killer-guard-ms))
 (defn danger-memory-ms [] (settings/get settings ::danger-memory-ms))
+(defn pause-s [] (settings/get settings ::pause-s))
 (defn wet-danger [] (settings/get settings ::wet-danger))
 (defn arrive-range [] (settings/get settings ::arrive-range))
 (defn max-hostile-cuts [] (settings/get settings ::max-hostile-cuts))
@@ -474,7 +476,7 @@
       (not (ctx/alive? c)) :declined
       (window-closed? c entry) (do (ctx/hold-still! c nil) :closed)
       (threatened? c) (do (ctx/hold-still! c nil) (decline-danger! c (threatened? c)))
-      :else (do (ctx/hold-still! c reason) (await (pace/pace!)) (recur)))))
+      :else (do (await (child/pause! c (pause-s) reason)) (await (pace/pace!)) (recur)))))
 
 (defn decide!
   "The decision of this trip: the saved one, else estimate, save and report it. A resumed trip estimates again once (from
@@ -558,7 +560,7 @@
           (not (ctx/alive? c)) :declined
           (window-closed? c entry) (do (ctx/hold-still! c nil) nil)
           (threatened? c) (do (ctx/hold-still! c nil) (decline-danger! c (threatened? c)))
-          :else (do (ctx/hold-still! c :fetching-kit) (await (pace/pace!)) (recur)))))))
+          :else (do (await (child/pause! c (pause-s) :fetching-kit)) (await (pace/pace!)) (recur)))))))
 
 (defn danger-only?
   "Whether the estimate e is a skip for danger alone: the pile would be fetched were the route safe."
