@@ -268,14 +268,14 @@
               {:keys [eng seen]} (setup jobs)]
           (core/submit! eng '(top) {})
           (await (core/tick! eng))
-          (is (= [{:name "top" :cause {:line :health :floor 15} :health 12}
+          (is (= [{:name 'top :cause {:line :health :floor 15} :health 12}
                   {:cause {:line :health :floor 15} :health 12}
                   {:cause {:line :time :spend 5} :used 6}]
                  (told seen))
               "the caller's floor, the child's floor and its time, the round in flight counted")
           (is (= 6 (get-in (:data (last (job-ev seen :limit_would_end))) [:report :uses :time])))
           (await (core/tick! eng))
-          (is (= {:name "top" :cause {:line :time :spend 10} :used 12} (last (told seen))))
+          (is (= {:name 'top :cause {:line :time :spend 10} :used 12} (last (told seen))))
           (is (= 4 (count (told seen))) "each frame and line once"))))))
 
 (deftest shadow-mode-holds-no-floor
