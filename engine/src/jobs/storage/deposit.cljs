@@ -39,7 +39,7 @@
   :no-chest-item, no free cell beside nothing-possible :no-chest-spot, :make-chests? false nothing-possible :all-chests-full. Any other :chest is used alone.
   Found goods (jobs.lib.found: bulk or containers picked up with no job reason) stay carried, even when named in :items; one
   goods.found notice (:attention :notice) names item, count and the pick-up place.
-  Stock: a chest whose stock is booked in body memory :fetch/stock gets what was put in added (jobs.lib.fetch).")
+  Stock: what the chest holds after each transfer is booked in body memory :fetch/stock (jobs.lib.fetch), so observe chests shows it.")
 
 (a/defargs args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :spec ::a/pos :default nil}
@@ -279,13 +279,13 @@
         (if-let [v (access/container-refusal c :put chest)]
           (refuse! c v)
           (let [r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
-                                                         :item (:name (:stack pick)) :count (:count pick)})))]
+                                                         :item (:name (:stack pick)) :count (:count pick)})))
+                _ (when (.-items r) (fetch/note-stock! c chest (.-items r)))]
             (if (= "ok" (.-status r))
               (if (and (pos? (or (.-moved r) 0))
                        (< (storage/carried (u/inventory (:primitives c)) (:name (:stack pick))) (storage/carried inventory (:name (:stack pick)))))
                 (do (ctx/update-mem! c #(-> % (update :deposited (fnil inc 0)) (update :moved (fnil + 0) (.-moved r))))
                     (u/progress! c)
-                    (fetch/note-moved! c chest (:name (:stack pick)) (.-moved r))
                     :again)
                 (if group? (mark-full! c chest) (give-up! c :chest_unusable "nothing moved into the chest" :nothing-moved)))
               (cond

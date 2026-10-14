@@ -12,6 +12,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.storage :as storage]
             [jobs.lib.world-files :as world]
+            [jobs.lib.fetch :as fetch]
             [engine.withdraw-test :as wt]
             [engine.test-util :as tu]))
 
@@ -392,3 +393,25 @@
               result (await (wt/ending-of eng job {:chest chest :items ["dirt"] :ignore-zones? true} 12))]
           (is (= {:kind :done} result))
           (is (= {:x 10 :y 64 :z 0} (chest-place-of eng))))))))
+
+(deftest deposit-books-what-the-opened-chest-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" [{:name "stone" :count 3}]}})
+              result (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 8))]
+          (is (= {:kind :done} result))
+          (is (= {[10 64 0] {"stone" 3 "dirt" 5}} (fetch/stock-of (mem/view (:store eng))))))))))
+
+(deftest deposit-uses-its-own-chest-and-the-kept-notice-says-it-is-about-recording
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (wt/setup {:inventory [{:name "dirt" :count 5}] :blocks {"10,64,0" "chest" "11,64,0" "chest"} :containers {"10,64,0" [] "11,64,0" []}})
+              _ (wt/know-place! eng :chest {:x 11 :y 64 :z 0})
+              result (await (wt/ending-of eng job {:chest chest :items ["dirt"] :make-chests? false} 8))
+              kept (first (filter #(= :place.kept (:kind %)) @seen))]
+          (is (= {:kind :done} result))
+          (is (= [] (get-in @(fake/state p) [:containers [11 64 0]])) "the recorded chest got nothing")
+          (is (= [{"dirt" 5}] [(into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [10 64 0]]))]) "the named chest got it")
+          (is (re-find #"recorded chest stays at .*11.*not recorded" (:text kept))))))))

@@ -177,8 +177,8 @@
                                          :text (str (name kind) " recorded at " (pr-str offered))}))
       :else
       (ctx/emit! c :place.kept :info {:name kind :kept recorded :offered offered
-                                      :text (str "kept the recorded " (name kind) " at " (pr-str recorded) ", not " (pr-str offered)
-                                                 ": it is still there; move it with jobs.memory.set-place")}))))
+                                      :text (str "the recorded " (name kind) " stays at " (pr-str recorded) "; " (pr-str offered)
+                                                 " was not recorded as the " (name kind) " (the recorded one is still there; jobs.memory.set-place moves it)")}))))
 
 (defn retract-if-missing!
   "A job found status (an act's result status) at pos. When it is \"missing\", pos is the recorded place of kind and

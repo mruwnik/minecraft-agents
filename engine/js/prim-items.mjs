@@ -87,11 +87,11 @@ export function createItems (env) {
       if (clicked.status) return clicked
       // The first open after a login can leave mineflayer's view stale (the click burst is stamped with an old stateId and
       // the server's resyncs stop at an intermediate state); a fresh open carries the true slots.
-      const after = await withWindow(ctx, block, async win => containerCount(win, a.item))
-      const change = after - clicked.before
+      const fresh = await withWindow(ctx, block, async win => ({ count: containerCount(win, a.item), items: slots(win.containerItems()) }))
+      const change = fresh.count - clicked.before
       const moved = Math.max(0, a.direction === 'deposit' ? change : -change)
-      if (moved > 0) return { status: 'ok', moved }
-      return clicked.failure ? { status: 'full', moved: 0 } : { status: 'ok', moved: 0 }
+      if (moved > 0) return { status: 'ok', moved, items: fresh.items }
+      return { status: clicked.failure ? 'full' : 'ok', moved: 0, items: fresh.items }
     })
   }
 

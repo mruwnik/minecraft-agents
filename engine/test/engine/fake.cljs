@@ -561,7 +561,7 @@
         (if (zero? moved)
           [w {:status "no-item" :moved 0}]
           [(if deposit? (-> w (assoc :inventory from') (assoc-in path to')) (-> w (assoc :inventory to') (assoc-in path from')))
-           {:status "ok" :moved moved}])))))
+           {:status "ok" :moved moved :items (with-slots (if deposit? to' from'))}])))))
 
 (defn equip [w {:keys [item dest]}]
   (let [part (if (= "off-hand" dest) "offHand" (when (contains? #{"head" "torso" "legs" "feet"} dest) dest))
