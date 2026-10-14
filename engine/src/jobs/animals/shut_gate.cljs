@@ -8,7 +8,6 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.pass :as pass]
-            [jobs.lib.result :as res]
             [jobs.lib.pen-gate :as pg]
             [jobs.lib.world :as known]))
 
@@ -23,16 +22,17 @@
   - With :plan: every open gate of that plan, wherever it is. A gate the body has not seen lately is walked to and
     looked at, never taken for shut; one that still cannot be read is left (:unseen).
 
-  One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never),
+  One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never, :ways #{:walk}),
   waits a few seconds when an animal stands in the gate (never pushes it), clicks it with an empty hand and reads
   the block again. A gate the body stands in is left (reason :standing-in), as is one an animal never left
   (:animal-in-the-way), or one the walk to it was interrupted for (:walk-interrupted); both get a 30 s :gate-gave-up
   entry, no warn. A gate that could not be reached or did not shut after :tries clicks is given up with one warn
   shut-gate.gave-up and a :gate-gave-up memory entry, which keeps the trigger away from it for 10 minutes.
 
-  Ends done with info shut-gate.done {:shut n :left []} when every open gate was shut (or none stood open); with any
-  left, stopped :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}. A :plan that is
-  missing or unreadable gives one warn shut-gate.declined and {:shut 0 :left [] :declined text}.")
+  Ends :done with info shut-gate.done and the data {:shut n :left []} when every open gate was shut (or none stood
+  open); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
+  A :plan that is missing or unreadable ends the first round :condition-failed :plan-trouble with one warn
+  shut-gate.declined and {:shut 0 :left [] :declined text}.")
 
 (a/defargs args
   {:plan {:doc "id of a plan whose open gates are all shut; nil: the open planned gates of every active plan within :radius" :spec a/name? :default nil}
@@ -90,21 +90,21 @@
     (first (sort-by #(pg/distance here %) cells))))
 
 (defn finish!
-  "End the job: the event and the result; stopped when any gate is left."
+  "End the call: the event and the ending; nothing-possible when any gate is left."
   [c shut left]
   (let [result {:shut shut :left left}
+        _ (ctx/update-mem! c assoc :shut shut)
         text (str shut " gate(s) shut" (when (seq left) (str ", " (count left) " left open")))]
     (if (empty? left)
       (do (ctx/emit! c :shut-gate.done :info (assoc result :text text))
-          (res/finish! c result))
+          (ctx/end c :done nil result))
       (do (ctx/emit! c :shut-gate.stopped :warn (assoc result :text text))
-          (res/stop! c :left text :shut shut :left left)))))
+          (ctx/end c :nothing-possible :left (assoc result :text text))))))
 
 (defn decline!
   [c text]
   (ctx/emit! c :shut-gate.declined :warn {:plan (:plan (:args c)) :text (str "shut-gate: " text)})
-  (ctx/result! c {:shut 0 :left [] :declined text})
-  :done)
+  (ctx/end c :condition-failed :plan-trouble {:shut 0 :left [] :declined text}))
 
 (defn give-up!
   "Give up the gate: one warn, one memory entry the trigger reads; the entry for the left list."
@@ -124,12 +124,12 @@
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
   [c cell]
-  (let [r (await (child/call-walk c :walk {:pos (u/cell-pos cell) :range (:reach (:args c)) :doors :never :escalate false}))
-        res (ctx/child-result c :walk)]
+  (let [e (await (child/call-walk* c :walk {:pos (u/cell-pos cell) :range (:reach (:args c)) :doors :never :ways #{:walk}}))
+        res (:data e)]
     (ctx/update-mem! c dissoc :blocker)
     (cond
-      (= :continue r) :walk-interrupted
-      (and (= :done r) (:arrived res)) nil
+      (= :continue e) :walk-interrupted
+      (and (= :done (:kind e)) (:arrived res)) nil
       :else (do (ctx/update-mem! c assoc :blocker (str (or (:hint res) (some-> (:why res) name) "no walk leads there")))
                 :unreachable))))
 
@@ -177,11 +177,21 @@
               (< n (:tries (:args c))) (recur (inc n))
               :else reason)))))))
 
-(defn check
-  "Always: a run that finds nothing open ends at once with {:shut 0 :left []}, and a started run owes its result
-  after the gate it shut no longer reads open."
-  [_c]
-  true)
+(def target [:plan])
+
+(def defaults {})
+
+(def conditions "None wait: a run that finds nothing open ends at once, and a missing plan ends the first round." [])
+
+(defn done?
+  "The gates shut and the watched gates still open. Never :done? itself: the run ends with its event and data."
+  [c]
+  (let [[cells trouble] (watched-cells c)
+        open (if trouble [] (open-now c cells []))]
+    {:done? false :units :gates :done (:shut (ctx/mem c) 0) :left (count open)}))
+
+(defn quote-of [_c]
+  {:uses {:time [0 15 120]}})
 
 (defn ^:async grace!
   "Without :plan, wait :open-s seconds once when a watched gate stands open now."

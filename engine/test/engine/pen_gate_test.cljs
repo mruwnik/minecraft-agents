@@ -437,7 +437,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stub {'jobs.movement.go-to {:check (constantly true) :args {} :round (fn ^:async r [_c] :continue)}}
+        (let [stub {'jobs.movement.go-to {:check (constantly true) :args {} :ways [:walk] :round (fn ^:async r [_c] :continue)}}
               s (await (run-job (pen-world true 2 7) {"pen-a" pen-a} {} 1 stub))]
           (is (= [:walk-interrupted] (mapv :reason (:left (first (events-of s :shut-gate.stopped))))))
           (is (empty? (events-of s :shut-gate.gave-up)) "no warn: it is not a verdict on the gate")
@@ -492,3 +492,16 @@
               (recur (inc i))))
           (is (empty? (events-of s :shut-gate.done)) "not done: the gate was never read")
           (is (= [{:cell [2 64 0] :reason :unseen}] (:left (first (events-of s :shut-gate.stopped))))))))))
+
+(deftest shut-gate-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[world plans args event reason]
+                [[(pen-world true 2 -7) {"pen-a" pen-a} {} :completed nil]
+                 [(pen-world false 2 -7) {"pen-a" pen-a} {} :completed nil]
+                 [(pen-world true 2 0) {"pen-a" pen-a} {} :stopped :left]
+                 [(pen-world true 2 7) {} {:plan "pen-a"} :stopped :plan-trouble]]]
+          (let [s (await (run-job world plans args 20))
+                e (first (filter #(#{:completed :stopped} (:kind %)) @(:seen s)))]
+            (is (= [event reason] [(:kind e) (:reason e)]) (pr-str args reason))))))))

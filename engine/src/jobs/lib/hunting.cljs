@@ -43,10 +43,9 @@
                  (assoc seen :text (str (:by seen) " killed a " (:animal seen) " at " (pr-str (:cell seen)) " (" (name (:rule seen)) ")"))))))
 
 (defn book-outcome!
-  "Book the attack child's result for target: a kill, or a skipped animal. Then
-  start collecting."
-  [c target]
-  (let [killed? (some #{target} (:killed (ctx/child-result c :attack)))]
+  "Book the attack child's ending e for target: a kill, or a skipped animal. Then start collecting."
+  [c target e]
+  (let [killed? (some #{target} (get-in e [:data :killed]))]
     (when killed? (kill-event! c target))
     (ctx/update-mem! c (fn [m]
                          (-> (if killed?
@@ -56,21 +55,23 @@
                              (assoc :collecting true))))))
 
 (defn ^:async attack!
-  "Call the attack child on the target (a whole fight); books its end. opts: :radius (search radius of the child),
-  :waiting (what to return while it waits on the world), :give-up (fn of c, called after too many skips in a row),
-  :job (its name) and :rule-fn (of c and the entity: which jobs.lib.animal-spare rule allows the kill) for the animal.killed event.
+  "Call the attack child on the target (a whole fight) with the call's weapons; books its end. :again, :yield while the
+  child waits on the world, or the ending after too many skips in a row (opts :give-up, a fn of c).
+  opts: :radius (search radius of the child), :job and :rule-fn (see note-target!).
   Shared by combat.hunt and animals.cull."
-  [c {:keys [radius waiting give-up] :as opts}]
+  [c {:keys [radius give-up] :as opts}]
   (let [target (:target (ctx/mem c))
         _ (note-target! c target opts)
-        r (await (ctx/call-child c :attack 'jobs.combat.attack
-                                 {:targets [target] :radius radius :weapons (:weapons (:args c)) :lost-s 1 :absent :done}))]
-    (cond
-      (not= :done r) waiting
-      :else (do (book-outcome! c target)
-                (if (>= (:skips (ctx/mem c) 0) (:max-skips (:args c)))
-                  (give-up c)
-                  :again)))))
+        tools (ctx/use c :tools)
+        e (await (ctx/call c :attack 'jobs.combat.attack
+                           (cond-> {:targets [target] :radius radius :lost-s 1 :absent :done}
+                             tools (assoc :use {:tools tools}))))]
+    (if (= :continue e)
+      :yield
+      (do (book-outcome! c target e)
+          (if (>= (:skips (ctx/mem c) 0) (:max-skips (:args c)))
+            (give-up c)
+            :again)))))
 
 (defn ^:async collect!
   "Call the collect-drops child; done collecting when it is, else waiting (what to return while it waits on the world)."
