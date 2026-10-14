@@ -3,8 +3,15 @@
   where a combinator's def is a generic job whose children run through
   call-child. Child slots come from position: :c0, :c1, ... See README.md,
   Job expressions."
-  (:require [engine.ctx :as ctx]
-            [engine.expr :as expr]))
+  (:require [engine.args :as a]
+            [engine.core.legacy :as legacy]
+            [engine.ctx :as ctx]
+            [engine.expr :as expr]
+            [engine.settings :as settings]))
+
+(a/defargs settings
+  {::rest-s {:default 30 :spec (a/num-in 0.001 nil) :doc "How long repeat or until rests after a run of its child that could not finish; each such run in a row doubles it."}
+   ::rest-max-s {:default 600 :spec (a/num-in 0.001 nil) :doc "The longest rest of repeat or until, s."}})
 
 (defn slot [i] (keyword (str "c" i)))
 
@@ -68,42 +75,75 @@
                       (refusal c i) (do (ctx/update-mem! c assoc-in [:refused (slot i)] (refusal c i)) :continue)
                       :else :done)))))}))
 
+(defn kind-of
+  "The ending kind of a refused child's result: its contract ending's, else an old job's stop reason read as one."
+  [res]
+  (or (get-in res [:ending :kind]) (get legacy/reason-kinds (:reason res) :nothing-possible)))
+
+(defn resting
+  "repeat's or until's rest {:until :after :kind} while it lasts, else nil."
+  [c]
+  (let [r (:rest (ctx/mem c))]
+    (when (and r (< (ctx/now c) (:until r))) r)))
+
+(defn rest-check
+  "A repeating check: the child's answer kid?, declined while the rest lasts."
+  [c kid?]
+  (cond
+    (not kid?) false
+    (resting c) (ctx/wait c (assoc (resting c) :reason :resting))
+    :else true))
+
+(defn ran!
+  "After the child in slot i ended :done: stopped with its cause when it was impossible or cut off (any refusal, in a
+  reflex job, which runs one round); a rest when it could not finish (each in a row doubles it); else a run counted.
+  :done after times runs, else :continue."
+  [c i times]
+  (let [res (refusal c i)
+        kind (some-> res kind-of)]
+    (cond
+      (and res (or (:reflex c) (#{:impossible :cut-off} kind))) (stop! c res)
+      (and res (not= :done kind))
+      (let [fails (inc (:fails (ctx/mem c) 0))
+            s (min (settings/get settings ::rest-max-s) (* (settings/get settings ::rest-s) (js/Math.pow 2 (dec fails))))]
+        (ctx/update-mem! c assoc :fails fails :rest {:until (+ (ctx/now c) (* 1000 s)) :after (:reason res) :kind kind})
+        :continue)
+      :else
+      (do (ctx/update-mem! c #(-> % (update :runs (fnil inc 0)) (dissoc :fails :rest)))
+          (if (and times (>= (:runs (ctx/mem c)) times)) :done :continue)))))
+
 (defn repeat-def
   "The child in slot :c0; when it is done call-child drops its memory, so the
   next call starts it fresh, and :runs counts the runs. Never done, or done
-  after times runs; stopped with the cause when the child ends refused. Check:
-  the child's check. Declined when the child declines, so it never spins."
+  after times runs. A child that ends refused: see ran!. Check: the child's
+  check, while not resting. Declined when the child declines, so it never spins."
   [kid times]
   (let [[def args] kid]
-    {:check (fn [c] (boolean (ctx/check-child c (slot 0) def args)))
+    {:check (fn [c] (rest-check c (ctx/check-child c (slot 0) def args)))
      :round (fn ^:async repeat-round [c]
               (let [r (await (ctx/call-child c (slot 0) def args))]
-                (when (and (= :done r) (not (refusal c 0)))
-                  (ctx/update-mem! c update :runs (fnil inc 0)))
-                (cond
-                  (= :declined r) :declined
-                  (and (= :done r) (refusal c 0)) (stop! c (refusal c 0))
-                  (and times (= :done r) (>= (:runs (ctx/mem c)) times)) :done
-                  :else :continue)))}))
+                (case r
+                  :declined :declined
+                  :done (ran! c 0 times)
+                  :continue)))}))
 
 (defn until-def
-  "Guard in slot :c0, child in :c1, which repeats like repeat's. Done at the
+  "Guard in slot :c0, child in :c1, which repeats like repeat's (rests too). Done at the
   top of a round once the guard's check passes (the guard itself never runs).
-  Check: the guard's or the child's. Declined when the child declines; stopped
-  with the cause when it ends refused."
+  Check: the guard's or the child's. Declined when the child declines."
   [guard kid]
   (let [[gdef gargs] guard
         [def args] kid
         reached? (fn [c] (boolean (ctx/check-child c (slot 0) gdef gargs)))]
-    {:check (fn [c] (or (reached? c) (boolean (ctx/check-child c (slot 1) def args))))
+    {:check (fn [c] (or (reached? c) (rest-check c (ctx/check-child c (slot 1) def args))))
      :round (fn ^:async until-round [c]
               (if (reached? c)
                 :done
                 (let [r (await (ctx/call-child c (slot 1) def args))]
-                  (cond
-                    (= :declined r) :declined
-                    (and (= :done r) (refusal c 1)) (stop! c (refusal c 1))
-                    :else :continue))))}))
+                  (case r
+                    :declined :declined
+                    :done (ran! c 1 nil)
+                    :continue))))}))
 
 (defn job
   "[def args] for node: a registry job with its args, or a combinator."

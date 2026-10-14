@@ -28,8 +28,7 @@
   [\"kitchen\"]}, so the job can stand in the queue under repeat without starving other jobs.
   Every pass books info kitchen.done and data {:steps {step summary}}; smelt summaries are keyed by food. It ends done
   when something was cooked, baked or stored; otherwise with the ending of the first step that stopped (its kind and
-  cause), or nothing-possible {:reason :nothing-to-do} when every step was skipped; a standing kitchen (under repeat) that
-  rests ends done instead, as any other ending would stop the repeat.
+  cause), or nothing-possible {:reason :nothing-to-do} when every step was skipped.
   Quote: a smelt of each raw food carried.")
 
 (def raw-foods ["beef" "porkchop" "chicken" "mutton" "rabbit" "cod" "salmon"])
@@ -152,9 +151,8 @@
                  (done? (:deposit report))))))
 
 (defn finish!
-  "End the pass: done when it cooked, baked or stored something, or when it is a standing job (under repeat) that now
-  rests (any other ending would stop the repeat for good); else the ending of the first step that stopped (its kind and
-  cause), or nothing-possible when every step was skipped."
+  "End the pass: done when it cooked, baked or stored something; else the ending of the first step that stopped (its
+  kind and cause), or nothing-possible when every step was skipped."
   [c report]
   (let [rested? (would-run? c (assoc (facts c) :tried nil))
         failed (:failed (ctx/mem c))]
@@ -163,7 +161,6 @@
     (ctx/emit! c :kitchen.done :info {:steps report :text (str "kitchen done: " (count report) " steps")})
     (cond
       (progressed? report) (ctx/end c :done nil {:steps report})
-      (and rested? (contains? (standing/standing-ids c) (standing/root-id c))) (ctx/end c :done nil {:steps report})
       failed (ctx/end c (:kind failed) (:cause failed) {:steps report})
       :else (ctx/end c :nothing-possible {:reason :nothing-to-do} {:steps report}))))
 
