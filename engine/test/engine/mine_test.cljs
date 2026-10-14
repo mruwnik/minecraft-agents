@@ -43,17 +43,17 @@
 (defn seeing
   "Fake primitives p with the body's perception over them (engine.perception/wrap), as the body runs; p as it is
   when it already has one."
-  [p]
-  (if (aget p "perception") p (perception/wrap p (perception/create (fake-raw/create p) sight-opts))))
+  [p & [rand]]
+  (if (aget p "perception") p (perception/wrap p (perception/create (fake-raw/create p) (cond-> sight-opts rand (assoc :rand rand))))))
 
 (defn start
   "An engine over primitives p (made from world, on a floor-block floor, when not given) on dir, seeing through
   perception; one sight pass first (what the body sees where it faces before the job; the job's own looks do the
   rest)."
-  [{:keys [world p dir clock shared jobs]}]
+  [{:keys [world p dir clock shared jobs rand]}]
   (let [clock (or clock (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        p (seeing (or p (tu/fake-on-floor (-> world (assoc :floor-block floor-block) (update :inventory #(or % [{:name "torch" :count 10}]))))))
+        p (seeing (or p (tu/fake-on-floor (-> world (assoc :floor-block floor-block) (update :inventory #(or % [{:name "torch" :count 10}]))))) rand)
         eng (core/create {:primitives p :jobs (or jobs registry/jobs) :triggers triggers/all :dir (or dir (tu/tmp-dir))
                           :now #(deref clock) :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -68,8 +68,8 @@
 
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks; the setup map."
-  [args world n]
-  (let [s (start {:world world})]
+  [args world n & [rand]]
+  (let [s (start {:world world :rand rand})]
     (core/submit! (:eng s) (spec args) {})
     (await (run-ticks s n))
     s))
@@ -491,21 +491,15 @@
           (is (= :count (:reason (done-event s))))
           (is (empty? (events-of s :mine.gave-up))))))))
 
-(defn with-random
-  "Run async f with js/Math.random pinned to r, restored after."
-  [r f]
-  (let [orig js/Math.random]
-    (set! js/Math.random (fn [] r))
-    (-> (f) (.finally (fn [] (set! js/Math.random orig))))))
 
 (deftest nearer-intact-block-is-dug-first
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [r [0 0.5 0.999]]
-          (let [s (await (with-random r
-                           #(scenario {:block "stone" :count 6 :dry-digs 1}
-                                      {:blocks (merge (cells "stone" [4 5 6 7 8 9] [64] [0]) (cells floor-block [4 5 6 7 8 9] [63] [0])) :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1}]} 80)))
+          (let [s (await (scenario {:block "stone" :count 6 :dry-digs 1}
+                                   {:blocks (merge (cells "stone" [4 5 6 7 8 9] [64] [0]) (cells floor-block [4 5 6 7 8 9] [63] [0])) :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1}]} 80
+                                   (constantly r)))
                 order (mapv first (dug-cells s))]
             (is (= [4 5] (take 2 order)) (str "random " r))
             (is (= :count (:reason (done-event s))) (str "random " r))

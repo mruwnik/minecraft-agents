@@ -30,11 +30,12 @@
 
 (defn sensed-only
   "Wrapped fake primitives for spec, lit, whose raw blockAt throws. rawWorld stays, as on the body: go-to's planner
-  snapshot (reach/lookup) reads it."
+  snapshot (reach/lookup) reads it. A spec's :jitter fixes the sight passes' ray jitter (perception's :rand)."
   [spec]
-  (let [p (tu/fake spec)
+  (let [p (tu/fake (dissoc spec :jitter))
         raw (fake-raw/create p)
-        per (perception/create raw {:now (constantly 1000000)})
+        per (perception/create raw (cond-> {:now (constantly 1000000)}
+                                     (:jitter spec) (assoc :rand (constantly (:jitter spec)))))
         w (perception/wrap p per)]
     (aset w "rawWorld" raw)
     (aset w "blockAt" (fn [_] (throw (js/Error. "raw blockAt"))))
@@ -178,7 +179,7 @@
   (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "dirt")) #{"0,61,0" "0,62,0" "0,63,0"}))
 
 (defn ^:async run-job-unpinned
-  "run-job with js/Math.random left as it is. A spec's :zones (a zone list) is the body's world's."
+  "run-job with the sight jitter left random unless the spec has :jitter. A spec's :zones (a zone list) is the body's world's."
   [job spec args & [setup before]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
@@ -204,13 +205,10 @@
 
 (defn ^:async run-job
   "Run job (a symbol) with args as a child over the sensed-only world spec; {:out :seen :p}. setup, when given, is called
-  with the sensed-only {:p :w} first. js/Math.random is pinned to 0.5 for the run: it jitters the sight passes' rays,
-  and some jitters (0.54 to 0.59 in the dark tunnel) see one more cell, which changes the walk."
+  with the sensed-only {:p :w} first. The sight jitter is fixed at 0.5 unless the spec has :jitter: some jitters
+  (0.54 to 0.59 in the dark tunnel) see one more cell, which changes the walk."
   [job spec args & [setup before]]
-  (let [orig js/Math.random]
-    (set! js/Math.random (constantly 0.5))
-    (try (await (run-job-unpinned job spec args setup before))
-         (finally (set! js/Math.random orig)))))
+  (run-job-unpinned job (merge {:jitter 0.5} spec) args setup before))
 
 (defn run-go-to [spec args & [setup before]] (run-job 'jobs.movement.go-to spec args setup before))
 
@@ -386,13 +384,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [orig js/Math.random
-              _ (set! js/Math.random (constantly 0.55))
-              {:keys [out seen]} (try (await (run-job-unpinned 'jobs.movement.go-to
-                                                               (assoc in-tunnel :inventory [{:name "torch" :count 4}]
-                                                                      :equipment {"offHand" {:name "shield" :count 1}})
-                                                               {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))
-                                      (finally (set! js/Math.random orig)))]
+        (let [{:keys [out seen]} (await (run-job-unpinned 'jobs.movement.go-to
+                                                          (assoc in-tunnel :jitter 0.55 :inventory [{:name "torch" :count 4}]
+                                                                 :equipment {"offHand" {:name "shield" :count 1}})
+                                                          {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))]
           (is (empty? (filter #(= :walker-fault (:kind %)) seen)) (pr-str (filter #(= :walker-fault (:kind %)) seen)))
           (is (= :unseen-floor-dark (:why out)) (pr-str out)))))))
 
@@ -450,14 +445,11 @@
 (defn ^:async quote-route
   "go-to's quote :route for args over the sensed-only world spec, after setup (as run-job's)."
   [spec args setup]
-  (let [orig js/Math.random
-        {:keys [w] :as world} (sensed-only spec)
-        _ (set! js/Math.random (constantly 0.5))
+  (let [{:keys [w] :as world} (sensed-only (assoc spec :jitter 0.5))
         _ (setup world)
         eng (core/create {:primitives w :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (constantly 1000000) :backoff false
                           :events (events/make {:body "Fake" :sinks [] :now (constantly 1000000)})})]
-    (try (get-in (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str args))) [:quote :route])
-         (finally (set! js/Math.random orig)))))
+    (get-in (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str args))) [:quote :route])))
 
 (deftest go-to-quote-with-unknown-shows-the-dark-drop-go-to-would-refuse
   (async done
