@@ -2,6 +2,7 @@
   "jobs.access.tunnel: the approach choice, the stops, and whole tunnels against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [jobs.lib.ledger :as ledger]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -194,18 +195,22 @@
 
 (defn setup
   "An engine over the fake world; a recording parent runs the tunnel as its child and keeps its result in :out.
-  opts: :p and :dir to restart over an earlier engine's world and state (nothing submitted then)."
+  opts: :p and :dir to restart over an earlier engine's world and state (nothing submitted then); :call ctx/call
+  makes the parent a contract parent whose :out is the ending."
   [spec args prep & {:keys [dir] :as opts}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (or (:p opts) (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans))))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
-        parent {:check (fn [c] (boolean (ctx/check-child c :kid job args)))
+        parent {:check (if (:call opts) (constantly true) (fn [c] (boolean (ctx/check-child c :kid job args))))
                 :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+                         (let [call (:call opts ctx/call-child)
+                               r (await (call c :kid job args))]
+                           (cond
+                             (= :continue r) r
+                             (= call ctx/call-child) (do (when (= :done r) (reset! out (ctx/child-result c :kid))) r)
+                             :else (do (reset! out r) :done))))}
         eng (core/create {:primitives p :jobs (merge registry/jobs {'recording-parent parent} (:jobs opts))
                           :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -221,8 +226,8 @@
       (recur (inc i))))
   s)
 
-(defn ^:async tunnel! [spec args prep]
-  (await (tick-out! (setup spec args prep))))
+(defn ^:async tunnel! [spec args prep & opts]
+  (await (tick-out! (apply setup spec args prep opts))))
 
 (defn digs [p] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true)
                      (filter #(= "dig" (.-name %)) (.-calls (.-world p)))))
@@ -324,29 +329,21 @@
             (is (empty? (digs p)))
             (is (= [0 65 0] (feet p)))))))))
 
-(deftest a-tunnel-without-a-pickaxe-waits-without-rounds-and-resumes-when-given-one
+(deftest a-tunnel-without-a-pickaxe-ends-no-tool-and-digs-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as s} (setup {:blocks ground :inventory []} {:target [6 57 0] :fetch false} (fn [_]))]
-          (await (tick-n! s 12))
-          (let [n (rounds s)]
-            (is (<= n 8) "a few rounds to plan and meet the declined stair")
-            (await (tick-n! s 10))
-            (is (= n (rounds s)) "parked: no rounds while the stair child would decline")
-            (is (= 1 (count (filter #(and (= :waiting (:kind %)) (= :no-tool (:reason %))) @(:seen s)))) "told once")
-            (fake/add-item! p "iron_pickaxe" 1)
-            (await (tick-out! s))
-            (is (= :reached (:reason @out)) "resumes once the pickaxe is carried")))))))
+        (let [{:keys [p out]} (await (tunnel! {:blocks ground :inventory []} {:target [6 57 0] :fetch false} (fn [_])))]
+          (is (= [:stopped :no-tool] ((juxt :status :reason) @out)))
+          (is (empty? (digs p))))))))
 
-(deftest no-zone-list-declines-with-one-warn
+(deftest no-zone-list-ends-condition-failed-before-any-dig
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (setup {:blocks ground :zones nil} {:target [6 57 0]} (fn [_]))]
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (empty? (digs p)))
-          (is (= 1 (count (events-of s :tunnel.declined)))))))))
+        (let [{:keys [out p]} (await (tunnel! {:blocks ground :zones nil} {:target [6 57 0]} (fn [_]) :call ctx/call))]
+          (is (= [:condition-failed :no-zones] [(:kind @out) (contract/cause-key @out)]))
+          (is (empty? (digs p))))))))
 
 (deftest a-cut-mid-dig-resumes-without-digging-twice
   (async done
@@ -419,10 +416,13 @@
           (is (some? (:leave @out)) "a dead end goes through leave-tunnel, which digs its own way out")
           (is (not= :walk-failed (:reason (:leave @out))) "the escape got the body out, or the walk did"))))))
 
+(declare get-tool-stub)
+
 (defn ^:async lost-pickaxe-dead-end!
   "A dead end whose way back is blocked and whose pickaxe is gone, so leave-tunnel's escape stair needs one."
   [args]
-  (let [prep (fn [p]
+  (let [calls (atom [])
+        prep (fn [p]
                (let [world (.-world p)
                      n (atom 0)]
                  (.override world "steer"
@@ -432,21 +432,23 @@
                                   (set-block! p "-2,65,0" "stone") (set-block! p "-2,66,0" "stone")
                                   (swap! (.-state world) assoc :inventory []))
                                 r)))))]
-    (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} (merge {:target [6 57 0]} args) prep))))
+    (assoc (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} (merge {:target [6 57 0]} args) prep
+                           :jobs {'jobs.items.get-tool (get-tool-stub calls nil nil)}))
+           :calls calls)))
 
 (deftest a-dead-end-without-a-pickaxe-fetches-for-its-escape-by-default
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await (lost-pickaxe-dead-end! {}))]
-          (is (seq (filter #(#{:fetch.started :fetch.failed} (:kind %)) @seen))))))))
+        (let [{:keys [calls]} (await (lost-pickaxe-dead-end! {}))]
+          (is (seq @calls)))))))
 
 (deftest tunnel-fetch-false-is-passed-to-the-leave-tunnel-child
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await (lost-pickaxe-dead-end! {:fetch false}))]
-          (is (empty? (filter #(#{:fetch.started :fetch.failed} (:kind %)) @seen))))))))
+        (let [{:keys [calls]} (await (lost-pickaxe-dead-end! {:fetch false}))]
+          (is (empty? @calls)))))))
 
 (deftest a-way-back-blocked-on-the-run-stops-at-the-stand
   (async done
@@ -541,16 +543,13 @@
           (is (empty? (events-of s :fetch.started)))
           (is (empty? (filter #(= :no-tool (:reason %)) (events-of s :waiting)))))))))
 
-(deftest no-pickaxe-waits-with-the-stairs-reason-and-digs-nothing
+(deftest no-pickaxe-ends-with-the-stairs-reason-and-digs-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng id out p seen]} (await (tunnel! {:blocks eight-down :inventory []} {:target [6 57 0] :fetch false} (fn [_])))
-              w (:waiting (job-api/summary eng id))]
-          (is (= :not-done @out) "the stair child declined: no result")
-          (is (= :no-tool (:reason w)))
-          (is (empty? (digs p)))
-          (is (= 1 (count (filter #(= :waiting (:kind %)) @seen))) "told once"))))))
+        (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory []} {:target [6 57 0] :fetch false} (fn [_])))]
+          (is (= [:stopped :no-tool "pickaxe"] ((juxt :status :reason :tool) @out)))
+          (is (empty? (digs p))))))))
 
 (deftest no-torches-digs-on-and-books-every-site-unlit-with-one-warn
   (async done
@@ -706,16 +705,13 @@
           (is (= 1 (count calls)))
           (is (= :reached (:reason @out))))))))
 
-(deftest a-pickaxe-that-cannot-be-fetched-leaves-the-tunnel-waiting-no-tool
+(deftest a-pickaxe-that-cannot-be-fetched-ends-no-tool
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng id out calls]} (await (fetching-tunnel! nil true (fn [_])))
-              w (:waiting (job-api/summary eng id))]
+        (let [{:keys [out calls]} (await (fetching-tunnel! nil true (fn [_])))]
           (is (= 1 (count calls)) "tried once, not again")
-          (is (= :not-done @out))
-          (is (= :no-tool (:reason w)))
-          (is (some? (:failed (:fetch w)))))))))
+          (is (= [:stopped :no-tool] ((juxt :status :reason) @out))))))))
 
 (deftest a-default-call-fetches-a-missing-pickaxe
   (async done
@@ -731,7 +727,7 @@
       (fn ^:async t []
         (let [{:keys [calls out]} (await (fetching-tunnel! "iron_pickaxe" false (fn [_])))]
           (is (empty? calls))
-          (is (= :not-done @out)))))))
+          (is (= [:stopped :no-tool] ((juxt :status :reason) @out))))))))
 
 (deftest one-call-is-the-whole-tunnel
   (async done
@@ -818,8 +814,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [n (atom 0)
-              orig ctx/call-child
-              orig-res ctx/child-result
+              orig ctx/call
               prep (fn [p]
                      (let [world (.-world p)
                            k (atom 0)]
@@ -829,16 +824,14 @@
                                       (when (= 3 (swap! k inc))
                                         (swap! (.-state world) assoc :inventory []))
                                       r)))))]
-          (set! ctx/call-child (fn [c slot job args]
-                                 (if (= :fetch slot)
-                                   (do (swap! n inc) (js/Promise.resolve :done))
-                                   (orig c slot job args))))
-          (set! ctx/child-result (fn [c slot] (if (= :fetch slot) {:status :done} (orig-res c slot))))
+          (set! ctx/call (fn [c slot job args]
+                           (if (= :need slot)
+                             (do (swap! n inc) (js/Promise.resolve (contract/ending :done nil {:tool "iron_pickaxe"})))
+                             (orig c slot job args))))
           (try
-            (let [s (setup {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} prep)]
-              (await (tick-n! s 60))
-              (is (= :not-solved (:failed (first (events-of s :fetch.failed)))) "the repeat is told :not-solved"))
-            (finally (set! ctx/call-child orig) (set! ctx/child-result orig-res)))
+            (let [s (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} prep))]
+              (is (= [:stopped :no-tool] ((juxt :status :reason) @(:out s))) "the fetch that cured nothing is not asked again"))
+            (finally (set! ctx/call orig)))
           (is (<= 1 @n 2) (str "fetch child calls " @n)))))))
 
 (deftest a-tunnel-run-digs-an-exposed-ore-beside-the-way-but-never-its-target
@@ -867,3 +860,43 @@
           (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory [{:name "iron_pickaxe" :count 1 :durability uses}]} args (fn [_])))]
             (is (= dug? (boolean (seq (digs p)))) (pr-str uses args))
             (is (= reason (:reason @out)) (pr-str uses args))))))))
+
+;; ---------------------------------------------------------------- the contract
+
+(deftest the-job-exports-the-contract-and-quotes-validly
+  (let [def (get registry/jobs job)
+        c {:primitives (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :blocks ground :inventory pick}) :args {:target {:x 6 :y 57 :z 0}}}
+        q ((:quote-of def) c)]
+    (is (= [:target] (:target def)))
+    (is (seq (:conditions def)))
+    (is (nil? (:check def)))
+    (is (nil? (contract/quote-problem q)) (pr-str q))
+    (is (= [6 57 0] (:moves-to q)))))
+
+(deftest a-tunnel-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [run (fn ^:async run1 [spec args prep]
+                    (let [e @(:out (await (tunnel! spec args prep :call ctx/call)))]
+                      [(:kind e) (contract/cause-key e)]))
+              target {:target [6 57 0]}]
+          (is (= [:done :done] (await (run {:blocks eight-down} target (fn [_])))))
+          (is (= [:condition-failed :too-far] (await (run {:blocks ground} (assoc target :max-length 6) (fn [_])))))
+          (is (= [:condition-failed :refused]
+                 (await (run {:blocks eight-down :zones [{:name "z" :min [6 57 0] :max [6 57 0]}]} target (fn [_])))))
+          (is (= [:condition-failed :no-zones] (await (run {:blocks eight-down :zones nil} target (fn [_])))))
+          (is (= [:condition-failed :no-tool] (await (run {:blocks eight-down :inventory []} (assoc target :fetch false) (fn [_])))))
+          (is (= [:condition-failed :hazard] (await (run {:blocks eight-down :inventory with-cobble} target lava-ahead))))
+          (is (= [:limit-reached :tool-spent]
+                 (await (run {:blocks eight-down :inventory [{:name "iron_pickaxe" :count 1 :durability 3}]} target (fn [_]))))))))))
+
+(deftest a-stopped-tunnel-hands-over-what-it-did-as-data
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e @(:out (await (tunnel! {:blocks eight-down :inventory with-cobble} {:target [6 57 0]} lava-ahead :call ctx/call)))]
+          (is (= :hazard (:reason (:data e))))
+          (is (true? (:out (:data e))))
+          (is (seq (:dug (:data e))))
+          (is (= [-3 65 0] (:entry (:data e)))))))))
