@@ -311,7 +311,8 @@
   "Every hook the engine calls, and what for."
   {:world/open "the world store over a world folder's files (engine.main)"
    :world/blank "an empty world store (engine.core, when none is given)"
-   :use/default "the list a call's :use gets for a purpose its job's defaults name a chooser for (engine.core.ending)"})
+   :use/default "the list a call's :use gets for a purpose its job's defaults name a chooser for (engine.core.ending)"
+   :look/around "one look round from where the body stands, for a condition that asks for one (engine.core.ending)"})
 
 (defn hook-defs
   "The hooks, resource jobs/hooks.edn: {hook-key qualified-fn-symbol}, checked: every key of hook-keys given, no

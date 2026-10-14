@@ -1,10 +1,11 @@
 (ns engine.core.ending
   "Contract jobs (a job that exports conditions; engine.contract) as the engine runs them: wrap gives the job a check
-  (a listed job waits while its conditions fail, until it starts) and a round that checks the conditions, freezes the
+  (a listed job waits while a condition fails, until it starts) and a round that checks the conditions (an impossible
+  one ends the job, one that asks for a look gets a look round first), freezes the
   call keys at the first round, asks done? (and, at the first round of a call with a :least other than 1, its quote for the least check) and adds
   :because to the ending the job's round returns."
   (:require [engine.contract :as contract]
-            [engine.core.base :refer [cut-error now owner?]]
+            [engine.core.base :refer [cut-error manual-job now owner?]]
             [engine.core.limits :as limits]
             [engine.ctx :as ctx]
             [engine.hooks :as hooks]
@@ -15,10 +16,29 @@
 
 (defn started? [c] (some? (ctx/frozen-call c)))
 
-(defn conditions-cause
-  "The cause of the first of conditions ([:fn f], (f c) a cause or nil) that fails now, or nil."
+(defn verdict
+  "What conditions ([:fn f], (f c) nil, a cause, contract/impossible or contract/look-first) say now: nil to start,
+  [:impossible cause] when one is impossible, else [:skip cause] for the first that fails, else [:look cause] for the
+  first that asks for a look."
   [c conditions]
-  (some (fn [[_ f]] (f c)) conditions))
+  (let [rs (filter identity (map (fn [[_ f]] (f c)) conditions))]
+    (or (some #(some->> (contract/impossible-cause %) (vector :impossible)) rs)
+        (some #(when-not (contract/look-cause %) [:skip %]) rs)
+        (some #(some->> (contract/look-cause %) (vector :look)) rs))))
+
+(defn ^:async looked-verdict
+  "verdict, after one look round (the :look/around hook) when a condition asks for a look; asking again after it skips."
+  [c conditions]
+  (let [v (verdict c conditions)]
+    (if (= :look (first v))
+      (do (await ((:look/around hooks/all) c))
+          (let [[k cause :as v] (verdict c conditions)] (if (= :look k) [:skip cause] v)))
+      v)))
+
+(defn stays-listed?
+  "Whether a skip leaves c's job queued: a listed root not yet started, not a reflex's nor the driver's slot job."
+  [c]
+  (and (empty? (:slots c)) (not (started? c)) (not (:reflex c)) (not= (:root c) (manual-job (:engine c)))))
 
 (defn wait-reason
   "A failing condition's cause as a check's wait reason: {:reason (cause key)}, with :cause when it is a map."
@@ -90,36 +110,49 @@
     (cond-> (contract/with-because e @(:child-ending c))
       d (update :report merge (contract/progress d)))))
 
-(defn ^:async run
-  "One round of contract job def: an ending, or :continue."
+(defn ^:async started-round
+  "One round of contract job def once its conditions pass: freeze the call at the first, then done?, the least
+  check and the job's round."
   [def c]
-  (if-let [cause (or (conditions-cause c (:conditions def))
-                     (when-not (started? c) (limits/floor-cause c #(first (call-of c def)))))]
-    (contract/ending :condition-failed cause nil)
-    (let [fresh? (not (started? c))
-          c (assoc c :job-ways (:ways def))]
-      (when fresh? (freeze! c def))
-      (let [d (contract/done? def c)]
-        (if (:done? d)
-          (assoc (contract/ending :done nil nil) :report (contract/progress d))
-          (if-let [cause (when (and fresh? (:quote-of def) (not= 1 (:least (ctx/frozen-call c))))
-                           (contract/least-cause (ctx/frozen-call c) (await ((:quote c) def (:args c) nil true)) d))]
-            (contract/ending :nothing-possible cause nil)
-            (let [r (await ((:round def) c))]
-              (cond
-                (= :continue r) :continue
-                (contract/ending? r) (finish def c r)
-                :else (throw (js/Error. (str "a contract job's round returned " (pr-str r)
-                                             ", not :continue or an ending (ctx/end)")))))))))))
+  (let [fresh? (not (started? c))
+        c (assoc c :job-ways (:ways def))]
+    (when fresh? (freeze! c def))
+    (let [d (contract/done? def c)]
+      (if (:done? d)
+        (assoc (contract/ending :done nil nil) :report (contract/progress d))
+        (if-let [cause (when (and fresh? (:quote-of def) (not= 1 (:least (ctx/frozen-call c))))
+                         (contract/least-cause (ctx/frozen-call c) (await ((:quote c) def (:args c) nil true)) d))]
+          (contract/ending :nothing-possible cause nil)
+          (let [r (await ((:round def) c))]
+            (cond
+              (= :continue r) :continue
+              (contract/ending? r) (finish def c r)
+              :else (throw (js/Error. (str "a contract job's round returned " (pr-str r)
+                                           ", not :continue or an ending (ctx/end)"))))))))))
+
+(defn ^:async run
+  "One round of contract job def: an ending, or :continue (a listed job not started whose condition skips)."
+  [def c]
+  (let [[k cause] (await (looked-verdict c (:conditions def)))]
+    (cond
+      (= :impossible k) (contract/ending :impossible cause nil)
+      (and k (stays-listed? c)) :continue
+      k (contract/ending :condition-failed cause nil)
+      :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
+              (contract/ending :condition-failed floor nil)
+              (await (started-round def c))))))
 
 (defn check
   "A contract job waits while the body is below a floor of its call (enforced limits); a started one runs on (any
-  ending ends it); one not started waits while a condition fails."
+  ending ends it); one not started waits while a condition fails. An impossible condition, or one that asks for a
+  look, passes: the round ends the job, or looks."
   [def c]
-  (if-let [cause (or (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def))))
-                     (when-not (started? c) (conditions-cause c (:conditions def))))]
-    (ctx/wait c (wait-reason cause))
-    true))
+  (let [[k cause] (when-not (started? c) (verdict c (:conditions def)))]
+    (if-let [cause (when-not (= :impossible k)
+                     (or (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def))))
+                         (when (= :skip k) cause)))]
+      (ctx/wait c (wait-reason cause))
+      true)))
 
 (defn wrap
   "Job def with the engine's check and round when it is a contract job; any other def as it is."

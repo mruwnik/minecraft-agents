@@ -48,8 +48,8 @@
   (get-in (frozen-call ctx) [:use purpose]))
 
 (defn end
-  "The ending a contract job's round returns: kind (:done :condition-failed :limit-reached :nothing-possible
-  :cut-off) and cause (a keyword or a map), data the job's own result fields. The engine adds :report and :because."
+  "The ending a contract job's round returns: kind (:done :condition-failed :impossible :limit-reached
+  :nothing-possible :cut-off) and cause (a keyword or a map), data the job's own result fields. The engine adds :report and :because."
   ([ctx kind cause] (end ctx kind cause nil))
   ([_ctx kind cause data] (contract/ending kind cause data)))
 

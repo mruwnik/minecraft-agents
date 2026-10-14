@@ -34,7 +34,7 @@
   smelts) and a furnace. With :fetch (default true; jobs.lib.need) what is missing is fetched first by obtain
   children, and, when no furnace is seen, a carried furnace is put down beside the body, else one is fetched and put
   down. A fetch that finds nothing leaves the cause below (no-item, no-fuel, no-furnace-seen), the fetch's ending
-  its :because. :fetch false skips all of it. Starts only with an item some furnace cooks (condition :not-smeltable;
+  its :because. :fetch false skips all of it. Starts only with an item some furnace cooks (impossible :not-smeltable, the job leaves the queue;
   an output such as cooked_chicken names its input). Quote: the cook time of the count (a furnace; half in the other
   two), the input and fuel items, the product; open-ended when no furnace is given or seen.
   Ends :done with {:smelted n :wanted n}: :wanted is the count this job loaded and :smelted what came of it; input
@@ -425,11 +425,11 @@
 (def target [:item])
 
 (defn not-smeltable
-  "At the call's start: the cause when the :item is one no furnace cooks, else nil."
+  "At the call's start: impossible when the :item is one no furnace cooks, else nil."
   [c]
   (let [item (:item (:args c))]
     (when (and item (not (coll? item)) (not (ctx/frozen-call c)) (not (sp/smeltable? (sp/input-of item (carried c)))))
-      {:reason :not-smeltable :item item})))
+      (contract/impossible {:reason :not-smeltable :item item}))))
 
 (def conditions [[:fn not-smeltable]])
 

@@ -62,9 +62,10 @@
   (reset! world {})
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
-        eng (core/create {:primitives (tu/fake (if inventory {:inventory inventory} {})) :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers (or triggers {})
+        p (tu/fake (if inventory {:inventory inventory} {}))
+        eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers (or triggers {})
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :seen seen :clock clock}))
+    {:eng eng :seen seen :clock clock :p p}))
 
 (defn ev [seen source kind] (filterv #(= [source kind] [(:source %) (:kind %)]) @seen))
 (defn job-ev [seen kind] (ev seen :job kind))
@@ -227,6 +228,72 @@
           (is (nil? (:ran @world)) "done? said it was done: no round")
           (is (= {:units :items :done 3 :left 0}
                  (select-keys (:report (:data (second (job-ev seen :completed)))) [:units :done :left]))))))))
+
+(def never
+  {:conditions [[:fn (gate :go :not-yet)] [:fn (fn [_] (contract/impossible {:reason :not-smeltable :item "diamond"}))]]
+   :round (fn [_] (swap! world assoc :never-ran true) :continue)})
+
+(def looks
+  "Waits on :tree; the condition can tell only after a look from here."
+  {:conditions [[:fn (fn [c] (cond (:tree @world) nil
+                                   (:looked (ctx/mem c)) (when-not (:tree-after-look @world) :no-tree)
+                                   :else (contract/look-first :no-tree)))]]
+   :round (fn [c] (swap! world update :looks-rounds (fnil inc 0)) (ctx/end c :done nil))})
+
+(defn looks-at [p] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
+
+(deftest an-impossible-condition-ends-the-job-and-it-leaves-the-queue
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'never never
+                                         'calls-never {:conditions []
+                                                       :round (fn ^:async calls-never [c]
+                                                                (swap! world assoc :child-ending (await (ctx/call c :kid never {})))
+                                                                (ctx/end c :nothing-possible :kid))}})]
+          (core/submit! eng '(never) {})
+          (await (core/tick! eng))
+          (is (nil? (:never-ran @world)) "its round never ran")
+          (is (empty? (:list (core/state eng))) "removed from the queue, though another condition only skips")
+          (is (empty? (job-ev seen :waiting)))
+          (is (= {:status :stopped :kind :impossible :cause {:reason :not-smeltable :item "diamond"} :reason :not-smeltable}
+                 (select-keys (:data (first (job-ev seen :stopped))) [:status :kind :cause :reason])))
+          (core/submit! eng '(calls-never) {})
+          (await (core/tick! eng))
+          (is (= {:kind :impossible :cause {:reason :not-smeltable :item "diamond"}} (dissoc (:child-ending @world) :report))))))))
+
+(deftest a-condition-that-needs-a-look-looks-once-then-the-job-waits-unstarted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {'looks looks})
+              id (core/submit! eng '(looks) {})]
+          (await (core/tick! eng))
+          (let [n (looks-at p)]
+            (is (pos? n) "it looked")
+            (is (nil? (:looks-rounds @world)) "the job's round did not run")
+            (is (= [id] (:list (core/state eng))) "still queued")
+            (is (nil? (:call (:contract (raw-mem eng id [])))) "not started")
+            (await (core/tick! eng))
+            (await (core/tick! eng))
+            (is (= n (looks-at p)) "no second look from the same place")
+            (is (= [:no-tree] (mapv #(:reason (:data %)) (job-ev seen :waiting)))))
+          (swap! world assoc :tree true)
+          (await (core/tick! eng))
+          (is (= 1 (:looks-rounds @world)))
+          (is (= 1 (count (job-ev seen :completed)))))))))
+
+(deftest a-look-that-finds-it-starts-the-job-in-the-same-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {'looks looks})]
+          (swap! world assoc :tree-after-look true)
+          (core/submit! eng '(looks) {})
+          (await (core/tick! eng))
+          (is (pos? (looks-at p)))
+          (is (= 1 (:looks-rounds @world)))
+          (is (= 1 (count (job-ev seen :completed)))))))))
 
 (deftest a-cancelled-job-is-cut-off
   (async done

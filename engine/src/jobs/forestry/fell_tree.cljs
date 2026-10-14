@@ -52,7 +52,8 @@
   fell-tree.declined once, with :reason :refused (or :no-zones when no zone list was read). :ignore-zones? true
   skips the check.
 
-  Conditions: :no-tree (none in sight, after one look around from where it stands; data :radius, :species) and
+  Conditions: :no-tree (none in sight after one look around from where it stands, the condition's look; data :radius,
+  :species; a listed job waits) and
   :night-sheltered (shut in a shelter at night: the trees are outside).
   Ends :done with {:base pos :logs n :axe why} of the tree it felled: n logs dug; :axe is :carried, :skipped-fetch-off,
   :skipped-small-tree or :none-found (fetch failed: chopped by hand). Condition-failed :no-tree when the look found none, :hungry
@@ -391,12 +392,14 @@
   (when-let [k (night-sheltered c)] {:reason :night-sheltered :shelter k}))
 
 (defn no-tree
-  "The cause :no-tree while no tree is chosen or marked unreachable, none is in sight, and the body has looked round."
+  "The cause :no-tree while no tree is chosen or marked unreachable, none is in sight and no unseen :at is to be walked
+  to; a look first while the body has not looked round from here."
   [c]
   (let [m (ctx/mem c)
-        {:keys [radius species]} (:args c)]
-    (when-not (or (:column m) (seq (:unreachable m)) (first (candidates c radius species)) (not (look/surveyed? c :cell)))
-      (no-tree-cause c))))
+        {:keys [radius species at]} (:args c)]
+    (when-not (or (:column m) (seq (:unreachable m)) (first (candidates c radius species))
+                  (and at (not (u/seen-name (:primitives c) at))))
+      (cond-> (no-tree-cause c) (not (look/surveyed? c :cell)) contract/look-first))))
 
 (def conditions [[:fn sheltered] [:fn no-tree]])
 

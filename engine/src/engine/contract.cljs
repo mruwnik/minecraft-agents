@@ -72,7 +72,7 @@
 
 (def kinds
   "The kinds of an ending other than :done, in the order that decides when two hold in one round."
-  [:cut-off :limit-reached :condition-failed :nothing-possible])
+  [:cut-off :limit-reached :impossible :condition-failed :nothing-possible])
 
 (def all-kinds (conj (set kinds) :done))
 
@@ -119,6 +119,23 @@
   (when-let [f (:done? def)] (f c)))
 
 (defn progress "The report fields of a done? answer." [d] (select-keys d [:units :done :left :left-items]))
+
+;; ------------------------------------------------------------------ conditions
+
+(defn impossible
+  "A condition's answer when the job can never start (smelting diamond): the job ends :impossible with cause."
+  [cause]
+  {::impossible cause})
+
+(defn look-first
+  "A condition's answer when it fails with cause unless a look round from here finds otherwise: the engine looks
+  once, then asks again."
+  [cause]
+  {::look-first cause})
+
+(defn impossible-cause [r] (when (map? r) (::impossible r)))
+
+(defn look-cause [r] (when (map? r) (::look-first r)))
 
 ;; ------------------------------------------------------------------ the call
 

@@ -1,4 +1,5 @@
 ;; The job-side fns the engine calls (engine.hooks); engine.registry/hook-keys says what each is for.
 {:world/open jobs.lib.world-files/open
  :world/blank jobs.lib.world-files/blank
- :use/default jobs.lib.choose/default-use}
+ :use/default jobs.lib.choose/default-use
+ :look/around jobs.lib.look/look-around!}

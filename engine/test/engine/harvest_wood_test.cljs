@@ -47,17 +47,21 @@
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))))
           (is (= [] (lt/debts eng))))))))
 
-(deftest no-tree-in-range-ends-condition-failed-after-one-look
+(deftest no-tree-in-range-looks-once-and-waits-unstarted
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 9 0 "oak" 3)})]
-          (core/submit! eng '(jobs.forestry.harvest-wood {:radius 2}) {})
-          (await (tu/run-until-empty eng 6))
-          (is (empty? (:list (core/state eng))) "ended")
-          (is (empty? (filterv #(= :holding (:kind %)) @seen)) "no hold")
-          (is (= [:no-tree] (mapv :reason (filterv #(= :stopped (:kind %)) @seen)))
-              (pr-str (distinct (map :kind @seen)))))))))
+        (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 9 0 "oak" 3)})
+              id (core/submit! eng '(jobs.forestry.harvest-wood {:radius 2}) {})]
+          (await (core/tick! eng))
+          (let [n (count (lt/calls p "look"))]
+            (is (pos? n) "it looked round")
+            (await (tu/run-until-empty eng 5))
+            (is (= n (count (lt/calls p "look"))) "once from this place"))
+          (is (= [id] (:list (core/state eng))) "stays queued")
+          (is (nil? (:call (:contract (mem/job-mem (mem/view (:store eng)) id [])))) "never started")
+          (is (empty? (filterv #(= :stopped (:kind %)) @seen)))
+          (is (= [:no-tree] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
 
 (deftest any-species-wide-radius-no-sapling-ends-with-the-debt-owed
   (async done

@@ -721,12 +721,12 @@
     (await (ticks eng 3))
     [@out p]))
 
-(deftest an-item-no-furnace-cooks-is-refused-first-and-ends-condition-failed
+(deftest an-item-no-furnace-cooks-is-refused-first-and-ends-impossible
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [[e p] (await (ending-by-call {:blocks {pos-key "furnace"} :inventory [{:name "coal" :count 2}]} {:item "diamond" :count 1}))]
-          (is (= {:kind :condition-failed :cause {:reason :not-smeltable :item "diamond"}} (select-keys e [:kind :cause])))
+          (is (= {:kind :impossible :cause {:reason :not-smeltable :item "diamond"}} (select-keys e [:kind :cause])))
           (is (empty? (calls p "furnace"))))))))
 
 (deftest a-give-up-with-nothing-smelted-ends-stopped
@@ -973,10 +973,10 @@
          (smelt-plan/load-figures {:carried (inv "raw_iron" 5 "coal" 3) :item "raw_iron" :count 3})))
   (is (= {:give-up "no-fuel"} (select-keys (smelt-plan/load-figures {:carried (inv "raw_iron" 5) :item "raw_iron"}) [:give-up]))))
 
-(deftest an-item-no-furnace-cooks-fails-the-start-condition
+(deftest an-item-no-furnace-cooks-is-an-impossible-start-condition
   (let [job (get registry/jobs 'jobs.items.smelt)
         cause (fn [item] (some (fn [[_ f]] (f {:primitives (tu/fake-on-floor base-world) :args {:item item} :view (fn [] {:now 0 :data {}}) :root "j" :slots []})) (:conditions job)))]
-    (is (= :not-smeltable (:reason (cause "diamond"))))
+    (is (= {:reason :not-smeltable :item "diamond"} (contract/impossible-cause (cause "diamond"))))
     (is (nil? (cause "raw_iron")))
     (is (nil? (cause "iron_ingot")) "a product names its input")))
 

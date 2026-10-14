@@ -298,8 +298,10 @@ a round's time to its own frame. Endings and a root's `completed`/`stopped`/`can
 a finished job's goes to body memory `:job-report` (cap 256).
 
 **Contract jobs.** Export `conditions` and `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
-`defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round. A failing
-condition ends `:condition-failed`, `done?` ends `:done`; endings are `{:kind :cause :because :report :data}`. A
+`defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round. A condition
+`[:fn f]` gives nil (start), a cause (skip: a listed job not started stays queued and waits, else `:condition-failed`),
+`(contract/impossible cause)` (ends `:impossible`, the job leaves the queue) or `(contract/look-first cause)` (the
+engine looks round once, hook `:look/around`, then asks again). `done?` ends `:done`; endings are `{:kind :cause :because :report :data}`. A
 started frame left without an ending (its root ends or is dropped, its parent clears its slot) gets `:cut-off`.
 
 **Quotes (engine.core.quote).** `{:uses {:time fig :health fig :food fig :items {name fig} :wear {tool fig}} :yields
