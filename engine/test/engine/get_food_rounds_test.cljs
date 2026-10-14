@@ -303,6 +303,48 @@
               (await (tu/run-until-empty eng 40))
               (is (= :done (:kind @out))))))))))
 
+(deftest hunt-skips-babies-and-animals-in-another-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[ent zones attacks] [[cow nil true]
+                                     [cow [{:name "pen" :owner "Miles" :min [4 63 -1] :max [12 66 1]}] false]
+                                     [(assoc cow :baby true) nil false]]]
+          (let [{:keys [eng p]} (setup {:self {:food 5} :entities (into [ent] (rest herd))} :step-ms 5 :zones zones)]
+            (await (one-round! eng {}))
+            (is (= attacks (boolean (seq (calls p "attack")))) (pr-str [ent zones]))))))))
+
+(deftest food-none-names-the-animals-it-passed-over
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [(assoc cow :baby true)]} :step-ms 5)]
+          (await (one-round! eng {}))
+          (let [none (first (filterv #(= :food.none (:kind %)) @seen))]
+            (is (= [{:name "cow" :id 7 :why :baby}] (mapv #(select-keys % [:name :id :why]) (:animals none))))
+            (is (re-find #"passed over 1 animal \(cow: baby\)" (str (:text none))))))))))
+
+(deftest food-none-lists-what-the-scan-saw-when-no-animal-qualified
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [(assoc cow :kind "other")]} :step-ms 5)]
+          (await (one-round! eng {}))
+          (let [none (first (filterv #(= :food.none (:kind %)) @seen))]
+            (is (= [{:name "cow" :kind "other"}] (mapv #(select-keys % [:name :kind]) (:nearby none))))
+            (is (re-find #"nothing hunted; in range: cow \(other\)" (str (:text none))))))))))
+
+(deftest food-none-nearby-leaves-out-a-hostile-behind-a-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20 :visible false}
+              {:keys [eng seen]} (setup {:self {:food 1} :entities [(assoc cow :kind "other") zombie]} :step-ms 5)]
+          (await (one-round! eng {}))
+          (let [none (first (filterv #(= :food.none (:kind %)) @seen))]
+            (is (= ["cow"] (mapv :name (:nearby none))))
+            (is (not (re-find #"zombie" (str (:text none)))))))))))
+
 ;; ---------------------------------------------------------------- cut and resume
 
 (defn ^:async cut-at-transfer!
