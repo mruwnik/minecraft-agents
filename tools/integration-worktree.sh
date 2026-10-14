@@ -25,6 +25,7 @@ wt=$(cd "$2" && pwd)
 for d in . engine dashboard; do
   ln -s "$repo/$d/node_modules" "$wt/$d/node_modules"
 done
+touch "$wt/.res-slot-heavy" # tools/res-slot treats runs from this checkout as heavy (agents' test runs cannot set env)
 mkdir -p "$wt/dashboard/.shadow-cljs" "$wt/worlds"
 ln -s "$repo/worlds/test" "$wt/worlds/test"
 cp -r "$repo/textures" "$wt/"
