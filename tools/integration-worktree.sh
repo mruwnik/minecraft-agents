@@ -7,6 +7,7 @@
 # Any failing step fails the script. The builds there start one shadow server (under a res-slot `server` slot, ~1-2 GB);
 # remove the worktree afterwards with `tools/integration-worktree.sh --remove <dir>`: it kills that server by PID, then removes it.
 set -euo pipefail
+export RES_SLOT_HEAVY=1 # its shadow server may take the reserved server slot (tools/res-slot.json)
 
 if [ "${1:-}" = --remove ] && [ $# -eq 2 ]; then
   for d in dashboard; do

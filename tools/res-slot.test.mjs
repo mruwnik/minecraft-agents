@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { decide, loadConfig, reservedMb } from './res-slot.mjs'
+import { decide, loadConfig, reservedMb, usableSlots } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -184,4 +184,32 @@ test('config: shadow-cljs servers have their own slot kind, with room for severa
   assert.equal(res.kinds.compile, undefined)
   assert.equal(res.kinds.server.needMb, 2000)
   assert.ok(res.kinds.server.max >= 6)
+})
+
+test('usableSlots: the last `reserve` slots are for heavy runs only', () => {
+  assert.deepEqual(usableSlots([0, 1, 2], 3, 1, false), [0, 1])
+  assert.deepEqual(usableSlots([2], 3, 1, false), [])
+  assert.deepEqual(usableSlots([2], 3, 1, true), [2])
+  assert.deepEqual(usableSlots([0, 1], 2, 0, false), [0, 1])
+})
+
+test('integration: with the other slot held a plain run is busy, a heavy run (--heavy or RES_SLOT_HEAVY) runs in the reserved slot', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 2, reserve: 1 } } }))
+  const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200' }
+  const holder = spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '30'], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ...env }, stdio: 'ignore', detached: true })
+  try {
+    await new Promise((r) => setTimeout(r, 1000))
+    assert.equal(run(['t', '--', 'echo', 'ran'], env).status, 75)
+    const flag = run(['t', '--heavy', '--', 'echo', 'ran'], env)
+    assert.equal(flag.status, 0); assert.match(flag.stdout, /ran/)
+    const viaEnv = run(['t', '--', 'echo', 'ran'], { ...env, RES_SLOT_HEAVY: '1' })
+    assert.equal(viaEnv.status, 0); assert.match(viaEnv.stdout, /ran/)
+  } finally { process.kill(-holder.pid, 'SIGKILL') }
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('config: the server kind reserves a slot for heavy runners', () => {
+  assert.ok(loadConfig().kinds.server.reserve >= 1)
 })
