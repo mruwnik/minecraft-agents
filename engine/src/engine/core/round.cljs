@@ -254,18 +254,24 @@
 
 (defn ^:async old-round
   "One round of old job def as the ctx/call child c (its id child-id) under parent base: :continue or its ending
-  (engine.core.legacy). Its check runs every round, as under call-child."
-  [base c child-id def]
+  (engine.core.legacy). Its check runs every round, as under call-child. A check that declines before the child's
+  first round (fresh?) ends it condition-failed; a decline after (its check, or its round for a declined child's
+  wait) is a short wait: :continue, the child and its memory kept, the wait reason put in waited."
+  [base c child-id def fresh? waited]
   (let [wait (atom nil)
         child-wait (:child-wait base)
         results (:results base)]
     (swap! results dissoc child-id)
     (reset! child-wait nil)
     (if-not ((:check def) (assoc c :wait wait))
-      (legacy/ending-of :declined nil (wait-reason @wait))
+      (if fresh?
+        (legacy/ending-of :declined nil (wait-reason @wait))
+        (do (reset! waited (wait-reason @wait)) :continue))
       (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
         (when (= status :error) (throw error))
-        (let [e (legacy/ending-of status (get @results child-id) (when (= :declined status) @child-wait))]
+        (let [e (if (= :declined status)
+                  (do (reset! waited @child-wait) :continue)
+                  (legacy/ending-of status (get @results child-id) nil))]
           (swap! results dissoc child-id)
           (reset! child-wait nil)
           e)))))
@@ -290,14 +296,16 @@
           (assoc dup :report {}))
     (do
     (emit! eng (assoc fields :kind :child_started))
-    (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
-      (mem/update-job! store (:root base) slots (fn [m] (let [ident (ending/frame-identity def args)] (cond-> (assoc m :args args :children {}) ident (assoc :contract ident))))))
-    (let [t0 (now eng)
+    (let [fresh? (empty? (mem/job-mem (mem/view store) (:root base) slots))
+          _ (when fresh?
+              (mem/update-job! store (:root base) slots (fn [m] (let [ident (ending/frame-identity def args)] (cond-> (assoc m :args args :children {}) ident (assoc :contract ident))))))
+          waited (atom nil)
+          t0 (now eng)
           c (child-ctx eng base slot args)
           own-limit #(limits/ending eng (:root base) slots %)
           r (try (limits/check! eng c)
                  (or (own-limit nil)
-                     (let [r (await (if (ending/contract-job? def) ((:round def) c) (old-round base c child-id def)))]
+                     (let [r (await (if (ending/contract-job? def) ((:round def) c) (old-round base c child-id def fresh? waited)))]
                        (if (= :done (:kind r)) r (or (own-limit nil) r))))
                  (catch :default e
                    (or (own-limit e)
@@ -306,7 +314,7 @@
                  (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))]
       (when-not (owner? eng (:token base)) (throw (cut-error)))
       (if (= :continue r)
-        (do (emit! eng (assoc fields :kind :child_ended :status :continue))
+        (do (emit! eng (cond-> (assoc fields :kind :child_ended :status :continue) @waited (assoc :reason (:reason @waited))))
             (limits/check! eng base)
             :continue)
         (let [e (assoc r :report (merge (tally/report eng (:root base) slots) (:report r)))

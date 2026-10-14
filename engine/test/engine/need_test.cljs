@@ -5,74 +5,153 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [jobs.lib.need :as need]))
 
-(def got (atom nil))
+(def got (atom []))
 
 (defn stopper
-  "An old fetch job that stops with reason, or finishes when reason is nil."
-  [seen-args reason]
+  "An old fetch job: each round records its args and slot, then does (step c), which ends it :done (nil) or stops it
+  with a reason; :continue yields instead."
+  [seen step]
   {:check (fn [_] true)
    :round (fn ^:async r [c]
-            (reset! seen-args (:args c))
-            (when reason (ctx/result! c {:status :stopped :reason reason}))
-            :done)})
+            (swap! seen conj (assoc (:args c) :slot (peek (:slots c))))
+            (let [s (step c)]
+              (cond
+                (= :continue s) :continue
+                s (do (ctx/result! c {:status :stopped :reason s}) :done)
+                :else :done)))})
 
-(defn run! [call-fn obtain-reason tool-reason]
-  (reset! got nil)
-  (let [obtain-args (atom nil)
-        tool-args (atom nil)
-        [_ sink] (tu/capture-sink)
-        jobs {'jobs.items.obtain (stopper obtain-args obtain-reason)
-              'jobs.items.get-tool (stopper tool-args tool-reason)
+(defn setup
+  "An engine with the caller job running (call-fn c) each round, obtain and get-tool as stoppers doing obtain-step and
+  tool-step, and go-to as a walker that puts the body on its :pos. Each round's answer is appended to got; the caller
+  ends on one other than :done."
+  [call-fn {:keys [obtain-step tool-step]}]
+  (reset! got [])
+  (let [obtain (atom [])
+        tool (atom [])
+        walks (atom [])
+        p (tu/fake {})
+        [seen sink] (tu/capture-sink)
+        walker {:check (fn [_] true)
+                :round (fn [c]
+                         (let [{:keys [x y z]} (:pos (:args c))]
+                           (swap! walks conj (:args c))
+                           (swap! (fake/state p) assoc-in [:self :pos] [(+ x 0.5) y (+ z 0.5)])
+                           :done))}
+        jobs {'jobs.items.obtain (stopper obtain (or obtain-step (constantly nil)))
+              'jobs.items.get-tool (stopper tool (or tool-step (constantly nil)))
+              'jobs.movement.go-to walker
               'caller {:conditions [] :args {}
                        :round (fn ^:async r [c]
-                                (reset! got (await (call-fn c)))
-                                (ctx/end c :done nil))}}
-        eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now (constantly 1000000) :jobs jobs :triggers {}
+                                (let [e (await (call-fn c))]
+                                  (swap! got conj e)
+                                  (if (and (map? e) (not= :done (:kind e))) e :continue)))}}
+        eng (core/create {:primitives p :dir (tu/tmp-dir) :now (constantly 1000000) :jobs jobs :triggers {}
                           :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})]
     (core/submit! eng '(caller {}) {})
-    (core/tick! eng)
-    {:obtain obtain-args :tool tool-args}))
+    {:eng eng :p p :seen seen :obtain obtain :tool tool :walks walks}))
 
-(defn ^:async run-wait! [& args]
-  (let [r (apply run! args)]
-    (await (js/Promise. (fn [res] (js/setTimeout res 50))))
-    r))
+(defn ^:async run!
+  "setup, then n ticks (default 1)."
+  ([call-fn steps] (run! call-fn steps 1))
+  ([call-fn steps n]
+   (let [r (setup call-fn steps)]
+     (dotimes [_ n] (await (core/tick! (:eng r))))
+     r)))
+
+(defn stop-with [reason] {:obtain-step (constantly reason) :tool-step (constantly reason)})
+
+(defn give! [p item n] (swap! (fake/state p) update :inventory fake/add-to item n))
+
+(defn carried [p item] (fake/carried (:inventory @(fake/state p)) item))
 
 (deftest item!-passes-a-done-child
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (run-wait! #(need/item! % "iron_ingot" 3) nil nil))]
-          (is (= :done (:kind @got)))
-          (is (= {:item "iron_ingot" :count 3 :explore false} (select-keys @(:obtain r) [:item :count :explore]))))))))
+        (let [r (await (run! #(need/item! % "iron_ingot" 3) nil))]
+          (is (= :done (:kind (last @got))))
+          (is (= {:item "iron_ingot" :count 3 :explore false :slot :need}
+                 (select-keys (first @(:obtain r)) [:item :count :explore :slot]))))))))
 
 (deftest item!-failure-reads-as-the-need-with-the-childs-ending-as-because
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (run-wait! #(need/item! % "iron_ingot" 3) :no-source nil))
-        (is (= :condition-failed (:kind @got)) "no-source is a missing fact")
-        (is (= {:reason :need :why :no-source :item "iron_ingot" :count 3} (:cause @got)))
-        (is (= :no-source (contract/cause-key (:because @got))))))))
+        (await (run! #(need/item! % "iron_ingot" 3) (stop-with :no-source)))
+        (is (= :condition-failed (:kind (last @got))) "no-source is a missing fact")
+        (is (= {:reason :need :why :no-source :item "iron_ingot" :count 3} (:cause (last @got))))
+        (is (= :no-source (contract/cause-key (:because (last @got)))))))))
 
 (deftest a-full-bag-is-free-slots-and-a-limit-stays-a-limit
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (run-wait! #(need/blocks! % ["cobblestone" "dirt"] 8) :inventory-full nil))
-        (is (= :free-slots (contract/cause-key @got)))
-        (is (= ["cobblestone" "dirt"] (get-in @got [:cause :any-of])))
-        (await (run-wait! #(need/item! % "coal" 1) :timeout nil))
-        (is (= :limit-reached (:kind @got)) "obtain's :timeout is a time limit")
-        (is (= :need (contract/cause-key @got)))))))
+        (await (run! #(need/blocks! % ["cobblestone" "dirt"] 8) (stop-with :inventory-full)))
+        (is (= :free-slots (contract/cause-key (last @got))))
+        (is (= ["cobblestone" "dirt"] (get-in (last @got) [:cause :any-of])))
+        (await (run! #(need/item! % "coal" 1) (stop-with :timeout)))
+        (is (= :limit-reached (:kind (last @got))) "obtain's :timeout is a time limit")
+        (is (= :need (contract/cause-key (last @got))))))))
 
 (deftest tool!-names-the-tool-wanted
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (run-wait! #(need/tool! % {:block "stone"} {:explore true}) nil :no-source))]
-          (is (= {:reason :tool :why :no-source :block "stone"} (:cause @got)))
-          (is (= {:block "stone" :explore true} (select-keys @(:tool r) [:block :explore]))))))))
+        (let [r (await (run! #(need/tool! % {:block "stone"} {:explore true}) {:tool-step (constantly :no-source)}))]
+          (is (= {:reason :tool :why :no-source :block "stone"} (:cause (last @got))))
+          (is (= {:block "stone" :explore true} (select-keys (first @(:tool r)) [:block :explore]))))))))
+
+(deftest a-waiting-child-is-continue-and-the-options-pass-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [rounds (atom 0)
+              r (await (run! #(need/item! % "coal" 2 {:slot :coal :how #{:chest} :depth 2})
+                             {:obtain-step #(when (= 1 (swap! rounds inc)) :continue)} 2))]
+          (is (= [:continue :done] [(first @got) (:kind (second @got))]))
+          (is (= [{:how #{:chest} :depth 2 :slot :coal}]
+                 (distinct (map #(select-keys % [:how :depth :slot]) @(:obtain r))))))))))
+
+(deftest a-done-fetch-that-leaves-the-need-is-not-solved
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run! #(need/item! % "coal" 1) nil 2))]
+          (is (= :done (:kind (first @got))))
+          (is (= {:kind :condition-failed :cause {:reason :need :why :not-solved :item "coal" :count 1}}
+                 (select-keys (second @got) [:kind :cause]))
+              "the same need straight after a done fetch, nothing used up meanwhile")
+          (is (= 1 (count @(:obtain r))) "the child is not called again"))))))
+
+(deftest a-need-again-after-using-up-what-was-fetched-fetches-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p obtain]} (setup #(need/item! % "coal" 1) nil)]
+          (give! p "coal" 1)
+          (await (core/tick! eng))
+          (swap! (fake/state p) assoc :inventory [])
+          (await (core/tick! eng))
+          (is (= [:done :done] (map :kind @got)))
+          (is (= 2 (count @obtain))))))))
+
+(deftest return!-walks-back-to-the-cell-the-fetch-began-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [obtain-step (fn [c] (swap! (fake/state (:primitives c)) assoc-in [:self :pos] [6.5 64 0.5]) nil)
+              {:keys [walks p]} (await (run! (fn ^:async f [c]
+                                               (or (await (need/return! c))
+                                                   (if (pos? (carried (:primitives c) "coal"))
+                                                     (ctx/end c :done nil)
+                                                     (let [e (await (need/item! c "coal" 1 {:return? true}))]
+                                                       (when (= :done (:kind e)) (give! (:primitives c) "coal" 1))
+                                                       (if (= :done (:kind e)) :continue e)))))
+                                             {:obtain-step obtain-step} 3))]
+          (is (= [:continue :done] (map #(if (map? %) (:kind %) %) (take 2 @got))))
+          (is (= [{:pos {:x 0 :y 64 :z 0} :range 0}] (map #(select-keys % [:pos :range]) @walks)))
+          (is (= [0.5 64 0.5] (get-in @(fake/state p) [:self :pos]))))))))

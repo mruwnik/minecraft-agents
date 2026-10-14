@@ -314,7 +314,8 @@ Before an act, its most (`jobs.primitive` table: target, quote-of, ending per pr
 has left: a crossing (cause with `:act`, amount `:most`/`:left`) refuses the act when enforced, inside `ctx/atomic` too.
 
 **Old and contract jobs together (engine.core.legacy).** An old job through `ctx/call` ends with the ending its
-check, round and result map to; a contract job through `call-child` answers `:declined` or `:done` with its ending in
+check, round and result map to; a decline after its first round (a short wait such as `:cooking`) is `:continue`, the
+child kept, `job.child_ended` naming the wait; only a check declining before it is condition-failed. A contract job through `call-child` answers `:declined` or `:done` with its ending in
 the child-result. A `legacy-args` export maps an old caller's options to call keys.
 
 **call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
@@ -743,7 +744,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 
 **Torches before a dig down** (`jobs.lib.trip/torches-ready!`): `gather.mine` (descent or strip tunnel), `access.tunnel` and a `access.stair :down` (`:stock-torches false` for a stair a job runs itself) obtain torches up to 16 when under 8 are carried (`:fetch` on; with coal or charcoal carried only the 4 torches each makes, no smelt; else coal, or charcoal from logs), once per job: info `torch.stocked`, or warn `torch.no-stock` (its text says why, e.g. no furnace could be made: 8 cobblestone) and the dig goes on dark; a charcoal smelt still cooking is waited for (the job's check waits `:torches-cooking` with `:furnace` and `:ready-at`, info `torch.waiting`) for at most `jobs.lib.trip/torch-wait-s` (300), then `torch.no-stock` carries `:torches :waited-out`; either way it then walks back to the cell the trip began on, so a far chest does not move the dig's level.
 
-**Fetching, contract jobs** (`jobs.lib.need`): `item!`, `blocks!`, `tool!` call `items.obtain` / `items.get-tool` through `ctx/call` and resolve to `:continue` or an ending: `:done` as given, else the same kind with cause `{:reason :need|:tool|:free-slots :why ..}` and the fetch ending as `:because`. No failure booking: a duplicate call is the engine's refusal.
+**Fetching, contract jobs** (`jobs.lib.need`): `item!`, `blocks!`, `tool!` call `items.obtain` / `items.get-tool` through `ctx/call` and resolve to `:continue` or an ending: `:done` as given, else the same kind with cause `{:reason :need|:tool|:free-slots :why ..}` and the fetch ending as `:because`. No failure booking: a duplicate call is the engine's refusal. The same want asked again after a `:done` fetch, nothing of it used up, ends `:why :not-solved`; `{:return? true}` keeps the start cell and `return!` (first in each round) walks back to it after a done fetch. Both sit in the caller's memory.
 
 **Fetching what a job lacks** (`jobs.lib.fetch`): `blocks.dig`, `blocks.place`, `access.stair`, `access.tunnel`, `access.leave-tunnel` and `items.equip` take `:fetch`
 (default true; `false` waits or stops with the reason). Go-to's escalation children, clear-path's digs, the stairs and places
