@@ -222,7 +222,12 @@
       resting {:reason :nothing-to-do :backed-off [(pen-key c)] :until (:until resting)}
       :else (pen-fact c))))
 
-(def conditions "Starts while some step would run (start-fact)." [[:fn start-fact]])
+(defn at-start
+  "f of the call, at its start only (same as jobs.gather.mine/at-start): the steps of a started pass decide for themselves."
+  [f]
+  (fn [c] (when-not (ctx/frozen-call c) (f c))))
+
+(def conditions "Starts while some step would run (start-fact)." [[:fn (at-start start-fact)]])
 
 (defn done?
   "The steps still to run against those of a pass. Never :done? itself: the run ends with its event and data."

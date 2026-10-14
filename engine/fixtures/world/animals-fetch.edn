@@ -98,8 +98,8 @@
    :expect [{:event {:source :job :kind :lead-to.done :data {:reason :no-lead}} :within-s 80 :of-job true}
             {:event {:source :job :kind :lead-to.gave-up :data {:reason :no-lead}} :within-s 80 :of-job true}]
    :limit-s 100}
-  {:name "lead-to-no-mob-still-waits"
+  {:name "lead-to-no-mob-is-impossible"
    :act [[:job (jobs.animals.lead-to {:pos #xyz [26 0 16]})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-mob}} :within-s 30 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-mob}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :lead-to.done} :for-s 20}]
    :limit-s 40}]}

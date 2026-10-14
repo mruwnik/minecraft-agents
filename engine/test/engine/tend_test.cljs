@@ -327,3 +327,8 @@
           (swap! (:clock s) + 660000)
           (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
           (is (= 2 (count (events-of s :tend.done))) "after the back-off it tries again"))))))
+
+(deftest a-started-pass-is-not-asked-its-start-condition-again
+  (let [f (second (first tend/conditions))
+        c {:primitives (tu/fake {:entities []}) :args {:box box :target 4}}]
+    (is (nil? (f (assoc c :quote-call {}))) "started: the pass runs on")))
