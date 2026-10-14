@@ -3,6 +3,7 @@
   and how a root job's ending is told."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
+            [engine.core.legacy :as legacy]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -229,7 +230,7 @@
             {:need true} {:kind :condition-failed :cause {:reason :need :what "thing"}}
             {:old :continue} :continue
             {:old :declined} {:kind :condition-failed :cause :declined}
-            {:old {:status :stopped :reason :timeout :text "slow"}} {:kind :limit-reached :cause :timeout :data {:text "slow"}}
+            {:old {:status :stopped :reason :timeout :text "slow"}} {:kind :limit-reached :cause {:line :time :reason :timeout} :data {:text "slow"}}
             {:old {:status :stopped :reason :no-way}} {:kind :nothing-possible :cause :no-way}
             {:old {:status :stopped :reason :no-tool :need "stone_pickaxe"}}
             {:kind :condition-failed :cause :no-tool :data {:need "stone_pickaxe"}}
@@ -238,6 +239,30 @@
           (is (map? (:report (:old-ending @world))))
           (is (= {:status :done :ending {:kind :done :cause nil}}
                  (select-keys (:data (last (job-ev seen :child_ended))) [:status :ending]))))))))
+
+(deftest an-old-stopped-reason-reads-as-the-doc-kind
+  (are [reason kind cause]
+       (= {:kind kind :cause cause} (legacy/ending-of :done {:status :stopped :reason reason} nil))
+    :no-tool :condition-failed :no-tool
+    :hungry :condition-failed :hungry
+    :danger :condition-failed :danger
+    :hostile-near :condition-failed :hostile-near
+    :gone :condition-failed :gone
+    :no-target :condition-failed :no-target
+    :no-source :condition-failed :no-source
+    :no-tree :condition-failed :no-tree
+    :no-sapling :condition-failed :no-sapling
+    :no-composter :condition-failed :no-composter
+    :no-boat :condition-failed :no-boat
+    :no-vehicle :condition-failed :no-vehicle
+    :not-found :condition-failed :not-found
+    :timeout :limit-reached {:line :time :reason :timeout}
+    :low-health :limit-reached {:line :health :reason :low-health}
+    :tool-spent :limit-reached {:line :wear :reason :tool-spent}
+    :no-way :nothing-possible :no-way))
+
+(deftest a-limit-reason-survives-the-round-trip-to-an-old-parent
+  (is (= :low-health (:reason (legacy/result-of (legacy/ending-of :done {:status :stopped :reason :low-health} nil))))))
 
 (def migrated
   {:conditions [] :round (fn [c] (ctx/end c :done nil)) :args nil
