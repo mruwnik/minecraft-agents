@@ -175,6 +175,7 @@
         unknown (remove (set ways) (:ways given))]
     (cond
       path (str sym " " (a/path-text path) " must be " want ", got " (pr-str value))
+      (and (contains? given :ways) (empty? (:ways given))) (str sym " :ways is empty, so no way may run")
       (seq unknown) (str sym " has no way " (str/join ", " (sort unknown)) "; "
                          (if (seq ways) (str "its ways are " (str/join ", " ways)) "it has no ways")))))
 

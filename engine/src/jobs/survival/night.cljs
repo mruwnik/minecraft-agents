@@ -112,7 +112,7 @@
   with :spawn when the respawn bed is known or lost."
   [c]
   (let [p (:primitives c)]
-    (when-not (sh/night-holds? p (ctx/view c) (:args c) (bed-down/bed-permit c))
+    (when-not (sh/night-holds? p (ctx/view c) (assoc (:args c) :ways (:ways (ctx/frozen-call c))) (bed-down/bed-permit c))
       (let [spawn (sh/spawn-state p (ctx/view c))]
         (cond-> (if-let [shelter (sh/night-sheltered p (:data (ctx/latest c :shelter)))]
                   {:reason :night-safe :shelter shelter}
@@ -399,7 +399,7 @@
     (when (and (sh/night? p) (bed-down/overdue? c)) (note-needs-bed! c))
     (note-spawn-lost! c)
     (cond
-      (sh/unlooked-for-bed? p (ctx/view c))
+      (and bed-way (sh/unlooked-for-bed? p (ctx/view c)))
       (do (await (look/look-around! c))
           (ctx/remember! c :night-looked {:cell (sh/feet p)} sh/night-looked-policy)
           :again)
@@ -409,7 +409,7 @@
       (do (when-not sheltered (hold/sheltered! c :dug-in))
           (cond
             (and bed-way (log-out-wanted? c)) (await (log-out-step c))
-            (sh/night-holds? p (ctx/view c) (:args c) (bed-down/bed-permit c)) (await (hold/hold! c :sheltered))
+            (sh/night-holds? p (ctx/view c) (assoc (:args c) :ways (:ways (ctx/frozen-call c))) (bed-down/bed-permit c)) (await (hold/hold! c :sheltered))
             :else (morning/end-night! c)))
       :else
       (let [bed (when bed-way (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))))

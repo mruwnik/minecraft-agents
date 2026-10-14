@@ -6,10 +6,12 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.hut-shelter-test :as hut]
+            [engine.memory :as mem]
             [engine.night-test :as nt]
             [engine.registry :as registry]
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
+            [jobs.lib.shelter :as sh]
             [jobs.time.wait-for-day :as wfd]))
 
 (def night-job 'jobs.survival.night)
@@ -77,3 +79,14 @@
           (is (empty? (filter #(#{:dig-in :niche :relocate} (first %)) log)) "no pit, niche or relocation")
           (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z])) "walked to the roofed home")
           (is (= [:roofed-place] (mapv :target (st/emitted seen :shelter.fled)))))))))
+
+(deftest an-empty-ways-set-is-bad-args
+  (is (some? (contract/call-problem night-job (:ways (get registry/jobs night-job)) {:ways #{}}))))
+
+(deftest a-call-without-the-bed-way-has-no-bed-terms
+  (let [{:keys [eng p]} (st/setup hut/night-bed-world)
+        _ (st/know-bed! eng {:x 6 :y 64 :z 0})
+        _ (st/looked-round! eng p)
+        holds #(boolean (sh/night-holds? p (mem/view (:store eng)) % (constantly true)))]
+    (is (true? (holds {})) "a bed in reach holds the night")
+    (is (false? (holds {:ways #{:shelter :flee}})) "without :bed it does not")))

@@ -298,7 +298,7 @@ a round's time to its own frame. Endings and a root's `completed`/`stopped`/`can
 a finished job's goes to body memory `:job-report` (cap 256).
 
 **Contract jobs.** Export `conditions` and `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
-`defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round. A condition
+`defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A condition
 `[:fn f]` gives nil (start), a cause (skip: a listed job not started stays queued and waits, else `:condition-failed`),
 `(contract/impossible cause)` (ends `:impossible`, the job leaves the queue) or `(contract/look-first cause)` (the
 engine looks round once, hook `:look/around`, then asks again). Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` ends `:done`; endings are `{:kind :cause :because :report :data}`. A
