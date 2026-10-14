@@ -384,6 +384,30 @@
 
 ;; ------------------------------------------------------------ plant-sapling
 
+(defn end-of
+  "{:kind :completed|:stopped :reason cause} of the job's end event."
+  [seen]
+  (select-keys (first (filter #(#{:completed :stopped} (:kind %)) @seen)) [:kind :reason]))
+
+(deftest plant-sapling-is-a-contract-job
+  (let [job (get registry/jobs 'jobs.forestry.plant-sapling)]
+    (is (some? (:conditions job)))
+    (is (nil? (:check job)) "no old check")
+    (is (= [:at :near] (:target job)))))
+
+(deftest plant-sapling-ends-with-the-honest-kind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[world args expected] [[{:inventory [{:name "oak_sapling" :count 1}]} {:at {:x 5 :y 64 :z 5}} {:kind :completed}]
+                                       [{} {} {:kind :completed}]
+                                       [{} {:at {:x 5 :y 64 :z 5}} {:kind :stopped :reason :need}]
+                                       [{:blocks {"5,64,5" "oak_log"} :inventory [{:name "oak_sapling" :count 1}]} {:at {:x 5 :y 64 :z 5}} nil]]]
+          (let [{:keys [eng seen]} (setup world)]
+            (core/submit! eng (list 'jobs.forestry.plant-sapling (assoc args :species "oak")) {})
+            (await (run-until-empty eng 12))
+            (is (= (or expected {}) (end-of seen)) (pr-str [world args]))))))))
+
 (deftest plant-sapling-reads-the-debt-places-and-clears-it
   (async done
     (tu/run-async done

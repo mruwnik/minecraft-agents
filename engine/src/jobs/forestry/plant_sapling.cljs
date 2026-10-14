@@ -1,12 +1,14 @@
 (ns jobs.forestry.plant-sapling
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
+            [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
+            [jobs.lib.need :as need]
             [jobs.lib.trees :refer [debts target-of sapling-for sapling-of log-name? replant-kind species]
              :rename {species all-species}]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.sense :as sense]))
 
@@ -14,13 +16,18 @@
   "Plant a sapling at :at, or at the oldest replant debt, and clear that debt. With :bone-meal n it then uses up to
   n bone meal on it.
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
-  A missing sapling is fetched (jobs.lib.fetch: a seen chest, or the leaves of its tree broken for the drop) unless :fetch is false; then, or when the
-  fetch failed, it waits (check) with :reason :no-sapling (:species). It also waits :log-on-spot when the spot still
-  holds a log. The sapling kind is the species' (mangrove propagule, fungus too); the same one already on the spot
-  counts as planted. Ends at once when there is nothing to plant or the spot is refused (a debt stays owed).
+  A missing sapling is got with jobs.lib.need (a seen chest, or the leaves of its tree broken for the drop) unless :fetch
+  is false. The sapling kind is the species' (mangrove propagule, fungus too); the same one already on the spot counts as
+  planted.
   Zones: a spot in another owner's zone or claim, or in another body's plan footprint (but :for-plan's own, or the body's own plan), is not planted.
   The job warns plant-sapling.declined once, with :reason :refused (or :no-zones when no zone list was read).
-  :ignore-zones? true skips the check.")
+  :ignore-zones? true skips the check.
+
+  Conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), :no-sapling (none carried and
+  :fetch false; data :species) and :log-on-spot (data :pos). Nothing to plant is done at once. Ends :done with data
+  {:pos} once planted (and the bone meal used up, grown or gone); condition-failed with the need cause when the fetch
+  failed, :refused when the zone rule changed on the way; nothing-possible :plant-blocked (the spot cannot be reached or
+  planted, data :text) or :unseen (the spot was never seen, after a look). Quote: the walk to the spot.")
 
 (a/defargs args
   {:at {:doc "where to plant; the oldest :forestry/replant debt when nil" :spec ::a/pos :default nil}
@@ -29,13 +36,18 @@
    :species {:doc "sapling species; any when nil" :spec a/name? :default nil}
    :bone-meal {:doc "bone meal uses after planting, 0 for none" :spec (a/int-in 0 nil) :default 0}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :fetch {:doc "get a missing sapling (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-sapling" :spec fetch/option? :default true}
+   :fetch {:doc "get a missing sapling with jobs.lib.need: true, a set of kinds or a map of limits; false ends :no-sapling" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
-(defn spot-allowed?
-  "Whether the job may plant at pos (one warn per job when refused)."
-  [c pos]
-  (gate/allowed? c :plant-sapling.declined "plant-sapling" :place pos {:except (:for-plan (:args c)) :own-plans-ok? true}))
+(a/defargs settings
+  {::time-s {:default 180 :doc "Seconds a planting may take: the walk, a fetch, the bone meal." :spec (a/num-in 0 nil)}
+   ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
+(defn max-steps [] (settings/get settings ::max-steps))
+
+(def target [:at :near])
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn sapling-at?
   "True when the block at pos is a sapling, mangrove propagule or fungus."
@@ -46,101 +58,135 @@
 (defn has-meal? [p]
   (some #(= "bone_meal" (:name %)) (u/inventory p)))
 
-(defn ^:async meal-round
-  "One bone meal use on the planted sapling: :again; :done when it grew, the uses are spent or no bone meal is
-  carried; :continue while the walk to it waits."
-  [c {:keys [pos left]}]
-  (let [p (:primitives c)]
-    (if (or (zero? left) (not (sapling-at? p pos)) (not (has-meal? p)))
-      (do (ctx/update-mem! c dissoc :meal) :done)
-      (let [w (await (near/go-near! c pos 3 {:zone-tolls true}))]
-        (case w
-          :partial :continue
-          (do (await (ctx/act c :useOn #js {:pos (clj->js pos) :item "bone_meal" :face "up"}))
-              (ctx/update-mem! c update-in [:meal :left] dec)
-              :again))))))
+(def saplings (mapv sapling-of all-species))
+
+(defn current-target [c] (target-of (debts c) (:args c)))
+
+(defn refusal
+  "Why the job may not plant at pos (:refused or :no-zones; one warn per job), or nil."
+  [c pos]
+  (:refusal (gate/judge c :plant-sapling.declined "plant-sapling" :place [pos] {:except (:for-plan (:args c)) :own-plans-ok? true})))
 
 (defn problem
-  "The wait {:reason :no-sapling :species} while there is a spot to plant and no matching sapling is carried; else nil.
-  The :need fields (:item, or :any-of when no species) are what a fetch gets."
+  "The cause {:reason :no-sapling :species} while there is a spot to plant and no matching sapling is carried; else nil.
+  The :item field (the species' sapling) is what a fetch gets."
   [c]
-  (let [t (when-not (:meal (ctx/mem c)) (target-of (debts c) (:args c)))
+  (let [t (when-not (:meal (ctx/mem c)) (current-target c))
         species (:species t)]
     (when (and t (nil? (sapling-for (u/inventory (:primitives c)) species)))
       (cond-> {:reason :no-sapling :species species}
         species (assoc :item (sapling-of species))))))
 
-(def saplings (mapv sapling-of all-species))
+(defn spot-refused [c]
+  (let [t (when-not (:meal (ctx/mem c)) (current-target c))]
+    (when t (refusal c (:pos t)))))
 
-(defn fetch-wait
-  "The :need wait a fetch of w's sapling answers."
-  [w]
-  (if (:item w)
-    {:reason :need :item (:item w)}
-    {:reason :need :any-of saplings}))
+(defn no-sapling [c]
+  (when-not (:fetch (:args c))
+    (some-> (problem c) (dissoc :item))))
 
-(defn shown-wait
-  "w without :item, plus the :fetch field when a fetch for it failed lately."
-  [c w]
-  (let [o (fetch/opts c 'jobs.forestry.plant-sapling)
-        f (when o
-            (some->> (fetch/plan-for (fetch-wait w) o) :key (fetch/failure c)))]
-    (cond-> (dissoc w :item)
-      f (assoc :fetch (fetch/shown f)))))
+(defn log-on-spot [c]
+  (let [t (when-not (:meal (ctx/mem c)) (current-target c))]
+    (when (and t (log-name? (some-> (u/seen-block (:primitives c) (:pos t)) .-name)))
+      {:reason :log-on-spot :pos (:pos t)})))
 
-(defn check
-  "Nothing to plant (the round finishes), or a matching sapling is carried or will be fetched, and the spot no longer
-  holds a log. Else it waits with reason :no-sapling (and :species) or :log-on-spot (and :pos)."
+(def conditions [[:fn spot-refused] [:fn no-sapling] [:fn log-on-spot]])
+
+(defn done?
+  "Done at once when nothing is owed (and no bone meal is being used)."
   [c]
-  (let [p (:primitives c)
-        t (target-of (debts c) (:args c))
-        w (problem c)]
+  (let [owed? (boolean (or (:meal (ctx/mem c)) (current-target c)))]
+    {:done? (not owed?) :units :saplings :done (if owed? 0 1) :left (if owed? 1 0)}))
+
+(defn quote-of [c]
+  (let [t (current-target c)
+        d (if t (u/dist (u/self-pos c) (:pos t)) 0)
+        fetch? (and (:fetch (:args c)) (problem c))]
+    {:uses {:time [1 (+ 2 (* 0.3 d)) (if fetch? (max (time-s) (+ 4 (* 0.6 d))) (+ 4 (* 0.6 d)))]}}))
+
+(defn ^:async walk!
+  "Walk to within 3 of pos with a go-to child: :there, :continue (it waits on the world, or a leg that got nearer), or
+  an ending when the walk did not arrive."
+  [c pos]
+  (if (u/within? (u/self-pos c) pos 3)
+    :there
+    (let [e (await (child/call-walk* c :walk {:pos pos :range 3 :one-way :closed :warn false :retry false :zone-tolls true
+                                              :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+      (cond
+        (= :continue e) :continue
+        (and (= :done (:kind e)) (:arrived (:data e))) :there
+        (and (= :done (:kind e)) (:leg (:data e))) :continue
+        (= :done (:kind e)) (ctx/end c :nothing-possible :plant-blocked {:text "cannot reach the planting spot"})
+        :else e))))
+
+(defn blocked
+  "The :plant-blocked ending, with its warn."
+  [c text]
+  (ctx/emit! c :plant_blocked :warn {:text text})
+  (ctx/end c :nothing-possible :plant-blocked {:text text}))
+
+(defn ^:async meal-round
+  "One bone meal use on the planted sapling: :again; the :done ending when it grew, the uses are spent or no bone meal
+  is carried; :continue while the walk to it waits."
+  [c {:keys [pos left]}]
+  (let [p (:primitives c)]
+    (if (or (zero? left) (not (sapling-at? p pos)) (not (has-meal? p)))
+      (do (ctx/update-mem! c dissoc :meal) (ctx/end c :done nil {:pos pos}))
+      (let [w (await (walk! c pos))]
+        (if (not= :there w)
+          w
+          (do (await (ctx/act c :useOn #js {:pos (clj->js pos) :item "bone_meal" :face "up"}))
+              (ctx/update-mem! c update-in [:meal :left] dec)
+              :again))))))
+
+(defn ^:async fetch-sapling!
+  "Get the missing sapling w names with jobs.lib.need: :continue while it works, :again once got, else the ending."
+  [c w]
+  (let [e (await (if (:item w) (need/item! c (:item w)) (need/blocks! c saplings 1)))]
+    (cond (= :continue e) :continue
+          (= :done (:kind e)) :again
+          :else e)))
+
+(defn ^:async place!
+  "Equip and place the sapling at the target's spot: :again (bone meal follows) or the ending."
+  [c t sapling]
+  (await (ctx/act c :equip (clj->js {:item sapling})))
+  (let [r (await (ctx/act c :place (clj->js {:pos (:pos t) :item sapling})))
+        forget! #(ctx/forget-where! c replant-kind (fn [d] (= (:pos t) (:pos d))))]
     (cond
-      (:meal (ctx/mem c)) true
-      (nil? t) true
-      w (let [r (fetch/check c 'jobs.forestry.plant-sapling (fetch-wait w))]
-          (or (true? r) (ctx/wait c (shown-wait c w))))
-      (log-name? (some-> (u/seen-block p (:pos t)) .-name)) (ctx/wait c {:reason :log-on-spot :pos (:pos t)})
-      :else true)))
+      (= "placed" (.-status r))
+      (let [n (:bone-meal (:args c))]
+        (forget!)
+        (if (and (pos? n) (has-meal? (:primitives c)))
+          (do (ctx/update-mem! c assoc :meal {:pos (:pos t) :left n}) :again)
+          (ctx/end c :done nil {:pos (:pos t)})))
+      (and (= "occupied" (.-status r)) (= sapling (u/seen-name (:primitives c) (:pos t))))
+      (do (forget!) (ctx/end c :done nil {:pos (:pos t)}))
+      :else (blocked c (str "cannot plant: " (.-status r))))))
 
 (defn ^:async step
-  "One piece of the planting: :again, :continue (a walk or fetch child waits on the world), :done or a stop."
+  "One piece of the planting: :again, :continue (a walk or fetch child waits on the world) or the ending."
   [c]
-  (let [t (target-of (debts c) (:args c))
+  (let [t (current-target c)
         sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))
-        meal (:meal (ctx/mem c))]
-    (when sapling (fetch/settle! c))
+        meal (:meal (ctx/mem c))
+        refused #(refusal c (:pos t))]
     (cond
       meal (await (meal-round c meal))
-      (nil? t) :done
-      (not (spot-allowed? c (:pos t))) :done
-      (nil? sapling) (or (await (fetch/fetch! c 'jobs.forestry.plant-sapling #(some-> (problem %) fetch-wait)))
-                         (if (problem c) :continue :again))
+      (nil? t) (ctx/end c :done nil {})
+      (refused) (ctx/end c :condition-failed (refused) {:pos (:pos t)})
+      (nil? sapling) (await (fetch-sapling! c (problem c)))
       :else
-      (let [w (await (near/go-near! c (:pos t) 3 {:zone-tolls true}))]
-        (case w
-          :partial :continue
-          :blocked (u/fail! c :plant_blocked "cannot reach the planting spot")
-          (cond
-            (not (spot-allowed? c (:pos t))) :done
-            (nil? (await (sense/decide! c :plant-sapling.spot #(u/seen-name (:primitives c) (:pos t)))))
-            (do (ctx/warn-once! c [:unknown (:pos t)] :plant-sapling.unknown {:pos (:pos t)}) :done)
-            :else
-            (do (await (ctx/act c :equip (clj->js {:item sapling})))
-              (let [r (await (ctx/act c :place (clj->js {:pos (:pos t) :item sapling})))]
-                (if (= "placed" (.-status r))
-                  (let [n (:bone-meal (:args c))]
-                    (ctx/forget-where! c replant-kind #(= (:pos t) (:pos %)))
-                    (if (and (pos? n) (has-meal? (:primitives c)))
-                      (do (ctx/update-mem! c assoc :meal {:pos (:pos t) :left n}) :again)
-                      :done))
-                  (if (and (= "occupied" (.-status r)) (= sapling (u/seen-name (:primitives c) (:pos t))))
-                    (do (ctx/forget-where! c replant-kind #(= (:pos t) (:pos %))) :done)
-                    (u/fail! c :plant_blocked (str "cannot plant: " (.-status r)))))))))))))
-
-(def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
+      (let [w (await (walk! c (:pos t)))]
+        (cond
+          (not= :there w) w
+          (refused) (ctx/end c :condition-failed (refused) {:pos (:pos t)})
+          (nil? (await (sense/decide! c :plant-sapling.spot #(u/seen-name (:primitives c) (:pos t)))))
+          (do (ctx/warn-once! c [:unknown (:pos t)] :plant-sapling.unknown {:pos (:pos t)})
+              (ctx/end c :nothing-possible :unseen {:pos (:pos t)}))
+          :else (await (place! c t sapling)))))))
 
 (defn ^:async round
   [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))

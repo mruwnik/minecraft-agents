@@ -1,12 +1,13 @@
 (ns jobs.gather.get-seeds
   (:require [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
@@ -42,13 +43,16 @@
   :none (the text names the radius and the nearest source seen beyond it). Two batches in a row where nothing was diggable (none dug, none skipped: all missing) end :barren
   (warn get-seeds.gave-up). A batch of only skipped blocks is not barren.
 
-  Hands over {:got n :reason r} (info get-seeds.done). :got is how many more are carried than at the start, at
-  least 0.
+  Ends :done (data {:got n :reason :count}, info get-seeds.done) when the goal is carried. Any other end is
+  nothing-possible with the cause :none, :dry, :barren, :refused, :short (the chest gave less) or :withdraw-declined,
+  and data {:got n :reason r}; :got is how many more are carried than at the start, at least 0. The same event
+  get-seeds.done tells it.
 
-  Declines (one warn get-seeds.declined {:reason r} per reason): :no-source (a material with no known way),
-  :no-chest (chest way with no :chest and no known chest place), :plan-missing, :plan-broken,
-  :no-chest-cell (the :plan has no chest cell), :no-zones (break way with no zone list read), and :too-short
-  (cane or bamboo in range but no stand of two or more: the job stays queued, a stand may grow).")
+  Conditions (one warn get-seeds.declined {:reason r} per reason): :no-source (a material with no known way),
+  :no-chest (chest way with no :chest and no known chest place), :plan-missing, :plan-broken, :no-chest-cell (the
+  :plan has no chest cell), :no-zones (break way with no zone list read), :too-short (cane or bamboo in range but no
+  stand of two or more: the job stays queued, a stand may grow) and :nothing-in-range (after one look around).
+  Quote: time by the way (about 8 breaks for a seed from grass), yields :count of the item.")
 
 (a/defargs args
   {:item {:doc "the planting material to gather" :spec a/item? :default "wheat_seeds"}
@@ -66,8 +70,14 @@
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::time-s {:default 600 :doc "Seconds a gathering may take: the walks, digs, drops and the chest." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
+(defn time-s [] (settings/get settings ::time-s))
+
+(def target [:item :chest :plan])
+
+(def defaults {:spend {:time ::time-s}})
 
 (def materials
   {"wheat_seeds" {:from :grass :sources ["short_grass" "tall_grass"]}
@@ -141,21 +151,48 @@
     (boolean (seq (look/seen-blocks (:primitives c) {:names [(:block (materials item))] :radius radius :max 8 :live? true})))))
 
 (defn decline!
-  "One warn per reason, then false for the check, noting the reason with ctx/wait."
+  "One warn per reason, then the reason as the condition's cause."
   [c reason]
   (ctx/warn-once! c [:declined reason] :get-seeds.declined
                   {:reason reason :text (str "get-seeds declined: " (name reason))})
-  (ctx/wait c reason))
+  reason)
 
-(defn check [c]
+(defn no-source [c]
+  (when (= :unknown (mode (:args c))) (decline! c :no-source)))
+
+(defn chest-trouble [c]
+  (when (= :chest (mode (:args c)))
+    (some->> (:trouble (chest-target c)) (decline! c))))
+
+(defn no-zones [c]
+  (when (and (not= :chest (mode (:args c))) (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
+    (decline! c :no-zones)))
+
+(defn nothing-in-range
+  "No source in range once the body has looked around: a stand too short to cut declines :too-short; the first look is
+  the round's own."
+  [c]
   (let [m (mode (:args c))]
-    (cond
-      (= :unknown m) (decline! c :no-source)
-      (= :chest m) (if-let [reason (:trouble (chest-target c))] (decline! c reason) true)
-      (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (decline! c :no-zones)
-      (or (:goal (ctx/mem c)) (seq (source-blocks c))) true
-      (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
-      :else (look/wait-unless-surveyed c {:reason :nothing-in-range :radius (:radius (:args c))}))))
+    (when-not (or (= :chest m) (:goal (ctx/mem c)) (seq (source-blocks c)))
+      (cond
+        (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
+        (look/surveyed? c) :nothing-in-range))))
+
+(def conditions [[:fn no-source] [:fn chest-trouble] [:fn no-zones] [:fn nothing-in-range]])
+
+(defn done?
+  "Progress only: the round that carries the goal ends the job."
+  [c]
+  (let [goal (or (:goal (ctx/mem c)) (+ (carried c) (:count (:args c))))]
+    {:done? false :units :items :done (max 0 (- (:count (:args c)) (- goal (carried c)))) :left (max 0 (- goal (carried c)))}))
+
+(defn quote-of [c]
+  (let [{:keys [item count] :as a} (:args c)
+        per (case (mode a) :grass 12 :stalk 4 3)
+        mean (+ 2 (* per count))]
+    {:uses {:time [(min 2 mean) mean (max mean (time-s))]}
+     :yields {:items {item [0 count count]}}
+     :done [0 count count]}))
 
 (defn none-why
   "Why no source block is left: none within :radius, and the nearest seen beyond it (the seen-blocks cap is 64)."
@@ -169,14 +206,15 @@
          (when far (str ", the nearest seen is " (Math/round (u/dist (u/self-pos c) (:pos far))) " away")))))
 
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
+  "Emit the outcome and end the job: :done for :count, else nothing-possible with the reason."
   [c reason]
   (let [{:keys [goal]} (ctx/mem c)
-        got (max 0 (- (carried c) (- goal (:count (:args c)))))]
-    (ctx/emit! c :get-seeds.done :info {:got got :reason reason
-                                        :text (str "get-seeds done: " (if (= :none reason) (none-why c) (name reason)) ", got " got)})
-    (ctx/result! c {:got got :reason reason})
-    :done))
+        got (max 0 (- (carried c) (- goal (:count (:args c)))))
+        data {:got got :reason reason}]
+    (ctx/emit! c :get-seeds.done :info (assoc data :text (str "get-seeds done: " (if (= :none reason) (none-why c) (name reason)) ", got " got)))
+    (if (= :count reason)
+      (ctx/end c :done nil data)
+      (ctx/end c :nothing-possible reason data))))
 
 (defn give-up!
   "Warn and end."
@@ -216,10 +254,23 @@
                   ok)))
             [] poss)))
 
+(defn ^:async walk!
+  "Walk to within (reach) of pos with a go-to child: :there, :partial (it waits on the world, or a leg that got nearer)
+  or :blocked."
+  [c pos]
+  (let [e (await (child/call-walk* c :walk {:pos pos :range (reach) :one-way :closed :warn false :retry false :zone-tolls true
+                                            :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (cond
+      (= :continue e) :partial
+      (not= :done (:kind e)) :blocked
+      (:arrived (:data e)) :there
+      (:leg (:data e)) :partial
+      :else :blocked)))
+
 (defn ^:async dig-one!
   "Walk to pos and dig it: :dug, :missing, :walking (the walk waits on the world: yield) or :skipped (a blocked walk, a cell the rules no longer permit, or a dig that is neither dug nor missing)."
   [c pos]
-  (let [walked (await (near/go-near! c pos (reach) {:zone-tolls true}))]
+  (let [walked (await (walk! c pos))]
     (cond
       (= :partial walked) :walking
       (= :blocked walked) (do (skip! c pos) :skipped)
@@ -252,21 +303,24 @@
   (let [{:keys [item]} (:args c)
         goal (:goal (ctx/mem c))
         chest (:chest (chest-target c))
-        r (await (ctx/call-child c :take 'jobs.storage.withdraw
-                                   (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items {item goal}})))
-        out (ctx/child-result c :take)]
+        e (await (ctx/call c :take 'jobs.storage.withdraw
+                           (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items {item goal}})))
+        out (:data e)]
     (cond
-      (= :continue r) :continue
-      (not= :done r) (give-up! c :withdraw-declined)
+      (= :continue e) :continue
       (>= (carried c) goal) (finish! c :count)
-      (:gave-up out) (do (ctx/emit! c :get-seeds.gave-up :warn (merge (select-keys out [:zones :claims])
-                                                                      {:reason (:reason out) :text (str "get-seeds: withdraw gave up: " (:reason out))}))
-                         (finish! c :short))
+      (and (= :condition-failed (:kind e)) (not (contains? out :gave-up))) (give-up! c :withdraw-declined)
+      (:gave-up out) (let [k (contract/cause-key e)
+                           ;; an old withdraw's refusal is a done result: the adapter keeps its :zones, not its :reason
+                           why (cond (not= :done k) k (or (seq (:zones out)) (seq (:claims out))) :refused :else :gave-up)]
+                       (ctx/emit! c :get-seeds.gave-up :warn (merge (select-keys out [:zones :claims])
+                                                                    {:reason why :text (str "get-seeds: withdraw gave up: " (name why))}))
+                       (finish! c :short))
       :else (finish! c :short))))
 
 (defn ^:async collect! [c]
   (let [{:keys [item collect-radius]} (:args c)
-        r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius collect-radius :filter [item]}))]
+        r (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius collect-radius :filter [item]}))]
     (when (not= :continue r)
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]

@@ -895,8 +895,7 @@
           (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"}) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
-          (is (= "oak_sapling" (block-at s 4 64 3)))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= "oak_sapling" (block-at s 4 64 3))))))))
 
 (deftest plant-sapling-without-fetch-waits-no-sapling-and-touches-no-chest
   (async done
@@ -909,16 +908,15 @@
           (is (empty? (transfers s)))
           (is (= [:no-sapling] (mapv :reason (events-of s :waiting)))))))))
 
-(deftest plant-sapling-with-nothing-to-fetch-waits-no-sapling-with-the-failure
+(deftest plant-sapling-with-nothing-to-fetch-ends-need-with-the-failure
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {}) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"}) {})
           (await (run-ticks s 20))
-          (is (= 1 (count (listed s))) "still queued")
-          (is (= 1 (count (events-of s :fetch.failed))))
-          (is (= :no-sapling (:reason (last (events-of s :waiting))))))))))
+          (is (empty? (listed s)) "the job ended")
+          (is (= :need (:reason (last (events-of s :stopped))))))))))
 
 (deftest plant-sapling-fetches-a-mangrove-propagule-for-the-species
   (async done
@@ -928,8 +926,7 @@
           (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "mangrove"}) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
-          (is (= "mangrove_propagule" (block-at s 4 64 3)))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= "mangrove_propagule" (block-at s 4 64 3))))))))
 
 (defn plan-ops
   "The step ops craft-plan makes for a pickaxe from carried logs, with mem as the job memory and no table in sight."
@@ -1072,8 +1069,7 @@
           (await (run-ticks s 120))
           (is (empty? (listed s)) "the job ended")
           (is (seq (calls s "dig")) "a leaf was broken")
-          (is (= "oak_sapling" (block-at s 4 64 3)))
-          (is (= 1 (count (events-of s :fetch.done))) "the fetch is told done once the sapling is carried"))))))
+          (is (= "oak_sapling" (block-at s 4 64 3))))))))
 
 (deftest obtain-sapling-waits-no-source-without-leaves-seen
   (async done

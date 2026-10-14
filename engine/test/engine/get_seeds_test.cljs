@@ -9,8 +9,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.world-files :as ew]
-            [jobs.lib.storage :as storage]))
+            [jobs.lib.world-files :as ew]))
 
 (defn setup-seeing
   "h/setup over a body that has seen every block in range."
@@ -45,9 +44,26 @@
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn job-mem [{:keys [eng]}] (core/job-memory eng "j1"))
+(defn ending-of
+  "{:kind :completed|:stopped :reason cause} of the job's end event."
+  [{:keys [seen]}]
+  (select-keys (first (filter #(#{:completed :stopped} (:kind %)) @seen)) [:kind :reason]))
 (defn dig-count [{:keys [p]}] (count (h/calls p "dig")))
 
 ;; ------------------------------------------------------------------ the job
+
+(deftest the-end-is-done-only-with-the-goal-else-nothing-possible-with-the-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args world expected] [[{:count 2} {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops} {:kind :completed :reason :count}]
+                                       [{} {:blocks {"2,64,0" "dirt"}} {:kind :stopped :reason :none}]
+                                       [{:dry-digs 6} {:blocks (patch "short_grass" (range 2 12) [0]) :drops {"short_grass" nil}} {:kind :stopped :reason :dry}]
+                                       [{:count 64} {:blocks (patch "short_grass" [2 3 4] [0]) :drops seed-drops} {:kind :stopped :reason :none}]
+                                       [{:count 2 :chest {:x 10 :y 64 :z 0}} {:containers {"10,64,0" []}} {:kind :stopped :reason :short}]
+                                       [{:count 2 :chest {:x 10 :y 64 :z 0}} {:containers {"10,64,0" [{:name "wheat_seeds" :count 10}]}} {:kind :completed :reason :count}]]]
+          (let [s (await (scenario args world 40))]
+            (is (= expected (ending-of s)) (pr-str args))))))))
 
 (deftest breaks-grass-until-the-seeds-are-carried
   (async done
@@ -245,15 +261,20 @@
           (is (= :count (:reason (done-event s))))
           (is (finished? s)))))))
 
+(defn setup-with-jobs
+  "setup-seeing with the registry's jobs overridden by stubs."
+  [world stubs]
+  (with-redefs [registry/jobs (merge registry/jobs stubs)]
+    (setup-seeing world)))
+
 (deftest a-walk-waiting-on-the-world-is-a-yield-not-a-skipped-cell
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng] :as s} (setup-seeing {:blocks {"6,64,0" "short_grass"} :drops seed-drops})]
-          (await (tu/with-near-stub (fn ^:async f [_ _ _ _] :partial)
-            (fn ^:async b []
-              (core/submit! eng (spec {:count 1}) {})
-              (await (run-ticks s 6 700)))))
+        (let [{:keys [eng] :as s} (setup-with-jobs {:blocks {"6,64,0" "short_grass"} :drops seed-drops}
+                                                    {'jobs.movement.go-to {:check (constantly true) :round (fn [_] :continue)}})]
+          (core/submit! eng (spec {:count 1}) {})
+          (await (run-ticks s 6 700))
           (is (zero? (dig-count s)))
           (is (not (finished? s)) "the job waits on the walk, it does not end")
           (is (zero? (:barren (job-mem s) 0)) "no barren round counted")
@@ -565,12 +586,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [calls (atom 0)
-              real storage/chest-of
-              s (setup-seeing {})]
-          (with-redefs [storage/chest-of (fn [view args] (when (= 1 (swap! calls inc)) (real view args)))]
-            (core/submit! (:eng s) (spec {:count 2 :chest {:x 10 :y 64 :z 0}}) {})
-            (await (run-ticks s 30 700)))
+        (let [s (setup-with-jobs {} {'jobs.storage.withdraw {:check (constantly false) :round (fn [_] :done)}})]
+          (core/submit! (:eng s) (spec {:count 2 :chest {:x 10 :y 64 :z 0}}) {})
+          (await (run-ticks s 30 700))
           (is (= :withdraw-declined (:reason (done-event s))))
           (is (= [:withdraw-declined] (mapv :reason (events-of s :get-seeds.gave-up))))
           (is (finished? s)))))))
