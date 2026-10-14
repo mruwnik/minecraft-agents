@@ -16,7 +16,8 @@
 (a/defargs settings
   {::hostile-radius {:default 8 :doc "Blocks within which a known hostile mob that can reach the body counts as a danger (the hostile-near trigger and go-to's cut check read it)." :spec (a/int-in 0 nil)}
    ::ranged-radius {:default 16 :doc "Blocks within which a known ranged mob with a line of fire counts as a danger." :spec (a/int-in 0 nil)}
-   ::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :spec (a/int-in 1 nil)}})
+   ::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :spec (a/int-in 1 nil)}
+   ::close-hearing {:default 2 :doc "Blocks within which a heard mob is loud enough to be beside the body (heard-close?)." :spec (a/num-in 0 nil)}})
 
 (defn seen-mob?
   "Whether the body has seen or heard hostile e: the seen or heard flag of a known-hostiles entry, else (raw entity)
@@ -72,6 +73,7 @@
     (u/dist (u/pos-of (.-pos (.self p))) (mob-pos p e))))
 
 (defn known-scan [] (settings/get settings ::known-scan))
+(defn close-hearing [] (settings/get settings ::close-hearing))
 (defn hostile-radius [] (settings/get settings ::hostile-radius))
 (defn ranged-radius [] (settings/get settings ::ranged-radius))
 
@@ -112,6 +114,25 @@
   [e]
   (and (combat/enderman? e) (false? (.-angry e))))
 
+(defn heard-close?
+  "Whether hostile e is heard only and within close-hearing of the body: loud enough that a player knows it is beside them."
+  [p e]
+  (and (true? (.-heard e)) (not (seen-only? e))
+       (<= (u/dist (u/pos-of (.-pos (.self p))) (u/pos-of (.-pos e))) (close-hearing))))
+
+(defn beside-toward?
+  "Whether a mob could stand beside the body's cell [x y z] toward compass direction d, within 45 degrees of it: a
+  standable cell one down, level or one up in one of those three neighbour columns. From there it hits the body, even
+  across a corner it cannot walk round."
+  [kind-at [x y z] d]
+  (let [i (.indexOf obs/directions d)]
+    (boolean (some (fn [j]
+                     (let [a (* (/ js/Math.PI 4) j)
+                           nx (+ x (js/Math.round (js/Math.sin a)))
+                           nz (- z (js/Math.round (js/Math.cos a)))]
+                       (some #(reach/standable? kind-at nx (+ y %) nz) [-1 0 1])))
+                   [(dec i) i (inc i)]))))
+
 (def swell-range "Blocks within which a creeper swells and its blast reaches." 7)
 
 (defn danger-in?
@@ -119,6 +140,7 @@
   :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own.
   :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
   :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land.
+  A melee mob heard close (heard-close?) is one when it could stand beside the body that way (beside-toward?), else by its rough spot.
   A fusing creeper (hissing, seen or heard) within swell-range is always one; beyond it the usual tests apply."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
   ([p kind-at pr e {:keys [sight? arrow-at ignore-heard? way?] :or {sight? true way? true}}]
@@ -136,8 +158,11 @@
      (and (or (seen-mob? e) (not sight?))
           (or (not way?)
               (let [mob (reach/cell-of (mob-pos p e))
-                    body (reach/cell-of (u/pos-of (.-pos (.self p))))]
-                (if pr (proofs/proved-way? kind-at pr mob body) (reach/way? kind-at mob body))))))))
+                    from (u/pos-of (.-pos (.self p)))
+                    body (reach/cell-of from)]
+                (or (and (heard-close? p e)
+                         (beside-toward? kind-at body (:direction (obs/rough-hearing from (u/pos-of (.-pos e))))))
+                    (if pr (proofs/proved-way? kind-at pr mob body) (reach/way? kind-at mob body)))))))))
 
 (defn danger?
   "Whether hostile e (JS entity) is a real danger to the body.

@@ -254,3 +254,25 @@
 
 (deftest a-seen-ranged-mob-in-a-glass-box-is-no-danger
   (is (= [] (danger-ids glass-box (assoc boxed-skel :seen true :heard false)))))
+
+;; ---------------------------------------------------------------- a mob across a corner can hit the body
+
+(def corner-pocket
+  "Rock north-west of the body (x and z -6..-1, feet and head) but for the pocket cell (-1 64 -1): a zombie there cannot
+  walk out, but its two cells next to the body are rock, so it hits the body across the corner."
+  (into {} (for [x (range -6 1) z (range -6 1) y [64 65]
+                 :when (and (or (neg? x) (neg? z)) (not (and (= x -1) (= z -1))))]
+             [(str x "," y "," z) "stone"])))
+
+(def corner-zed {:id 7 :name "zombie" :kind "hostile" :seen true :heard false :pos {:x -0.6 :y 64 :z -0.6}})
+
+(deftest a-zombie-seen-across-a-corner-is-a-danger
+  (is (= [7] (danger-ids corner-pocket corner-zed))))
+
+(deftest a-zombie-heard-across-a-corner-is-a-danger
+  (is (= [7] (danger-ids corner-pocket (assoc corner-zed :seen false :heard true)))
+      "heard north-west and near: its rough spot is rock, but it hits the body"))
+
+(deftest a-zombie-heard-just-outside-a-sealed-body-is-no-danger
+  (is (= [] (danger-ids walls (assoc corner-zed :pos {:x 2.4 :y 64 :z 0.5} :seen false :heard true)))
+      "heard close and east, but the cells beside the body that way are rock"))
