@@ -42,7 +42,7 @@
 (defn limits
   "The fetch limits of the call; :how given as a list (a JSON array) is read as a set."
   [c]
-  (cond-> (fetch/merge-limits 'jobs.items.obtain nil (fetch/body-limits (ctx/view c)) (:args c))
+  (cond-> (fetch/merge-limits nil (:args c))
     (:how (:args c)) (update :how set)))
 
 (defn holds [items names]

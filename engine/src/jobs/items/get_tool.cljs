@@ -56,7 +56,7 @@
 
 (defn obtain-args [c names]
   (let [a (:args c)
-        o (fetch/merge-limits 'jobs.items.get-tool nil (fetch/body-limits (ctx/view c)) a)]
+        o (fetch/merge-limits nil a)]
     {:any-of names :count 1 :depth (max 0 (dec (:depth o))) :how (:how o) :minutes (:minutes o)
      :fail-minutes (:fail-minutes o) :chain (vec (:chain a)) :explore (:explore a)}))
 

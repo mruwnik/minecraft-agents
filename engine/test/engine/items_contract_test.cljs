@@ -37,7 +37,7 @@
     (await (tu/run-until-empty eng 40))
     @out))
 
-(defn kc [e] (select-keys e [:kind :cause]))
+(defn kc [e] {:kind (:kind e) :cause (contract/cause-key e)})
 (defn stacks [& names] {:inventory (mapv (fn [n] {:name n :count 3}) names)})
 (defn cow [id x] {:id id :uuid (str "u" id) :name "cow" :kind "passive" :pos {:x x :y 64 :z 0}})
 
@@ -53,7 +53,7 @@
         (is (= {:kind :condition-failed :cause :unknown-item}
                (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxx"})))))
         (is (= {:kind :condition-failed :cause :no-item}
-               (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxe" :fetch false})))))))))
+               (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxe" :hand "main" :fetch false})))))))))
 
 (deftest interact-ends-by-what-the-click-did
   (async done
@@ -73,7 +73,7 @@
         (is (= {:kind :condition-failed :cause :no-item}
                (kc (await (ending-of {:entities [{:id 5 :name "Steve" :kind "player" :pos {:x 3 :y 64 :z 0}}]}
                                      'jobs.items.give {:player "Steve" :item "bread"})))))
-        (is (= {:kind :condition-failed :cause {:reason :bad-args :why "needs a player name and an item name"}}
+        (is (= {:kind :condition-failed :cause :bad-args}
                (kc (await (ending-of {} 'jobs.items.give {:item "bread"})))))))))
 
 (deftest enchant-ends-with-the-fact-that-stopped-it
@@ -81,6 +81,35 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:kind :condition-failed :cause :no-table}
-               (kc (await (ending-of (stacks "iron_sword") 'jobs.items.enchant {:item "iron_sword"})))))
-        (let [e (await (ending-of (stacks "iron_sword") 'jobs.items.enchant {:item "iron_sword"}))]
+               (kc (await (ending-of (assoc (stacks "iron_sword" "lapis_lazuli") :self {:experience {:level 30}}) 'jobs.items.enchant {:item "iron_sword"})))))
+        (let [e (await (ending-of (assoc (stacks "iron_sword" "lapis_lazuli") :self {:experience {:level 30}}) 'jobs.items.enchant {:item "iron_sword"}))]
           (is (= {:enchanted false :item "iron_sword" :levels-spent 0 :lapis-spent 0} (:data e))))))))
+
+(defn ^:async waits?
+  "Whether job sym with args, submitted as a root job in world, is still listed (waiting on a condition) after 12 ticks."
+  [world sym args]
+  (let [eng (core/create {:primitives (tu/seeing-all (tu/fake-on-floor world)) :jobs registry/jobs :dir (tu/tmp-dir)})]
+    (core/submit! eng (list sym args) {})
+    (await (tu/run-until-empty eng 12))
+    (boolean (seq (:list (core/state eng))))))
+
+(deftest item-facts-are-conditions-so-a-root-job-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [xp {:self {:experience {:level 30}}}]
+          (is (true? (await (waits? (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxe" :fetch false}))))
+          (is (true? (await (waits? (merge xp (stacks "lapis_lazuli")) 'jobs.items.enchant {:item "iron_sword" :fetch false}))))
+          (is (true? (await (waits? (merge xp (stacks "iron_sword")) 'jobs.items.enchant {:item "iron_sword" :fetch false}))))
+          (is (true? (await (waits? (stacks "iron_sword" "lapis_lazuli") 'jobs.items.enchant {:item "iron_sword"}))) "no level at all")
+          (is (true? (await (waits? {} 'jobs.items.give {:player "Steve" :item "bread"})))))))))
+
+(deftest enchant-fetches-the-lapis-and-the-item-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (assoc (stacks "iron_sword") :self {:experience {:level 30}})]
+          (is (= :need (:cause (kc (await (ending-of w 'jobs.items.enchant {:item "iron_sword"}))))) "no lapis: a fetch for it fails as :need")
+          (is (= :need (:cause (kc (await (ending-of (assoc w :inventory [{:name "lapis_lazuli" :count 3}]) 'jobs.items.enchant {:item "iron_sword"}))))) "no item")
+          (is (= :no-lapis (:cause (kc (await (ending-of w 'jobs.items.enchant {:item "iron_sword" :fetch false}))))))
+          (is (= :no-item (:cause (kc (await (ending-of (assoc w :inventory [{:name "lapis_lazuli" :count 3}]) 'jobs.items.enchant {:item "iron_sword" :fetch false})))))))))))

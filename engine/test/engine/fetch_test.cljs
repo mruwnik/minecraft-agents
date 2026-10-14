@@ -90,23 +90,19 @@
   (is (:error (fetch/parse-arg {:depth -1})))
   (is (:error (fetch/parse-arg {:what #{:tools}}))))
 
-(deftest limits-precedence-call-over-body-job-over-body-all-over-job-default-over-built-in
-  (let [body {:all {:depth 5 :minutes 4} :jobs {'jobs.blocks.dig {:depth 3}}}]
-    (is (= 7 (:depth (fetch/merge-limits nil nil nil nil))))
-    (is (= 10 (:minutes (fetch/merge-limits nil nil nil nil))))
-    (is (= 6 (:depth (fetch/merge-limits nil {:depth 6} nil nil))) "job code default over the built-in")
-    (is (= 5 (:depth (fetch/merge-limits 'jobs.blocks.place {:depth 6} body nil))) "body default for all jobs over code")
-    (is (= 3 (:depth (fetch/merge-limits 'jobs.blocks.dig {:depth 6} body nil))) "body default for this job over all")
-    (is (= 4 (:minutes (fetch/merge-limits 'jobs.blocks.dig nil body nil))))
-    (is (= 1 (:depth (fetch/merge-limits 'jobs.blocks.dig {:depth 6} body {:depth 1}))) "the call wins")))
+(deftest limits-precedence-call-over-job-default-over-built-in
+  (is (= 7 (:depth (fetch/merge-limits nil nil))))
+  (is (= 10 (:minutes (fetch/merge-limits nil nil))))
+  (is (= 6 (:depth (fetch/merge-limits {:depth 6} nil))) "job code default over the built-in")
+  (is (= 1 (:depth (fetch/merge-limits {:depth 6} {:depth 1}))) "the call wins"))
 
 (deftest a-need-above-64-is-fetched-whole
-  (let [o (fetch/merge-limits nil nil nil nil)]
+  (let [o (fetch/merge-limits nil nil)]
     (is (= {:item "cobblestone" :count 100 :explore false} (:args (fetch/plan-for {:reason :need :item "cobblestone" :count 100} o))) "no 64 cap on one fetch")
     (is (= {:any-of ["dirt"] :count 100 :explore false} (:args (fetch/plan-for {:reason :need :any-of ["dirt"] :count 100} o))))))
 
 (deftest a-wait-maps-to-a-fetch-only-for-wanted-kinds
-  (let [o (fetch/merge-limits nil nil nil nil)]
+  (let [o (fetch/merge-limits nil nil)]
     (is (= 'jobs.items.get-tool (:job (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
     (is (= {:block "stone" :explore false} (:args (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
     (is (= {:item "oak_planks" :count 1 :explore false} (:args (fetch/plan-for {:reason :need :item "oak_planks" :pos {}} o))))
@@ -1316,9 +1312,9 @@
           (is (= 1 (get (inv s) "stone_pickaxe")) (pr-str (inv s) (last (events-of s :stopped)))))))))
 
 (deftest explore-is-a-fetch-limit-passed-to-the-fetch-jobs
-  (let [o (assoc (fetch/merge-limits nil nil nil {:explore true}) :explore true)]
-    (is (true? (:explore (fetch/merge-limits nil nil nil {:explore true}))))
-    (is (false? (:explore (fetch/merge-limits nil {:explore true} nil {:explore false}))) "the call wins")
+  (let [o (assoc (fetch/merge-limits nil {:explore true}) :explore true)]
+    (is (true? (:explore (fetch/merge-limits nil {:explore true}))))
+    (is (false? (:explore (fetch/merge-limits {:explore true} {:explore false}))) "the call wins")
     (is (= {:item "oak_log" :count 2 :explore true} (:args (fetch/plan-for {:reason :need :item "oak_log" :count 2} o))))
     (is (= {:block "stone" :explore true} (:args (fetch/plan-for {:reason :no-tool :block "stone"} o))))
     (is (nil? (fetch/limit-error {:explore {:max-distance 10}})))

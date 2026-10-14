@@ -122,9 +122,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (give {:entities [(steve 10)]} {:player "Steve" :item "bread"} 5 true))]
-          (is (= {:given 0 :reason :no-item} @out))
-          (is (empty? (calls p "toss")))
-          (is (has-event? s :give.no-item)))))))
+          (is (= :not-done @out) "waits on its :no-item condition")
+          (is (empty? (calls p "toss"))))))))
 
 (deftest a-player-who-is-never-there-is-gone-after-two-seconds
   (async done

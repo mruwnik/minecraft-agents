@@ -11,9 +11,9 @@
 (def doc
   "Hold a carried item in the main hand (:hand \"main\", default) or the off-hand (:hand \"off\"). Needs the item
   carried; a missing one is fetched (jobs.lib.need) unless :fetch is false. done? holds when it is held there.
-  Ends :done {:item :hand}. Condition-failed: :bad-args (no :item), :unknown-item (no such item for the body's version),
-  :no-item (not carried, :fetch false; both warn equip.refused), a failed fetch as {:reason :need} with its ending as the
-  :because. Nothing-possible :failed (the server did not take it, data :equip the primitive's status; warn
+  Ends :done {:item :hand}. Conditions (a listed root job waits): :bad-args (no :item), :unknown-item (no such item for
+  the body's version), :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
+  the :because. Nothing-possible :failed (the server did not take it, data :equip the primitive's status; warn
   equip.refused). Quote: A, a fixed time.")
 
 (a/defargs args
@@ -43,7 +43,22 @@
   (when (nil? (:item (:args c)))
     {:reason :bad-args :why "equip needs :item"}))
 
-(def conditions [[:fn problem]])
+(defn unknown
+  "The cause :unknown-item when the item is not in the body's version."
+  [c]
+  (let [item (:item (:args c))]
+    (when (and item (not (known-item? (:primitives c) item)))
+      {:reason :unknown-item :item item})))
+
+(defn lacking
+  "The cause :no-item when the item is neither carried nor held and nothing fetches it."
+  [c]
+  (let [p (:primitives c)
+        {:keys [item hand fetch]} (:args c)]
+    (when (and item (not (carried? p item)) (not= item (held-in p hand)) (not (fetch/parse-arg fetch)))
+      {:reason :no-item :item item})))
+
+(def conditions [[:fn problem] [:fn unknown] [:fn lacking]])
 
 (defn done?
   "The item is in the hand asked for."
@@ -68,9 +83,8 @@
   (let [p (:primitives c)
         {:keys [item hand]} (:args c)
         opts (fetch-opts c)
-        e (when (and (known-item? p item) (not (carried? p item)) opts) (await (need/item! c item 1 opts)))]
+        e (when (and (not (carried? p item)) opts) (await (need/item! c item 1 opts)))]
     (cond
-      (not (known-item? p item)) (refuse! c :condition-failed :unknown-item (str "no such item " item) {:item item})
       (= :continue e) :continue
       (and e (not= :done (:kind e))) (ctx/end c (:kind e) (:cause e) {:item item})
       (not (carried? p item)) (refuse! c :condition-failed :no-item (str "cannot hold " item ": not carried") {:item item})

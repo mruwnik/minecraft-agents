@@ -3,6 +3,9 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
+            [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
@@ -10,8 +13,8 @@
 
 (def doc
   "Enchant one :item at an enchanting table. Walks to the table (:table, else the nearest within :radius), reads
-  the three offers with the item lying in the table, chooses one and enchants. Needs lapis and levels; it does not
-  fetch them. Quote: A, a walk and a visit.
+  the three offers with the item lying in the table, chooses one and enchants. Needs the item, lapis and levels; a missing item or
+  lapis is fetched (jobs.lib.need) unless :fetch is false. Quote: A, a walk and a visit.
   An offer costs its slot number in lapis, and in levels at least its level cost and its slot number. The
   choice: :slot 1-3 takes that offer alone. Otherwise :choice \"best\" takes the dearest offer the body can pay and
   \"cheapest\" the lowest level cost it can pay (the lower slot on a tie). Offers dearer than :max-level-cost
@@ -20,8 +23,10 @@
   :level}] :xp-level :hint {:enchant :level}|nil}, measured from what is carried and the body's level after the
   window closed. Info enchant.done.
   A give-up warns enchant.gave-up and ends with {:enchanted false :item :levels-spent n :lapis-spent n}.
-  Condition-failed: :bad-args (condition), :no-table, :not-a-table, :no-item, :already-enchanted (every copy carried is
-  enchanted), :not-enchantable, :no-lapis, :too-few-levels, :no-offer (the :slot has none), :no-offer-within-cost,
+  Conditions (a listed root job waits): :bad-args, :no-item and :no-lapis (not carried, :fetch false), :too-few-levels
+  (no level at all). A failed fetch ends as {:reason :need} with its ending as the :because. Condition-failed in the
+  round: :no-table, :not-a-table, :no-item, :already-enchanted (every copy carried is enchanted), :not-enchantable,
+  :no-lapis, :too-few-levels (the offers cost more), :no-offer (the :slot has none), :no-offer-within-cost,
   :inventory-full. Nothing-possible: :enchant-failed (an answer not understood after the call), :window (did not open,
   three times), :window-stalled, :not-confirmed (the item came back unenchanted), :offer-changed (three times),
   :unreachable, :timeout.
@@ -36,7 +41,8 @@
    :radius {:doc "how far to look for a table" :spec (a/num-in 0 nil) :default 16}
    :max-level-cost {:doc "highest level cost of an offer to take; nil for no limit" :spec (a/int-in 0 nil) :default nil}
    :slot {:doc "take exactly offer 1, 2 or 3; nil to choose by :choice" :spec #{1 2 3} :default nil}
-   :choice {:doc "\"best\" (dearest affordable offer) or \"cheapest\" (lowest level cost affordable)" :spec #{"best" "cheapest"} :default "best"}})
+   :choice {:doc "\"best\" (dearest affordable offer) or \"cheapest\" (lowest level cost affordable)" :spec #{"best" "cheapest"} :default "best"}
+   :fetch {:doc "get a missing item or lapis (jobs.lib.need): true, a set of kinds or a map of limits; false stops with :no-item / :no-lapis" :spec fetch/option? :default true}})
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
@@ -53,7 +59,37 @@
     (when-not (and (string? i) (not (str/blank? i)))
       {:reason :bad-args :why "no item name"})))
 
-(def conditions [[:fn problem]])
+(def lapis "lapis_lazuli")
+
+(defn lapis-wanted
+  "How much lapis the visit may spend: the slot asked for, else the dearest offer."
+  [c]
+  (or (:slot (:args c)) 3))
+
+(defn under-way?
+  "An attempt was written before the call: the facts changed with it, the round reports what it finds."
+  [c]
+  (or (:attempt (ctx/mem c)) (:enchanted (ctx/mem c))))
+
+(defn carries [c name] (storage/carried (u/inventory (:primitives c)) name))
+
+(defn lacking
+  "The cause :no-item or :no-lapis for what is not carried when nothing fetches it."
+  [c]
+  (let [{:keys [item fetch]} (:args c)]
+    (when-not (or (under-way? c) (fetch/parse-arg fetch) (not (string? item)))
+      (cond
+        (zero? (carries c item)) {:reason :no-item :item item}
+        (zero? (carries c lapis)) {:reason :no-lapis}))))
+
+(defn unaffordable
+  "The cause :too-few-levels when the body has no level: the cheapest offer costs one."
+  [c]
+  (when-not (under-way? c)
+    (when (zero? (or (some-> (.self (:primitives c)) .-experience .-level) 0))
+      {:reason :too-few-levels :need 1})))
+
+(def conditions [[:fn problem] [:fn lacking] [:fn unaffordable]])
 
 (defn done?
   "Counts only (the round ends the call with its data)."
@@ -216,7 +252,23 @@
           (not (or (u/within? (u/self-pos c) pos (reach)) (:arrived (:data r)))) (fail-up! c "unreachable")
           :else (await (consider! c pos)))))))
 
+(defn ^:async supply!
+  "Fetch the item, then the lapis, when one is not carried and :fetch allows: nil when both are, :continue while a
+  fetch waits, else the fetch's ending."
+  [c]
+  (let [{:keys [item]} (:args c)
+        opts (fetch/opts c 'jobs.items.enchant)
+        lacks (when-not (under-way? c)
+                (cond (zero? (carries c item)) [item 1]
+                      (zero? (carries c lapis)) [lapis (lapis-wanted c)]))
+        e (when (and lacks opts) (await (need/item! c (first lacks) (second lacks) opts)))]
+    (when-not (or (nil? e) (= :done (:kind e))) e)))
+
 (defn ^:async round
   "The whole enchant in one call: step! again until it is done or stopped."
   [c]
-  (await (pace/steps! c (fn ^:async enchant-step [] (await (step! c))))))
+  (let [e (await (supply! c))]
+    (cond
+      (= :continue e) :continue
+      e (finish! c (:kind e) (:cause e) {})
+      :else (await (pace/steps! c (fn ^:async enchant-step [] (await (step! c))))))))

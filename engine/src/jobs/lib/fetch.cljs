@@ -11,7 +11,7 @@
   The :fetch arg: false/nil (off), true (all kinds, all sources), a set of kinds (#{:tool :item}), or a map of limits
   {:what :how :depth :minutes :fail-minutes :explore}; :explore (default false: reflexes must not walk off) lets the
   fetch jobs walk and look for a raw need not seen. Limits merge, later wins: built-in, the job's code default, the body's
-  memory :fetch/limits (all jobs, then this job), the call's own arg.
+  the call's own arg.
 
   Also body memory :fetch/stock: what a chest held when last looked into or moved from (withdraw, deposit, kit,
   obtain), so obtain goes first to a chest known to hold the item and skips one known not to."
@@ -76,18 +76,11 @@
   (a/pred "true, false, a set of kinds (:tool :item) or a map of limits {:what :how :depth :minutes :fail-minutes :explore}"
           #(nil? (:error (parse-arg %)))))
 
-(def limits-kind :fetch/limits)
-
-(defn body-limits
-  "The body's defaults {:all {..} :jobs {job-sym {..}}} from memory view, {} when none were set."
-  [view]
-  (or (:data (peek (mem/entries view limits-kind))) {}))
-
 (defn merge-limits
-  "Limits for job: built-in, then job-default, then the body's :all and the body's entry for job, then call."
-  [job job-default body call]
+  "Limits: built-in, then job-default, then call."
+  [job-default call]
   (let [clean #(into {} (remove (comp nil? val)) (select-keys % limit-keys))]
-    (merge built-in (clean job-default) (clean (:all body)) (clean (get-in body [:jobs job])) (clean call))))
+    (merge built-in (clean job-default) (clean call))))
 
 (defn opts
   "The fetch limits of the job running in c (job: its namespace symbol), nil when :fetch is off."
@@ -96,7 +89,7 @@
    (let [arg (parse-arg (:fetch (:args c)))]
      (cond
        (nil? arg) nil
-       :else (merge-limits job job-default (body-limits (ctx/view c)) arg)))))
+       :else (merge-limits job-default arg)))))
 
 ;; ------------------------------------------------------------------ waits to fetch jobs
 

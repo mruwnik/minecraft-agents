@@ -751,11 +751,10 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 
 **Fetching, contract jobs** (`jobs.lib.need`): `item!`, `blocks!`, `tool!` call `items.obtain` / `items.get-tool` through `ctx/call` and resolve to `:continue` or an ending: `:done` as given, else the same kind with cause `{:reason :need|:tool|:free-slots :why ..}` and the fetch ending as `:because`. No failure booking: a duplicate call is the engine's refusal. The same want asked again after a `:done` fetch, nothing of it used up, ends `:why :not-solved`; `{:return? true}` keeps the start cell and `return!` (first in each round) walks back to it after a done fetch. Both sit in the caller's memory.
 
-**Fetching what a job lacks** (`jobs.lib.fetch`): `blocks.dig` and `blocks.place` take `:fetch`; `access.bridge`, `access.stair`, `access.tunnel`, `access.leave-tunnel` and `items.craft` and `items.equip` (contract jobs) take it through `jobs.lib.need`
+**Fetching what a job lacks** (`jobs.lib.fetch`): `blocks.dig` and `blocks.place` take `:fetch`; `access.bridge`, `access.stair`, `access.tunnel`, `access.leave-tunnel`, `items.craft`, `items.equip` and `items.enchant` (contract jobs) take it through `jobs.lib.need`
 (default true; `false` waits or stops with the reason). Go-to's escalation children, clear-path's digs, the stairs and places
 of leave-tunnel, tunnel, dig-in and breathe, obtain's table place passes `:fetch false`, its gather mines `:fetch {:what #{:tool} :how #{:chest :craft}}` (no mine inside a mine's fetch); `gather.mine`'s stair passes true. `true` allows every kind (`:tool :item`) and source (`:chest :craft :gather`); a
-set narrows the kinds; a map gives limits `{:what :how :depth :minutes :fail-minutes}` (built-in, the job's default, the
-body's memory `:fetch/limits`, then the call's arg; later wins). A fetchable wait (`:no-tool`, `:need`) then runs
+set narrows the kinds; a map gives limits `{:what :how :depth :minutes :fail-minutes}` (built-in, the job's default, then the call's arg; later wins). A fetchable wait (`:no-tool`, `:need`) then runs
 `items.get-tool` or `items.obtain` as child `:fetch` (info `fetch.started`, `fetch.done`). A failed fetch (also a child that ends done while the same wait remains: `:not-solved`) writes
 `:fetch/failed` (warn `fetch.failed`) and the job waits for `:fail-minutes` (or until it carries more logs, coal or wool than at the failure) before trying again. Only the job given `:fetch`
 fetches; its children and go-to never do. Sources are carried items, seen chests, crafting and gathering (a sapling by breaking seen leaves). A fetch child that waits on the world makes the job yield `:continue` at once (the fetch resumes next round).

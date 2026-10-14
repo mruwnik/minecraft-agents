@@ -11,9 +11,9 @@
 (def doc
   "Walk to the player :player, toss them :count of :item (everything carried when nil) and confirm the drop was
   taken. Needs the item carried and the player in sight. Quote: A, walks, the toss and the wait.
-  Ends before the toss as a failed condition with data {:given 0}:
-  - :bad-args, a player and an item name are needed (condition).
-  - :no-item, nothing is carried (warn give.no-item).
+  Conditions (a listed root job waits): :bad-args (a player and an item name are needed) and :no-item (nothing is
+  carried before the toss; warn give.no-item when it turns up in the round). Ends before the toss as a failed
+  condition with data {:given 0}:
   - :gone, the player is not seen within :radius for 2 s (info give.gone).
   Nothing-possible, {:given 0}:
   - :unreachable, three walks in a row are blocked (warn give.unreachable).
@@ -66,7 +66,14 @@
     (when-not (and (string? player) (string? item))
       {:reason :bad-args :why "needs a player name and an item name"})))
 
-(def conditions [[:fn problem]])
+(defn lacking
+  "The cause :no-item when nothing of the item is carried and nothing was tossed yet."
+  [c]
+  (let [{:keys [item]} (:args c)]
+    (when (and (string? item) (nil? (:tossed (ctx/mem c))) (zero? (storage/carried (u/inventory (:primitives c)) item)))
+      {:reason :no-item :item item})))
+
+(def conditions [[:fn problem] [:fn lacking]])
 
 (defn given-so-far
   "Items given and not taken back so far."

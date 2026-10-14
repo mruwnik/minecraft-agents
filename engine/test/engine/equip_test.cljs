@@ -67,22 +67,21 @@
         (let [{:keys [out]} (await (equip (assoc (stacks "iron_pickaxe") :self {:held "iron_pickaxe"}) {:item "iron_pickaxe"}))]
           (is (= {:status :done} @out)))))))
 
-(deftest a-missing-item-is-refused-with-a-reason
+(deftest a-missing-item-waits-as-a-failed-condition
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out seen]} (await (equip (stacks "dirt") {:item "iron_pickaxe" :fetch false}))]
-          (is (= {:status :stopped :reason :no-item :item "iron_pickaxe"} (select-keys @out [:status :reason :item])))
+          (is (= :not-done @out))
           (is (nil? (held p)))
-          (is (some #(re-find #"equip.refused" %) (tu/kinds seen))))))))
+          (is (some #{"job.waiting"} (tu/kinds seen))))))))
 
-(deftest an-unknown-item-name-is-refused
+(deftest an-unknown-item-name-waits-as-a-failed-condition
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (equip (stacks "dirt") {:item "iron_pickaxx"}))]
-          (is (= :unknown-item (:reason @out)))
-          (is (= :stopped (:status @out))))))))
+          (is (= :not-done @out)))))))
 
 (deftest no-item-given-is-refused-with-a-clear-text
   (async done
@@ -117,7 +116,7 @@
           (is (empty? (ft/events-of s :equip.done)))
           (is (empty? (:list (core/state (:eng s)))) "the call ended, it does not wait for the item"))))))
 
-(deftest fetch-false-opts-out-and-the-round-stops-no-item-without-touching-the-chest
+(deftest fetch-false-opts-out-and-the-job-waits-without-touching-the-chest
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -128,5 +127,5 @@
           (is (empty? (ft/events-of s :fetch.started)))
           (is (empty? (ft/inspects s)))
           (is (seq (ft/chest-items s [-2 64 3])))
-          (is (= [:no-item] (mapv :reason (ft/events-of s :equip.refused))))
-          (is (empty? (ft/listed s))))))))
+          (is (empty? (ft/events-of s :equip.done)))
+          (is (seq (ft/listed s)) "the job waits on its condition"))))))
