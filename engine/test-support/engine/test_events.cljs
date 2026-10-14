@@ -1,5 +1,5 @@
 (ns engine.test-events
-  "The live-tests @@test protocol: pure line builders, and install! (cljs.test report hooks that print plan, one result per test var, progress per namespace). Shared by the engine (engine.timing-test) and dashboard test builds; install! does nothing unless TEST_EVENTS=1."
+  "The live-tests @@test protocol: pure line builders, and install! (cljs.test report hooks that print plan, one result per test var, progress per namespace). Shared by the engine (engine.timing-test) and dashboard test builds; install! prints @@test lines only when TEST_EVENTS=1, but always fails a run that exits before its end."
   (:require [cljs.test :as t]))
 
 (def enabled? (= "1" (some-> js/process .-env (aget "TEST_EVENTS"))))
@@ -32,7 +32,27 @@
         prior (get-method t/report k)]
     (defmethod t/report k [m] (f m) (when prior (prior m)))))
 
+(def last-started (atom nil))
+
+(defn incomplete-exit!
+  "Fails the run in proc and returns why: the test last started never finished."
+  [proc last]
+  (set! (.-exitCode proc) 1)
+  (str "test run stopped before its end: " (or last "no test") " never finished (a promise that never settles?)"))
+
+;; shadow's node runner ends a run with process.exit, which skips beforeExit: beforeExit means the event loop drained with a test pending.
+(defn- guard! []
+  (hook! :begin-test-var (fn [m] (reset! last-started (var-name (:var m)))))
+  (.on js/process "beforeExit" (fn []
+                                 (let [msg (incomplete-exit! js/process @last-started)]
+                                   (.error js/console msg)
+                                   (when enabled? (emit! {:event "result" :name @last-started :outcome "error" :message msg}))))))
+
+(def ^:private guarded (atom false))
+
 (defn install! []
+  (when (compare-and-set! guarded false true)
+    (guard!))
   (when (and enabled? (compare-and-set! installed false true))
     (hook! :begin-run-tests (fn [m] (reset! run {:ns-count (:ns-count m) :ns-done 0}) (emit! {:event "plan" :total (:var-count m)})))
     (hook! :begin-test-var (fn [_] (reset! reports [])))
