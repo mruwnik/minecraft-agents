@@ -236,6 +236,31 @@
                   :when (> x s)]
               [{:line k what n :spend s} {:used x}]))))
 
+(defn most-crossings
+  "Each line of a frame's :contract state an act quoted q could cross before it can be stopped, as [cause amount]:
+  cause as crossings names the line, amount {:most m :left room}; lines crossings names already are left out. levels,
+  now and extra-ms as for crossings."
+  [{:keys [call] :as state} q levels now extra-ms]
+  (let [{:keys [spend floor deadline]} call
+        u (used state extra-ms)
+        uses (:uses q)
+        most #(when (vector? %) (nth % 2))
+        crossed (set (map first (crossings state levels now extra-ms)))
+        over (fn [cause m room] (when (and m (> m room) (not (crossed cause))) [cause {:most m :left room}]))]
+    (keep identity
+          (concat [(when deadline (over {:line :deadline :deadline deadline} (most (:time uses)) (/ (- deadline now) 1000)))]
+                  (for [k [:health :food]
+                        :let [f (get floor k) l (get levels k)]
+                        :when (and f (number? l))]
+                    (over {:line k :floor f} (most (get uses k)) (- l f)))
+                  (for [k [:time :health :food]
+                        :let [s (get spend k)]
+                        :when s]
+                    (over {:line k :spend s} (most (get uses k)) (- s (get u k 0))))
+                  (for [[k what] [[:items :item] [:wear :tool]]
+                        [n s] (get spend k)]
+                    (over {:line k what n :spend s} (most (get-in uses [k n])) (- s (get-in u [k n] 0))))))))
+
 (defn below-floor
   "The cause {:floor line :min f} of the first floor of call the body's levels are below, or nil."
   [call levels]

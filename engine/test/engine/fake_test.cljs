@@ -3,7 +3,8 @@
   (:require [cljs.test :refer [deftest is are async]]
             [clojure.string :as str]
             [engine.fake :as fake]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.primitive :as primitive]))
 
 (defn at [x y z] {:x x :y y :z z})
 
@@ -103,6 +104,14 @@
     (is (nil? (.blockAt p (tu/pos 1 64 0))))
     (is (nil? (.blockAt p (tu/pos 2 64 0))))
     (is (= "air" (:name (block-at p 3 64 0))))))
+
+(def not-acting
+  #{"world" "setOwner" "isOwner" "drive" "stopDriving" "isOffline" "isSettling" "self" "worldAge" "entities" "blocks"
+    "digTime" "clearTime" "harvestTools" "blockAt" "pathWorld" "onBodyEvent" "close"})
+
+(deftest the-primitive-table-has-every-acting-primitive-of-the-fake
+  (is (= (set (remove not-acting (js-keys (fake/create {}))))
+         (set (map name (keys primitive/table))))))
 
 (deftest acting-with-a-stale-token-rejects-with-cut
   (async-test

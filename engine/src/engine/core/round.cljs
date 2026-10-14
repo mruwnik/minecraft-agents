@@ -30,7 +30,7 @@
   save memory again, emit action.done. A cut rejects here (stale token) or from the primitive."
   [eng {:keys [root slots token chain round reflex] :as base} id k args]
   (own! eng base)
-  (limits/check! eng base)
+  (limits/check-act! eng base k args)
   (act-started! eng token root k args)
   (save-memory! eng)
   (let [useful? (useful-act? eng root k)

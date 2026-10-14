@@ -310,6 +310,8 @@ remainder only with `enforce-limits` on (else `job.way_would_drop`); a least of 
 **Limits (engine.core.limits).** A child's limits are clamped to its caller's; acts and call boundaries check the chain.
 `:engine.contract/enforce-limits` off (default): `job.limit_would_end` once per crossed frame and line (`:used`, `:health`,
 `:food` or `:now`); on: the outermost crossed frame ends `:limit-reached`; catch-alls rethrow on `contract/passes-through?`.
+Before an act, its most (`jobs.primitive` table: target, quote-of, ending per primitive) is checked against what each frame
+has left: a crossing (cause with `:act`, amount `:most`/`:left`) refuses the act when enforced, inside `ctx/atomic` too.
 
 **Old and contract jobs together (engine.core.legacy).** An old job through `ctx/call` ends with the ending its
 check, round and result map to; a contract job through `call-child` answers `:declined` or `:done` with its ending in

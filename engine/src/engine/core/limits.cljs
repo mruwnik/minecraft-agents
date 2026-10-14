@@ -3,12 +3,15 @@
   boundary, over the started contract frames of the chain. The outermost crossed frame is the one a crossing ends.
   With :engine.contract/enforce-limits on it is tagged (its :contract :limit) and a limit error unwinds to its call
   boundary, which ends it :limit-reached; on the way frames may act but not call, and a crossing inside ctx/atomic is
-  held until the section closes. Off, job.limit_would_end is told once per crossed frame and line, and the job goes on."
+  held until the section closes. Before an act, its most (jobs.primitive) is checked against what each frame has left:
+  enforced, a crossing refuses the act at once. Off, job.limit_would_end is told once per crossed frame and line, and
+  the job goes on."
   (:require [engine.contract :as contract]
             [engine.core.base :refer [emit! now]]
             [engine.expr :as expr]
             [engine.memory :as mem]
-            [engine.settings :as settings]))
+            [engine.settings :as settings]
+            [jobs.primitive :as primitive]))
 
 (defn enforce? [] (settings/get contract/settings ::contract/enforce-limits))
 
@@ -68,20 +71,54 @@
     (when-let [{:keys [frame cause]} (some (comp :limit second) (frames eng root slots))]
       (throw (contract/limit-error frame cause)))))
 
+(defn check-frames!
+  "check! over fs, the chain's started frames."
+  [eng {:keys [root t0s section-depth held]} fs]
+  (cond
+    (empty? fs) nil
+    (not (enforce?)) (run! #(would-end! eng root %) (crossings eng fs t0s))
+    (some (comp :limit second) fs) nil
+    :else (when-let [x (first (crossings eng fs t0s))]
+            (if (and section-depth (pos? @section-depth))
+              (swap! held #(or % x))
+              (throw (tag! eng root x)))))
+  nil)
+
 (defn check!
   "Check the chain of base ({:root :slots :t0s :section-depth :held}) against its limits (see the ns doc). Throws the
   limit error that ends a frame; returns nil."
-  [eng {:keys [root slots t0s section-depth held]}]
+  [eng {:keys [root slots] :as base}]
+  (check-frames! eng base (frames eng root slots)))
+
+(defn refusals
+  "As crossings, each line of frames act k with args could cross before it can be stopped (its jobs.primitive quote's
+  most, engine.contract/most-crossings), the cause naming the act."
+  [eng frames t0s k args]
+  (when-let [quote-of (get-in primitive/table [k :quote-of])]
+    (let [p (:primitives eng)
+          q (quote-of p (js->clj args :keywordize-keys true))
+          lv (levels p)
+          t (now eng)]
+      (for [[s state] frames
+            :let [extra-ms (- t (nth t0s (count s) t))]
+            [cause amount] (contract/most-crossings state q lv t extra-ms)]
+        {:slots s :cause (assoc cause :act k) :amount amount :state state :extra-ms extra-ms}))))
+
+(defn check-act!
+  "check! before act k with args, then the act's most against what every frame has left. Enforced, a crossing refuses
+  the act, inside ctx/atomic too: it ends the outermost frame it crosses, or goes on unwinding a frame already
+  unwinding. Off, job.limit_would_end is told once per frame, line and act."
+  [eng {:keys [root slots t0s] :as base} k args]
   (let [fs (frames eng root slots)]
-    (cond
-      (empty? fs) nil
-      (not (enforce?)) (run! #(would-end! eng root %) (crossings eng fs t0s))
-      (some (comp :limit second) fs) nil
-      :else (when-let [x (first (crossings eng fs t0s))]
-              (if (and section-depth (pos? @section-depth))
-                (swap! held #(or % x))
-                (throw (tag! eng root x)))))
-    nil))
+    (check-frames! eng base fs)
+    (when (seq fs)
+      (let [xs (refusals eng fs t0s k args)]
+        (cond
+          (not (enforce?)) (run! #(would-end! eng root %) xs)
+          (empty? xs) nil
+          :else (throw (if-let [{:keys [frame cause]} (some (comp :limit second) fs)]
+                         (contract/limit-error frame cause)
+                         (tag! eng root (first xs)))))))))
 
 (defn section-closed!
   "After a ctx/atomic section of base's round closed: throw the crossing it held, once no section is open."
