@@ -1,27 +1,23 @@
 (ns triggers.survival.dusk-home
   "The dusk-home trigger: before night, a body under the open sky whose remembered :home (else :bed) is within :limit
   blocks leaves for it once the day left no longer covers the walk (:slack times the straight line at :speed blocks a
-  second) plus :margin-s seconds. A place beyond go-home's own limit up to :warn-limit also fires it, for go-home's
-  too-far warn: the body digs in where night finds it, and go-home's :too-far memory for that place keeps it from
-  firing again. Stored args missing a key (an older entry) fall back to defaults. It does not hold at night (the night job has it), within :arrive
+  second) plus :margin-s seconds. A place beyond :limit (go-home's own) never fires it: the body digs in where night finds it. Stored args missing a key (an older entry) fall back to defaults. It does not hold at night (the night job has it), within :arrive
   blocks of the place, or underground (sh/buried?)."
   (:require [jobs.lib.body :as body]
-            [engine.memory :as mem]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]))
 
-(def defaults {:warn-limit 600 :margin-s 60 :speed 4.3 :slack 1.4 :arrive 4})
+(def defaults {:limit 160 :margin-s 60 :speed 4.3 :slack 1.4 :arrive 4})
 
 (defn dusk-home
   [p view args]
-  (let [{:keys [warn-limit margin-s speed slack arrive]} (merge defaults args)
+  (let [{:keys [limit margin-s speed slack arrive]} (merge defaults args)
         self (.self p)
         left-s (/ (- sh/dusk-tick (.-timeOfDay self)) 20)
         pos (sh/home-target view)]
     (boolean
      (and pos (pos? left-s) (not (body/recovery-pending? view :dusk-home)) (not (sh/sleeping? p))
-          (not-any? #(= pos (get-in % [:data :home])) (mem/entries view :too-far))
           (let [d (u/dist (u/self-pos {:primitives p}) pos)]
-            (and (< arrive d) (<= d warn-limit)
+            (and (< arrive d) (<= d limit)
                  (<= left-s (+ margin-s (/ (* slack d) speed)))
                  (not (sh/buried? p))))))))

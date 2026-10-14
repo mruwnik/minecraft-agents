@@ -21,10 +21,6 @@
 (a/defargs args
   {:limit {:doc "farthest place, in blocks, worth the walk" :spec (a/num-in 0 nil) :default 160}})
 
-(def too-far-policy
-  "One :too-far entry, one in-game day: dusk-home does not fire again for the home it names."
-  {:cap 1 :ttl 1200000})
-
 (defn place [c] (sh/home-target (ctx/view c)))
 
 (a/defargs settings
