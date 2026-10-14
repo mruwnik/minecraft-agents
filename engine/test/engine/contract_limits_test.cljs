@@ -119,6 +119,19 @@
                     (is (= [[:spend :time]] (:lines (:data (first (job-ev seen :budget_clamped))))))
                     (is (= {:kind :limit-reached :cause {:line :time :spend 10}} (stopped seen)))))))))))
 
+(deftest a-childs-left-is-the-least-its-chain-has-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [jobs {'top (merge (caller (kid (fn [c] (swap! clock + 3000) (swap! world assoc :kid-left (ctx/left c))))
+                                        {:spend {:health 4}})
+                                {:defaults {:spend {:time 10} :floor {:health 5}}})}
+              {:keys [eng]} (setup jobs)]
+          (core/submit! eng '(top) {})
+          (await (core/tick! eng))
+          (is (= {:spend {:time 7 :health 4} :floor {:health 5}} (:kid-left @world))
+              "the caller's time, which the child sets no line for, is the child's too"))))))
+
 (deftest a-mob-hit-ends-the-child-whose-floor-it-crosses-not-the-caller
   (async done
     (tu/run-async done

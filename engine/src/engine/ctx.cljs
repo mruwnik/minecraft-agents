@@ -48,7 +48,8 @@
   (or (:quote-call ctx) (get-in (mem/job-mem ((:view ctx)) (:root ctx) (:slots ctx)) [:contract :call])))
 
 (defn left
-  "What is left of the call's limits: {:spend {line remainder} :floor {line level} :deadline ms}."
+  "What is left of the call's limits and its callers', each line the least over the chain: {:spend {line remainder}
+  :floor {line level} :deadline ms}."
   [ctx]
   ((:left ctx)))
 

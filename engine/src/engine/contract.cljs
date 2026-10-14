@@ -232,6 +232,17 @@
   (let [{:keys [floor deadline]} (:call state)]
     (cond-> {:spend (remainder state extra-ms)} floor (assoc :floor floor) deadline (assoc :deadline deadline))))
 
+(defn least-left
+  "The least of lefts (left of each frame of a chain): each spend line's least remainder, each floor's highest level,
+  the earliest deadline."
+  [lefts]
+  (reduce (fn [a b]
+            (cond-> {:spend (merge-with #(if (map? %1) (merge-with min %1 %2) (min %1 %2)) (:spend a) (:spend b))}
+              (or (:floor a) (:floor b)) (assoc :floor (merge-with max (:floor a) (:floor b)))
+              (or (:deadline a) (:deadline b)) (assoc :deadline (apply min (keep :deadline [a b])))))
+          {:spend {}}
+          lefts))
+
 (defn crossings
   "Each line of a frame's :contract state that is crossed, as [limit cause, amount]: {:used n}, the body's {:health n}
   or {:food n}, or {:now t}. levels is the body's {:health :food}, now the wall clock, extra-ms as for used. A spend is

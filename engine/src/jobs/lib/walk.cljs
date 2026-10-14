@@ -61,6 +61,20 @@
   {:x (.-x pose) :y (.-y pose) :z (.-z pose) :vx (.-vx pose) :vy (.-vy pose) :vz (.-vz pose) :on-ground (.-onGround pose)
    :on-climbable (.-onClimbable pose) :on-scaffolding (.-onScaffolding pose) :in-water (.-inWater pose) :in-lava (.-inLava pose) :collided (.-collided pose)})
 
+(def room-margin-s "Seconds a steer leaves of the time left, for the time between asking and the act's check." 0.05)
+(def min-steer-s "The shortest steer a walk holds to the time left; with less left the act's refusal ends the call." 0.5)
+
+(defn steer-s
+  "timeout-s held to what c's call chain has left (ctx/left: time and deadline) less room-margin-s, since a longer
+  steer is refused; with less than min-steer-s left, timeout-s as it is."
+  [c timeout-s]
+  (let [{:keys [spend deadline]} (ctx/left c)
+        rooms (cond-> []
+                (:time spend) (conj (:time spend))
+                deadline (conj (/ (- deadline (ctx/now c)) 1000)))
+        room (when (seq rooms) (- (apply min rooms) room-margin-s))]
+    (if (and room (>= room min-steer-s)) (min timeout-s room) timeout-s)))
+
 (defn steer-args
   "The act args of one walk. decide is not enumerable: the engine's act wrapper writes (js->clj args) into
   an event, and a function there would break the event stream."
@@ -86,7 +100,7 @@
   "A short walk (no planning, no jump) to within centre-tolerance of [tx tz] on the cell the body is in: the step a
   go-to to a cell cannot make, since a body on the edge of the cell already counts as in it."
   [c tx tz]
-  (await (ctx/act c :steer (steer-args 3 (centre-decider tx tz)))))
+  (await (ctx/act c :steer (steer-args (steer-s c 3) (centre-decider tx tz)))))
 
 (defn ^:async plan-walk!
   "Plan a walk with plan-within! (yields to the event loop between search slices): what the walks (jobs.lib.near, walk-to!)
@@ -219,7 +233,7 @@
                      (do (vreset! last-done done) #js {:done (clj->js done)})
                      #js {:controls (clj->js controls) :yaw yaw :pitch pitch})))
         t (js/Date.now)
-        r (await (ctx/act c :steer (steer-args timeout-s decide)))
+        r (await (ctx/act c :steer (steer-args (steer-s c timeout-s) decide)))
         ms (- (js/Date.now) t)]
     [(case (.-status r)
        "done" @last-done

@@ -96,7 +96,8 @@
      :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base) :t0s (:t0s base)
      :quote-deadline (:quote-deadline base)
      :left #(let [t (now eng)]
-              (contract/left (:contract (mem/job-mem (mem/view store) root slots)) (- t (nth (:t0s base) (count slots) t))))
+              (contract/least-left (for [[s state] (limits/frames eng root slots)]
+                                     (contract/left state (- t (nth (:t0s base) (count s) t))))))
      :section-depth (:section-depth base) :held (:held base) :section-closed #(limits/section-closed! eng base)
      :view #(mem/view store)
      :update-mem (fn [f more]
