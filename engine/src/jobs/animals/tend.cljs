@@ -224,7 +224,7 @@
     :cull (select-keys r [:killed :remaining :reason])
     :shear {:shorn (count (:shorn r)) :reason (:reason r) :collected (:collected r)}
     :collect (select-keys r [:collected])
-    :deposit (select-keys r [:gave-up :reason])))
+    :deposit (assoc (select-keys r [:reason]) :gave-up (boolean (:gave-up r)))))
 
 (defn finish!
   [c report]
