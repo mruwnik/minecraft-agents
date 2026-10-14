@@ -31,7 +31,7 @@
 
   Ends :done with info shut-gate.done and the data {:shut n :left []} when every open gate was shut (or none stood
   open); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
-  A :plan that is missing or unreadable ends the first round :condition-failed :plan-trouble with one warn
+  A call whose :plan is missing or unreadable waits (:plan-trouble); one that goes bad after the start ends :condition-failed :plan-trouble with one warn
   shut-gate.declined and {:shut 0 :left [] :declined text}.")
 
 (a/defargs args
@@ -181,7 +181,14 @@
 
 (def defaults {})
 
-(def conditions "None wait: a run that finds nothing open ends at once, and a missing plan ends the first round." [])
+(defn plan-fact
+  "The :plan-trouble wait while :plan is missing or unreadable, else nil."
+  [c]
+  (when-let [id (:plan (:args c))]
+    (when-let [why (second (plan-gates c id))]
+      {:reason :plan-trouble :plan id :text (str "shut-gate waits: " why)})))
+
+(def conditions "Waits while :plan is missing or unreadable (plan-fact)." [[:fn plan-fact]])
 
 (defn done?
   "The gates shut and the watched gates still open. Never :done? itself: the run ends with its event and data."

@@ -10,20 +10,26 @@
 (defn refused? [v]
   (and (not (:ok v)) (contains? social-reasons (:reason v))))
 
+(defn look
+  "As judge, without the decline warn: {:allowed [pos ..] :refusal nil|:refused|:no-zones :refusals [verdict ..]}."
+  [c action poss opts]
+  (let [in (access/rules-input c opts)
+        judged (mapv (fn [pos] [pos (access/may? in action pos)]) poss)
+        refusals (filterv refused? (map second judged))]
+    {:allowed (into [] (comp (remove (comp refused? second)) (map first)) judged)
+     :refusals refusals
+     :refusal (when (seq refusals)
+                (if (some #(= :no-zones (:reason %)) refusals) :no-zones :refused))}))
+
 (defn judge
   "As allowed, as {:allowed [pos ..] :refusal nil|:refused|:no-zones}: what the decline warn named, for a job that
   ends on it."
   ([c kind job-name action poss] (judge c kind job-name action poss {}))
   ([c kind job-name action poss opts]
-   (let [in (access/rules-input c opts)
-         judged (mapv (fn [pos] [pos (access/may? in action pos)]) poss)
-         refusals (filterv refused? (map second judged))
-         refusal (when (seq refusals)
-                   (if (some #(= :no-zones (:reason %)) refusals) :no-zones :refused))]
+   (let [{:keys [allowed refusal refusals]} (look c action poss opts)]
      (when refusal
        (access/decline! c kind job-name (assoc (access/refusal-fields refusals) :reason refusal)))
-     {:allowed (into [] (comp (remove (comp refused? second)) (map first)) judged)
-      :refusal refusal})))
+     {:allowed allowed :refusal refusal})))
 
 (defn allowed
   "The positions ({:x :y :z}) of poss the job may act on with action (:dig :place :sow :harvest :take :put), in

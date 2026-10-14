@@ -43,14 +43,22 @@
        (mapv (fn [e] (let [{:keys [x y z]} (u/pos-of (.-pos e))]
                        {:kind (.-name e) :id (.-id e) :pos [(/ (js/Math.round (* 10 x)) 10) y (/ (js/Math.round (* 10 z)) 10)]})))))
 
+(defn cell-of [e]
+  (let [{:keys [x y z]} (u/pos-of (.-pos e))]
+    {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}))
+
+(defn refusal-of
+  "Why the zone rules let the job act on none of es with action: :refused, :no-zones, else nil. Quiet: no warn, no memory."
+  [c action es]
+  (let [{:keys [allowed refusal]} (gate/look c action (map cell-of es) {:own-plans-ok? true})]
+    (when (and refusal (empty? allowed)) refusal)))
+
 (defn allowed
   "The animals of es (JS entities) the zone rules let the job act on with action (:harvest :take), judged at the cell
   each stands in. One decline warn of kind (for job-name) names what refuses, or :no-zones. :ignore-zones? lets all.
   The last verdict is kept in the job's memory (see refusal)."
   [c kind job-name action es]
-  (let [cell-of (fn [e] (let [{:keys [x y z]} (u/pos-of (.-pos e))]
-                          {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}))
-        {:keys [allowed refusal]} (gate/judge c kind job-name action (map cell-of es) {:own-plans-ok? true})
+  (let [{:keys [allowed refusal]} (gate/judge c kind job-name action (map cell-of es) {:own-plans-ok? true})
         ok (set allowed)]
     (ctx/update-mem! c #(if refusal (assoc % :refusal refusal) (dissoc % :refusal)))
     (filterv #(contains? ok (cell-of %)) es)))

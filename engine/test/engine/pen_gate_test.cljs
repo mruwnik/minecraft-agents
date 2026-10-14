@@ -362,17 +362,6 @@
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (gate-open? (:p s) 20 64 0) "12 blocks off: beyond the radius"))))))
 
-(deftest a-plan-that-is-missing-is-declined-with-one-warn
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [[plans reason] [[{} "no such plan"]]]
-          (let [s (await (run-job (pen-world true 2 7) plans {:plan "pen-a"} 6))
-                warns (events-of s :shut-gate.declined)]
-            (is (= 1 (count warns)) reason)
-            (is (re-find (re-pattern reason) (:text (first warns))))
-            (is (gate-open? (:p s) 2 64 0))))))))
-
 (deftest an-unreachable-gate-is-given-up-with-one-warn-and-remembered
   (async done
     (tu/run-async done
@@ -500,8 +489,16 @@
         (doseq [[world plans args event reason]
                 [[(pen-world true 2 -7) {"pen-a" pen-a} {} :completed nil]
                  [(pen-world false 2 -7) {"pen-a" pen-a} {} :completed nil]
-                 [(pen-world true 2 0) {"pen-a" pen-a} {} :stopped :left]
-                 [(pen-world true 2 7) {} {:plan "pen-a"} :stopped :plan-trouble]]]
+                 [(pen-world true 2 0) {"pen-a" pen-a} {} :stopped :left]]]
           (let [s (await (run-job world plans args 20))
                 e (first (filter #(#{:completed :stopped} (:kind %)) @(:seen s)))]
             (is (= [event reason] [(:kind e) (:reason e)]) (pr-str args reason))))))))
+
+(deftest shut-gate-waits-without-a-readable-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-job (pen-world true 2 7) {} {:plan "pen-a"} 20))]
+          (is (zero? (count (filter #(= :round_started (:kind %)) @(:seen s)))))
+          (is (gate-open? (:p s) 2 64 0))
+          (is (= :plan-trouble (:reason (last (filter #(= :waiting (:kind %)) @(:seen s)))))))))))
