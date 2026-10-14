@@ -1,5 +1,6 @@
 (ns jobs.apiary.guard
-  (:require [engine.settings :as settings]
+  (:require [engine.contract :as contract]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
@@ -21,10 +22,16 @@
   One call works every fire (:continue only while a walk or the carpet pick-up waits on the world). Fires are
   worked nearest first, at most :max actions in a run. A fire that cannot be reached or refuses is
   skipped for the rest of the run. The body never stands in a fire's cell.
+  Start facts, found after a quiet look around, make it wait (a skipped job): :nothing-to-guard (no fire needs
+  work), :no-carpet or :no-campfire (the body carries what the work needs), :refused or :no-zones (the zone rules
+  refuse every fire).
   Result: {:sunk n :carpeted n :reason r :left {pos reason} :skipped {pos reason} :fires n}. :reason is
   :guarded (work done, nothing left), :limit (:max reached), :safe, :no-fire, :no-carpet, :no-campfire, a skip
   reason (:unreachable, :on-fire, :occupied, :cannot, :place-failed, :refused) or :gave-up (3 fruitless fires
   in a row). Every end but :guarded and :limit also warns apiary.guard-gave-up.
+  The ending: :done for :guarded, :limit, :safe, and any other reason when the call's :least (default 1) actions
+  were done; else condition-failed for :no-fire, :no-carpet, :no-campfire, :occupied, :refused and :no-zones,
+  nothing-possible for the rest, with the reason as the cause and the result as its data.
   Zones: a fire in another owner's zone or claim, or in a plan's footprint, is left out of the survey (all refused
   ends :no-fire). Each dig and place is checked again before it (a refusal skips the fire as :refused). The job
   warns apiary.guard-declined once, with :reason :refused (or :no-zones when no zone list was read).
@@ -43,10 +50,14 @@
   (gate/allowed? c :apiary.guard-declined "apiary guard" action pos))
 
 (defn permitted-fires
-  "The fires of the area whose cell the job may dig and the cell over it place on."
-  [c fires]
-  (let [dig (set (gate/allowed c :apiary.guard-declined "apiary guard" :dig (map :pos fires)))
-        place (set (gate/allowed c :apiary.guard-declined "apiary guard" :place (map #(update (:pos %) :y inc) fires)))]
+  "The fires of the area whose cell the job may dig and the cell over it place on (quiet?: no decline warn)."
+  [c fires & [quiet?]]
+  (let [ok (fn [action poss]
+             (set (if quiet?
+                    (:allowed (gate/look c action poss {}))
+                    (gate/allowed c :apiary.guard-declined "apiary guard" action poss))))
+        dig (ok :dig (map :pos fires))
+        place (ok :place (map #(update (:pos %) :y inc) fires))]
     (filterv #(and (dig (:pos %)) (place (update (:pos %) :y inc))) fires)))
 
 (a/defargs settings
@@ -74,12 +85,12 @@
 
 (defn survey
   "{:fires n :todo [action maps, nearest first] :left {key reason}} of the fires not skipped."
-  [c center]
+  [c center & [quiet?]]
   (let [p (:primitives c)
         block-at (apiary/block-at-fn p)
         inventory (u/inventory p)
         skipped (:skipped (ctx/mem c) {})
-        all (permitted-fires c (apiary/fires p {:box (:box (:args c)) :center center :radius (:radius (:args c))}))
+        all (permitted-fires c (apiary/fires p {:box (:box (:args c)) :center center :radius (:radius (:args c))}) quiet?)
         plans (->> all
                    (remove #(contains? skipped (apiary/pos-key (:pos %))))
                    (keep #(plan-fire block-at inventory %)))]
@@ -99,8 +110,22 @@
 
 (defn actions [m] (+ (:sunk m 0) (:carpeted m 0)))
 
+(def failed-conditions "Reasons that end condition-failed: the world or the zones bar the work. The rest are nothing-possible."
+  #{:no-fire :no-carpet :no-campfire :occupied :refused :no-zones})
+
+(defn ending-of
+  "The ending of a run that stopped for reason: :done for :guarded, :limit and :safe or when the call's :least actions
+  were done, else condition-failed for failed-conditions, else nothing-possible; result is its data."
+  [c reason result]
+  (let [least (:least (ctx/frozen-call c) 1)
+        need (if (number? least) least 1)]
+    (cond
+      (or (#{:guarded :limit :safe} reason) (>= (actions (ctx/mem c)) need)) (ctx/end c :done nil result)
+      (failed-conditions reason) (ctx/end c :condition-failed reason result)
+      :else (ctx/end c :nothing-possible reason result))))
+
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
+  "Emit the outcome and end the job (ending-of)."
   [c reason seen]
   (let [m (ctx/mem c)
         result {:sunk (:sunk m 0)
@@ -113,8 +138,7 @@
     (when-not (#{:guarded :limit} reason)
       (ctx/emit! c :apiary.guard-gave-up :warn {:reason reason :left (:left result) :skipped (:skipped result)
                                                 :text (str "apiary guard stopped: " (name reason))}))
-    (ctx/result! c result)
-    :done))
+    (ending-of c reason result)))
 
 (defn skip!
   "Leave the fire alone for the rest of the run and count a fruitless fire."
@@ -274,17 +298,36 @@
         (await (sink! c))
         (do (abandon! c fire :on-fire) :again)))))
 
-(defn check
-  "True while a run is under way or some lit fire in the area lacks a carpet or sits too high, and while a cell of the area was never seen and the body has not looked."
+(def target [:box :center])
+
+(def defaults {:least 1})
+
+(defn start-fact
+  "The cause that bars the first step, or nil: no fire needs work, the body carries no carpet or campfire the work
+  needs, or the zone rules refuse every fire. Asks for a look first while the body has not looked round near here."
   [c]
-  (or (boolean
-       (or (:started (ctx/mem c))
-           (let [p (:primitives c)
-                 block-at (apiary/block-at-fn p)
-                 {:keys [box radius]} (:args c)
-                 center (or (:center (:args c)) (u/self-pos c))]
-             (some #(seq (apiary/needs block-at (:pos %))) (permitted-fires c (apiary/fires p {:box box :center center :radius radius}))))))
-      (look/wait-unless-surveyed c {:reason :nothing-to-guard} (apiary/watched-cells c))))
+  (when-not (:started (ctx/mem c))
+    (let [{:keys [box radius center]} (:args c)
+          center (or center (u/self-pos c))
+          fires (apiary/fires (:primitives c) {:box box :center center :radius radius})
+          seen (survey c center true)
+          cause (cond
+                  (seq (:todo seen)) nil
+                  (seq (:left seen)) {:reason (first (vals (:left seen)))}
+                  (and (seq fires) (zero? (:fires seen))) {:reason (:refusal (gate/look c :dig (map :pos fires) {}))}
+                  :else {:reason :nothing-to-guard})]
+      (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first))))
+
+(def conditions "Wait on a start fact (start-fact)." [[:fn start-fact]])
+
+(defn done?
+  "The fires worked, and the fires still to work."
+  [c]
+  (let [seen (survey c (apiary/center-of c) true)]
+    {:done? false :units :fires :done (actions (ctx/mem c)) :left (+ (count (:todo seen)) (count (:left seen)))}))
+
+(defn quote-of [c]
+  {:uses {:time [0 (* 10 (or (:max (:args c)) 12)) ##Inf]}})
 
 (defn ^:async step
   "One piece of the guarding: resume a sink; else survey the fires and finish when the budget is spent, three fires

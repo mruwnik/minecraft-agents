@@ -1,5 +1,6 @@
 (ns jobs.apiary.harvest
-  (:require [engine.settings :as settings]
+  (:require [engine.contract :as contract]
+            [engine.settings :as settings]
             [jobs.lib.game-facts :as facts]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -21,10 +22,16 @@
   - A smoked hive over an open lit fire (nothing with a collision box on it; a non-moss carpet counts) burns
     the bees that land, so it is declined too (:open-fire).
   - A hive the body cannot walk to, or that refuses the item, is skipped for the rest of the run.
+  Start facts, found after a quiet look around, make it wait (a skipped job): :no-hive, :not-ripe, :not-smoked,
+  :open-fire (no hive can be worked), :no-tool (none of :with is carried), :refused or :no-zones (the zone rules
+  refuse every hive).
   Result: {:harvested n :reason r :with item :declined {pos reason} :skipped {pos reason} :collected n}. :reason is
   :harvested (some taken, nothing more to do), :limit (:max reached), :no-tool, :no-hive, :not-ripe,
   :not-smoked, :open-fire, :unreachable or :gave-up (3 fruitless hives in a row). Declines and give-ups also warn
   apiary.gave-up.
+  The ending: :done for :harvested, :limit and any other reason when the call's :least (default 1) hives were
+  taken; else condition-failed for :no-hive, :not-ripe, :not-smoked, :open-fire, :no-tool, :refused and :no-zones,
+  nothing-possible for the rest, with the reason as the cause and the result as its data.
   Zones: a hive in another owner's zone or claim, or in a plan's footprint, is left out of the survey (all refused
   ends :no-hive) and checked again before the click. The job warns apiary.declined once, with :reason :refused (or
   :no-zones when no zone list was read). :ignore-zones? true skips the check.")
@@ -56,21 +63,29 @@
   [c pos]
   (gate/allowed? c :apiary.declined "apiary harvest" :harvest pos {:own-plans-ok? true}))
 
-(defn hives
-  "Every hive the body has seen in the area that the zone rules let the job use, as {:pos :ripe}, nearest to the
-  body first."
+(defn found-hives
+  "Every hive the body has seen in the area, as {:pos :ripe}."
   [c center]
   (let [p (:primitives c)
         me (u/self-pos c)
         {:keys [radius box]} (:args c)
-        search (if box 64 (+ radius (u/dist me center)))
-        found (->> (look/seen-blocks p {:radius search :names hive-names :properties? true :live? true :max 64})
-                   (map (fn [b] {:pos (:pos b) :ripe (ripe? b)}))
-                   (filter #(apiary/in-area? {:box box :center center :radius radius} (:pos %))))
-        ok (set (gate/allowed c :apiary.declined "apiary harvest" :harvest (map :pos found) {:own-plans-ok? true}))]
+        search (if box 64 (+ radius (u/dist me center)))]
+    (->> (look/seen-blocks p {:radius search :names hive-names :properties? true :live? true :max 64})
+         (map (fn [b] {:pos (:pos b) :ripe (ripe? b)}))
+         (filter #(apiary/in-area? {:box box :center center :radius radius} (:pos %))))))
+
+(defn hives
+  "Every hive the body has seen in the area that the zone rules let the job use, as {:pos :ripe}, nearest to the
+  body first (quiet?: no decline warn)."
+  [c center & [quiet?]]
+  (let [found (found-hives c center)
+        poss (map :pos found)
+        ok (set (if quiet?
+                  (:allowed (gate/look c :harvest poss {:own-plans-ok? true}))
+                  (gate/allowed c :apiary.declined "apiary harvest" :harvest poss {:own-plans-ok? true})))]
     (->> found
          (filter #(ok (:pos %)))
-         (sort-by #(u/dist me (:pos %))))))
+         (sort-by #(u/dist (u/self-pos c) (:pos %))))))
 
 (defn tool-for
   "The item name to harvest with under :with, from the inventory, or nil."
@@ -105,8 +120,22 @@
     (zero? ripe) :not-ripe
     :else :no-hive))
 
+(def failed-conditions "Reasons that end condition-failed: the world or the zones bar the work. The rest are nothing-possible."
+  #{:no-hive :not-ripe :not-smoked :open-fire :no-tool :refused :no-zones})
+
+(defn ending-of
+  "The ending of a run that stopped for reason: :done for :harvested and :limit or when the call's :least hives were
+  taken, else condition-failed for failed-conditions, else nothing-possible; result is its data."
+  [c reason result]
+  (let [least (:least (ctx/frozen-call c) 1)
+        need (if (number? least) least 1)]
+    (cond
+      (or (#{:harvested :limit} reason) (>= (:harvested result) need)) (ctx/end c :done nil result)
+      (failed-conditions reason) (ctx/end c :condition-failed reason result)
+      :else (ctx/end c :nothing-possible reason result))))
+
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
+  "Emit the outcome and end the job (ending-of)."
   [c reason seen]
   (let [m (ctx/mem c)
         result {:harvested (:harvested m 0)
@@ -119,8 +148,7 @@
     (when-not (#{:harvested :limit} reason)
       (ctx/emit! c :apiary.gave-up :warn {:reason reason :declined (:declined result) :skipped (:skipped result)
                                          :text (str "apiary harvest stopped: " (name reason))}))
-    (ctx/result! c result)
-    :done))
+    (ending-of c reason result)))
 
 (defn skip!
   "Leave the hive alone for the rest of the run and count a fruitless hive."
@@ -191,7 +219,36 @@
           (skip! c pos (keyword (if (= "used" (.-status r)) "no-effect" (.-status r)))))
         :again))))
 
-(defn check [_c] true)
+(def target [:box :center])
+
+(def defaults {:least 1})
+
+(defn start-fact
+  "The cause that bars the first step, or nil: no hive can be worked (idle-reason), none of :with is carried or the zone
+  rules refuse every hive. Asks for a look first while the body has not looked round near here."
+  [c]
+  (when-not (:center (ctx/mem c))
+    (let [center (apiary/center-of c)
+          found (found-hives c center)
+          hs (hives c center true)
+          seen (classify c hs)
+          refusal (when (and (seq found) (empty? hs)) (:refusal (gate/look c :harvest (map :pos found) {:own-plans-ok? true})))
+          cause (cond
+                  refusal {:reason refusal}
+                  (empty? (:todo seen)) {:reason (idle-reason {} seen)}
+                  (nil? (tool-for (:with (:args c)) (u/inventory (:primitives c)))) {:reason :no-tool})]
+      (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first))))
+
+(def conditions "Wait on a start fact (start-fact)." [[:fn start-fact]])
+
+(defn done?
+  "The hives harvested, and the ripe hives still to work."
+  [c]
+  (let [seen (classify c (hives c (apiary/center-of c) true))]
+    {:done? false :units :hives :done (:harvested (ctx/mem c) 0) :left (count (:todo seen))}))
+
+(defn quote-of [c]
+  {:uses {:time [0 (* 15 (or (:max (:args c)) 8)) ##Inf]}})
 
 (defn ^:async step
   "One piece of the harvest: collect after a shears harvest; else classify the hives and finish when none can be

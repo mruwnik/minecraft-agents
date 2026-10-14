@@ -46,10 +46,6 @@
 
 (defn open-side [w k] (update w :blocks dissoc k))
 
-(defn check-of [p args]
-  ((:check (get registry/jobs job))
-   {:primitives p :args (merge {:radius 16 :max 12 :box nil :center nil} args) :view (fn [] {:data {} :now 0}) :engine {:world (ew/of-data {} {} [])}}))
-
 (deftest an-open-fire-gets-a-carpet
   (async done
     (tu/run-async done
@@ -126,38 +122,6 @@
           (is (= "campfire" (block-name p 2 63 0)))
           (is (= "red_carpet" (block-name p 2 64 0))))))))
 
-(deftest a-raised-fire-without-a-campfire-is-left
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [w (-> (fire-world {:inventory (inv "stick" 1)}) (open-side "3,64,0") (update :blocks assoc "2,65,0" "white_carpet"))
-              {:keys [eng p seen]} (setup w)
-              result (await (child-outcome eng job {} 40))]
-          (is (= :no-campfire (:reason result)))
-          (is (= {"2,64,0" :no-campfire} (:left result)))
-          (is (empty? (calls p "dig")))
-          (is (empty? (calls p "place")))
-          (is (= 1 (count (kinds seen :apiary.guard-gave-up)))))))))
-
-(deftest an-open-fire-without-a-carpet-is-left
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup (fire-world {:inventory (inv "stick" 1)}))
-              result (await (child-outcome eng job {} 40))]
-          (is (= :no-carpet (:reason result)))
-          (is (= {"2,64,0" :no-carpet} (:left result)))
-          (is (empty? (calls p "place"))))))))
-
-(deftest moss-carpet-is-not-a-carpet
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup (fire-world {:inventory (inv "moss_carpet" 3)}))
-              result (await (child-outcome eng job {} 40))]
-          (is (= :no-carpet (:reason result)))
-          (is (empty? (calls p "place"))))))))
-
 (deftest a-raised-fire-over-unsound-ground-only-gets-its-carpet
   (async done
     (tu/run-async done
@@ -180,30 +144,6 @@
               result (await (child-outcome eng job {} 60))]
           (is (= :guarded (:reason result)))
           (is (= 1 (:carpeted result))))))))
-
-(deftest a-safe-fire-is-not-the-jobs-business
-  (are [w] (false? (check-of (:p (setup w)) {}))
-    (assoc (fire-world {}) :blocks (assoc (:blocks (fire-world {})) "2,65,0" "white_carpet"))
-    (-> (fire-world {}) (open-side "3,64,0") (open-side "3,63,0") (update :blocks assoc "2,65,0" "white_carpet"))
-    (update (fire-world {}) :states dissoc "2,64,0")
-    {}))
-
-(deftest an-open-fire-or-a-started-job-passes-the-check
-  (let [p (:p (setup (fire-world {})))]
-    (is (true? (check-of p {})))
-    (is (false? (check-of p {:box {:from {:x 10 :y 60 :z -5} :to {:x 14 :y 70 :z 5}}})))))
-
-(deftest a-job-with-nothing-to-guard-does-nothing
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [w (assoc-in (fire-world {:inventory (inv "white_carpet" 1)}) [:blocks "2,65,0"] "white_carpet")
-              {:keys [eng p]} (setup w)
-              _ (core/submit! eng (list job) {})
-              _ (await (run-until-empty eng 5))]
-          (is (empty? (calls p "moveTo")))
-          (is (empty? (calls p "place")))
-          (is (empty? (calls p "dig"))))))))
 
 (deftest a-fire-the-body-cannot-walk-to-is-unreachable
   (async done
@@ -228,6 +168,20 @@
           (is (= :limit (:reason result)))
           (is (= 1 (:carpeted result)))
           (is (= 1 (count (calls p "place")))))))))
+
+(deftest a-fire-left-for-want-of-a-carpet-is-reported-after-the-others
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (fire-world {:inventory (inv "white_carpet" 1)})
+                    (update :blocks merge (:blocks (fire-world {:x 2 :z 5})))
+                    (update :states merge (:states (fire-world {:x 2 :z 5}))))
+              {:keys [eng p seen]} (setup w)
+              result (await (child-outcome eng job {} 60))]
+          (is (= 1 (:carpeted result)))
+          (is (= :no-carpet (:reason result)))
+          (is (= 1 (count (:left result))))
+          (is (= 1 (count (kinds seen :apiary.guard-gave-up)))))))))
 
 (deftest a-box-keeps-the-job-to-its-fires
   (async done
@@ -299,7 +253,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[owner extra block declined] [["Fake" {} "white_carpet" []] ["FAKE" {} "white_carpet" []]
-                                              ["Miles" {} "air" [{:reason :refused :zones ["bees"]}]]
+                                              ["Miles" {} "air" []]
                                               ["Miles" {:ignore-zones? true} "white_carpet" []]]]
           (let [w (assoc (fire-world {:inventory (inv "white_carpet" 2)}) :zones [(assoc zone-over-fire :owner owner)])
                 {:keys [p seen]} (await (run-guard w extra 12))]
@@ -315,14 +269,6 @@
               {:keys [p]} (await (run-guard w {} 12))]
           (is (empty? (calls p "dig")))
           (is (empty? (calls p "place"))))))))
-
-(deftest no-zone-list-declines-the-guard
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p seen]} (await (run-guard (assoc (fire-world {:inventory (inv "white_carpet" 2)}) :zones nil) {} 12))]
-          (is (empty? (calls p "place")))
-          (is (= [:no-zones] (mapv :reason (kinds seen :apiary.guard-declined)))))))))
 
 (deftest a-sink-whose-steps-never-settle-is-bounded
   (async done

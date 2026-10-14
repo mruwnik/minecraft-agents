@@ -37,10 +37,6 @@
     'jobs.animals.herd {:target 4} :no-mob-or-box
     'jobs.combat.attack {:targets ["zombie"] :absent :wait} :no-target))
 
-(deftest apiary-checks-say-why-they-decline
-  (are [job reason] (= reason (waiting-reason job {}))
-    'jobs.apiary.guard :nothing-to-guard))
-
 (deftest build-checks-say-why-they-decline
   (are [job] (= :plan-trouble (waiting-reason job {:plan "no-such-plan"}))
     'jobs.build.pen

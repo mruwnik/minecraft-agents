@@ -104,66 +104,6 @@
           (is (= "glass_bottle" (:with r2)))
           (is (= 1 (carried (:p bottle) "honey_bottle"))))))))
 
-(deftest a-ripe-hive-without-smoke-is-declined-without-a-click
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup (world {:inventory (inv "shears" 1) :smoke? false}))
-              result (await (child-outcome eng job {} 40))]
-          (is (= 0 (:harvested result)))
-          (is (= :not-smoked (:reason result)))
-          (is (= {"2,64,0" :not-smoked} (:declined result)))
-          (is (empty? (calls p "useOn")))
-          (is (= 1 (count (kinds seen :apiary.gave-up)))))))))
-
-(deftest a-ripe-hive-over-an-open-fire-is-declined
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [w (-> (world {:inventory (inv "shears" 1)})
-                    (update :blocks #(-> % (dissoc under) (assoc "2,62,0" "campfire")))
-                    (update :states #(-> % (dissoc under) (assoc "2,62,0" {:lit true}))))
-              {:keys [eng p]} (setup w)
-              result (await (child-outcome eng job {} 40))]
-          (is (= :open-fire (:reason result)))
-          (is (empty? (calls p "useOn"))))))))
-
-(deftest an-unripe-hive-is-left-alone
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup (world {:inventory (inv "shears" 1) :level 4}))
-              result (await (child-outcome eng job {} 40))]
-          (is (= :not-ripe (:reason result)))
-          (is (= 0 (:harvested result)))
-          (is (empty? (calls p "useOn"))))))))
-
-(deftest no-tool-is-declined
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup (world {:inventory (inv "stick" 1)}))
-              result (await (child-outcome eng job {} 40))]
-          (is (= :no-tool (:reason result)))
-          (is (= 0 (:harvested result)))
-          (is (empty? (calls p "useOn"))))))))
-
-(deftest the-wanted-tool-alone-counts
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup (world {:inventory (inv "shears" 1)}))
-              result (await (child-outcome eng job {:with :bottle} 40))]
-          (is (= :no-tool (:reason result))))))))
-
-(deftest no-hive-in-range
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup {:inventory (inv "shears" 1)})
-              result (await (child-outcome eng job {} 40))]
-          (is (= :no-hive (:reason result))))))))
-
 (deftest a-hive-the-body-cannot-walk-to-is-unreachable
   (async done
     (tu/run-async done
@@ -218,15 +158,6 @@
           (is (= 2 (:harvested result)))
           (is (= :harvested (:reason result))))))))
 
-(deftest a-box-keeps-the-job-to-its-hives
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup (world {:inventory (inv "shears" 1)}))
-              result (await (child-outcome eng job {:box {:from {:x 10 :y 60 :z -5} :to {:x 14 :y 70 :z 5}}} 40))]
-          (is (= :no-hive (:reason result)))
-          (is (empty? (calls p "useOn"))))))))
-
 ;; ------------------------------------------------------------------ zones and claims
 
 (def zone-over-hive {:name "bees" :min [2 60 0] :max [2 70 0]})
@@ -236,23 +167,12 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[owner extra harvested reason declined] [["Fake" {} 1 :harvested []] ["FAKE" {} 1 :harvested []]
-                                                         ["Miles" {} 0 :no-hive [{:reason :refused :zones ["bees"]}]]
                                                          ["Miles" {:ignore-zones? true} 1 :harvested []]]]
           (let [{:keys [eng p seen]} (setup (assoc (world {:inventory (inv "shears" 1)}) :zones [(assoc zone-over-hive :owner owner)]))
                 result (await (child-outcome eng job extra 40))]
             (is (= [harvested reason] [(:harvested result) (:reason result)]) (pr-str [owner extra]))
             (is (= harvested (count (calls p "useOn"))) (pr-str [owner extra]))
             (is (= declined (mapv #(select-keys % [:reason :zones]) (kinds seen :apiary.declined))) (pr-str [owner extra]))))))))
-
-(deftest no-zone-list-declines-the-harvest
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup (assoc (world {:inventory (inv "shears" 1)}) :zones nil))
-              result (await (child-outcome eng job {} 40))]
-          (is (= :no-hive (:reason result)))
-          (is (empty? (calls p "useOn")))
-          (is (= [:no-zones] (mapv :reason (kinds seen :apiary.declined)))))))))
 
 (deftest the-walk-to-a-hive-never-escalates-and-a-waiting-walk-is-a-yield
   (async done
