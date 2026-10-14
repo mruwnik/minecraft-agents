@@ -2,9 +2,9 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
-            [jobs.lib.combat :as combat]
             [jobs.lib.util :as u]
             [jobs.lib.hunting :as hunting]
+            [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]))
 
 (def doc
@@ -12,8 +12,9 @@
 
   The herd is the animals of the kind inside a bound: :box when set, else :radius blocks around :centre
   ({:x :z}, horizontal), else :radius blocks around the body. Babies are never targets and never count as
-  adults. With :keep or fewer adults in the bound at the start it ends at once, stopped :too-few (warn cull.too-few, with
-  :mob :keep and :in-range), so a held cull never blocks the queue.
+  adults. With :keep or fewer adults in the bound at the start it ends at once, condition-failed :too-few (warn cull.too-few, with
+  :mob :keep and :in-range), so a held cull never blocks the queue. The weapons are the call's :use :tools (default
+  the best carried).
 
   One call is the whole run, a loop of these:
   - With a target: the attack child fights it. It is booked killed, or skipped when attack gave up or lost it.
@@ -25,8 +26,11 @@
 
   With :deposit-first? true it first deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
 
-  Ends with info cull.done and {:killed n :remaining adults-in-bound :babies n :reason r :skipped [ids]}. Skipped
-  animals stay alive and still count as adults, so they still breed.
+  Ends with info cull.done and the data {:killed n :remaining adults-in-bound :babies n :reason r :skipped [ids]}.
+  Skipped animals stay alive and still count as adults, so they still breed. The ending: :done for :count and :keep,
+  and for any other reason when the call's :least (default 1) animals were killed; else condition-failed for
+  :refused and :no-zones, nothing-possible for the rest, with r as the cause. It yields (:continue) only while a
+  child waits on the world.
   Reasons:
   - :count: :killed reached :count (nil: no cap).
   - :keep: at most :keep adults remain. The census is live at every step, so the last :keep are never taken.
@@ -48,10 +52,15 @@
    :count {:doc "most animals to kill in one run; nil: no cap" :spec (a/int-in 1 nil) :default nil}
    :collect-radius {:doc "how far around to collect drops after a kill" :spec (a/num-in 0 nil) :default 8}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
-   :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
    :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default false}
    :max-skips {:doc "animals skipped in a row before the cull gives up" :spec (a/int-in 1 nil) :default 3}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
+
+(def target [:mob :box :centre])
+
+(def defaults {:least 1 :use {:tools :attack}})
+
+(def conditions "None wait: too few adults end the first round." [])
 
 (defn corners
   "The eight corners of a box of cells: the far corners are the outer edges of the max cells."
@@ -104,24 +113,38 @@
          (sort-by (juxt #(if (false? (.-hittable %)) 1 0)
                         #(u/dist here (u/pos-of (.-pos %))))))))
 
-(defn check
-  "Always: too few adults at the start end the job in its round."
-  [_c]
-  true)
+(defn done?
+  "The animals killed, and the adults above :keep that are left. Never :done? itself: the cull ends with its event and data."
+  [c]
+  {:done? false :units :animals :done (:killed (ctx/mem c) 0)
+   :left (max 0 (- (count (:adults (census c))) (:keep (:args c))))})
+
+(defn quote-of [c]
+  {:uses {:time [0 (* 20 (or (:count (:args c)) 4)) ##Inf]}})
 
 (defn too-few!
-  "Warn and end the job stopped :too-few."
+  "Warn and end the job condition-failed :too-few."
   [c]
   (let [{:keys [mob keep]} (:args c)
         in-range (count (:adults (census c)))
         text (str "cull stopped: " in-range " " mob " adults in the bound, keeping " keep)
-        out {:status :stopped :reason :too-few :mob mob :keep keep :in-range in-range :killed 0 :text text}]
+        out {:reason :too-few :mob mob :keep keep :in-range in-range :killed 0 :text text}]
     (ctx/emit! c :cull.too-few :warn out)
-    (ctx/result! c out)
-    :done))
+    (ctx/end c :condition-failed :too-few out)))
+
+(defn ending-of
+  "The ending of a cull of killed animals that stopped for reason: :done for :count and :keep or when the call's :least
+  was killed, :condition-failed for a refusal, else :nothing-possible with reason as the cause; data its result."
+  [c reason killed data]
+  (let [least (:least (ctx/frozen-call c) 1)
+        need (if (= :all least) (or (:count (:args c)) 1) least)]
+    (cond
+      (or (#{:count :keep} reason) (>= killed need)) (ctx/end c :done nil data)
+      (#{:refused :no-zones} reason) (ctx/end c :condition-failed reason data)
+      :else (ctx/end c :nothing-possible reason data))))
 
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job."
+  "Emit the outcome and end the call (ending-of)."
   [c reason]
   (let [killed (:killed (ctx/mem c) 0)
         {:keys [adults babies]} (census c)
@@ -129,8 +152,7 @@
              :reason reason :skipped (vec (:skipped (ctx/mem c)))}]
     (ctx/emit! c :cull.done :info (assoc out :text (str "cull done: " (name reason) ", killed " killed
                                                        ", " (count adults) " adults left")))
-    (ctx/result! c out)
-    :done))
+    (ending-of c reason killed out)))
 
 (defn give-up!
   "Warn about the animals left alive, then end with reason."
@@ -142,9 +164,9 @@
     (finish! c reason)))
 
 (defn attack-opts
-  "Options for hunting.attack!: a search around the reach; yields while waiting, ends with :gave-up."
+  "Options for hunting.attack!: a search around the reach; ends with :gave-up."
   [c]
-  {:radius (+ (reach c) 16) :waiting :continue :give-up #(give-up! % :gave-up)
+  {:radius (+ (reach c) 16) :give-up #(give-up! % :gave-up)
    :job "jobs.animals.cull" :rule-fn (constantly :cull)})
 
 (defn none!
@@ -152,33 +174,34 @@
   [c]
   (give-up! c (or (animals/refusal c) :none)))
 
-(defn ^:async step [c]
+(defn ^:async step
+  "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child waits on the world) or an ending."
+  [c]
   (let [now (ctx/now c)
         {:keys [keep] wanted :count} (:args c)]
     (if (and (not (:started (ctx/mem c))) (<= (count (:adults (census c))) keep))
       (too-few! c)
       (do
-    (ctx/update-mem! c update :started #(or % now))
-    (let [{:keys [target collecting killed skipped]} (ctx/mem c)]
-      (if target
-        (await (hunting/attack! c (attack-opts c)))
-        (if collecting
-          (await (hunting/collect! c :continue))
-          (let [adults (:adults (census c))
-                next-target (first (candidates c adults))]
-            (cond
-              (and wanted (>= (or killed 0) wanted)) (finish! c :count)
-              (<= (count adults) keep) (finish! c :keep)
-              (and (nil? next-target) (seq skipped)) (give-up! c :unreachable)
-              (nil? next-target) (await (hunting/search! c none!))
-              :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
-                        (await (hunting/attack! c (attack-opts c)))))))))))))
+        (ctx/update-mem! c update :started #(or % now))
+        (let [{:keys [target collecting killed skipped]} (ctx/mem c)]
+          (cond
+            target (await (hunting/attack! c (attack-opts c)))
+            collecting (await (hunting/collect! c :yield))
+            :else
+            (let [adults (:adults (census c))
+                  next-target (first (candidates c adults))]
+              (cond
+                (and wanted (>= (or killed 0) wanted)) (finish! c :count)
+                (<= (count adults) keep) (finish! c :keep)
+                (and (nil? next-target) (seq skipped)) (give-up! c :unreachable)
+                (nil? next-target) (await (hunting/search! c none!))
+                :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
+                          (await (hunting/attack! c (attack-opts c))))))))))))
 
 (defn ^:async round
   "The whole attempt: loop the steps until one ends or yields."
   [c]
   (if-let [t (and (:deposit-first? (:args c)) (await (trip/ready! c)))]
     t
-    (loop []
-      (let [r (await (step c))]
-        (if (= :again r) (recur) r)))))
+    (let [r (await (pace/steps! c #(step c)))]
+      (if (= :yield r) :continue r))))

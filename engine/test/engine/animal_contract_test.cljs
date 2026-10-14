@@ -26,7 +26,9 @@
                       ['jobs.animals.leash {:mob "cow"}]
                       ['jobs.animals.unleash {}]
                       ['jobs.animals.breed {:mob "cow" :count 2}]
-                      ['jobs.animals.pen-check {:at [2 64 2]}]]]
+                      ['jobs.animals.pen-check {:at [2 64 2]}]
+                      ['jobs.animals.cull {:mob "cow" :keep 1}]
+                      ['jobs.animals.shut-gate {}]]]
     (is (some? (:conditions (job sym))) (str sym " has conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
@@ -101,6 +103,10 @@
 (defn ^:async hunting
   [args world]
   (await (seek/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) (list 'jobs.combat.hunt args))))
+
+(defn ^:async hunting-cull
+  [args world]
+  (await (seek/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) (list 'jobs.animals.cull args))))
 
 (deftest a-hunt-ends-with-a-kind-and-a-cause
   (async done
@@ -193,3 +199,16 @@
                  (await (ending '(jobs.animals.pen-check {:at [2 64 2] :max-cells 100}) (w {"2,64,-1" "air"})))))
           (is (= {:event :stopped :kind :condition-failed :reason :no-pen}
                  (await (ending '(jobs.animals.pen-check {}) (w {}))))))))))
+
+;; ------------------------------------------------------------------ cull
+
+(deftest a-cull-ends-with-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :completed} (select-keys (await (hunting-cull {:keep 0} {:inventory h/sword :entities [(cow 1 3)]})) [:event])))
+        (is (= {:event :stopped :kind :condition-failed :reason :too-few}
+               (await (hunting-cull {:keep 2} {:inventory h/sword :entities [(cow 1 3)]}))))
+        (is (= {:event :stopped :kind :nothing-possible :reason :unreachable}
+               (await (hunting-cull {:keep 0} {:inventory h/sword :entities [(assoc (cow 1 3) :invulnerable true)]})))
+            "an animal that cannot be hurt: 0 killed is not done")))))

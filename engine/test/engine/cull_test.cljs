@@ -193,8 +193,8 @@
             (is (= keep (count (world-ids s))) (str "keep " keep))
             (is (= (- 4 keep) (:killed (done-event s))) (str "keep " keep))))))))
 
-(deftest check-and-round-are-exported
-  (is (fn? cull/check))
+(deftest conditions-and-round-are-exported
+  (is (vector? cull/conditions))
   (is (fn? cull/round)))
 
 (deftest cull-follows-zones-and-claims

@@ -259,35 +259,6 @@
   [c]
   {:radius (+ (:radius (:args c)) 8) :give-up give-up! :job "jobs.combat.hunt" :rule-fn allowed-by})
 
-(defn book-outcome!
-  "Book the attack child's ending e for target: a kill, or a skipped animal. Then start collecting."
-  [c target e]
-  (let [killed? (some #{target} (get-in e [:data :killed]))]
-    (when killed? (hunting/kill-event! c target))
-    (ctx/update-mem! c (fn [m]
-                         (-> (if killed?
-                               (-> m (update :killed (fnil inc 0)) (assoc :skips 0))
-                               (-> m (update :skipped (fnil conj []) target) (update :skips (fnil inc 0))))
-                             (dissoc :target)
-                             (assoc :collecting true))))))
-
-(defn ^:async attack!
-  "Call the attack child on the target (a whole fight) with the call's weapons; books its end. :again, :yield while the
-  child waits on the world, or the ending after too many skips in a row (opts :give-up)."
-  [c {:keys [radius give-up] :as opts}]
-  (let [target (:target (ctx/mem c))
-        _ (hunting/note-target! c target opts)
-        tools (ctx/use c :tools)
-        e (await (ctx/call c :attack 'jobs.combat.attack
-                           (cond-> {:targets [target] :radius radius :lost-s 1 :absent :done}
-                             tools (assoc :use {:tools tools}))))]
-    (if (= :continue e)
-      :yield
-      (do (book-outcome! c target e)
-          (if (>= (:skips (ctx/mem c) 0) (:max-skips (:args c)))
-            (give-up c)
-            :again)))))
-
 (defn ^:async step
   "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child is waiting on the world) or :done."
   [c]
@@ -300,14 +271,14 @@
           next-target (first (candidates c))]
       (cond
         (and first? (hostile? c) (not (armed? c))) (unarmed! c)
-        target (await (attack! c (attack-opts c)))
+        target (await (hunting/attack! c (attack-opts c)))
         collecting (await (hunting/collect! c :yield))
         (>= (or killed 0) wanted) (finish! c :count)
         (<= (count (present c)) keep) (finish! c :keep)
         (and (nil? next-target) (seq (spare-rules c))) (finish! c :spared)
         (nil? next-target) (await (hunting/search! c #(finish! % :none)))
         :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
-                  (await (attack! c (attack-opts c))))))))
+                  (await (hunting/attack! c (attack-opts c))))))))
 
 (defn ^:async hunt-round
   "The whole hunt of one kind: steps until it ends; yields only while a child waits on the world."
