@@ -141,6 +141,32 @@
            (when (some-> fields (#(% e)) .-baby true?) {:baby true})
            (when (identical? e (.-entity source)) {:self? true}))))
 
+(defn wrap-heard
+  "The primitives object p (perception-wrapped over senses/wrap) with heardMobs({radius, names, max}): the passive mobs
+  the body hears but has no line to, nearest first, as {id name kind distance direction band}; what a sound tells,
+  never the place (rough-hearing)."
+  [^js p]
+  (let [out (js/Object.assign #js {} p)
+        per (.-perception p)]
+    (aset out "heardMobs"
+          (fn [a]
+            (let [{:keys [radius names max] :or {max 32}} (js->clj (or a #js {}) :keywordize-keys true)
+                  ^js eye (some-> per :raw .eye)
+                  from (when eye {:x (.-x eye) :y (.-y eye) :z (.-z eye)})]
+              (if-not (and from (fn? (.-unseenPassives p)))
+                #js []
+                (->> (array-seq (.unseenPassives p #js {:radius (or radius (:hearing (:opts per)))}))
+                     (filter (fn [^js e] (and (or (nil? names) (some #{(.-name e)} names))
+                                              (= :heard (perception/sense-thing per eye (.-pos e) false false)))))
+                     (map (fn [^js e] (let [^js pos (.-pos e)]
+                                        (clj->js (assoc (rough-hearing from {:x (.-x pos) :y (.-y pos) :z (.-z pos)})
+                                                        :id (.-id e) :name (.-name e) :kind (.-kind e)
+                                                        :distance (.-distance e))))))
+                     (sort-by #(.-distance ^js %))
+                     (take max)
+                     into-array)))))
+    out))
+
 (defn prune [entities now]
   (into {} (filter (fn [[_ entity]] (> (:expires-at entity) now))) entities))
 

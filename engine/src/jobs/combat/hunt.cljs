@@ -40,8 +40,8 @@
   3. :killed reaching :count ends :count.
   4. At most :keep adults present ends :keep. Skipped animals still count.
   With a :color only unsheared sheep of that colour count and are hunted (the :keep rule applies to them: the last :keep stay).
-  5. No adult of the kind in sight within :radius (animals heard below a lip are not in sight): the body walks to up to four
-     look-outs 3 blocks round where it started and looks round at each (jobs.lib.vantage), before step 4 or the end below.
+  5. No adult of the kind in sight within :radius but some heard (below a lip, behind a bank): before step 4 or the end below
+     the body steps up to four times toward the sound and looks round (jobs.lib.vantage). Nothing heard, no steps.
      No candidate (present, not skipped) ends :none, on the second such round in a row, after a 1 s wait.
   6. Otherwise the nearest candidate becomes the :target and is attacked in the same round.
      The target stays until killed or given up on, even when a nearer animal turns up.
@@ -195,17 +195,18 @@
   (let [m (too-few c)]
     (assoc m :killed 0 :text (too-few-text m))))
 
-(defn unseen-kind?
-  "Whether no adult of the kind is in sight within :radius and not every look-out was tried: animals heard below a lip
-  are looked for before the hunt says there are none."
+(defn heard-kind
+  "The unseen animals of the kind within :radius that the body hears, while no adult of it is in sight and steps are
+  left: the cue to step toward the sound."
   [c]
-  (and (empty? (present-any c)) (not (vantage/done? c))))
+  (when (and (empty? (present-any c)) (not (vantage/done? c)))
+    (seq (vantage/heard c [(:mob (:args c))] (:radius (:args c))))))
 
 (defn start-fact
   "The cause that bars a hunt's first step, or nil: nothing of the :color in range, or :keep or fewer adults.
-  Nil while none of the kind is in sight and the look-outs are untried: the first steps look for them."
+  Nil while the kind is heard and not in sight: the first steps look for it."
   [c]
-  (when-not (or (:started (ctx/mem c)) (kinds c) (unseen-kind? c))
+  (when-not (or (:started (ctx/mem c)) (kinds c) (heard-kind c))
     (cond
       (and (:color (:args c)) (empty? (present c))) (no-color c)
       (<= (count (present c)) (keep-of c)) (too-few-cause c))))
@@ -285,7 +286,8 @@
         target (await (hunting/attack! c (attack-opts c)))
         collecting (await (hunting/collect! c :yield))
         (>= (or killed 0) wanted) (finish! c :count)
-        (unseen-kind? c) (or (await (hunting/look-further! c #(seq (present-any c)))) (await (step c)))
+        (heard-kind c) (let [r (await (vantage/step! c (heard-kind c) #(seq (present-any c))))]
+                         (if (= :partial r) :yield :again))
         (<= (count (present c)) keep) (finish! c :keep)
         (and (nil? next-target) (seq (spare-rules c))) (finish! c :spared)
         (nil? next-target) (await (hunting/search! c #(finish! % :none)))

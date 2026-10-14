@@ -362,20 +362,31 @@
             (is (finished? s) (str targets))
             (is (= :absent (:reason (done-event s))) (str targets))
             (is (= 1 (count (events-of s :attack.done))) (str targets))
-            (is (every? #(zero? (count (h/calls p %))) ["equip" "attack"]) (str targets))
+            (is (every? #(zero? (count (h/calls p %))) ["equip" "moveTo" "attack"]) (str targets))
             (is (pos? (count (h/calls p "look"))) (str targets " turned before ending absent"))
             (is (pos? (count (h/calls p "wait"))) (str targets))))))))
 
-(deftest a-target-out-of-sight-is-stepped-to-before-the-job-ends-absent
+(deftest a-target-heard-but-not-seen-is-stepped-toward-before-the-job-ends-absent
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {:inventory h/sword :entities [{:id 5 :name "cow" :kind "passive" :pos {:x 6 :y 64 :z 0}}]} 20)
-              _ (hunt-test/hide-passives-west-of! (:p s) 2)
+        (let [s (h/setup {:inventory h/sword :entities [{:id 5 :name "cow" :kind "passive" :pos {:x 0 :y 64 :z -8}}]} 20)
+              _ (hunt-test/hear-passives-until! (:p s) #(<= (:z %) -2))
               _ (core/submit! (:eng s) (spec {:targets [5]}) {})
               _ (await (run-ticks s 60 700))]
-          (is (= [5] (take 1 (attacked s))) "attacked after stepping east to see it")
+          (is (= [5] (take 1 (attacked s))) "attacked after stepping north to see it")
           (is (not= :absent (:reason (done-event s)))))))))
+
+(deftest a-target-neither-seen-nor-heard-is-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword :entities []} 20)
+              _ (hunt-test/hear-passives-until! (:p s) (constantly false))
+              _ (core/submit! (:eng s) (spec {:targets [5]}) {})
+              _ (await (run-ticks s 60 700))]
+          (is (= :absent (:reason (done-event s))))
+          (is (zero? (count (h/calls (:p s) "steer")))))))))
 
 (deftest a-target-arriving-within-the-grace-is_attacked
   (async done

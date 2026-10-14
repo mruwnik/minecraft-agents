@@ -1,33 +1,44 @@
 (ns jobs.lib.vantage
-  "Stepping to see: a body that heard animals it cannot see (below a pit lip, behind a bank) walks to a few cells round
-  the place it started from and looks round at each, as a player steps to the edge, before a job says they are absent."
+  "Stepping to see: a body that hears animals it cannot see (below a pit lip, behind a bank) walks a few blocks toward
+  where the sound came from and looks round there, as a player steps to the edge, before a job says they are absent."
   (:require [engine.ctx :as ctx]
+            [engine.entity-observations :as obs]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.util :as u]))
 
-(def ring
-  "Offsets {x z} from the first cell, one look-out each."
-  [[3 0] [-3 0] [0 3] [0 -3]])
+(def max-steps "The most steps toward a sound in one run." 4)
+(def reach "Blocks one step goes." 3)
 
 (defn done?
-  "Whether every look-out was tried this run."
+  "Whether every step was taken this run."
   [c]
-  (>= (:index (:vantage (ctx/mem c)) 0) (count ring)))
+  (>= (:steps (:vantage (ctx/mem c)) 0) max-steps))
+
+(defn heard
+  "The unseen animals named names within radius that the body hears, nearest first (look/heard-entities)."
+  [c names radius]
+  (look/heard-entities (:primitives c) {:names names :radius radius}))
+
+(defn toward
+  "The cell reach blocks from the body's own toward the compass direction of a heard row, at its height."
+  [c {:keys [direction]}]
+  (let [self (look/cell-of (u/self-pos c))
+        a (* (/ js/Math.PI 4) (.indexOf obs/directions (keyword direction)))]
+    {:x (+ (:x self) (js/Math.round (* reach (js/Math.sin a))))
+     :y (:y self)
+     :z (- (:z self) (js/Math.round (* reach (js/Math.cos a))))}))
 
 (defn ^:async step!
-  "Walk to the next look-out and look round there, testing (f) after each look. Resolves to :found (a look showed what (f) tests for), :partial (the walk waits on the world: yield, call again), :next (nothing yet, more look-outs left) or
-  nil when none is left."
-  [c f]
-  (let [{:keys [home index] :or {index 0}} (:vantage (ctx/mem c))
-        home (or home (look/cell-of (u/self-pos c)))]
-    (ctx/update-mem! c assoc-in [:vantage :home] home)
-    (if (>= index (count ring))
+  "Walk reach blocks toward the nearest heard animal (rows from heard) and look round there, testing (f) after each
+  look. Resolves to :found (a look showed what (f) tests for), :partial (the walk waits on the world: yield, call
+  again), :next (nothing yet) or nil when no steps are left."
+  [c rows f]
+  (let [steps (:steps (:vantage (ctx/mem c)) 0)]
+    (if (or (>= steps max-steps) (empty? rows))
       nil
-      (let [[dx dz] (nth ring index)
-            r (await (near/go-near! c {:x (+ (:x home) dx) :y (:y home) :z (+ (:z home) dz)} 1
-                                    {:doors :shut :dangers false :escalate false}))]
+      (let [r (await (near/go-near! c (toward c (first rows)) 1 {:doors :shut}))]
         (if (= :partial r)
           :partial
-          (do (ctx/update-mem! c assoc-in [:vantage :index] (inc index))
+          (do (ctx/update-mem! c assoc-in [:vantage :steps] (inc steps))
               (if (await (look/look-around-until! c f)) :found :next)))))))

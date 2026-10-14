@@ -97,6 +97,14 @@
               (js-delete e "width")
               e))))
 
+(defn- unseen-passives
+  "The passive mobs and villagers sense-entities drops for want of a line from the eye, as raw entities: the input of
+  engine.entity-observations/wrap-heard, which turns them into what a sound tells."
+  [raw ^js eye entities max]
+  (->> (array-seq entities)
+       (remove (fn [^js e] (or (#{"hostile" "item" "player"} (.-kind e)) (can-see? raw eye e))))
+       (take max)))
+
 (defn- monsters-near?
   "A hostile within monster-range level and monster-height vertically of the body."
   [^js p ^js s]
@@ -154,6 +162,15 @@
               (if (and eye (pos? (alength entities)))
                 (into-array (sense-entities raw eye entities max))
                 entities))))
+    (aset out "unseenPassives"
+          (fn [a]
+            (let [opts (or a #js {})
+                  max (if (some? (.-max opts)) (.-max opts) 32)
+                  entities (.entities p (doto (js/Object.assign #js {} opts) (aset "max" max-listed)))
+                  eye (.eye raw)]
+              (if eye
+                (into-array (unseen-passives raw eye entities max))
+                #js []))))
     (aset out "sleep"
           (fn [token a]
             (let [^js s (.self p)

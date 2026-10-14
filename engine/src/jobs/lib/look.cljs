@@ -205,6 +205,15 @@
       (vec (concat (remove hostile? (filter shown? raw)) (filter hostile? known)))
       (vec (filter shown? raw)))))
 
+(defn heard-entities
+  "The passive mobs the body hears but cannot see, nearest first, as cljs maps {:id :name :kind :distance :direction
+  :band} (opts: :radius :names :max): what a sound tells, never a place. Empty for primitives without hearing."
+  [p opts]
+  (u/note-read! :entities (select-keys opts [:radius :names]))
+  (if-let [f (aget p "heardMobs")]
+    (js->clj (.call f p (clj->js opts)) :keywordize-keys true)
+    []))
+
 (defn seen-items
   "The item entities within opts (:radius, :max) the body can see, as JS entities of entities(): not those hidden
   behind a wall (visible false)."

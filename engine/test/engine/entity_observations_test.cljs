@@ -327,3 +327,27 @@
     (is (= :seen (:sense sheep)))
     (is (= {:x 0.5 :y 64 :z 10.5} (:pos sheep)))
     (is (not (contains? sheep :direction)))))
+
+;; ---- heardMobs: the unseen passive mobs a body hears
+
+(defn heard-rig [spec]
+  (let [raw-p (tu/fake (merge {:self {:pos body-pos} :floor [-80 -80 80 80]} spec))
+        raw (fake-raw/create raw-p)
+        per (perception/create raw {:now (constantly 1000000)})]
+    (seen/wrap-heard (perception/wrap (senses/wrap raw-p raw) per))))
+
+(defn cow-at [id x z] {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z z}})
+
+(deftest a-cow-behind-a-wall-is-heard-by-direction-and-band-never-by-place
+  (let [wall (tu/box 5 64 -3 5 69 3 "stone")
+        rows (js->clj (.heardMobs (heard-rig {:blocks wall :entities [(cow-at 2 12.5 0.5) (cow-at 3 0.5 3.5) (cow-at 4 40.5 0.5)]}))
+                      :keywordize-keys true)]
+    (is (= [{:id 2 :name "cow" :kind "passive" :direction "east" :band "far"}]
+           (mapv #(dissoc % :distance) rows))
+        "only the walled-off cow within hearing: the one in the clear is seen, the far one is out of earshot")))
+
+(deftest heard-mobs-answer-the-name-and-radius-filters
+  (let [p (heard-rig {:blocks (tu/box 5 64 -3 5 69 3 "stone") :entities [(cow-at 2 12.5 0.5) (cow-at 3 12.5 1.5)]})]
+    (is (= [2 3] (mapv #(.-id %) (.heardMobs p #js {:names #js ["cow"]}))))
+    (is (empty? (.heardMobs p #js {:names #js ["pig"]})))
+    (is (empty? (.heardMobs p #js {:radius 5})))))
