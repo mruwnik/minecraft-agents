@@ -75,13 +75,13 @@
   Events: build.done (info), build.short, build.gave-up, build.refused and build.wrong (warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   Start facts (one build.declined warn naming the plan and the reason): no zone list read (unless :ignore-zones?) is a
-  failed condition {:reason :no-zones}, also later in the call; a plan that is missing, unreadable or has no cells to
+  failed condition {:reason :no-zones}, also later in the call (a plan that goes bad later ends impossible :plan-trouble too); a plan that is missing, unreadable or has no cells to
   build (in :part) is impossible {:reason :plan-trouble :why text}; at the start, with nothing to place, dig, fetch or
   look at, a failed condition {:reason :no-items :needs {item n}}.
   Wood: a generic wood want (jobs.build.wood: planks, logs, wooden_stairs, wooden_slabs, wooden_doors, wooden_fences,
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
   else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
-  When cells are missing but none of their blocks is carried and none can be fetched, the job waits (:no-items with :needs).
+  When cells are missing but none of their blocks is carried and none can be fetched, the call ends condition-failed :no-items with :needs.
   Material: while cells wait for an item not carried (and not given up or refused), each round fetches it, once no cell can be placed from what is carried (:fetch,
   jobs.lib.need with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is not asked again in the call); a pickaxe block to dig without a pickaxe fetches the tool the same way
   (jobs.items.get-tool). With :fetch false, or once a fetch failed, the build goes on with what is carried and ends
@@ -488,7 +488,9 @@
 (defn ^:async step [c]
   (let [{:keys [trouble wood]} (planned c)]
     (if trouble
-      (ctx/end c :condition-failed (if (= no-zones trouble) {:reason :no-zones} {:reason :plan-trouble :why trouble}) nil)
+      (if (= no-zones trouble)
+        (ctx/end c :condition-failed {:reason :no-zones} nil)
+        (ctx/end c :impossible {:reason :plan-trouble :why trouble} nil))
       (do (when (and wood (nil? (:wood (ctx/mem c)))) (ctx/update-mem! c assoc :wood wood))
           (or (await (fetch-step! c))
               (let [cells (:cells (planned c))]

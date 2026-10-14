@@ -36,6 +36,11 @@
   (assoc (dissoc real :conditions :target :quote-of) :check (constantly true)
          :round (fn ^:async stub-round [c] (round-fn c) :done)))
 
+(defn ending-job
+  "The real job of sym with its round replaced by one that ends with kind and cause."
+  [sym kind cause]
+  (assoc (get registry/jobs sym) :conditions [] :round (fn ^:async ending-round [c] (ctx/end c kind cause nil))))
+
 (defn done [result] (fn [_] result))
 
 (def furnace-1 [5 65 102])
@@ -67,7 +72,7 @@
 (defn setup
   "An engine over the site with every child of the job stubbed. results: job symbol -> (fn [ctx]) giving the child's result,
   the default being success."
-  [& {:keys [results inventory dir pos plans fail-smelt entities triggers]}]
+  [& {:keys [results inventory dir pos plans fail-smelt entities triggers ending-jobs]}]
   (let [results (atom results)
         furnaces (atom {})
         p (tu/seeing-all (tu/fake {:self {:pos (or pos {:x 0 :y -27 :z 10})} :blocks (cond-> site-blocks pos (assoc "0,63,100" "stone" "12,63,100" "stone" "12,59,100" "stone"))
@@ -101,7 +106,7 @@
                            (ctx/result! c {:arrived true}))))
         clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        eng (core/create {:primitives p :jobs (assoc (merge registry/jobs stubs) 'jobs.movement.go-to go-to 'jobs.items.smelt (smelt-stub p calls furnaces fail-smelt))
+        eng (core/create {:primitives p :jobs (merge (assoc (merge registry/jobs stubs) 'jobs.movement.go-to go-to 'jobs.items.smelt (smelt-stub p calls furnaces fail-smelt)) ending-jobs)
                           :triggers (or triggers triggers/all) :dir (or dir (tu/tmp-dir)) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
                           :world (world/of-data (merge {"base" plan} plans) {"field-base" blueprint} [])})]
@@ -308,6 +313,27 @@
           (is (= {:child "jobs.strip.seal" :because :no-blocks} (select-keys seal-fails [:child :because])))
           (is (= :done (:status done)))
           (is (= {:sealed 2 :stripped 1} (:segments done))))))))
+
+(deftest a-childs-ending-kind-is-passed-through
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [kind [:condition-failed :limit-reached :impossible]]
+          (let [r (await (start! (setup :ending-jobs {'jobs.strip.seal (ending-job 'jobs.strip.seal kind :whatever)}) args))]
+            (is (= [kind :child-failed] (ends r)) (str kind))
+            (is (= {:child "jobs.strip.seal" :because :whatever} (select-keys r [:child :because])))))))))
+
+(deftest a-failed-walk-down-keeps-the-go-tos-own-kind-and-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shaft {:id "shaft" :kind :mineshaft :parts [{:id "stair" :stair {:from [12 64 100] :heading :east :to-y 60} :want :clear}]}
+              run (fn [walk-end] (start! (setup :pos {:x 0 :y 64 :z 100} :plans {"shaft" shaft} :ending-jobs {'jobs.movement.go-to (ending-job 'jobs.movement.go-to (first walk-end) (second walk-end))}) (assoc args :shaft "shaft")))
+              stuck (await (run [:nothing-possible :unreachable]))
+              blocked (await (run [:condition-failed :no-path]))]
+          (is (= [:nothing-possible :unreachable] (ends stuck)))
+          (is (= [:condition-failed :child-failed] (ends blocked)))
+          (is (= {:child "jobs.movement.go-to" :because :no-path} (select-keys blocked [:child :because]))))))))
 
 (deftest a-call-without-site-or-base-or-at-for-a-new-site-is-impossible
   (async done

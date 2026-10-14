@@ -46,8 +46,9 @@
   Needs :site and :base (a new site also :at), else impossible :bad-args. A start in the strip phase with a real danger near
   waits (:danger), and a running strip phase yields while one is near.
   Ends :done with data {:segments {state n} :taken {class n} :hauled {item n} :smelted {raw-item n} :smelt-failed [{:furnace :reason}]},
-  or condition-failed (:bad-plan :no-site :no-shears :no-torches :food-short :base-full, or :child-failed when the child's
-  ending was a failed condition) or nothing-possible (:unreachable :trips-exhausted, other :child-failed) with the same data and
+  or condition-failed (:bad-plan :no-site :no-shears :no-torches :food-short :base-full, or :child-failed), nothing-possible
+  (:unreachable when the walk down found no way, :trips-exhausted, :child-failed), or :child-failed ending with the kind of a
+  child that ended condition-failed, limit-reached or impossible, with the same data and
   :phase, :child and :because (the child's reason) for a child. Events: strip.site.done (info), strip.site.stopped (warn).")
 
 (a/defargs args
@@ -253,7 +254,8 @@
         w (await (child/call-walk* c :enter {:pos cell :range (if above? 1 2) :escalate (not above?)}))]
     (cond
       (= :continue w) :continue
-      (not= :done (:kind w)) (stop! c :unreachable {:cell cell})
+      (not= :done (:kind w)) (stop! c (if (= :nothing-possible (:kind w)) :unreachable :child-failed)
+                                    {:cell cell :child "jobs.movement.go-to" :because (contract/cause-key w) :child-kind (:kind w)})
       above? (let [f (await (run-all! c [[:stair 'jobs.access.stair {:dir :down :heading heading :y to-y :through id :stock-torches false
                                                                        :ignore-zones? (:ignore-zones? (:args c))}]]))]
                (cond (= :continue f) :continue f (child-stop! c f) :else :again))
@@ -390,6 +392,8 @@
              [:home 'jobs.memory.forget-place {:name "home"}])]
     spawn-bed (conj [:spawn 'jobs.survival.set-spawn {:bed (vec3 spawn-bed)}])))
 
+(def passed-kinds "Child ending kinds a :child-failed stop ends with as its own." #{:condition-failed :limit-reached :impossible})
+
 (defn finish!
   "End the call: done, or stopped with fields, whose :reason is the cause."
   [c status fields]
@@ -402,7 +406,10 @@
                (assoc (merge data (select-keys fields [:reason])) :text text))
     (if (= :done status)
       (ctx/end c :done nil data)
-      (ctx/end c (if (or (condition-reasons reason) (= :condition-failed child-kind)) :condition-failed :nothing-possible) reason data))))
+      (ctx/end c (cond (and (= :child-failed reason) (passed-kinds child-kind)) child-kind
+                       (condition-reasons reason) :condition-failed
+                       :else :nothing-possible)
+            reason data))))
 
 (defn ^:async restore! [c s]
   (let [f (when (:was s) (await (run-all! c (restore-steps (:was s)))))]
