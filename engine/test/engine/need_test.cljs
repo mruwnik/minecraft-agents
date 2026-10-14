@@ -127,6 +127,14 @@
               "the same need straight after a done fetch, nothing used up meanwhile")
           (is (= 1 (count @(:obtain r))) "the child is not called again"))))))
 
+(deftest a-want-naming-no-item-skips-the-repeat-guard
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run! #(need/fetch! % 'jobs.items.obtain {:count 1} :need {:count 1} nil) nil 2))]
+          (is (= [:done :done] (map :kind @got)))
+          (is (= 2 (count @(:obtain r)))))))))
+
 (deftest a-need-again-after-using-up-what-was-fetched-fetches-again
   (async done
     (tu/run-async done

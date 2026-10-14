@@ -42,7 +42,7 @@
   "Whether the done fetch booked in the caller's memory was for want, and none of what it got has been used up."
   [c want]
   (when-let [{w :want have :have} (:need/done (ctx/mem c))]
-    (and (= want w) (let [now (counts c (keys have))] (every? (fn [[n k]] (>= (now n) k)) have)))))
+    (and (= want w) (seq have) (let [now (counts c (keys have))] (every? (fn [[n k]] (>= (now n) k)) have)))))
 
 (defn feet [c]
   (let [{:keys [x y z]} (u/self-pos c)]

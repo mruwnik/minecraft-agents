@@ -16,6 +16,11 @@
                  (repeat :condition-failed))
          (zipmap [:timeout :low-health :tool-spent] (repeat :limit-reached))))
 
+(def short-waits
+  "Wait reasons of an old job that mean the world is busy and the wait passes: under ctx/call such a decline after
+  the child's first round is a :continue yield; any other decline is condition-failed."
+  #{:cooking :night-sheltered :torches-cooking :chunks-loading})
+
 (def reason-lines
   "The limit line ({:line ..}, as the contract gives it) of an old limit reason; :reason keeps what an old parent reads."
   {:timeout :time :low-health :health :tool-spent :wear})

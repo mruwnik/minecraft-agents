@@ -12,8 +12,10 @@
             [engine.core.quote :as quote]
             [engine.core.tally :as tally]
             [engine.contract :as contract]
+            [engine.args :as a]
             [engine.chat :as chat]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             ["crypto" :as crypto]))
 
 (declare call call-child quote-ctx)
@@ -252,26 +254,44 @@
             call (first (ending/call-of c def))]
         (assoc c :quote-call call :left (constantly (contract/left {:call call} 0)) :job-ways (:ways def))))))
 
+(a/defargs settings
+  {:engine.core.round/short-wait-rounds
+   {:default 600 :spec (a/int-in 1 nil)
+    :doc "Consecutive rounds an old child under ctx/call may yield on a short wait (legacy/short-waits) before its caller sees condition-failed :wait-too-long."}})
+
 (defn ^:async old-round
-  "One round of old job def as the ctx/call child c (its id child-id) under parent base: :continue or its ending
-  (engine.core.legacy). Its check runs every round, as under call-child. A check that declines before the child's
-  first round (fresh?) ends it condition-failed; a decline after (its check, or its round for a declined child's
-  wait) is a short wait: :continue, the child and its memory kept, the wait reason put in waited."
-  [base c child-id def fresh? waited]
+  "One round of old job def as the ctx/call child c (its id child-id) at slots under parent base: :continue or its
+  ending (engine.core.legacy). Its check runs every round, as under call-child. A decline before the child's first
+  round (counted in its frame) ends it condition-failed; so does one after it unless its wait reason is a short
+  wait (legacy/short-waits): then :continue, the child and its memory kept, the wait put in waited, up to
+  short-wait-rounds in a row."
+  [eng base c child-id def slots waited]
   (let [wait (atom nil)
         child-wait (:child-wait base)
-        results (:results base)]
+        results (:results base)
+        store (:store eng)
+        frame (fn [] (mem/job-mem (mem/view store) (:root base) slots))
+        rounds (:call/rounds (frame) 0)
+        note! (fn [rounds* waits*] (mem/update-job! store (:root base) slots assoc :call/rounds rounds* :call/waits waits*))
+        failed (fn [w] (legacy/ending-of :declined nil w))
+        short-wait (fn [w rounds]
+                     (cond
+                       (not (legacy/short-waits (:reason w))) (failed w)
+                       (>= (:call/waits (frame) 0) (settings/get settings :engine.core.round/short-wait-rounds))
+                       (failed (assoc w :why :wait-too-long))
+                       :else (do (reset! waited w) (note! rounds (inc (:call/waits (frame) 0))) :continue)))]
     (swap! results dissoc child-id)
     (reset! child-wait nil)
     (if-not ((:check def) (assoc c :wait wait))
-      (if fresh?
-        (legacy/ending-of :declined nil (wait-reason @wait))
-        (do (reset! waited (wait-reason @wait)) :continue))
+      (if (zero? rounds)
+        (failed (wait-reason @wait))
+        (short-wait (wait-reason @wait) rounds))
       (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
         (when (= status :error) (throw error))
         (let [e (if (= :declined status)
-                  (do (reset! waited @child-wait) :continue)
-                  (legacy/ending-of status (get @results child-id) nil))]
+                  (short-wait @child-wait (inc rounds))
+                  (do (note! (inc rounds) 0)
+                      (legacy/ending-of status (get @results child-id) nil)))]
           (swap! results dissoc child-id)
           (reset! child-wait nil)
           e)))))
@@ -305,7 +325,7 @@
           own-limit #(limits/ending eng (:root base) slots %)
           r (try (limits/check! eng c)
                  (or (own-limit nil)
-                     (let [r (await (if (ending/contract-job? def) ((:round def) c) (old-round base c child-id def fresh? waited)))]
+                     (let [r (await (if (ending/contract-job? def) ((:round def) c) (old-round eng base c child-id def slots waited)))]
                        (if (= :done (:kind r)) r (or (own-limit nil) r))))
                  (catch :default e
                    (or (own-limit e)
