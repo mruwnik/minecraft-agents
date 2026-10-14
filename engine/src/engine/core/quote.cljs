@@ -5,7 +5,7 @@
   is refused as ctx/call refuses it. A job with no quote-of quotes the mean time of its :job-report entries. ctx/next-way
   picks a contract job's next way and books the ways that failed."
   (:require [engine.contract :as contract]
-            [engine.core.base :refer [now owner?]]
+            [engine.core.base :refer [emit! now owner?]]
             [engine.core.ending :as ending]
             [engine.core.limits :as limits]
             [engine.ctx :as ctx]
@@ -44,10 +44,22 @@
           :else (let [q (await ((:quote-of def) (make-ctx qd)))]
                   (if (> (now eng) qd) contract/too-expensive (checked def q)))))))
 
+(defn over-line
+  "The line b ({:line :least :left}, or nil) that way w of c crosses, when it drops the way: enforced or a least of
+  ##Inf. Otherwise nil, and job.way_would_drop tells it."
+  [eng c w b]
+  (when b
+    (if (or (limits/enforce?) (= ##Inf (:least b)))
+      b
+      (do (emit! eng {:source :job :kind :way_would_drop :level :info :job (mem/path->id (:root c) (:slots c))
+                      :way w :line (:line b) :least (:least b) :left (:left b)})
+          nil))))
+
 (defn ^:async next-way
   "{:way k :dropped {way why}}: the first of c's job ways (in its ways order) the call allows, that has not failed on
   thing this call and whose quote, (quote-of-way way) (a quote, a promise of one, an ending or nil), crosses no line
-  of ctx/left by its least; :way nil when none is left. The way chosen is booked in c's frame: a later child ending
+  of ctx/left by its least (shadow mode keeps it and tells job.way_would_drop; a least of ##Inf always drops); :way
+  nil when none is left. The way chosen is booked in c's frame: a later child ending
   other than :done books it as failed on thing."
   [c quote-of-way thing]
   (let [eng (:engine c)
@@ -64,13 +76,19 @@
                     :else (let [q (await (quote-of-way w))]
                             (cond
                               (nil? q) nil
-                              (contract/ending? q) (:cause q)
-                              :else (contract/breaks q left levels (now eng)))))]
+                              (contract/ending? q) (or (:cause q) :ending)
+                              :else (over-line eng c w (contract/breaks q left levels (now eng))))))]
           (if why
             (recur more (assoc dropped w why))
             (do (when (owner? eng (:token c))
                   (mem/update-job! (:store eng) (:root c) (:slots c) assoc-in [:contract :way] {:way w :thing thing}))
                 {:way w :dropped dropped})))))))
+
+(defn clear-way!
+  "Forget the way the frame of base chose last: it succeeded, so a later failure is no failure of it."
+  [eng {:keys [root slots]}]
+  (when (get-in (mem/job-mem (mem/view (:store eng)) root slots) [:contract :way])
+    (mem/update-job! (:store eng) root slots update :contract dissoc :way)))
 
 (defn book-failure!
   "Book child ending e as a failure of the way the frame of base chose last with next-way, if any."

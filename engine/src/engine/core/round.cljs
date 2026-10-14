@@ -18,12 +18,18 @@
 
 (declare call call-child quote-ctx)
 
+(defn own!
+  "Throw unless the token of base is current: a cut; a quote ctx (no token) gets a plain error."
+  [eng {:keys [token quote-deadline]}]
+  (when quote-deadline (throw (js/Error. "a quote cannot act, call or write")))
+  (when-not (owner? eng token) (throw (cut-error))))
+
 (defn ^:async act!
   "Every acting primitive call from a job: check the ownership token, save
   memory, emit action.started, call, count what it used and yielded on every frame of the chain (engine.core.tally),
   save memory again, emit action.done. A cut rejects here (stale token) or from the primitive."
   [eng {:keys [root slots token chain round reflex] :as base} id k args]
-  (when-not (owner? eng token) (throw (cut-error)))
+  (own! eng base)
   (limits/check! eng base)
   (act-started! eng token root k args)
   (save-memory! eng)
@@ -83,7 +89,7 @@
         base (assoc base :results results :child-wait child-wait
                     :section-depth (or (:section-depth base) (atom 0)) :held (or (:held base) (atom nil)))
         id (mem/path->id root slots)
-        check! #(when-not (owner? eng token) (throw (cut-error)))
+        check! #(own! eng base)
         wrote! (fn [kind] (emit! eng {:source :job :kind :memory_written :level :debug :job id
                                       :chain chain :round round :reflex reflex :memory kind}))]
     {:engine eng :primitives (:primitives eng) :token token :args args :id id
@@ -115,7 +121,7 @@
                      (mem/forget-until! store kind t)
                      (wrote! kind))
      :act (fn [k act-args] (act! eng base id k act-args))
-     :note-walk (fn [status moved] (record-act! eng base :walk #js {:status status} moved))
+     :note-walk (fn [status moved] (check!) (record-act! eng base :walk #js {:status status} moved))
      :call-child (fn [slot def child-args] (call-child eng base slot def child-args))
      :call (fn [slot def child-args] (call eng base child-ending slot def child-args))
      :quote (fn [def quote-args deadline self?]
@@ -194,7 +200,7 @@
                               (:ending result)
                               (assoc :ending (dissoc (contract/for-event (:ending result)) :report)))))
         clear! #(mem/update-job! store (:root base) (:slots base) update :children dissoc slot)]
-    (when-not (owner? eng (:token base)) (throw (cut-error)))
+    (own! eng base)
     (limits/refuse! eng base)
     (emit! eng (assoc fields :kind :child_started))
     (swap! (:results base) dissoc child-id)
@@ -276,7 +282,7 @@
         child-id (mem/path->id (:root base) slots)
         fields {:source :job :level :debug :job child-id :slot slot :chain (conj (:chain base) child-id)
                 :round (:round base) :reflex (:reflex base)}]
-    (when-not (owner? eng (:token base)) (throw (cut-error)))
+    (own! eng base)
     (limits/refuse! eng base)
     (if-let [dup (ending/duplicate-ending eng base def args)]
       (do (emit! eng (assoc fields :kind :duplicate_call :ending dup))
@@ -311,7 +317,7 @@
           (tally/remember! eng (:sym def) (some->> (:target def) (select-keys args)) (:report e))
           (cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended)
           (mem/update-job! store (:root base) (:slots base) update :children dissoc slot)
-          (when-not done? (reset! child-ending e) (quote/book-failure! eng base e))
+          (if done? (quote/clear-way! eng base) (do (reset! child-ending e) (quote/book-failure! eng base e)))
           (limits/check! eng base)
           e)))))))
 

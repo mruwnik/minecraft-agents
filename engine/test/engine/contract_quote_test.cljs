@@ -41,7 +41,7 @@
                (swap! world assoc :seen {:pos (:pos (:args c)) :left (ctx/left c) :a (ctx/way? c :a) :b (ctx/way? c :b)
                                          :mem (ctx/mem c)})
                (try (await (ctx/act c :look #js {:yaw 0 :pitch 0}))
-                    (catch :default _ (swap! world assoc :act-refused true)))
+                    (catch :default e (swap! world assoc :act-refused (.-message e))))
                {:uses {:time [1 2 ##Inf]} :yields {:items {"dirt" [0 1 2]}}})
    :round (fn [_] (swap! world assoc :kid-ran true) :continue)})
 
@@ -55,7 +55,7 @@
           (is (= {:uses {:time [1 2 ##Inf]} :yields {:items {"dirt" [0 1 2]}}} (:got @world)))
           (is (= {:pos [1 2 3] :left {:spend {:time 100} :floor {:health 5}} :a true :b false :mem {}} (:seen @world))
               "the would-be call: given spend clamped to the caller's remainder, the caller's floor, the default ways")
-          (is (:act-refused @world))
+          (is (re-find #"quote cannot act" (str (:act-refused @world))) "a clear error, not a cut")
           (is (not (:kid-ran @world)) "a quote runs no round"))))))
 
 ;; ---------------------------------------------------------------- default quote
@@ -140,6 +140,19 @@
    :quote-of (fn [_] {:uses {:time [1 1 1]} :done [0 2 2]})
    :round (fn [c] (swap! world assoc :ran true) (ctx/end c :done nil))})
 
+(def idle-field
+  (assoc field :quote-of (fn [_] (swap! world update :quotes (fnil inc 0)) {:uses {:time [1 1 1]} :done [0 0 0]})))
+
+(deftest the-default-least-asks-no-quote
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'idle-field idle-field})]
+          (core/submit! eng '(idle-field) {})
+          (await (core/tick! eng))
+          (is (:ran @world))
+          (is (nil? (:quotes @world))))))))
+
 (deftest a-call-whose-quote-cannot-reach-its-least-does-not-start
   (async done
     (tu/run-async done
@@ -156,10 +169,12 @@
 ;; ---------------------------------------------------------------- next-way
 
 (def failer {:conditions [] :args no-args :round (fn [c] (ctx/end c :nothing-possible :empty))})
+(def winner {:conditions [] :args no-args :round (fn [c] (ctx/end c :done nil))})
 
 (defn way-quote [way]
   (case way
     :b {:uses {:time [20 30 40]}}
+    :d (contract/ending :nothing-possible nil nil)
     {:uses {:time [1 2 3]}}))
 
 (def chooser
@@ -173,18 +188,55 @@
               (swap! world assoc :ways [w1 w2 w3 w4])
               (ctx/end c :done nil)))})
 
-(deftest next-way-drops-the-ways-not-allowed-failed-or-over-a-remainder
+(def slow {:line :time :least 20 :left 10})
+
+(deftest next-way-drops-the-ways-not-allowed-failed-or-over-a-remainder-when-enforced
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {'chooser chooser 'failer failer})]
+        (await (settings/with-settings {:engine.contract/enforce-limits true}
+                 (fn ^:async enforced []
+                   (let [{:keys [eng]} (setup {'chooser chooser 'failer failer})]
+                     (core/submit! eng '(chooser) {})
+                     (await (core/tick! eng))
+                     (let [[w1 w2 w3 w4] (:ways @world)]
+                       (is (= {:way :c :dropped {:a :not-allowed :b slow}} w1))
+                       (is (= {:way :e :dropped {:a :not-allowed :b slow :c {:failed :empty} :d :ending}} w2)
+                           "failed on :x for :empty; a nil cause is dropped as :ending")
+                       (is (= :c (:way w3)) "another thing")
+                       (is (= (let [inf {:line :time :least ##Inf :left 10}]
+                                {:way nil :dropped {:a :not-allowed :b inf :c {:failed :empty} :d inf :e inf}})
+                              w4)))))))))))
+
+(deftest next-way-keeps-a-way-over-a-remainder-in-shadow-mode-and-tells-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'chooser chooser 'failer failer})]
           (core/submit! eng '(chooser) {})
           (await (core/tick! eng))
-          (let [[w1 w2 w3 w4] (:ways @world)
-                slow {:line :time :least 20 :left 10}]
-            (is (= {:way :c :dropped {:a :not-allowed :b slow}} w1))
-            (is (= {:way :d :dropped {:a :not-allowed :b slow :c {:failed :empty}}} w2) "failed on :x for :empty")
-            (is (= :c (:way w3)) "another thing")
-            (is (= (let [inf {:line :time :least ##Inf :left 10}]
-                     {:way nil :dropped {:a :not-allowed :b inf :c {:failed :empty} :d inf :e inf}})
-                   w4))))))))
+          (let [[w1 _ _ w4] (:ways @world)]
+            (is (= {:way :b :dropped {:a :not-allowed}} w1))
+            (is (= :not-allowed (get-in w4 [:dropped :a])))
+            (is (= {:way nil} (select-keys w4 [:way])) "a least of ##Inf still drops")
+            (is (some #(and (= :way_would_drop (:kind %)) (= :b (get-in % [:data :way])) (= :time (get-in % [:data :line])))
+                      @seen))))))))
+
+(def booker
+  {:conditions [] :ways [:a :b :c] :defaults {:ways #{:c}} :args no-args
+   :round (fn ^:async booker-round [c]
+            (let [w1 (await (ctx/next-way c way-quote :x))
+                  _ (await (ctx/call c :ok 'winner {}))
+                  _ (await (ctx/call c :bad 'failer {}))
+                  w2 (await (ctx/next-way c way-quote :x))]
+              (swap! world assoc :ways [w1 w2])
+              (ctx/end c :done nil)))})
+
+(deftest a-done-child-clears-the-way-a-later-failure-would-book
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'booker booker 'winner winner 'failer failer})]
+          (core/submit! eng '(booker) {})
+          (await (core/tick! eng))
+          (is (= [:c :c] (map :way (:ways @world)))))))))

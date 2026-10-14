@@ -1,7 +1,7 @@
 (ns engine.core.ending
   "Contract jobs (a job that exports conditions; engine.contract) as the engine runs them: wrap gives the job a check
   (a listed job waits while its conditions fail, until it starts) and a round that checks the conditions, freezes the
-  call keys at the first round, asks done? (and, at the first round, its quote for the least check) and adds
+  call keys at the first round, asks done? (and, at the first round of a call with a :least other than 1, its quote for the least check) and adds
   :because to the ending the job's round returns."
   (:require [engine.contract :as contract]
             [engine.core.base :refer [cut-error now owner?]]
@@ -89,7 +89,7 @@
       (let [d (contract/done? def c)]
         (if (:done? d)
           (assoc (contract/ending :done nil nil) :report (contract/progress d))
-          (if-let [cause (when (and fresh? (:quote-of def))
+          (if-let [cause (when (and fresh? (:quote-of def) (not= 1 (:least (ctx/frozen-call c))))
                            (contract/least-cause (ctx/frozen-call c) (await ((:quote c) def (:args c) nil true)) d))]
             (contract/ending :nothing-possible cause nil)
             (let [r (await ((:round def) c))]

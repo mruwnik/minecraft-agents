@@ -302,10 +302,10 @@ condition ends `:condition-failed`, `done?` ends `:done`; endings are `{:kind :c
 started frame left without an ending (its root ends or is dropped, its parent clears its slot) gets `:cut-off`.
 
 **Quotes (engine.core.quote).** `{:uses {:time fig :health fig :food fig :items {name fig} :wear {tool fig}} :yields
-{:items {name fig}} :done fig :moves-to [x y z]}`, fig `[least mean most]` (`##Inf` allowed, `:done` in `done?` units).
-`quote-of` runs token-less with the would-be call and `ctx/left`; none: time `(0, mean :job-report time, ##Inf)`. Past
-the quote deadline time is `##Inf`. At the first round a quote whose most `:done` is short of `:least` ends
-`:nothing-possible` `{:reason :least}`.
+{:items {name fig}} :done fig :moves-to [x y z]}`, fig `[least mean most]` (`##Inf` allowed). `quote-of` runs token-less
+(it cannot act); none: time `(0, mean :job-report time, ##Inf)`; past the quote deadline time is `##Inf`. A `:least` other
+than 1 above the quote's most `:done` ends `:nothing-possible` `{:reason :least}`. `ctx/next-way` drops a way over a
+remainder only with `enforce-limits` on (else `job.way_would_drop`); a least of `##Inf` always drops.
 
 **Limits (engine.core.limits).** A child's limits are clamped to its caller's; acts and call boundaries check the chain.
 `:engine.contract/enforce-limits` off (default): `job.limit_would_end` once per crossed frame and line (`:used`, `:health`,
