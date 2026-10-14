@@ -652,3 +652,7 @@
               e (await (ending-of s {:box box} 80))]
           (is (= {:kind :nothing-possible :cause :gave-up} (select-keys e [:kind :cause])))
           (is (some? (get-in e [:data :steps :harvest]))))))))
+
+(deftest tend-hands-its-chest-argument-to-deposit
+  (let [given [-545 64 324]]
+    (is (= given (get-in (decide/decide :deposit {:chest given} {:stored ["wheat"] :keep {}}) [:call :args :chest])))))

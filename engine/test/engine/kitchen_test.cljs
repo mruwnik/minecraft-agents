@@ -8,7 +8,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [engine.withdraw-test :as wt]))
+            [engine.withdraw-test :as wt]
+            [jobs.items.kitchen :as kitchen]))
 
 (def job 'jobs.items.kitchen)
 (def furnace {:x 1 :y 64 :z 0})
@@ -185,3 +186,10 @@
               e (await (wt/ending-of eng job (assoc args :furnace {:x 30 :y 64 :z 0}) 40))]
           (is (contains? #{:condition-failed :nothing-possible} (:kind e)) (pr-str e))
           (is (contains? (:data e) :steps)))))))
+
+(deftest kitchen-hands-its-chest-argument-to-bake-and-deposit
+  (let [given [-545 64 324]
+        args {:chest given :keep {} :foods ["beef"]}
+        facts {:carried {"bread" 20 "wheat" 9} :chest true}]
+    (are [step] (= given (get-in (kitchen/decide step args facts) [:call :args :chest]))
+      :bake :deposit)))

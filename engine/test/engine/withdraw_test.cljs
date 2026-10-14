@@ -207,3 +207,17 @@
           (is (= :chest-lacks (:reason result)))
           (is (= {:units :items :done 9 :left 7} (select-keys (:report (:ending result)) [:units :done :left]))
               "a partial take reports what it carried, not done"))))))
+
+(deftest withdraw-message-counts-what-earlier-chests-gave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                           :containers {"10,64,0" [{:name "bread" :count 3}] "11,64,0" [{:name "dirt" :count 2}]}})]
+          (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (let [result (await (ending-of eng job {:chest chest :items {"bread" 10}} 16))
+                text (some #(when (= :withdraw.short (:kind %)) (:text %)) @seen)]
+            (is (= {"bread" 3} (inv p)))
+            (is (= :chest-lacks (:cause result)))
+            (is (re-find #"took bread 3" text))
+            (is (not (re-find #"^no bread in this chest" text)))))))))

@@ -109,11 +109,15 @@
   (fetch/stacks->items stacks))
 
 (defn lacks-text
-  "\"no shears in this chest (holds bread 5, dirt 2)\": the wanted names the chest lacks, and what it does hold."
-  [names held]
-  (str "no " (str/join ", " names) " in this chest ("
-       (if (empty? held) "empty" (str "holds " (str/join ", " (map (fn [[n k]] (str n " " k)) (sort held)))))
-       ")"))
+  "\"no shears in this chest (holds bread 5, dirt 2)\": the wanted names the chest lacks, and what it does hold. After
+  earlier takes this call: \"took bread 3; no more bread in the chests (the last holds dirt 2)\"."
+  ([names held] (lacks-text names held {}))
+  ([names held taken]
+   (let [holds (if (empty? held) "empty" (str "holds " (str/join ", " (map (fn [[n k]] (str n " " k)) (sort held)))))]
+     (if (empty? taken)
+       (str "no " (str/join ", " names) " in this chest (" holds ")")
+       (str "took " (str/join ", " (map (fn [[n k]] (str n " " k)) (sort taken)))
+            "; no more " (str/join ", " names) " in the chests (the last " holds ")")))))
 
 (defn refuse!
   "End refused: one withdraw.refused warn naming the zones and claims; they are the cause and the data."
@@ -142,7 +146,7 @@
                         (when (seq others) (deposit/mark-full! c chest))
                         (if (seq others)
                           :again
-                          (do (ctx/emit! c :withdraw.short :info {:short lacking :held held :text (lacks-text (map first short) held)})
+                          (do (ctx/emit! c :withdraw.short :info {:short lacking :held held :text (lacks-text (map first short) held (:taken (ctx/mem c)))})
                               (ctx/end c :condition-failed :chest-lacks {:gave-up false :held held :short lacking}))))
           (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
           :else
@@ -157,6 +161,7 @@
                   (<= (storage/carried (u/inventory (:primitives c)) name) (storage/carried before name)))
               (give-up! c "nothing-moved" short)
               :else (do (fetch/note-moved! c chest name (- (.-moved r)))
+                        (ctx/update-mem! c update-in [:taken name] (fnil + 0) (.-moved r))
                         (u/progress! c)
                         :again))))))))
 
