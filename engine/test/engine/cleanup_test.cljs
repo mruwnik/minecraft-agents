@@ -199,6 +199,11 @@
     (is (= args (:args (:scaffold-left triggers/all))))
     (is (= [args] (rest (:job (:scaffold-left triggers/all)))) "the job the reflex starts gets the radius too")))
 
+(deftest the-trigger-ignores-scaffold-cleanup-would-hold-far-below
+  (let [p (tu/fake {:blocks {"0,54,0" "dirt" "0,62,0" "dirt"}})]
+    (is (false? (fires? p (trigger-store [(entry [0 54 0])] []) [])) "ten below: cleanup holds it :far-below each time the hold runs out")
+    (is (true? (fires? p (trigger-store [(entry [0 54 0]) (entry [0 62 0])] []) [])) "another, in reach, still fires")))
+
 (deftest the-trigger-waits-for-day-and-for-no-hostile-near
   (let [dirt (trigger-store [(entry [0 64 0])] [])
         night #(tu/fake {:blocks {"0,64,0" "dirt"} :time 14000})
