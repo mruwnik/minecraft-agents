@@ -5,6 +5,7 @@
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -49,16 +50,29 @@
     (cond->> (for [d doors s (door-sides d)] {:pos s :home? false})
       home (cons {:pos home :home? true}))))
 
+(def open-policy
+  "Cells judged no closed room, kept in body memory so each new flight does not flood an open home again."
+  {:cap 16 :ttl (* 2 60 1000)})
+
+(defn known-open?
+  "Whether a flight within open-policy's ttl judged cell pos no closed room."
+  [c pos]
+  (let [k (cell-key pos)]
+    (boolean (some #(= k (:cell (:data %))) (mem/entries (ctx/view c) :refuge-open)))))
+
 (defn closed?
-  "Whether cell pos holds a closed room (jobs.lib.reach/closed-room?), kept in mem :refuge-rooms for the job."
+  "Whether cell pos holds a closed room (jobs.lib.reach/closed-room?), kept in mem :refuge-rooms for the job; an open
+  verdict also in body memory (known-open?) for a while."
   [c pos]
   (let [k (cell-key pos)
         known (get (:refuge-rooms (ctx/mem c)) k)]
-    (if (some? known)
-      known
-      (let [v (reach/closed-room? (:primitives c) pos)]
-        (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
-        v))))
+    (cond
+      (some? known) known
+      (known-open? c pos) false
+      :else (let [v (reach/closed-room? (:primitives c) pos)]
+              (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
+              (when-not v (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
+              v))))
 
 (defn survey
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach/room plus :start and :home?): the home's (home

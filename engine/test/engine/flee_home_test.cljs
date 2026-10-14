@@ -394,3 +394,22 @@
               counts [(unjudged 0) (unjudged 2) (unjudged 2)]]
           (is (pos? (first counts)) (str "none judged at first: " counts))
           (is (apply > counts) (str "each later step judges more: " counts)))))))
+
+(deftest an-open-home-is-flooded-once-across-flights
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [open-home {:x -10 :y 64 :z 0}
+              {:keys [eng p]} (setup (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states []) :home false))
+              reads (atom 0)
+              _ (reading! p reads)
+              flight (fn [root token]
+                       (let [c (core/make-ctx eng {:root root :slots [] :chain [root] :token token :args {} :round 1})
+                             _ (.setOwner (:primitives eng) token)
+                             before @reads]
+                         (retreat-home/survey c open-home)
+                         (- @reads before)))
+              first-flight (flight "j8" "t8")
+              second-flight (flight "j9" "t9")]
+          (is (pos? first-flight))
+          (is (< second-flight (/ first-flight 10)) (str "cells read by the first flight " first-flight ", the next " second-flight)))))))
