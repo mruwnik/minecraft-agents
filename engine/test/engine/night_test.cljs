@@ -215,12 +215,6 @@
           (is (= [] (st/calls p "sleep")))
           (is (= [] (tu/walk-calls p)) "roofed with nothing else to do: done without a step"))))))
 
-(deftest sleep-declines-an-occupied-remembered-bed
-  (let [{:keys [eng]} (st/setup {:time night :blocks {"6,64,0" "red_bed"} :states {"6,64,0" {:occupied true}}})]
-    (st/know-bed! eng {:x 6 :y 64 :z 0})
-    (core/submit! eng '(jobs.survival.sleep) {})
-    (is (nil? (core/tick! eng)))))
-
 (deftest sleep-says-why-it-waits
   (let [reason (fn [world know?]
                  (let [{:keys [eng]} (st/setup world)]
@@ -228,7 +222,6 @@
                    (let [id (core/submit! eng '(jobs.survival.sleep) {})]
                      (core/tick! eng)
                      (:reason (:waiting (job-api/summary eng id))))))]
-    (is (= :bed-occupied (reason {:time night :blocks {"6,64,0" "red_bed"} :states {"6,64,0" {:occupied true}}} true)))
     (is (= :no-bed (reason {:time night} false)))
     (is (= :not-night (reason {:time noon :blocks {"6,64,0" "red_bed"}} true)))))
 
@@ -1126,13 +1119,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup {:time night :blocks {"6,64,0" "red_bed"} :states {"6,64,0" {:occupied true}}})
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"6,64,0" "red_bed"} :states {"6,64,0" {:occupied true}}})
               id (core/submit! eng '(jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}}) {})]
           (tu/seeing-after-look p)
           (await (st/tick-n eng 6))
           (is (empty? (st/calls p "sleep")) "no sleep on an occupied bed")
           (is (= 1 (count (:list (core/state eng)))) "the call holds for the bed")
-          (is (nil? (:done (job-api/summary eng id)))))))))
+          (is (= [:bed-occupied] (distinct (map :reason (st/emitted seen :holding))))))))))
 
 (deftest a-room-not-yet-looked-at-is-looked-at-before-the-carried-bed-has-no-room
   (async done
@@ -1261,3 +1254,18 @@
           (await (tu/run-until-empty eng 30))
           (is (empty? (st/calls p "place")) "no bed on a container floor")
           (is (= 1 (count (st/entries eng :bed-place-failed)))))))))
+
+(deftest sleep-holds-an-occupied-bed-for-a-bounded-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (st/setup {:time night :blocks {"6,64,0" "red_bed"} :states {"6,64,0" {:occupied true}}})
+              id (core/submit! eng '(jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}}) {})]
+          (tu/seeing-after-look p)
+          (await (st/tick-n eng 3))
+          (is (= 1 (count (:list (core/state eng)))) "holds, not condition-failed at the start")
+          (is (= [:bed-occupied] (distinct (map :reason (st/emitted seen :holding)))))
+          (swap! clock + 3600000)
+          (await (st/tick-n eng 3))
+          (is (empty? (:list (core/state eng))) "the hold is bounded")
+          (is (empty? (st/calls p "sleep"))))))))

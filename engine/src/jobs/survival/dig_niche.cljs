@@ -12,6 +12,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
+            [jobs.lib.reach :as reach]
             [jobs.lib.seal :as seal]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
@@ -30,7 +31,7 @@
   at each opening cell (feet, then head) from the blocks the dig dropped or carried ones.
   Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.need) runs jobs.items.get-tool
   for it, else, or when that fails, it ends :no-tool.
-  Conditions (at the start only): night, else condition-failed :day. A body already roofed is done. Done {:pos :door [feet head cells plugged]}
+  Conditions (at the start only): night, else condition-failed :day. A body already shut in a closed room under a roof (any roof within :roof-height, a canopy too) is done. Done {:pos :door [feet head cells plugged]}
   with a :shelter entry {:pos :door} (jobs.lib.dig-in-leave/leave! digs the door out by day). Facts of the site are condition-failed:
   :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :no-blocks, and what a dug cell
   laid open: :fluid (in or beside the niche), :open-shell (a shell cell that is not solid). Tries that failed are nothing-possible:
@@ -61,23 +62,26 @@
    ::dig-reach {:default 4 :doc "How far from a cell the body digs it without walking closer." :spec (a/int-in 0 nil)}
    ::time-s {:default 120 :doc "Seconds a niche may take." :spec (a/num-in 0 nil)}
    ::cell-s {:default 2 :doc "Seconds one cell takes to dig or plug, for the quote." :spec (a/num-in 0 nil)}
+   ::niche-cells {:default 6 :doc "Cells one niche takes to dig and plug, for the quote." :spec (a/int-in 0 nil)}
+   ::quote-spread {:default 3 :doc "How many times the mean the quote's upper time bound is, at least." :spec (a/num-in 1 nil)}
    ::walk-s {:default 5 :doc "Seconds the walk to the face takes, for the quote." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::time-s))
 
 (def defaults {:spend {:time ::time-s}})
 
 (defn done?
-  "Roofed before this call cut anything, or once the niche is plugged."
+  "Shut in a closed room under a roof before this call cut anything, or once the niche is plugged."
   [c]
   (let [m (ctx/mem c)
-        d (and (sh/roofed? (:primitives c) (:roof-height (:args c))) (or (:ended m) (nil? (:site m))))]
+        p (:primitives c)
+        d (and (sh/roofed? p (:roof-height (:args c))) (reach/closed-room? p (sh/feet p))
+               (or (:ended m) (nil? (:site m))))]
     {:done? (boolean d) :units :shelters :done (if d 1 0) :left (if d 0 1)}))
 
 (defn quote-of [c]
   (let [roofed (:done? (done? c))
-        cell-s (settings/get settings ::cell-s)
-        mean (if roofed 0 (+ (settings/get settings ::walk-s) (* 6 cell-s)))]
-    {:uses {:time [0 mean (max (* 3 mean) (time-s))]} :done [0 1 1]}))
+        mean (if roofed 0 (+ (settings/get settings ::walk-s) (* (settings/get settings ::niche-cells) (settings/get settings ::cell-s))))]
+    {:uses {:time [0 mean (max (* (settings/get settings ::quote-spread) mean) (time-s))]} :done [0 1 1]}))
 (defn max-steps [] (settings/get settings ::max-steps))
 
 

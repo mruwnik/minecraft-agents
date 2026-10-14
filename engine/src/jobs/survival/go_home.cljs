@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [engine.contract :as contract]
             [jobs.lib.child :as child]
             [jobs.lib.places :as places]
             [jobs.lib.shelter :as sh]
@@ -14,7 +15,7 @@
   Done {:home pos} on arrival (also records :home there unless a live one exists), or at once when already within 2 of it.
   A place farther than :limit blocks is a fact: condition-failed :too-far {:pos :distance :text} with one warn go-home.too-far and a
   :too-far memory (the night job then digs in or sleeps; :dusk-home skips that place). A walk that did not arrive is
-  nothing-possible :walk-failed with go-to's ending as the cause. The :dusk-home trigger starts it when the day left
+  nothing-possible {:reason :walk-failed :walk go-to's cause} with {:text}. The :dusk-home trigger starts it when the day left
   no longer covers the walk; a work job it cuts is resumed by the scheduler afterwards.
   Quote: time by the straight distance at :speed blocks a second; done 1 visit.")
 
@@ -71,7 +72,8 @@
       (= :continue e) :continue
       (= :done (:kind e)) (do (places/offer! c :home pos)
                               (ctx/end c :done nil {:home pos}))
-      :else (ctx/end c :nothing-possible :walk-failed {:text (or (get-in e [:data :text]) "could not walk home")}))))
+      :else (ctx/end c :nothing-possible {:reason :walk-failed :walk (contract/cause-key e)}
+                      {:text (or (get-in e [:data :text]) "could not walk home")}))))
 
 (defn ^:async round [c]
   (let [pos (place c)]
