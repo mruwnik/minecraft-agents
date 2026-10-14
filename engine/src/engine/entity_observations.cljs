@@ -5,7 +5,7 @@
 
   Each entity is listed with how it was sensed:
   - hostile mobs come only from engine.perception's known-mobs memory (`known-sense`): :seen, :heard, or
-    :remembered at the place last sensed, with :age-ms
+    :remembered at the place last sensed, with :age-ms; dropped once that memory forgets it, even if unloaded
   - everything else goes through perception's rule for a thing at a place (`sense`): a clear line, light and
     the view cone, or hearing. Drops and the like make no sound.
   - a :heard row has no :pos, only :direction (8 compass points) and :band (:near or :far); :seen and :remembered keep
@@ -132,6 +132,7 @@
             :dimension dim :observed-at (- now (if entry (or (.-ageMs entry) 0) 0))
             :expires-at (+ (- now (if entry (or (.-ageMs entry) 0) 0)) (setting "ttl-ms"))
             :sense how}
+           (when (hostile? e) {:hostile? true})
            ;; Heard only: a player hears roughly where, not the exact place.
            (if (= :heard how)
              (rough-hearing (or (position (.-entity source)) pos) pos)
@@ -163,7 +164,10 @@
         lost (into #{} (keep (fn [[e how]] (when-not how (:key (entity-identity store source e))))) senses)
         cap (get-in store [:opts :cap])
         incoming (keep #(observation store source (.-fields sample) dim % now) (take cap loaded))
-        prior (apply dissoc (prune (:entities @(:state store)) now) lost)
+        ;; A hostile mob is listed only while perception's memory holds it, whether or not the client still tracks it.
+        forgotten (when known (into #{} (keep (fn [[key e]] (when (and (:hostile? e) (not (contains? known (:id e)))) key)))
+                                    (:entities @(:state store))))
+        prior (apply dissoc (prune (:entities @(:state store)) now) (concat lost forgotten))
         merged (reduce (fn [m entity] (assoc m (:key entity) entity)) prior incoming)
         dropped (+ (max 0 (- (count loaded) cap)) (max 0 (- (count merged) cap)))
         kept (if (> (count merged) cap)

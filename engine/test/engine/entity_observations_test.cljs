@@ -291,6 +291,19 @@
     (seen/observe! c (sample bot [(.-entity bot)]) 1000)
     (is (= #{"player" "cow"} (into #{} (map :type) (:entities (seen/snapshot c 1000)))))))
 
+(deftest a-hostile-mob-the-memory-forgot-is-dropped-at-once
+  (let [{:keys [p clock] :as r} (rig {:entities [(fake-mob 2 "zombie" 0.5 4.5)]})
+        bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position #js {:x 0.5 :y 64 :z 0.5}}}
+        c (seen/open {:world "w" :body "Probe" :sense (partial seen/sense (:per r)) :known #(array-seq (.knownMobs p))})
+        zombies #(into #{} (comp (filter (comp #{"zombie"} :type)) (map :sense)) (:entities (seen/snapshot c %)))]
+    (seen/observe! c (sample bot [(.-entity bot) (mob 2 "zombie" 64 0.5 4.5)]) 1000)
+    (is (= #{:seen} (zombies 1000)))
+    ;; the client no longer tracks it and perception forgot it: the row would be a ghost for the rest of the ttl
+    (swap! (fake/state (:raw r)) assoc :entities [])
+    (swap! clock + 2000)
+    (seen/observe! c (sample bot [(.-entity bot)]) 3000)
+    (is (= #{} (zombies 3000)))))
+
 ;; ---- a sound gives a rough direction and a band, never a place
 (defn rows-of [r es]
   (let [bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position #js {:x 0.5 :y 64 :z 0.5}}}
