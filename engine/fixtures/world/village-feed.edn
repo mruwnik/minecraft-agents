@@ -31,12 +31,12 @@
   ;; should fail: the villager is not there
   {:name "absent-villager-is-gone"
    :act [[:job (jobs.village.feed {:villager "00004f26-0000-0007-0000-00040000034b" :count 1})]]
-   :expect [{:event {:source :job :kind :feed.gave-up :data {:reason "gone"}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :feed.gave-up :data {:reason :gone}} :within-s 30 :of-job true}]
    :after [[:item "bread" 8]]}
   ;; should fail: a full inventory takes nothing; every drop is collected back
   {:name "full-villager-takes-nothing"
    :act [[:summon "villager" [16.5 0 16.5] "{Attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],UUID:[I;20262,7,5,843],Inventory:[{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64}]}"]
          [:wait-s 2]
          [:job (jobs.village.feed {:villager "00004f26-0000-0007-0000-00050000034b" :count 2})]]
-   :expect [{:event {:source :job :kind :feed.gave-up :data {:reason "not-taken"}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :feed.gave-up :data {:reason :not-taken}} :within-s 90 :of-job true}]
    :after [[:item "bread" 8]]}]}
