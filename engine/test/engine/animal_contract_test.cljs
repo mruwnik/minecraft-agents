@@ -159,8 +159,7 @@
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.leash {:mob "cow"}) {:inventory lead :entities [(cow-at 1 2)]})) [:event])))
         (doseq [[args world kind reason]
-                [[{:fetch false} {:entities [(cow-at 1 2)]} :condition-failed :no-lead]
-                 [{} {:inventory lead :entities []} :nothing-possible :none]
+                [[{} {:inventory lead :entities []} :nothing-possible :none]
                  [{} {:inventory lead :entities [(cow-at 1 2 {:leashed true :leashHolder 99})]} :nothing-possible :all-leashed]
                  [{:spend {:time 0}} {:inventory lead :entities [(cow-at 1 2)]} :limit-reached :timeout]]]
           (is (= {:event :stopped :kind kind :reason reason} (await (ending (list 'jobs.animals.leash (merge {:mob "cow"} args)) world)))))))))
@@ -180,9 +179,10 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.breed {:mob "cow"}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
+        (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.breed {:mob "cow" :count 6}) {:inventory wheat :entities (mapv #(cow-at % %) [1 2 3 4 5 6])})) [:event]))
+            "the food ran out after four: done with the count fed")
         (doseq [[args world kind reason]
-                [[{:fetch false} {:entities [(cow-at 1 2) (cow-at 2 3)]} :condition-failed :no-food]
-                 [{} {:inventory wheat :entities [(cow-at 1 2)]} :condition-failed :too-few]
+                [[{} {:inventory wheat :entities [(cow-at 1 2)]} :condition-failed :too-few]
                  [{:mob "rock"} {:inventory wheat :entities []} :condition-failed :unknown-mob]
                  [{:spend {:time 0}} {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]} :limit-reached :timeout]]]
           (is (= {:event :stopped :kind kind :reason reason} (await (ending (list 'jobs.animals.breed (merge {:mob "cow"} args)) world)))))))))
@@ -196,9 +196,7 @@
         (fn ^:async t []
           (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.pen-check {:at [2 64 2]}) (w {}))) [:event])))
           (is (= {:event :stopped :kind :condition-failed :reason :leak}
-                 (await (ending '(jobs.animals.pen-check {:at [2 64 2] :max-cells 100}) (w {"2,64,-1" "air"})))))
-          (is (= {:event :stopped :kind :condition-failed :reason :no-pen}
-                 (await (ending '(jobs.animals.pen-check {}) (w {}))))))))))
+                 (await (ending '(jobs.animals.pen-check {:at [2 64 2] :max-cells 100}) (w {"2,64,-1" "air"}))))))))))
 
 ;; ------------------------------------------------------------------ cull
 

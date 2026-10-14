@@ -27,9 +27,9 @@
 
   Ends with info breed.done and a warn breed.gave-up unless the reason is :fed. The data {:reason :fed [keys]
   :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand} and the ending by the reason:
-  - :done :fed: :count animals were fed.
+  - :done :fed: :count animals were fed. :done :food-out: the food ran out after some were fed (warn breed.gave-up).
   - :condition-failed :unknown-mob (no breeding food is known for :mob), :bees-indoors (bees at night or in rain),
-    :no-food (none carried and none fetched, or it ran out; after a failed fetch the cause names the food, :because
+    :no-food (none carried and none fetched, nothing fed yet; a listed call with :fetch false waits for food; after a failed fetch the cause names the food, :because
     the fetch's ending), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
     :refused (some refused, none ate) or :no-zones (the zone rules refused the adults).
   - :limit-reached :timeout: the call's :spend :time (default ::time-s) of work, not counting fetching.
@@ -67,9 +67,16 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(def conditions
-  "None wait: a call that cannot feed (no food with :fetch off, unknown mob, too few adults) ends in its first round."
-  [])
+(defn no-food
+  "The cause :no-food before the call starts: a known mob, no breeding food carried and :fetch off."
+  [c]
+  (let [{:keys [mob fetch]} (:args c)]
+    (when (and (contains? animals/breeding-food mob)
+               (not (fetch/parse-arg fetch))
+               (nil? (animals/food-carried (:primitives c) mob)))
+      {:reason :no-food})))
+
+(def conditions [[:fn no-food]])
 
 (defn legacy-args
   "An old caller's :timeout-s as the call's :spend {:time}."
@@ -96,6 +103,7 @@
    :unknown-mob [:condition-failed :unknown-mob]
    :bees-indoors [:condition-failed :bees-indoors]
    :no-food [:condition-failed :no-food]
+   :food-out [:done nil]
    :too-few [:condition-failed :too-few]
    :refused [:condition-failed :refused]
    :no-zones [:condition-failed :no-zones]
@@ -218,6 +226,13 @@
       nil)
     (if (= "no-item" (.-status r)) :no-food :again)))
 
+(defn ^:async no-food!
+  "Out of food: done when some animals were fed, else :no-food (with the failed fetch's ending when given)."
+  [c & [ending]]
+  (if (seq (:fed (ctx/mem c)))
+    (await (finish! c :food-out))
+    (await (finish! c :no-food ending))))
+
 (defn ^:async engage!
   "Walk to the animal and feed it; finish when out of food or fruitless three times in a row."
   [c animal food]
@@ -226,7 +241,7 @@
               :there (await (feed! c animal food))
               :again)]
     (cond
-      (= :no-food fed) (await (finish! c :no-food))
+      (= :no-food fed) (await (no-food! c))
       (>= (:in-row (ctx/mem c) 0) (max-in-row)) (await (finish! c (out-reason c)))
       :else :again)))
 
@@ -257,14 +272,14 @@
   arrived, else the round's result."
   [c]
   (if-not (fetchable? c)
-    (await (finish! c :no-food))
+    (await (no-food! c))
     (let [{:keys [mob] n :count} (:args c)
           limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :depth :explore])
           e (await (u/untimed! c #(need/blocks! c (get animals/breeding-food mob) (- n (count (:fed (ctx/mem c)))) limits)))]
       (cond
         (= :continue e) :continue
         (= :done (:kind e)) :again
-        :else (await (finish! c :no-food e))))))
+        :else (await (no-food! c e))))))
 
 (defn ^:async step
   "One walk or feeding, or the end."

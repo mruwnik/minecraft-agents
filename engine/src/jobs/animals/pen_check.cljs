@@ -14,7 +14,7 @@
   is not taken) from the feet cell :at [x y z], or from every surface inside :box (or the box round the barrier cells of :plan), where a step out of the box
   is a leak. Reads what the body has seen; a pen it has not seen closed is checked again after it looks at the
   cells it has not seen (jobs.lib.sense/decide!); a cell that stays unseen (hidden behind a block) is walked to, at
-  most 3 times, until the eye sees it. Never digs or places. Ends condition-failed :no-pen without :at, :box and :plan, and :plan-trouble when :plan is missing or has no fence, wall or gate cells (before any look).
+  most 3 times, until the eye sees it. Never digs or places. Waits (condition) and ends condition-failed :no-pen without :at, :box and :plan, and :plan-trouble when :plan is missing or has no fence, wall or gate cells (before any look).
 
   The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
@@ -52,17 +52,19 @@
 
 (def defaults {})
 
+(defn no-pen
+  "The cause :no-pen before the call starts: none of :at, :box, :plan."
+  [c]
+  (let [{:keys [at box plan]} (:args c)]
+    (when-not (or at box plan) {:reason :no-pen :why "needs :at, :box or :plan"})))
+
 (defn problem
   "The cause of a call with no pen to read, or nil."
   [c]
-  (let [{:keys [at box plan]} (:args c)]
-    (cond
-      (not (or at box plan)) {:reason :no-pen :why "needs :at, :box or :plan"}
-      (:trouble (pen-box c)) {:reason :plan-trouble :why (:trouble (pen-box c))})))
+  (or (no-pen c)
+      (when-let [t (:trouble (pen-box c))] {:reason :plan-trouble :why t})))
 
-(def conditions
-  "None wait: a call with no pen to read ends its first round (problem), so a queued order never blocks the queue."
-  [])
+(def conditions [[:fn no-pen]])
 
 (defn done?
   "Counts only (the round ends the call with its data): the cells of the pen read."

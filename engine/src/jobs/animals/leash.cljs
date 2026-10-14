@@ -23,7 +23,7 @@
   Ends with info leash.done and a warn leash.gave-up unless the reason is :leashed. The data {:reason :animal key
   :id entity-id :given-up {key reason}} and the ending by the reason:
   - :done :leashed: an animal is on the lead.
-  - :condition-failed :no-lead (no lead carried and none fetched, or the server found none; after a failed fetch the cause names the lead, :because the fetch's ending),
+  - :condition-failed :no-lead (no lead carried and none fetched; a listed call with :fetch false waits for one; or the server found none; after a failed fetch the cause names the lead, :because the fetch's ending),
     :refused (others given up, or the zone rules refused the animals) or :no-zones (no zone list was read).
   - :limit-reached :timeout: the call's :spend :time (default ::time-s) of work, not counting fetching.
   - :nothing-possible when no candidate is left: :unreachable if one was given up as unreachable, else :all-leashed
@@ -53,9 +53,13 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(def conditions
-  "None wait: no lead with :fetch off ends the first round (finish! :no-lead), so a queued order never blocks the queue."
-  [])
+(defn no-lead
+  "The cause :no-lead before the call starts: no lead carried and :fetch off."
+  [c]
+  (when-not (or (fetch/parse-arg (:fetch (:args c))) (animals/lead-carried? c))
+    {:reason :no-lead}))
+
+(def conditions [[:fn no-lead]])
 
 (defn legacy-args
   "An old caller's :timeout-s as the call's :spend {:time}."

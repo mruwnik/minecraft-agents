@@ -468,14 +468,23 @@
           (is (= :fed (:reason (done-event s))))
           (is (= 8 (wheat-in-chest s)) "two wheat taken for two cows"))))))
 
-(deftest fetch-false-ends-no-food-and-leaves-the-chest
+(deftest fetch-false-waits-for-food-and-leaves-the-chest
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (seeing-scenario {:mob "cow" :fetch false} (chest-world [{:name "wheat" :count 10}]) 12))]
-          (is (finished? s))
-          (is (= :no-food (:reason (done-event s))))
+          (is (not (finished? s)))
+          (is (nil? (done-event s)))
           (is (= 10 (wheat-in-chest s))))))))
+
+(deftest food-running-out-after-a-partial-feed-ends-done-with-the-count-fed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow" :count 4} {:inventory (wheat 2) :entities (mapv #(cow % 2) [1 2 3 4])} 8))]
+          (is (finished? s))
+          (is (= 2 (count (:fed (done-event s)))))
+          (is (= 0 (count-of s "wheat"))))))))
 
 (deftest a-fetch-longer-than-timeout-s-does-not-end-timeout
   (async done
@@ -485,7 +494,7 @@
           (perception/pass! (aget (:p s) "perception"))
           (.override (.-world (:p s)) "transfer"
                      (fn [token a impl] (swap! (:clock s) + 10000) (impl token a)))
-          (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow" :timeout-s 3}) {})
+          (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow" :spend {:time 3}}) {})
           (await (run-ticks s 120 700))
           (is (finished? s))
           (is (= :fed (:reason (done-event s)))))))))
