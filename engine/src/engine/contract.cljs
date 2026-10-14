@@ -88,12 +88,12 @@
   (cond-> {:kind kind :cause cause} (seq data) (assoc :data data)))
 
 (defn cause-key
-  "The keyword an ending's cause reads as (an event's :reason): the cause itself, a map's :reason, :fact or :line,
-  else the kind."
+  "The keyword an ending's cause reads as (an event's :reason): the cause itself, a map's :reason, :fact, :line or
+  :floor, else the kind."
   [{:keys [kind cause]}]
   (cond
     (keyword? cause) cause
-    (map? cause) (or (some #(when (keyword? (get cause %)) (get cause %)) [:reason :fact :line]) kind)
+    (map? cause) (or (some #(when (keyword? (get cause %)) (get cause %)) [:reason :fact :line :floor]) kind)
     :else kind))
 
 (defn with-because
@@ -181,3 +181,82 @@
                            :else m)))
                      {:least 1} (keys call-keys))]
     (cond-> call (and (nil? (:deadline call)) (:deadline caller)) (assoc :deadline (:deadline caller)))))
+
+;; ------------------------------------------------------------------ limits
+
+(a/defargs settings
+  {::enforce-limits {:default false :spec boolean?
+                     :doc "Whether a crossed limit ends the job :limit-reached; off, job.limit_would_end is told instead."}})
+
+(defn used
+  "What a frame's :contract state has used of each spend line, its time in s with extra-ms (the round in flight's)."
+  [{:keys [tally ran-ms]} extra-ms]
+  (assoc (:uses tally) :time (/ (+ (or ran-ms 0) extra-ms) 1000)))
+
+(defn remainder
+  "What is left of each spend line the call of a frame's :contract state sets, extra-ms as for used."
+  [state extra-ms]
+  (let [u (used state extra-ms)
+        left #(max 0 (- %2 (or %1 0)))]
+    (into {} (map (fn [[k v]]
+                    [k (if (map? v) (into {} (map (fn [[n x]] [n (left (get-in u [k n]) x)])) v) (left (get u k) v))]))
+          (get-in state [:call :spend]))))
+
+(defn crossed
+  "The first line of a frame's :contract state that is crossed, as a limit cause, or nil. levels is the body's
+  {:health :food}, now the wall clock, extra-ms as for used. A spend is crossed past it, a floor below it."
+  [{:keys [call] :as state} levels now extra-ms]
+  (let [{:keys [spend floor deadline]} call
+        u (used state extra-ms)]
+    (or (when (and deadline (> now deadline)) {:line :deadline :deadline deadline})
+        (some (fn [k] (let [f (get floor k) l (get levels k)]
+                        (when (and f (number? l) (< l f)) {:line k :floor f})))
+              [:health :food])
+        (some (fn [k] (let [s (get spend k)] (when (and s (> (get u k 0) s)) {:line k :spend s})))
+              [:time :health :food])
+        (some (fn [[k what]] (some (fn [[n s]] (when (> (get-in u [k n] 0) s) {:line k what n :spend s})) (get spend k)))
+              [[:items :item] [:wear :tool]]))))
+
+(defn below-floor
+  "The cause {:floor line :min f} of the first floor of call the body's levels are below, or nil."
+  [call levels]
+  (some (fn [k] (let [f (get-in call [:floor k]) l (get levels k)]
+                  (when (and f (number? l) (< l f)) {:floor k :min f})))
+        [:health :food]))
+
+(defn clamp
+  "A child's frozen call held to its caller's: each spend line it sets no more than left (the caller's remainder) has,
+  the deadline no later than the caller's, each floor at least the caller's. [call lines], lines the paths changed."
+  [call caller left]
+  (let [spend (reduce-kv (fn [m k v]
+                           (let [l (get left k)]
+                             (cond
+                               (nil? l) m
+                               (map? v) (assoc m k (into {} (map (fn [[n x]] [n (if-let [y (get l n)] (min x y) x)])) v))
+                               :else (assoc m k (min v l)))))
+                         (:spend call) (:spend call))
+        deadline (cond->> (:deadline call) (:deadline caller) (min (:deadline caller)))
+        floor (merge-with max (:floor call) (:floor caller))
+        out (cond-> call
+              (seq spend) (assoc :spend spend)
+              deadline (assoc :deadline deadline)
+              (seq floor) (assoc :floor floor))
+        lines (concat (for [k (keys spend) :when (not= (get spend k) (get-in call [:spend k]))] [:spend k])
+                      (when (not= deadline (:deadline call)) [[:deadline]])
+                      (for [k (keys floor) :when (not= (get floor k) (get-in call [:floor k]))] [:floor k]))]
+    [out (vec lines)]))
+
+(defn limit-error
+  "The error a crossed line unwinds with to the call boundary of frame, the job id it ends."
+  [frame cause]
+  (doto (js/Error. (str "limit: " frame " reached " (pr-str cause)))
+    (aset "code" "limit")
+    (aset "limit" {:frame frame :cause cause})))
+
+(defn limit-of "{:frame :cause} of a limit error, else nil." [e]
+  (when (and (instance? js/Error e) (= "limit" (.-code e))) (aget e "limit")))
+
+(defn passes-through?
+  "Whether error e must pass a job's catch-all on up: a cut or a limit."
+  [e]
+  (and (instance? js/Error e) (contains? #{"cut" "limit"} (.-code e))))

@@ -1,6 +1,7 @@
 (ns jobs.apiary.maintain
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
@@ -198,12 +199,12 @@
   (-> m (update :todo rest) (dissoc :call-args) (assoc-in [:report step] entry)))
 
 (defn ^:async run-child!
-  "One round of the child in slot. A child that throws is booked failed instead of failing the pass; a cut passes through."
+  "One round of the child in slot. A child that throws is booked failed instead of failing the pass; a cut or a limit passes through."
   [c step call-args]
   (try
     (await (ctx/call-child c step (jobs step) call-args))
     (catch :default e
-      (when (= "cut" (.-code e)) (throw e))
+      (when (contract/passes-through? e) (throw e))
       (ctx/update-mem! c booked step {:skipped :failed :error (str e)})
       :failed)))
 

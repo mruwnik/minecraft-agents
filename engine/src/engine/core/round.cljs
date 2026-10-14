@@ -8,6 +8,7 @@
             [engine.core.list-edits :refer [submit!]]
             [engine.core.ending :as ending]
             [engine.core.legacy :as legacy]
+            [engine.core.limits :as limits]
             [engine.core.tally :as tally]
             [engine.contract :as contract]
             [engine.chat :as chat]
@@ -20,8 +21,9 @@
   "Every acting primitive call from a job: check the ownership token, save
   memory, emit action.started, call, count what it used and yielded on every frame of the chain (engine.core.tally),
   save memory again, emit action.done. A cut rejects here (stale token) or from the primitive."
-  [eng {:keys [root slots token chain round reflex]} id k args]
+  [eng {:keys [root slots token chain round reflex] :as base} id k args]
   (when-not (owner? eng token) (throw (cut-error)))
+  (limits/check! eng base)
   (act-started! eng token root k args)
   (save-memory! eng)
   (let [useful? (useful-act? eng root k)
@@ -77,13 +79,15 @@
         results (or (:results base) (atom {}))
         child-wait (or (:child-wait base) (atom nil))
         child-ending (atom nil)
-        base (assoc base :results results :child-wait child-wait)
+        base (assoc base :results results :child-wait child-wait
+                    :section-depth (or (:section-depth base) (atom 0)) :held (or (:held base) (atom nil)))
         id (mem/path->id root slots)
         check! #(when-not (owner? eng token) (throw (cut-error)))
         wrote! (fn [kind] (emit! eng {:source :job :kind :memory_written :level :debug :job id
                                       :chain chain :round round :reflex reflex :memory kind}))]
     {:engine eng :primitives (:primitives eng) :token token :args args :id id
-     :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base)
+     :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base) :t0s (:t0s base)
+     :section-depth (:section-depth base) :held (:held base) :section-closed #(limits/section-closed! eng base)
      :view #(mem/view store)
      :update-mem (fn [f more]
                    (check!)
@@ -148,7 +152,7 @@
   "The ctx of the child in slot under parent base, with args."
   [eng base slot args]
   (let [slots (conj (:slots base) slot)]
-    (make-ctx eng (assoc base :slots slots :args args
+    (make-ctx eng (assoc base :slots slots :args args :t0s (conj (or (:t0s base) []) (now eng))
                          :chain (conj (:chain base) (mem/path->id (:root base) slots))))))
 
 (defn child-end-fields
@@ -198,7 +202,11 @@
           (ended! :declined nil w nil)
           :declined)
         (let [t0 (now eng)
-              {:keys [status error ending]} (try (normalize-result (await ((:round def) c)))
+              {:keys [status error ending]} (try (limits/check! eng c)
+                                                 (normalize-result (or (limits/ending eng (:root base) slots nil)
+                                                                       (await ((:round def) c))))
+                                                 (catch :default e
+                                                   (if-let [l (limits/ending eng (:root base) slots e)] {:status :ended :ending l} (throw e)))
                                                  (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))
               report (merge (tally/report eng (:root base) slots) (:report ending))
               status (if ending :done status)]
@@ -245,19 +253,27 @@
         fields {:source :job :level :debug :job child-id :slot slot :chain (conj (:chain base) child-id)
                 :round (:round base) :reflex (:reflex base)}]
     (when-not (owner? eng (:token base)) (throw (cut-error)))
+    (limits/refuse! eng base)
     (emit! eng (assoc fields :kind :child_started))
     (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
       (mem/update-job! store (:root base) slots assoc :args args :children {}))
     (let [t0 (now eng)
           c (child-ctx eng base slot args)
-          r (try (await (if (ending/contract-job? def) ((:round def) c) (old-round base c child-id def)))
+          own-limit #(limits/ending eng (:root base) slots %)
+          r (try (limits/check! eng c)
+                 (or (own-limit nil)
+                     (let [r (await (if (ending/contract-job? def) ((:round def) c) (old-round base c child-id def)))]
+                       (if (= :done (:kind r)) r (or (own-limit nil) r))))
                  (catch :default e
-                   (when-not (cut? e) (emit! eng (assoc fields :kind :child_ended :status :error)))
-                   (throw e))
+                   (or (own-limit e)
+                       (do (when-not (contract/passes-through? e) (emit! eng (assoc fields :kind :child_ended :status :error)))
+                           (throw e))))
                  (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))]
       (when-not (owner? eng (:token base)) (throw (cut-error)))
       (if (= :continue r)
-        (do (emit! eng (assoc fields :kind :child_ended :status :continue)) :continue)
+        (do (emit! eng (assoc fields :kind :child_ended :status :continue))
+            (limits/check! eng base)
+            :continue)
         (let [e (assoc r :report (merge (tally/report eng (:root base) slots) (:report r)))
               done? (= :done (:kind e))]
           (emit! eng (merge fields {:kind :child_ended :status (if done? :done :stopped) :ending (dissoc (contract/for-event e) :report)
@@ -267,21 +283,28 @@
           (cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended)
           (mem/update-job! store (:root base) (:slots base) update :children dissoc slot)
           (when-not done? (reset! child-ending e))
+          (limits/check! eng base)
           e)))))
 
 (defn ^:async run-round [eng run inst]
   (let [[def args] (job-of eng inst)
         results (atom {})
         child-wait (atom nil)
+        t0 (now eng)
         c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
                          :args args :round (:round run) :reflex (:reflex run) :results results
-                         :child-wait child-wait})
-        t0 (now eng)]
+                         :child-wait child-wait :t0s [t0]})
+        own-limit #(limits/ending eng (:id run) [] %)]
     (try
-      (assoc (normalize-result (await ((:round def) c))) :result (get @results (:id run))
-             :child-wait @child-wait)
+      (limits/check! eng c)
+      (let [r (or (own-limit nil) (await ((:round def) c)))]
+        (assoc (normalize-result (if (or (= :done r) (= :done (:kind r))) r (or (own-limit nil) r)))
+               :result (get @results (:id run)) :child-wait @child-wait))
       (catch :default e
-        (if (cut? e) {:status :cut :error e} {:status :error :error e}))
+        (cond
+          (own-limit e) {:status :ended :ending (own-limit e)}
+          (cut? e) {:status :cut :error e}
+          :else {:status :error :error e}))
       (finally
         (tally/add-time! eng (:id run) [] (- (now eng) t0))))))
 

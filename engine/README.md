@@ -298,6 +298,15 @@ a finished job's goes to body memory `:job-report` (cap 256).
 condition ends `:condition-failed`, `done?` ends `:done`; endings are `{:kind :cause :because :report :data}`. A
 started frame left without an ending (its root ends or is dropped, its parent clears its slot) gets `:cut-off`.
 
+**Limits (engine.core.limits).** At `ctx/call` a child's spend lines are clamped to the caller's remainder, its deadline
+to the caller's, its floors raised to the caller's (`job.budget_clamped`, debug). Before every act and at each call and
+root round boundary the started frames of the chain are checked (spend on the own clock, deadline, floors, items,
+wear). Setting `:engine.contract/enforce-limits` (default false) off: `job.limit_would_end` (`:cause`, `:call`,
+`:report`) once per frame and line, nothing ends. On: the outermost crossed frame ends `:limit-reached` `{:line ..}` at
+its call boundary; frames on the way may act but not call; a crossing inside `ctx/atomic` is thrown when it closes; a
+child called below a floor ends `:condition-failed` `{:floor :health :min n}`, a listed job below one waits. A job's
+catch-all rethrows when `engine.contract/passes-through?` (a cut or a limit).
+
 **Old and contract jobs together (engine.core.legacy).** An old job through `ctx/call` ends with the ending its
 check, round and result map to; a contract job through `call-child` answers `:declined` or `:done` with its ending in
 the child-result. A `legacy-args` export maps an old caller's options to call keys.
