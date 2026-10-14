@@ -3,13 +3,14 @@
   go-to's policy, costs, dangers and tolls. Nothing is walked, opened or dug."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.settings :refer [quote-block-s quote-most-factor]]))
+            [jobs.movement.go-to.settings :refer [quote-most-factor quote-unseen-factor]]))
 
 (defn waypoints
   "The cells [x y z] of steps where the heading or the move kind changes, and of the last step."
@@ -99,11 +100,13 @@
 
 (defn quote-of-route
   "The quote of route r: time from the planner's seconds (most quote-most-factor times them); a partial route or none
-  adds quote-block-s a block still to go and has no most; none at all, or a refusal, is ##Inf unless escalating? (a way
+  adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; none at all, or a refusal, is ##Inf unless escalating? (a way
   that changes the world may still get there). Health: the planned damage. :moves-to the goal."
   [{:keys [found seconds partial near reason damage goal] :as r} escalating?]
   (let [s (or seconds (:seconds partial) 0)
-        rest-s (* (or near 0) (quote-block-s))
+        [ex _ ez] (last (:waypoints partial))
+        rest-blocks (if (and goal ex) (js/Math.round (js/Math.hypot (- (first goal) ex) (- (nth goal 2) ez))) (or near 0))
+        rest-s (* rest-blocks cost-planner/walk-floor (quote-unseen-factor))
         time (cond
                found [s s (* s (quote-most-factor))]
                (refusals reason) (get-in contract/too-expensive [:uses :time])

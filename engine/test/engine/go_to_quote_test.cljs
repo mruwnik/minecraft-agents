@@ -13,7 +13,9 @@
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
             [jobs.lib.near :as near]
-            [jobs.movement.go-to.preview :as pv]))
+            [jobs.lib.cost.planner :as cost-planner]
+            [jobs.movement.go-to.preview :as pv]
+            [jobs.movement.go-to.settings :refer [quote-unseen-factor]]))
 
 (defn ^:async quote-reply
   "eng's answer to GET /quote for go-to with args (what ./bin/quote prints)."
@@ -100,6 +102,14 @@
           (is (js/isFinite least) "the goal may lie past what is loaded")
           (is (< least mean))
           (is (= ##Inf most)))))))
+
+(deftest a-partial-routes-rest-counts-the-blocks-past-its-end-once
+  (let [r {:found false :reason :partial :near 30 :goal [14 64 0]
+           :partial {:seconds 5 :waypoints [[0 64 0] [10 64 0]]}}
+        [least mean] (get-in (pv/quote-of-route r false) [:uses :time])]
+    (is (= 5 least))
+    (is (< (js/Math.abs (- mean (+ 5 (* 4 cost-planner/walk-floor (quote-unseen-factor))))) 1e-9)
+        "four blocks are left past the route's end, not the 30 of the body")))
 
 (deftest drop-cost-false-takes-no-two-block-drop
   (async done
