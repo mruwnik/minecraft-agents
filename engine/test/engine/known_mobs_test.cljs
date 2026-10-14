@@ -261,3 +261,22 @@
 (deftest a-seen-mob-fires-the-trigger-through-a-mute
   (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 0 4)]})]
     (is (true? (near-with-memory? p (muted-memory 100 5000))))))
+
+;; ---- card d56da453: a creeper that follows the body up its own dark stair and fuses behind it
+
+(def stair-rock
+  "Rock round a stair the body cut up to its feet cell (0 64 0): steps k = 1..4 have feet (0 64-k -k), clear three
+  high; no light anywhere."
+  (merge (tu/box -2 56 -7 2 68 2 "stone")
+         (into {} (for [k (range 0 5) y (range (- 64 k) (- 67 k))] [(str "0," y "," (- k)) "air"]))))
+
+(deftest a-fusing-creeper-behind-on-the-dark-stair-fires-the-trigger
+  (doseq [k [1 2] visible [nil false]
+          :let [why (str k " steps below, line " (if (false? visible) "blocked" "clear"))
+                {:keys [p]} (rig {:entities [(cond-> {:id 1 :name "creeper" :kind "hostile" :pos {:x 0 :y (- 64 k) :z (- k)} :fusing true}
+                                               (some? visible) (assoc :visible visible))]
+                                  :blocks stair-rock :light-default [0 0]})]]
+    (is (some? (first (known p))) why)
+    (is (= [1] (danger-ids p)) why)
+    (is (true? (hostile-near? p)) why)))
+
