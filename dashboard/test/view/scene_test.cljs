@@ -65,6 +65,17 @@
 
 (defn counts [^js s] (js->clj (.counts s) :keywordize-keys true))
 
+(defn wait-until
+  "A promise resolving once (pred) is true, polled every 2 ms; rejects after 5000 polls so a broken retry fails instead of hanging."
+  [pred]
+  (js/Promise.
+   (fn [resolve reject]
+     (letfn [(poll [n]
+               (cond (pred) (resolve true)
+                     (> n 5000) (reject (js/Error. "wait-until: condition never held"))
+                     :else (js/setTimeout #(poll (inc n)) 2)))]
+       (poll 0)))))
+
 (defn after-ticks [n] (reduce (fn [p _] (.then p tick)) (js/Promise.resolve) (range n)))
 
 (deftest a-pose-fills-the-window-and-frame-draws-it
@@ -154,9 +165,8 @@
         urls (volatile! [])
         ^js s (make-scene {:radius 0 :calls calls :urls urls :fetch (flaky-fetch 2 mode urls)})]
     (.feed s "pose" (pose 8 8))
-    (-> (js/Promise. (fn [resolve] (js/setTimeout resolve 60)))
+    (-> (wait-until (fn [] (.frame s 0 nil) (seq (of-kind calls :upload))))
         (.then (fn []
-                 (.frame s 0 nil)
                  (is (= 3 (count (filter #(.includes % "/columns/") @urls))) (str mode))
                  (is (= 1 (count (of-kind calls :upload))))
                  (is (= 1 (:loaded (js->clj (.stats s) :keywordize-keys true))))
@@ -175,7 +185,8 @@
           urls (volatile! [])
           ^js s (make-scene {:radius 0 :calls calls :urls urls :fetch (flaky-fetch 1000 :reject urls)})]
       (.feed s "pose" (pose 8 8))
-      (-> (js/Promise. (fn [resolve] (js/setTimeout resolve 150)))
+      (-> (wait-until #(= 5 (count (filter (fn [u] (.includes u "/columns/")) @urls))))
+          (.then #(after-ticks 10))
           (.then (fn []
                    (.frame s 0 nil)
                    (is (= 5 (count (filter #(.includes % "/columns/") @urls))))
