@@ -251,6 +251,7 @@ Wherever a job is named (scenarios, register entries, `submit!`, `do-now!`, the 
 | `(repeat e)` | when the child is done, start it fresh; never done |
 | `(repeat n e)` | the same, done after `n` runs |
 | `(until g e)` | repeat `e`; done at the top of a round once `g`'s check passes (`g` never runs), e.g. `(until (jobs.time.wait-for-dusk) e)`; a daily routine is `(repeat (seq (jobs.time.wait-for-day) ... (jobs.time.wait-for-dusk)))` |
+| a refused child | a child that ends :done with a `:stopped` result stops `seq`, `repeat` and `until` with that cause (a stopped result of their own); `any` skips it and tries the next |
 | `(hold e)` | like `e`, but the list entry holds the body; around a whole spec only, not in a register entry |
 
 An unknown symbol, a wrong arity, an undeclared arg, a bad position arg (`[x y z]` or `{:x :y :z}`) or a nested `hold`
