@@ -569,6 +569,35 @@
           (is (empty? (events-of s :round_started)))
           (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
 
+(defn ^:async condition-in-round
+  "The tend condition, evaluated in a round of a probe job beside wait-for-dusk, as for a call with :quote-call? (started)."
+  [s args started?]
+  (let [out (atom ::none)
+        probe {:check (constantly true)
+               :round (fn ^:async probe-round [c]
+                        (reset! out ((second (first tend/conditions)) (cond-> (assoc c :args args) started? (assoc :quote-call {}))))
+                        :done)}
+        eng (assoc-in (:eng s) [:jobs 'probe] probe)]
+    (core/submit! eng '(jobs.time.wait-for-dusk) {})
+    (core/submit! eng '(probe) {})
+    (dotimes [_ 3] (swap! (:clock s) + 700) (await (core/tick! eng)))
+    @out))
+
+(deftest a-started-tend-is-not-ended-by-the-away-fact
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= :away (:reason (await (condition-in-round (setup far-ripe) {:box far-box} false)))) "before the start")
+        (is (nil? (await (condition-in-round (setup far-ripe) {:box far-box} true))))))))
+
+(deftest a-started-tend-with-nothing-left-to-start-does-not-end-on-the-start-facts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec (farm "wheat" 0 all-cells all-cells)]
+          (is (= :nothing-to-do (:reason (await (condition-in-round (setup spec) {:box box} false)))) "before the start")
+          (is (nil? (await (condition-in-round (setup spec) {:box box} true)))))))))
+
 ;; ------------------------------------------------------------------ contract
 
 (defn ^:async ending-of

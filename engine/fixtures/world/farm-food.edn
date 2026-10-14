@@ -4,7 +4,7 @@
 ;; Should-succeed: tend composts 6 of 70 seeds and stores 5 of 20 carrots (3 bread = 15 points, so 15 carrots stay);
 ;; default deposit keeps 12 bread; 30 carrots + 3 bread are tilled and sown; harvest replants its own cell with 15 carrots;
 ;; plant sows wheat seeds beside 15 carrots; kit takes 8 cooked_beef for 60 points.
-;; Should-fail: 12 carrots and no seed (nothing to compost, store or sow: tend waits :nothing-to-do); 15 carrots with a hoe
+;; Should-fail: 12 carrots and no seed (nothing to compost, store or sow: tend ends condition-failed :nothing-to-do); 15 carrots with a hoe
 ;; and untilled dirt (tends nothing); plant with only 15 carrots waits :food-reserve.
 ;; Floor y -1 is the ground layer; farmland at y -1 with water beside, crops at y 0. Chest [9 0 16], composter [11 0 16].
 {:defaults
@@ -25,7 +25,7 @@
             [:set [9 0 16] "chest"] [:set [11 0 16] "composter"]]
    :body {:inventory [["carrot" 12]]}
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [10 0 16]} :chest #xyz [9 0 16] :composter #xyz [11 0 16]})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :nothing-to-do}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :farm-tend.done} :for-s 20}]
    :after [[:block [10 0 16] "air"] [:item "carrot" 12]]}
   {:name "deposit-without-items-keeps-the-food-reserve"
@@ -38,7 +38,7 @@
    :blocks [[:set [10 -1 16] "dirt"] [:set [10 -2 17] "stone"] [:set [10 -1 17] "water"]]
    :body {:inventory [["stone_hoe" 1] ["carrot" 15]]}
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [10 0 16]}})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :nothing-to-do}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :till.done} :for-s 20}]
    :after [[:block [10 -1 16] "dirt"] [:block [10 0 16] "air"] [:item "carrot" 15]]}
   {:name "tend-with-30-carrots-and-bread-tills-and-sows"

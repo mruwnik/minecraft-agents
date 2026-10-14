@@ -288,11 +288,12 @@
     (when (:plan (:args c)) (first (keys (:crops (tend-plan/planned c)))))))
 
 (defn problem
-  "Why no run can start, a cause: impossible without a usable box (or plan), away while the field is far and another job
+  "Why no run can start (checked at the call's start only; a started run decides through its steps), a cause: impossible without a usable box (or plan), away while the field is far and another job
   is listed, else the cause of the last part not resting (the first to ask for a look), nil when some part has work."
   [c]
   (let [{:keys [plan box]} (:args c)
-        away (when (false? (standing/away-wait c (site c))) {:reason :away :site (site c) :limit (standing/away-limit)})]
+        w (atom nil)
+        away (when (false? (standing/away-wait (assoc c :wait w) (site c))) @w)]
     (cond
       (and (not plan) (not (usable-box? box))) (contract/impossible {:reason :no-box})
       away away
@@ -304,7 +305,7 @@
           (empty? causes) {:reason :nothing-to-do :backed-off (vec (sort (keys rested)))}
           :else (or (first (filter contract/look-cause causes)) (last causes)))))))
 
-(def conditions [[:fn problem]])
+(def conditions [[:fn (fn [c] (when-not (ctx/frozen-call c) (problem c)))]])
 
 (defn worked?
   "Whether the summary of a step says it changed something."
