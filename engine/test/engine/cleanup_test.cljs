@@ -391,6 +391,7 @@
           (is (= (mapv (fn [c] {:cell c :item "dirt"}) (reverse cells)) (:removed @out)))
           (is (= [] (:open @out)))
           (is (= 6 (:collected @out)))
+          (is (= :done (:status @out)))
           (is (= 1 (count (of-kind seen :cleanup.done)))))))))
 
 (deftest every-removal-goes-through-the-dig-job
@@ -545,7 +546,22 @@
           (await (ticks s eng 30))
           (is (= [[[0 67 0] [0 68 0]] [[0 66 0] [0 67 0]]] @digs))
           (is (= "dirt" (block p [0 65 0])))
-          (is (= [{:cell [0 65 0] :item "dirt" :reason :no-floor-below :block "air"}] (:open @out))))))))
+          (is (= [{:cell [0 65 0] :item "dirt" :reason :no-floor-below :block "air"}] (:open @out)))
+          (is (= [:nothing-possible :left-open] ((juxt :kind :cause) (:ending @out)))))))))
+
+(deftest cleanup-is-a-contract-job
+  (let [j (get registry/jobs job)]
+    (is (nil? (:check j)))
+    (is (= [:job :near] (:target j)))
+    (is (some? (:defaults j)))
+    (is (fn? (:quote-of j)))))
+
+(deftest a-bad-job-argument-is-a-failed-condition
+  (are [job cause] (= cause (cleanup/bad-args {:args {:job job}}))
+    5 :bad-args
+    nil nil
+    :all nil
+    "j3" nil))
 
 (deftest nothing-open-declines-without-a-round
   (async done

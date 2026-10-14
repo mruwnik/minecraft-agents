@@ -9,6 +9,7 @@
             [engine.harvest-test :as h]
             [engine.library-test :as lt]
             [engine.test-util :as tu]
+            [engine.ctx :as ctx]
             [engine.registry :as registry]
             [jobs.lib.access.approach :as approach]
             [jobs.items.obtain :as obtain]
@@ -120,7 +121,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [cleanup (assoc (get registry/jobs 'jobs.access.cleanup) :round (fn ^:async f [_] :done))
+        (let [cleanup (assoc (get registry/jobs 'jobs.access.cleanup) :round (fn ^:async f [c] (ctx/end c :nothing-possible :left-open nil)))
               s (with-redefs [registry/jobs (assoc registry/jobs 'jobs.access.cleanup cleanup)]
                   (await (fell tall {:radius 10} 200)))]
           (is (not= :not-done (:out s)) "the job ends instead of cleaning for ever")

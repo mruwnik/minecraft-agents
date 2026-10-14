@@ -1,6 +1,7 @@
 (ns jobs.access.cleanup
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.game :as game]
             [engine.memory :as mem]
             [jobs.access.stair :as stair]
@@ -78,13 +79,15 @@
   :give-up failed digs :dig-failed.
 
   Ends by collecting the removed items' drops (jobs.forestry.collect-drops, filtered to the items they drop;
-  a wall torch gives the torch). Result {:removed [{:cell :item}] :dropped [{:cell :item :found}] :open [{:cell
+  a wall torch gives the torch). Data {:removed [{:cell :item}] :dropped [{:cell :item :found}] :open [{:cell
   :item :reason}] :collected n}, info cleanup.done, and warn cleanup.left while :open is not empty. Open cells
-  are held (:scaffold-held, 10 minutes) so the check and the scaffold-left trigger do not offer them again at
-  once.
+  are held (:scaffold-held, 10 minutes) so the conditions and the scaffold-left trigger do not offer them again at
+  once. Ends :done when nothing is left open, else nothing-possible :left-open (what could be taken back, was);
+  :too-many-passes (nothing-possible) after ::max-passes steps.
 
-  The check declines while nothing is offered. It also declines while no zone list has been read, with one warn
-  cleanup.declined.")
+  Conditions: :bad-args (:job is nil, :all or an instance id), :no-zones (no zone list has been read, with one warn
+  cleanup.declined, unless :ignore-zones?) and :nothing-to-do (nothing is offered, after a look around when a cell was
+  never seen). Quote: from the entries it would work on.")
 
 (a/defargs args
   {:job {:doc "nil: entries no live job owns; \"jN\": that instance's and its children's; :all: every entry" :spec (a/or-of #{:all} a/name?) :default nil}
@@ -108,7 +111,10 @@
    ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; a roofed one is not walked to from the open (:roofed)." :spec (a/int-in 0 nil)}
    ::died-radius {:default 24 :doc "Blocks around a place the body died within which a scaffold is not walked to (:died-near)." :spec (a/num-in 0 nil)}
    ::hold-unarmed? {:default true :doc "Whether an unarmed body, or one below jobs.lib.body/risky-min-health, walks to no scaffold (:unarmed, :low-health)." :spec boolean?}
+   ::time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}
    ::max-passes {:default 200 :doc "Steps (dig, walk, collect) in one run before it stops." :spec (a/int-in 0 nil)}})
+(defn time-s [] (settings/get settings ::time-s))
+
 (defn max-below [] (settings/get settings ::max-below))
 
 (defn roof-height [] (settings/get settings ::roof-height))
@@ -313,17 +319,42 @@
                    (map (fn [{[x y z] :cell}] {:x x :y y :z z})))]
     (look/unseen? (:primitives c) cells)))
 
-(defn check [c]
-  (cond
-    (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
-    (do (ctx/warn-once! c :no-zones :cleanup.declined
-                        {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"})
-        (ctx/wait c {:reason :no-zones}))
-    (:started (ctx/mem c)) true
-    :else (or (boolean (seq (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)) (ledger/near-of-args c (:args c)))))
-              (if (unseen-entries? c)
-                (look/wait-unless-surveyed c {:reason :nothing-to-do})
-                (ctx/wait c {:reason :nothing-to-do})))))
+(defn bad-args [c]
+  (when (bad-job? (:job (:args c))) :bad-args))
+
+(defn offered-now [c]
+  (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)) (ledger/near-of-args c (:args c))))
+
+(defn no-zones [c]
+  (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
+    (ctx/warn-once! c :no-zones :cleanup.declined
+                    {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"})
+    :no-zones))
+
+(defn nothing-to-do
+  "Nothing is offered, and a cell never seen has been looked at (or none is unseen)."
+  [c]
+  (when-not (or (:started (ctx/mem c)) (seq (offered-now c)) (and (not (look/surveyed? c)) (unseen-entries? c)))
+    :nothing-to-do))
+
+(def conditions [[:fn bad-args] [:fn no-zones] [:fn nothing-to-do]])
+
+(def target [:job :near])
+
+(def defaults {:spend {:time ::time-s}})
+
+(defn picked-entries [c]
+  (let [view (ctx/view c)]
+    (ledger/select (ledger/open-entries view) view (:job (:args c)) (ledger/near-of-args c (:args c)))))
+
+(defn done?
+  "Progress only: the job is done by the round that has nothing left to work on."
+  [c]
+  {:done? false :units :cells :done (count (:removed (ctx/mem c))) :left (count (picked-entries c))})
+
+(defn quote-of [c]
+  (let [n (max 1 (count (picked-entries c)))]
+    {:uses {:time [(* 0.5 n) (* 4 n) (max (* 4 n) (time-s))]}}))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -360,30 +391,39 @@
           (if (= :continue outcome) :continue :again))))))
 
 
+(defn walk-result
+  "go-to's ending e (or :continue) as the {:status :reason :why} map result/permanent-walk? reads."
+  [e]
+  (let [cause (:cause e)]
+    (merge (:data e) (when (map? cause) (select-keys cause [:why]))
+           {:status (if (= :done (:kind e)) :done :stopped) :reason (contract/cause-key e)})))
+
 (defn ^:async walk!
-  "Walk one leg toward within 3 of cell, or hold it :danger. A permanent verdict holds it :unreachable, an end out of
-  reach, a walk that did not end or a go-to that gave up for a passing reason counts a failure; a leg that got nearer does not."
+  "Walk one leg toward within 3 of cell, or hold it :danger (no walk is made: the reflex acts). A permanent verdict
+  holds it :unreachable, an end out of reach or a go-to that gave up for a passing reason counts a failure; a leg that
+  got nearer does not. A walk that did not end counts a failure, as the round goes on."
   [c {:keys [cell]}]
-  (let [[r d] (await (child/call-walk-leg c :walk {:pos cell :range (walk-range) :escalate false :clear-seal false :zone-tolls true
-                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                                          (:leg-s (:args c)) #(danger-ahead? c cell)))
-        result (when (= :done r) (ctx/child-result c :walk))
-        status (:status result)]
-    (cond
-      (= :danger r) (ctx/update-mem! c assoc-in [:held cell] {:reason :danger})
-      (:leg result) nil
-      (result/permanent-walk? result)
-      (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
-      (or (not= :done r) (= :stopped status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
-      (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))
-    :again))
+  (if (danger-ahead? c cell)
+    (do (ctx/update-mem! c assoc-in [:held cell] {:reason :danger}) :again)
+    (let [e (await (child/call-walk* c :walk {:pos cell :range (walk-range) :escalate false :clear-seal false :zone-tolls true
+                                              :ignore-zones? (boolean (:ignore-zones? (:args c)))
+                                              :leg-s (:leg-s (:args c))}))
+          result (walk-result e)
+          status (:status result)]
+      (cond
+        (:leg result) nil
+        (result/permanent-walk? result)
+        (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
+        (or (= :continue e) (= :stopped status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
+        (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))
+      :again)))
 
 (defn ^:async retreat!
   "Walk to the ground at the end of the row the body stands on (go-to, range 0, no digging); counts a try."
   [c {:keys [to]}]
   (let [[x y z] to
-        r (await (child/call-walk c :retreat {:pos {:x x :y y :z z} :range 0 :escalate false :clear-seal false
-                                                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        r (await (child/call-walk* c :retreat {:pos {:x x :y y :z z} :range 0 :escalate false :clear-seal false
+                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r) (ctx/update-mem! c update :retreats (fnil inc 0)))
     :again))
 
@@ -396,12 +436,12 @@
   "One collect-drops call. :continue means it waits on the world: asked again on the next pass; else the drops are
   not asked for again."
   [c removed]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
-                                 {:radius (collect-radius c removed) :filter (vec (distinct (map (comp placement/item-of :item) removed)))
-                                  :holes (mapv :cell removed)}))]
+  (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops
+                           {:radius (collect-radius c removed) :filter (vec (distinct (map (comp placement/item-of :item) removed)))
+                            :holes (mapv :cell removed)}))]
     (when-not (= :continue r)
       (ctx/update-mem! c #(-> % (dissoc :collect)
-                              (assoc :collected (if (= :done r) (:collected (ctx/child-result c :collect) 0) 0)))))
+                              (assoc :collected (if (= :done (:kind r)) (:collected (:data r) 0) 0)))))
     :again))
 
 (defn hold-open!
@@ -428,8 +468,9 @@
                                       :open (count open) :collected (:collected result)
                                       :text (str "cleanup removed " (count (:removed result)) ", dropped "
                                                  (count (:dropped result)) " not ours, " (count open) " left")})
-    (ctx/result! c result)
-    :done))
+    (if (seq open)
+      (ctx/end c :nothing-possible :left-open result)
+      (ctx/end c :done nil result))))
 
 (defn settle!
   "Settle the entries this cleanup works on from their cells; store the ledger when it changed, book removed and
@@ -452,7 +493,7 @@
     ledger))
 
 (defn ^:async work!
-  "One pass: settle, then one step. Resolves :again or :done (finished)."
+  "One pass: settle, then one step. Resolves :again, :continue (a dig waits) or the ending."
   [c zones]
   (let [view (ctx/view c)
         l (ledger/open-entries view)
@@ -470,19 +511,10 @@
 
 (defn ^:async round [c]
   (let [zones (known/zones c)
-        {:keys [job]} (:args c)]
-    (cond
-      (bad-job? job) (do (ctx/result! c {:status :bad-args :text ":job must be nil, :all or an instance id"}) :done)
-      (and (nil? zones) (not (:ignore-zones? (:args c)))) :declined
-      (and (not (:started (ctx/mem c)))
-           (empty? (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) job (ledger/near-of-args c (:args c)))))
-      (if (and (not (look/surveyed? c)) (unseen-entries? c))
-        (await (look/survey! c)) ; a block behind the body is not seen until it looks
-        :declined)
-      :else (do (ctx/update-mem! c assoc :started true)
-                (loop [i 0]
-                  (cond
-                    (not (ctx/alive? c)) :done
-                    (<= (max-passes) i) (result/stop! c :too-many-passes "cleanup did not settle")
-                    (= :again (await (work! c zones))) (do (await (pace/pace!)) (recur (inc i)))
-                    :else :done))))))
+        n (atom 0)]
+    (if (and (not (:started (ctx/mem c))) (empty? (offered-now c)))
+      (or (await (look/survey! c)) (ctx/end c :condition-failed :nothing-to-do)) ; a block behind the body is not seen until it looks
+      (do (ctx/update-mem! c assoc :started true)
+          (await (pace/steps! c #(if (<= (max-passes) (swap! n inc))
+                                   (ctx/end c :nothing-possible :too-many-passes {:text "cleanup did not settle"})
+                                   (work! c zones))))))))
