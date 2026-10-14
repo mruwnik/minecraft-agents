@@ -277,7 +277,9 @@
 
 ;; ------------------------------------------------------------ night in a shelter
 
-(def roofed-at-night {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}})
+(def late-night 22500)
+
+(def roofed-at-night {:time late-night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}})
 
 (defn night-run
   "Die with the field-report pile 20 blocks off while the body is under a roof at night, run the job once."
@@ -300,6 +302,25 @@
           (is (every? #{:night} (map :reason (dt/emitted seen :recover-drops.declined))) "every decline names the night")
           (is (seq (dt/emitted seen :recover-drops.declined)))
           (is (true? (died/died nil (mem/view (:store eng)) {})) "the died trigger fires again"))))))
+
+(deftest a-pile-that-will-not-last-until-day-is-fetched-from-a-shelter-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (await ((night-run (assoc roofed-at-night :time st/night))))]
+          (is (= :collected (:decision (recovered eng))))
+          (is (not-any? #{:night} (map :reason (dt/emitted seen :recover-drops.declined)))))))))
+
+(deftest accept-night-risk-walks-out-of-a-shelter-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} roofed-at-night))]
+          (die! eng {:pos dt/death-pos :inventory pile})
+          (core/submit! eng '(jobs.survival.recover-drops {:accept-night-risk true}) {})
+          (await (run-until-empty eng 20))
+          (is (= :collected (:decision (recovered eng)))))))))
 
 (deftest the-night-hold-is-a-setting
   (async done

@@ -27,7 +27,7 @@
   One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
   the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
   Every :declined emits recover-drops.declined with a :reason (:danger with :mob and :mob-pos, :unreachable) and a text.
-  It ends :declined without walking while the walk would leave a shelter at night (::hold-at-night; the window goes on), and for a pile farther than ::open-night-radius while the body is in the open at night (the night reflex shelters it first).
+  It ends :declined without walking while the walk would leave a shelter at night and the pile lasts until morning (::hold-at-night, off with :accept-night-risk; a pile that despawns first is weighed by its route danger alone; the window goes on), and for a pile farther than ::open-night-radius while the body is in the open at night (the night reflex shelters it first).
   It ends :declined, without acting, while a real danger is within :danger-radius, so a reflex can deal with it
   (the died trigger fires it again), and when go-to does not arrive; the despawn window ends it :abandoned.
   A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.danger/nearest-danger).
@@ -71,6 +71,7 @@
    :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.fetch limits); false: no kit fetch" :spec fetch/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
    :leg-s {:doc "the walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again" :spec (a/num-in 0.1 120) :default 6}
    :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}
+   :accept-night-risk {:doc "walk out of a shelter at night for the pile even while it would last until day (by default only a pile that despawns before dawn is fetched then, weighed by its route danger)" :spec boolean? :default false}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :spec (a/num-in 0 nil) :default 10}})
 
 (a/defargs settings
@@ -338,7 +339,7 @@
   go-to refused for the body's own shelter (:inside-own-shelter) is no failed try: the window closes the trip."
   [c pos]
   (let [before (u/dist (u/self-pos c) pos)
-        [r danger] (await (child/call-walk-leg c :go {:pos pos :range (arrive-range)} (:leg-s (:args c)) #(threatened? c)))]
+        [r danger] (await (child/call-walk-leg c :go {:pos pos :range (arrive-range) :at-night :go} (:leg-s (:args c)) #(threatened? c)))]
     (cond
       (= :danger r) (decline-danger! c danger)
       (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
@@ -619,12 +620,13 @@
               :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (or (:reason (ctx/child-result c :dig)) r)))))))))))
 
 (defn night-shelter
-  "The shelter (jobs.lib.shelter/walk-leaves-shelter?) the walk to pos would leave at night, else :open for a walk of
-  more than ::open-night-radius under the open sky at night, else nil; nil with ::hold-at-night off."
-  [c pos]
+  "The shelter (jobs.lib.shelter/walk-leaves-shelter?) the walk to pos would leave at night while the pile of entry lasts until morning (a pile that despawns first is weighed by its route danger alone), else :open for a walk of
+  more than ::open-night-radius under the open sky at night, else nil; nil with ::hold-at-night off or :accept-night-risk."
+  [c entry pos]
   (let [p (:primitives c)]
-    (when (settings/get settings ::hold-at-night)
-      (or (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) pos (arrive-range))
+    (when (and (settings/get settings ::hold-at-night) (not (:accept-night-risk (:args c))))
+      (or (when (< (sh/ms-until-morning (.-timeOfDay (.self p))) (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))))
+            (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) pos (arrive-range)))
           (when (and (sh/night? p) (not (sh/sleeping? p)) (not (sh/safe-from-night? p))
                      (> (u/dist (u/self-pos c) pos) (settings/get settings ::open-night-radius)))
             :open)))))
@@ -674,7 +676,7 @@
 
       (= :collect (:phase (ctx/mem c))) (await (collect! c pos collect-radius (:inventory (:data entry))))
       (and (deep-pile c pos) (:blocked (ctx/mem c))) (await (dig-down! c entry pos (deep-pile c pos)))
-      (night-shelter c pos) (decline-night! c entry pos (night-shelter c pos))
+      (night-shelter c entry pos) (decline-night! c entry pos (night-shelter c entry pos))
       :else (let [r (await (go! c pos))]
               (if (and (= :declined r) (:blocked (ctx/mem c)) (deep-pile c pos)) :next r)))))
 
