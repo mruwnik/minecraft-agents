@@ -53,12 +53,6 @@
 (defn creeper? [e]
   (or (true? (.-creeper e)) (= "creeper" (.-name e))))
 
-(defn weapon-score
-  "Higher is better: the material, and swords over axes of the same material."
-  [item-name]
-  (+ (weapon/weapon-rank item-name)
-     (if (str/ends-with? item-name "_sword") 0.5 0)))
-
 (defn weapon? [weapons item-name]
   (boolean (some #(str/includes? item-name %) weapons)))
 
@@ -69,7 +63,7 @@
   (->> (u/inventory p)
        (map :name)
        (filter #(weapon? weapons %))
-       (sort-by weapon-score >)
+       (sort-by weapon/weapon-score >)
        first))
 
 (defn ^:async equip-best!

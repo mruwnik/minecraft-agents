@@ -170,7 +170,7 @@
 (def purposes
   [[{:blocks :build} [{:name "dirt" :count 4} {:name "diamond" :count 1} {:name "oak_planks" :count 2}] {} {:blocks ["dirt" "oak_planks"]}]
    [{:blocks :seal} [{:name "dirt" :count 4} {:name "cobblestone" :count 2}] {} {:blocks ["cobblestone" "dirt"]}]
-   [{:tools :attack} [(pick "iron_pickaxe" 100) (pick "stone_sword" 20)] {} {:tools ["stone_sword"]}]
+   [{:tools :attack} [(pick "iron_pickaxe" 100) (pick "stone_sword" 20) (pick "iron_axe" 100)] {} {:tools ["iron_axe" "stone_sword"]}]
    [{:tools :till} [(pick "iron_hoe" 100)] {} {:tools ["iron_hoe"]}]
    [{:tools :shear} [(pick "shears" 100)] {} {:tools ["shears"]}]])
 

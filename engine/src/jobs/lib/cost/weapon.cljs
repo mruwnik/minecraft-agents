@@ -37,6 +37,12 @@
   [item-name]
   (get-in tool-material [(material-of item-name) :rank] 0))
 
+(defn weapon-score
+  "Higher is better: the material, and swords over axes of the same material."
+  [item-name]
+  (+ (weapon-rank item-name)
+     (if (str/ends-with? item-name "_sword") 0.5 0)))
+
 (defn cheap-rank
   "Position of the tool's material in cheapness (past the end for an unknown one)."
   [item-name]

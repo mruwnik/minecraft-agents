@@ -1,7 +1,7 @@
 (ns jobs.lib.choose
   "Choosers: what a body may use for a purpose, in order. (tools-for c [:dig block] amount) answers
   {:list [{:item name :uses-left n}] :short n}: the carried tools that harvest block and are not reserved, cheapest
-  material first (opts {:fast true}: best first), and the uses the amount still lacks once the list is used up (the
+  material first (opts {:fast true}: best first; [:attack] always best first, swords over axes), and the uses the amount still lacks once the list is used up (the
   caller's :fetch). `reserved` is the one filter over the reserves that name an item: the bait reserve, the food
   reserve, the never-spent items and a body's :choose/override entries {:chooser :tools :avoid [names] :prefer [names]}.
   (fillers-for c purpose amount) answers {:list [{:item name :count n}] :short n} the same way for the blocks a
@@ -58,7 +58,9 @@
          prefer (:prefer (overrides c :tools))
          rank-in (fn [name] (let [i (.indexOf prefer name)] (if (neg? i) (count prefer) i)))
          order (fn [t] [(rank-in (:name t))
-                        (if (:fast opts) (- (weapon/weapon-rank (:name t))) (weapon/cheap-rank (:name t)))
+                        (cond (= :attack what) (- (weapon/weapon-score (:name t)))
+                              (:fast opts) (- (weapon/weapon-rank (:name t)))
+                              :else (weapon/cheap-rank (:name t)))
                         (or (:durability t) whole)])
          fit (fn [ks] (->> (u/inventory p)
                           (filter #(and (some (partial kind/of-kind? (:name %)) ks) (or (empty? ok) (ok (:name %)))))
