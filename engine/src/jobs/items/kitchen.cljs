@@ -1,5 +1,6 @@
 (ns jobs.items.kitchen
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -26,7 +27,8 @@
   (:away). A pass that leaves such work (no furnace, no fuel) rests the kitchen 10 minutes (jobs.lib.standing; a rest
   after bake found no table ends once a table is seen near the chest): the wait is {:reason :nothing-to-do :backed-off
   [\"kitchen\"]}, so the job can stand in the queue under repeat without starving other jobs.
-  Every pass books info kitchen.done and data {:steps {step summary}}; smelt summaries are keyed by food. It ends done
+  Every pass books info kitchen.done, its text naming what was smelted, baked and stored, and data {:steps {step
+  summary}}; smelt summaries are keyed by food, the deposit's has :stored {name n}. It ends done
   when something was cooked, baked or stored; otherwise with the ending of the first step that stopped (its kind and
   cause), or nothing-possible {:reason :nothing-to-do} when every step was skipped.
   Quote: a smelt of each raw food carried.")
@@ -139,7 +141,8 @@
     (case step
       :smelt (select-keys r [:smelted :wanted :reason])
       :bake (select-keys r [:baked :deposited :reason])
-      :deposit (select-keys r [:gave-up :reason]))))
+      :deposit (cond-> (select-keys r [:gave-up :reason])
+                 (seq (get-in e [:report :uses :items])) (assoc :stored (get-in e [:report :uses :items]))))))
 
 (defn progressed?
   "Whether a pass booked report cooked, baked or stored something: a step that was skipped or stopped is none."
@@ -150,6 +153,15 @@
                  (pos? (:deposited (:bake report) 0))
                  (done? (:deposit report))))))
 
+(defn done-text
+  "\"kitchen done: smelted beef 3; baked 4; stored bread 14\", or \"kitchen done: nothing\"."
+  [report]
+  (let [parts (concat (keep (fn [[food b]] (when (pos? (:smelted b 0)) (str "smelted " food " " (:smelted b)))) (:smelt report))
+                      (when (pos? (:baked (:bake report) 0)) [(str "baked " (:baked (:bake report)))])
+                      (when-let [m (:stored (:deposit report))]
+                        [(str "stored " (str/join ", " (map (fn [[n k]] (str n " " k)) (sort m))))]))]
+    (str "kitchen done: " (if (seq parts) (str/join "; " parts) "nothing"))))
+
 (defn finish!
   "End the pass: done when it cooked, baked or stored something; else the ending of the first step that stopped (its
   kind and cause), or nothing-possible when every step was skipped."
@@ -158,7 +170,7 @@
         failed (:failed (ctx/mem c))]
     (when rested?
       (standing/rest! c job-sym rest-key (if (= :no-table (get-in report [:bake :reason])) :no-table :undone)))
-    (ctx/emit! c :kitchen.done :info {:steps report :text (str "kitchen done: " (count report) " steps")})
+    (ctx/emit! c :kitchen.done :info {:steps report :text (done-text report)})
     (cond
       (progressed? report) (ctx/end c :done nil {:steps report})
       failed (ctx/end c (:kind failed) (:cause failed) {:steps report})

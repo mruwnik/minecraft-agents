@@ -132,6 +132,16 @@
           (is (= [{:smelt :no-food :bake :no-wheat :deposit :kept-carried}]
                  (distinct (map (comp :skipped :cause) (events-of s :waiting))))))))))
 
+(deftest the-pass-says-what-it-stored
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run (list job (assoc args :keep {"bread" 6})) {:inventory [(item "bread" 20)] :containers {"10,64,0" []}} 4 {}))
+              e (first (events-of s :kitchen.done))]
+          (is (= {"bread" 14} (chest-items s)))
+          (is (= {:stored {"bread" 14}} (get-in e [:steps :deposit])))
+          (is (= "kitchen done: stored bread 14" (:text e))))))))
+
 (defn ^:async run-beside
   "Submit the job wait-for-dusk (listed, check false by day), then form, over the world; tick 3 times."
   [form world]
