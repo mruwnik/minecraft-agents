@@ -2,7 +2,9 @@
   (:require [jobs.lib.choose :as choose]
             [clojure.string :as str]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -90,7 +92,7 @@
      - The pit and the pocket are dropped when a dig shows fluid or a cave (a seen open cell) in their shell. Lava is first
        filled with a carried block (:on-lava :seal, the default; :stop leaves it).
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist. A body with no weapon
-       (:weapons) first looks for a way to walk once more (:fist-sweeps, default 1).
+       (the call's :use :tools, else jobs.lib.combat/default-weapons) first looks for a way to walk once more (:fist-sweeps, default 1).
        A pillared body that is hit raises the pillar `retreat-refuge/::pillar-extend` (2) blocks, once, before the refuge fails.
      Order: fight if it wins, then seal, pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), pit, pocket, fight.
      Against a creeper back off comes first.
@@ -106,12 +108,14 @@
   after a few seconds); then the flight ends :hidden. After :hide-s in the refuge with no real danger on the body as it
   stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays
   (info retreat.hide-ended): the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup).
-  A chase has no time limit. With no new best gap to the nearest chaser in :no-gain-steps steps it takes the
-  cornered options instead of walking on; stopped :cannot_escape only once every option failed in two sweeps in a row
-  with no gain between.
+  A chase is bounded by the call's time spend (default ::time-s): past it the flight ends limit-reached :time where it
+  stands (refuge included) and the hostile trigger fires again while the danger stays. With no new best gap to the
+  nearest chaser in :no-gain-steps steps it takes the cornered options instead of walking on; it ends nothing-possible
+  :cannot_escape only once every option failed in two sweeps in a row with no gain between.
   Each change of what it chose among is said in one retreat.choice info: the hostiles and where, every closed room and why
   it is not run to, the cells that are no closed room, the home and why it is no run (:home-why), the goal and why it is dropped, where it leans.
-  Returns done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none}, or stopped :cannot_escape.
+  Needs nothing to start (no conditions). Ends done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none},
+  nothing-possible :cannot_escape {:fled [ids]}, or limit-reached. Quote: time (0, ::mean-s, ##Inf).
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
   A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
 
@@ -122,7 +126,6 @@
    :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (done within 3 blocks of it; given up for jobs.survival.retreat-goal/retry-s after a leg that lost ground or left the goal's height), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
    :step {:doc "blocks per walk" :spec (a/num-in 1 nil) :default 6}
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :spec (a/num-in 0 nil) :default 64}
-   :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
    :reserve {:doc "health a cornered fight must be expected to leave" :spec (a/num-in 0 nil) :default cost/default-reserve}
    :blocks {:doc "names of the blocks a cornered body may seal itself in with" :spec (a/coll-of (a/or-of string? keyword?)) :default (choose/fillers :build)}
    :max-places {:doc "seal placements per step" :spec (a/int-in 1 nil) :default 4}
@@ -143,7 +146,33 @@
 (def stall-blocks "A low step that moved the body less than this stood still: cover where it stands comes next." 1)
 
 
-(defn check [_c] true)
+(a/defargs settings
+  {::time-s {:default 120 :doc "Seconds of a flight's time spend: past it the flight ends limit-reached (once limits are enforced) and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
+   ::mean-s {:default 20 :doc "Seconds a flight is guessed to take, the mean of its quote." :spec (a/num-in 0 nil)}})
+
+(def target [])
+
+(def defaults {:spend {:time ::time-s}})
+
+(defn legacy-args
+  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}."
+  [{:keys [weapons] :as args}]
+  (cond-> args
+    (sequential? weapons) (dissoc :weapons)
+    (and (sequential? weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))))
+
+(def conditions [])
+
+(defn done?
+  "The hostiles fled against those still chasing: a flight is never done before it has run."
+  [c]
+  (let [m (ctx/mem c)]
+    {:done? false :units :hostiles :done (count (:fled m)) :left (count (:chasers m))}))
+
+(defn quote-of
+  "A flight has to find out how long the mobs chase: time (0, ::mean-s, ##Inf)."
+  [_c]
+  {:uses {:time [0 (settings/get settings ::mean-s) ##Inf]}})
 
 
 (defn close-hitters
@@ -160,8 +189,8 @@
   [c threat]
   (when (and (not (:ate (ctx/mem c)))
              (>= (danger-q/mob-distance (:primitives c) threat) (:eat-gap (:args c))))
-    (let [r (await (ctx/call-child c :eat 'jobs.survival.eat {:until 20 :max-bites 1}))]
-      (when (or (= :declined r) (:reason (ctx/child-result c :eat)))
+    (let [r (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1}))]
+      (when (and (contract/ending? r) (not= :done (:kind r)))
         (ctx/update-mem! c assoc :ate true)))))
 
 

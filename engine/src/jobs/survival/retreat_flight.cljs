@@ -7,7 +7,6 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
-            [jobs.lib.result :as r]
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
@@ -247,7 +246,7 @@
 (defn end-flight!
   "Write a :threat entry per mob fled (jobs.lib.threats; one per mob, its last way out) and end the flight: done with
   {:fled [ids] :ended}, :ended why the last chaser stopped (or ended, given for the chasers still on: :hidden); ended
-  :cannot-escape stops."
+  :cannot-escape ends nothing-possible :cannot_escape {:fled [ids]}."
   [c ended]
   (let [{:keys [chasers fled]} (ctx/mem c)
         by-id (merge (into {} (map (juxt :id identity)) fled)
@@ -265,5 +264,5 @@
         (when origin (ctx/remember! c :flight {:from origin} {:cap 1 :ttl (settings/get settings ::chain-window-ms)}))))
     (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back :pocket-tried :pocket-dug :early-refuge-failed)
     (if (= :cannot-escape ended)
-      (r/stop! c :cannot_escape "every way of escaping failed twice in a row" :fled ids)
-      (r/finish! c {:fled ids :ended why}))))
+      (ctx/end c :nothing-possible :cannot_escape {:fled ids :text "every way of escaping failed twice in a row"})
+      (ctx/end c :done nil {:fled ids :ended why}))))

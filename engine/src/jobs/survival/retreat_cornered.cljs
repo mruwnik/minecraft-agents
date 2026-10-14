@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.access :as access]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -16,8 +17,7 @@
             [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.survival.retreat-home :as retreat-home]
             [jobs.survival.retreat-refuge :as refuge]
-            [jobs.survival.retreat-walk :as walk]
-            [jobs.survival.fight-back :as fight-back]))
+            [jobs.survival.retreat-walk :as walk]))
 
 (def tool-weapons
   "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."
@@ -37,6 +37,11 @@
     (fn [{:keys [x y z]}] (at [x y z]))))
 
 
+(defn weapons
+  "The weapons of the flight's call: its :use :tools, else the default substrings."
+  [c]
+  (or (ctx/use c :tools) combat/default-weapons))
+
 (def hit-reach
   "Blocks within which a melee hostile counts as the one that hit the body."
   3)
@@ -45,19 +50,22 @@
   "Fight back with the best of weapons (the fist when none is carried) whatever
   the health, kept while the hostile stays close: :again, nil when the fight
   cannot reach any hostile (the option failed this flight). reach-only?: only a hostile within hit-reach is
-  swung at, none walked to."
+  swung at, none walked to. A fight that ends other than done keeps its memory (its given-up counts) for the next."
   [c weapons reach-only?]
   (let [{:keys [radius ranged-radius]} (:args c)
         radius (if reach-only? (min radius hit-reach) radius)
         ranged-radius (if reach-only? radius ranged-radius)]
     (ctx/update-mem! c assoc :cornered true)
-    (let [r (await (ctx/call-child c :cornered 'jobs.survival.fight-back
-                                   {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons
-                                    :skip (flight/dead-ids c)}))]
+    (let [r (await (ctx/call c :cornered 'jobs.survival.fight-back
+                             {:range radius :ranged-range ranged-radius :min-health 0 :use {:tools (mapv name weapons)}
+                              :skip (flight/dead-ids c)}))
+          ended (when (contract/ending? r) r)]
       (ctx/update-mem! c update :dead #(into (vec %) (concat (get-in (ctx/mem c) [:children :cornered :killed])
-                                                             (:killed (ctx/child-result c :cornered)))))
-      (if (or (= :declined r) (fight-back/restore-memory! c :cornered (ctx/child-result c :cornered)))
-        (do (flight/tried! c :fight) nil)
+                                                             (:killed (:data ended)))))
+      (if (and ended (not= :done (:kind ended)))
+        (do (when-let [m (:memory (:data ended))] (ctx/update-mem! c assoc-in [:children :cornered] m))
+            (flight/tried! c :fight)
+            nil)
         :again))))
 
 
@@ -132,11 +140,11 @@
   [c hostiles]
   (let [p (:primitives c)
         self (.self p)
-        {:keys [weapons reserve]} (:args c)]
+        reserve (:reserve (:args c))]
     (boolean
      (and (seq hostiles)
           (not-any? combat/creeper? hostiles)
-          (<= (cost/fight-damage {:weapon (combat/best-weapon p weapons)
+          (<= (cost/fight-damage {:weapon (combat/best-weapon p (weapons c))
                                   :equipment (cost/equipment-of (.-equipment self))
                                   :mobs (map (fn [e] {:name (.-name e) :distance (danger-q/mob-distance p e) :hits 0}) hostiles)})
               (- (.-health self) reserve))))))
@@ -187,11 +195,11 @@
   ([c slot target range leg-s y-margin]
   (let [from (u/self-pos c)
         t0 (ctx/now c)
-        r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :y-margin y-margin :at-night :go
+        r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :escalate false :y-margin y-margin :at-night :go
                                                               :warn false :leg-s leg-s
                                                               :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
                                                               :retry false :look-round false :allow-over-budget true}))
-        res (when (= :done r) (ctx/child-result c slot))
+        res (when (contract/ending? r) (:data r))
         s (/ (- (ctx/now c) t0) 1000)
         d (u/dist from (u/self-pos c))]
     (ctx/emit! c :retreat.step-speed :debug {:slot slot :blocks (/ (js/Math.round (* 10 d)) 10) :seconds (/ (js/Math.round (* 10 s)) 10)
@@ -339,7 +347,7 @@
   (let [near (hitters c hostiles)
         p (:primitives c)]
     (boolean (and (seq near)
-                  (combat/best-weapon p (:weapons (:args c)))
+                  (combat/best-weapon p (weapons c))
                   (or (:hit-on-the-run (ctx/mem c))
                       (recently-hurt? c)
                       (some #(<= (danger-q/mob-distance p %) (press-gap)) near))))))
@@ -373,7 +381,8 @@
   start over (blocked!). home?: the body is in its home room."
   ([c why] (await (cornered! c why false)))
   ([c why home?]
-  (let [{:keys [weapons fist-sweeps]} (:args c)
+  (let [weapons (weapons c)
+        fist-sweeps (:fist-sweeps (:args c))
         hostiles (near-hostiles c)
         threat (first hostiles)
         fire? (under-fire? c)

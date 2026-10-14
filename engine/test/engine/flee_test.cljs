@@ -373,8 +373,8 @@
     (is (nil? (retreat-flight/nearest-gap p [])))))
 
 (def sweeper
-  "A job that runs retreat's blocked! until it ends the job."
-  {:check (constantly true)
+  "A contract job that runs retreat's blocked! until it ends the job."
+  {:conditions []
    :round (fn ^:async sweeper-round [c]
             (loop [n 1]
               (let [r (await (cornered/blocked! c "test"))]
