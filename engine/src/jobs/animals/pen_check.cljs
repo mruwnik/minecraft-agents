@@ -11,7 +11,7 @@
 (def doc
   "Read-only: say whether an animal can walk out of a pen. Flood-fills what a cow can walk (rules in
   jobs.lib.pen: fences, walls and closed gates are 1.5 high, an open gate is a way out, a drop of more than 3
-  is not taken) from the feet cell :at [x y z], or from every surface inside :box (or the box round the barrier cells of :plan), where a step out of the box
+  is not taken) from the feet cell :at [x y z], or from every surface inside :box (or the columns a :plan's fence, wall and gate cells close in), where a step out of the box
   is a leak. Reads what the body has seen; a pen it has not seen closed is checked again after it looks at the
   cells it has not seen (jobs.lib.sense/decide!); a cell that stays unseen (hidden behind a block) is walked to, at
   most 3 times, until the eye sees it. Never digs or places. Waits (condition) and ends condition-failed :no-pen without :at, :box and :plan, and :plan-trouble when :plan is missing or has no fence, wall or gate cells (before any look).

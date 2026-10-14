@@ -526,6 +526,13 @@
   (let [bounded (event-api/bounded-value wide-args 0 (volatile! 64))]
     (is (true? (:truncated bounded)))))
 
+(deftest scalar-fields-of-a-result-survive-a-bulky-neighbour
+  (let [result {:animals (vec (repeat 20 {:kind "cow" :id 1 :pos [1 2 3]}))
+                :leaks [{:pos {:x 1 :y 2 :z 3} :why :gap}]
+                :closed? false :reason :leak :cells 15}
+        bounded (event-api/bounded-value result 0 (volatile! 32))]
+    (is (= {:closed? false :reason :leak :cells 15} (select-keys bounded [:closed? :reason :cells])))))
+
 (deftest catalog-entry-shows-target-ways-and-defaults
   (let [eng {:jobs {'jobs.demo.go {:doc "go" :args {} :target [:pos] :ways [:walk :stair] :defaults {:spend {:time 30} :least 1}}
                     'jobs.demo.old {:doc "old" :args {}}}}

@@ -182,6 +182,34 @@
           (is (= :leak (:reason result)))
           (is (= [{:pos {:x 4 :y 64 :z 3} :why :gap}] (:leaks result))))))))
 
+(def l-inside
+  "A 3x3 pen at x 3..5, z 3..5 and a lobby of x 3, z 6..7."
+  (into #{} cat [(for [x (range 3 6) z (range 3 6)] [x z]) [[3 6] [3 7]]]))
+
+(def l-ring
+  "Every cell next to the L (sides and corners) that is not inside it, at y 64."
+  (vec (distinct (for [[x z] l-inside dx [-1 0 1] dz [-1 0 1]
+                       :let [c [(+ x dx) (+ z dz)]]
+                       :when (not (l-inside c))]
+                   [(c 0) 64 (c 1)]))))
+
+(deftest a-plan-of-an-l-shaped-pen-is-closed-and-counts-only-the-l
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "l" :parts [{:id "fence" :cells l-ring :want "oak_fence"}]}
+              built (into {} (map (fn [[x y z]] [(str x "," y "," z) "oak_fence"])) l-ring)
+              {:keys [eng]} (b/start (pb/spec [] built) {"l" plan} [])
+              result (await (tu/child-outcome eng job {:plan "l"} 300))]
+          (is (true? (:closed? result)) (pr-str (:leaks result)))
+          (is (= 11 (:cells result))))
+        (let [built (into {} (map (fn [[x y z]] [(str x "," y "," z) "oak_fence"])) (remove #{[3 64 8]} l-ring))
+              plan {:id "l" :parts [{:id "fence" :cells l-ring :want "oak_fence"}]}
+              {:keys [eng]} (b/start (pb/spec [] built) {"l" plan} [])
+              result (await (tu/child-outcome eng job {:plan "l"} 300))]
+          (is (= :leak (:reason result)))
+          (is (some #{{:x 3 :y 64 :z 8}} (map :pos (:leaks result)))))))))
+
 (def plain
   "Open ground far past the sight radius round the fence ring."
   (into {} (for [x (range -60 66) z (range -60 66)] [(str x ",63," z) "stone"])))

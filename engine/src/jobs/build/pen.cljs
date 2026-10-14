@@ -69,7 +69,7 @@
     (when (seq ps)
       (let [lo (apply map min ps)
             hi (apply map max ps)]
-        {:min (zipmap [:x :y :z] lo) :max (zipmap [:x :y :z] hi)}))))
+        (pen/with-cols {:min (zipmap [:x :y :z] lo) :max (zipmap [:x :y :z] hi)} ps)))))
 
 (defn gate? [want] (boolean (some #(str/ends-with? % "_fence_gate") (want-blocks want))))
 

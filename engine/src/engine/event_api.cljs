@@ -207,7 +207,7 @@
 
 (defn bounded-value
   "A small EDN-safe copy of user-supplied job args or specs: depth at most 4, strings cut to 160
-  characters, at most budget nodes in all. Cut parts read :truncated."
+  characters, at most budget nodes in all, scalar entries of a map before its collections. Cut parts read :truncated."
   [value depth budget]
   (cond
     (zero? @budget) :truncated
@@ -218,7 +218,7 @@
         (if (string? value) (short-text value 160) value))
     (map? value)
     (do (vswap! budget dec)
-        (loop [entries (seq value) out {}]
+        (loop [entries (seq (sort-by (fn [[_ v]] (if (coll? v) 1 0)) value)) out {}]
           (if (or (empty? entries) (zero? @budget))
             (cond-> out (seq entries) (assoc :truncated true))
             (let [[k v] (first entries)]

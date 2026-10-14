@@ -85,12 +85,13 @@
                  (want-blocks want))))
 
 (defn barrier-box
-  "The inclusive box {:min :max} around the fence, gate and wall cells of cells ({:pos :want}), or nil without any."
+  "The inclusive box {:min :max :cols} around the fence, gate and wall cells of cells ({:pos :want}), or nil without any."
   [cells]
   (let [ps (map :pos (filter #(barrier? (:want %)) cells))]
     (when (seq ps)
-      {:min (zipmap [:x :y :z] (apply map min ps))
-       :max (zipmap [:x :y :z] (apply map max ps))})))
+      (pen/with-cols {:min (zipmap [:x :y :z] (apply map min ps))
+                      :max (zipmap [:x :y :z] (apply map max ps))}
+                     ps))))
 
 (defn plan-box
   "{:box} around the barrier cells of plan id (of part, when given), or {:trouble text}."

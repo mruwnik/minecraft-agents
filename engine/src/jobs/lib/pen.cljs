@@ -210,15 +210,38 @@
 (defn seeds-at [world {:keys [x y z]}]
   (take 1 (surfaces-in world x z y y)))
 
-(defn seeds-in-box [world {:keys [min max]}]
+(defn outside?
+  "True when column x z is outside box: beyond its corners, or, when it has :cols (see with-cols), not one of them."
+  [{:keys [min max cols]} x z]
+  (not (and (<= (:x min) x (:x max)) (<= (:z min) z (:z max)) (or (nil? cols) (contains? cols [x z])))))
+
+(defn with-cols
+  "box with :cols, the set of [x z] columns in it that a walker outside the box cannot reach without crossing a
+  column of barriers (positions [x y z]): the pen of an L-shaped plan leaves its notch out. No :cols when the
+  barriers do not close."
+  [{:keys [min max] :as box} barriers]
+  (let [walls (into #{} (map (fn [[x _ z]] [x z])) barriers)
+        in? (fn [[x z]] (and (<= (dec (:x min)) x (inc (:x max))) (<= (dec (:z min)) z (inc (:z max)))))
+        reached (loop [seen #{[(dec (:x min)) (dec (:z min))]} stack [[(dec (:x min)) (dec (:z min))]]]
+                  (if-let [[x z] (peek stack)]
+                    (let [next (->> [[(inc x) z] [(dec x) z] [x (inc z)] [x (dec z)]]
+                                    (filter #(and (in? %) (not (walls %)) (not (seen %)))))]
+                      (recur (into seen next) (into (pop stack) next)))
+                    seen))]
+    (let [cols (set (for [x (range (:x min) (inc (:x max)))
+                          z (range (:z min) (inc (:z max)))
+                          :when (not (reached [x z]))]
+                      [x z]))]
+      ;; only barrier columns left: the walls do not close, so check the whole box
+      (if (every? walls cols) box (assoc box :cols cols)))))
+
+(defn seeds-in-box [world {:keys [min max] :as box}]
   (for [x (range (:x min) (inc (:x max)))
         z (range (:z min) (inc (:z max)))
+        :when (not (outside? box x z))
         s (surfaces-in world x z (:y min) (:y max))
         :when (not (:perch? s))]
     s))
-
-(defn outside? [{:keys [min max]} x z]
-  (not (and (<= (:x min) x (:x max)) (<= (:z min) z (:z max)))))
 
 ;; ------------------------------------------------------------------ the fill
 
