@@ -8,6 +8,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
+            [jobs.lib.started :as started]
             [jobs.lib.walk.world :as wworld]
             [jobs.animals.escort :as escort]))
 
@@ -158,12 +159,7 @@
       (not (or pos fence)) (contract/impossible :no-destination)
       (and fence (not-fence? c)) {:reason :no-fence :text "lead-to waits: the named cell is not a fence"})))
 
-(defn at-start
-  "f of the call, at its start only (same as jobs.gather.mine/at-start): a started lead ends itself through finish!."
-  [f]
-  (fn [c] (when-not (ctx/frozen-call c) (f c))))
-
-(def conditions "Starts while the order is complete and the post is no seen non-fence (start-fact)." [[:fn (at-start start-fact)]])
+(def conditions "Starts while the order is complete and the post is no seen non-fence (start-fact)." [[:fn (started/at-start start-fact)]])
 
 (defn time-limit "Seconds the leading may take." [c]
   (or (get-in (ctx/frozen-call c) [:spend :time]) (timeout-s)))
