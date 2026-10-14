@@ -310,11 +310,8 @@
       (= :continue e) :continue
       (>= (carried c) goal) (finish! c :count)
       (and (= :condition-failed (:kind e)) (not (contains? out :gave-up))) (give-up! c :withdraw-declined)
-      (:gave-up out) (let [k (contract/cause-key e)
-                           ;; an old withdraw's refusal is a done result: the adapter keeps its :zones, not its :reason
-                           why (cond (not= :done k) k (or (seq (:zones out)) (seq (:claims out))) :refused :else :gave-up)]
-                       (ctx/emit! c :get-seeds.gave-up :warn (merge (select-keys out [:zones :claims])
-                                                                    {:reason why :text (str "get-seeds: withdraw gave up: " (name why))}))
+      (:gave-up out) (let [why (contract/cause-key e)]
+                       (ctx/emit! c :get-seeds.gave-up :warn (merge (select-keys out [:zones :claims]) {:reason why :text (str "get-seeds: withdraw gave up: " (name why))}))
                        (finish! c :short))
       :else (finish! c :short))))
 
