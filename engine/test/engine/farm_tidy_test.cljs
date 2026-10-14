@@ -50,7 +50,7 @@
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                           (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :status)))
                            r))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
     (core/submit! eng '(recording-parent) {})

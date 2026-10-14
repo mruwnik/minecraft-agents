@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -35,10 +36,12 @@
   Refused cells are in the result's :refused [{:pos :block :reason}] and the warn tidy.refused.
   The sweep goes top-down, nearest first. It ends by collecting the drops within the field's extent plus 4 blocks
   (jobs.forestry.collect-drops as a child).
-  Result: {:dug n :collected n :kept [...] :wrong [...] :refused [...]}, info tidy.done. Over a tidy field it
-  digs nothing.
-  The job declines (one tidy.declined warn naming the plan and the reason) while the plan is missing, unreadable
-  or has no cells (in :part), and while no zone list has been read.")
+  Ends :done with data {:dug n :collected n :kept [...] :wrong [...] :refused [...]} (info tidy.done); over a tidy
+  field it digs nothing and is done. When strays were found, none dug and some refused, it ends nothing-possible
+  :refused with the same data.
+  Condition-failed {:reason :plan-trouble :why text} (one tidy.declined warn naming the plan and the reason) while the
+  plan is missing, unreadable or has no cells (in :part), and while no zone list has been read.
+  Quote: time only, the strays are not counted.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
@@ -48,6 +51,9 @@
    :reach {:doc "cells whose centre is this close to the eye are dug without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
    :give-up {:doc "failed walks, failed digs or hazard-blocked tries after which a cell is refused" :spec (a/int-in 1 nil) :default 3}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+
+(a/defargs settings
+  {::time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the sweep of the drops." :spec (a/num-in 0 nil)}})
 
 
 ;; ------------------------------------------------------------------ access
@@ -119,7 +125,7 @@
 
 (defn pos-map [[x y z]] {:x x :y y :z z})
 
-;; ------------------------------------------------------------------ check
+;; ------------------------------------------------------------------ conditions
 
 (defn planned
   "{:answer plan-answer} for the plan in the args, or {:trouble text} (warned once per reason)."
@@ -136,10 +142,9 @@
                            :text (str "tidy declines plan " plan (when part (str " part " part)) ": " trouble)})
           {:trouble trouble}))))
 
-(defn check [c]
-  (if-let [trouble (:trouble (planned c))]
-    (ctx/wait c {:reason :plan-trouble :why trouble})
-    true))
+(defn plan-problem [c]
+  (when-let [trouble (:trouble (planned c))]
+    {:reason :plan-trouble :why trouble}))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -250,11 +255,10 @@
     (min 48 (+ 4 (js/Math.ceil (apply js/Math.hypot (map - hi lo)))))))
 
 (defn ^:async collect! [c cells]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (field-radius cells) :holes (:holes (ctx/mem c))}))]
-    (when (= :done r)
-      (ctx/update-mem! c #(-> % (dissoc :collect) (update :collected (fnil + 0) (:collected (ctx/child-result c :collect) 0)))))
-    (when (= :declined r) (ctx/update-mem! c dissoc :collect))
-    (if (= :continue r) :continue :again)))
+  (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius (field-radius cells) :holes (:holes (ctx/mem c))}))]
+    (when-not (= :continue e)
+      (ctx/update-mem! c #(-> % (dissoc :collect) (update :collected (fnil + 0) (get-in e [:data :collected] 0)))))
+    (if (= :continue e) :continue :again)))
 
 (defn finish! [c found]
   (let [m (ctx/mem c)
@@ -274,8 +278,9 @@
                                    :text (str "tidy of " plan " done: "
                                               (if (and (zero? (:dug result)) (empty? refused)) "nothing to dig" (str "dug " (:dug result)))
                                               (when (seq refused) (str ", refused " (count refused))))})
-    (ctx/result! c result)
-    :done))
+    (if (and (zero? (:dug result)) (seq refused))
+      (ctx/end c :nothing-possible :refused result)
+      (ctx/end c :done nil result))))
 
 (defn settle-digging!
   "A dig the last run was in when it was cut: counted as dug once its stray is gone from the world."
@@ -292,7 +297,7 @@
 (defn ^:async step [c]
   (let [{:keys [answer trouble]} (planned c)]
     (if trouble
-      :declined
+      (ctx/end c :condition-failed {:reason :plan-trouble :why trouble})
       (let [cells (work-cells (:cells answer) (:part (:args c)))
             found (strays cells #(tr/world-block (:primitives c) %))
             _ (settle-digging! c found)
@@ -310,3 +315,20 @@
   the sweep waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async s [] (await (step c))))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def target [:plan :part])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions [[:fn plan-problem]])
+
+(defn done?
+  "Never done before the round says so: the strays left are read at each step."
+  [c]
+  {:done? false :units :strays :done (:dug (ctx/mem c) 0) :left 1})
+
+(defn quote-of [_c]
+  {:uses {:time [1 30 (settings/get settings ::time-s)]}
+   :done [0 1 1]})

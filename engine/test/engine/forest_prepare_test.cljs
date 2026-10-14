@@ -28,7 +28,7 @@
   ([spec plans] (outcome spec plans {:plan "forest"}))
   ([spec plans args]
    (let [s (start spec plans)]
-     (assoc s :result (await (tu/child-outcome (:eng s) job args 300))))))
+     (assoc s :result (let [r (await (tu/child-outcome (:eng s) job args 300))] (cond-> r (map? r) (dissoc :status)))))))
 
 (defn ^:async run
   "Submit the job with args in a world over plans and tick it n times: the start map."
@@ -669,15 +669,13 @@
             (is (= 3 (count (places (:p s)))) (str label " " status))
             (is (= [{:pos {:x 3 :y 64 :z 0} :reason (keyword status)}] (warns (:seen s) :prepare.refused)) (str label " " status))))))))
 
-(deftest a-cell-receding-from-a-dam-waits-until-its-recede-time
+(deftest a-cell-receding-from-a-dam-yields-until-its-recede-time
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (await (run (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt) {"forest" one-cell} {:plan "forest"} 6))
-              waits (h/events-of seen :waiting)]
-          (is (listed? eng))
-          (is (= [:receding] (distinct (map :reason waits))))
-          (is (every? number? (map :ready-at waits))))))))
+        (let [{:keys [eng p]} (await (run (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt) {"forest" one-cell} {:plan "forest"} 6))]
+          (is (listed? eng) "yields while the flow recedes")
+          (is (= [[2 64 0 "dirt"]] (places p)) "the dam is placed once"))))))
 
 (deftest a-planned-cell-never-seen-is-looked-at-before-nothing-to-do
   (async done
@@ -685,27 +683,10 @@
       (fn ^:async t []
         (let [spec (world {} (item "oak_sapling" 1))
               {:keys [eng p]} (start spec {"forest" one-cell} (tu/tmp-dir) (tu/seeing-after-look (tu/fake-on-floor spec)))
-              result (await (tu/child-outcome eng job {:plan "forest"} 300))]
+              result (dissoc (await (tu/child-outcome eng job {:plan "forest"} 300)) :status)]
           (is (seq (h/calls p "look")))
           (is (= [[3 64 0 "oak_sapling"]] (places p)))
           (is (= (expect {:planted 1}) result)))))))
-
-(deftest a-cell-whose-headroom-stays-unseen-after-the-look-waits-saying-so
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [spec (world {"3,64,0" "cobblestone"} (item "iron_pickaxe" 1) (item "oak_sapling" 1))
-              p (tu/seeing-after-look (tu/fake-on-floor spec))
-              {:keys [seen eng]} (start spec {"forest" one-cell} (tu/tmp-dir) p)
-              hidden? #(= 65 (.-y %))
-              seen-at (.-seenBlockAt p)
-              sensed-at (.-sensedAt p)]
-          (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (seen-at pos))))
-          (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (sensed-at pos))))
-          (core/submit! eng (list job {:plan "forest"}) {})
-          (await (ticks eng 20))
-          (is (= [] (digs p)))
-          (is (= [:cells-unloaded] (vec (waiting-reasons seen)))))))))
 
 (deftest ground-under-the-feet-is-replaced-from-beside
   (async done

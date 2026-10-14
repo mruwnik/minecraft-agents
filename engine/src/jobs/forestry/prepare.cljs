@@ -1,6 +1,7 @@
 (ns jobs.forestry.prepare
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.trees :as forestry]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.check-cache :as check-cache]
@@ -48,14 +49,21 @@
   chosen and again before the act. A refusal, a dig hazard not in :accept, or three failed tries (walk, dig,
   place, plant) skips the cell for 10 minutes (body memory :forestry/prepare-skip). It is reported as :refused
   {:pos :reason} (warn prepare.refused).
-  Waits (check) unless a step can be taken. A field where every cell is done, wrong, cramped, without soil or
+  Condition-failed (it does not start) unless a step can be taken. A field where every cell is done, wrong, cramped, without soil or
   short of saplings is left alone, with one note per cell (prepare.wrong, prepare.no-soil, prepare.cramped,
   prepare.wet) and one per species short (prepare.short {:species :missing}). The job wakes when what it lacked
   is carried. A started job runs on to finish.
-  The job declines (one prepare.declined warn) while the plan is missing, unreadable or has no tree cells (in
-  :part), and while no zone list is loaded. With a planned cell never seen, the first round looks around once first.
-  Result: {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped :wet :refused},
-  info prepare.done.")
+  Condition-failed {:reason :plan-trouble :why text} (one prepare.declined warn) while the plan is missing,
+  unreadable or has no tree cells (in :part), and while no zone list is loaded. With a planned cell never seen, the
+  first round looks around once first.
+  Ends :done with data {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped
+  :wet :refused} (info prepare.done) when it cleared, soiled, planted or dammed a cell. With none of those, it ends
+  nothing-possible :refused when cells were skipped, else condition-failed with the worst blocked state.
+  Quote: time only.")
+
+(a/defargs settings
+  {::time-s {:default 1200 :doc "Seconds a prepare run may take: the digs, soil, plants and walks." :spec (a/num-in 0 nil)}
+   ::max-steps {:default 400 :doc "Steps of one round before it gives the body back with :continue." :spec (a/int-in 1 nil)}})
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world; its tree cells are the planting spots" :spec a/name? :default nil}
@@ -114,22 +122,23 @@
               {:reason reason :cells (vec (sort (map (comp maintain/cell-vec :pos) cells)))}))
           blocked-states)))
 
-(defn check
-  "Passes while a step can be taken on a planned cell, and once the job has begun (its finishing round must run)
-  unless a cell is still receding from a dam. Otherwise it waits, naming the cells held back. The field is assessed
-  once per check-cache window; the round says (warns) what is wrong with each cell."
+(defn not-ready
+  "Why the job does not start: nil while a step can be taken on a planned cell, and once it has begun (its finishing
+  round must run). The field is assessed once per check-cache window; the round says (warns) what is wrong with
+  each cell."
   [c]
-  (let [field (field/planned c)]
-    (if (:trouble field)
-      (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
-      (let [cells (maintain/field-cells field)
-            read #(field/assessments c field)
-            states (if (look/unseen? (:primitives c) cells) (read) (check-cache/cached c :states read))
-            work (field/todo c states)]
-        (or (boolean (or (seq work) (and (:begun (ctx/mem c)) (not (receding? states)))))
+  (when-not (ctx/frozen-call c)
+    (let [field (field/planned c)]
+      (if (:trouble field)
+        {:reason :plan-trouble :why (:trouble field)}
+        (let [cells (maintain/field-cells field)
+              read #(field/assessments c field)
+              states (if (look/unseen? (:primitives c) cells) (read) (check-cache/cached c :states read))]
+          (when (empty? (field/todo c states))
             (if-let [due (seq (vals (:recede (ctx/mem c))))]
-              (ctx/wait c {:reason :receding :ready-at (apply min due)})
-              (look/wait-unless-surveyed c (or (blocked-reason states) {:reason :nothing-to-do}) cells)))))))
+              {:reason :receding :ready-at (apply min due)}
+              (when (or (look/surveyed? c) (not (look/unseen? (:primitives c) cells)))
+                (or (blocked-reason states) {:reason :nothing-to-do})))))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -264,22 +273,24 @@
           (let [v (field/place-verdict c (maintain/cell-vec pos))]
             (if (not= :ok v)
               (blocked! c pos v)
-              (do (await (ctx/call-child c :plant 'jobs.forestry.plant-sapling
-                                {:at pos :species species :for-plan (:plan (:args c))
-                                 :ignore-zones? (:ignore-zones? (:args c))}))
-                  (if (= item (u/seen-name (:primitives c) pos))
-                    (ctx/update-mem! c bump :planted)
-                    (count-cell-fail! c pos :failed))
-                  :again)))))))
+              (let [e (await (ctx/call c :plant 'jobs.forestry.plant-sapling
+                                       {:at pos :species species :for-plan (:plan (:args c))
+                                        :ignore-zones? (:ignore-zones? (:args c))}))]
+                (if (= :continue e)
+                  :continue
+                  (do (if (= item (u/seen-name (:primitives c) pos))
+                        (ctx/update-mem! c bump :planted)
+                        (count-cell-fail! c pos :failed))
+                      :again)))))))))
 
 (defn ^:async collect!
   "One collect-drops round while the drops of the digs are owed. :again, :continue while it waits."
   [c]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
-                                 {:radius (:collect-radius (:args c))
-                                  :holes (vec (remove nil? (cons (:collect (ctx/mem c)) (:holes (ctx/mem c)))))}))]
-    (when (= :done r) (ctx/update-mem! c dissoc :collect))
-    (if (= :continue r) :continue :again)))
+  (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops
+                           {:radius (:collect-radius (:args c))
+                            :holes (vec (remove nil? (cons (:collect (ctx/mem c)) (:holes (ctx/mem c)))))}))]
+    (when-not (= :continue e) (ctx/update-mem! c dissoc :collect))
+    (if (= :continue e) :continue :again)))
 
 (defn ^:async act!
   "The step the cell is owed."
@@ -328,13 +339,15 @@
                                         ", planted " (:planted result) ", short " (reduce + (vals missing))
                                         ", left " (+ (count (:wrong result)) (count (:no-soil result)) (count (:no-tool result)) (count (:cramped result))
                                                     (count (:wet result)) (count (:refused result))))))
-    (ctx/result! c result)
-    :done))
+    (cond
+      (pos? (+ (:cleared result) (:soiled result) (:planted result) (:dammed result))) (ctx/end c :done nil result)
+      (seq (:refused result)) (ctx/end c :nothing-possible :refused result)
+      :else (ctx/end c :condition-failed (or (blocked-reason states) {:reason :nothing-to-do}) result))))
 
 (defn ^:async step [c]
   (let [field (field/planned c)]
     (if (:trouble field)
-      :declined
+      (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble field)})
       (or (await (maintain/survey-field! c field))
           (do
             (when-not (:begun (ctx/mem c))
@@ -350,8 +363,23 @@
                 (receding? states) :continue
                 :else (finish! c states))))))))
 
-(def max-steps "Steps of one call before it gives the round back with :continue." 400)
-
 (defn ^:async round [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (settings/get settings ::max-steps)) (step c) :continue)))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def target [:plan :part])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions [[:fn not-ready]])
+
+(defn done?
+  "Never done before the round says so: the cells left are assessed at each step."
+  [c]
+  {:done? false :units :cells :done (reduce + (map #(% (ctx/mem c) 0) [:cleared :soiled :planted :dammed])) :left 1})
+
+(defn quote-of [_c]
+  {:uses {:time [1 60 (settings/get settings ::time-s)]}
+   :done [0 1 1]})
