@@ -1,12 +1,12 @@
 (ns jobs.items.get-kit
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.items.recipes :as recipes]
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.armour :as armour]
-            [jobs.lib.blocks :as b]
             [jobs.lib.combat :as combat]
             [jobs.lib.foods :as foods]
             [jobs.lib.util :as u]))
@@ -29,9 +29,12 @@
   no new food search for ::no-food-wait-ms. Get a base first.
   A death since the job began (body memory :died) clears the children and what was made; the next round re-plans from
   what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
-  Ends {:status :done :have [..] :made [..]} or {:status :stopped :item next :reason r :why text :have :made}, warn
-  kit.stopped; r is the obtain's (:no-source, :timeout ..; :item is then the furnace material when that failed),
-  :needs-food (:food :min-food :cause) or :wear-failed.")
+  Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]}. Every other ending has
+  :have, :made, the next :item and a :why text, warn kit.stopped:
+  - the obtain child's kind and cause (:no-source, :time ..; :item is then the furnace material when that failed);
+  - condition-failed {:reason :needs-food :cause c :food :min-food} (the starving body found no food, or :food is false);
+  - nothing-possible {:reason :wear-failed}.
+  Quote: a guess per missing item. done? counts the items carried or worn.")
 
 (def iron-kit
   ["iron_pickaxe" "iron_sword" "iron_axe" "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots"])
@@ -47,7 +50,13 @@
 (a/defargs settings
   {::minutes {:default 45 :doc "Time budget of each obtain child of the kit." :spec (a/num-in 0 nil)}
    ::no-food-wait-ms {:default 300000 :doc "After a food search fails while the body is not starving, how long the kit goes on without asking get-food again." :spec (a/num-in 0 nil)}
+   ::time-s {:default 10800 :doc "Seconds a kit may last: every child of every piece." :spec (a/num-in 0 nil)}
+   ::item-s {:default 120 :doc "Seconds a quote counts for each missing item of the kit." :spec (a/num-in 0 nil)}
    ::min-food {:default 20 :doc "Food points carried before the kit job starts work or a new piece." :spec (a/int-in 0 nil)}})
+
+(def target [:items])
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn furnace-short
   "{material n}: the furnace products (iron_ingot ..) that the first recipes of items need together, beyond carried
@@ -65,14 +74,22 @@
   [m now]
   (-> m (dissoc :children :materials :made :fed :partial :no-food-until :weapon-tried) (assoc :since now)))
 
+(defn why-of
+  "The text a child ending e gives for its stop: its data's :why, else its cause map's."
+  [e]
+  (or (get-in e [:data :why]) (when (map? (:cause e)) (:why (:cause e))) (get-in e [:data :text])))
+
+(defn stop-of
+  "A way the kit stops: the ending kind and cause, the cause's keyword as :reason and the text why."
+  [kind cause why]
+  {:kind kind :cause cause :reason (contract/cause-key {:kind kind :cause cause}) :why why})
+
 (defn wear-outcome
-  "What a wear child round means: :continue (yield), nil (it wore something), or {:reason :wear-failed :why}.
-  r is the call-child return, res the child's result, declined-why the reason its check waits with."
-  [r res declined-why]
-  (cond (= :continue r) :continue
-        (= :declined r) {:reason :wear-failed :why declined-why}
-        (seq (:worn res)) nil
-        :else {:reason :wear-failed :why (:reason res)}))
+  "What a wear child ending e means: :continue (yield), nil (it wore something), or a stop (stop-of) :wear-failed."
+  [e]
+  (cond (= :continue e) :continue
+        (and (= :done (:kind e)) (seq (:worn (:data e)))) nil
+        :else (stop-of :nothing-possible {:reason :wear-failed} (contract/cause-key e))))
 
 (defn stale?
   "Whether the body died (latest :died entry) after the job booked :since."
@@ -101,9 +118,27 @@
                        (and slot (contains? carried item) (> rank (armour/rank-of (get worn slot))))))
           items))
 
-(defn check [c]
-  (or (seq (:items (:args c)))
-      (ctx/wait c {:reason :bad-args :why "needs :items, a list of item names"})))
+(defn bad-args [c]
+  (when-not (seq (:items (:args c)))
+    (contract/impossible {:reason :bad-args :why "needs :items, a list of item names"})))
+
+(def conditions [[:fn bad-args]])
+
+(defn done?
+  "Counts the items carried or worn (the round ends the call, after the armour is worn)."
+  [c]
+  (let [st (state c)
+        items (:items (:args c))
+        n (count (filter #(had? (:carried st) (:worn st) %) items))]
+    {:done? false :units :items :done n :left (- (count items) n)}))
+
+(defn quote-of
+  "A guess of the seconds each missing item takes."
+  [c]
+  (let [st (state c)
+        n (count (remove #(had? (:carried st) (:worn st) %) (:items (:args c))))
+        t (* n (settings/get settings ::item-s))]
+    {:uses {:time [0 t ##Inf]}}))
 
 (defn obtain-args [c item n]
   (let [a (:args c)]
@@ -121,26 +156,26 @@
   ["stone_sword" "wooden_sword"])
 
 (defn ^:async run-obtain!
-  "One obtain child round in slot: :continue, or {:reason :why} when it ended without the item (nil when it got it)."
+  "One obtain child round in slot: :continue, or the stop (stop-of) of the child's ending when it ended without the item
+  (nil when it got it)."
   [c slot item n]
-  (let [oargs (obtain-args c item n)
-        r (await (ctx/call-child c slot 'jobs.items.obtain oargs))]
-    (case r
-      :continue :continue
-      :declined (let [w (b/child-wait c slot 'jobs.items.obtain oargs)]
-                  {:reason (:reason w) :why (:why w)})
-      (let [res (ctx/child-result c slot)]
-        (when-not (= :done (:status res)) {:reason (:reason res :failed) :why (:why res)})))))
+  (let [e (await (ctx/call c slot 'jobs.items.obtain (obtain-args c item n)))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) nil
+      :else (stop-of (:kind e) (:cause e) (why-of e)))))
 
-(defn finish! [c items have out]
-  (let [res (merge {:have have :made (vec (:made (ctx/mem c)))} out)]
-    (if (= :done (:status out))
-      (ctx/emit! c :kit.done :info {:have have :text (str "kit complete: " (count have) " item(s)")})
-      (ctx/emit! c :kit.stopped :warn (assoc (select-keys out [:item :reason :why]) :have have
-                                             :text (str "kit stopped at " (:item out) ": " (name (:reason out))
-                                                        (when (:why out) (str " (" (:why out) ")"))))))
-    (ctx/result! c res)
-    :done))
+(defn finish!
+  "End the call: done when out is nil, else with the stop out; the data has what is had and made."
+  [c items have out]
+  (let [data {:have have :made (vec (:made (ctx/mem c)))}]
+    (if-not out
+      (do (ctx/emit! c :kit.done :info {:have have :text (str "kit complete: " (count have) " item(s)")})
+          (ctx/end c :done nil data))
+      (do (ctx/emit! c :kit.stopped :warn (assoc (select-keys out [:item :reason :why]) :have have
+                                                 :text (str "kit stopped at " (:item out) ": " (name (:reason out))
+                                                            (when (:why out) (str " (" (:why out) ")")))))
+          (ctx/end c (:kind out) (:cause out) (merge data (select-keys out [:item :why])))))))
 
 (defn food-args
   "The get-food child's args: feed the body, then stock the pack up to :min-food points."
@@ -149,15 +184,14 @@
    :stock (or (:min-food (:args c)) (settings/get settings ::min-food))})
 
 (defn ^:async run-food!
-  "One get-food child round: :continue, nil when the body is fed or not hungry, or {:reason :why} when it could not be fed."
+  "One get-food child round: :continue, nil when the body is fed or not hungry, or {:cause :why} when it could not be fed."
   [c]
-  (let [r (await (ctx/call-child c :food 'jobs.survival.get-food (food-args c)))]
-    (case r
-      :continue :continue
-      :declined (let [w (b/child-wait c :food 'jobs.survival.get-food (food-args c))]
-                  (when-not (= :not-hungry (:reason w)) {:cause (:reason w) :why (:why w)}))
-      (let [res (ctx/child-result c :food)]
-        (when (= :stopped (:status res)) {:cause (:reason res) :why (:text res)})))))
+  (let [e (await (ctx/call c :food 'jobs.survival.get-food (food-args c)))
+        cause (contract/cause-key e)]
+    (cond
+      (= :continue e) :continue
+      (or (= :done (:kind e)) (= :not-hungry cause)) nil
+      :else {:cause cause :why (why-of e)})))
 
 (defn ^:async round [c]
   (let [a (:args c)
@@ -183,14 +217,12 @@
             raw (when partial (get (:carried st) (get smelt-plan/made-from (first need)) 0))]
         (cond
           wear
-          (let [r (await (ctx/call-child c :wear 'jobs.items.wear {:item wear}))
-                out (wear-outcome r (ctx/child-result c :wear)
-                                  (when (= :declined r) (:reason (b/child-wait c :wear 'jobs.items.wear {:item wear}))))]
+          (let [out (wear-outcome (await (ctx/call c :wear 'jobs.items.wear {:item wear})))]
             (cond (= :continue out) :continue
-                  out (finish! c items have (assoc out :status :stopped :item wear))
+                  out (finish! c items have (assoc out :item wear))
                   :else (recur)))
 
-          (empty? todo) (finish! c items have {:status :done})
+          (empty? todo) (finish! c items have nil)
 
           (and need (not (armed? (:carried st))) (not (:weapon-tried (ctx/mem c))))
           (let [r (await (run-obtain! c :weapon starter-weapons 1))]
@@ -208,10 +240,11 @@
                       (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
                                                        :text (str "no food found (" (name (:cause r)) "), going on with " fp " food points carried")})
                       (recur))
-                  (some? r) (finish! c items have (assoc r :status :stopped :item (first todo) :reason :needs-food
-                                                         :food fp :min-food min-food))
-                  (not (:food a)) (finish! c items have {:status :stopped :item (first todo) :reason :needs-food :food fp :min-food min-food
-                                                         :why (str "carries " fp " food points, needs " min-food ": get a food supply first")})
+                  (some? r) (finish! c items have (assoc (stop-of :condition-failed {:reason :needs-food :cause (:cause r) :food fp :min-food min-food} (:why r))
+                                                         :item (first todo)))
+                  (not (:food a)) (finish! c items have (assoc (stop-of :condition-failed {:reason :needs-food :food fp :min-food min-food}
+                                                                        (str "carries " fp " food points, needs " min-food ": get a food supply first"))
+                                                               :item (first todo)))
                   :else (do (ctx/update-mem! c assoc :fed true) (recur))))
 
           short
@@ -221,7 +254,7 @@
             (cond (= :continue r) :continue
                   (and (some? r) (pos? carried-raw)) (do (ctx/update-mem! c assoc :partial (assoc r :item mat))
                                                          (recur))
-                  (some? r) (finish! c items have (merge {:status :stopped :item mat} r))
+                  (some? r) (finish! c items have (assoc r :item mat))
                   :else (recur)))
 
           (and partial (not (:smelted partial)) (or (:smelting partial) (pos? raw)))
@@ -229,7 +262,7 @@
                 r (await (run-obtain! c :smelt mat (min (or (:smelting partial) raw) n)))]
             (cond (= :continue r) (do (ctx/update-mem! c assoc-in [:partial :smelting] (or (:smelting partial) raw))
                                       :continue)
-                  (some? r) (finish! c items have (merge {:status :stopped :item mat} r))
+                  (some? r) (finish! c items have (assoc r :item mat))
                   :else (do (ctx/update-mem! c assoc-in [:partial :smelted] true)
                             (recur))))
 
@@ -238,9 +271,9 @@
                 r (await (run-obtain! c (keyword item) item 1))]
             (cond
               (= :continue r) :continue
-              (some? r) (finish! c items have (merge {:status :stopped :item item}
-                                                     (cond-> r partial (update :why #(str % " (the materials for the whole kit failed: "
-                                                                                          (:reason partial) ")")))))
+              (some? r) (finish! c items have (assoc (cond-> r partial (update :why #(str % " (the materials for the whole kit failed: "
+                                                                                                           (:reason partial) ")")))
+                                                     :item item))
               :else (do (ctx/update-mem! c #(-> % (update :made (fnil conj []) item) (dissoc :fed)))
                         (ctx/emit! c :kit.progress :info {:item item :have (inc (count have)) :of (count items)
                                                           :text (str "got " item " (" (inc (count have)) " of " (count items) ")")})

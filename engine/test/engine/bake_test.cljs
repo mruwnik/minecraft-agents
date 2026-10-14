@@ -2,12 +2,14 @@
   "jobs.items.bake against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
-            [engine.test-util :as tu :refer [child-outcome]]
+            [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.withdraw-test :as wt]
             [jobs.items.bake :as bake]))
 
 (defn setup [world]
@@ -28,6 +30,15 @@
 (def chest {:x 10 :y 64 :z 0})
 (def beside {"11,64,0" "crafting_table"})
 
+(defn ^:async child-outcome
+  "The job's ending as a ctx/call child, at most n ticks: {:kind :cause :data}, the data's :baked and :deposited with the
+  cause's keyword as :reason when it did not end done (the shape the old result had)."
+  [eng job args n]
+  (let [e (await (wt/ending-of eng job args n))]
+    (merge (select-keys (:data e) [:baked :deposited :zones :claims])
+           {:kind (:kind e)}
+           (when (not= :done (:kind e)) {:reason (contract/cause-key e)}))))
+
 (defn ^:async bake
   "Setup world, run the job with args; [result p seen]."
   ([world args] (bake world args identity))
@@ -39,17 +50,18 @@
 
 (defn kinds [seen] (set (map :kind @seen)))
 
-(deftest bake-check-wants-a-known-chest
-  (are [args ok] (= ok ((:check (get registry/jobs job)) {:args args :view (fn [] {:data {} :now 0})}))
-    {:chest chest} true
-    {:chest nil} false))
+(deftest bake-needs-a-known-chest
+  (let [conditions (:conditions (get registry/jobs job))
+        problem (fn [args] ((second (first conditions)) {:args args :view (fn [] {:data {} :now 0})}))]
+    (is (nil? (problem {:chest chest})))
+    (is (= {:reason :no-chest} (problem {:chest nil})))))
 
 (deftest bakes-the-chest-wheat-and-keeps-some-loaves
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [[result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks beside} {}))]
-          (is (= {:baked 10 :deposited 6} result))
+          (is (= {:kind :done :baked 10 :deposited 6} result))
           (is (= {"bread" 6} (chest-items p)) "no wheat left, 6 loaves")
           (is (= {"bread" 4} (inv p)))
           (is (contains? (kinds seen) :bake.done)))))))
@@ -59,7 +71,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 31}]} :blocks beside} {}))]
-          (is (= {:baked 10 :deposited 6} result))
+          (is (= {:kind :done :baked 10 :deposited 6} result))
           (is (= {"wheat" 1 "bread" 6} (chest-items p))))))))
 
 (deftest no-table-near-the-chest-takes-nothing
@@ -70,7 +82,7 @@
                 [{} {"30,64,0" "crafting_table"}]
                 (fn ^:async one [blocks]
                   (let [[result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks blocks} {}))]
-                    (is (= {:baked 0 :deposited 0 :reason "no-table"} result) (str blocks))
+                    (is (= {:kind :condition-failed :baked 0 :deposited 0 :reason :no-table} result) (str blocks))
                     (is (= {"wheat" 30} (chest-items p)))
                     (is (contains? (kinds seen) :bake.no-table))
                     (is (empty? (calls p "transfer")))))))))))
@@ -80,7 +92,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks beside} {} tu/blind))]
-          (is (= {:baked 0 :deposited 0 :reason "no-table"} result))
+          (is (= {:kind :condition-failed :baked 0 :deposited 0 :reason :no-table} result))
           (is (empty? (calls p "transfer"))))))))
 
 (deftest a-withdraw-that-gives-up-in-the-top-up-stops-the-bake
@@ -89,7 +101,8 @@
       (fn ^:async t []
         (let [[result _ seen] (await (bake {:inventory [{:name "wheat" :count 3}] :containers {"10,64,0" [{:name "bread" :count 8}]} :blocks beside} {}
                                            (fn [p] (.override (.-world p) "transfer" (fn [_ _ _] (js/Promise.resolve #js {:status "unreachable"}))))))]
-          (is (re-find #"^withdraw " (:reason result)))
+          (is (= :condition-failed (:kind result)))
+          (is (= :unreachable (:reason result)))
           (is (contains? (kinds seen) :bake.withdraw-failed))
           (is (not (contains? (kinds seen) :bake.done))))))))
 
@@ -101,7 +114,7 @@
                 [0 2]
                 (fn ^:async one [n]
                   (let [[result p seen] (await (bake {:containers {"10,64,0" [{:name "wheat" :count n}]} :blocks beside} {}))]
-                    (is (= {:baked 0 :deposited 0} result) (str n))
+                    (is (= {:kind :done :baked 0 :deposited 0} result) (str n))
                     (is (empty? (calls p "craft")) (str n))
                     (is (contains? (kinds seen) :bake.nothing))))))))))
 
@@ -116,7 +129,7 @@
                                                           (if (= "deposit" (.-direction args))
                                                             #js {:status "full" :moved 0}
                                                             (impl _ args)))))))]
-          (is (= {:baked 10 :deposited 0 :reason "deposit full"} result))
+          (is (= {:kind :nothing-possible :baked 10 :deposited 0 :reason :full} result))
           (is (= {"bread" 10} (inv p)))
           (is (empty? (calls p "toss")))
           (is (contains? (kinds seen) :bake.deposit-failed)))))))
@@ -128,7 +141,7 @@
         (let [filler (mapv (fn [i] {:name (str "filler_" i) :count 1}) (range 33))
               [result p] (await (bake {:inventory filler :containers {"10,64,0" [{:name "wheat" :count 192}]} :blocks beside} {}))
               wheat-moves (filter #(= "wheat" (.-item (.-args %))) (calls p "transfer"))]
-          (is (= {:baked 64 :deposited 60} result))
+          (is (= {:kind :done :baked 64 :deposited 60} result))
           (is (= {"bread" 60} (chest-items p)))
           (is (every? #(<= (.-count (.-args %)) 64) wheat-moves))
           (is (> (count wheat-moves) 1)))))))
@@ -162,7 +175,7 @@
         (let [[result p] (await (bake {:inventory [{:name "wheat" :count 6}]
                                        :containers {"10,64,0" [{:name "wheat" :count 9}]} :blocks beside} {}))
               order (mapv #(.-name %) (filter #(contains? #{"craft" "transfer"} (.-name %)) (.-calls (.-world p))))]
-          (is (= {:baked 5 :deposited 1} result))
+          (is (= {:kind :done :baked 5 :deposited 1} result))
           (is (= "craft" (first order)))
           (is (= {"bread" 4} (inv p))))))))
 
@@ -177,7 +190,7 @@
                                                      (let [r (await (impl _ args))]
                                                        (swap! (fake/state p) update :containers dissoc [10 64 0])
                                                        r))))))]
-          (is (string? (:reason result)))
+          (is (keyword? (:reason result)))
           (is (empty? (calls p "toss")))
           (is (= {"bread" 10} (inv p))))))))
 
@@ -195,7 +208,7 @@
                                                        (do (reset! first? false)
                                                            (await (impl token (clj->js (assoc (js->clj args) "count" 3))))
                                                            #js {:status "partial" :made 3 :reason "interrupted"})))))))]
-          (is (= {:baked 10 :deposited 8} result))
+          (is (= {:kind :done :baked 10 :deposited 8} result))
           (is (= {"bread" 2} (inv p)))
           (is (= {"bread" 8} (chest-items p))))))))
 
@@ -205,7 +218,7 @@
       (fn ^:async t []
         (let [filler (mapv (fn [i] {:name (str "filler_" i) :count 1}) (range 35))
               [result p seen] (await (bake {:inventory filler :containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks beside} {}))]
-          (is (= {:baked 0 :deposited 0 :reason "inventory-full"} result))
+          (is (= {:kind :condition-failed :baked 0 :deposited 0 :reason :inventory-full} result))
           (is (= {"wheat" 30} (chest-items p)))
           (is (empty? (calls p "transfer")))
           (is (contains? (kinds seen) :bake.inventory-full)))))))
@@ -234,7 +247,7 @@
                                            (fn [p]
                                              (.override (.-world p) "transfer"
                                                         (fn ^:async f [_ _ _] #js {:status "ok" :moved 1})))))]
-          (is (string? (:reason result)))
+          (is (keyword? (:reason result)))
           (is (contains? (kinds seen) :bake.withdraw-failed)))))))
 
 (defn ^:async bake-with-craft
@@ -244,15 +257,16 @@
         eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.items.craft craft-def))]
     [(await (child-outcome eng job {:chest chest :keep 4} 60)) p seen]))
 
-(deftest a-declined-craft-child-is-counted-and-ends-the-bake
+(deftest a-craft-child-whose-condition-fails-ends-the-bake
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [[result p seen] (await (bake-with-craft {:inventory [{:name "wheat" :count 6}]
                                                        :containers {"10,64,0" [{:name "wheat" :count 9}]} :blocks beside}
-                                                      {:check (constantly false) :round (fn [_] :done)}))]
-          (is (string? (:reason result)))
-          (is (contains? (kinds seen) :bake.gave-up))
+                                                      {:conditions [[:fn (fn [_] {:reason :nope})]] :args {} :round (fn [_] nil)}))]
+          (is (keyword? (:reason result)))
+          (is (= {:kind :condition-failed :reason :nope} (select-keys result [:kind :reason])))
+          (is (contains? (kinds seen) :bake.craft-failed))
           (is (empty? (calls p "craft"))))))))
 
 (deftest the-body-is-not-drawn-back-to-the-chest-between-the-table-and-the-craft
@@ -263,7 +277,7 @@
                                        :containers {"10,64,0" [{:name "wheat" :count 9}]} :blocks {"17,64,0" "crafting_table"}} {}))
               names (mapv #(.-name %) (.-calls (.-world p)))
               to-second-craft (vec (take 4 (filter #{"steer" "craft"} names)))]
-          (is (= {:baked 5 :deposited 1} result))
+          (is (= {:kind :done :baked 5 :deposited 1} result))
           (is (= ["steer" "craft" "steer" "craft"] to-second-craft) "chest, craft (too far), table, craft: no walk back between"))))))
 
 (deftest a-bake-is-one-call
@@ -274,7 +288,7 @@
               result (await (child-outcome eng job {:chest chest :keep 4} 1))]
           (is (empty? (:list (core/state eng))))
           (is (= {"bread" 4} (inv p)))
-          (is (= {:baked 10 :deposited 6} result)))))))
+          (is (= {:kind :done :baked 10 :deposited 6} result)))))))
 
 (deftest bake-looks-around-before-it-says-there-is-no-table
   (async done
@@ -282,12 +296,12 @@
       (fn ^:async t []
         (let [[result p] (await (bake {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks beside} {} tu/seeing-after-look))]
           (is (seq (calls p "look")))
-          (is (= {:baked 10 :deposited 6} result)))))))
+          (is (= {:kind :done :baked 10 :deposited 6} result)))))))
 
 (defn short-craft
   "A craft stand-in that ends :need, making loaves in its first call only; calls counts them."
   [loaves calls]
-  {:check (constantly true) :round (fn [c]
+  {:conditions [] :args {} :round (fn [c]
             (let [n (swap! calls inc)
                   made (if (= 1 n) loaves 0)]
               (ctx/end c :condition-failed {:reason :need :short {"wheat" 1}} {:made made :short {"wheat" 1}})))})
@@ -309,5 +323,4 @@
         (let [n (atom 0)
               [result] (await (bake-with-craft short-world (short-craft 0 n)))]
           (is (= 1 @n))
-          (is (re-find #"craft" (str (:reason result))) (pr-str result))
-          (is (not (re-find #":" (str (:reason result)))) (pr-str result)))))))
+          (is (= {:kind :condition-failed :reason :need} (select-keys result [:kind :reason]))))))))

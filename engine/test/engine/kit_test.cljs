@@ -2,13 +2,15 @@
   "jobs.storage.kit against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
-            [engine.test-util :as tu :refer [run-until-empty child-outcome]]
+            [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
+            [engine.withdraw-test :as wt]
             [jobs.storage.kit :as kit]))
 
 (defn setup [world]
@@ -18,6 +20,13 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
+
+(defn ^:async child-outcome
+  "The job's ending as a ctx/call child, at most n ticks: its data with :kind and, when it did not end done, the cause's
+  keyword as :cause."
+  [eng job args n]
+  (let [e (await (wt/ending-of eng job args n))]
+    (merge (:data e) {:kind (:kind e)} (when (:cause e) {:cause (contract/cause-key e)}))))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
@@ -75,7 +84,7 @@
           (is (= {"stone_hoe" 2 "bread" 12} (inv p)))
           (is (= [{:name "bread" :count 20} {:name "wooden_hoe" :count 1}]
                  (filterv #(pos? (:count %)) (chest-items p))))
-          (is (= {:gave-up false :short {}} result)))))))
+          (is (= {:kind :done :gave-up false :short {}} result)))))))
 
 (deftest kit-with-everything-carried-moves-nothing
   (async done
@@ -85,7 +94,7 @@
                                       :containers {"10,64,0" full-chest}})
               result (await (child-outcome eng job kit-args 4))]
           (is (zero? (count (calls p "transfer"))))
-          (is (= {:gave-up false :short {}} result)))))))
+          (is (= {:kind :done :gave-up false :short {}} result)))))))
 
 (deftest kit-reports-an-empty-chest
   (async done
@@ -93,7 +102,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:containers {"10,64,0" []}})
               result (await (child-outcome eng job kit-args 8))]
-          (is (= {:gave-up false :short {"hoe" 2 :food 12}} result))
+          (is (= {:kind :condition-failed :cause :chest-lacks :gave-up false :short {"hoe" 2 :food 12}} result))
           (is (some #(= :kit.short (:kind %)) @seen))
           (is (= [] (:list (core/state eng)))))))))
 
@@ -103,7 +112,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:containers {"10,64,0" full-chest} :unreachable ["10,64,0"]})
               result (await (child-outcome eng job kit-args 8))]
-          (is (= {:gave-up true :reason "unreachable" :short {"hoe" 2 :food 12}} result))
+          (is (= {:kind :condition-failed :cause :unreachable :gave-up true :short {"hoe" 2 :food 12}} result))
           (is (some #(= :kit.gave-up (:kind %)) @seen)))))))
 
 (deftest kit-gives-up-when-withdraw-does
@@ -114,9 +123,14 @@
           (.override (.-world p) "transfer" (fn ^:async f [_ _ _] (clj->js {:status "full" :moved 0})))
           (let [result (await (child-outcome eng job kit-args 12))]
             (is (true? (:gave-up result)))
-            (is (= :full (:reason result)))
+            (is (= :full (:cause result)))
+            (is (= :nothing-possible (:kind result)))
             (is (some #(= :withdraw.gave-up (:kind %)) @seen))
             (is (= [] (:list (core/state eng))))))))))
+
+(deftest kit-needs-a-known-chest-as-a-condition
+  (let [problem (second (first (:conditions (get registry/jobs job))))]
+    (is (= {:reason :no-chest} (problem {:args {} :view (fn [] {:data {} :now 0})})))))
 
 (deftest kit-needs-a-known-chest
   (async done
@@ -167,7 +181,7 @@
                   {"diamond_hoe" 1}
                   {"cobblestone" 5 "stick" 2 "diamond" 1}]]]
           (let [{:keys [result inv chest]} (await (craft-run world))]
-            (is (= {:gave-up false :short {}} result) label)
+            (is (= {:kind :done :gave-up false :short {}} result) label)
             (is (= expected-inv (select-keys inv (keys expected-inv))) label)
             (is (= expected-chest chest) label)))))))
 
@@ -178,13 +192,13 @@
         (doseq [[label world expected]
                 [["no table"
                   {:contents stone-chest :blocks {}}
-                  {:gave-up false :short {"hoe" 1} :missing {"hoe" "no-table"}}]
+                  {:kind :condition-failed :cause :chest-lacks :gave-up false :short {"hoe" 1} :missing {"hoe" "no-table"}}]
                  ["nothing makeable"
                   {:contents [{:name "dirt" :count 4}]}
-                  {:gave-up false :short {"hoe" 1} :missing {"hoe" "cobblestone, oak_log"}}]
+                  {:kind :condition-failed :cause :chest-lacks :gave-up false :short {"hoe" 1} :missing {"hoe" "cobblestone, oak_log"}}]
                  ["food short, no wheat"
                   {:contents [] :args {:chest chest :tools [] :spare 0 :food 2}}
-                  {:gave-up false :short {:food 2} :missing {:food "wheat"}}]]]
+                  {:kind :condition-failed :cause :chest-lacks :gave-up false :short {:food 2} :missing {:food "wheat"}}]]]
           (let [{:keys [result chest p]} (await (craft-run world))]
             (is (= expected result) label)
             (is (zero? (count (calls p "transfer"))) label)))))))
@@ -195,7 +209,7 @@
       (fn ^:async t []
         (let [{:keys [result inv chest]} (await (craft-run {:contents [{:name "wheat" :count 10}]
                                                             :args {:chest chest :tools [] :spare 0 :food 2}}))]
-          (is (= {:gave-up false :short {}} result))
+          (is (= {:kind :done :gave-up false :short {}} result))
           (is (= 2 (get inv "bread")))
           (is (= 4 (get chest "wheat"))))))))
 
@@ -204,7 +218,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [result p]} (await (craft-run {:contents stone-chest :args (assoc hoe-args :craft false)}))]
-          (is (= {:gave-up false :short {"hoe" 1}} result))
+          (is (= {:kind :condition-failed :cause :chest-lacks :gave-up false :short {"hoe" 1}} result))
           (is (empty? (calls p "craft"))))))))
 
 (deftest kit-craft-rederives-from-the-inventory-after-a-cut
@@ -213,20 +227,20 @@
       (fn ^:async t []
         (let [{:keys [result inv chest]} (await (craft-run {:contents stone-chest
                                                               :carried [{:name "stick" :count 2}]}))]
-          (is (= {:gave-up false :short {}} result))
+          (is (= {:kind :done :gave-up false :short {}} result))
           (is (= 1 (get inv "stone_hoe")))
           (is (= 4 (get chest "stick"))))))))
 
 ;; ------------------------------------------------------------------ check, full inventory, remembered failures
 
-(deftest kit-craft-ends-done-when-the-inventory-is-full
+(deftest kit-craft-reports-full-when-the-inventory-is-full
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [packed (concat (repeat 35 {:name "iron_pickaxe" :count 1}) [{:name "diamond" :count 2}])
               recipes {"stone_hoe" {:needs {"diamond" 2} :count 1 :table true}}
               {:keys [result p]} (await (craft-run {:contents [{:name "dirt" :count 4}] :carried packed :recipes recipes}))]
-          (is (= {:gave-up false :short {"hoe" 1} :missing {"hoe" "full"}} result))
+          (is (= {:kind :condition-failed :cause :chest-lacks :gave-up false :short {"hoe" 1} :missing {"hoe" "full"}} result))
           (is (empty? (calls p "toss"))))))))
 
 (defn ^:async two-runs
@@ -244,7 +258,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [missing {:gave-up false :short {"hoe" 1} :missing {"hoe" "cobblestone, oak_log"}}
+        (let [missing {:kind :condition-failed :cause :chest-lacks :gave-up false :short {"hoe" 1} :missing {"hoe" "cobblestone, oak_log"}}
               [[r1 c1] [r2 c2] [r3 c3]] (await (two-runs [0 1000 (* 11 60 1000)]))]
           (is (= missing r1))
           (is (pos? c1))
@@ -260,7 +274,7 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "stone_hoe" :count 2} {:name "bread" :count 12}]
                                       :containers {"10,64,0" full-chest}})
               result (await (child-outcome eng job kit-args 4))]
-          (is (= {:gave-up false :short {}} result))
+          (is (= {:kind :done :gave-up false :short {}} result))
           (is (empty? (.-calls (.-world p))) "no walk, inspect or transfer call"))))))
 
 (deftest kit-craft-short-text-uses-the-chest-counted-food-need
@@ -268,7 +282,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [result inv]} (await (craft-run {:contents [{:name "bread" :count 5}] :args {:chest chest :tools [] :spare 0}}))]
-          (is (= {:gave-up false :short {:food 7} :missing {:food "wheat"}} result))
+          (is (= {:kind :condition-failed :cause :chest-lacks :gave-up false :short {:food 7} :missing {:food "wheat"}} result))
           (is (= {"bread" 5} inv)))))))
 
 (deftest a-kit-is-one-call

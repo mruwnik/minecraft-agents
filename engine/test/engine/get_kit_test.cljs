@@ -1,6 +1,7 @@
 (ns engine.get-kit-test
   "jobs.items.get-kit: a list of items got in order and the armour worn, against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -33,7 +34,8 @@
    :recipes iron-recipes})
 
 (defn start
-  "fetch-test's perception engine, with a recording parent that runs the job as a child and keeps its result in :out."
+  "fetch-test's perception engine, with a recording parent that runs the job as a ctx/call child and keeps its ending in :out
+  (the data, :status :done or :stopped, :kind, and for a stop the cause's keyword as :reason and a cause map's other fields)."
   ([w args] (start w args f/sight-opts))
   ([w args sight]
   (let [clock (atom 1000000)
@@ -43,9 +45,13 @@
         out (atom :not-done)
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+                         (let [e (await (ctx/call c :kid job args))]
+                           (when-not (= :continue e)
+                             (reset! out (merge (:data e) (when (map? (:cause e)) (dissoc (:cause e) :reason))
+                                                {:kind (:kind e)
+                                                 :status (if (= :done (:kind e)) :done :stopped)}
+                                                (when (not= :done (:kind e)) {:reason (contract/cause-key e)}))))
+                           (if (= :continue e) :continue :done)))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock) :world (ew/of-data {} {} [f/own-zone])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -232,15 +238,15 @@
          (kit/restarted {:since 100 :children {:a 1} :materials #{"x"} :made ["iron_pickaxe"] :fed true :other 1} 500))))
 
 (deftest a-wear-child-that-yields-yields-and-one-that-wore-nothing-stops
-  (is (= :continue (kit/wear-outcome :continue nil nil)))
-  (is (nil? (kit/wear-outcome :done {:worn ["iron_boots"]} nil)))
-  (is (= {:reason :wear-failed :why "failed"} (kit/wear-outcome :done {:reason "failed"} nil)))
-  (is (= {:reason :wear-failed :why :not-ready} (kit/wear-outcome :declined nil :not-ready))))
+  (is (= :continue (kit/wear-outcome :continue)))
+  (is (nil? (kit/wear-outcome (contract/ending :done nil {:worn ["iron_boots"]}))))
+  (is (= {:kind :nothing-possible :reason :wear-failed}
+         (select-keys (kit/wear-outcome (contract/ending :nothing-possible :failed {})) [:kind :reason])))
+  (is (= {:kind :nothing-possible :reason :wear-failed}
+         (select-keys (kit/wear-outcome (contract/ending :condition-failed :no-item nil)) [:kind :reason]))))
 
-(deftest a-bad-args-check-waits
-  (let [waited (atom nil)]
-    (kit/check {:args {:items []} :wait waited})
-    (is (= :bad-args (:reason @waited)))))
+(deftest empty-items-are-impossible-bad-args
+  (is (= {:reason :bad-args} (select-keys (contract/impossible-cause ((second (first (:conditions (get registry/jobs job)))) {:args {:items []}})) [:reason]))))
 
 (deftest a-fed-body-with-no-food-and-an-animal-near-stocks-up-before-the-work
   (async done

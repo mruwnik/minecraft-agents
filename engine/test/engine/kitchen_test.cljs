@@ -58,7 +58,7 @@
           (is (nil? (get (inv s) "chicken")))
           (is (nil? (get (inv s) "wheat"))))))))
 
-(defn waits [s] (distinct (map (juxt :reason :backed-off) (events-of s :waiting))))
+(defn waits [s] (distinct (map (juxt :reason (comp :backed-off :cause)) (events-of s :waiting))))
 
 (defn run-with [inventory & [stock]]
   (run (list job (dissoc args :keep)) {:inventory inventory :containers {"10,64,0" []}} 2 (or stock {})))
@@ -86,7 +86,7 @@
       (fn ^:async t []
         (let [s (await (run (list 'repeat (list job (assoc args :furnace {:x 30 :y 64 :z 0}))) {:inventory [(item "beef" 3) (item "coal" 1)]} 8))]
           (is (= 1 (count (events-of s :kitchen.done))) "one pass, then the kitchen rests")
-          (is (some #(= ["kitchen"] (:backed-off %)) (events-of s :waiting)) "the wait says it rests")
+          (is (some #(= ["kitchen"] (get-in % [:cause :backed-off])) (events-of s :waiting)) "the wait says it rests")
           (swap! (:clock s) + 660000)
           (dotimes [_ 6] (await (core/tick! (:eng s))) (swap! (:clock s) + 1000))
           (is (= 2 (count (events-of s :kitchen.done))) "after the rest it tries again"))))))
@@ -128,7 +128,7 @@
       (fn ^:async t []
         (let [s (await (run-with [(item "bread" 4)]))]
           (is (= [{:smelt :no-food :bake :no-wheat :deposit :kept-carried}]
-                 (distinct (map :skipped (events-of s :waiting))))))))))
+                 (distinct (map (comp :skipped :cause) (events-of s :waiting))))))))))
 
 (defn ^:async run-beside
   "Submit the job wait-for-dusk (listed, check false by day), then form, over the world; tick 3 times."

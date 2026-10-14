@@ -1,7 +1,9 @@
 (ns jobs.storage.kit
   (:require [engine.args :as a]
             [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.child :as child]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost :as cost]
@@ -21,10 +23,14 @@
   any name in the eat table.
   One call is the whole kit: it yields :continue only while a child waits on the world. Each step works out the needs from the inventory and the plan from the inspected chest, and hands the plan to
   jobs.storage.withdraw as carry-at-least targets.
-  Ends with {:gave-up false :short {kind n}}. :short is empty when the kit is complete, else what the chest could
-  not supply, keyed by the kind string or :food. After failed attempts it ends {:gave-up true :reason r :short
-  {...}}, with r \"unreachable\", the inspect status or the withdraw's reason. A chest that refuses (zone or
-  claim) ends at once with :reason :refused.
+  Needs (condition): a known chest, else :no-chest. Ends done with data {:gave-up false :short {}} when the kit is
+  complete. Every other ending has :short, what is still lacking keyed by the kind string or :food, and :gave-up:
+  - condition-failed :chest-lacks {:gave-up false}: the chest could not supply it (and :missing {kind text} when the craft
+    phase found no way);
+  - after failed attempts {:gave-up true}: condition-failed :unreachable or :missing, or nothing-possible with the
+    inspect status or the withdraw's cause; a withdraw or craft child that stopped passes its kind and cause up;
+    a chest that refuses (zone or claim) ends at once condition-failed :refused {:zones :claims}.
+  Quote: a walk and a visit per kind; done? counts the kinds complete.
   With :craft (the default) a short does not end the job. It enters a craft phase. Each craft step makes
   exactly one child call:
   - For a short tool kind K, the tiers of :craft-tiers are tried in order for tier_K (jobs.items.craft).
@@ -48,6 +54,14 @@
    :craft-tiers {:doc "tool tiers to craft, in order; iron or diamond only when listed" :spec (a/coll-of (a/or-of string? keyword?)) :default ["stone" "wooden"]}
    :radius {:doc "how far to look for a crafting table" :spec (a/num-in 0 nil) :default 32}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+
+(a/defargs settings
+  {::time-s {:default 300 :doc "Seconds a kit may last: the walks, the chest visits and the crafts." :spec (a/num-in 0 nil)}
+   ::kind-s {:default 20 :doc "Seconds a quote counts for each kind of the kit." :spec (a/num-in 0 nil)}})
+
+(def target [:chest])
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn kind-of?
   "Does item name belong to tool kind: equal to it or ending in _kind."
@@ -125,34 +139,64 @@
      {:take {} :short {}}
      needs)))
 
-(defn check
-  "A chest is known. A complete kit is not a false check: the job must stay
-  admitted to report {:short {}} (a parent reads it), and its first round
-  then ends at once without walking or inspecting."
+(defn no-chest
+  "A chest is known. A complete kit passes: its first round then ends at once without walking or inspecting."
   [c]
-  (or (boolean (storage/chest-of (ctx/view c) (:args c)))
-      (ctx/wait c {:reason :no-chest})))
+  (when-not (storage/chest-of (ctx/view c) (:args c))
+    {:reason :no-chest}))
+
+(def conditions [[:fn no-chest]])
+
+(defn done?
+  "The kinds of the kit (tools and food) that are complete (the round ends the call with the short)."
+  [c]
+  (let [left (count (needs (u/inventory (:primitives c)) (:args c)))
+        all (inc (count (:tools (:args c))))]
+    {:done? false :units :kinds :done (- all left) :left left}))
+
+(defn quote-of
+  "A walk and a visit per kind."
+  [c]
+  (let [kinds (inc (count (:tools (:args c))))
+        t (* kinds (settings/get settings ::kind-s))]
+    {:uses {:time [0 t (max t (settings/get settings ::time-s))]}}))
 
 (defn give-up!
-  "u/fail!, and when it gives up hand the parent the reason and what is short."
+  "u/fail!, and when it gives up end with the reason (a chest that is not there or not reachable is a failed condition)
+  and what is short."
   [c reason short]
   (let [r (u/fail! c :kit.gave-up (str "kit gave up: " reason))]
     (if (= :done r)
-      (do (ctx/result! c {:gave-up true :reason reason :short short})
-          :done)
+      (ctx/end c (if (#{"unreachable" "missing"} reason) :condition-failed :nothing-possible) (keyword reason)
+               {:gave-up true :short short})
       :again)))
 
 (defn refused!
-  "End at once with the withdraw child's refusal res ({:reason :refused :zones :claims}) and what is short: another's
-  chest does not get asked three times."
-  [c res short]
-  (ctx/result! c (merge {:gave-up true :reason :refused :short short} (select-keys res [:zones :claims])))
-  :done)
+  "End at once with the withdraw child's refusal e and what is short: another's chest does not get asked three times."
+  [c e short]
+  (ctx/end c :condition-failed {:reason :refused} (merge {:gave-up true :short short} (select-keys (:data e) [:zones :claims]))))
+
+(defn child-stop!
+  "End like the child that stopped, with what is short."
+  [c e short]
+  (if (= :refused (contract/cause-key e))
+    (refused! c e short)
+    (ctx/end c (:kind e) (:cause e) {:gave-up true :short short})))
 
 (defn finish!
-  [c short]
-  (ctx/result! c {:gave-up false :short short})
-  :done)
+  "Done when nothing is short, else condition-failed :chest-lacks; more is data."
+  ([c short] (finish! c short nil))
+  ([c short more]
+   (let [data (merge {:gave-up false :short short} more)]
+     (if (empty? short)
+       (ctx/end c :done nil data)
+       (ctx/end c :condition-failed :chest-lacks data)))))
+
+(defn result-of
+  "A child's ending e as the result absorb reads: its data, with :reason the cause when it did not end done."
+  [e]
+  (cond-> (:data e)
+    (not= :done (:kind e)) (assoc :reason (contract/cause-key e))))
 
 (defn stacks-of
   "The inspected container items as cljs maps {:name :count}."
@@ -286,8 +330,7 @@
     (when (seq short)
       (ctx/emit! c :kit.short :info {:short short :text (str "kit still short " (pr-str short) (when (seq missing) (str ", missing " (pr-str missing))))}))
     (when (seq missing) (ctx/remember! c :no-craft {:missing missing} no-craft-policy))
-    (ctx/result! c (cond-> {:gave-up false :short short} (seq missing) (assoc :missing missing)))
-    :done))
+    (finish! c short (when (seq missing) {:missing missing}))))
 
 (defn remembered-missing
   "The :missing of the live :no-craft entry restricted to the kinds in short, or nil."
@@ -301,8 +344,7 @@
   [c short]
   (ctx/emit! c :kit.short :info {:short short :text (str "chest lacks " (pr-str short))})
   (let [missing (remembered-missing c short)]
-    (ctx/result! c (cond-> {:gave-up false :short short} missing (assoc :missing missing)))
-    :done))
+    (finish! c short (when missing {:missing missing}))))
 
 (defn ^:async reach-chest!
   "Walk to within 3 of the chest (a go-to child) unless already there: nil when there, :continue while go-to waits,
@@ -310,10 +352,10 @@
   [c chest still]
   (if (u/within? (u/self-pos c) chest 3)
     nil
-    (let [r (await (child/call-walk c :walk {:pos chest :range 3 :escalate false :warn false :retry false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (let [r (await (child/call-walk* c :walk {:pos chest :range 3 :escalate false :warn false :retry false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (cond
         (= :continue r) :continue
-        (:arrived (ctx/child-result c :walk)) nil
+        (:arrived (:data r)) nil
         :else (give-up! c "unreachable" (into {} still))))))
 
 (defn ^:async load-chest!
@@ -348,14 +390,13 @@
             (ctx/update-mem! c merge (select-keys mem craft-keys))
             (if (nil? call)
               (finish-craft! c need nil)
-              (let [r (await (ctx/call-child c (:slot call) (:job call) (:args call)))
-                    res (when (= :done r) (ctx/child-result c (:slot call)))]
-                (if-not (= :done r)
-                  (if (= :continue r) :continue (give-up! c "craft child declined" (into {} need)))
-                  (let [{:keys [mem end fail]} (absorb mem call res stacks inv)]
+              (let [e (await (ctx/call c (:slot call) (:job call) (:args call)))]
+                (if (= :continue e)
+                  :continue
+                  (let [{:keys [mem end fail]} (absorb mem call (result-of e) stacks inv)]
                     (ctx/update-mem! c merge (select-keys mem craft-keys))
                     (cond
-                      (= :refused fail) (refused! c res (into {} need))
+                      (= "refused" fail) (refused! c e (into {} need))
                       fail (give-up! c fail (into {} need))
                       end (finish-craft! c need end)
                       :else (do (u/progress! c) :again))))))))))))
@@ -388,15 +429,11 @@
                   (empty? take) (do (ctx/emit! c :kit.short :info {:short short :text (str "chest lacks " (pr-str short))})
                                     (finish! c short))
                   :else
-                  (let [r (await (ctx/call-child c :take 'jobs.storage.withdraw
-                                                 (merge (select-keys a [:ignore-zones?]) {:chest chest :items take})))
-                        res (when (= :done r) (ctx/child-result c :take))]
+                  (let [e (await (ctx/call c :take 'jobs.storage.withdraw
+                                           (merge (select-keys a [:ignore-zones?]) {:chest chest :items take})))]
                     (cond
-                      (= :continue r) :continue
-                      (= :declined r) (give-up! c "withdraw declined" (merge (into {} (needs inv a stacks)) short))
-                      (= :refused (:reason res)) (refused! c res (merge (into {} (needs inv a stacks)) short))
-                      (:gave-up res) (do (ctx/result! c {:gave-up true :reason (:reason res) :short (merge (into {} (needs inv a stacks)) short)})
-                                         :done)
+                      (= :continue e) :continue
+                      (true? (get-in e [:data :gave-up])) (child-stop! c e (merge (into {} (needs inv a stacks)) short))
                       :else (do (u/progress! c) :again)))))))))))
 
 (defn ^:async round
