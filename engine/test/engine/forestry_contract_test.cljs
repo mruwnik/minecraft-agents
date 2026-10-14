@@ -129,7 +129,6 @@
           (is (= {:got 1} (:data end)))
           (is (= 1 (ot/carried p "obsidian"))))
         (let [{:keys [end]} (await (obsidian-end (ot/world ot/lava-lake [ot/pick]) {:count 1}))]
-          (is (= {:kind :condition-failed :cause :no-bucket} (kc end)))
-          (is (= 0 (get-in end [:data :got]))))
+          (is (= {:kind :condition-failed :cause :no-bucket} (kc end))))
         (let [{:keys [end]} (await (obsidian-end (ot/world ot/ground [ot/pick {:name "water_bucket" :count 1}]) {:count 1}))]
           (is (= {:kind :condition-failed :cause :no-lava} (kc end))))))))

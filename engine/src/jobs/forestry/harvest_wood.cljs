@@ -22,8 +22,7 @@
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
   with :count, :pos, :reason (:no-sapling or :not-planted) and :text. Ends :done (the wood is the goal), with {:replant-owed n} when
   debts stay owed. With :count, the three phases repeat on the next tree until that many logs are carried.
-  No tree in range before the first is felled is a wait, not an ending: the job yields :continue while the cell it looked from shows none
-  (held still on purpose, reason :no-tree). Endings otherwise are the felling's, passed up with :got (the logs carried) and :replant-owed in the data: condition-failed
+  No tree in range before the first is felled is a condition (:no-tree): the first round looks round, then the job ends condition-failed :no-tree. Endings otherwise are the felling's, passed up with :got (the logs carried) and :replant-owed in the data: condition-failed
   :no-tree when no tree is left after the first (with :count); a fell that ends for want of an axe or pillar blocks (:need, :tool, :free-slots)
   or hunger, a limit, or nothing-possible :tree-unreachable / :tree-blocked (data :why, :columns); nothing-possible
   :nothing-collected when a felling brings in no item at all (the inventory count of the filter's items, before the felling against
@@ -159,10 +158,7 @@
         _ (when-not (:carried-before (ctx/mem c)) (ctx/update-mem! c assoc :carried-before (carried-count c) :logs-before (logs-carried c)))
         [phase job args] (current-phase c)
         args (cond-> args (= :collect phase) (assoc :want (:want (ctx/mem c) 1)))]
-    (if-let [cause (and (= :fell phase) (tree-cause c))]
-      (do (ctx/hold-still! c (contract/cause-key {:kind :condition-failed :cause cause}))
-          :continue)
-      (let [e (await (ctx/call c phase job args))]
+    (let [e (await (ctx/call c phase job args))]
         (cond
           (= :continue e) :continue
           (= :fell phase) (fell-ended! c e)
@@ -178,7 +174,7 @@
           :else (let [next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil nil))))]
                   (ctx/update-mem! c assoc :phase next-phase)
                   (when (= :plant next-phase) (ctx/update-mem! c assoc :origin (u/self-pos c)))
-                  :again))))))
+                  :again)))))
 
 (defn ^:async round
   [c]
@@ -199,7 +195,12 @@
   (when-not (ctx/frozen-call c)
     (fell-tree/sheltered (assoc c :args (fell-args (:args c))))))
 
-(def conditions [[:fn sheltered]])
+(defn no-tree-to-fell
+  "tree-cause while the next tree is still to be felled (the first round looks round, then the job waits); the other phases are the children's."
+  [c]
+  (when (= :fell (:phase (ctx/mem c) :fell)) (tree-cause c)))
+
+(def conditions [[:fn sheltered] [:fn no-tree-to-fell]])
 
 (defn done?
   "Never done before the round says so: the plant phase follows the felling."

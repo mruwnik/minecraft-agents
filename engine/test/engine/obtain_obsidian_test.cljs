@@ -48,8 +48,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [none (await (waiting (world ground [pick])))
-              no-bucket (:res (await (obtain (world lava-lake [pick]))))]
+              no-bucket (await (waiting (world lava-lake [pick])))]
           (is (= :no-source (:reason none)))
           (is (re-find #"obsidian" (:why none)))
-          (is (= :no-source (:reason no-bucket)))
-          (is (re-find #"no-bucket" (:why no-bucket)) (pr-str no-bucket)))))))
+          (is (= :no-bucket (:reason no-bucket)) "make-obsidian's start condition is the wait reason"))))))

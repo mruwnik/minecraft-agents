@@ -47,16 +47,17 @@
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))))
           (is (= [] (lt/debts eng))))))))
 
-(deftest no-tree-in-range-waits-and-says-so
+(deftest no-tree-in-range-ends-condition-failed-after-one-look
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 9 0 "oak" 3)})]
           (core/submit! eng '(jobs.forestry.harvest-wood {:radius 2}) {})
-          (await (tu/run-until-empty eng 4))
-          (is (= 1 (count (:list (core/state eng)))) "still queued")
-          (is (= [:no-tree] (distinct (mapv :reason (filterv #(= :holding (:kind %)) @seen))))
-              "it holds still on purpose and says why"))))))
+          (await (tu/run-until-empty eng 6))
+          (is (empty? (:list (core/state eng))) "ended")
+          (is (empty? (filterv #(= :holding (:kind %)) @seen)) "no hold")
+          (is (= [:no-tree] (mapv :reason (filterv #(= :stopped (:kind %)) @seen)))
+              (pr-str (distinct (map :kind @seen)))))))))
 
 (deftest any-species-wide-radius-no-sapling-ends-with-the-debt-owed
   (async done

@@ -153,7 +153,22 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(def conditions [])
+(defn bucket-cause
+  "Cause :no-bucket before the start (the round's own ending covers it later): no obsidian seen to mine, no water bucket carried and no bucket with water seen to fill."
+  [c]
+  (when (and (not (ctx/frozen-call c))
+             (zero? (carried c "water_bucket"))
+             (empty? (seen-of c ["obsidian"]))
+             (not (and (pos? (carried c "bucket")) (seq (seen-of c ["water"])))))
+    {:reason :no-bucket}))
+
+(defn lava-cause
+  "Cause :no-lava before the start: no obsidian seen to mine and no pour site."
+  [c]
+  (when (and (not (ctx/frozen-call c)) (empty? (seen-of c ["obsidian"])) (empty? (sites c)))
+    {:reason :no-lava}))
+
+(def conditions [[:fn bucket-cause] [:fn lava-cause]])
 
 (defn done? [c]
   (let [n (:count (:args c))
