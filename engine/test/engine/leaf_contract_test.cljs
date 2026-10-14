@@ -38,15 +38,35 @@
       (core/shutdown! eng)
       (assoc (select-keys (:data e) [:kind :reason]) :event (:kind e)))))
 
-(deftest a-refused-leaf-call-is-a-failed-condition-not-a-done-result
+(defn ^:async waits-with [spec]
+  (let [[seen sink] (tu/capture-sink)
+        eng (core/create {:primitives (tu/seeing-all (tu/fake {})) :jobs registry/jobs :dir (tu/tmp-dir)
+                          :events (events/make {:sinks [sink]})})]
+    (core/submit! eng spec {})
+    (await (core/tick! eng))
+    (await (core/tick! eng))
+    (let [r {:listed (count (:list (core/state eng)))
+             :causes (mapv #(get-in % [:data :reason]) (filter #(= :waiting (:kind %)) @seen))
+             :started (count (filter #(= :round_started (:kind %)) @seen))}]
+      (core/shutdown! eng)
+      r)))
+
+(deftest a-leaf-call-with-bad-args-waits-instead-of-starting
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[spec reason] [['(jobs.memory.remember {:kind :hurt}) :reserved-kind]
                                ['(jobs.memory.remember {}) :bad-kind]
                                ['(jobs.memory.set-place {:name :home :pos [2 999 3]}) :bad-pos]
-                               ['(jobs.memory.forget-place {:name :nowhere}) :no-such-place]
+                               ['(jobs.memory.forget-place {:name "Bad Name"}) :bad-name]
                                ['(jobs.explore.look {:block-names ["no_such_block"]}) :bad-args]]]
+          (is (= {:listed 1 :causes [reason] :started 0} (await (waits-with spec))) (pr-str spec)))))))
+
+(deftest a-refused-leaf-call-is-a-failed-condition-not-a-done-result
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[spec reason] [['(jobs.memory.forget-place {:name :nowhere}) :no-such-place]]]
           (is (= {:event :stopped :kind :condition-failed :reason reason} (await (stopped-data spec))) (pr-str spec)))))))
 
 (deftest an-accepted-leaf-call-ends-done

@@ -17,7 +17,6 @@
    :properties? {:doc "include nearby block state properties" :spec boolean? :default false}
    :at {:doc "optional exact block position [x y z] or {:x :y :z}" :spec ::a/pos :default nil}})
 (def target [:at])
-(def conditions [])
 (defn quote-of [_c] {:uses {:time [0 0 1]}})
 (def useful-names #{"crafting_table" "furnace" "blast_furnace" "smoker" "chest" "trapped_chest" "barrel" "ender_chest"
                     "enchanting_table" "anvil" "brewing_stand" "ancient_debris"})
@@ -101,6 +100,12 @@
       at (assoc :at (if (or (nil? exact) (:unknown exact))
                       {:pos (pos at) :unknown true}
                       (assoc (block exact) :seen? true))))))
+(defn bad-args
+  "The cause {:reason :bad-args :text why} when the call's args are refused."
+  [c]
+  (when-let [error (:error (options (:args c) (block-name-checker (:primitives c))))]
+    {:reason :bad-args :text error}))
+(def conditions [[:fn bad-args]])
 (defn round [c]
   (let [a (options (:args c) (block-name-checker (:primitives c)))]
     (if-let [error (:error a)]

@@ -193,7 +193,7 @@
   (let [{:keys [eng seen]} (setup {})]
     (prepare! eng)
     (await (run-job eng (list job args)))
-    {:eng eng :seen seen :reasons (mapv :reason (events-of seen :place.refused))}))
+    {:eng eng :seen seen :reasons (into (mapv :reason (events-of seen :place.refused)) (mapv :reason (events-of seen :waiting)))}))
 
 (deftest set-place-refuses-bad-arguments-as-data-and-writes-nothing
   (async done
@@ -206,7 +206,7 @@
           (let [{:keys [eng seen reasons]} (await (try-job identity set-place args))]
             (is (nil? (place eng :home)) (pr-str args))
             (is (= [reason] reasons) (pr-str args))
-            (is (every? string? (mapv :text (events-of seen :place.refused))))))))))
+            (is (= 1 (count (:list (core/state eng)))) "the listed job waits, not started")))))))
 
 (deftest set-place-refuses-a-block-that-is-no-name-at-submit
   (doseq [block [5 ""]]
@@ -219,7 +219,7 @@
     (await (run-job eng (list set-place {:name :my-notes :pos [1 64 1]})))
     (is (= [{:n 1}] (entries eng :my-notes)))
     (is (= {:cap 50 :ttl (* 60 60 1000)} (mem/policy (mem/view (:store eng)) :my-notes)))
-    (is (= [:not-a-place] (mapv :reason (events-of seen :place.refused))))))))
+    (is (= [:not-a-place] (mapv :reason (events-of seen :waiting))))))))
 
 (deftest a-kind-holding-positions-under-another-policy-is-not-a-place
   (async done
@@ -291,7 +291,7 @@
           (is (false? (:ok (submit "set-junk" '(jobs.memory.set-place {:name :home :pos [2 3]})))) "a malformed position is refused at submit")
           (is (= true (:ok (submit "set-bad" '(jobs.memory.set-place {:name :home :pos [2 999 3]})))) "an impossible one comes as an event")
           (await (run-until-empty eng 8))
-          (is (= [:bad-pos] (mapv :reason (events-of seen :place.refused))))
+          (is (= [:bad-pos] (mapv :reason (events-of seen :waiting))))
           (is (= {:x 2 :y 64 :z 3} (place eng :home)))
           (is (= true (:ok (submit "forget-home" '(jobs.memory.forget-place {:name :home})))))
           (await (run-until-empty eng 8))

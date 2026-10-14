@@ -113,11 +113,9 @@
                                [{:kind :shelter-trapped} :reserved-kind]]]
           (let [{:keys [eng seen]} (setup)]
             (await (run-job eng (list remember args)))
-            (is (= [reason] (mapv :reason (events-of seen :memory.refused))) (pr-str args))
-            (is (every? string? (mapv :text (events-of seen :memory.refused))) (pr-str args))
+            (is (= [reason] (mapv :reason (events-of seen :waiting))) (pr-str args))
             (is (empty? (events-of seen :memory.remembered)) (pr-str args))
-            (is (empty? (entries eng (:kind args))) (pr-str args))
-            (is (empty? (:list (core/state eng))) "the job still ended")))))))
+            (is (= 1 (count (:list (core/state eng)))) "the listed job waits, not started")))))))
 
 (deftest remember-will-not-take-the-name-of-a-recorded-place
   (async done
@@ -126,7 +124,7 @@
         (let [{:keys [eng seen]} (setup)]
           (mem/write! (:store eng) :old-farm {:pos {:x 1 :y 64 :z 1}} mem/place-policy)
           (await (run-job eng (list remember {:kind :old-farm})))
-          (is (= [:reserved-kind] (mapv :reason (events-of seen :memory.refused))))
+          (is (= [:reserved-kind] (mapv :reason (events-of seen :waiting))))
           (is (= [{:pos {:x 1 :y 64 :z 1}}] (entries eng :old-farm))))))))
 
 ;; ------------------------------------------------------------------ the composition

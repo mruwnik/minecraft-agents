@@ -16,7 +16,16 @@
 
 (def target [:name])
 
-(def conditions [])
+(def arg-refusals #{:bad-name :reserved-name :not-a-place})
+
+(defn bad-args
+  "The refusal cause when the name is not one a place can have (a name with no place recorded is for the round)."
+  [c]
+  (let [r (places/resolve-forget (ctx/view c) (:name (:args c)))]
+    (when (arg-refusals (:reason r))
+      {:reason (:reason r) :text (:message r)})))
+
+(def conditions [[:fn bad-args]])
 
 (defn quote-of [_c] {:uses {:time [0 0 1]}})
 

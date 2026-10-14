@@ -27,15 +27,24 @@
 
 (def target [:name])
 
-(def conditions [])
-
-(defn quote-of [_c] {:uses {:time [0 0 1]}})
-
 (defn standing
   "The cell the body stands in."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)]
     {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)}))
+
+(def arg-refusals #{:bad-name :reserved-name :not-a-place :bad-pos :bad-block})
+
+(defn bad-args
+  "The refusal cause when the name, :pos or :block of the call is wrong whatever the world holds."
+  [c]
+  (let [r (places/resolve-set (ctx/view c) (constantly nil) (standing c) (:args c))]
+    (when (arg-refusals (:reason r))
+      {:reason (:reason r) :text (:message r)})))
+
+(def conditions [[:fn bad-args]])
+
+(defn quote-of [_c] {:uses {:time [0 0 1]}})
 
 (defn round [c]
   (let [p (:primitives c)

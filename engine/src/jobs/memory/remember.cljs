@@ -27,8 +27,6 @@
 
 (def target [:kind])
 
-(def conditions [])
-
 (defn quote-of [_c] {:uses {:time [0 0 1]}})
 
 (defn refusal [reason text] {:reason reason :text text})
@@ -51,6 +49,14 @@
                 :ttl (if ttl-s
                        (if (= :forever ttl-s) :forever (* 1000 ttl-s))
                        (get-in view [:data :policies kind :ttl] (:ttl mem/default-policy)))})}))
+
+(defn bad-args
+  "The refusal cause when the call's :kind is not one a job may write."
+  [c]
+  (let [r (resolve-args (ctx/view c) (:args c))]
+    (when (:reason r) r)))
+
+(def conditions [[:fn bad-args]])
 
 (defn round [c]
   (let [r (resolve-args (ctx/view c) (:args c))]
