@@ -787,6 +787,16 @@
           (is (= 1 (get (inv s) "raw_iron")))
           (is (= :count (:reason (done-event s)))))))))
 
+(deftest a-drop-seen-but-never-taken-does-not-hold-the-mine
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0} (rock-world {"1,64,0" "iron_ore"}) 0))]
+          (.override (.-world (:p s)) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
+          (await (run-ticks s 80))
+          (is (nil? (get (inv s) "raw_iron")))
+          (is (finished? s) "the job ends, the pickup is not asked for ever"))))))
+
 (deftest the-tunnel-exposes-ore-which-is-then-dug
   (async done
     (tu/run-async done

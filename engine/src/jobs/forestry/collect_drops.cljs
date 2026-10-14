@@ -33,8 +33,9 @@
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
-  inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them), also
-  when nothing came in; :nothing-possible :search-waited when the search was held up; :cut-off :cut when cut.
+  inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them); none in
+  sight at all is :done with 0. Drops tried and none collected: :nothing-possible :none-collected, same data;
+  :nothing-possible :search-waited when the search was held up; :cut-off :cut when cut.
   Quote: what is in sight within :radius (yields by name), time to walk to each, unbounded with :search or :dig.")
 
 (a/defargs args
@@ -284,7 +285,11 @@
                      a))
         done! (fn [kind cause data] (loose/release! c) (ctx/end c kind cause data))
         data (fn [] (cond-> {:collected (:collected (ctx/mem c) 0)}
-                      (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))))]
+                      (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))))
+        swept! (fn []
+                 (if (and (zero? (:collected (ctx/mem c) 0)) (seq (:skipped (ctx/mem c))))
+                   (done! :nothing-possible :none-collected (data))
+                   (done! :done nil (data))))]
     (loop []
       (let [items (when (ctx/alive? c) (candidates c anchor))
             _ (note-last-cells! c items)
@@ -299,10 +304,10 @@
                 (cond
                   (not (ctx/alive? c)) (done! :cut-off :cut (data))
                   (= :waited r) (done! :nothing-possible :search-waited (data))
-                  :else (done! :done nil (data))))))
+                  :else (swept!)))))
           (if-not item
           (do (when (ctx/alive? c) (leave-unseen! c))
-              (if (ctx/alive? c) (done! :done nil (data)) (done! :cut-off :cut (data))))
+              (if (ctx/alive? c) (swept!) (done! :cut-off :cut (data))))
           (let [hole? (in-hole? c item)
                 moving? (and hole? (settling? c item))
                 why (when (and hole? (not moving?)) (await (hole-problem! c item)))

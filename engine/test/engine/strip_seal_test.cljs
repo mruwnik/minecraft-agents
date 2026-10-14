@@ -40,6 +40,17 @@
           (is (= [0 64 0] (last (placed-cells p))) "the centre bottom cell is closed last")
           (is (= [64 64 64 65 65 65 66 66 66] (sort (mapv second (placed-cells p)))) "nine cells, three rows"))))))
 
+(deftest a-pickup-that-takes-nothing-does-not-hold-the-seal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world)
+              p (:p env)
+              _ (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
+              r (await (run! env args))]
+          (is (= {:status :done :reason :sealed :placed 9} (select-keys r [:status :reason :placed])))
+          (is (every? #(solid? p %) plane)))))))
+
 (deftest the-lowest-row-is-placed-before-the-rows-above
   (async done
     (tu/run-async done

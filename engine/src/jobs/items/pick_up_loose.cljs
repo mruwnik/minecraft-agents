@@ -80,5 +80,5 @@
                    (assoc out :text (str "picked up " n " loose item" (when (not= 1 n) "s") " (" (str/join ", " (:items out)) ")"
                                          (when (seq left) (str "; left " (count left))))))
         (if (pos? n)
-          (ctx/end c :done nil (cond-> out (= :continue r) (assoc :reason :walk-waiting)))
-          (ctx/end c :nothing-possible (if (= :continue r) :walk-waiting :none-taken) out))))))
+          (ctx/end c :done nil out)
+          (ctx/end c :nothing-possible :none-taken out))))))

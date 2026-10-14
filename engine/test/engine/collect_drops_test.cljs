@@ -99,8 +99,19 @@
           (seen-from-above! p)
           (let [result (await (bd/child-outcome eng job {:radius 8} 30))]
             (is (= 0 (:collected result)))
+            (is (= :nothing-possible (get-in result [:ending :kind])) "drops seen, none collected: never :done")
+            (is (= :none-collected (:reason result)))
             (is (= [:unreachable] (mapv :reason (:left result))))
             (is (= [:unreachable] (mapv :reason (bd/left-drops seen))))))))))
+
+(deftest no-drop-in-sight-is-done-with-nothing-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (bd/setup {:self body})
+              result (await (bd/child-outcome eng job {:radius 6} 10))]
+          (is (= 0 (:collected result)))
+          (is (= :done (:status result))))))))
 
 (defn falling-first!
   "The first entities() answer shows every item one block higher, as a drop still falling into the hole."

@@ -94,6 +94,17 @@
           (is (= 1 (:killed (done-event s))))
           (is (finished? s)))))))
 
+(deftest drops-seen-but-none-taken-end-the-pickup-and-the-hunt
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (h/setup {:inventory h/sword :entities [(cow 1 3)]} 20)]
+          (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
+          (core/submit! (:eng s) (spec {:count 1 :keep 0}) {})
+          (await (run-ticks s 30 700))
+          (is (= 1 (:killed (done-event s))))
+          (is (finished? s) "no loop on the pickup"))))))
+
 (deftest keep-stops-the-hunt-before-the-last-animals
   (async done
     (tu/run-async done

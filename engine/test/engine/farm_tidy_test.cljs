@@ -191,6 +191,16 @@
           (is (= {"wheat_seeds" 1 "cobblestone" 1 "oak_sapling" 1 "oak_leaves" 1 "dirt" 1} (inv p)))
           (is (= 5 (:collected result))))))))
 
+(deftest drops-seen-but-none-taken-end-the-pickup-with-nothing-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start tidy-spec {"field" field-plan})
+              _ (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
+              result (await (outcome eng {:plan "field"} 200))]
+          (is (= 0 (:collected result)))
+          (is (pos? (:dug result)) "the tidy finished its digs, no loop on the pickup"))))))
+
 (deftest crops-water-and-the-wanted-torch-stand-after
   (async done
     (tu/run-async done

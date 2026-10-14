@@ -196,6 +196,18 @@
           (is (= #{{:x 10 :y 64 :z 0} {:x 12 :y 64 :z 0}} (set (call-args p "dig" "pos"))) "only the ripe ones")
           (is (= 2 (count (calls p "eat")))))))))
 
+(deftest harvest-drops-seen-but-none-taken-end-the-round-stopped-not-looping
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (assoc farm :self {:food 0}))]
+          (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
+          (know-source! eng {:x 11 :y 64 :z 0} :farm)
+          (await (one-round! eng {}))
+          (is (= [] (:list (core/state eng))) "one round")
+          (is (empty? (calls p "eat")))
+          (is (= [:stopped] (mapv :kind (ended seen))) "no food came in: not completed"))))))
+
 (deftest one-round-with-no-food-anywhere-is-stopped-with-a-reason
   (async done
     (tu/run-async done

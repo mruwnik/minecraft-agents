@@ -590,3 +590,14 @@
               result (await (tu/child-outcome eng job {:plan "forest"} 200))]
           (is (seq (h/calls p "look")))
           (is (= {:felled 1 :planted 1 :left [] :bare []} result)))))))
+
+(deftest logs-seen-but-none-taken-end-the-pickup-and-the-plan-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start oak-world {"forest" oak-cell})
+              _ (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
+              result (await (tu/child-outcome eng job {:plan "forest"} 200))]
+          (is (= 0 (get (h/inv p) "oak_log" 0)))
+          (is (= 1 (:felled result)))
+          (is (= 1 (:planted result)) "the replant follows although the pickup took nothing"))))))

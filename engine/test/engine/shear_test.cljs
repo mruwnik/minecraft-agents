@@ -141,6 +141,17 @@
           (is (= 1 (:collected (done-event s))))
           (is (= [:shear.gave-up] (mapv :kind (events-of s :shear.gave-up)))))))))
 
+(deftest wool-seen-but-none-taken-ends-the-pickup-with-nothing-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (h/setup {:inventory shears :entities [(sheep 1 2)]})]
+          (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
+          (core/submit! eng '(jobs.animals.shear {}) {})
+          (await (run-ticks s 10 700))
+          (is (finished? s) "the pickup is over, no loop")
+          (is (= 0 (:collected (done-event s)))))))))
+
 (deftest shear-follows-zones-and-claims
   (async done
     (tu/run-async done
