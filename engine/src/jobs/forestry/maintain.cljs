@@ -1,7 +1,9 @@
 (ns jobs.forestry.maintain
   (:require [engine.args :as a]
             [jobs.lib.access.rules :as rules]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.access :as access]
@@ -22,8 +24,9 @@
   3. Plant the planned sapling on a planned cell standing bare (air over soil) or owing one.
   4. Fell the nearest grown tree of the wanted species on a planned cell (jobs.forestry.fell-tree as a child). The
      cell is noted as owing a sapling before the base log is dug, so a restart or plan edit never loses the replant.
-  5. Finish. Result: {:felled :planted :left :bare}.
-  With a planned cell never seen, the first round looks around once (and yields) before it decides.
+  5. Finish.
+  With a planned cell never seen, the body looks around once from where it stands (again after moving over 3 blocks)
+  before the start conditions decide, and the first round looks once more before it works.
   Cells are read from the plan and the world at every step. A sapling of the wanted species is left to grow.
   Anything else on a planned cell (another species, a block) is left and reported once (forest.foreign). Trees off
   the planned cells are never touched.
@@ -34,10 +37,13 @@
   - a log of it may not be dug (another plan's footprint or a zone; checked for the whole column before the first
     dig and again before every felling round), or
   - planting it was refused or failed three times.
-  Waits (check) unless a grown tree stands on a planned cell that is not left, or a bare planned cell has its
-  sapling carried. A started job always runs on to finish.
-  The job declines (one forest.declined warn naming the plan and the reason) while the plan is missing,
-  unreadable or has no tree cells, and while no zone list is loaded.")
+  Does not start (condition-failed, a skipped job) unless a grown tree stands on a planned cell that is not left, or a
+  bare planned cell has its sapling carried: the cause is the worst blocked state ({:reason :cells-foreign
+  :cells-unplantable :no-sapling :cells [..]}) or :nothing-to-do. Condition-failed {:reason :plan-trouble :why text}
+  (one forest.declined warn) while the plan is missing, unreadable or has no tree cells, and while no zone list is loaded.
+  A started job always runs on to finish.
+  Ends :done with data {:felled :planted :left :bare} (info forest.done) when it felled or planted a tree. With none of
+  those it ends nothing-possible :left when it left trees standing, else condition-failed :nothing-to-do.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world; its tree cells are the forest" :spec a/name? :default nil}
@@ -247,20 +253,23 @@
       (or (seq (:no-ground kinds)) (seq (:cramped kinds))) {:reason :cells-unplantable :cells (cells :no-ground :cramped)}
       (seq short) {:reason :no-sapling :cells (vec (sort (map (comp cell-vec key) short)))})))
 
-(defn check
-  "A started job always passes (its finishing round must run); else a grown tree is ripe on a planned cell, or a
-  bare one has its sapling carried. Otherwise it waits, naming the cells that hold it back. The cells are read once
-  per check-cache window; the round says (warns) what is wrong with each."
+(defn not-ready
+  "Why the job does not start: nil once begun (its finishing round must run) or while a grown tree is ripe on a planned
+  cell or a bare one has its sapling carried; else the cells that hold it back, with a look first while one was never
+  seen. The cells are read once per check-cache window; the round says (warns) what is wrong with each."
   [c]
-  (let [field (planned c)]
-    (if (:trouble field)
-      (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
-      (let [read #(classes-of c (:trees field))
-            classes (if (look/unseen? (:primitives c) (field-cells field)) (read) (check-cache/cached c :classes read))]
-        (or (boolean (or (:begun (ctx/mem c))
-                         (seq (ripe-cells c classes))
-                         (seq (plantable c (owed-cells c classes)))))
-            (look/wait-unless-surveyed c (or (blocked-reason c classes) {:reason :nothing-to-do}) (field-cells field)))))))
+  (when-not (ctx/frozen-call c)
+    (let [field (planned c)]
+      (if (:trouble field)
+        {:reason :plan-trouble :why (:trouble field)}
+        (let [cells (field-cells field)
+              unseen? (look/unseen? (:primitives c) cells)
+              read #(classes-of c (:trees field))
+              classes (if unseen? (read) (check-cache/cached c :classes read))]
+          (when-not (or (seq (ripe-cells c classes))
+                        (seq (plantable c (owed-cells c classes))))
+            (cond-> (or (blocked-reason c classes) {:reason :nothing-to-do})
+              (and unseen? (not (look/surveyed? c :near))) contract/look-first)))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -402,7 +411,7 @@
                 (do (fail-plant! c pos :failed) :again)))))))))
 
 (defn finish!
-  "Step 5: say what was done and be done."
+  "Step 5: say what was done and end: done when it felled or planted, else nothing-possible :left or condition-failed."
   [c classes]
   (let [m (ctx/mem c)
         bare (vec (keep (fn [[pos [kind _]]] (when (= :bare kind) pos)) classes))
@@ -411,13 +420,15 @@
     (ctx/emit! c :forest.done :info
                (assoc result :text (str "forest done: felled " (:felled result) ", planted " (:planted result)
                                         ", left " (count left) ", bare " (count bare))))
-    (ctx/result! c result)
-    :done))
+    (cond
+      (pos? (+ (:felled result) (:planted result))) (ctx/end c :done nil result)
+      (seq left) (ctx/end c :nothing-possible :left result)
+      :else (ctx/end c :condition-failed (or (blocked-reason c classes) {:reason :nothing-to-do}) result))))
 
 (defn ^:async step [c]
   (let [field (planned c)]
     (if (:trouble field)
-      :declined
+      (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble field)})
       (let [trees (:trees field)]
         (or (await (survey-field! c field))
             (do (when-not (:begun (ctx/mem c))
@@ -431,8 +442,27 @@
                       (await (fell! c trees classes))
                       (finish! c classes)))))))))
 
-(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+(a/defargs settings
+  {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::time-s {:default 1800 :doc "Seconds a maintain run may take: the fellings, collecting, plantings and walks." :spec (a/num-in 0 nil)}})
 
 (defn ^:async round [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (settings/get settings ::max-steps)) (step c) :continue)))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def target [:plan :part])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions [[:fn not-ready]])
+
+(defn done?
+  "Never done before the round says so: the cells left are classified at each step."
+  [c]
+  (let [m (ctx/mem c)]
+    {:done? false :units :trees :done (+ (:felled m 0) (:planted m 0)) :left 1}))
+
+(defn quote-of [_c]
+  {:uses {:time [1 60 (settings/get settings ::time-s)]}})

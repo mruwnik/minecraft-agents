@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
-            [jobs.lib.blocks :as blocks]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.steps :as steps]
@@ -45,7 +45,8 @@
    :target {:doc "bees wanted in the area (babies count); nil: no breeding" :spec (a/int-in 0 nil) :default nil}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
    :keep {:doc "{item-name count}: how many of honeycomb or honey_bottle deposit leaves carried" :spec (a/map-of a/item? (a/int-in 0 nil)) :default {}}
-   :ignore-zones? {:doc "act regardless of zones and claims (passed to guard and harvest); the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to guard and harvest); the rules of the game allow it" :spec boolean? :default false}
+   :fetch {:doc "get a carpet, campfire or harvest tool that is not carried (passed to guard and harvest, jobs.lib.need): true, a set of kinds or a map of limits; false skips the step" :spec fetch/option? :default true}})
 
 (def steps [:guard :harvest :breed :deposit])
 
@@ -113,21 +114,24 @@
 
 ;; ------------------------------------------------------------------ what is decided
 
+(defn fetching? [{:keys [fetch]}] (some? (fetch/parse-arg fetch)))
+
 (defn decide-guard
-  [_args {{:keys [fires todo left]} :fires}]
+  [args {{:keys [fires todo left]} :fires}]
   (cond
     (seq todo) {:call {:slot :guard :args {}}}
+    (and (seq left) (fetching? args)) {:call {:slot :guard :args {}}}
     (seq left) {:skip (first (vals left))}
     (zero? fires) {:skip :no-fire}
     :else {:skip :safe}))
 
 (defn decide-harvest
-  [_args {{:keys [ripe todo declined]} :hives :keys [tool unsafe]}]
+  [args {{:keys [ripe todo declined]} :hives :keys [tool unsafe]}]
   (cond
     (zero? ripe) {:skip :not-ripe}
     (seq unsafe) {:skip :unsafe-fire}
     (empty? todo) {:skip (or (first (vals declined)) :not-ripe)}
-    (nil? tool) {:skip :no-tool}
+    (and (nil? tool) (not (fetching? args))) {:skip :no-tool}
     :else {:call {:slot :harvest :args {}}}))
 
 (defn decide-breed
@@ -161,7 +165,7 @@
   "The args a child gets: the area for guard and harvest, as decided for the rest."
   [c step center decided]
   (case step
-    (:guard :harvest) (merge (area c center) {:fetch false} (when (= :harvest step) {:with (:with (:args c))})
+    (:guard :harvest) (merge (area c center) {:fetch (:fetch (:args c))} (when (= :harvest step) {:with (:with (:args c))})
                              (when (:ignore-zones? (:args c)) {:ignore-zones? true}))
     (:args decided)))
 
@@ -171,9 +175,12 @@
   (let [f (facts c)]
     (boolean (some #(:call (decide % (:args c) f)) steps))))
 
-(defn check [c]
-  (or (boolean (or (:todo (ctx/mem c)) (would-run? c)))
-      (look/wait-unless-surveyed c {:reason :nothing-to-do} (apiary/watched-cells c))))
+(defn not-ready
+  "Why the job does not start: nothing would run, with a look first while part of the area was never seen. A started run goes on."
+  [c]
+  (when-not (or (ctx/frozen-call c) (would-run? c))
+    (cond-> {:reason :nothing-to-do}
+      (and (look/unseen? (:primitives c) (apiary/watched-cells c)) (not (look/surveyed? c :near))) contract/look-first)))
 
 ;; ------------------------------------------------------------------ the run
 
@@ -186,31 +193,50 @@
     :breed {:fed (count (:fed r)) :reason (:reason r)}
     :deposit (select-keys r [:gave-up :reason])))
 
+(defn ran?
+  "Whether a step's report entry is one that ran to its end."
+  [entry]
+  (not (or (:skipped entry) (:stopped entry))))
+
 (defn finish!
+  "End the pass: done when some step ran to its end, else nothing-possible :failed-steps (one stopped or threw) or
+  condition-failed :nothing-to-do."
   [c report]
   (let [{:keys [target]} (:args c)
-        out {:target target :bees (count (bees-in-area c (apiary/center-of c))) :steps report}]
-    (ctx/emit! c :maintain.done :info (assoc out :text (str "maintain done: " (count (filter :skipped (vals report))) " steps skipped")))
-    (ctx/result! c out)
-    :done))
+        out {:target target :bees (count (bees-in-area c (apiary/center-of c))) :steps report}
+        entries (vals report)]
+    (cond
+      (some ran? entries) (do (ctx/emit! c :maintain.done :info (assoc out :text (str "maintain done: " (count (filter :skipped entries)) " steps skipped")))
+                              (ctx/end c :done nil out))
+      (some #(or (:stopped %) (= :failed (:skipped %))) entries) (ctx/end c :nothing-possible :failed-steps out)
+      :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
 
 (defn booked
-  "Memory after the step's child ended with status r: the step leaves todo, its summary goes in the report."
+  "Memory after the step's child ended: the step leaves todo, its summary goes in the report."
   [m step entry]
   (-> m (update :todo rest) (dissoc :call-args) (assoc-in [:report step] entry)))
+
+(defn entry-of
+  "The report entry of a child's ending e: its summary; a child that did not start (no data) is {:skipped :declined
+  :reason cause}, one that stopped carries :stopped kind."
+  [step e]
+  (cond
+    (= :done (:kind e)) (summary step (:data e))
+    (empty? (:data e)) {:skipped :declined :reason (contract/cause-key e)}
+    :else (assoc (summary step (merge {:reason (contract/cause-key e)} (:data e))) :stopped (:kind e))))
 
 (defn ^:async run-child!
   "One round of the child in slot. A child that throws is booked failed instead of failing the pass; a cut or a limit passes through."
   [c step call-args]
   (try
-    (await (ctx/call-child c step (jobs step) call-args))
+    (await (ctx/call c step (jobs step) call-args))
     (catch :default e
       (when (contract/passes-through? e) (throw e))
       (ctx/update-mem! c booked step {:skipped :failed :error (str e)})
       :failed)))
 
-(defn ^:async pass-step
-  "One piece of the pass itself (see step)."
+(defn ^:async step
+  "One piece of the pass: :again after a step ended, :continue while its child waits on the world, or the ending."
   [c]
   (let [center (apiary/center-of c)]
     (when-not (:todo (ctx/mem c))
@@ -226,22 +252,29 @@
           (case r
             :continue :continue
             :failed :again
-            :done (do (ctx/update-mem! c booked step (summary step (ctx/child-result c step))) :again)
-            (do (ctx/update-mem! c booked step {:skipped :declined :reason (:reason (blocks/child-wait c step (jobs step) call-args))}) :again)))))))
-
-(defn ^:async step
-  "One piece of the pass: :again after a step ended, :continue while its child waits on the world, :done. With
-  nothing to do in sight before the pass, a look around first (:continue: the check decides again)."
-  [c]
-  (if (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (look/unseen? (:primitives c) (apiary/watched-cells c))
-           (not (would-run? c)))
-    (await (look/survey! c))
-    (await (pass-step c))))
+            (do (ctx/update-mem! c booked step (entry-of step r)) :again)))))))
 
 (a/defargs settings
-  {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+  {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::time-s {:default 1800 :doc "Seconds a maintain pass may take: its four steps." :spec (a/num-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async round [c]
   (let [n (atom 0)]
     (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def target [:box :center])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions [[:fn not-ready]])
+
+(defn done?
+  "Never done before the round says so: the steps left are decided from the facts at each step."
+  [c]
+  {:done? false :units :steps :done (count (filter ran? (vals (:report (ctx/mem c))))) :left (count (:todo (ctx/mem c)))})
+
+(defn quote-of [_c]
+  {:uses {:time [1 60 (settings/get settings ::time-s)]}})

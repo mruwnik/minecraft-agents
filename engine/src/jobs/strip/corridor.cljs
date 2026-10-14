@@ -1,6 +1,8 @@
 (ns jobs.strip.corridor
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.danger :as danger]
@@ -13,6 +15,9 @@
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]))
+
+(a/defargs settings
+  {::time-s {:default 1800 :doc "Seconds one corridor trip may take: the digs, torches and walks." :spec (a/num-in 0 nil)}})
 
 (def max-steps "Pieces of work of one round before it gives the round back with :continue (danger is weighed again in between)." 6)
 (def lit "Light at the feet from which no torch is hung." 8)
@@ -28,16 +33,19 @@
   the rest outward from the :entry end, each with a carried tool of its kind (shears, axe, pickaxe). With no target left it
   walks to the far end and looks round there, so crossings and new corridors come into view, then takes back the torches
   standing in the segment (the caller seals behind it).
-  The check declines (wait :danger) while a real danger is near (jobs.lib.danger), unless :danger-check is false.
+  It does not start (a skipped job) while a real danger is near (jobs.lib.danger, unless :danger-check is false: :danger)
+  or the body is short of food (:food-short); a run under way yields :continue while a danger is near. A :segment that
+  is neither a map nor a readable id is never possible (:bad-args).
   A spawner follows :spawner: :light (default) hangs torches on the dark standable centre-line cells of the segment inside its
   spawn box (4 either side, 1 up or down; light 8), leaves the spawner and those torches, and lists it in :kept {:why :spawner :lit true};
   side passages and pockets the body cannot stand beside stay as they are. :break lights it so, then digs it with a pickaxe
   (no drop expected); :seal stops the trip :spawner at once with it left; :skip leaves it, listed in :kept {:why :spawner}.
-  Every child's failure ends the trip stopped with the child's reason in :child.
-  Ends {:status :done :taken {class n} :kept [{:pos :why}] :new-segments [segment ..]}, :new-segments being the corridors
-  seen from the far end that are not this segment (the caller folds them into its memory with merge-segments); or stopped
-  {:status :stopped :reason r :taken ..} with r one of :bag-full :food-short :no-torches :no-tool (:tool kind) :spawner (:cell) :refused
-  :unreachable :dig-failed :cart-failed :torch-failed :bad-args. Events: strip.corridor.done (info), strip.corridor.stopped (warn).")
+  Every child's failure ends the trip with the child's reason in :child.
+  Ends :done with data {:taken {class n} :kept [{:pos :why}] :new-segments [segment ..]}, :new-segments being the corridors
+  seen from the far end that are not this segment (the caller folds them into its memory with merge-segments); or
+  condition-failed with the cause :bag-full :food-short :no-torches :no-tool (data :tool kind) :spawner (:cell) :refused,
+  or nothing-possible with :unreachable :dig-failed :cart-failed :torch-failed (data :cell, :child), the data carrying :taken.
+  Events: strip.corridor.done (info), strip.corridor.stopped (warn).")
 
 (a/defargs args
   {:segment {:doc "the segment map {:y :axis :line :from :to :open-ends} of jobs.lib.strip, or its id string" :spec (a/pred "a segment map or its id string" #(or (map? %) (string? %))) :default nil}
@@ -56,23 +64,36 @@
     (when-let [[_ axis y line from to] (some->> s (re-matches #"([xz])(-?\d+)-(-?\d+):(-?\d+)\.\.(-?\d+)"))]
       {:id s :axis (keyword axis) :y (js/parseInt y) :line (js/parseInt line) :from (js/parseInt from) :to (js/parseInt to) :open-ends #{}})))
 
-(defn check
-  "Declines while a real danger is near."
+(defn danger-near? [c]
+  (and (:danger-check (:args c))
+       (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius))))
+
+(defn bad-segment
+  "Never possible: the :segment arg is neither a map nor a readable id."
   [c]
-  (or (not (:danger-check (:args c)))
-      (not (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius)))
-      (ctx/wait c {:reason :danger})))
+  (when-not (seg-of (:segment (:args c)))
+    (contract/impossible :bad-args)))
+
+(defn not-now
+  "Why a trip does not start: a real danger near, or no food and none to eat."
+  [c]
+  (when-not (ctx/frozen-call c)
+    (cond (danger-near? c) :danger
+          (trip/food-short? c) :food-short)))
+
+(def failed-conditions "Stop reasons that end condition-failed: a fact of the body or the world. The rest are nothing-possible."
+  #{:bag-full :food-short :no-torches :no-tool :spawner :refused})
 
 (defn finish!
-  [c status extra]
-  (let [m (ctx/mem c)
-        res (merge {:status status :taken (:taken m {})} extra)]
-    (ctx/result! c res)
-    (ctx/emit! c (if (= :done status) :strip.corridor.done :strip.corridor.stopped) (if (= :done status) :info :warn)
-               (assoc res :text (str "corridor " (name (or (:reason res) :done)) ": took " (pr-str (:taken res)))))
-    :done))
+  [c extra]
+  (let [res (merge {:taken (:taken (ctx/mem c) {})} extra)]
+    (ctx/emit! c :strip.corridor.done :info (assoc res :text (str "corridor done: took " (pr-str (:taken res)))))
+    (ctx/end c :done nil res)))
 
-(defn stop! [c reason extra] (finish! c :stopped (assoc extra :reason reason)))
+(defn stop! [c reason extra]
+  (let [res (merge {:taken (:taken (ctx/mem c) {})} extra)]
+    (ctx/emit! c :strip.corridor.stopped :warn (assoc res :reason reason :text (str "corridor " (name reason) ": took " (pr-str (:taken res)))))
+    (ctx/end c (if (failed-conditions reason) :condition-failed :nothing-possible) reason res)))
 
 (defn light-at
   "Block or sky light of the cell, nil when no light data is loaded there."
@@ -207,7 +228,7 @@
   (let [p (:primitives c)
         blocks (look/seen-blocks p {:match #(or (strip/fence? %) (strip/planks? %) (strip/rail? %)) :radius 24 :max 512})
         news (remove #(strip/overlaps? seg %) (strip/segments blocks {:block-at (access/seen-at p)}))]
-    (finish! c :done {:kept (into (:kept (strip/targets [] seg {:block-at (access/seen-at p)}))
+    (finish! c {:kept (into (:kept (strip/targets [] seg {:block-at (access/seen-at p)}))
                                   (map (fn [t] (cond-> {:pos (:pos t) :why :spawner} (= :light (:spawner (:args c))) (assoc :lit true))))
                                   (when (not= :break (:spawner (:args c))) (spawners c seg)))
                       :new-segments (vec news)})))
@@ -241,7 +262,23 @@
       :else (done! c seg))))
 
 (defn ^:async round [c]
-  (if-let [seg (seg-of (:segment (:args c)))]
-    (let [n (atom 0)]
-      (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step! c seg) :continue))))
-    (stop! c :bad-args {:why "needs :segment (a map or an id)"})))
+  (let [seg (seg-of (:segment (:args c)))
+        n (atom 0)]
+    (await (pace/steps! c #(if (and (< (swap! n inc) max-steps) (not (danger-near? c))) (step! c seg) :continue)))))
+
+;; ------------------------------------------------------------------ the contract
+
+(def target [:segment])
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions [[:fn bad-segment] [:fn not-now]])
+
+(defn done?
+  "Never done before the round says so: the targets left are read from the seen blocks at each step."
+  [c]
+  {:done? false :units :cells :done (count (:dug (ctx/mem c))) :left 1})
+
+(defn quote-of [c]
+  (let [{:keys [from to]} (seg-of (:segment (:args c)))]
+    {:uses {:time [1 (max 1 (- (or to 0) (or from 0))) (settings/get settings ::time-s)]}}))

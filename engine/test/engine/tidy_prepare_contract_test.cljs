@@ -9,6 +9,7 @@
             [engine.farm-tidy-test :as ft]
             [engine.forest-maintain-test :as fm :refer [ground]]
             [engine.forest-prepare-test :as fp]
+            [engine.library-test :as lt]
             [engine.registry :as registry]
             [engine.test-util :as tu]))
 
@@ -29,7 +30,7 @@
 
 (defn kc [e] (select-keys e [:kind :cause]))
 
-(def jobs '[jobs.farm.tidy jobs.forestry.prepare])
+(def jobs '[jobs.farm.tidy jobs.forestry.prepare jobs.forestry.maintain])
 
 (deftest both-jobs-export-the-contract-and-quote-validly
   (let [p (tu/fake {})]
@@ -150,3 +151,33 @@
           (is (= [id] (:list (core/state eng))) "stays queued")
           (is (nil? (:call (:contract (mem/job-mem (mem/view (:store eng)) id [])))) "never started")
           (is (= [] (fm/digs p))))))))
+
+;; ------------------------------------------------------------------ forestry.maintain
+
+(def maintain 'jobs.forestry.maintain)
+
+(deftest maintain-felling-and-planting-is-done-with-the-counts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start fm/oak-world {"forest" fm/oak-cell})
+              e (await (ending-of eng maintain {:plan "forest"} 300))]
+          (is (= :done (:kind e)))
+          (is (= {:felled 1 :planted 1} (select-keys (:data e) [:felled :planted]))))))))
+
+(deftest maintain-with-a-plan-it-cannot-work-is-condition-failed-plan-trouble
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start fm/oak-world {})
+              e (await (ending-of eng maintain {:plan "nope"} 20))]
+          (is (= {:kind :condition-failed :cause {:reason :plan-trouble :why "no such plan"}} (kc e))))))))
+
+(deftest maintain-that-only-left-trees-standing-is-nothing-possible-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start {:blocks (merge (ground [[3 0]]) (lt/tree 3 0 "oak" 8)) :inventory [(fm/item "oak_sapling" 1)]} {"forest" fm/oak-cell})
+              e (await (ending-of eng maintain {:plan "forest" :pillar? false} 300))]
+          (is (= {:kind :nothing-possible :cause :left} (kc e)))
+          (is (= [{:x 3 :y 64 :z 0}] (get-in e [:data :left]))))))))

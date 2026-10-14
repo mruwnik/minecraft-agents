@@ -249,7 +249,8 @@
           (is (contract/passes-through? e))
           (is (contract/passes-through? (doto (js/Error. "cut") (aset "code" "cut"))))
           (is (not (contract/passes-through? (js/Error. "boom"))))
-          (let [runs (with-redefs [ctx/call-child (fn [_ _ _ _] (js/Promise.reject e))]
+          (let [runs (with-redefs [ctx/call-child (fn [_ _ _ _] (js/Promise.reject e))
+                       ctx/call (fn [_ _ _ _] (js/Promise.reject e))]
                        [(rejected (village-maintain/run-child! c :roll-1 {}))
                         (rejected (apiary-maintain/run-child! c :hives {}))])
                 thrown (await (js/Promise.all (clj->js runs)))]

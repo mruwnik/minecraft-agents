@@ -83,7 +83,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} (world {:inventory kit :raised? true}) 40))]
+        (let [s (await (scenario {:fetch false} (world {:inventory kit :raised? true}) 40))]
           (is (= 1 (:carpeted (step s :guard))))
           (is (= :no-campfire (:reason (step s :guard))))
           (is (= 1 (:harvested (step s :harvest))))
@@ -93,7 +93,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} (world {:inventory (inv "shears" 1) :raised? true}) 10))]
+        (let [s (await (scenario {:fetch false} (world {:inventory (inv "shears" 1) :raised? true}) 10))]
           (is (nil? (done-event s)))
           (is (empty? (calls s "moveTo")))
           (is (empty? (calls s "useOn"))))))))
@@ -182,7 +182,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} (world {:inventory (inv "white_carpet" 1)}) 30))]
+        (let [s (await (scenario {:fetch false} (world {:inventory (inv "white_carpet" 1)}) 30))]
           (is (= {:skipped :no-tool} (step s :harvest)))
           (is (= 5 (honey s)))
           (is (true? (finished? s))))))))
@@ -219,7 +219,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-after-look))]
-          (core/submit! (:eng s) (spec {}) {})
+          (core/submit! (:eng s) (spec {:fetch false}) {})
           (dotimes [_ 10]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
@@ -233,7 +233,7 @@
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true}))
                   (-> :p (doto tu/blind (aset "sensedAt" (fn [_] #js {:unknown true})))))]
-          (core/submit! (:eng s) (spec {}) {})
+          (core/submit! (:eng s) (spec {:fetch false}) {})
           (dotimes [_ 10]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
@@ -246,7 +246,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-all))]
-          (core/submit! (:eng s) (spec {}) {})
+          (core/submit! (:eng s) (spec {:fetch false}) {})
           (dotimes [_ 10]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
@@ -260,6 +260,47 @@
         (let [waits (fn [jobs] (assoc jobs 'jobs.apiary.harvest {:check (fn [c] (ctx/wait c {:reason :boom})) :round (fn [_c] :done)}))
               s (await (scenario {} (world {:inventory kit}) 30 waits))]
           (is (= {:skipped :declined :reason :boom} (step s :harvest))))))))
+
+;; the tool of a harvest is fetched unless :fetch is false; the children get the caller's :fetch
+(deftest the-children-get-the-callers-fetch-and-a-missing-tool-is-fetched-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [got (atom {})
+              spy (fn [jobs] (reduce (fn [jobs k]
+                                       (assoc jobs (symbol (str "jobs.apiary." (name k)))
+                                              {:check (constantly true) :round (fn [c] (swap! got assoc k (:fetch (:args c))) :done)}))
+                                     jobs [:guard :harvest]))
+              w (quiet-world (world {:inventory (inv "stick" 1)}))
+              _ (await (scenario {} w 10 spy))
+              default @got
+              _ (reset! got {})
+              _ (await (scenario {:fetch false} w 10 spy))]
+          (is (true? (:harvest default)) (pr-str default))
+          (is (= {} @got) "with :fetch false no step is called for a missing item"))))))
+
+(deftest a-declined-child-is-booked-with-the-reason-of-the-ending-it-gave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              waits (fn [jobs] (assoc jobs 'jobs.apiary.harvest
+                                      {:check (fn [c] (ctx/wait c {:reason (keyword (str "wait-" (swap! n inc)))})) :round (fn [_c] :done)}))
+              s (await (scenario {} (world {:inventory kit}) 30 waits))
+              reason (:reason (step s :harvest))]
+          (is (= "wait-" (subs (name reason) 0 5)))
+          (is (= 1 @n) "the reason is not asked for again"))))))
+
+(deftest a-pass-where-no-step-ran-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [waits (fn [jobs] (assoc jobs 'jobs.apiary.harvest {:check (fn [c] (ctx/wait c {:reason :boom})) :round (fn [_c] :done)}))
+              s (await (scenario {} (quiet-world (world {:inventory (inv "shears" 1)})) 30 waits))]
+          (is (nil? (done-event s)) "the report is not a maintain.done")
+          (is (true? (finished? s)))
+          (is (= [:stopped :nothing-to-do]
+                 ((juxt :kind :reason) (first (filter #(#{:completed :stopped} (:kind %)) @(:seen s)))))))))))
 
 (def harvest-worlds
   "Worlds and args where harvest could be chosen, or looks it could."

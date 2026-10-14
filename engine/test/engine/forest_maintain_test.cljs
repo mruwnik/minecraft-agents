@@ -201,7 +201,7 @@
           (is (= "oak_sapling" (h/block-at p 3 64 0)))
           (is (= 4 (get (h/inv p) "oak_log")) "the drops are collected")
           (is (= (repeat 4 "oak_log") (mapv #(h/block-at p 9 % 0) (range 64 68))) "the tree outside the plan stands")
-          (is (= {:felled 1 :planted 1 :left [] :bare []} result))
+          (is (= {:felled 1 :planted 1 :left [] :bare []} (dissoc result :status)))
           (is (= [] (lt/debts eng)) "fell-tree's replant debt is cleared by the planting")
           (is (= 1 (count (h/events-of seen :forest.done)))))))))
 
@@ -226,7 +226,7 @@
               result (await (tu/child-outcome eng job {:plan "forest"} 300))]
           (is (= 12 (count (digs p))))
           (is (= (set (map (fn [[x z]] [x 64 z "dark_oak_sapling"]) cells)) (set (places p))))
-          (is (= {:felled 4 :planted 4 :left [] :bare []} result)))))))
+          (is (= {:felled 4 :planted 4 :left [] :bare []} (dissoc result :status))))))))
 
 (defn ^:async cell-case
   "Run the job over the oak cell at 3 64 0 in a world of blocks and inventory: [digs places events of kind]."
@@ -593,7 +593,7 @@
         (let [{:keys [eng p]} (start oak-world {"forest" oak-cell} (tu/tmp-dir) (tu/seeing-after-look (tu/fake-on-floor oak-world)))
               result (await (tu/child-outcome eng job {:plan "forest"} 200))]
           (is (seq (h/calls p "look")))
-          (is (= {:felled 1 :planted 1 :left [] :bare []} result)))))))
+          (is (= {:felled 1 :planted 1 :left [] :bare []} (dissoc result :status))))))))
 
 (deftest logs-seen-but-none-taken-end-the-pickup-and-the-plan-goes-on
   (async done

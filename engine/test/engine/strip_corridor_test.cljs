@@ -243,3 +243,16 @@
           (is (= {:status :done :taken {:wood 21 :rail 13 :cobweb 1}} (select-keys r [:status :taken])))
           (is (some #{{:pos {:x 10 :y 65 :z 2} :why :spawner}} (:kept r)))
           (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
+
+(deftest a-stopped-trip-ends-with-the-kind-of-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [filler (mapv (fn [i] {:name (str "filler_" i) :count 1}) (range 21))
+              ends (fn ^:async ends [env a] (let [e (:ending (await (run! env a)))] [(:kind e) (:cause e)]))]
+          (is (= [:impossible :bad-args] (await (ends (world) {:segment "nonsense"})))
+              "a segment from the args that cannot be read is never possible")
+          (is (= [:condition-failed :bag-full] (await (ends (world :inventory (into kit filler)) args))))
+          (is (= [:condition-failed :no-tool] (await (ends (world :inventory (vec (take 2 kit))) args))))
+          (is (= [:condition-failed :refused]
+                 (await (ends (world :zones [{:name "farm" :min [0 60 -3] :max [12 70 3] :owner "Miles"}]) args)))))))))
