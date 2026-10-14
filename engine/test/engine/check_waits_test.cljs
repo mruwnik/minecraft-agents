@@ -68,7 +68,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (waiting-after '(jobs.access.pillar {:height 3}) {:self {:pos {:x 0 :y 64 :z 0}} :inventory []}))]
+        (let [r (await (waiting-after '(jobs.access.pillar {:height 3 :fetch false}) {:self {:pos {:x 0 :y 64 :z 0}} :inventory []}))]
           (is (= [:too-few-blocks 3] ((juxt :reason (comp :short :cause)) (:waiting r)))))))))
 
 (deftest pillar-with-dirt-runs

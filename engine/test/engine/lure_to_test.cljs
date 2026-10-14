@@ -1,6 +1,7 @@
 (ns engine.lure-to-test
   "jobs.animals.lure-to against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
@@ -72,6 +73,15 @@
           (is (finished? s))
           (is (= :no-food (:reason (done-event s))))
           (is (= 1 (count (stopped s)))))))))
+
+(deftest a-failed-food-fetch-names-the-fetchs-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory [] :entities [(cow 1 3)]} 12))
+              e (first (stopped s))]
+          (is (= :no-food (:reason e)) (pr-str e))
+          (is (= :no-source (:why e)) "the fetch's cause comes up, not just :no-food"))))))
 
 (deftest a-chicken-lure-with-no-seeds-breaks-grass-for-them-first
   (async done

@@ -21,7 +21,7 @@
   A one-shot order that starts and ends itself. Each step it keeps a :gate-held entry fresh for every planned gate seen open within 10 blocks of :pos, so the pen-gate trigger does not shut the gate it leads the animal through. Without :mob or :pos it can never start (impossible :no-mob, :no-destination).
 
   A body that holds none of the food first gets it (a jobs.items.obtain child, unless :fetch is false); when none can
-  be got the job ends condition-failed :no-food. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
+  be got the job ends :no-food with the fetch's kind and cause as :why. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
   it), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
   jobs.animals.lead-to (doors left open for the animal and shut afterwards). After each leg the animal is looked at:
   unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it and the first look of the wait emits info
@@ -41,7 +41,7 @@
   Every result gives :distance: the animal's, or its last sighting's when it is unseen.
   - :no-animal (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
     :unreachable (a walk gave up), :timeout (:timeout-s from the first round, not the food fetch).
-  Endings: :arrived is done; :no-food is condition-failed; :timeout is limit-reached (the call's :spend :time, default
+  Endings: :arrived is done; :no-food is condition-failed (the fetch's kind when it gave one); :timeout is limit-reached (the call's :spend :time, default
   ::timeout-s); the rest are nothing-possible with the reason as the cause. Every reason but :arrived carries a :text.
 
   Zones: an animal standing in another owner's zone or claim is not lured (:ignore-zones? true skips the check).")
@@ -163,8 +163,12 @@
       (ctx/emit! c :lure-to.done :info (assoc result :text (str "lure-to done: " (name reason))))
       (when-not ok?
         (ctx/emit! c :lure-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
-      (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
-        (ctx/end c kind cause (cond-> result (not ok?) (assoc :text (stop-text c reason))))))))
+      (let [[kind cause] (get ending-of reason [:nothing-possible reason])
+            food (when (= :no-food reason) (:food-ending m))
+            [kind cause] (if food [(:kind food) {:reason :no-food :why (get-in food [:cause :why])}] [kind cause])]
+        (ctx/end c kind cause (cond-> result
+                                        (not ok?) (assoc :text (stop-text c reason))
+                                        food (assoc :why (:why cause))))))))
 
 (defn finish! [c reason]
   (ctx/update-mem! c assoc :ending reason)
@@ -214,12 +218,13 @@
   [c]
   (if-not (fetch/opts c 'jobs.animals.lure-to)
     (finish! c :no-food)
-    (let [limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :explore])
+    (let [limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :explore :minutes])
           e (await (need/blocks! c (get animals/breeding-food (:mob (:args c))) 1 limits))]
       (cond
         (= :continue e) :yield
         (animals/food-carried (:primitives c) (:mob (:args c))) :again
-        :else (finish! c :no-food)))))
+        :else (do (ctx/update-mem! c assoc :food-ending e)
+                  (finish! c :no-food))))))
 
 (defn ^:async start!
   "Hold the food, walk up to the nearest animal and send the walk on its way."

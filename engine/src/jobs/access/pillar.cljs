@@ -7,6 +7,8 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
             [jobs.lib.look :as sight]
@@ -28,7 +30,8 @@
 
   Needs: blocks for the :use {:blocks [...]} list of the call (default: the carried fillers for a pillar, dirt then
   cobblestone, jobs.lib.choose); an old caller's :item / :items become that list. A call starts only with some of them
-  carried (condition :too-few-blocks, with :short) and, when it was submitted with a :from, with the body near it
+  carried unless :fetch is false (then condition :too-few-blocks, with :short; a fetch that fails ends the same, the
+  fetch's ending its :because) and, when it was submitted with a :from, with the body near it
   (:moved-since-submit); both are checked at the call's start only. Quote: height x the time of a block, that many
   blocks of the first carried one, ending height up.
 
@@ -58,6 +61,7 @@
 (a/defargs args
   {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
    :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
+   :fetch {:doc "get the blocks with jobs.items.obtain when none is carried at the start, and walk back (false: end :too-few-blocks); a set of kinds or a map of limits counts as true" :spec fetch/option? :default true}
    :height {:doc "blocks to rise, 1 to 64" :spec (a/int-in 1 64) :default 1}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :mob-wait-ms {:doc "how long to wait for a mob to leave the cell; nil: ::mob-wait-ms (an escape from danger passes 0)" :spec (a/int-in 0 nil) :default nil}})
@@ -239,10 +243,10 @@
   (when-not (item-to-use nil carried items) height))
 
 (defn too-few-blocks
-  "At the call's start: the cause when no listed block is carried (:short blocks missing), else nil. Run short part
-  way, the round gives up with its pillar and ledger settled."
+  "At the call's start without :fetch: the cause when no listed block is carried (:short blocks missing), else nil. Run
+  short part way, the round gives up with its pillar and ledger settled."
   [c]
-  (when-not (ctx/frozen-call c)
+  (when-not (or (ctx/frozen-call c) (:fetch (:args c)))
     (let [items (blocks-of c)]
       (when-let [short (blocks-short (pl/carried (:primitives c)) items (:height (:args c)))]
         {:reason :too-few-blocks :short short :items items}))))
@@ -400,9 +404,26 @@
           (await (place! c l step)))
         (finish! c l step)))))
 
+(defn ^:async fetch-first!
+  "Before the first block, outside the urgent section: walk back after a fetch, and with no listed block carried get
+  them (jobs.lib.need). :continue while that goes on, the give-up when it fails, else nil. Cut mid-pillar it is skipped."
+  [c]
+  (let [back (await (need/return! c))
+        short (when (and (:fetch (:args c)) (not (:base (ctx/mem c))))
+                (blocks-short (pl/carried (:primitives c)) (blocks-of c) (:height (:args c))))]
+    (cond
+      back back
+      (nil? short) nil
+      :else (let [e (await (need/blocks! c (or (seq (blocks-of c)) (choose/fillers :pillar)) short {:return? true}))]
+              (cond
+                (= :continue e) :continue
+                (= :done (:kind e)) nil
+                :else (finish! c (ledger/open-entries (ctx/view c)) (give-up :too-few-blocks :short short)))))))
+
 (defn ^:async round
   "The whole pillar: step! until it ends, a pace between blocks, as one urgent section (ctx/atomic :pillar): a night or
   low-food reflex waits for the climb to end, up to its cap."
   [c]
   (submitted/begin! c)
-  (await (ctx/atomic c :urgent :pillar #(pace/steps! c (fn [] (step! c))))))
+  (or (await (fetch-first! c))
+      (await (ctx/atomic c :urgent :pillar #(pace/steps! c (fn [] (step! c)))))))

@@ -92,7 +92,7 @@
 
 (defn setup
   "An engine over a fake world with a stone floor under the base; :make starts another engine on the same body."
-  [{:keys [inventory blocks zones hitbox entities] :or {zones []}}]
+  [{:keys [inventory blocks zones hitbox entities jobs] :or {zones []}}]
   (let [clock (atom 1000000)
         w (world/of-data {} {} zones)
         dir (tu/tmp-dir)
@@ -101,7 +101,7 @@
                     :blocks (merge {"0,63,0" "stone"} blocks)
                     :inventory (or inventory [{:name "dirt" :count 64}])
                     :entities (or entities [])})
-        make (fn [] (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock) :world w
+        make (fn [] (core/create {:primitives p :jobs (merge registry/jobs jobs) :triggers triggers/all :dir dir :now #(deref clock) :world w
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))]
     {:eng (make) :make make :p p :seen seen :clock clock}))
 
@@ -184,11 +184,29 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {:inventory []})
-              id (core/submit! eng (list job {:height 6}) {})]
+              id (core/submit! eng (list job {:height 6 :fetch false}) {})]
           (await (ticks s eng 3))
           (is (not (finished? eng)) "still listed: it waits for blocks")
           (is (empty? (calls p "jumpPlace")))
           (is (= [:too-few-blocks 6] ((juxt :reason (comp :short :cause)) (core/waiting eng id)))))))))
+
+(defn obtain-stub
+  "An obtain that records the args of each round in the atom and yields."
+  [calls]
+  {:ways [:chest :craft :smelt :gather] :check (constantly true)
+   :round (fn ^:async obtain [c] (swap! calls conj (select-keys (:args c) [:any-of :count])) :continue)
+   :args {:item {:default nil} :any-of {:default nil} :count {:default 1} :how {:default nil} :depth {:default nil} :explore {:default true}}})
+
+(deftest no-blocks-at-the-start-fetches-them-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [got (atom [])
+              {:keys [eng p] :as s} (setup {:inventory [] :jobs {'jobs.items.obtain (obtain-stub got)}})]
+          (core/submit! eng (list job {:height 6}) {})
+          (await (ticks s eng 3))
+          (is (empty? (calls p "jumpPlace")))
+          (is (= {:any-of ["dirt" "cobblestone"] :count 6} (first @got))))))))
 
 (deftest running-short-part-way-builds-what-it-has-and-gives-up-saying-so
   (async done
