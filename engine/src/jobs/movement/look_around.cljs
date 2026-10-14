@@ -2,7 +2,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
-            [jobs.primitive :as primitive]))
+            [engine.primitive :as primitive]))
 
 (def idle-ok true)
 
