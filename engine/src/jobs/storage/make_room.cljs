@@ -1,6 +1,8 @@
 (ns jobs.storage.make-room
   (:require [jobs.lib.choose :as choose]
+            [engine.contract :as contract]
             [engine.args :as a]
+            [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
             [clojure.string :as str]
@@ -12,7 +14,6 @@
             [engine.memory :as mem]
             [jobs.lib.pace :as pace]
             [jobs.lib.child :as child]
-            [jobs.lib.result :as res]
             [jobs.lib.storage :as storage]
             [jobs.lib.foods :as foods]))
 
@@ -42,12 +43,13 @@
   Resume: a toss or swap writes its intent first; a run that finds one (after a cut or a restart) checks the
   inventory before acting again. What was tossed before a cut stays in the result when the job survives the cut (a
   child); the spot to walk away from is body memory, so a cut reflex's refire still walks away from it.
+  Needs: nothing; a bag with :free slots free is done at once.
   Ends:
   - done {:tossed [{:item :count}] :free} once :free slots are free (info make-room.done when it acted);
-  - stopped :short (it acted, nothing more may go) or :nothing-to-go (it may put away or toss nothing), with
-    :free and :tossed, info make-room.stopped;
-  - stopped :stalled after :max-steps steps (warn make-room.stalled) or
-    :toss-failed after three failed tosses in a row (warn make-room.toss-failed).
+  - nothing-possible :short (it acted, nothing more may go) or :nothing-to-go (it may put away or toss nothing),
+    :taken-back (the body picked its tossed items up again), :stalled after :max-steps steps (warn make-room.stalled)
+    or :toss-failed after three failed tosses in a row (warn make-room.toss-failed); data :free, :tossed and :text,
+    info make-room.stopped for the first two. The report counts the free slots.
   Also emits info make-room.tossed (with :junk) and make-room.swapped.")
 
 (a/defargs args
@@ -347,14 +349,13 @@
   unusable for ten minutes) the chest is done with for this run (run's :chest-done)."
   [c run chest names keep]
   (let [before (u/free-slots (:primitives c))
-        r (await (ctx/call-child c :deposit 'jobs.storage.deposit
-                                 (merge (select-keys (:args c) [:ignore-zones? :free]) {:chest chest :items names :keep keep :make-chests? true :fetch-chests? false})))
-        result (when (= :done r) (ctx/child-result c :deposit))]
-    (when (:gave-up result)
-      (ctx/remember! c :chest-unusable {:pos chest :reason (:reason result)} unusable-policy))
+        e (await (ctx/call c :deposit 'jobs.storage.deposit
+                           (merge (select-keys (:args c) [:ignore-zones? :free]) {:chest chest :items names :keep keep :make-chests? true :fetch-chests? false})))]
+    (when (get-in e [:data :gave-up])
+      (ctx/remember! c :chest-unusable {:pos chest :reason (contract/cause-key e)} unusable-policy))
     (when (> (u/free-slots (:primitives c)) before)
       (ctx/update-mem! c assoc :acted true))
-    (when (not= :continue r)
+    (when (not= :continue e)
       (swap! run assoc :chest-done true))
     (await (pace/pace!))))
 
@@ -376,12 +377,34 @@
     (await (pick-up-swap! c))
     (ctx/update-mem! c dissoc :swap)))
 
-(defn check
-  "Fewer than :free slots are free, or the job has acted and has yet to end (a cut run resumes)."
+(a/defargs settings
+  {::step-s {:default 3 :doc "Seconds a quote counts for one deposit call, swap or toss." :spec (a/num-in 0 nil)}})
+
+(def target [:free])
+
+(def conditions
+  "None: a bag with room is already done, one with nothing to spare ends nothing-possible after looking."
+  [])
+
+(defn slots-short
+  "How many more slots must be free for :free."
   [c]
-  (or (boolean (or (< (u/free-slots (:primitives c)) (:free (:args c)))
-                   (:acted (ctx/mem c))))
-      (ctx/wait c {:reason :enough-room})))
+  (max 0 (- (:free (:args c)) (u/free-slots (:primitives c)))))
+
+(defn done?
+  "Done when :free slots are free; a run that acted and was cut still has its walk away and its summary to do."
+  [c]
+  (let [left (slots-short c)]
+    {:done? (and (zero? left) (not (:acted (ctx/mem c))))
+     :units :slots :done (u/free-slots (:primitives c)) :left left}))
+
+(defn quote-of
+  "Time for the steps the missing slots take (one each at best); frees up to the missing slots, none at worst."
+  [c]
+  (let [need (slots-short c)
+        step (settings/get settings ::step-s)]
+    {:uses {:time [0 (* need step) (* (:max-steps (:args c)) step)]}
+     :done [0 need need]}))
 
 (defn tossed-summary
   "The done event's fields: what was tossed ([{:item :count}]) and a text saying so."
@@ -407,12 +430,12 @@
     (when (seq tossed) (ctx/remember! c :make-room-rest {} rest-policy))
     (if (nil? reason)
       (do (when (:acted m) (ctx/emit! c :make-room.done :info summary))
-          (res/finish! c {:tossed tossed :free free-now}))
+          (ctx/end c :done nil {:tossed tossed :free free-now}))
       (let [text (str (stop-texts reason) "; " text)]
         (if (#{:stalled :toss-failed} reason)
           (ctx/emit! c (keyword (str "make-room." (name reason))) :warn (assoc summary :text text :status (:toss-status m)))
           (ctx/emit! c :make-room.stopped :info (assoc summary :reason reason :text text)))
-        (res/stop! c reason text :free free-now :tossed tossed)))))
+        (ctx/end c :nothing-possible reason {:text text :free free-now :tossed tossed})))))
 
 (defn ^:async end!
   "Walk away from a toss spot the body is still near, then end: done when :free slots are free (reason nil), else stopped with reason.

@@ -1,6 +1,7 @@
 (ns engine.make-room-test
   "jobs.storage.make-room, the reflex of inventory-nearly-full, against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -574,7 +575,8 @@
           (is (= [:done] @returns))
           (is (= {:status :stopped :reason :short :free 2
                   :tossed [{:item "cobblestone" :count 64} {:item "cobblestone" :count 64}]}
-                 (dissoc @out :text)))
+                 (dissoc @out :text :ending)))
+          (is (= :nothing-possible (get-in @out [:ending :kind])))
           (is (string? (:text @out))))))))
 
 (deftest nothing-that-may-go-is-stopped
@@ -812,3 +814,46 @@
           (await (tick-out! eng 30))
           (is @back "walk-away ran")
           (is (= {:status :stopped :reason :taken-back} (select-keys @out [:status :reason]))))))))
+
+;; ------------------------------------------------------------------ job contract
+
+(defn ^:async root-ending
+  "Submit make-room with args over world, tick to its end; the root :completed or :stopped event's {:event :kind :reason}."
+  [world args]
+  (let [[seen sink] (tu/capture-sink)
+        clock (atom t0)
+        eng (core/create {:primitives (tu/fake-on-floor world) :jobs registry/jobs :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:sinks [sink] :now #(deref clock)})})]
+    (core/submit! eng (list 'jobs.storage.make-room args) {})
+    (dotimes [_ 12]
+      (swap! clock + 700)
+      (await (core/tick! eng)))
+    (let [e (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
+      (core/shutdown! eng)
+      {:event (:kind e) :kind (get-in e [:data :kind]) :reason (get-in e [:data :reason])})))
+
+(deftest make-room-exports-the-contract-and-quotes-validly
+  (let [job (get registry/jobs 'jobs.storage.make-room)
+        p (tu/fake-on-floor {:inventory (same "diamond" 35 1)})]
+    (is (some? (:conditions job)))
+    (is (nil? (:check job)))
+    (is (vector? (:target job)))
+    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {:free 4 :max-steps 40}}))))))
+
+(deftest enough-free-slots-at-the-start-end-done-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :completed :kind :done :reason nil} (await (root-ending {:inventory []} {:free 2}))))))))
+
+(deftest make-room-endings-carry-a-kind-and-a-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :kind :nothing-possible :reason :nothing-to-go}
+               (await (root-ending {:inventory (same "diamond" 35 1)} {}))) "nothing may go")
+        (is (= {:event :stopped :kind :nothing-possible :reason :short}
+               (await (root-ending {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "cobblestone" 3 64)))} {:keep-blocks 64})))
+            "it tossed, still short")
+        (is (= {:event :completed :kind :done :reason nil}
+               (await (root-ending {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "dirt" 2 64)))} {:free 3 :keep-blocks 0}))))))))
