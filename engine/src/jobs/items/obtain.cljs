@@ -44,7 +44,8 @@
     :pickaxe: wooden_pickaxe for stone and coal, stone_pickaxe for iron); a mine that ends :no-tool (its pickaxe broke) does not count as a nothing run, that tool is got again the same way.
     With :explore, an unseen stone material or ore other than coal is left to the mine child (it tunnels for ore); any other unseen raw need is searched for (jobs.explore.search child, slot :explore, at most 3 per need;
     a notice :obtain.exploring says so); none found stops it (:tried {:gather {:searched ..}}).
-  - Nothing else: nothing-possible :no-source.
+  - Nothing else: nothing-possible :no-source; a gather whose last fruitless run could not walk to or from its source
+    (walk-causes: :zone-exit, :not-home, :unreachable ..) ends nothing-possible with that cause instead.
 
   Bad args end condition-failed :bad-args {:why} (warn obtain.declined).
   Conditions (before it starts): no source {:reason :no-source :why text :item|:any-of} (:why: what
@@ -74,6 +75,12 @@
 (def target [:item :any-of])
 
 (def ways [:chest :craft :smelt :gather])
+
+(def walk-causes
+  "Gather endings where the body could not get to or from the source (docs/end-statuses.md no-path, and a zone it
+  could not leave): the obtain ends with that cause, not :no-source, so a caller can try again later or from elsewhere."
+  #{:unreachable :not-home :not-back :zone-exit :walk-failed :walk-in-failed :shut-in :exhausted :tree-unreachable
+    :no-approach :out-of-reach :one-way :way-dives :detour :door-stuck :cut-again :replan-limit})
 
 (def defaults {:ways (set ways) :spend {:time ::time-s}})
 
@@ -209,6 +216,11 @@
           (await (gather-step! c names have target))
           (= :table-unreachable (get-in m [:tried :craft]))
           (ctx/end c :nothing-possible :table-unreachable (assoc data :tried (:tried m)))
+          (walk-causes (get-in m [:tried :gather]))
+          (let [k (get-in m [:tried :gather])
+                why (str "could not get to a source of " (clojure.string/join "/" names) ": gathering ended " (pr-str k)
+                         (some->> (get-in m [:gather :why]) (str ": ")))]
+            (ctx/end c :nothing-possible (merge {:reason k :why why} (wanted-fields a)) (assoc data :tried (:tried m) :why why)))
           :else
           (let [why (str "no source for " (clojure.string/join "/" names) ": " (no-source-why c names (:count a))
                          (tried-text (:tried m) (get-in m [:gather :why]) (get-in m [:craft :detail])))]

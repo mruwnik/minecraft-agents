@@ -104,3 +104,23 @@
           (is (= {:kind :nothing-possible :cause :no-source} (kc e)))
           (is (= 0 (get-in e [:data :got])))
           (is (get-in e [:data :tried :gather])))))))
+
+(deftest a-gather-whose-walk-fails-ends-with-the-walks-cause-not-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [cause [:zone-exit :not-home]]
+          (let [runs (atom 0)
+                mine (assoc (get registry/jobs 'jobs.gather.mine) :round (fn ^:async stuck [c] (swap! runs inc) (ctx/end c :nothing-possible cause {:got 0})))
+                out (atom nil)
+                parent {:check (constantly true)
+                        :round (fn ^:async recording-round [c]
+                                 (let [e (await (ctx/call c :kid 'jobs.items.obtain {:item "raw_iron" :explore false}))]
+                                   (if (= :continue e) :continue (do (reset! out e) :done))))}
+                s (with-redefs [registry/jobs (assoc registry/jobs 'jobs.gather.mine mine 'recording-parent parent)]
+                    (f/start (oi/ore-world {"1,64,4" "iron_ore"} [{:name "stone_pickaxe" :count 1}]) []))]
+            (core/submit! (:eng s) '(recording-parent) {})
+            (await (f/run-ticks s 200))
+            (is (pos? @runs) "the mine ran")
+            (is (= {:kind :nothing-possible :cause cause} (kc @out)) (str cause))
+            (is (re-find (re-pattern (name cause)) (str (get-in @out [:cause :why]))))))))))

@@ -31,7 +31,7 @@
   what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
   Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]}. Every other ending has
   :have, :made, the next :item and a :why text, warn kit.stopped:
-  - the obtain child's kind and cause (:no-source, :time ..; :item is then the furnace material when that failed);
+  - the obtain child's kind and cause (:no-source, a walk cause such as :zone-exit or :not-home, :time ..; :item is then the furnace material when that failed);
   - condition-failed {:reason :needs-food :cause c :food :min-food} (the starving body found no food, or :food is false);
   - nothing-possible {:reason :wear-failed}.
   Quote: a guess per missing item. done? counts the items carried or worn.")
