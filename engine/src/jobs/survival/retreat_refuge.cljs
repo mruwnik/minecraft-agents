@@ -452,7 +452,7 @@
         top (peek cells)]
     (if-not (and item (pos? n) (not (:raised refuge)))
       (await (abandon-refuge! c))
-      (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height n :item item :ignore-zones? true}))
+      (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height n :item item :ignore-zones? true :mob-wait-ms 0}))
             built (:built (ctx/child-result c :pillar) 0)
             more (mapv #(escape/up top %) (range 1 (inc n)))]
         (ctx/update-mem! c update :refuge assoc :raised true :cells (into cells (take built more)))
@@ -529,7 +529,7 @@
 (defn ^:async pillar-round!
   "One block of the pillar (the child jobs.access.pillar); hidden once it is at least 2 high."
   [c {:keys [item] :as refuge}]
-  (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height (pillar-height) :item item :ignore-zones? true}))]
+  (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height (pillar-height) :item item :ignore-zones? true :mob-wait-ms 0}))]
     (case r
       :declined (await (abandon-refuge! c))
       :done (if (>= (:built (ctx/child-result c :pillar) 0) 2)

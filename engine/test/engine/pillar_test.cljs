@@ -439,6 +439,30 @@
             (is (= "cow" (:mob g)))
             (is (= [0 64 0] (:at g)))))))))
 
+(deftest a-hostile-in-the-cell-is-not-waited-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:entities [(assoc cow :name "zombie" :kind "hostile" :height 1.95)]})]
+          (refuse-while-a-mob-stands-in! p nil)
+          (core/submit! eng (list job {:height 3}) {})
+          (await (ticks s eng 20))
+          (is (finished? eng))
+          (is (= 3 (count (calls p "jumpPlace"))))
+          (is (= :place-failed (:reason (first (of-kind seen :pillar.gave-up))))))))))
+
+(deftest a-pillar-told-not-to-wait-for-mobs-ends-at-once-naming-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:entities [cow]})]
+          (refuse-while-a-mob-stands-in! p 5)
+          (core/submit! eng (list job {:height 3 :mob-wait-ms 0}) {})
+          (await (ticks s eng 20))
+          (is (finished? eng))
+          (is (empty? (calls p "jumpPlace")))
+          (is (= ["cow"] (map :mob (of-kind seen :pillar.gave-up)))))))))
+
 (deftest a-mob-beside-the-cell-is-no-reason-to-wait
   (is (nil? (pillar/mob-in [{:name "cow" :width 0.9 :height 1.4 :pos {:x 1.5 :y 64 :z 0.5}}] [0 64 0])))
   (is (nil? (pillar/mob-in [{:name "item" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}}] [0 64 0])) "a dropped item does not block a place")

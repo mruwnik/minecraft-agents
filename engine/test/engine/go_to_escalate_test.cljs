@@ -135,10 +135,11 @@
   (is (= {:step :none :why :no-wall} (escape/choose (tu/fake on-ledge) [0 66 0] [8 70 0]))))
 
 (deftest escape-choose-pillars-only-with-enough-blocks
-  (is (= {:step :pillar :height 3 :item "dirt"}
-         (escape/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 3}]})) [0 61 0] [10 64 0])))
+  (is (= {:step :pillar :height 2 :item "dirt"}
+         (escape/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})) [0 61 0] [10 64 0]))
+      "a 3-deep pit: two blocks up, then a step onto the rim")
   (is (= {:step :stair :heading :east :steps 3}
-         (escape/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})) [0 61 0] [10 64 0]))))
+         (escape/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 1}]})) [0 61 0] [10 64 0]))))
 
 (def wide-pit
   "A 3-deep 5x5 pit (inside x -2..2, z -2..2, feet y 61) in a dirt block x -3..3, y 60..63, z -3..3; stone ground east
@@ -158,6 +159,27 @@
                           [2 61 0] [10 64 0] (constantly false)))
         "a roofed pit has no rim to step onto")))
 
+(deftest escape-choose-rim-pillars-on-the-side-toward-the-goal
+  (let [low-south (apply dissoc wide-pit (for [x (range -3 4)] (str x ",63,3")))
+        p (tu/fake {:self {:pos {:x 2 :y 61 :z 2}} :blocks low-south :inventory [{:name "dirt" :count 9}]})]
+    (is (= {:step :pillar :height 2 :item "dirt"} (escape/choose p [2 61 2] [10 64 2] (constantly false)))
+        "the east wall, toward the goal, though the south one is a block lower")
+    (is (= {:step :pillar :height 1 :item "dirt"} (escape/choose p [2 61 2] [2 64 10] (constantly false)))
+        "the south wall when the goal is south")))
+
+(def plank-yard
+  "An unroofed yard on stone (inside x -2..2, z -2..2, feet y 64) walled 2 high in dirt, but for oak planks in the
+  east wall at z 0."
+  (merge (box -6 63 -6 12 63 6 "stone")
+         (apply dissoc (box -3 64 -3 3 65 3 "dirt") (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))
+         (box 3 64 0 3 65 0 "oak_planks")))
+
+(deftest escape-choose-walks-to-a-door-it-may-dig-before-it-rim-pillars
+  (let [p (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks plank-yard :inventory [{:name "dirt" :count 9}]})]
+    (is (= :approach (:step (escape/choose p [2 64 0] [8 64 0]))) "the dirt beside the planks")
+    (is (= {:step :pillar :height 1 :item "dirt"} (escape/choose p [2 64 0] [8 64 0] (constantly false)))
+        "no dig allowed: over the wall")))
+
 ;; ------------------------------------------------------------------ go-to escalation
 
 (deftest go-to-pillars-out-of-a-pit-when-it-carries-blocks
@@ -168,7 +190,7 @@
                                                 {:pos [10 64 0] :range 1}))]
           (is (= {:arrived true} @out))
           (is (= [:pillar] (mapv :step (events-of seen :go-to.escalated))))
-          (is (= 3 (count (calls p "jumpPlace"))) "one block per pillar round")
+          (is (= 2 (count (calls p "jumpPlace"))) "two blocks up, then a step onto the rim")
           (is (empty? (calls p "dig"))))))))
 
 (deftest go-to-at-low-food-escalates-instead-of-giving-up-on-a-sprint-only-way
@@ -195,7 +217,7 @@
       (fn ^:async t []
         (let [{:keys [eng out p]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5} {:name "iron_sword" :count 1}]})
                                                    'jobs.movement.go-to {:pos [10 64 0] :range 1} []))
-              column [[0 61 0] [0 62 0] [0 63 0]]]
+              column [[0 61 0] [0 62 0]]]
           (is (= {:arrived true} @out))
           (is (every? #(= "dirt" (block p %)) column) "the pillar stands")
           (is (true? (scaffold-left/scaffold-left p (mem/view (:store eng)) {} (ew/of-data {} {} [])))
@@ -210,7 +232,7 @@
       (fn ^:async t []
         (doseq [zones [nil [] [{:name "home" :owner "fake" :min [-60 0 -60] :max [60 120 60]}]]]
           (let [{:keys [eng out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
-                                                      'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
+                                                      'jobs.movement.go-to {:pos [10 64 0] :range 1 :ways #{:walk :stair}} zones))]
             (is (= {:arrived true} @out) (pr-str zones))
             (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))) (pr-str zones))
             (is (= #{} (holes eng)) "own diggings are not noted for refilling")
@@ -222,11 +244,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
-                                                'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign))
+                                                'jobs.movement.go-to (merge {:pos [10 64 0] :range 1 :ways #{:walk :stair}} trespass) foreign))
               restored (first (events-of seen :go-to.restored))
               skipped (first (events-of seen :go-to.restore-skipped))]
           (is (= {:arrived true} @out))
-          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))) "2 blocks are too few for a 3-deep pillar")
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))))
           (is (= [[1 62 0] [1 63 0]] (:cells restored)) "the two blocks carried go back, lowest first")
           (is (= "dirt" (block p [1 62 0])))
           (is (= "dirt" (block p [1 63 0])))
@@ -280,7 +302,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[what world pos] [[:pillar (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]}) [10 64 0]]
-                                  [:stair (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]}) [10 64 0]]
+                                  [:stair (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 1}]}) [10 64 0]]
                                   [:clear-path (merge in-room {:blocks room}) [8 64 0]]]]
           (let [{:keys [out seen ticks]} (await (run-job! world {:pos pos :range 1}))]
             (is (= {:arrived true} @out) what)
@@ -681,7 +703,7 @@
         ;; the third step would cut stone with no pickaxe: the stair stops after two, which already reach the rim
         (let [{:keys [eng out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "3,64,0" "stone")
                                                                        :inventory [{:name "dirt" :count 2}]})
-                                                    'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign))
+                                                    'jobs.movement.go-to (merge {:pos [10 64 0] :range 1 :ways #{:walk :stair}} trespass) foreign))
               dug (dug-cells p)]
           (is (= {:arrived true} @out))
           (is (= #{[1 63 0] [1 62 0] [2 63 0]} dug))
@@ -697,7 +719,7 @@
       (fn ^:async t []
         (let [plain (apply dissoc (merge (box -40 63 -40 40 63 40 "stone") pit) pit-cells)
               {:keys [eng p seen]} (setup (merge in-pit {:blocks plain :inventory [{:name "dirt" :count 2}]}) foreign)]
-          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1 :ignore-zones? true}) {})
+          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1 :ignore-zones? true :ways #{:walk :stair}}) {})
           (let [k (atom 0)]
             (.override (.-world p) "dig" (fn [token args impl]
                                            (if (< (swap! k inc) 3) (impl token args) (js/Promise. (fn [_ _])))))
@@ -819,7 +841,7 @@
                                                      :inventory [{:name "iron_pickaxe" :count 1}
                                                                  {:name "cobblestone" :count 2}]})
                                      foreign)]
-          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1 :ignore-zones? true}) {})
+          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1 :ignore-zones? true :ways #{:walk :stair}}) {})
           (await (tick-out! eng 600))
           (is (= "cobblestone" (block p [1 62 0])) "the put-back block is cobblestone")
           (is (= #{[[1 62 0] "cobblestone"] [[1 63 0] "cobblestone"]}
@@ -905,7 +927,7 @@
               flaky (assoc place :conditions [[:fn (constantly :flaky)]])
               {:keys [out p seen eng]} (with-redefs [registry/jobs (assoc registry/jobs 'jobs.blocks.place flaky)]
                                          (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
-                                                          'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign)))
+                                                          'jobs.movement.go-to (merge {:pos [10 64 0] :range 1 :ways #{:walk :stair}} trespass) foreign)))
               skipped (:cells (first (events-of seen :go-to.restore-skipped)))]
           (is (= {:arrived true} @out))
           (is (= #{:flaky} (set (map :why skipped))) "a skip with the place's cause")

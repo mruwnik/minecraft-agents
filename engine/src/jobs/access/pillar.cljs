@@ -40,7 +40,7 @@
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell passes jobs.lib.access.rules/may-place?
   - no seen mob but a hostile stands in the cell: it waits for one to move on (a failed jump while one does is not counted), up to
-    ::mob-wait-ms, then gives up :mob-in-cell (:mob its name)
+    :mob-wait-ms, then gives up :mob-in-cell (:mob its name)
 
   A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: it waits to land,
   walks back to where it began (go-to child if off the column, then a short centring nudge) and tries again; up to 8 per pillar, then :off-column.
@@ -59,7 +59,8 @@
   {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
    :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
    :height {:doc "blocks to rise, 1 to 64" :spec (a/int-in 1 64) :default 1}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :mob-wait-ms {:doc "how long to wait for a mob to leave the cell; nil: ::mob-wait-ms (an escape from danger passes 0)" :spec (a/int-in 0 nil) :default nil}})
 
 (a/defargs settings
   {::max-height {:default 64 :doc "Tallest pillar a call may ask for, in blocks." :spec (a/int-in 0 nil)}
@@ -317,7 +318,7 @@
   [c]
   (let [n (inc (:mob-waits (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :mob-waits n)
-    (<= (* n (settings/get settings ::mob-step-ms)) (settings/get settings ::mob-wait-ms))))
+    (<= (* n (settings/get settings ::mob-step-ms)) (or (:mob-wait-ms (:args c)) (settings/get settings ::mob-wait-ms)))))
 
 (defn ^:async wait-out-mob!
   "A mob stands in the cell of the next block: wait mob-step-ms for it to move on, :again; after mob-wait-ms of it,

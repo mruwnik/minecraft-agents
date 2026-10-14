@@ -118,15 +118,14 @@
       h)))
 
 (defn rim-pillar
-  "The lowest pillar beside a wall along one of dirs that leaves the body a step below the wall's top: h - 1 for a
-  wall h high (rim-height), with the feet column clear up to the head of a body on the rim. nil when none."
-  [block-at feet dirs]
-  (some->> dirs
-           (keep (fn [d] (when-let [h (rim-height block-at feet d)]
-                           (when (every? #(passable? (block-at (up feet %))) (range 2 (+ h 2)))
-                             (dec h)))))
-           seq
-           (apply min)))
+  "The pillar beside a wall that leaves the body a step below the wall's top: h - 1 for a wall h high (rim-height),
+  with the feet column clear up to the head of a body on the rim. The wall along dir (toward the goal) when it is
+  one, else the lowest; nil when none."
+  [block-at feet dir]
+  (let [n-of (fn [d] (when-let [h (rim-height block-at feet d)]
+                       (when (every? #(passable? (block-at (up feet %))) (range 2 (+ h 2)))
+                         (dec h))))]
+    (or (some-> dir n-of) (some->> cardinals (keep n-of) seq (apply min)))))
 
 (defn stair-cuts
   "The cells a stair up along dir ([dx dz]) cuts from feet in n steps, step by step (plan.shape/step-cells)."
@@ -311,16 +310,18 @@
   natural terrain (natural?) and blocks it placed itself (opts :own?, (own? cell block)) in cells (may-dig? cell)
   allows (go-to: no other owner's zone or claim). opts :skip is a set of steps that already failed (a stair heading
   that failed: [:stair :east]): the next one is chosen.
-  - {:step :pillar :height d :item}: in a pit d deep with room above the head and at least d pillar blocks carried.
-    Beside a wall (a pit too wide to be walled on three sides) when nothing above may be dug: d the rim-pillar.
+  - {:step :pillar :height n :item}: in a pit d deep with room above the head and at least n pillar blocks carried: n
+    the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto.
   - {:step :stair :heading kw :steps n}: a block in front to stair up on, n how far the goal is above or the pit's
     depth, whichever is more, at most max-depth (the pit's depth when the longer cut is not all diggable?), every cell
     of its cut diggable?.
   - {:step :clear-path :heading kw}: a wall at most max-door thick straight toward the goal, with floor beyond,
     every cell diggable?. Chosen before a stair when the goal is no higher than the feet: a sealed tunnel reads as a
     pit, and its stair would climb away from the goal.
-  - a stair with no pit and no goal above (a sealed tunnel, a goal through thick rock) is the last way: the deepest
-    diggable one, up to max-depth, before :none.
+  - a stair with no pit and no goal above (a sealed tunnel, a goal through thick rock): the deepest diggable one, up
+    to max-depth.
+  - {:step :pillar :height n :item}, the last way before :none: beside a wall (a pit too wide to be walled on three
+    sides) with no walk or dig way, n the rim-pillar.
   - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first; in the free part of a
     shut door's cell with no door-spot in sight, step back off the panel (door-back).
   - on a ledge (no side solid, no wall-spot) under a higher goal with a pillar block carried: a stair whose first
@@ -334,7 +335,9 @@
          dir (heading feet goal)
          depth (pit-depth block-at (unseen-of p) feet)
          {:keys [item count]} (pillar-item p)
-         pillar-blocks? (and (not (skip :pillar)) (pos? depth) item (>= count depth))
+         rim-n (when (and item (not (skip :pillar))) (rim-pillar block-at feet dir))
+         height (when (pos? depth) (min depth (or rim-n depth)))
+         pillar-blocks? (and (not (skip :pillar)) height item (>= count height))
          rise (min (max-depth) (max depth (- (second goal) (second feet))))
          stair-dirs (remove #(skip [:stair (heading-names %)]) (distinct (cond->> cardinals dir (cons dir))))
          [stair rise] (if (or (skip :stair) (not (pos? rise)))
@@ -352,12 +355,10 @@
                        (door-spot p feet dir #(diggable? block-at may-dig? own? %))))
          back (delay (when-not (or (skip :approach) (skip :clear-path)) (door-back p feet)))
          door? (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))
-         rim (delay (when (and item (not (skip :pillar)))
-                      (when-let [n (rim-pillar block-at feet (distinct (cond->> cardinals dir (cons dir))))]
-                        (when (>= count n) n))))]
+         rim (when (and rim-n (>= count rim-n)) rim-n)]
      (cond
        (and pillar-blocks? (passable? (block-at (up feet 2))))
-       {:step :pillar :height depth :item item}
+       {:step :pillar :height height :item item}
 
        (and door? (<= (second goal) (second feet)))
        {:step :clear-path :heading (heading-names dir)}
@@ -367,9 +368,6 @@
 
        door?
        {:step :clear-path :heading (heading-names dir)}
-
-       @rim
-       {:step :pillar :height @rim :item item}
 
        @spot
        {:step :approach :pos @spot}
@@ -388,6 +386,9 @@
 
        @climb
        (let [[heading n] @climb] {:step :stair :heading heading :steps n})
+
+       rim
+       {:step :pillar :height rim :item item}
 
        pillar-blocks? {:step :none :why :no-headroom}
 
