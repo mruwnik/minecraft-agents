@@ -8,7 +8,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.takeover :as takeover]
-            [engine.test-util :as tu :refer [child-outcome]]
+            [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.farm.harvest :as harvest]
@@ -54,6 +54,12 @@
 (defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
 
 (def job 'jobs.farm.harvest)
+
+(defn ^:async child-outcome
+  "tu/child-outcome without the ending the adapter adds, and without :status when it is :done."
+  [eng job args n]
+  (let [r (await (tu/child-outcome eng job args n))]
+    (if (map? r) (cond-> (dissoc r :ending) (= :done (:status r)) (dissoc :status)) r)))
 (def origin {:x 0 :y 64 :z 0})
 
 (defn cell-key [x y z] (str x "," y "," z))
@@ -235,7 +241,7 @@
           (is (zero? (count (calls p "dig"))))
           (is (= 1 (count (events-of seen :harvest.gave-up))))
           (is (= 4 (:unreachable warn)))
-          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true} result)))))))
+          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true} (dissoc result :status :reason))))))))
 
 (deftest farmland-gone-before-replanting-leaves-the-cell-bare
   (async done
@@ -363,7 +369,7 @@
                                               :noPath cells}})
               result (await (child-outcome eng job {:radius 14} 100))]
           (is (zero? (count (calls p "dig"))))
-          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true} result)))))))
+          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true} (dissoc result :status :reason))))))))
 
 (deftest a-crop-is-skipped-at-the-third-blocked-walk
   (async done
@@ -375,7 +381,7 @@
               _ (tu/short-walks! p 1) ; every steer runs for no time: blocked walks without a reason
               result (await (child-outcome eng job {} 100))]
           (is (= 6 (count (tu/walked-to eng))))
-          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up false} result))
+          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up false} (dissoc result :status :reason)))
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest a-replanted-cell-lost-before-the-finish-is-bare

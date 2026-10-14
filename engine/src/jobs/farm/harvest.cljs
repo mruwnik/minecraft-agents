@@ -3,12 +3,12 @@
             [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.farm.common :as common]
             [jobs.farm.field :as fld]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.gate :as gate]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
-            [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.world :as known]))
@@ -18,25 +18,27 @@
   The centre is :center, or the body's position when the job first runs (kept in memory).
   One call is the whole run: it does the first step that applies, again and again, until it finishes:
   1. Replant: seed the bare farmland of cells it cut, from the seeds carried.
-  2. Cut the ripe crops, walking to the nearest when out of :reach. A crop it cannot reach is skipped.
+  2. Cut the ripe crops, walking (a go-to child) to the nearest when out of :reach. A crop it cannot reach is skipped.
      After :give-up such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
-  3. Collect the drops.
+  3. Collect the drops (a jobs.forestry.collect-drops child).
   4. Finish.
   With no crop seen at all (ripe or not) it looks around once from where it stands first; if still none it ends
-  :stopped :no-crop-seen (warn harvest.no-crop-seen).
-  Result: {:cut :replanted :bare :lost :gave-up}. Cells that could not be replanted, or stopped being a crop
-  afterwards, are named in a harvest.bare warn.
+  condition-failed :no-crop-seen (warn harvest.no-crop-seen).
   Each cell it cuts is written to memory with its seed before the dig, because bare farmland does not show
   which seed was there. A restart or reflex in between loses nothing.
   :plan (optionally :part) makes the plan's crop cells the field instead (:radius and :center are then unused).
   The plan is read again every step. A cell is cut only when ripe and holding the crop the plan wants there.
   Crops outside the plan are left standing. A planned cell standing bare is sown unless :replant-bare is false,
   food seeds only above the food reserve. A cell it cut is always replanted.
-  The job declines (one harvest.declined warn naming the plan and the reason) while the plan is missing,
-  unreadable or has no crop cells.
-  Zones: a crop or bare cell in another owner's zone or claim, or in another plan's footprint, is left alone.
-  The job warns harvest.declined once, with :reason :refused (or :no-zones when no zone list was read).
-  :ignore-zones? true skips the check.")
+  Zones: a crop or bare cell in another owner's zone or claim, or in another plan's footprint, is left alone (one
+  harvest.declined warn, :reason :refused); :ignore-zones? true skips the check.
+  Refused before it starts, as failed conditions: {:reason :no-zones} (no zone list read, unless :ignore-zones?),
+  {:reason :plan-trouble :why} (the plan is missing, unreadable or has no crop cells), :refused (every ripe crop is
+  refused) and :nothing-to-do (no ripe crop and nothing owed).
+  Ends with data {:cut :replanted :bare :lost :gave-up}: cells that could not be replanted, or stopped being a crop
+  afterwards, are named in :bare and a harvest.bare warn. Done when it cut or replanted some and the number meets :least
+  (cells, default 1; :all wants every ripe crop it found); with none cut and crops given up on, nothing-possible
+  :gave-up; with nothing left to cut, condition-failed :nothing-to-do. done? counts the cells cut and the ripe crops left.")
 
 (a/defargs args
   {:radius {:doc "how far around the centre to harvest, in blocks" :spec (a/num-in 0 nil) :default 12}
@@ -78,7 +80,7 @@
 (defn center-of
   "The centre: the :center arg, else the remembered one, else the body's position."
   [c]
-  (or (:center (:args c)) (:center (ctx/mem c)) (u/self-pos c)))
+  (or (:center (:args c)) (when (:view c) (:center (ctx/mem c))) (u/self-pos c)))
 
 (defn below [pos] (update pos :y dec))
 
@@ -158,14 +160,17 @@
   [c]
   (if (:plan (:args c)) :dig :harvest))
 
-(defn ripe-of
-  "The ripe crops to cut: the planned ones with :plan, else those within :radius of the centre; none that zones,
-  claims or other plans' footprints refuse."
+(defn ripe-raw
+  "The ripe crops to cut before the zone rules: the planned ones with :plan, else those within :radius of the centre."
   [c skipped]
-  (permitted c (cut-action c)
-             (if-let [cells (:plan-cells c)]
-               (fld/planned-ripe (:primitives c) (:args c) cells skipped)
-               (fld/ripe-crops (:primitives c) (:args c) (center-of c) skipped))))
+  (if-let [cells (:plan-cells c)]
+    (fld/planned-ripe (:primitives c) (:args c) cells skipped)
+    (fld/ripe-crops (:primitives c) (:args c) (center-of c) skipped)))
+
+(defn ripe-of
+  "The ripe crops to cut: none that zones, claims or other plans' footprints refuse."
+  [c skipped]
+  (permitted c (cut-action c) (ripe-raw c skipped)))
 
 (defn planned
   "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} (warned once per reason) when the plan
@@ -227,22 +232,41 @@
   [c]
   (and (cutting? c) (not (:plan-cells c)) (not (look/surveyed? c :cell)) (not (crop-seen? c))))
 
-(defn check
-  "A debt is owed (with :plan: a planned bare cell whose seed is carried), a collect sweep is owed, or there
-  is a ripe crop and cutting has not been given up. A job that has begun (its :center is in memory) always
-  passes, so that the round that finishes it runs; with :plan only while the plan can be worked."
+(def target [:center :radius :plan :part])
+(def defaults {:least 1})
+
+(defn problem
+  "Why the call cannot run now, a cause map, or nil: no zone list read (unless :ignore-zones?), a plan that cannot be
+  worked, and a field with nothing owed: no debt, no sweep, no ripe crop it may cut (:refused when zones keep it from
+  every one) and no need to look around first."
   [c]
-  (let [field (planned c)
-        c (with-field c field)
-        m (ctx/mem c)]
-    (cond
-      (:trouble field) (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
-      (or (:center m)
-          (if field (or (seq (sowable c)) (seq (:replant m))) (seq (:replant m)))
-          (:collect m)
-          (and (cutting? c) (seq (ripe-of c (:skipped m))))
-          (and (not field) (blind? c))) true
-      :else (gate/wait-unless-set c {:reason :nothing-to-do}))))
+  (or (common/no-zones c :harvest.declined "harvest")
+      (let [field (planned c)
+            c (with-field c field)
+            m (ctx/mem c)]
+        (cond
+          (:trouble field) {:reason :plan-trouble :why (:trouble field)}
+          (or (:center m)
+              (if field (or (seq (sowable c)) (seq (:replant m))) (seq (:replant m)))
+              (:collect m)
+              (and (cutting? c) (seq (ripe-of c (:skipped m))))
+              (and (not field) (blind? c))) nil
+          (and (cutting? c) (seq (ripe-raw c (:skipped m)))) {:reason :refused}
+          :else {:reason :nothing-to-do}))))
+
+(def conditions [[:fn problem]])
+
+(defn done?
+  "Counts only (the round ends the call with its data): the cells cut this call and the ripe crops left."
+  [c]
+  (let [c (with-field c (planned c))]
+    {:done? false :units :cells :done (:cut (ctx/mem c) 0) :left (count (ripe-of c (:skipped (ctx/mem c))))}))
+
+(defn quote-of [c]
+  (let [c (with-field c (planned c))
+        n (count (ripe-raw c nil))]
+    {:uses {:time [(* 0.5 n) (* 2 n) (* 10 n)]}
+     :done [0 n n]}))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -283,10 +307,10 @@
             reach (:reach (:args c))
             near (filterv #(<= (u/eye-dist here (:pos %)) (debt-reach % reach)) plantable)
             nearest-debt (first (sort-by #(u/dist here (:pos %)) plantable))
-            walked (when (empty? near) (await (fld/walk! c (:pos nearest-debt) (walk-range nearest-debt))))
+            walked (when (empty? near) (await (common/walk-to! c (:pos nearest-debt) (walk-range nearest-debt))))
             targets (if (seq near) near [nearest-debt])]
         (case walked
-          :partial :continue
+          :continue :continue
           :blocked (do (ctx/update-mem! c walk-fail-debt (:pos (first targets))) :again)
           (loop [todo (take max-per-round targets)]
             (if (empty? todo)
@@ -339,13 +363,13 @@
     (when (seq ripe)
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here %) (:reach (:args c))) ripe)
-            walked (when (empty? near) (await (fld/walk! c (first ripe) 3)))
+            walked (when (empty? near) (await (common/walk-to! c (first ripe) 3)))
             targets (if (seq near) near [(first ripe)])
             targets (still-ripe p targets)]
-        (when (and (empty? targets) (not (#{:partial :blocked} walked)))
+        (when (and (empty? targets) (not (#{:continue :blocked} walked)))
           (ctx/update-mem! c skip-crop (first ripe)))
         (case walked
-          :partial :continue
+          :continue :continue
           :blocked (do (ctx/update-mem! c walk-fail-crop (first ripe))
                        (warn-gave-up! c)
                        :again)
@@ -373,18 +397,18 @@
                (> (u/dist (u/self-pos c) center) radius))
       (if (>= (:home-fails m 0) (max-home-fails))
         :finish
-        (case (await (fld/walk! c center (quot radius 2)))
+        (case (await (common/walk-to! c center (quot radius 2)))
           :there :again
-          :partial :continue
+          :continue :continue
           (do (ctx/update-mem! c inc-in :home-fails) :again))))))
 
 (defn ^:async collect!
   "Step 3: one collect-drops round while a sweep is owed."
   [c]
   (when (:collect (ctx/mem c))
-    (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
-                                   {:radius (+ (:radius (:args c)) 4) :filter collect-items}))]
-      (when (#{:done :declined} r) (ctx/update-mem! c dissoc :collect))
+    (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops
+                             {:radius (+ (:radius (:args c)) 4) :filter collect-items}))]
+      (when-not (= :continue r) (ctx/update-mem! c dissoc :collect))
       (if (= :continue r) :continue :again))))
 
 (defn lost-cells
@@ -393,13 +417,16 @@
   (filterv #(let [n (u/seen-name p %)] (and n (not (ripe-age n)))) planted))
 
 (defn finish!
-  "Step 4: the debts still owed and the planted cells that are no longer crops are bare; warn, report and be done."
+  "Step 4: the debts still owed and the planted cells that are no longer crops are bare; warn and end. Done when it cut
+  or replanted some and they meet :least of the crops it found, else the cause is why none were."
   [c]
   (let [m (ctx/mem c)
         lost (lost-cells (:primitives c) (:planted m))
         bare (vec (distinct (concat (:bare m) (map :pos (:replant m)) lost)))
         no-crop? (and (not (:plan-cells c)) (zero? (:cut m 0)) (empty? (:replant m)) (not (crop-seen? c)))
-        result {:cut (:cut m 0) :replanted (:replanted m 0) :bare bare :lost lost :gave-up (gave-up? c)}]
+        result {:cut (:cut m 0) :replanted (:replanted m 0) :bare bare :lost lost :gave-up (gave-up? c)}
+        worked (max (:cut result) (:replanted result))
+        left (count (:skipped m))]
     (when no-crop?
       (ctx/emit! c :harvest.no-crop-seen :warn
                  {:text (str "harvest saw no crop within " (:radius (:args c)) " of " (pr-str (center-of c)) " after looking around")}))
@@ -412,11 +439,11 @@
       (ctx/emit! c :harvest.done :info
                {:cut (:cut result) :replanted (:replanted result) :bare-count (count bare) :gave-up (:gave-up result)
                 :text (str "harvest done: cut " (:cut result) ", replanted " (:replanted result) ", bare " (count bare))}))
-    (if no-crop?
-      (result/stop! c :no-crop-seen (str "harvest saw no crop within " (:radius (:args c)) " of " (pr-str (center-of c)))
-                    :cut 0 :replanted 0 :bare bare :lost lost :gave-up (:gave-up result))
-      (do (ctx/result! c result)
-          :done))))
+    (cond
+      no-crop? (ctx/end c :condition-failed :no-crop-seen result)
+      (and (pos? worked) (common/enough? c worked (+ worked left))) (ctx/end c :done nil result)
+      (pos? left) (ctx/end c :nothing-possible :gave-up result)
+      :else (ctx/end c :condition-failed :nothing-to-do result))))
 
 (defn sync-plan-debts!
   "With :plan and replanting, the debts are the planned cells standing bare (written only when they change)."
@@ -447,7 +474,7 @@
 (defn ^:async step [c]
   (let [field (planned c)]
     (if (:trouble field)
-      :declined
+      (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble field)} {:cut (:cut (ctx/mem c) 0) :replanted (:replanted (ctx/mem c) 0)})
       (await (work (with-field c field))))))
 
 (defn ^:async round

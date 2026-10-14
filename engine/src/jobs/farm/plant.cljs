@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
+            [jobs.farm.common :as common]
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
@@ -10,6 +11,7 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.farm.field :as fld]
@@ -18,35 +20,36 @@
 
 (def doc
   "Sow the bare farmland of a :box. A cell is bare when (x, min.y, z) is farmland and the block above is air.
-  A missing seed is fetched (jobs.lib.fetch, child :fetch) before the run starts, unless :fetch is false; the check then waits :need.
   The seed is :seed, else the carried seed with the largest stack. Carrots and potatoes are sown only above the
-  food reserve (jobs.lib.cost/food-reserve); harvest replants its own cut cells whatever the
-  reserve. That pick is kept while it is carried, so one run sows one crop.
-  One call plants the bare cells within :reach, walking to the nearest when none is, until the field is done. A cell whose place is refused or
-  unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
-  Result: {:planted n :skipped [cells] :reason r}, plus :untilled [cells] when ground cells of the box are dirt, grass or path
-  (farmland that dried back: till them first; the wait carries :untilled n). :reason is :done, :none (no bare cell), :gave-up (cells
-  were skipped), :no-seed, or :food-reserve (a food-crop seed is carried but the reserve keeps it; the result adds
-  :seed :held :kept :reserve-points, and nothing is fetched).
-  :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused).
-  Every planned cell standing bare is sown with the seed of the crop the plan wants there, when it is carried.
-  Zones and the footprints of other active plans are asked before choosing a cell and again before the place.
-  The result adds :refused [{:pos :reason}] and :short [seeds not carried]. :reason is :no-seed when the
-  only cells left lack a seed. Cells another plan also claims are refused; one plant.declined warn (:reason :refused,
-  :plans) names it, also when no cell is left to sow. The job declines (one plant.declined warn naming the plan and the reason) while
-  the plan is missing, unreadable, has no crop cells, or no zone list has been read.
-  Box mode zones: a cell in another owner's zone or claim, or in a plan's footprint, is left bare. If every
-  cell is refused the job ends with :none. The job warns plant.declined once, with :reason :refused (or
-  :no-zones when no zone list was read). The check waits :need (seed) when none is carried, :nothing-to-do when no cell
-  is bare, :refused / :no-zones when zones refuse. :ignore-zones? true skips the check, so cells shared with another plan are sown too.")
+  food reserve (jobs.lib.cost/food-reserve); harvest replants its own cut cells whatever the reserve. That pick is
+  kept while it is carried, so one run sows one crop.
+  A missing seed is fetched before the run starts (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as
+  the :because), unless :fetch is false.
+  One call plants the bare cells within :reach, walking to the nearest (a go-to child) when none is, until the field is
+  done. A cell whose place is refused or unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
+  :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused). Every planned
+  cell standing bare is sown with the seed of the crop the plan wants there, when it is carried. Zones and the footprints
+  of other active plans are asked before choosing a cell and again before the place; a cell another owner's zone or a
+  plan refuses is left bare (one plant.declined warn, :reason :refused, names it), :ignore-zones? true skips the check.
+  Refused before it starts, as failed conditions: {:reason :bad-args :why}, {:reason :no-zones} (no zone list read, unless
+  :ignore-zones?), {:reason :plan-trouble :why} (the plan is missing, unreadable or has no crop cells), :refused
+  (every bare cell is refused), :food-reserve (a food-crop seed is carried but the reserve keeps it, with :seed :held :kept
+  :reserve-points; nothing is fetched), {:reason :need ..} (no seed, :fetch false) and :nothing-to-do (no bare cell; a
+  field of dried-back dirt names :untilled n).
+  Ends with data {:planted n :skipped [cells] :untilled [cells]} (plan mode: :refused [{:pos :reason}] and :short [seeds
+  not carried] instead of :untilled; :untilled lists the dirt, grass or path cells of the box: till them first). Done when
+  every bare cell was sown, or some were and the number meets :least (cells, default 1); else condition-failed :need,
+  :refused or :food-reserve for cells left without a seed or permission, nothing-possible :gave-up for skipped cells;
+  with none planted and nothing left, condition-failed :nothing-to-do. done? counts the cells sown and the bare cells
+  left.")
 
 (a/defargs args
-  {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required (without it the check declines)" :spec a/box? :default nil}
+  {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required without :plan" :spec a/box? :default nil}
    :seed {:doc "item name to plant; the carried seed with the largest count when nil" :spec a/item? :default nil}
    :reach {:doc "cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :spec a/name? :default nil}
    :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
-   :fetch {:doc "get a missing seed (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need" :spec fetch/option? :default true}
+   :fetch {:doc "get a missing seed (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :need" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -110,41 +113,27 @@
 (declare planned sowing)
 
 (def job-sym 'jobs.farm.plant)
+(def target [:box :plan :part])
+(def defaults {:least 1})
 
 (defn count-fail
   "Count a fail of kind k (:fails or :walk-fails) on the cell at pos; the cell is skipped at the max-fails-th."
   [m k pos]
   (crops/count-entry m k pos (max-fails) #(update %1 :skipped (fnil conj []) %2)))
 
-(defn owes?
-  "A box is given and the run has started, or a bare cell that is not skipped exists and a seed is carried.
-  A started run always passes, so that the round that finishes it runs."
-  [p args m]
-  (boolean
-   (and (:box args)
-        (or (:started m)
-            (and (seq (bare-cells p (:box args) (:skipped m)))
-                 (pick-seed (:seed args) (u/inventory p)))))))
-
 (defn need-of
-  "The :need wait for n seeds of a set of item names (non-empty)."
+  "The :need cause for n seeds of a set of item names (non-empty)."
   [seeds n]
   (if (= 1 (count seeds))
     {:reason :need :item (first seeds) :count n}
     {:reason :need :any-of (vec (sort seeds)) :count n}))
 
-(defn plan-check
-  "A plan that can be worked and either a started run or a sowable cell. Otherwise waits :need (a seed the plan wants
-  is not carried, fetched when :fetch allows) or the gate's wait / :nothing-to-do."
-  [c field]
-  (if (:trouble field)
-    (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
-    (let [{:keys [ready short]} (when-not (:started (ctx/mem c)) (sowing c (:cells field)))]
-      (cond
-        (:started (ctx/mem c)) true
-        (seq ready) true
-        (seq short) (fetch/check c job-sym (need-of short (count (fld/planned-bare (:primitives c) (:cells field)))))
-        :else (gate/wait-unless-set c {:reason :nothing-to-do})))))
+(defn seed-need
+  "The :need cause for n of the named seed, or of any seed."
+  [seed n]
+  (if seed
+    {:reason :need :item seed :count n}
+    {:reason :need :any-of (vec (sort (distinct (vals crops/seed-of)))) :count n}))
 
 (defn sowable-cells
   "The ground cells of cells whose sowing (the cell above) the job may do; one warn when some are refused."
@@ -152,53 +141,85 @@
   (let [ok (set (gate/allowed c :plant.declined "plant" :sow (map #(update % :y inc) cells) {:own-plans-ok? true}))]
     (filterv #(ok (update % :y inc)) cells)))
 
-(defn seed-need
-  "The :need wait for n of the named seed, or of any seed."
-  [seed n]
-  (if seed
-    {:reason :need :item seed :count n}
-    {:reason :need :any-of (vec (distinct (vals crops/seed-of))) :count n}))
-
-(defn problem
-  "The :need wait for a missing seed before the run has started (box: bare cells and none carried; plan: no cell
-  ready and a seed short), else nil."
+(defn unsown
+  "The bare cells of the field now (a box's, or the plan's planned ones), skipped cells included."
   [c]
-  (let [m (ctx/mem c)
+  (let [{:keys [box plan]} (:args c)
         p (:primitives c)]
-    (when-not (:started m)
-      (if (:plan (:args c))
-        (let [field (planned c)
-              {:keys [ready short]} (when (:cells field) (sowing c (:cells field)))]
-          (when (and (empty? ready) (seq short))
-            (need-of short (count (fld/planned-bare p (:cells field))))))
-        (let [{:keys [box seed]} (:args c)
-              bare (when box (bare-cells p box (:skipped m)))]
-          (when (and (seq bare) (not (pick-seed seed (u/inventory p))) (not (held-back seed (u/inventory p))))
+    (cond
+      plan (when-let [cells (:cells (planned c))] (vec (fld/planned-bare p cells)))
+      box (bare-cells p box []))))
+
+(defn seed-wanted
+  "The cause {:reason :need ..} for the seeds a run that has not started lacks (bare cells, no sowable seed, none held
+  back by the food reserve), else nil. A plan wants the seeds of its cells."
+  [c]
+  (when-not (:started (ctx/mem c))
+    (let [p (:primitives c)
+          inventory (u/inventory p)
+          {:keys [seed plan box]} (:args c)]
+      (if plan
+        (when-let [cells (:cells (planned c))]
+          (let [{:keys [ready short]} (sowing c cells)]
+            (when (and (empty? ready) (seq short))
+              (need-of short (count (fld/planned-bare p cells))))))
+        (let [bare (when box (bare-cells p box (:skipped (ctx/mem c))))]
+          (when (and (seq bare) (not (pick-seed seed inventory)) (not (held-back seed inventory)))
             (seed-need seed (count bare))))))))
 
-(defn box-check
-  "A started run, or a bare cell that zones and claims let the job sow with a carried seed. Otherwise waits with
-  :nothing-to-do (no bare cell), :need (no seed carried) or the gate's :refused / :no-zones."
+(defn fetch-opts
+  "The limits {:how :depth :explore} for fetching seeds, nil when :fetch does not allow items."
   [c]
+  (when-let [o (fetch/opts c job-sym)]
+    (when (contains? (:what o) :item) (select-keys o [:how :depth :explore]))))
+
+(defn plan-problem [c]
+  (let [{:keys [trouble cells]} (planned c)]
+    (if trouble
+      {:reason :plan-trouble :why trouble}
+      (let [{:keys [ready short]} (sowing c cells)]
+        (cond
+          (seq ready) nil
+          (seq short) (when (nil? (fetch-opts c)) (seed-wanted c))
+          (seq (fld/planned-bare (:primitives c) cells)) {:reason :refused}
+          :else {:reason :nothing-to-do})))))
+
+(defn box-problem [c]
   (let [{:keys [box seed]} (:args c)
         p (:primitives c)
-        m (ctx/mem c)
-        bare (when box (bare-cells p box (:skipped m)))]
+        inventory (u/inventory p)
+        bare (bare-cells p box [])
+        untilled (untilled-cells p box)]
     (cond
-      (:started m) true
-      (and (empty? bare) (not (look/surveyed? c :cell))) true ; the round looks around before it gives up
-      (empty? bare) (ctx/wait c (cond-> {:reason :nothing-to-do}
-                                  (seq (untilled-cells p box)) (assoc :untilled (count (untilled-cells p box)))))
-      (held-back seed (u/inventory p)) true ; the round says :food-reserve
-      (not (pick-seed seed (u/inventory p)))
-      (fetch/check c job-sym (seed-need seed (count bare)))
-      :else (or (boolean (seq (sowable-cells c bare)))
-                (gate/wait-unless-set c {:reason :nothing-to-do})))))
+      (and (empty? bare) (not (look/surveyed? c :cell))) nil ; the round looks around before it gives up
+      (empty? bare) (cond-> {:reason :nothing-to-do} (seq untilled) (assoc :untilled (count untilled)))
+      (held-back seed inventory) (assoc (held-back seed inventory) :reason :food-reserve)
+      (not (pick-seed seed inventory)) (when (nil? (fetch-opts c)) (seed-need seed (count bare)))
+      (empty? (sowable-cells c bare)) {:reason :refused})))
 
-(defn check [c]
-  (if (:plan (:args c))
-    (plan-check c (planned c))
-    (box-check c)))
+(defn problem
+  "Why the call cannot run now (before its first round), a cause map, or nil: bad args, no zone list read (unless :ignore-zones?), a plan that
+  cannot be worked, and a field with no cell to sow or no seed to sow it with."
+  [c]
+  (let [{:keys [box plan]} (:args c)]
+    (cond
+      (:started (ctx/mem c)) nil
+      (and (nil? box) (nil? plan)) {:reason :bad-args :why "plant needs :box or :plan"}
+      :else (or (common/no-zones c :plant.declined "plant")
+                (if plan (plan-problem c) (box-problem c))))))
+
+(def conditions [[:fn problem]])
+
+(defn done?
+  "Counts only (the round ends the call with its data): the cells sown this call and the bare cells left."
+  [c]
+  {:done? false :units :cells :done (:planted (ctx/mem c) 0) :left (count (unsown c))})
+
+(defn quote-of [c]
+  (let [n (count (unsown c))
+        seed (pick-seed (:seed (:args c)) (u/inventory (:primitives c)))]
+    {:uses (cond-> {:time [(* 0.5 n) (* 2 n) (* 10 n)]} (and seed (pos? n)) (assoc :items {seed [0 n n]}))
+     :done [0 n n]}))
 
 ;; ------------------------------------------------------------------ plan mode
 
@@ -210,8 +231,7 @@
     (let [part (:part (:args c))
           answer (known/plan c id)
           cells (fld/crop-cells answer part)
-          trouble (or (fld/plan-trouble answer cells)
-                      (when (nil? (known/zones c)) "no zone list has been read"))]
+          trouble (fld/plan-trouble answer cells)]
       (if-not trouble
         {:cells cells}
         (do (ctx/warn-once! c [id trouble] :plant.declined
@@ -255,35 +275,54 @@
         (:placed :already :occupied) (ctx/update-mem! c crops/inc-in :planted)
         (ctx/update-mem! c count-fail :fails pos)))))
 
-(defn finish-plan!
-  [c {:keys [short refused]}]
+(defn result-of
+  "The data of the call's ending: what is sown and skipped so far (extra: the plan mode's :refused and :short), and in
+  box mode the dirt cells that need tilling."
+  [c extra]
   (let [m (ctx/mem c)
-        skipped (vec (:skipped m))
-        reason (cond (seq skipped) :gave-up (seq short) :no-seed (pos? (:planted m 0)) :done :else :none)
-        result {:planted (:planted m 0) :skipped skipped :refused refused :short (vec (sort short)) :reason reason}]
+        untilled (when (:box (:args c)) (untilled-cells (:primitives c) (:box (:args c))))]
+    (cond-> (merge {:planted (:planted m 0) :skipped (vec (:skipped m))} extra)
+      (seq untilled) (assoc :untilled untilled))))
+
+(defn conclude!
+  "The ending of a run with no cell it can sow. cause: why cells are left bare (:gave-up for skipped ones, else a
+  failed condition's cause), nil when none is. Done when every cell is sown, or some are and they meet :least."
+  [c cause extra]
+  (let [planted (:planted (ctx/mem c) 0)
+        left (count (unsown c))
+        data (result-of c extra)
+        skipped (:skipped data)
+        reason (cond (nil? cause) (if (pos? planted) :done :none) (map? cause) (:reason cause) :else cause)]
     (when (seq skipped)
       (ctx/emit! c :plant.gave-up :warn
                  {:cells skipped
                   :text (str "plant gave up on " (count skipped) " cells: " (str/join ", " (map pr-str skipped)))}))
     (ctx/emit! c :plant.done :info
-               {:planted (:planted result) :skipped-count (count skipped) :reason reason
-                :text (str "plant done: planted " (:planted result) ", skipped " (count skipped) ", reason " (name reason))})
-    (ctx/result! c result)
-    :done))
+               {:planted planted :skipped-count (count skipped) :reason reason :untilled (count (:untilled data))
+                :text (str "plant done: planted " planted ", skipped " (count skipped) ", reason " (name reason)
+                           (when (seq (:untilled data)) (str ", " (count (:untilled data)) " cells are dirt: they need tilling")))})
+    (cond
+      (and (nil? cause) (pos? planted)) (ctx/end c :done nil data)
+      (and (pos? planted) (common/enough? c planted (+ planted left))) (ctx/end c :done nil data)
+      (nil? cause) (ctx/end c :condition-failed :nothing-to-do data)
+      (= :gave-up cause) (ctx/end c :nothing-possible :gave-up data)
+      :else (ctx/end c :condition-failed cause data))))
 
 (defn ^:async plan-round [c field]
   (when-not (:started (ctx/mem c))
     (ctx/update-mem! c assoc :started true))
-  (let [{:keys [ready] :as found} (update (sowing c (:cells field)) :ready #(fld/above-reserve (u/inventory (:primitives c)) %))]
+  (let [{:keys [ready short refused]} (update (sowing c (:cells field)) :ready #(fld/above-reserve (u/inventory (:primitives c)) %))]
     (if (empty? ready)
-      (finish-plan! c found)
+      (conclude! c (cond (seq (:skipped (ctx/mem c))) :gave-up
+                         (seq short) (need-of short (count (fld/planned-bare (:primitives c) (:cells field))))
+                         (seq (fld/planned-bare (:primitives c) (:cells field))) :refused)
+                 {:refused refused :short (vec (sort short))})
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here (:pos %)) (:reach (:args c))) ready)
             target (first (sort-by #(u/dist here (:pos %)) ready))
-            walked (when (empty? near) (await (fld/walk! c (:pos target) 3)))]
+            walked (when (empty? near) (await (common/walk-to! c (:pos target) 3)))]
         (case walked
-          :partial :continue
-          :no-path (do (ctx/update-mem! c count-fail :walk-fails (:pos target)) :again)
+          :continue :continue
           :blocked (do (ctx/update-mem! c count-fail :walk-fails (:pos target)) :again)
           (or (loop [todo (if (seq near) near [target])]
                 (when (seq todo)
@@ -292,28 +331,7 @@
                     (recur (rest todo)))))
               :again))))))
 
-;; ------------------------------------------------------------------ steps
-
-(defn finish!
-  ([c reason] (finish! c reason nil))
-  ([c reason extra]
-  (let [m (ctx/mem c)
-        skipped (vec (:skipped m))
-        untilled (when (:box (:args c)) (untilled-cells (:primitives c) (:box (:args c))))
-        result (cond-> (merge {:planted (:planted m 0) :skipped skipped :reason reason} extra)
-                 (seq untilled) (assoc :untilled untilled))]
-    (when (seq skipped)
-      (ctx/emit! c :plant.gave-up :warn
-                 {:cells skipped
-                  :text (str "plant gave up on " (count skipped) " cells: " (str/join ", " (map pr-str skipped)))}))
-    (ctx/emit! c :plant.done :info
-               {:planted (:planted result) :skipped-count (count skipped) :reason reason :untilled (count untilled)
-                :text (str "plant done: planted " (:planted result) ", skipped " (count skipped) ", reason " (name reason)
-                           (when (seq untilled) (str ", " (count untilled) " cells are dirt: they need tilling"))
-                           (when extra (str " (" (:seed extra) ": holding " (:held extra) ", reserve keeps " (:kept extra)
-                                            " of " (:reserve-points extra) " food points)")))})
-    (ctx/result! c result)
-    :done)))
+;; ------------------------------------------------------------------ box mode
 
 (defn ^:async plant-one!
   "Place seed on cell and settle by the status: :no-seed when the seed is gone, else nil."
@@ -339,44 +357,59 @@
     (ctx/update-mem! c assoc :started true))
   (let [p (:primitives c)
         m (ctx/mem c)
+        bare (bare-cells p (:box (:args c)) [])
         cells (sowable-cells c (bare-cells p (:box (:args c)) (:skipped m)))
         inventory (u/inventory p)
         kept (:sowing m)                ; the seed picked first is kept while carried: one run, one crop
         seed (if (and (nil? (:seed (:args c))) kept (pick-seed kept inventory))
                kept
-               (pick-seed (:seed (:args c)) inventory))]
+               (pick-seed (:seed (:args c)) inventory))
+        no-seed-cause #(if-let [held (held-back (:seed (:args c)) inventory)]
+                         (assoc held :reason :food-reserve)
+                         (seed-need (:seed (:args c)) (count cells)))]
     (when (and seed (not= seed kept))
       (ctx/update-mem! c assoc :sowing seed))
     (cond
-      (empty? cells) (finish! c (cond (seq (:skipped m)) :gave-up (pos? (:planted m 0)) :done :else :none))
-      (nil? seed) (if-let [held (held-back (:seed (:args c)) inventory)]
-                    (finish! c :food-reserve held)
-                    (finish! c :no-seed))
+      (empty? cells) (conclude! c (cond (seq (:skipped m)) :gave-up (seq bare) :refused) nil)
+      (nil? seed) (conclude! c (no-seed-cause) nil)
       :else
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here %) (:reach (:args c))) cells)
             target (fld/nearest p cells)
-            walked (when (empty? near) (await (fld/walk! c target 3)))]
+            walked (when (empty? near) (await (common/walk-to! c target 3)))]
         (case walked
-          :partial :continue
-          :no-path (do (ctx/update-mem! c count-fail :walk-fails target) :again)
+          :continue :continue
           :blocked (do (ctx/update-mem! c count-fail :walk-fails target) :again)
           (case (await (plant-all! c (vec (take (max 1 (get (sowable inventory) seed 0)) (if (seq near) near [target]))) seed))
-            :no-seed (finish! c :no-seed)
+            :no-seed (conclude! c (no-seed-cause) nil)
             :continue :continue
             :again))))))
+
+(defn ^:async fetch-seed!
+  "Get the seeds a run that has not started lacks: nil when none is wanted, :continue while the fetch waits on the world,
+  :again once it got them, else the call's ending (the fetch's kind and cause)."
+  [c]
+  (when-let [wanted (seed-wanted c)]
+    (let [o (fetch-opts c)
+          e (await (if (:item wanted)
+                     (need/item! c (:item wanted) (:count wanted) o)
+                     (need/blocks! c (:any-of wanted) (:count wanted) o)))]
+      (cond
+        (= :continue e) :continue
+        (= :done (:kind e)) :again
+        :else (ctx/end c (:kind e) (:cause e) (result-of c nil))))))
 
 (defn ^:async step [c]
   (let [field (planned c)
         m (ctx/mem c)
         unseen? (and (nil? field) (not (:started m)) (not (look/surveyed? c :cell))
                      (empty? (bare-cells (:primitives c) (:box (:args c)) (:skipped m))))
-        fetched (when-not unseen? (when (problem c) (await (fetch/fetch! c job-sym problem))))]
+        fetched (when-not unseen? (await (fetch-seed! c)))]
     (cond
       unseen? (await (look/survey! c :cell))
       fetched fetched
       (nil? field) (await (box-round c))
-      (:trouble field) :declined
+      (:trouble field) (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble field)} (result-of c nil))
       :else (await (plan-round c field)))))
 
 (defn ^:async round

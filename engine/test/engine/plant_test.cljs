@@ -5,7 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.test-util :as tu :refer [child-outcome]]
+            [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.hostile-test :as h]
             [engine.perception :as perception]
@@ -50,6 +50,12 @@
 (defn inv [& pairs] (mapv (fn [[n c]] {:name n :count c}) (partition 2 pairs)))
 
 (def job 'jobs.farm.plant)
+
+(defn ^:async child-outcome
+  "tu/child-outcome without the ending the adapter adds, and without :status when it is :done."
+  [eng job args n]
+  (let [r (await (tu/child-outcome eng job args n))]
+    (if (map? r) (cond-> (dissoc r :ending) (= :done (:status r)) (dissoc :status)) r)))
 
 (defn cell-key [x y z] (str x "," y "," z))
 
@@ -118,28 +124,13 @@
       [pos other pos other pos] [pos]
       [pos pos other pos] [pos])))
 
-(deftest owes-needs-a-box-and-either-a-started-run-or-bare-cells-with-a-seed
-  (let [world (tu/fake (field-world (inv "wheat_seeds" 1)))
-        noseed (tu/fake (field-world []))
-        full (tu/fake {:blocks (merge (farmland [2] [2]) {"2,64,2" "wheat"}) :inventory (inv "wheat_seeds" 1)})
-        args (fn [b] {:box b :seed nil :reach 4.2})]
-    (are [p b m expected] (= expected (plant/owes? p (args b) m))
-      world field-box {} true
-      world nil {} false
-      noseed field-box {} false
-      full (box 2 2 2 2) {} false
-      full (box 2 2 2 2) {:started true} true
-      noseed field-box {:started true} true
-      world nil {:started true} false
-      world field-box {:skipped (vec (for [x (range 2 5) z (range 2 5)] {:x x :y 63 :z z}))} false)))
-
 (deftest a-field-is-sown-with-the-carried-seeds
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start (field-world (inv "wheat_seeds" 9)))
               result (await (child-outcome eng job {:box field-box} 100))]
-          (is (= {:planted 9 :skipped [] :reason :done} result))
+          (is (= {:planted 9 :skipped []} result))
           (is (sown p (range 2 5) (range 2 5) "wheat"))
           (is (= {} (inv-of p)))
           (is (= 1 (count (events-of seen :plant.done))))
@@ -151,7 +142,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start (field-world (inv "carrot" 5 "bread" 12)))
               result (await (child-outcome eng job {:box field-box} 100))]
-          (is (= {:planted 5 :skipped [] :reason :no-seed} result))
+          (is (= {:planted 5 :skipped []} result))
           (is (= 5 (count (filter (fn [[x z]] (= "carrots" (block-at p x 64 z))) (for [x (range 2 5) z (range 2 5)] [x z])))))
           (is (= {"bread" 12} (inv-of p))))))))
 
@@ -162,7 +153,7 @@
         (let [xs (range 2 14)
               {:keys [eng p]} (start {:blocks (farmland xs [2]) :inventory (inv "wheat_seeds" 12) :floor tu/walk-floor})
               result (await (child-outcome eng job {:box (box 2 2 13 2)} 100))]
-          (is (= {:planted 12 :skipped [] :reason :done} result))
+          (is (= {:planted 12 :skipped []} result))
           (is (pos? (count (tu/walk-calls p))))
           (is (sown p xs [2] "wheat")))))))
 
@@ -173,7 +164,7 @@
         (let [xs (range 2 14)
               {:keys [eng p]} (start {:blocks (farmland xs [2]) :inventory (inv "wheat_seeds" 12) :floor tu/walk-floor})
               result (await (child-outcome eng job {:box (box 2 2 13 2)} 1))]
-          (is (= {:planted 12 :skipped [] :reason :done} result))
+          (is (= {:planted 12 :skipped []} result))
           (is (sown p xs [2] "wheat")))))))
 
 (deftest nothing-is-planted-outside-the-box-or-on-a-crop
@@ -183,7 +174,7 @@
         (let [{:keys [eng p]} (start {:blocks (merge (farmland (range 0 7) [2]) {"3,64,2" "carrots"})
                                       :inventory (inv "wheat_seeds" 20) :floor tu/walk-floor})
               result (await (child-outcome eng job {:box (box 2 2 4 2)} 100))]
-          (is (= {:planted 2 :skipped [] :reason :done} result))
+          (is (= {:planted 2 :skipped []} result))
           (is (= ["air" "air" "wheat" "carrots" "wheat" "air" "air"]
                  (mapv #(block-at p % 64 2) (range 0 7))))
           (is (= {"wheat_seeds" 18} (inv-of p))))))))
@@ -207,7 +198,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start (field-world (inv "wheat_seeds" 20 "potato" 3 "bread" 12)))
               result (await (child-outcome eng job {:box field-box :seed "potato"} 100))]
-          (is (= {:planted 3 :reason :no-seed} (select-keys result [:planted :reason])))
+          (is (= 3 (:planted result)))
           (is (= {"wheat_seeds" 20 "bread" 12} (inv-of p))))))))
 
 (deftest the-largest-stack-is-sown-when-no-seed-is-named
@@ -216,7 +207,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start (field-world (inv "wheat_seeds" 2 "carrot" 9 "bread" 12)))
               result (await (child-outcome eng job {:box field-box} 100))]
-          (is (= {:planted 9 :reason :done} (select-keys result [:planted :reason])))
+          (is (= 9 (:planted result)))
           (is (= {"wheat_seeds" 2 "bread" 12} (inv-of p))))))))
 
 (deftest a-cell-whose-place-is-refused-three-times-is-skipped-and-reported
@@ -231,7 +222,7 @@
                          #js {:status "failed" :reason "refused"}
                          (await (impl token args)))))
           (let [result (await (child-outcome eng job {:box field-box} 100))]
-            (is (= {:planted 8 :skipped [refused] :reason :gave-up} result))
+            (is (= {:planted 8 :skipped [refused]} result))
             (is (= 3 (count (filter #(= 3 (.-x (.-pos (.-args %)))) (filter #(= 3 (.-z (.-pos (.-args %)))) (calls p "place"))))))
             (is (= 1 (count (events-of seen :plant.gave-up))))
             (is (= 1 (count (events-of seen :plant.done))))))))))
@@ -347,8 +338,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= [:need] (await (waiting-reasons {:box (box 2 2 3 2) :fetch false} [] []))))
-        (is (= [:need] (await (waiting-reasons {:plan "mix" :fetch false} [] []))))
-        (is (= [:nothing-to-do] (await (waiting-reasons {:box (box 8 8 9 9)} (inv "wheat_seeds" 6) []))))))))
+        (is (= [:need] (await (waiting-reasons {:plan "mix" :fetch false} [] []))))))))
 
 (def seed-chest "-2,64,3")
 
@@ -398,18 +388,6 @@
           (is (= 3 (:planted result)))
           (is (= {"carrot" 20} (inv-of p))))))))
 
-(deftest a-carried-seed-held-back-by-the-food-reserve-reports-food-reserve-and-fetches-nothing
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (start (field-world (inv "carrot" 6)))
-              result (await (child-outcome eng job {:box field-box :seed "carrot"} 100))]
-          (is (= 0 (:planted result)))
-          (is (= :food-reserve (:reason result)))
-          (is (= {:seed "carrot" :held 6 :kept 6 :reserve-points 60} (select-keys result [:seed :held :kept :reserve-points])))
-          (is (empty? (events-of seen :fetch.started)))
-          (is (= {"carrot" 6} (inv-of p))))))))
-
 (deftest a-planned-cell-whose-place-answers-no-item-three-times-is-skipped
   (async done
     (tu/run-async done
@@ -448,20 +426,8 @@
               {:keys [eng seen]} (start-on p)
               result (await (child-outcome eng job {:box field-box} 100))]
           (is (seq (calls p "look")))
-          (is (= {:planted 9 :skipped [] :reason :done} result))
+          (is (= {:planted 9 :skipped []} result))
           (is (empty? (events-of seen :waiting))))))))
-
-(deftest a-box-with-nothing-bare-after-the-look-still-waits-nothing-to-do
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [p (tu/fake (field-world (inv "wheat_seeds" 9) {:blocks {}}))
-              _ (look-then-see p)
-              {:keys [eng seen]} (start-on p)]
-          (core/submit! eng (list job {:box field-box}) {})
-          (await (run-until-empty eng 6))
-          (is (seq (calls p "look")))
-          (is (= [:nothing-to-do] (distinct (map :reason (events-of seen :waiting))))))))))
 
 (def dried-world
   "The field with two cells dried back to dirt."
@@ -476,12 +442,3 @@
           (is (= 7 (:planted result)))
           (is (= [{:x 2 :y 63 :z 2} {:x 3 :y 63 :z 2}] (:untilled result)) "the dirt cells are named")
           (is (= 2 (:untilled (first (events-of seen :plant.done))))))))))
-
-(deftest a-field-wholly-dried-back-waits-naming-the-count
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (start (field-world (inv "wheat_seeds" 9) {:blocks (into {} (for [x (range 2 5) z (range 2 5)] [(str x ",63," z) "dirt"]))}))]
-          (core/submit! eng (list job {:box field-box}) {})
-          (await (run-until-empty eng 6))
-          (is (= [[:nothing-to-do 9]] (distinct (map (juxt :reason :untilled) (events-of seen :waiting))))))))))

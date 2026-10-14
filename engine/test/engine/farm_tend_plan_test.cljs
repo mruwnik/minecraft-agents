@@ -422,7 +422,7 @@
       (fn ^:async t []
         (let [[r s] (await (child-result 'jobs.farm.plant {:plan "mix"} (world-of farmland-all {:inventory [(item "wheat_seeds" 6)]})
                                          {"mix" (plan-of) "other" (foreign-plan [[3 64 2]])} [] 20))]
-          (is (= {:planted 1 :skipped [] :refused [{:pos {:x 3 :y 64 :z 2} :reason :footprint}] :short ["carrot"] :reason :no-seed} r))
+          (is (= {:planted 1 :skipped [] :refused [{:pos {:x 3 :y 64 :z 2} :reason :footprint}] :short ["carrot"] :status :done} r))
           (is (= #{[2 64 2]} (set (keys (placed s))))))))))
 
 (deftest plant-over-a-plan-asks-the-rules-again-right-before-the-place

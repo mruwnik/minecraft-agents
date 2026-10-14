@@ -1,9 +1,10 @@
 (ns jobs.farm.common
-  "What till, fertilize, compost and find-spot share as contract jobs: the walk to a cell (a go-to child) and the
+  "What the farm jobs share as contract jobs: the walk to a cell (a go-to child) and the
   test of a partial outcome against the call's :least."
   (:require [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.places :as places]
+            [jobs.lib.toll-cells :as tc]
             [jobs.lib.util :as u]
             [jobs.lib.world :as known]))
 
@@ -39,3 +40,8 @@
               (cond (= :continue e) :continue
                     (and (= :done (:kind e)) (:arrived (:data e))) :there
                     :else :blocked)))))
+
+(defn ^:async walk-to!
+  "walk! to pos with the tolls of the cell: :there, :continue or :blocked."
+  [c pos range]
+  (await (walk! c pos range {:tolls (tc/walk-tolls c (:pos (places/parse-pos pos)))})))

@@ -5,7 +5,7 @@
 ;; default deposit keeps 12 bread; 30 carrots + 3 bread are tilled and sown; harvest replants its own cell with 15 carrots;
 ;; plant sows wheat seeds beside 15 carrots; kit takes 8 cooked_beef for 60 points.
 ;; Should-fail: 12 carrots and no seed (nothing to compost, store or sow: tend waits :nothing-to-do); 15 carrots with a hoe
-;; and untilled dirt (tends nothing); plant with only 15 carrots waits :need.
+;; and untilled dirt (tends nothing); plant with only 15 carrots waits :food-reserve.
 ;; Floor y -1 is the ground layer; farmland at y -1 with water beside, crops at y 0. Chest [9 0 16], composter [11 0 16].
 {:defaults
  {:tags [:farm :food-reserve :jobs]
@@ -53,11 +53,11 @@
    :act [[:job (jobs.farm.harvest {:center #xyz [10 0 16] :radius 3})]]
    :expect [{:event {:source :job :kind :harvest.done :data {:cut 1 :replanted 1}} :within-s 60 :of-job true}]
    :after [[:block [10 0 16] "carrots[age=0]"]]}
-  {:name "plant-with-only-the-reserve-in-carrots-waits-for-seed"
+  {:name "plant-with-only-the-reserve-in-carrots-waits-food-reserve"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["carrot" 15]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :need}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :food-reserve}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :plant.done :data {:planted [:>= 1]}} :for-s 20}]
    :after [[:block [10 0 16] "air"] [:block [13 0 16] "air"] [:item "carrot" 15]]}
   {:name "plant-sows-wheat-seeds-and-keeps-the-carrot-reserve"
