@@ -280,3 +280,13 @@
     (is (= [1] (danger-ids p)) why)
     (is (true? (hostile-near? p)) why)))
 
+
+(deftest a-fusing-creeper-beyond-swell-range-or-a-quiet-one-in-rock-is-no-danger
+  (let [far (:p (rig {:entities [(assoc (mob 1 "creeper" 0 -12) :fusing true :visible false)] :light-default [0 0]}))
+        quiet (:p (rig {:entities [{:id 1 :name "creeper" :kind "hostile" :pos {:x 0 :y 62 :z -2} :fusing false :visible false}]
+                        :blocks stair-rock :light-default [0 0]}))]
+    (is (false? (.-seen (first (known far)))) "heard, not seen, 12 blocks away")
+    (is (= [] (mapv #(.-id %) (danger-q/dangers far 16 {} {:ignore-heard? true}))) "heard beyond swell range: muted like any heard mob")
+    (is (= [1] (mapv #(.-id %) (danger-q/dangers (:p (rig {:entities [(assoc (mob 1 "creeper" 0 -5) :fusing true :visible false)] :light-default [0 0]})) 16 {} {:ignore-heard? true}))) "within swell range: not muted")
+    (is (= [] (danger-ids quiet)))
+    (is (false? (hostile-near? quiet)))))

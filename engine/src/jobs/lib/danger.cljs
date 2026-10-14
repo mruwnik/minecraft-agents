@@ -112,19 +112,21 @@
   [e]
   (and (combat/enderman? e) (false? (.-angry e))))
 
+(def swell-range "Blocks within which a creeper swells and its blast reaches." 7)
+
 (defn danger-in?
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
   :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own.
   :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
   :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land.
-  A fusing creeper (hissing, seen or heard) is always one."
+  A fusing creeper (hissing, seen or heard) within swell-range is always one; beyond it the usual tests apply."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
   ([p kind-at pr e {:keys [sight? arrow-at ignore-heard? way?] :or {sight? true way? true}}]
    (cond
      (calm-enderman? e) false
      ;; it swells only while it has a line of sight to the body within 7 blocks, so its blast reaches; heard only, its
      ;; rough spot may fall in rock and fail the way test
-     (true? (.-fusing e)) true
+     (and (true? (.-fusing e)) (<= (mob-distance p e) swell-range)) true
      (and ignore-heard? (not (seen-only? e))) false
      (combat/ranged? e)
      (and (or (not sight?) (seen-only? e) (<= (mob-distance p e) obs/near-band))
