@@ -73,8 +73,7 @@
         (let [digs (atom 0)
               stub (fn ^:async refilling-dig [c]
                      (swap! digs inc)
-                     (ctx/result! c {:dug true})
-                     :done)
+                     (ctx/end c :done nil {:dug true :reason :dug}))
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) stub))]
           (is (= [:stopped :refills] [(:status r) (:reason r)]) (pr-str r))
           (is (= 8 @digs) "a cell is dug max-cell-digs times"))))))
@@ -86,7 +85,7 @@
         (let [calls (atom 0)
               stub (fn ^:async slow-dig [c]
                      (if (zero? (mod (swap! calls inc) 4))
-                       (do (ctx/result! c {:dug true}) :done)
+                       (ctx/end c :done nil {:dug true :reason :dug})
                        :continue))
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) stub))]
           (is (= [:refills 8] [(:reason r) (count (:dug r))]) "a cell is dug max-cell-digs times, not max-cell-digs calls"))))))
@@ -96,8 +95,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [stub (fn ^:async failing-dig [c]
-                     (ctx/result! c {:dug false :reason :failed :primitive "timeout" :status :stopped})
-                     :done)
+                     (ctx/end c :nothing-possible :failed {:dug false :primitive "timeout"}))
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) stub))]
           (is (= [:stopped :dig-failed] [(:status r) (:reason r)]) (pr-str r))
           (is (= {:reason :failed :primitive "timeout"} (:dig r)) (pr-str r)))))))

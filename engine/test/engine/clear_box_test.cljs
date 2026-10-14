@@ -81,7 +81,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"9,55,1" "dirt"}})
               args {:from {:x 9 :y 55 :z 1} :to {:x 9 :y 55 :z 1}}]
-          (is (= {:dug 0 :skipped {{:x 9 :y 55 :z 1} :unreachable} :kept 0 :fluids {}} (await (child-outcome eng job args 20))))
+          (is (= {:dug 0 :skipped {{:x 9 :y 55 :z 1} :refused} :kept 0 :fluids {}} (await (child-outcome eng job args 20))))
           (is (empty? (calls p "dig"))))))))
 
 (deftest clear-box-equips-the-cheapest-matching-tool-once
@@ -129,10 +129,12 @@
                                  r))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
-          (dotimes [_ 3] (await (core/tick! eng)))   ; the first cell: dig, pick up the drop, the pick-up ends
           (.hold world "dig")
           (let [running (core/tick! eng)]
-            (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
+            (loop []
+              (when (empty? (calls p "dig"))
+                (await (js/Promise. (fn [resolve] (js/setTimeout resolve 5))))
+                (recur)))
             (takeover/take! eng {:who "claude" :why "cut"})
             (await running))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})

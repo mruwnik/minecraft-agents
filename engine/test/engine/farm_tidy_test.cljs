@@ -176,7 +176,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [dig (get registry/jobs 'jobs.blocks.dig)
-              declining (assoc dig :check (fn [c] (ctx/wait c {:reason :not-allowed :why "claimed"}) false))
+              declining (assoc dig :conditions [[:fn (fn [_] {:reason :not-allowed :why "claimed"})]])
               {:keys [eng]} (start tidy-spec {"field" field-plan} [] (assoc registry/jobs 'jobs.blocks.dig declining))
               result (await (outcome eng {:plan "field" :give-up 1} 200))]
           (is (seq (:refused result)))

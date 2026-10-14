@@ -270,6 +270,8 @@
       :dug :dug
       :already-clear :missing
       (:cannot :fluid) :cannot
+      (:not-allowed :hazard) :refused
+      (:unreachable :no-tool :inventory-full :not-loaded) :unreachable
       (or (some-> (:primitive res) keyword) (:reason res) :failed))))
 
 (defn ^:async dig-cell!

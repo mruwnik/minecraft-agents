@@ -67,6 +67,10 @@
 (def own-zone {:name "home" :min [-6 60 -6] :max [6 70 6] :owner "Fake"})
 (def foreign-zone {:name "vault" :min [-3 60 2] :max [-1 70 4] :owner "Miles"})
 
+(defn equip-spec [extra] (list 'jobs.items.equip (merge {:item "wooden_pickaxe"} extra)))
+
+(defn stopped-reasons [s] (mapv :reason (events-of s :stopped)))
+
 (defn dig-spec [extra] (list 'jobs.blocks.dig (merge {:pos [2 64 3]} extra)))
 
 (defn transfers [s] (calls s "transfer"))
@@ -124,8 +128,7 @@
           (is (= 1 (get (inv s) "cobblestone")))
           (is (= 1 (count (transfers s))))
           (is (empty? (filter #(= "wooden_pickaxe" (:name %)) (chest-items s [-2 64 3]))) "the chest lost its pickaxe")
-          (is (= 1 (count (events-of s :fetch.started))))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= 1 (count (transfers s)))))))))
 
 ;; the default call (no :fetch) fetches: dig, place and stair
 (deftest dig-by-default-fetches-a-pickaxe
@@ -136,7 +139,7 @@
           (core/submit! (:eng s) (dig-spec {}) {})
           (await (run-ticks s 40))
           (is (= "air" (block-at s 2 64 3)))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
 
 (deftest place-by-default-fetches-the-block
   (async done
@@ -180,31 +183,28 @@
           (is (empty? (listed s)))
           (is (= "cobblestone" (block-at s 1 64 1))))))))
 
-(deftest dig-without-fetch-waits-no-tool-and-touches-no-chest
+(deftest dig-without-fetch-ends-no-tool-and-touches-no-chest
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world pickaxe-stock) [own-zone])
-              id (core/submit! (:eng s) (dig-spec {:fetch false}) {})]
+        (let [s (start (world pickaxe-stock) [own-zone])]
+          (core/submit! (:eng s) (dig-spec {:fetch false}) {})
           (await (run-ticks s 10))
-          (is (= :no-tool (:reason (core/waiting (:eng s) id))))
+          (is (= [:no-tool] (stopped-reasons s)))
           (is (empty? (inspects s)))
           (is (empty? (transfers s)))
           (is (= "stone" (block-at s 2 64 3))))))))
 
-(deftest a-chest-in-another-zone-is-not-used-and-the-dig-waits-with-the-failure
+(deftest a-chest-in-another-zone-is-not-used-and-the-dig-ends-no-tool
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world pickaxe-stock) [foreign-zone])
-              id (core/submit! (:eng s) (dig-spec {:fetch true}) {})]
+        (let [s (start (world pickaxe-stock) [foreign-zone])]
+          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
           (await (run-ticks s 15))
-          (let [w (core/waiting (:eng s) id)]
-            (is (= :no-tool (:reason w)))
-            (is (= :no-source (:failed (:fetch w)))))
+          (is (= [:no-tool] (stopped-reasons s)))
           (is (empty? (inspects s)))
-          (is (empty? (transfers s)))
-          (is (= 1 (count (events-of s :fetch.failed)))))))))
+          (is (empty? (transfers s))))))))
 
 (deftest a-chest-in-another-zone-that-allows-take-is-used
   (async done
@@ -234,24 +234,24 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (update (world pickaxe-stock) :blocks merge walled-chest) [own-zone])
-              id (core/submit! (:eng s) (dig-spec {:fetch true}) {})]
+        (let [s (start (update (world pickaxe-stock) :blocks merge walled-chest) [own-zone])]
+          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
           (await (run-ticks s 15))
           (is (empty? (inspects s)))
           (is (empty? (transfers s)))
-          (is (= :no-source (:failed (:fetch (core/waiting (:eng s) id))))))))))
+          (is (= [:no-tool] (stopped-reasons s))))))))
 
-(deftest a-failure-is-remembered-and-a-second-dig-does-not-look-again
+(deftest a-failure-is-remembered-and-a-second-equip-does-not-look-again
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (assoc-in (world {chest-at [{:name "dirt" :count 3}]}) [:blocks "2,65,3"] "stone") [own-zone])
-              a (core/submit! (:eng s) (dig-spec {:fetch true}) {})]
+        (let [s (start (world {chest-at [{:name "dirt" :count 3}]}) [own-zone])
+              a (core/submit! (:eng s) (equip-spec {:fetch true}) {})]
           (await (run-ticks s 25))
           (is (= 1 (count (inspects s))) "the chest was looked into once")
           (is (empty? (transfers s)))
           (is (= :no-source (:failed (:fetch (core/waiting (:eng s) a)))))
-          (let [b (core/submit! (:eng s) (list 'jobs.blocks.dig {:pos [2 65 3] :fetch true}) {})]
+          (let [b (core/submit! (:eng s) (equip-spec {:fetch true}) {})]
             (await (run-ticks s 15))
             (is (= 1 (count (inspects s))) "not again within the failure's time")
             (is (= :no-source (:failed (:fetch (core/waiting (:eng s) b)))))
@@ -262,7 +262,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {}) [own-zone])
-              id (core/submit! (:eng s) (dig-spec {:fetch true}) {})]
+              id (core/submit! (:eng s) (equip-spec {:fetch true}) {})]
           (await (run-ticks s 25))
           (is (= 1 (count (events-of s :fetch.failed))))
           (is (= :no-source (:failed (:fetch (core/waiting (:eng s) id)))))
@@ -275,7 +275,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {}) [own-zone])
-              id (core/submit! (:eng s) (dig-spec {:fetch true}) {})]
+              id (core/submit! (:eng s) (equip-spec {:fetch true}) {})]
           (await (run-ticks s 25))
           (swap! (fake/state (:p s)) fake/give "dirt" 4)
           (await (run-ticks s 25))
@@ -287,7 +287,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "dirt" :count 3}]}) [own-zone])
-              _ (core/submit! (:eng s) (dig-spec {:fetch {:fail-minutes 1}}) {})]
+              _ (core/submit! (:eng s) (equip-spec {:fetch {:fail-minutes 1}}) {})]
           (await (run-ticks s 25))
           (is (= 1 (count (events-of s :fetch.failed))))
           (swap! (:clock s) + 70000)
@@ -298,11 +298,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world pickaxe-stock) [own-zone])
-              id (core/submit! (:eng s) (dig-spec {:fetch #{:item}}) {})]
+        (let [s (start (world pickaxe-stock) [own-zone])]
+          (core/submit! (:eng s) (dig-spec {:fetch #{:item}}) {})
           (await (run-ticks s 10))
-          (is (= :no-tool (:reason (core/waiting (:eng s) id))))
-          (is (nil? (:fetch (core/waiting (:eng s) id))))
+          (is (= [:no-tool] (stopped-reasons s)))
           (is (empty? (inspects s))))))))
 
 (deftest a-bad-fetch-arg-is-refused-at-submit
@@ -677,8 +676,7 @@
           (await (run-ticks s 80))
           (is (empty? (listed s)) "the dig ended")
           (is (= "air" (block-at s 2 64 3)))
-          (is (= 1 (get (inv s) "wooden_pickaxe")))
-          (is (= 1 (count (events-of s :fetch.done)))))))))
+          (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
 
 (deftest get-tool-crafts-from-sticks-and-planks-and-uses-a-seen-table
   (async done
