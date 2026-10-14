@@ -1,15 +1,18 @@
 (ns engine.breathe-test
   "The suffocating trigger and the breathe job against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.seek-contract-test :as sc]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.breath :as breath]
             [jobs.lib.shore :as shore]
             [jobs.survival.breathe :as b]
+            [jobs.survival.breathe.air :as air]
             [engine.fake :as fake]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
@@ -32,7 +35,7 @@
   ((:when (get triggers/all :suffocating)) p nil args))
 
 (defn check? [p args]
-  ((:check (get registry/jobs breathe)) {:primitives p :args args}))
+  (b/needs-air? {:primitives p :args args}))
 
 (def defaults {:min-oxygen 12})
 
@@ -132,7 +135,7 @@
           (await (one-run! eng defaults))
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p)) "feet at the top water block, head in air")
           (is (= [] (:list (core/state eng))) "one run")
-          (is (= [[:stopped :no_land_in_range]] (ended seen)) "no land and no water to swim on: stopped, not completed")
+          (is (= [[:stopped :no-land-in-range]] (ended seen)) "no land and no water to swim on: stopped, not completed")
           (is (= ["swim"] (call-names p)) "the swim surfaces; nothing else to try")
           (is (empty? (of-kind seen :holding)) "no hold")
           (is (empty? (of-kind seen :afloat))))))))
@@ -145,7 +148,7 @@
           (await (one-run! eng defaults))
           (is (= [] (:list (core/state eng))))
           (is (= ["swim" "swim" "swim"] (call-names p)) "three tries in the one run")
-          (is (= [[:stopped :no_air]] (ended seen)))
+          (is (= [[:stopped :no-air]] (ended seen)))
           (is (= 1 (count (of-kind seen :no_air)))))))))
 
 (def side-args (assoc defaults :radius 1))
@@ -172,7 +175,7 @@
                                          :blocks (merge water-column walls {"0,68,0" "oak_planks" "1,64,0" "stone"})})]
           (await (one-run! eng side-args))
           (is (= [] (:list (core/state eng))))
-          (is (= [[:stopped :no_air]] (ended seen)))
+          (is (= [[:stopped :no-air]] (ended seen)))
           (is (= 1 (count (of-kind seen :no_air)))))))))
 
 (deftest enclosed-run-digs-the-head-block-then-the-one-above-and-steps-out
@@ -196,7 +199,7 @@
           (await (one-run! eng defaults))
           (is (= [] (:list (core/state eng))))
           (is (= ["dig" "dig" "dig"] (call-names p)) "three tries in the one run, no moveTo")
-          (is (= [[:stopped :no_way_out]] (ended seen)))
+          (is (= [[:stopped :no-way-out]] (ended seen)))
           (is (= 1 (count (of-kind seen :no_way_out)))))))))
 
 (deftest enclosed-digs-that-work-but-leave-the-head-enclosed-are-progress-not-failures
@@ -228,7 +231,7 @@
               round (:round (get registry/jobs breathe))]
           (core/submit! eng (list breathe defaults) {})
           (await (core/tick! eng))
-          (is (= :done (await (round {:primitives p :args defaults}))))
+          (is (= :done (:kind (await (round {:primitives p :args defaults})))))
           (is (zero? (count (.. p -world -calls)))))))))
 
 (deftest an-enclosed-run-remembers-why
@@ -420,7 +423,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (failed-shore-swim-run! false))]
-          (is (= [[:stopped :no_land_in_range]] (:ended r)) "the go-to arrives on the ledge, but not onGround")
+          (is (= [[:stopped :no-land-in-range]] (:ended r)) "the go-to arrives on the ledge, but not onGround")
           (is (= {:x 2 :y 65 :z 0} (:pos r)))
           (is (empty? (:holding r)) "no hold"))))))
 
@@ -517,7 +520,7 @@
         (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                            :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)})]
           (await (one-run! eng small-args))
-          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (< (dist-from-origin p) 7) "never left the pond")
           (is (empty? (of-kind seen :holding)) "no job.holding event")
           (is (empty? (of-kind seen :afloat)))
@@ -534,7 +537,7 @@
         (let [{:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                          :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)})]
           (await (one-run! eng small-args))
-          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (<= 1 (unreachable-count seen) (b/land-tries))))))))
 
 (deftest open-water-with-no-land-swims-legs-inside-the-bounds-then-stops
@@ -544,7 +547,7 @@
         (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                            :blocks (lake -30 30 12)})]
           (await (one-run! eng small-args))
-          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (let [d (stopped-data seen)]
             (is (pos? (:legs d)) "it swam outward before it gave up")
             (is (<= (:legs d) (:max-legs small-args))))
@@ -557,7 +560,7 @@
         (let [{:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                          :blocks (lake -50 50 12)})]
           (await (one-run! eng (assoc small-args :max-legs 2 :swim-range 60 :search-radius 5)))
-          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (= 2 (:legs (stopped-data seen)))))))))
 
 (deftest a-bank-beyond-the-search-radius-is-found-after-a-leg
@@ -633,32 +636,31 @@
                                          :blocks (merge (lake -14 14 14) (bank 15 15 14) (bank -15 -15 14) ring)})
               args (assoc no-shore-args :swim-range 9 :leg-length 9 :search-radius 16)]
           (await (one-run! eng args))
-          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (= 2 (unreachable-count seen)) "two walled banks tried (2 x 15 blocks, beyond 3 x swim-range), not a third try"))))))
 
 (defn stub-child-ctx
-  "A ctx whose go-to child call resolves to r, with a go-to registry entry; child-result gives res."
-  [r res]
-  {:engine {:jobs {'jobs.movement.go-to {:check (fn [_] true) :round (fn [_] nil) :args nil}}}
-   :call-child (fn [_slot _def _args] (js/Promise.resolve r))
-   :child-result (fn [_slot] res)})
+  "A ctx whose go-to child call resolves to the ending e, with a go-to registry entry."
+  [e]
+  {:engine {:jobs {'jobs.movement.go-to {:conditions [] :ways [:walk] :round (fn [_] nil) :args nil}}}
+   :call (fn [_slot _def _args] (js/Promise.resolve e))})
 
-(deftest a-go-to-child-that-continues-or-is-declined-is-a-failed-try
+(deftest a-go-to-child-that-continues-or-does-not-end-done-is-a-failed-try
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [r [:continue :declined]]
-          (is (false? (await (b/go! (stub-child-ctx r {:arrived true}) :leg {:x 0 :y 64 :z 0} 2))) (str r)))
-        (is (true? (await (b/go! (stub-child-ctx :done {:arrived true}) :leg {:x 0 :y 64 :z 0} 2))))
-        (is (false? (await (b/go! (stub-child-ctx :done {:arrived false}) :leg {:x 0 :y 64 :z 0} 2))))))))
+        (doseq [e [:continue (contract/ending :condition-failed :declined nil)
+                   (contract/ending :done nil {:arrived false})]]
+          (is (false? (await (air/go! (stub-child-ctx e) :leg {:x 0 :y 64 :z 0} 2))) (str e)))
+        (is (true? (await (air/go! (stub-child-ctx (contract/ending :done nil {:arrived true})) :leg {:x 0 :y 64 :z 0} 2))))))))
 
 (deftest the-go-to-child-may-drown-the-body-when-no-other-way-exists
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [sent (atom nil)
-              c (assoc (stub-child-ctx :done {:arrived true}) :call-child (fn [_slot _def args] (reset! sent args) (js/Promise.resolve :done)))]
-          (await (b/go! c :leg {:x 0 :y 64 :z 0} 2))
+              c (assoc (stub-child-ctx nil) :call (fn [_slot _def args] (reset! sent args) (js/Promise.resolve (contract/ending :done nil {:arrived true}))))]
+          (await (air/go! c :leg {:x 0 :y 64 :z 0} 2))
           (is (= {:lethal-air 1} (:costs @sent))))))))
 
 (deftest a-refire-after-a-stop-keeps-the-searched-area
@@ -679,7 +681,7 @@
             (reset! seen [])
             (set-self! p {"oxygen" 4 "pos" [x 62 z] "inWater" true})
             (await (one-run! eng small-args))
-            (is (= [[:stopped :no_land_in_range]] (ended seen)))
+            (is (= [[:stopped :no-land-in-range]] (ended seen)))
             (is (= 0 (:legs (stopped-data seen))) "no leg repeats the first run's")))))))
 
 (deftest children-of-a-breathe-run-leave-no-unreachable-warning
@@ -692,7 +694,7 @@
                                         raw)
               unreachable #(= :unreachable (:kind %))]
           (await (one-run! eng small-args))
-          (is (= [[:stopped :no_land_in_range]] (ended seen)))
+          (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (pos? (count (filter unreachable @raw))) "the children still report, quietly")
           (is (empty? (filter #(and (unreachable %) (= :warn (:level %))) @raw))))))))
 
@@ -804,7 +806,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [ended ledger data]} (await (step-run! {}))]
-          (is (= [[:stopped :no_blocks]] ended))
+          (is (= [[:stopped :no-blocks]] ended))
           (is (= :no-blocks (:step data)))
           (is (empty? ledger)))))))
 
@@ -814,7 +816,7 @@
       (fn ^:async t []
         (let [{:keys [ended ledger data p]} (await (step-run! {:inventory [{:name "dirt" :count 4}]
                                                               :zones [{:name "keep-out" :min [-3 60 -3] :max [3 70 3]}]}))]
-          (is (= [[:stopped :no_land_in_range]] ended))
+          (is (= [[:stopped :no-land-in-range]] ended))
           (is (= :refused (:step data)))
           (is (empty? ledger))
           (is (empty? (filterv #(= "place" (.-name %)) (array-seq (.. p -world -calls))))))))))
@@ -903,12 +905,12 @@
           (is (= "air" (.-name (.blockAt p (apply tu/pos [0 73 0])))) "the cap is dug once the body is under it"))))))
 
 (defn ^:async never-dug!
-  "A cap of block: stopped :no_air with :cap why, the block still there, no dig call."
+  "A cap of block: stopped :no-air with :cap why, the block still there, no dig call."
   [done block why]
   (tu/run-async done
     (fn ^:async t []
       (let [{:keys [ended data p] at :block} (await (cap-run! {:block block}))]
-        (is (= [[:stopped :no_air]] ended))
+        (is (= [[:stopped :no-air]] ended))
         (is (= why (:cap data)))
         (is (= 1 (:air-radius data)) "the stop says how far it looked")
         (is (= block (at [0 68 0])))
@@ -998,7 +1000,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [ended data digs]} (await (refused-dig-run!))]
-          (is (= [[:stopped :no_air]] ended))
+          (is (= [[:stopped :no-air]] ended))
           (is (= :dig-failed (:cap data)))
           (is (= 3 digs)))))))
 
@@ -1010,7 +1012,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [ended data p] at :block} (await (cap-run! {:block "stone" :dig-ms 60000}))]
-          (is (= [[:stopped :no_air]] ended))
+          (is (= [[:stopped :no-air]] ended))
           (is (= :too-slow (:cap data)))
           (is (= "stone" (at [0 68 0])))
           (is (not (some #{"dig"} (call-names p)))))))))
@@ -1076,9 +1078,9 @@
         (let [p (:p (setup {:self {:inWater true :oxygen 4}
                               :blocks (merge (capped-world "dirt") {"0,69,0" "dirt" "0,70,0" "air"})}))
               head {:x 0 :y 65 :z 0}]
-          (is (= {:cells [{:x 0 :y 68 :z 0}]} (b/cap-above p head)))
+          (is (= {:cells [{:x 0 :y 68 :z 0}]} (air/cap-above p head)))
           (is (= {:cells [{:x 0 :y 68 :z 0}]}
-                 (b/cap-above (:p (setup {:blocks (merge (capped-world "dirt") {"0,69,0" "dirt" "0,70,0" "dirt"})})) head))
+                 (air/cap-above (:p (setup {:blocks (merge (capped-world "dirt") {"0,69,0" "dirt" "0,70,0" "dirt"})})) head))
               "the same whatever lies over the cap"))))))
 
 (deftest a-sand-cap-is-never-dug-it-would-fall-into-the-water
@@ -1087,7 +1089,7 @@
 (deftest a-cap-cell-never-seen-is-unseen-not-read
   (let [p (:p (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "dirt")}))]
     (stub-seen! p (fn [[_ y]] (< y 68)))
-    (is (= {:why :unseen} (b/cap-above p {:x 0 :y 65 :z 0})))))
+    (is (= {:why :unseen} (air/cap-above p {:x 0 :y 65 :z 0})))))
 
 (deftest drowning-under-a-cap-looks-up-before-digging-it
   (async done
@@ -1125,7 +1127,7 @@
           (stub-seen! p (fn [[_ y]] (<= y 65)))
           (await (one-run! eng cap-args))
           (is (some #{"swim"} (call-names p)) "an unseen column is swum up, as a player does")
-          (is (= [[:stopped :no_land_in_range]] (ended seen)) "surfaced, then no land in the sealed world: not :no_air"))))))
+          (is (= [[:stopped :no-land-in-range]] (ended seen)) "surfaced, then no land in the sealed world: not :no-air"))))))
 
 (deftest a-seen-cap-is-not-swum-into
   (async done
@@ -1134,7 +1136,7 @@
         (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "obsidian")})]
           (await (one-run! eng cap-args))
           (is (not-any? #{"swim"} (call-names p)) "a seen cap blocks the swim fallback")
-          (is (= [[:stopped :no_air]] (ended seen))))))))
+          (is (= [[:stopped :no-air]] (ended seen))))))))
 
 (deftest step-cell-and-leg-target-skip-cells-never-seen
   (let [world (merge {"0,64,0" "water" "0,65,0" "air" "0,66,0" "air" "1,64,0" "water" "1,65,0" "air" "1,66,0" "air"
@@ -1289,11 +1291,11 @@
       (is (nil? (breath/side-cell p (.self p))) below))))
 
 (deftest a-swim-is-progress-only-above-the-best-height-reached
-  (is (b/rose? nil 64 65) "first rise")
-  (is (not (b/rose? 65 64 65)) "pushed back down, back to the best: no progress")
-  (is (b/rose? 65 64 66) "above the best")
-  (is (b/rose? 65 66 67) "carried up between passes, then a block more")
-  (is (not (b/rose? nil 64 64)) "no rise"))
+  (is (air/rose? nil 64 65) "first rise")
+  (is (not (air/rose? 65 64 65)) "pushed back down, back to the best: no progress")
+  (is (air/rose? 65 64 66) "above the best")
+  (is (air/rose? 65 66 67) "carried up between passes, then a block more")
+  (is (not (air/rose? nil 64 64)) "no rise"))
 
 (defn drag-tunnel
   "A water tunnel x 0..9, z -1..1 (feet y 64, head y 65) under a stone ceiling at y 66, a glass cap over the body (never
@@ -1484,7 +1486,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [ended data]} (await (cut-run! 72 "oak_planks" 70 []))]
-          (is (= [[:stopped :no_air]] ended))
+          (is (= [[:stopped :no-air]] ended))
           (is (= [:not-natural :no-block] [(:cap data) (:pocket data)]))
           (is (re-find #"pocket: no-block.*cap: not-natural" (:text data))))))))
 
@@ -1496,3 +1498,34 @@
         (let [{:keys [ended] at :block} (await (cap-run! {:block "stone" :dig-ms 9000}))]
           (is (= [[:completed nil]] ended))
           (is (= "air" (at [0 68 0]))))))))
+
+
+(deftest breathe-exports-the-contract
+  (let [job (get registry/jobs breathe)]
+    (is (nil? (:check job)))
+    (is (vector? (:target job)))
+    (is (some? (:conditions job)))
+    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (tu/fake {}) :args {} :quote-call {}}))))))
+
+(defn ^:async ending [world args]
+  (await (sc/ending-of #(tu/seeing-all (tu/fake world)) (list breathe args))))
+
+(deftest a-body-with-air-fails-the-condition-not-underwater
+  (is (= :not-underwater (let [[_ f] (first b/conditions)] (f {:primitives (tu/fake {}) :args defaults})))))
+
+(deftest a-body-that-found-air-ends-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= :completed (:event (await (ending {:self {:inWater true :oxygen 4}
+                                                  :blocks (merge water-column walls
+                                                                 {"0,68,0" "stone"
+                                                                  "1,64,0" "water" "1,65,0" "water" "1,66,0" "water" "1,67,0" "water"})}
+                                                 side-args)))))))))
+
+(deftest a-body-with-no-air-found-is-nothing-possible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :kind :nothing-possible :reason :no-air}
+               (await (ending {:self {:inWater true :oxygen 4} :swimFails true :blocks water-column} defaults))))))))

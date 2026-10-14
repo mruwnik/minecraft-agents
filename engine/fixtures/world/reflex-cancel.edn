@@ -22,5 +22,5 @@
   {:name "cancel-unknown-id-refused-reflex-runs-on"
    :act [[:await {:source :reflex :kind :fired} 40]
          [:http :cancel "j9999" {:ok false :reason :job-not-found}]]
-   :expect [{:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}} :within-s 90}
+   :expect [{:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}} :within-s 90}
             {:no-event {:source :reflex :kind :ended :data {:outcome :cancelled}} :for-s 60 :until {:source :reflex :kind :ended :data {:outcome :stopped}}}]}]}

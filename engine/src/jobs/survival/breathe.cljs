@@ -1,23 +1,19 @@
 (ns jobs.survival.breathe
-  (:require [jobs.lib.choose :as choose]
-            [engine.settings :as settings]
-            [engine.args :as a]
-            [jobs.lib.tidy :as tidy]
+  (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.access :as access]
-            [jobs.lib.dig-look :as look]
+            [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.breath :as breath]
+            [jobs.lib.choose :as choose]
             [jobs.lib.escape :as escape]
             [jobs.lib.land :as land]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
-            [jobs.lib.result :as result]
-            [jobs.lib.shore :as shore]
             [jobs.lib.sense :as sense]
-            [jobs.lib.tools :as tools]
+            [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]
-            [jobs.lib.breath :as breath]
-            [jobs.survival.breathe-pocket :as pocket]))
+            [jobs.survival.breathe.air :as air]))
 
 (def doc
   "Get air when drowning or stuck inside a block, then out of the water, in one run (a reflex; never yields).
@@ -27,7 +23,7 @@
     child to the nearest air-reaching surface within :air-radius, else to the nearest seen air below the feet within :depth
     (the way the body came; a failed target is not tried again); else dig up through a cap within 3 blocks over the head
     when it is natural (jobs.lib.escape/natural?), not protected and not sand or gravel, one cell a pass, at most 3 digs
-    (zones respected, trespass only as a last resort), with the best tool, and only when the dig fits ::cap-dig-share of the air left.
+    (zones respected, trespass only as a last resort), with the best tool, and only when the dig fits jobs.survival.breathe.air/cap-dig-share of the air left.
     With no air seen near (or after a failed try) and :pocket, a dry pocket comes before the swim up an unseen column and
     the cap: standing on solid ground with a carried pillar block, after the go-to to seen air further out, it digs the
     two natural wall cells beside it, steps in and plugs the opening (jobs.survival.breathe-pocket; ledger purpose
@@ -47,13 +43,17 @@
     written to the scaffold ledger (purpose :breathe-step, for jobs.access.cleanup), at most 2 per spot; the next
     pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..:leg-length blocks out, outward from the run's
     start only, inside :swim-range of it, at most :max-legs legs (a leg that moved starts afresh at its end).
-  Completed when the head is clear and, after a swim, the body stands on solid ground out of the water. Stopped
-  :no_blocks when only a step cell was left and no pillar block is carried. Stopped
-  :no_land_in_range (fields :searched :swum :legs :headings-failed :step, one of :no-wall :no-blocks :refused :failed) when every way is spent or the run has gone
-  3 x :swim-range blocks; the searched area (the start and the failed headings) is remembered (:breathe-afloat, 5 min), so a refire there swims no leg the run already did. Stopped
-  :no_air (fields :air-radius, :cap why no cap was dug: :no-cap :unseen :not-natural :protected :gravity :too-slow :dig-failed,
-  :pocket why no pocket gave air: :off :made-near :no-block :afloat :no-wall :too-slow :dig-failed :step-failed :made :not-tried; the text names both) or
-  :no_way_out (with a warn) after three failed tries in the run. It never holds still while afloat.
+  Needs a body that is drowning, enclosed or surfaced but still in water: else condition-failed :not-underwater. A reflex
+  (level danger): it exhausts its ways before it stops and never yields :continue. Ends :done when the head is clear
+  and, after a swim, the body stands on solid ground out of the water. Else nothing-possible:
+  :no-land-in-range (data :searched :swum :legs :headings-failed :step, one of :no-wall :no-blocks :refused :failed) when
+  every way out of the water is spent or the run has gone 3 x :swim-range blocks; the searched area (the start and the
+  failed headings) is remembered (:breathe-afloat, 5 min), so a refire there swims no leg the run already did;
+  :no-blocks when only a step cell was left and no pillar block is carried;
+  :no-air (data :air-radius, :cap why no cap was dug: :no-cap :unseen :not-natural :protected :gravity :too-slow :dig-failed,
+  :pocket why no pocket gave air: :off :made-near :no-block :afloat :no-wall :too-slow :dig-failed :step-failed :made :not-tried;
+  the text names both) or :no-way-out (with a warn) after three failed tries in the run, or many passes. It never holds still while afloat.
+  The air search is jobs.survival.breathe.air. Quote: a few seconds to a minute.
   Memory: one :breathe entry per run; :breathe-pocket per pocket made.")
 
 (a/defargs args
@@ -72,24 +72,19 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::max-cap-digs {:default 3 :doc "Cap digs one run makes at most." :spec (a/int-in 0 nil)}
-   ::land-tries {:default 3 :doc "Go-to targets one spot tries before it swims a leg." :spec (a/int-in 0 nil)}
+  {::land-tries {:default 3 :doc "Go-to targets one spot tries before it swims a leg." :spec (a/int-in 0 nil)}
    ::min-leg {:default 8 :doc "Blocks a swim leg must move to count as moved." :spec (a/int-in 0 nil)}
    ::max-passes {:default 120 :doc "Passes one run makes before it stops :no_way_out, a safety net against a world that never changes." :spec (a/int-in 0 nil)}
    ::afloat-near {:default 16 :doc "Blocks around a spot in which a later run takes over the start and failed headings of an earlier stop." :spec (a/int-in 0 nil)}
-   ::max-steps {:default 2 :doc "Step blocks one spot places at most." :spec (a/int-in 0 nil)}
-   ::cap-dig-share {:default 0.5 :doc "Share of the air left (oxygen, then health) a cap dig may take; a slower dig is not started and the dig gives up at it." :spec (a/num-in 0 1)}})
-(defn max-cap-digs [] (settings/get settings ::max-cap-digs))
+   ::max-steps {:default 2 :doc "Step blocks one spot places at most." :spec (a/int-in 0 nil)}})
 (defn land-tries [] (settings/get settings ::land-tries))
 (defn min-leg [] (settings/get settings ::min-leg))
 (defn max-passes [] (settings/get settings ::max-passes))
 (defn afloat-near [] (settings/get settings ::afloat-near))
-(defn cap-dig-share [] (settings/get settings ::cap-dig-share))
 (def afloat-policy {:cap 5 :ttl (* 5 60 1000)})
 
 (def breathe-policy {:cap 20 :ttl (* 60 60 1000)})
 
-(declare go!)
 
 (defn land-footing?
   "The support under the feet is solid ground: not air, water, lava, fire or magma, and loaded. It is the cell below
@@ -117,20 +112,23 @@
                 (:surfaced (ctx/mem c))
                 (not (on-land? (:primitives c))))))
 
-(defn check [c]
+(defn needs-air? [c]
   (or (some? (breath/situation (:primitives c) (:min-oxygen (:args c))))
-      (boolean (surfaced-in-water? c))
-      (ctx/wait c {:reason :not-underwater})))
+      (boolean (surfaced-in-water? c))))
 
-(defn rose?
-  "A swim that ended with the feet at floor y is progress only above the best height reached so far (best, nil before
-  the first swim) and the feet height the pass started at (fy): a body pushed back down between passes is not progress."
-  [best fy y]
-  (> y (max (or best fy) fy)))
+(def target [])
 
-(defn solid-at? [p cell] (breath/suffocates? p cell))
+(def defaults {})
 
-(defn status [r] (.-status r))
+(def conditions [[:fn (fn [c] (when-not (needs-air? c) :not-underwater))]])
+
+(defn done?
+  "Air at the head and, after a swim, solid ground under the feet."
+  [c]
+  (let [needs (needs-air? c)]
+    {:done? (not needs) :units :cells :left (if needs 1 0)}))
+
+(defn quote-of [_c] {:uses {:time [1 10 60]}})
 
 (defn surface-pos
   "pos with y raised to the feet cell at the top of the own water column (breath/surface-in-column), so a body that has
@@ -178,200 +176,6 @@
           (filter #(and (shore/standable? p %) (keep? p %)))
           first))))
 
-(defn cap-beyond-dig?
-  "The own column over the head is water or air, unseen included, up to a seen block within reach that lies farther than
-  the 3 cells dig-cap reaches: the body must rise under it first."
-  [p head reach]
-  (loop [k 0]
-    (let [n (when (<= k (inc reach)) (breath/seen-water-name p (update head :y + k)))]
-      (cond
-        (> k (inc reach)) false
-        (or (nil? n) (breath/passable-water-or-air? n)) (recur (inc k))
-        :else (> k 3)))))
-
-(defn ^:async swim-up!
-  "Drowning: swim up the own column when it reaches air, else walk (through
-  water, at the feet's height) to the nearest column that does (target, from breath/find-air!). With no air seen and no block seen over the own
-  column, swim up anyway: a body in the dark learns by moving, as a player does; so does one under a seen cap more than 3
-  above its head (cap-beyond-dig?), to dig it from below. True when the action succeeded (a swim
-  counts when it surfaced or rose above the best height reached); :no-air
-  when there is no air in reach; nil when the move failed (failure counted)."
-  [c target]
-  (let [{:keys [reach]} (:args c)
-        p (:primitives c)
-        pos (u/self-pos c)
-        fx (js/Math.floor (:x pos))
-        fy (js/Math.floor (:y pos))
-        fz (js/Math.floor (:z pos))
-        ;; a swim that timed out but rose is progress, not a failed try: a deep column takes several 3 s swims
-        swim! (fn ^:async f []
-                (let [surfaced? (= "surfaced" (status (await (ctx/act c :swim #js {}))))
-                      y (js/Math.floor (:y (u/self-pos c)))
-                      rose (rose? (:best-y (ctx/mem c)) fy y)]
-                  (if surfaced?
-                    (ctx/update-mem! c #(-> % (assoc :surfaced true) (dissoc :best-y)))
-                    (ctx/update-mem! c update :best-y #(max (or % y) y)))
-                  (or surfaced? rose)))]
-    (cond
-      (and (nil? target) (breath/column-open? p fx fz fy reach))
-      (or (await (swim!)) :no-air)
-
-      (and (nil? target) (cap-beyond-dig? p (breath/eye-cell (.self p)) reach))
-      (or (await (swim!)) :no-air)
-
-      (nil? target) :no-air
-      (breath/surface-in-column p fx fz fy reach) (await (swim!))
-
-      :else
-      ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
-      (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos {:x (:x target) :y fy :z (:z target)}
-                                                                :range 0}))))))))
-
-(defn ^:async dig-out!
-  "Enclosed: dig the head block (and the one above if solid), step up. True
-  when the dig worked and the body stepped up; :dug when a dig worked but the step did not (the head cell may have
-  refilled); false when nothing changed."
-  [c]
-  (let [p (:primitives c)
-        head (breath/eye-cell (.self p))
-        above (update head :y inc)
-        _ (access/trespass! c "breathe" (:trespass (access/choose c :dig [(cond-> [head] (solid-at? p above) (conj above))] identity)))
-        dug (status (await (tidy/dig! c head true)))]
-    (if-not (contains? #{"dug" "missing"} dug)
-      false
-      (do (when (solid-at? p above)
-            (await (tidy/dig! c above true)))
-          ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
-          (if (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))
-            true
-            :dug)))))
-
-(defn cap-above
-  "The own column's cap: {:cells [..]} to dig, or {:why kw} when none may be. The first block within 3 above the head
-  that is neither air nor water is the cap (the only cell read, as seen); it must be natural, not protected and not a
-  falling block; a cell not seen (look first, see look-up!) gives :unseen. What lies over the cap is learned by digging,
-  a cell a pass."
-  [p head]
-  (let [cell (fn [k] (update head :y + k))]
-    (loop [k 0]
-      (let [n (when (<= k 3) (breath/seen-water-name p (cell k)))]
-        (cond
-          (> k 3) {:why :no-cap}
-          (nil? n) {:why :unseen}
-          (breath/passable-water-or-air? n) (recur (inc k))
-          (escape/protected? n) {:why :protected}
-          (not (escape/natural? n)) {:why :not-natural}
-          (contains? pocket/falling n) {:why :gravity}
-          :else {:cells [(cell k)]})))))
-
-(defn ^:async look-up!
-  "Look at each cell within 3 above head that the body has not seen, so cap-above reads what is there."
-  [c head]
-  (loop [k 0]
-    (when (<= k 3)
-      (let [cell (update head :y + k)]
-        (when (look/unknown? (:primitives c) [(:x cell) (:y cell) (:z cell)])
-          (await (look/look-at! c [(:x cell) (:y cell) (:z cell)])))
-        (recur (inc k))))))
-
-(defn ^:async cap-dig-ms
-  "Milliseconds the cap dig of the own column would take, after looking up; nil when it may not be dug, would not fit
-  ::cap-dig-share of the air left or the run has made :max-cap-digs digs."
-  [c]
-  (let [p (:primitives c)
-        head (breath/eye-cell (.self p))
-        _ (await (look-up! c head))
-        {:keys [cells]} (cap-above p head)
-        ms (reduce + (map #(.digTime p (clj->js %)) cells))]
-    (when (and cells (< (:cap-digs (ctx/mem c) 0) (max-cap-digs))
-               (<= ms (* (cap-dig-share) (breath/air-left-ms (.self p)))))
-      ms)))
-
-(defn ^:async go-air!
-  "Drowning with no air near: a go-to child to the nearest air-reaching surface within :air-radius, else to the nearest
-  seen air below the feet joined to the body by water or air within :depth (breath/nearest-pocket: the way the body
-  came), not failed before, when the swim there fits the air left and is not dearer than the cap dig (cap-dig-ms). True
-  on arrival (the body has surfaced); nil when it did not, :none when there is no target. The target is remembered as
-  tried either way, so a world that stays drowning does not loop on it."
-  [c]
-  (let [{:keys [air-radius reach depth]} (:args c)
-        p (:primitives c)
-        pos (u/self-pos c)
-        failed (:failed-air (ctx/mem c))
-        surface (breath/nearest-air p pos air-radius reach failed false)
-        pocket (when-not surface (breath/nearest-pocket p pos air-radius depth failed))
-        swim-ms (* (:steps pocket 0) (breath/swim-ms))
-        pocket? (and pocket
-                     (< swim-ms (breath/air-left-ms (.self p)))
-                     (let [dig-ms (await (cap-dig-ms c))] (or (nil? dig-ms) (<= swim-ms dig-ms))))
-        target (or surface (when pocket? (:cell pocket)))]
-    (if-not target
-      :none
-      (let [arrived? (await (go! c :air target 0))]
-        (ctx/update-mem! c update :failed-air (fnil conj []) target)
-        ;; a pocket below is the way the body came, not open water: no shore to head for from it
-        (when arrived? (ctx/update-mem! c #(cond-> (dissoc % :best-y) surface (assoc :surfaced true))))
-        (when arrived? true)))))
-
-(defn ^:async dig-cap!
-  "Drowning under a cap: dig it (and the solid cell over it) from below, with the best carried tool. A floating dig
-  under water is 25 times slower than on land, so the dig is started only when its expected time, all cells together,
-  fits share of the air left (breath/air-left-ms), and each dig gives up at what is left of that. True when a
-  dig worked, so the next pass swims up; else the reason (see cap-above, :too-slow, or :dig-failed, also after
-  :max-cap-digs digs that left the body drowning)."
-  [c share]
-  (let [p (:primitives c)
-        self (.self p)
-        head (breath/eye-cell self)
-        _ (await (look-up! c head))
-        {:keys [cells why]} (cap-above p head)
-        _ (when (and cells (< (:cap-digs (ctx/mem c) 0) (max-cap-digs))) (await (tools/equip! c (u/seen-name p (first cells)))))
-        air-ms (breath/air-left-ms self)
-        allowed-ms (* share air-ms)]
-    (cond
-      (not cells) why
-      (<= (max-cap-digs) (:cap-digs (ctx/mem c) 0)) :dig-failed
-      (< allowed-ms (reduce + (map #(.digTime p (clj->js %)) cells))) :too-slow
-      :else
-      (let [_ (ctx/update-mem! c update :cap-digs (fnil inc 0))
-            _ (access/trespass! c "breathe" (:trespass (access/choose c :dig [cells] identity)))
-            left-ms #(- allowed-ms (- air-ms (breath/air-left-ms (.self p))))
-            dug (loop [todo cells ok? false]
-                  (if-let [cell (first todo)]
-                    (let [r (status (await (tidy/dig! c cell true {:timeoutS (/ (max 0 (left-ms)) 1000)})))]
-                      (if (contains? #{"dug" "missing"} r) (recur (rest todo) true) ok?))
-                    ok?))]
-        (or dug :dig-failed)))))
-
-(defn ^:async drown-out!
-  "Drowning: to seen air near; with none seen (or after a failed try) a dry pocket where it stands, after the go-to to
-  seen air further out; else swim up a column not seen capped, go-to air further out, dig up through a natural cap;
-  with those spent a footing block for the pocket, then a cap dig that fits all the air left. True on progress; nil
-  after a failed try, the pocket's and the cap's reasons kept for the stop."
-  [c]
-  (let [target (await (breath/find-air! c (u/self-pos c)))
-        site (when (or (nil? target) (pos? (:failures (ctx/mem c) 0))) (await (pocket/site! c)))
-        _ (when (:why site) (ctx/update-mem! c assoc :pocket (:why site)))
-        far (when (:cells site) (await (go-air! c)))
-        made (when (= :none far) (await (pocket/make! c site)))]
-    (cond
-      (or (true? far) (true? made)) true
-      ;; the go-to moved the body: the site is read again next pass
-      (and (:cells site) (nil? far)) nil
-      :else
-      (let [r (await (swim-up! c target))]
-        (cond
-          (not= :no-air r) r
-          (true? (await (go-air! c))) true
-          :else
-          (let [d (await (dig-cap! c (cap-dig-share)))]
-            (cond
-              (true? d) true
-              (await (pocket/footing! c)) true
-              :else (let [d (if (= :too-slow d) (await (dig-cap! c 1)) d)]
-                      (when-not (true? d) (ctx/update-mem! c assoc :cap d))
-                      (true? d)))))))))
-
 (def headings
   "Swim headings [dx dz], east first, then south, west, north, then the diagonals."
   [[1 0] [0 1] [-1 0] [0 -1] [1 1] [-1 1] [-1 -1] [1 -1]])
@@ -411,28 +215,21 @@
               (when (and cell (= "water" (u/seen-name p cell))) cell)))
           (range leg-length (dec (min-leg)) -1))))
 
-(defn ^:async go!
-  "One go-to child call to target: true when it reports arrival. A call that waits or is declined is a failed try
-  (go-to with :escalate false waits on nothing)."
-  [c slot target range]
-  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :warn false :costs {:lethal-air 1} :at-night :go}))]
-    (and (= :done r) (boolean (:arrived (ctx/child-result c slot))))))
-
 (defn stop-afloat!
-  "Every way out of the water is spent: remember the spot's failed headings and stop with reason (:no_land_in_range, or
-  :no_blocks when a step cell was left and no block to place)."
+  "Every way out of the water is spent: remember the spot's failed headings and stop with reason (:no-land-in-range, or
+  :no-blocks when a step cell was left and no block to place)."
   [c reason]
   (let [{:keys [search-radius swim-range]} (:args c)
         m (ctx/mem c)
         pos (u/self-pos c)
         failed (:failed-headings m #{})]
     (ctx/remember! c :breathe-afloat {:pos pos :start (:start m pos) :reason reason :headings (vec failed)} afloat-policy)
-    (result/stop! c reason
-                  (str "afloat; no land within " search-radius " blocks or a swim of " swim-range
-                       (when (= :no_blocks reason) ", and no block to step out on"))
-                  :searched search-radius :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
-                  :headings-failed (count failed)
-                  :step (cond (= :no_blocks reason) :no-blocks (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall))))
+    (ctx/end c :nothing-possible reason
+             {:text (str "afloat; no land within " search-radius " blocks or a swim of " swim-range
+                         (when (= :no-blocks reason) ", and no block to step out on"))
+              :searched search-radius :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
+              :headings-failed (count failed)
+              :step (cond (= :no-blocks reason) :no-blocks (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall)})))
 
 (defn max-steps [] (settings/get settings ::max-steps))
 
@@ -458,26 +255,26 @@
   (let [p (:primitives c)
         block-at (escape/block-at-of p)
         at [(:x cell) (:y cell) (:z cell)]
-        args {:pos at :any-of (choose/fillers :climb) :fetch false}
-        item (blocks/chosen c (choose/fillers :climb))
-        refused (= :not-allowed (:reason (blocks/child-wait c :step 'jobs.blocks.place args)))
-        l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)]
-    (if refused
+        fillers (vec (choose/fillers :climb))
+        args {:pos at :use {:blocks fillers} :fetch false}
+        item (blocks/chosen c fillers)
+        l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
+        intended (ledger/intend l {:cell at :item item :before (block-at at) :job (:id c) :purpose :breathe-step})
+        _ (ledger/remember! c intended)
+        e (await (ctx/call c :step 'jobs.blocks.place args))]
+    (ledger/remember! c (ledger/reconcile intended block-at))
+    (cond
+      (= :not-allowed (contract/cause-key e))
       (ctx/update-mem! c #(-> % (assoc :step-refused true) (update :failed-steps (fnil conj []) cell)))
-      (let [intended (ledger/intend l {:cell at :item item :before (block-at at) :job (:id c) :purpose :breathe-step})
-            _ (ledger/remember! c intended)
-            r (await (ctx/call-child c :step 'jobs.blocks.place args))]
-        (ledger/remember! c (ledger/reconcile intended block-at))
-        (if (and (= :done r) (= item (block-at at)))
-          (ctx/update-mem! c update :steps (fnil inc 0))
-          (ctx/update-mem! c update :failed-steps (fnil conj []) cell))))
+      (and (= :done (:kind e)) (= item (block-at at))) (ctx/update-mem! c update :steps (fnil inc 0))
+      :else (ctx/update-mem! c update :failed-steps (fnil conj []) cell))
     :again))
 
 (defn ^:async land-by-go-to!
   "A go-to child onto land at target. :done when the body then stands on land, else :again (target excluded)."
   [c target]
   (ctx/update-mem! c (fn [m] (-> m (update :land-tries (fnil inc 0)) (update :travelled (fnil + 0) (hdist (u/self-pos c) target)))))
-  (await (go! c :land target 0))
+  (await (air/go! c :land target 0))
   (if (on-land? (:primitives c))
     :done
     (do (ctx/update-mem! c update :failed-land (fnil conj []) target)
@@ -488,7 +285,7 @@
   [c heading target]
   (let [before (u/self-pos c)]
     (ctx/update-mem! c update :travelled (fnil + 0) (hdist before target))
-    (await (go! c :leg target 2))
+    (await (air/go! c :leg target 2))
     (ctx/update-mem! c after-leg heading (>= (hdist before (u/self-pos c)) (min-leg)))
     (if (on-land? (:primitives c)) :done :again)))
 
@@ -522,7 +319,7 @@
     (cond
       shore
       (let [r (await (ctx/act c :swim (clj->js {:toward shore})))]
-        (if (or (= "landed" (status r)) (on-land? p))
+        (if (or (= "landed" (air/status r)) (on-land? p))
           :done
           (do (ctx/update-mem! c update :failed-shores (fnil conj []) shore)
               :again)))
@@ -530,8 +327,8 @@
       land (await (land-by-go-to! c land))
       (and stepcell carried?) (await (step! c stepcell))
       legs (await (swim-leg! c (first legs) (second legs)))
-      stepcell (stop-afloat! c :no_blocks)
-      :else (stop-afloat! c :no_land_in_range))))
+      stepcell (stop-afloat! c :no-blocks)
+      :else (stop-afloat! c :no-land-in-range))))
 
 (defn note!
   "Write the :breathe entry once per job instance."
@@ -542,15 +339,15 @@
       (ctx/update-mem! c assoc :noted true))))
 
 (defn fail!
-  "One failed try in this run: :again until u/max-failures, then the warn kind and stopped with reason kind."
-  [c kind text]
+  "One failed try in this run: :again until u/max-failures, then the warn kind and nothing possible with cause cause."
+  [c kind cause text]
   (if-not (u/count-fail! c)
     :again
     (do (ctx/emit! c kind :warn {:tries (u/max-failures) :text text})
-        (result/stop! c kind text))))
+        (ctx/end c :nothing-possible cause {:text text}))))
 
 (defn fail-air!
-  "fail! for :no_air: the stop says how far air was searched and why no pocket and no cap gave air."
+  "fail! for :no-air: the stop says how far air was searched and why no pocket and no cap gave air."
   [c]
   (if-not (u/count-fail! c)
     :again
@@ -558,7 +355,7 @@
           text (str "drowning and no air within reach (none seen within " (:air-radius fields) "; pocket: " (name (:pocket fields))
                     "; cap: " (name (:cap fields)) ")")]
       (ctx/emit! c :no_air :warn (assoc fields :tries (u/max-failures) :text text))
-      (apply result/stop! c :no_air text (mapcat identity fields)))))
+      (ctx/end c :nothing-possible :no-air (assoc fields :text text)))))
 
 (defn ^:async pass!
   "One look at the world and one try. :again or :held for another pass, else :done (perhaps stopped)."
@@ -581,21 +378,22 @@
               (await (ctx/act c :moveTo (clj->js {:pos side :range 0})))
               :again)
           (let [drowning? (= :drowning why)
-                ok (await (if drowning? (drown-out! c) (dig-out! c)))]
+                ok (await (if drowning? (air/drown-out! c) (air/dig-out! c)))]
             (cond
               (nil? (breath/situation p min-oxygen)) :again
               (and drowning? ok) :again
               (= :dug ok) (do (ctx/update-mem! c dissoc :failures) :again)
               drowning? (fail-air! c)
-              :else (fail! c :no_way_out "could not dig out of the block"))))))))
+              :else (fail! c :no_way_out :no-way-out "could not dig out of the block"))))))))
 
 (defn ^:async round [c]
   (loop [i 0]
     (cond
       (not (ctx/alive? c)) :done
-      (<= (max-passes) i) (result/stop! c :no_way_out "still not out after many tries")
+      (<= (max-passes) i) (ctx/end c :nothing-possible :no-way-out {:text "still not out after many tries"})
       :else (let [r (await (pass! c))]
               (case r
                 :held (recur (inc i))
                 :again (do (await (pace/pace!)) (recur (inc i)))
+                :done (ctx/end c :done nil)
                 r)))))

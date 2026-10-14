@@ -50,5 +50,5 @@
             [:fill [16 5 16] [16 8 16] "air"]]
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :job :kind :no_air :data {:cap :not-natural}} :within-s 60}
-            {:event {:source :job :kind :stopped :data {:reason :no_air :cap :not-natural}} :within-s 60}]
+            {:event {:source :job :kind :stopped :data {:reason :no-air :cap :not-natural}} :within-s 60}]
    :after [[:block [16 4 16] "oak_planks"]]}]}
