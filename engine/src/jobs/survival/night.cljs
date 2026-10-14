@@ -445,7 +445,10 @@
     (when (and (sh/night? p) (bed-down/overdue? c)) (note-needs-bed! c))
     (note-spawn-lost! c)
     (cond
-      (and (sh/unlooked-for-bed? p (ctx/view c)) (not (look/surveyed? c :cell))) (do (await (look/look-around! c)) :again)
+      (sh/unlooked-for-bed? p (ctx/view c))
+      (do (await (look/look-around! c))
+          (ctx/remember! c :night-looked {:cell (sh/feet p)} sh/night-looked-policy)
+          :again)
       (not (sh/night? p)) (await (morning! c))
       (sh/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))

@@ -26,7 +26,7 @@
   "A miner at x 5 in the one-wide stone tunnel (x 0..20), at night, with a bed block at far-bed in the open."
   [light]
   {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :offlineScale 0.0001
-   :blocks (merge hut/tunnel {"40,64,0" "red_bed"}) :light light :sees-all true})
+   :blocks (merge hut/tunnel {"40,64,0" "red_bed"}) :light light})
 
 (defn lit-fake
   "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh/buried?). :sees-all in the
@@ -52,8 +52,14 @@
   (let [{:keys [eng p]} (setup world)]
     (sh/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))
 
+(defn looked!
+  "The night job's look pass from the body's cell, as it remembers it."
+  [eng p]
+  (mem/write! (:store eng) :night-looked {:cell (sh/feet p)} sh/night-looked-policy))
+
 (defn holds? [world]
-  (let [{:keys [eng p]} (setup world)]
+  (let [{:keys [eng p]} (setup world)
+        _ (looked! eng p)]
     (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))))
 
 (deftest a-buried-body-does-not-use-a-bed-out-in-the-open
@@ -63,6 +69,7 @@
 (deftest a-buried-body-neither-places-a-carried-bed-nor-logs-out-for-a-sleeper
   (let [carrying (assoc (tunnel-world buried-light) :inventory [{:name "red_bed" :count 1}])
         {:keys [eng p]} (setup carrying)]
+    (looked! eng p)
     (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
     (is (false? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))) "mining goes on")))
 
@@ -148,3 +155,20 @@
           (await (st/tick-n eng 12))
           (is (seq (st/calls raw "look")) "looked")
           (is (seq (st/calls raw "place")) "the bed is put down"))))))
+
+(deftest a-buried-miner-looks-once-then-the-night-does-not-hold-on-the-next-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p raw]} (setup (assoc (tunnel-world buried-light) :inventory [{:name "red_bed" :count 1}]))
+              holds #(sh/night-holds? p (mem/view (:store eng)) {} (constantly true))]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (let [looks (count (st/calls raw "look"))]
+            (is (pos? looks) "looked once")
+            (is (false? (holds)) "no hold after the look, whatever stays unseen")
+            (st/teleport! raw 6 64 0)
+            (is (false? (holds)) "nor on the next cell of the tunnel")
+            (core/submit! eng '(jobs.survival.night) {})
+            (await (st/tick-n eng 12))
+            (is (= looks (count (st/calls raw "look"))) "no second look pass")))))))

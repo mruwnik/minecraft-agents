@@ -588,13 +588,27 @@
   [p]
   (and (shut-in-room? p) (wide-room? (reach/room p (feet p)))))
 
+(def night-looked-policy {:cap 1 :ttl (quot ms-per-day 2)})
+
+(defn looked-here?
+  "Whether the night's look pass (night.cljs, remembered as :night-looked {:cell}) was from this room or within two
+  blocks: a cell that shows no face (a tunnel's diagonals) stays unseen whatever is looked at."
+  [p view]
+  (let [self (feet p)
+        {:keys [cell]} (:data (mem/latest view :night-looked))]
+    (boolean (and cell
+                  (or (<= (u/dist self cell) 2)
+                      (contains? (:cells (reach/room p self)) [(:x cell) (:y cell) (:z cell)]))))))
+
 (defn unlooked-for-bed?
-  "Night, awake, a bed carried or remembered, and a cell beside the feet (floor, feet or head) the body has never seen:
-  the room checks (shut-in-hut?, walk-leaves-shelter?) would read the room smaller than it is, so look before deciding."
+  "Night, awake, a bed carried or remembered, and a cell beside the feet (floor, feet or head) the body has never seen
+  and has not looked from here (looked-here?): the room checks (shut-in-hut?, walk-leaves-shelter?) would read the room
+  smaller than it is, so look before deciding."
   [p view]
   (let [{:keys [x y z]} (feet p)]
     (boolean (and (night? p) (not (sleeping? p))
                   (or (some? (carried-bed p)) (some? (mem/place view :bed)))
+                  (not (looked-here? p view))
                   (look/unseen? p (for [dx [-1 0 1] dz [-1 0 1] dy [-1 0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))))))
 
 (defn breached-home?
