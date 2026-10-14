@@ -648,6 +648,7 @@ export const main = async (args) => {
   if (!(await waitMin(p, capNow))) return 4
   const workers = workerSpecs(capNow(), bodyCap(), p.prefix, p.firstPlot)
   stopStaleBodies(script, p.prefix)
+  if (p.passthrough.includes('--allow-time')) restoreSleepRule(script, p.passthrough, workers[0].body, true)
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
   process.on('exit', reaper.reap)
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { reaper.reap(); process.exit(code) })

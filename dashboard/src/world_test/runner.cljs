@@ -726,6 +726,18 @@
       :else (.then (if old (set-sleep-rule! send (update opts :time-log #(or % (:time-log st))) (if (= 101 old) 100 old) why) (js/Promise.resolve nil))
                    (fn [_] (fs/rmSync file #js {:force true}) old)))))
 
+(defn reset-stray-sleep-rule!
+  "A 101 on the server that no recorded batch owns (a killed run, an old bug) goes back to the vanilla 100, logged.
+  Only with time changes allowed; any other value is left alone."
+  [send opts why]
+  (if (or (not (:allow-time opts)) (read-sleep-state opts))
+    (js/Promise.resolve nil)
+    (.then (send [(str "gamerule " sleep-rule)])
+           (fn [[reply]]
+             (if (= 101 (parse-gamerule reply))
+               (set-sleep-rule! send opts 100 why)
+               nil)))))
+
 (defn claim-night-batch!
   "Atomically writes the batch marker; true for the one starter that wins it."
   [batch & [dir]]
@@ -1480,14 +1492,17 @@
            {:stop! stop!
             :acquire! #(acquire-time-lock! phase (str (:id c) (if (= :any phase) " runs under the current time" " depends on the time of day")) batch)
             :first-set! (fn []
-                          (-> (cond
+                          (-> (if (and (:sleep-skip rc) (not= :any phase))
+                                (reset-stray-sleep-rule! rcon! opts (str (:id c) " needs the vanilla night skip"))
+                                (js/Promise.resolve nil))
+                              (.then (fn [_] (cond
                                 (= :any phase) true
                                 (and batch (night-batch-set? batch)) (js/Promise.resolve true)
                                 batch (.then (set-time! opts 14000 (str (:id c) " starts night batch " batch))
                                              (fn [ok] (if ok
                                                         (.then (start-sleep-rule! rcon! opts rc batch nil (str (:id c) " starts night batch " batch)) (constantly ok))
                                                         ok)))
-                                :else (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))))
+                                :else (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))))))
                               (.then (fn [ok]
                                        (if (or (not ok) (= :any phase))
                                          ok
@@ -1865,7 +1880,9 @@
                                    (log! "world-test --check: " (count res) " cases, " (count (remove #(= :pass (:status %)) res)) " failed")
                                    (check-exit-code res))
                    (:stop-stale-bodies opts) (do (stop-stale-bodies! (:stop-stale-bodies opts)) 0)
-                   (:sleep-rule-restore opts) (.then (restore-sleep-rule! rcon! opts "world-test restores a recorded gamerule" (if (= :dead (:sleep-rule-restore opts)) {:only-dead? true} {:pool (owner-pid)})) (constantly 0))
+                   (:sleep-rule-restore opts) (-> (restore-sleep-rule! rcon! opts "world-test restores a recorded gamerule" (if (= :dead (:sleep-rule-restore opts)) {:only-dead? true} {:pool (owner-pid)}))
+                                                  (.then (fn [_] (when (= :dead (:sleep-rule-restore opts)) (reset-stray-sleep-rule! rcon! opts "pool start"))))
+                                                  (.then (constantly 0)))
                    (:night-batch-end opts) (.then (end-night-batch! rcon! opts (:night-batch-end opts) nil) (constantly 0))
                    (:list opts) (do (run! (if (:night-classes opts)
                                            #(log! (night-class-line %))

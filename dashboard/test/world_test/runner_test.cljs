@@ -1314,3 +1314,26 @@
     (is (= (path/join dir "f__c__r2-a2.edn") (:trace out)))
     (is (fs/existsSync (:trace out)))
     (fs/rmSync dir #js {:recursive true :force true})))
+
+(deftest a-stray-101-with-no-recorded-batch-goes-back-to-100-and-is-logged
+  (async done
+    (let [sent (atom []) dir (tmp-dir) log (path/join dir "time.log")
+          opts {:allow-time true :sleep-state-dir dir :time-log log :body "B"}]
+      (-> (r/reset-stray-sleep-rule! (fake-send sent 101) opts "pool start")
+          (.then (fn [_]
+                   (is (= ["gamerule players_sleeping_percentage" "gamerule players_sleeping_percentage 100"] @sent))
+                   (is (re-find #"gamerule players_sleeping_percentage 100 by world-test B .*\(pool start\)" (fs/readFileSync log "utf8")))
+                   (reset! sent [])
+                   (r/reset-stray-sleep-rule! (fake-send sent 60) opts "pool start")))
+          (.then (fn [_]
+                   (is (= ["gamerule players_sleeping_percentage"] @sent) "any other value is left alone")
+                   (reset! sent [])
+                   (fs/writeFileSync (path/join dir "world-test-sleep-rule.edn") (pr-str {:old 60 :batch "n1" :pid js/process.pid}))
+                   (r/reset-stray-sleep-rule! (fake-send sent 101) opts "case")))
+          (.then (fn [_]
+                   (is (empty? @sent) "a recorded batch owns its 101")
+                   (r/reset-stray-sleep-rule! (fake-send sent 101) (dissoc opts :allow-time) "case")))
+          (.then (fn [_]
+                   (is (empty? @sent) "without --allow-time the rule is not touched")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
