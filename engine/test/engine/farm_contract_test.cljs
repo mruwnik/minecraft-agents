@@ -234,7 +234,11 @@
         (doseq [[least kind cause] [[5 :done :done] [6 :condition-failed :need] [:all :condition-failed :need]]]
           (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "carrot" 5 "bread" 12))) plant {:box pt/field-box :least least :fetch false} 100))]
             (is (= [kind cause] [(:kind e) (contract/cause-key e)]) (str ":least " least))
-            (is (= 5 (get-in e [:data :planted])))))))))
+            (is (= 5 (get-in e [:data :planted])))))
+        (doseq [[least kind cause] [[9 :done nil] [:all :done nil]]]
+          (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9))) plant {:box pt/field-box :least least} 100))]
+            (is (= {:kind kind :cause cause} (kc e)) (str "nothing left, :least " least))
+            (is (= 9 (get-in e [:data :planted])))))))))
 
 ;; ------------------------------------------------------------------ harvest
 
@@ -262,3 +266,18 @@
                (kc (await (ending-of (ht/start {:world ht/zoned-world :shared (ew/of-data {} {} [(ht/zone-over-crop "Miles")])}) harvest {:radius 6} 20)))))
         (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}}
                (kc (await (ending-of (ht/start {:world {:blocks (ht/field "wheat" 3 [2 3] [2]) :ages (ht/ages 3 [2 3] [2])}}) harvest {} 20)))))))))
+
+(deftest harvest-partial-run-is-done-only-when-it-meets-least
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[least kind cause] [[9 :done nil] [:all :done nil]]]
+          (let [e (await (ending-of (ht/start {:world ht/wheat-world}) harvest {:least least} 200))]
+            (is (= {:kind kind :cause cause} (kc e)) (str ":least " least))
+            (is (= 9 (get-in e [:data :cut])))))))))
+
+(deftest harvest-quote-counts-the-seeds-it-replants
+  (let [p (tu/seeing-all (tu/fake-on-floor ht/wheat-world))
+        quote-for (fn [args] ((:quote-of (get registry/jobs harvest)) {:primitives p :args (merge (ht/plain-args {}) args)}))]
+    (is (= {"wheat_seeds" [0 9 9]} (:items (:uses (quote-for {})))))
+    (is (nil? (:items (:uses (quote-for {:replant false})))))))

@@ -38,7 +38,8 @@
   Ends with data {:cut :replanted :bare :lost :gave-up}: cells that could not be replanted, or stopped being a crop
   afterwards, are named in :bare and a harvest.bare warn. Done when it cut or replanted some and the number meets :least
   (cells, default 1; :all wants every ripe crop it found); with none cut and crops given up on, nothing-possible
-  :gave-up; with nothing left to cut, condition-failed :nothing-to-do. done? counts the cells cut and the ripe crops left.")
+  :gave-up; some cut but fewer than :least with nothing left, nothing-possible :partial; none, condition-failed
+  :nothing-to-do. done? counts the cells cut and the ripe crops left.")
 
 (a/defargs args
   {:radius {:doc "how far around the centre to harvest, in blocks" :spec (a/num-in 0 nil) :default 12}
@@ -78,7 +79,8 @@
                                    (filter #(and (:cut %) (not (planned (:pos %)))) (:replant m)))))))
 
 (defn center-of
-  "The centre: the :center arg, else the remembered one, else the body's position."
+  "The centre: the :center arg, else the remembered one (a bare ctx of a quote test has no job memory), else the
+  body's position."
   [c]
   (or (:center (:args c)) (when (:view c) (:center (ctx/mem c))) (u/self-pos c)))
 
@@ -264,8 +266,12 @@
 
 (defn quote-of [c]
   (let [c (with-field c (planned c))
-        n (count (ripe-raw c nil))]
-    {:uses {:time [(* 0.5 n) (* 2 n) (* 10 n)]}
+        ripe (ripe-raw c nil)
+        n (count ripe)]
+    {:uses (cond-> {:time [(* 0.5 n) (* 2 n) (* 10 n)]}
+             (and (:replant (:args c)) (pos? n))
+             (assoc :items (update-vals (frequencies (keep #(get seed-of (u/seen-name (:primitives c) %)) ripe))
+                                        (fn [k] [0 k k]))))
      :done [0 n n]}))
 
 ;; ------------------------------------------------------------------ steps
@@ -443,6 +449,7 @@
       no-crop? (ctx/end c :condition-failed :no-crop-seen result)
       (and (pos? worked) (common/enough? c worked (+ worked left))) (ctx/end c :done nil result)
       (pos? left) (ctx/end c :nothing-possible :gave-up result)
+      (pos? worked) (ctx/end c :nothing-possible :partial result)
       :else (ctx/end c :condition-failed :nothing-to-do result))))
 
 (defn sync-plan-debts!
