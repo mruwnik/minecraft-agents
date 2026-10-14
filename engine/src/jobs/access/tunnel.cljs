@@ -175,7 +175,7 @@
   (let [{:keys [plan]} (ctx/mem c)
         accept (set (:accept (:args c)))
         in (stair/rules-in c feet)
-        base (ln/run-cells feet (:heading plan))
+        base (stair/step-cells feet :level (:heading plan))
         {:keys [next cut] :as cells} (assoc base :bridged? (contains? (:bridged (ctx/mem c)) (:floor base))
                                                  :filler? (some? (choose/filler c :build)))]
     (await (stair/look-ahead! c feet next cut))
@@ -199,7 +199,7 @@
   [c feet]
   (let [accept (set (:accept (:args c)))
         in (stair/rules-in c feet)
-        {:keys [next cut] :as cells} (ln/run-cells feet (:heading (:plan (ctx/mem c))))
+        {:keys [next cut] :as cells} (stair/step-cells feet :level (:heading (:plan (ctx/mem c))))
         over (first cut)]
     (await (stair/look-ahead! c feet next cut))
     (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet [over]))

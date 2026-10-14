@@ -26,13 +26,13 @@
             [jobs.lib.walk :as walk]))
 
 (def doc
-  "Dig a 1-wide stair :down or :up along :heading (nil: the way the body faces) from where the body stands, :steps steps or to feet height :y.
+  "Dig a 1-wide stair :down or :up (or a flat run, :level) along :heading (nil: the way the body faces) from where the body stands, :steps steps or to feet height :y.
   The check waits (:no-tool, :no-free-slot) when the next dig lacks a pickaxe or room for the drop; with :make-room (default) a
   pack without room is first made room in (jobs.storage.make-room child, once per pack content), so it waits :no-free-slot only when nothing may be tossed.
   A stair down first stocks torches when under 8 are carried (jobs.lib.trip/torches-ready!; :stock-torches false skips it, as does :fetch off).
 
   A step cuts three cells, top first, so the body can walk one block forward and one down (or up) with full
-  headroom. Then the body walks into the step (a go-to child). Before cutting the next step it plans the
+  headroom; a :level step cuts two (head, then feet) and its floors are no stair way (:stair-way below). Then the body walks into the step (a go-to child). Before cutting the next step it plans the
   way back to the stair's first cell on a fresh pathWorld. The way must be whole and walkable by the executor
   (no gap, door or swim), else the stair stops :no-way-back.
 
@@ -104,7 +104,7 @@
 (a/defargs args
   {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
    :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
-   :dir {:doc ":down or :up" :spec #{:down :up} :default :down}
+   :dir {:doc ":down, :up or :level (a flat run, :steps only)" :spec #{:down :up :level} :default :down}
    :heading {:doc ":north :east :south or :west; nil: the way the body faces" :spec #{:north :east :south :west} :default nil}
    :steps {:doc "steps to cut; or give :y" :spec (a/int-in 1 nil) :default nil}
    :y {:doc "feet height to end at, instead of :steps" :spec (a/num-in nil nil) :default nil}
@@ -132,10 +132,25 @@
 (defn max-fall-digs [] (settings/get settings ::max-fall-digs))
 (defn max-steps [] (settings/get settings ::max-steps))
 
+(def rises (assoc shape/rises :level 0))
+
+(defn delta
+  "One step's move [dx dy dz]."
+  [dir heading]
+  (let [[dx dz] (shape/headings heading)] [dx (rises dir) dz]))
+
+(defn step-cells
+  "plan.shape/step-cells, and for :level the run step: {:next :cut (head first) :floor :under}."
+  [feet dir heading]
+  (if (= :level dir)
+    (let [n (shape/add feet (delta dir heading))]
+      {:next n :cut [(shape/add n [0 1 0]) n] :floor (shape/add n [0 -1 0]) :under (shape/add n [0 -2 0])})
+    (shape/step-cells feet dir heading)))
+
 (defn stair-index
   "i when feet is the stair's cell after i steps from origin, 0 <= i <= steps; else nil."
   [origin feet dir heading steps]
-  (let [[dx dy dz] (shape/delta dir heading)
+  (let [[dx dy dz] (delta dir heading)
         i (+ (* dx (- (feet 0) (origin 0))) (* dz (- (feet 2) (origin 2))))]
     (when (and (<= 0 i steps) (= feet (shape/add origin [(* i dx) (* i dy) (* i dz)])))
       i)))
@@ -187,7 +202,7 @@
 (defn way-floors
   "The floors of the steps a stair walked (not the start's own ground), from its origin, direction and steps reached."
   [origin dir heading steps]
-  (let [d (shape/delta dir heading)]
+  (let [d (delta dir heading)]
     (vec (for [i (range 1 (inc (or steps 0)))] (shape/add (shape/add origin (mapv #(* i %) d)) [0 -1 0])))))
 
 (defn joined-way
@@ -316,13 +331,13 @@
   (assoc in :unseen? #(unknown? (:primitives c) %)))
 
 (defn ^:async look-ahead!
-  "Once per step from feet (memory :looked): look at the next cell and the floor under it, at each cut cell still unknown,
-  and at the unknown neighbours of the feet and head, so what a player would see of the step is seen when it is judged."
+  "Once per step from feet (memory :looked): look at the next cell and the floor under it, at each cut cell and the cell
+  over the top one (lava or a falling block there is a hazard) still unknown, and at the unknown neighbours of the feet and head, so what a player would see of the step is seen when it is judged."
   [c feet next cut]
   (when-not (= [feet next] (:looked (ctx/mem c)))
     (ctx/update-mem! c assoc :looked [feet next])
     (await (look-at! c next))
-    (loop [cells (concat cut (map #(shape/add next [0 % 0]) [-1 -2])
+    (loop [cells (concat cut [(shape/add (first cut) [0 1 0])] (map #(shape/add next [0 % 0]) [-1 -2])
                          (for [b [feet (shape/add feet [0 1 0])] d rules/neighbour-deltas] (shape/add b d)))]
       (when-let [cell (first cells)]
         (when (unknown? (:primitives c) cell) (await (look-at! c cell)))
@@ -398,10 +413,10 @@
   "Steps to cut from the args and the start feet, or {:error text}."
   [{:keys [dir heading steps y]} [_ fy _]]
   (cond
-    (not (shape/rises dir)) {:error "dir must be :down or :up"}
+    (not (rises dir)) {:error "dir must be :down, :up or :level"}
     (not (shape/headings heading)) {:error "heading must be :north :east :south or :west"}
     (and (int? steps) (pos? steps)) steps
-    (and (int? y) (pos? (* (shape/rises dir) (- y fy)))) (js/Math.abs (- y fy))
+    (and (int? y) (pos? (* (rises dir) (- y fy)))) (js/Math.abs (- y fy))
     :else {:error "give :steps > 0, or :y beyond the feet in :dir"}))
 
 (defn finish!
@@ -413,9 +428,9 @@
                        :at (reach/standing-vec (:primitives c)) :dug (:dug m []) :ores (vec (ore-pick/picked c))}
                       detail)]
     (ctx/result! c result)
-    (when-let [{:keys [origin]} (when (pos? steps) m)]
-      (let [{:keys [dir heading]} (:args c)]
-        (record-way! c origin dir heading steps)))
+    (let [{:keys [dir heading]} (:args c)]
+      (when (and (pos? steps) (not= :level dir))
+        (record-way! c (:origin m) dir heading steps)))
     (if (= :done reason)
       (ctx/emit! c :stair.done :info (assoc result :text (str "stair " (name (:dir (:args c))) " done, " steps " steps")))
       (ctx/emit! c :stair.stopped :warn
@@ -442,9 +457,9 @@
         feet (reach/standing-vec (:primitives c))
         {:keys [origin target]} (ctx/mem c)
         on-stair? (or (nil? origin) (some? (stair-index origin feet dir heading target)))]
-    (when (and on-stair? (shape/rises dir) (shape/headings heading))
+    (when (and on-stair? (rises dir) (shape/headings heading))
       (let [block-at (:block-at (rules-in c feet))
-            {:keys [cut]} (shape/step-cells feet dir heading)
+            {:keys [cut]} (step-cells feet dir heading)
             block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (rules/air n)) (not (rules/unbreakable n))) n)) cut)]
         (cond
           (nil? block) nil
@@ -458,9 +473,9 @@
         {:keys [origin target]} (ctx/mem c)
         feet (reach/standing-vec (:primitives c))]
     (when (and (or (nil? origin) (and (= feet origin) (empty? (:dug (ctx/mem c)))))
-               (shape/rises dir) (shape/headings heading))
+               (rises dir) (shape/headings heading))
       (let [in (rules-in c feet)
-            cells (-> (shape/step-cells feet dir heading) (assoc :up? (= :up dir)))
+            cells (-> (step-cells feet dir heading) (assoc :up? (= :up dir)))
             stop (stop-of in cells (set (:accept (:args c))))]
         (when (#{:zone :claim :footprint} (:reason stop)) stop)))))
 
@@ -543,7 +558,7 @@
   "The bridge/bridge-plans opts of the stair: a stair down may bridge back along its line (a stair up would place into its own cut)."
   [c]
   (let [{:keys [dir heading]} (:args c)
-        [dx _ dz] (shape/delta dir heading)]
+        [dx _ dz] (delta dir heading)]
     (when (= :down dir) {:back [(- dx) (- dz)] :depth (settings/get settings ::bridge-depth)})))
 
 (defn ^:async shut-opening!
@@ -608,7 +623,7 @@
             (ctx/update-mem! c assoc :checked i)
             (if (= i target)
               (or (await (lava-step! c :stair.sealed (:block-at in) feet [])) :finished)
-              (let [{:keys [next cut] :as cells} (-> (shape/step-cells feet dir heading)
+              (let [{:keys [next cut] :as cells} (-> (step-cells feet dir heading)
                                                            (as-> cs (assoc cs :up? (= :up dir)
                                                                  :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs))
                                                                  :filler? (some? (choose/filler c :build)))))
@@ -631,7 +646,7 @@
         {:keys [origin target]} (ctx/mem c)
         i (when origin (stair-index origin (reach/standing-vec (:primitives c)) dir heading target))]
     (when (and i (pos? i))
-      (shape/add origin (mapv #(* (dec i) %) (shape/delta dir heading))))))
+      (shape/add origin (mapv #(* (dec i) %) (delta dir heading))))))
 
 (defn ^:async back-off!
   "After a failed seal: walk one step back up the stair (a go-to child), then finish with the stop, :backed-off true

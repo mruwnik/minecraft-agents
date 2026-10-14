@@ -227,8 +227,10 @@
   (are [args steps] (= steps (stair/target-steps args [0 65 0]))
     {:dir :down :heading :east :steps 4} 4
     {:dir :down :heading :east :y 57} 8
-    {:dir :up :heading :east :y 71} 6)
+    {:dir :up :heading :east :y 71} 6
+    {:dir :level :heading :east :steps 2} 2)
   (are [args] (:error (stair/target-steps args [0 65 0]))
+    {:dir :level :heading :east :y 65}
     {:dir :down :heading :east}
     {:dir :down :heading :east :y 70}
     {:dir :sideways :heading :east :steps 2}
@@ -422,6 +424,18 @@
           (is (= :done (:status @out)))
           (is (= [6 65 0] (:at @out)) "on the surface")
           (is (every? #(<= 59 (get-in % [:cell 1])) (:dug @out)) "never digs below the start"))))))
+
+(deftest a-level-run-cuts-feet-and-head-cells-and-records-no-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [rock (dissoc (stone -3 12 50 67) "0,65,0" "0,66,0")
+              {:keys [out p eng]} (await (stair! {:blocks rock} {:dir :level :heading :east :steps 2} (fn [_])))]
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (= [2 65 0] (:at @out)))
+          (is (= [[1 66 0] [1 65 0] [2 66 0] [2 65 0]] (mapv :cell (:dug @out))))
+          (is (= "stone" (block-at p [2 64 0])) "the floor is never dug")
+          (is (empty? (mem/entries (mem/view (:store eng)) :stair-way)) "a flat run is no stair way"))))))
 
 (deftest a-pickaxe-that-breaks-in-the-last-stair-dig-says-tool-broke-and-tool-none
   ;; no equip follows the last dig, so only the after-dig check can tell

@@ -146,16 +146,16 @@
          {:pos pos :name name})))
 
 (defn book-ground!
-  "A cell of the ground footprint that the snapshot did not see, about to be dug: the block is known now, so record it for
-  the mend."
-  [c pos]
+  "A cell of the ground footprint that the snapshot did not see, about to be dug (or dug, its block name given): the block
+  is known now, so record it for the mend."
+  ([c pos] (book-ground! c pos (u/seen-name (:primitives c) (select-keys pos [:x :y :z]))))
+  ([c pos name]
   (let [{:keys [start ground]} (ctx/mem c)
-        cell (select-keys pos [:x :y :z])
-        name (u/seen-name (:primitives c) cell)]
+        cell (select-keys pos [:x :y :z])]
     (when (and (:mend (:args c)) start name (not (not-solid name))
                (some #{cell} (ground-pos start))
                (not-any? #(= cell (:pos %)) ground))
-      (ctx/update-mem! c update :ground (fnil conj []) {:pos cell :name name}))))
+      (ctx/update-mem! c update :ground (fnil conj []) {:pos cell :name name})))))
 
 (defn way-floor
   "The first of cells (maps {:x :y :z}) that is a still-solid floor of a stair this body cut (memory :stair-way): digging it

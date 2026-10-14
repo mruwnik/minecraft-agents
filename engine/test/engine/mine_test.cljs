@@ -916,7 +916,7 @@
         ;; lava behind the rock cannot be seen before the cut: the dig child seals it from the rim (fetching a block)
         (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10}
                                  (rock-world {"5,64,0" "lava"}) 80))]
-          (is (= 1 (count (events-of s :blocks.dig.sealed))))
+          (is (= 1 (count (events-of s :stair.sealed))))
           (is (not= "lava" (block-at s 5 64 0)))
           (is (= :tunnel-length (:reason (last (events-of s :mine.done))))))))))
 
@@ -929,6 +929,7 @@
           (is (= :tunnel-length (:reason (done-event s))))
           (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))))
           (is (= (set (for [x [1 2 3 4] y [64 65]] [x y 0])) (set (dug-cells s))))
+          (is (= 4 (count (events-of s :stair.step))) "each step is a jobs.access.stair child")
           (is (= [0 64 0] (feet s))))))))
 
 ;; ------------------------------------------------------------------ ore depth and variants
@@ -1015,7 +1016,7 @@
       (fn ^:async t []
         (let [s (await (facing-west-run {"-1,64,0" "water"} 4 250))
               legs (:legs (done-event s))]
-          (is (= {:heading "west" :length 0 :stop :water} (first legs)))
+          (is (= {:heading "west" :length 0 :stop :fluid-in-cut} (first legs)))
           (is (= 2 (count legs)) (pr-str legs))
           (is (= 4 (:length (second legs))))
           (is (some #(< (nth % 2) 0) (dug-cells s)) "it went on north"))))))
@@ -1316,15 +1317,6 @@
           (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))))
           (is (= "air" (block-at s 2 65 0)) "the fallen gravel is dug")
           (is (= 4 (count (filter #{[2 65 0]} (dug-cells s)))) "the cut, then each of the 3 that fell"))))))
-
-(deftest what-a-cut-leaves-tells-an-unseen-cell-from-a-fallen-block
-  (let [world {[1 65 0] "air" [1 64 0] "cave_air" [2 65 0] "gravel"}
-        cut [{:x 1 :y 65 :z 0} {:x 1 :y 64 :z 0}]
-        after #(mine/after-cut (fn [{:keys [x y z]}] (get % [x y z])) cut)]
-    (is (= :clear (after world)))
-    (is (= :refilled (after (assoc world [1 64 0] "gravel"))))
-    (is (= :unseen (after (dissoc world [1 64 0]))) "not yet seen: look again, do not cut")
-    (is (= :unseen (after (-> world (dissoc [1 64 0]) (assoc [1 65 0] "sand")))))))
 
 (deftest the-tunnel-runs-the-way-asked-or-the-way-the-body-faces
   (async done
@@ -2147,7 +2139,7 @@
           (await (run-ticks s 200))
           (is (finished? s))
           (is (= "stone" (block-at s 3 60 0)) "the floor of the lowest step is not cut")
-          (is (= [:way-out] (mapv :reason (tunnel-ends s))) "the tunnel ends saying why")
+          (is (= [:undercuts-way] (mapv :reason (tunnel-ends s))) "the tunnel ends saying why")
           (is (= [4 60 0] (feet s))))))))
 
 ;; ------------------------------------------------------------------ unseen faces are no hazard
@@ -2163,18 +2155,6 @@
   (is (= :no (classify-in {"0,65,3" "lava"})) "lava on top shows as drips: known")
   (is (= :no (classify-in {"0,64,2" "lava"})) "lava in the open face, seen")
   (is (= :buried (classify-in {"1,64,3" "stone" "-1,64,3" "stone" "0,65,3" "stone" "0,63,3" "stone" "0,64,4" "stone" "0,64,2" "stone"}))))
-
-(defn cut-hazard-of
-  "mine/cut-hazard of the stone at [1 64 0] when the body's sensedAt answers (answer orig pos) for it."
-  [answer]
-  (let [p (:p (start {:world {:blocks {"1,64,0" "stone"}}}))
-        orig (aget p "sensedAt")]
-    (aset p "sensedAt" (fn [pos] (if (= 1 (.-x pos)) (answer pos) (orig pos))))
-    (mine/cut-hazard {:primitives p :args {}} {:x 1 :y 64 :z 0})))
-
-(deftest a-loaded-cell-the-body-has-not-seen-is-no-tunnel-hazard-an-unloaded-one-is
-  (is (nil? (cut-hazard-of (fn [pos] #js {:unknown true :pos pos}))) "loaded, never seen: the dig looks")
-  (is (= {:reason :not-loaded :at {:x 1 :y 64 :z 0}} (cut-hazard-of (fn [_] nil))) "no chunk there"))
 
 (deftest the-tunnel-cuts-beside-lava-it-has-not-seen
   (async done
@@ -2347,11 +2327,10 @@
         (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10}
                                  (assoc (rock-world {}) :noPath ["2.5,64,0.5"]) 80))
               e (first (tunnel-ends s))]
-          (is (= :walk-failed (:reason e)))
-          (is (= [2 64 0] (:at e)))
-          (is (= {:status "blocked" :reason "noPath"} (select-keys (:walk e) [:status :reason])))
-          (is (= {:cell "air" :floor "stone"} (select-keys (:walk e) [:cell :floor])))
-          (is (re-find #"blocked noPath" (:text e))))))))
+          (is (= :step-failed (:reason e)))
+          (is (= [1 64 0] (:at e)))
+          (is (= {:status :stopped :reason :unreachable} (select-keys (:walk e) [:status :reason])))
+          (is (re-find #"walk stopped unreachable" (:text e))))))))
 
 ;; ------------------------------------------------------------------ low health
 

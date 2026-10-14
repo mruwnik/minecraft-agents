@@ -17,13 +17,14 @@
           (is (= :count (:reason (m/done-event s))))
           (is (>= (get (m/inv s) "sand") 6)))))))
 
-(deftest mine-runs-the-strip-tunnel-and-walks-home-in-one-round
+(deftest mine-runs-the-strip-tunnel-and-walks-home-once-the-flow-delays-have-passed
   (async done
     (tu/run-async done
       (fn ^:async t []
+        ;; each tunnel step (a stair child) yields :continue until a flow delay has passed since its dig
         (let [s (await (m/scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4}
-                                   (m/rock-world {"3,64,1" "iron_ore"}) 1))]
-          (is (m/finished? s) "ended after one tick")
+                                   (m/rock-world {"3,64,1" "iron_ore"}) 14))]
+          (is (m/finished? s) "ended once the flow delays passed")
           (is (= 1 (get (m/inv s) "raw_iron")))
           (is (= [0 64 0] (m/feet s))))))))
 
@@ -39,13 +40,13 @@
           (is (m/finished? s) "ended once the flow delay passed")
           (is (= :count (:reason (m/done-event s)))))))))
 
-(deftest mine-hangs-torches-in-one-round
+(deftest mine-hangs-torches-once-the-flow-delays-have-passed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (m/scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :torch-interval 2}
-                                   (assoc (m/rock-world {}) :inventory m/pickaxe) 1))]
-          (is (m/finished? s) "ended after one tick")
+                                   (assoc (m/rock-world {}) :inventory m/pickaxe) 14))]
+          (is (m/finished? s) "ended once the flow delays passed")
           (is (some #(= "torch" (.-item (.-args %))) (m/calls s "place")) "a torch was placed"))))))
 
 (deftest get-seeds-breaks-grass-until-the-count-in-one-round

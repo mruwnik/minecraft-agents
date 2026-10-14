@@ -30,12 +30,6 @@
            (and (<= (+ y 2) hi) (or (nil? seen-at) (every? seen-at [[x y z] [x (+ y 1) z] [x (+ y 2) z]])) (rules/solid-floor? block-at [x y z])) (inc y)
            :else nil))))))
 
-(defn run-cells
-  "The cells of one flat run step from feet: {:next :cut (head first) :floor :under}."
-  [feet heading]
-  (let [n (ahead feet heading 1)]
-    {:next n :cut [(shape/add n [0 1 0]) n] :floor (shape/add n [0 -1 0]) :under (shape/add n [0 -2 0])}))
-
 (defn line
   "The steps of a line, as [feet cells] each: the stair from entry, then the run; with :end (the stair's last cell)
   and :stand."
@@ -44,7 +38,7 @@
         end (last stair-feet)
         run-feet (take (inc run) (iterate #(ahead % heading 1) end))]
     {:steps (concat (map (fn [f] [f (shape/step-cells f dir heading)]) (butlast stair-feet))
-                    (map (fn [f] [f (run-cells f heading)]) (butlast run-feet)))
+                    (map (fn [f] [f (stair/step-cells f :level heading)]) (butlast run-feet)))
      :end end
      :stand (last run-feet)}))
 
@@ -93,7 +87,7 @@
   [in plan accept]
   (let [{:keys [steps stand]} (line plan)]
     (or (some (fn [[feet cells]] (step-stop in feet cells accept)) steps)
-        (step-stop in stand (run-cells stand (:heading plan)) accept))))
+        (step-stop in stand (stair/step-cells stand :level (:heading plan)) accept))))
 
 (defn standable?
   "Whether the body can stand at feet: it and the head cell open, a solid floor under."
