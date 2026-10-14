@@ -531,6 +531,11 @@
     1 11.4 false
     3 11.4 false))
 
+(deftest gap-jump-while-held-by-the-edge-at-the-client-width
+  (are [x expected] (= expected (gap-jump-of (gap-steps 1) (pose x 64 0.5)))
+    11.305 true
+    11.4 false))
+
 (deftest gap-jump-down-two-walks-from-the-edge
   (are [x expected] (= expected (gap-jump-of (gap-steps 2 :landing-y 63) (pose x 64 0.5)))
     10.65 false

@@ -52,7 +52,7 @@
               2 {:from 0.4 :sprint true}   ; edge; a walking jump falls short over 2 cells or more: they need a sprint for the run and the flight
               3 {:from 0.1 :sprint true}}
    :gap-jump-down {2 {:from 0.0 :sprint false}}  ; one block down, by width, where it differs (a sprint jump over 2 overshoots a 1x1 landing)
-   :gap-past constants/hitbox-half-width ; feet up to this far past the takeoff edge are still held by it (half the body's width)
+   :gap-past constants/body-half-width ; feet up to this far past the takeoff edge are still held by it (half the body's width)
    :gap-headroom 3         ; free blocks over the takeoff's stand height needed over takeoff and gap cells
    :bounce-settle-vy 0.4   ; a :bounce drop is reached only on the ground with |vy| at most this (the bounce left is under a block)
    :bounce-margin-ticks 20 ; ...or this long past the settle time of its fall (base/bounce-flight) after the first contact
