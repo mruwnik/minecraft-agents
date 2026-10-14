@@ -19,7 +19,8 @@
   - :bake (jobs.items.bake) when 3 or more wheat are carried above its :keep entry or the chest holds them (its
     stock booked in :fetch/stock, or unknown): bake takes the chest's wheat, crafts it at the table near :chest and
     keeps the bread's :keep loaves.
-  - :deposit (jobs.storage.deposit) of the cooked foods and bread carried above their :keep entries into :chest.
+  - :deposit (jobs.storage.deposit) of the cooked foods and bread this pass made, above their :keep entries, into
+    :chest; food the body brought or withdrew stays carried.
   A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-chest,
   :nothing-to-store. A step whose child stops is booked with its summary and the stop as :reason; the pass goes on.
   Needs (conditions, a listed job waits): a run under way, or a step that would run (raw food carried, wheat for a loaf
@@ -55,24 +56,41 @@
 (def job-sym 'jobs.items.kitchen)
 (def rest-key "kitchen")
 
+(defn made
+  "{name n} the pass has cooked or baked so far (and not yet put in the chest), from its booked report."
+  [report]
+  (let [bake (:bake report)
+        loaves (- (:baked bake 0) (:deposited bake 0))]
+    (into (if (pos? loaves) {"bread" loaves} {})
+          (keep (fn [[food b]] (when (pos? (:smelted b 0)) [(str "cooked_" food) (:smelted b)])))
+          (:smelt report))))
+
 (defn facts
-  "What the decisions are made from: {name count} carried, whether a chest is known and the wheat it is booked to
-  hold (nil when unknown), the foods tried this pass."
+  "What the decisions are made from: {name count} carried, {name n} made this pass, whether a chest is known and the
+  wheat it is booked to hold (nil when unknown), the foods tried this pass."
   [c]
   (let [chest (storage/chest-of (ctx/view c) (:args c))
         stock (some->> chest storage/cell-of (get (fetch/stock-of (ctx/view c))))]
     {:carried (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory (:primitives c)))
+     :made (made (:report (ctx/mem c)))
      :chest (some? chest)
      :chest-wheat (some-> stock (get "wheat" 0))
      :tried (:tried (ctx/mem c))}))
 
+(defn keep-but-made
+  "keep raised so that only the made part of a carried food, and only above its keep, may be stored: what the body
+  brought itself stays carried."
+  [carried made keep]
+  (into keep (map (fn [n] [n (max (get keep n 0) (- (get carried n 0) (get made n 0)))])) (conj cooked-foods "bread")))
+
 (defn to-store
-  "The cooked foods and bread carried above their keep."
-  [carried keep]
-  (vec (filter #(> (get carried % 0) (get keep % 0)) (conj cooked-foods "bread"))))
+  "The cooked foods and bread carried above their keep, of what the pass made."
+  [carried made keep]
+  (let [keep (keep-but-made carried made keep)]
+    (vec (filter #(> (get carried % 0) (get keep % 0)) (conj cooked-foods "bread")))))
 
 (defn decide
-  [step {:keys [furnace chest foods keep ignore-zones?]} {:keys [carried tried chest-wheat] chest? :chest}]
+  [step {:keys [furnace chest foods keep ignore-zones?]} {:keys [carried made tried chest-wheat] chest? :chest}]
   (let [zone (when ignore-zones? {:ignore-zones? true})]
     (case step
       :smelt (if-let [food (first (filter #(and (pos? (get carried % 0)) (not (contains? tried %))) foods))]
@@ -82,11 +100,11 @@
               (not chest?) {:skip :no-chest}
               (and chest-wheat (< (+ chest-wheat (max 0 (- (get carried "wheat" 0) (get keep "wheat" 0)))) 3)) {:skip :no-wheat}
               :else {:call {:slot :bake :job (jobs :bake) :args (merge zone {:chest chest :keep (get keep "bread" 16)})}})
-      :deposit (let [items (to-store carried keep)]
+      :deposit (let [items (to-store carried made keep)]
                  (cond
                    (not chest?) {:skip :no-chest}
                    (empty? items) {:skip (if (some #(pos? (get carried % 0)) (conj cooked-foods "bread")) :kept-carried :nothing-to-store)}
-                   :else {:call {:slot :deposit :job (jobs :deposit) :args (merge zone {:chest chest :items items :keep keep})}})))))
+                   :else {:call {:slot :deposit :job (jobs :deposit) :args (merge zone {:chest chest :items items :keep (keep-but-made carried made keep)})}})))))
 
 (defn decisions [c f] (into {} (map (juxt identity #(decide % (:args c) f))) steps))
 

@@ -136,11 +136,31 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run (list job (assoc args :keep {"bread" 6})) {:inventory [(item "bread" 20)] :containers {"10,64,0" []}} 4 {}))
+        (let [s (await (run (list job (assoc args :keep {"bread" 6})) {:inventory [(item "beef" 3) (item "coal" 2)] :containers {"10,64,0" []}} 40 {}))
               e (first (events-of s :kitchen.done))]
-          (is (= {"bread" 14} (chest-items s)))
-          (is (= {:stored {"bread" 14}} (get-in e [:steps :deposit])))
-          (is (= "kitchen done: stored bread 14" (:text e))))))))
+          (is (= {"cooked_beef" 3} (chest-items s)))
+          (is (= {:stored {"cooked_beef" 3}} (get-in e [:steps :deposit])))
+          (is (= "kitchen done: smelted beef 3; stored cooked_beef 3" (:text e))))))))
+
+(deftest bread-withdrawn-by-hand-stays-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run (list job (assoc args :keep {"bread" 6})) {:inventory [(item "bread" 20)] :containers {"10,64,0" []}} 4 {}))]
+          (is (= {} (chest-items s)))
+          (is (= 20 (get (inv s) "bread"))))))))
+
+(deftest only-the-part-the-kitchen-made-is-stored-above-the-keep
+  (are [carried made keep expected] (= expected (kitchen/to-store carried made keep))
+    {"bread" 20} {} {"bread" 6} []
+    {"bread" 20} {"bread" 4} {"bread" 6} ["bread"]
+    {"bread" 7} {"bread" 4} {"bread" 6} ["bread"]
+    {"bread" 5} {"bread" 4} {"bread" 6} []
+    {"cooked_beef" 9} {"cooked_beef" 3} {"cooked_beef" 8} ["cooked_beef"]))
+
+(deftest deposit-keeps-all-but-the-made-loaves
+  (let [call (:call (kitchen/decide :deposit {:chest {:x 1 :y 1 :z 1} :keep {"bread" 6}} {:carried {"bread" 20} :made {"bread" 4} :chest true}))]
+    (is (= 16 (get-in call [:args :keep "bread"])))))
 
 (defn ^:async run-beside
   "Submit the job wait-for-dusk (listed, check false by day), then form, over the world; tick 3 times."
@@ -200,6 +220,6 @@
 (deftest kitchen-hands-its-chest-argument-to-bake-and-deposit
   (let [given [-545 64 324]
         args {:chest given :keep {} :foods ["beef"]}
-        facts {:carried {"bread" 20 "wheat" 9} :chest true}]
+        facts {:carried {"bread" 20 "wheat" 9} :made {"bread" 20} :chest true}]
     (are [step] (= given (get-in (kitchen/decide step args facts) [:call :args :chest]))
       :bake :deposit)))
