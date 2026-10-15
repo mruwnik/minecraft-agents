@@ -678,8 +678,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3)] :blocks gate-wall
-                                     :states {"15,64,0" {:open false :facing "east"}}} 40))]
+        (let [s0 (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)] :blocks gate-wall
+                         :states {"15,64,0" {:open false :facing "east"}}})
+              _ (tu/seeing-all (:p s0))
+              s (await (submit s0 {} 40))]
           (is (finished? s))
           (is (some? (done-event s)))
           (is (false? (gate-open? s)) "the gate is shut behind the cow and the body")
