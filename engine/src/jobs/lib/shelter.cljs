@@ -99,6 +99,13 @@
     (when (and raw (<= 0 (.stateAt ^js raw x y z)))
       (bit-and (.lightAt ^js raw x y z) 15))))
 
+(defn light-at
+  "The brighter of block and sky light (0-15, before the night's darkening) of the cell, or nil when no light data is
+  loaded there."
+  [p cell]
+  (when-let [block (block-light-at p cell)]
+    (max block (sky-light-at p cell))))
+
 (defn cave-cells
   "How many standable cells (feet, head and the cell over it free, a solid floor, a seen solid within cave-ceiling over them) lie
   within cave-radius of the feet, a block up or down: a cave is wide and high, what the body digs is 2 high (a tunnel, a mine's room)."

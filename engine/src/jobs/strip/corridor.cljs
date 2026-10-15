@@ -11,6 +11,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.shelter :as shelter]
             [jobs.lib.strip :as strip]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
@@ -90,13 +91,6 @@
     (ctx/emit! c :strip.corridor.stopped :warn (assoc res :reason reason :text (str "corridor " (name reason) ": took " (pr-str (:taken res)))))
     (ctx/end c (if (failed-conditions reason) :condition-failed :nothing-possible) reason res)))
 
-(defn light-at
-  "Block or sky light of the cell, nil when no light data is loaded there."
-  [p [x y z]]
-  (when-let [raw (some-> (aget p "perception") :raw)]
-    (when (<= 0 (.stateAt ^js raw x y z))
-      (let [l (.lightAt ^js raw x y z)] (max (bit-and l 15) (bit-shift-right l 4))))))
-
 (defn torch-spot
   "A cell beside the centre line at the feet's height or a step along it, free, whose floor is not seen open: where a torch stands. nil when none."
   [block-at axis [x y z]]
@@ -109,7 +103,7 @@
 (defn torch-due?
   "The feet are dark and no torch of this trip hangs within torch-gap of them."
   [c feet]
-  (let [dark (some-> (light-at (:primitives c) feet) (< lit))]
+  (let [dark (some-> (shelter/light-at (:primitives c) (zipmap [:x :y :z] feet)) (< lit))]
     (boolean (and dark (not-any? #(<= (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] %)) torch-gap) (:torches (ctx/mem c)))))))
 
 (defn ^:async hang-torch! [c seg feet]
@@ -163,7 +157,7 @@
     (->> (range (max from (- along 4)) (inc (min to (+ along 4))))
          (map #(strip/at axis (:y seg) line %))
          (filter #(and (in-spawn-box? {:x x :y y :z z} %) (let [n (block-at %)] (or (strip/air? n) (strip/rail? n)))
-                       (some-> (light-at (:primitives c) %) (< lit))
+                       (some-> (shelter/light-at (:primitives c) (zipmap [:x :y :z] %)) (< lit))
                        (not-any? (fn [h] (<= (u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] h)) torch-gap)) hung)))
          (sort-by d2)
          first)))
