@@ -20,7 +20,6 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.spent :as spent]
             [plan.shape :as shape]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.check-cache :as check-cache]
@@ -99,10 +98,11 @@
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :spec boolean? :default false}})
 
 (def target [:plan :part])
-(def defaults {:least :all})
+(def defaults {:least :all :spend {:time ::time-s}})
 
 (a/defargs settings
-  {::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
+  {::time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}
+   ::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn judged-plan
   "planned, judged once per check-cache window."
@@ -137,10 +137,11 @@
 (def conditions [[:fn plan-problem] [:fn (started/at-start no-items)]])
 
 (defn done?
-  "Counts only (the round ends the call with its data): the cells placed and the cells still owed."
+  "Done when the plan has nothing owed; else the cells placed this call and the cells still owed."
   [c]
-  (let [{:keys [cells trouble]} (judged-plan c)]
-    {:done? false :units :cells :done (:placed (ctx/mem c) 0) :left (if trouble 0 (count (owed cells)))}))
+  (let [{:keys [cells trouble]} (judged-plan c)
+        left (if trouble 0 (count (owed cells)))]
+    {:done? (and (not trouble) (zero? left)) :units :cells :done (:placed (ctx/mem c) 0) :left left}))
 
 (defn quote-of [c]
   (let [{:keys [cells trouble]} (judged-plan c)
@@ -196,8 +197,7 @@
             give-up (:give-up (:args c))]
         (case outcome
           :continue :continue
-          :placed (let [wrong (misplaced want item (:block (ctx/child-result c :place)))
-                        _ (spent/note! c item pos)]
+          :placed (let [wrong (misplaced want item (:block (ctx/child-result c :place)))]
                     (ctx/update-mem! c #(cond-> (update (dissoc % :placing) :placed (fnil inc 0))
                                           wrong (assoc-in [:misplaced pos] wrong))))
           :already (ctx/update-mem! c dissoc :placing)
@@ -302,7 +302,7 @@
   or not: the next step judges where the body stands). :continue while the walk waits, else :again."
   [c]
   (let [[x y z] (:leave (ctx/mem c))
-        r (await (child/call-walk c :leave {:pos {:x x :y y :z z} :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        r (await (child/call-walk* c :leave {:pos {:x x :y y :z z} :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r)
       (ctx/update-mem! c dissoc :leave))
     (if (= :continue r) :continue :again)))
@@ -373,10 +373,9 @@
 
 
 (defn result-data
-  "What the build left (text/summary), with the failed fetches of the call and what it spent."
+  "What the build left (text/summary), with the failed fetches of the call."
   [c cells]
-  (merge (assoc-fetch-failed c (summary c cells (ctx/mem c) (:sturdy-ground (:args c))))
-         (some-> (spent/log c) spent/summary)))
+  (assoc-fetch-failed c (summary c cells (ctx/mem c) (:sturdy-ground (:args c)))))
 
 (defn ending-of
   "The ending of a build with nothing more to do: done when nothing is missing or the placed cells meet the call's
@@ -411,7 +410,7 @@
 (defn ^:async set-spawn!
   "Use the built bed at pos to set the respawn point (jobs.survival.set-spawn child); one try."
   [c pos]
-  (let [w (await (ctx/call-child c :spawn 'jobs.survival.set-spawn {:bed pos}))]
+  (let [w (await (ctx/call c :spawn 'jobs.survival.set-spawn {:bed pos}))]
     (if (= :continue w)
       :continue
       (do (ctx/update-mem! c assoc :spawn-tried true)

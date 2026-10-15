@@ -182,7 +182,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory shovel :blocks (zipmap (keys four) (repeat "dirt_path"))})
               result (await (child-outcome eng job box 2))]
-          (is (= {:pathed 0 :skipped {}} result))
+          (is (= {} result) "already done: ended by done? before any round, no data")
           (is (empty? (calls p "useOn"))))))))
 
 (deftest path-skips-cells-when-the-shovel-is-lost-mid-run

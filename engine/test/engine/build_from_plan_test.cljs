@@ -76,10 +76,7 @@
           (is (= "torch" (block p [2 65 2])))
           (is (< (.indexOf order [2 64 2]) (.indexOf order [2 65 2])))
           (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused []}
-                 (dissoc result :spent :spent-at)))
-          (is (= {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1} (:spent result)) "what it placed, by item")
-          (is (= 5 (count (:spent-at result))))
-          (is (re-find #"used 7 oak_fence, 1 oak_fence_gate, 1 torch" (:text (first (h/events-of seen :build.done)))))
+                 result))
           (is (= 1 (count (h/events-of seen :build.done))))
           (is (empty? (h/events-of seen :build.short))))))))
 
@@ -1139,5 +1136,4 @@
               result (await (child-outcome eng job {:plan "row"} 200))]
           (is (empty? (h/events-of seen :fetch.started)) "nothing is fetched: a listed choice is carried")
           (is (= 6 (:placed result)))
-          (is (= {} (:short result)))
-          (is (= {"oak_fence" 2 "spruce_fence" 4} (:spent result))))))))
+          (is (= {} (:short result))))))))

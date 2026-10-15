@@ -1,6 +1,7 @@
 (ns jobs.debug.access-check
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
@@ -14,7 +15,7 @@
   :ignore-zones? judges as a job that acts regardless.
   One round ends :done with {:verdicts [{:cell [x y z] :block name-or-nil :dig verdict :place verdict} ...]}. An
   ok dig verdict may carry :hazards. One :access-check.result event gives the counts of ok and refused digs and
-  places. Bad arguments end with {:status :bad-args :reason text}.")
+  places. Bad arguments are impossible (:bad-args). Never done before it runs: it reports.")
 
 (a/defargs args
   {:cells {:doc "cells [[x y z] ...] to check" :spec (a/coll-of a/position?) :default nil}
@@ -29,10 +30,13 @@
    :ignore-zones? {:doc "judge as a job that acts regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::max-cells {:default 400 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}})
+  {::time-s {:default 10 :doc "Seconds one check may take." :spec (a/int-in 1 nil)}
+   ::max-cells {:default 400 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
 
-(defn check [_c] true)
+(def target [])
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn span [a b] (range (min a b) (inc (max a b))))
 
@@ -50,6 +54,19 @@
         {:error (str "box covers " n " cells, at most " (max-cells))}
         (box-cells from to)))
     :else {:error "give :cells or a box :from/:to"}))
+
+(defn bad-args
+  "Impossible :bad-args when neither :cells nor a box within the cell limit is given."
+  [c]
+  (when-let [error (:error (cells-of (:args c)))]
+    (contract/impossible {:reason :bad-args :why error})))
+
+(def conditions [[:fn bad-args]])
+
+(defn done?
+  "Never done before it runs: it reports."
+  [_c]
+  {:done? false :units :cells :done 0 :left 0})
 
 (defn feet-cell [c]
   (let [{:keys [x y z]} (u/self-pos c)]
@@ -71,20 +88,15 @@
 
 (defn ^:async round [c]
   (let [p (:primitives c)
-        cells (cells-of (:args c))]
-    (if (:error cells)
-      (do (ctx/result! c {:status :bad-args :reason (:error cells)})
-          :done)
-      (let [block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
-            args (:args c)
-            vs (verdicts block-at (feet-cell c)
-                         (assoc args :self (or (:self args) (ctx/self-name c)) :now (or (:now args) (ctx/now c)))
-                         cells)
-            dig (tally vs :dig)
-            place (tally vs :place)]
-        (ctx/result! c {:verdicts vs})
-        (ctx/emit! c :access-check.result :info
-                   {:verdicts vs :dig dig :place place
-                    :text (str (count vs) " cells: dig " (:ok dig) " ok " (:refused dig) " refused, place "
-                               (:ok place) " ok " (:refused place) " refused")})
-        :done))))
+        args (:args c)
+        block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
+        vs (verdicts block-at (feet-cell c)
+                     (assoc args :self (or (:self args) (ctx/self-name c)) :now (or (:now args) (ctx/now c)))
+                     (cells-of args))
+        dig (tally vs :dig)
+        place (tally vs :place)]
+    (ctx/emit! c :access-check.result :info
+               {:verdicts vs :dig dig :place place
+                :text (str (count vs) " cells: dig " (:ok dig) " ok " (:refused dig) " refused, place "
+                           (:ok place) " ok " (:refused place) " refused")})
+    (ctx/end c :done nil {:verdicts vs})))

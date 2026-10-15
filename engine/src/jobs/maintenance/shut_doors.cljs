@@ -121,9 +121,9 @@
         (ctx/end c :nothing-possible :left (assoc result :text text))))))
 
 (defn done?
-  "Never done before the round has run: the done event reports the count, also of none."
+  "Done when no left-open block stands within :radius; else the doors shut so far."
   [c]
-  {:done? false :units :doors :done (:shut (ctx/mem c) 0)})
+  {:done? (empty? (targets c [])) :units :doors :done (:shut (ctx/mem c) 0)})
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-door) (count (targets c [])))]

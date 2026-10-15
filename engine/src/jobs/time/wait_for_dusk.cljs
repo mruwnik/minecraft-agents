@@ -1,5 +1,6 @@
 (ns jobs.time.wait-for-dusk
-  (:require [jobs.lib.game-facts :as facts]
+  (:require [engine.args :as a]
+            [jobs.lib.game-facts :as facts]
             [engine.ctx :as ctx]
             [engine.settings :as settings]))
 
@@ -16,7 +17,18 @@
   (when-not (>= (.-timeOfDay (.self (:primitives c))) facts/dusk-tick)
     {:reason :dusk-not-come :dusk facts/dusk-tick}))
 
+(a/defargs settings
+  {::time-s {:default 1800 :doc "Seconds the wait for dusk may take." :spec (a/int-in 1 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
+
 (def conditions [[:fn dusk-not-come]])
+
+(defn done?
+  "Done when it is evening or later in the day's ticks."
+  [c]
+  (let [dusk? (>= (.-timeOfDay (.self (:primitives c))) facts/dusk-tick)]
+    {:done? dusk? :units :dusks :left (if dusk? 0 1)}))
 
 (defn quote-of [c]
   (let [left (max 0 (- facts/dusk-tick (.-timeOfDay (.self (:primitives c)))))

@@ -23,8 +23,8 @@
         out (atom :not-done)
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                         (let [r (await (ctx/call c :kid job args))]
+                           (when-not (= :continue r) (reset! out (if (= :done (:kind r)) (:data r) r)))
                            r))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
@@ -94,4 +94,5 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (settle {}))]
-          (is (= {:status :bad-args} (select-keys @out [:status]))))))))
+          (is (= {:kind :impossible :cause {:reason :bad-args :why "give :cells or a box :from/:to"}}
+                 (select-keys @out [:kind :cause]))))))))

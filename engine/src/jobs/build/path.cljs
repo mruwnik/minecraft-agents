@@ -13,6 +13,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
+            [jobs.lib.started :as started]
             [jobs.lib.toll-cells :as tc]))
 
 (def doc
@@ -33,7 +34,8 @@
   Ends with data {:pathed n :skipped {pos reason}}: done when it pathed some (the least accepted is :least, cells) or had
   nothing to path; with none pathed and cells skipped, condition-failed for :not-pathable, :covered, :not-permitted, :gone
   and :no-shovel, else nothing-possible (:unreachable, :refused, :cover-stuck), the cause the one skip reason or
-  :nothing-pathed when mixed. done? counts the cells pathed this call and the cells left.")
+  :nothing-pathed when mixed. Already done when every cell is a path; done? counts the cells pathed this call and the
+  cells left.")
 
 (a/defargs args
   {:from {:doc "box corner (inclusive); with :to, any order" :spec ::a/pos :default nil}
@@ -45,6 +47,7 @@
 
 (a/defargs settings
   {::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
+   ::time-s {:default 600 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
 (def pathable #{"grass_block" "dirt" "coarse_dirt" "podzol" "mycelium" "rooted_dirt"})
@@ -53,7 +56,7 @@
 (defn max-tries [] (settings/get settings ::max-tries))
 (def no-shovel {:reason :no-tool :kind "shovel"})
 (def target [:from :to :center :radius])
-(def defaults {:use {:tools :shovel}})
+(def defaults {:use {:tools :shovel} :spend {:time ::time-s}})
 
 (defn span [a b] (range (min a b) (inc (max a b))))
 (defn span-size [a b] (inc (js/Math.abs (- a b))))
@@ -110,9 +113,6 @@
   [c action pos]
   (gate/allowed? c :path.declined "path" action pos {}))
 
-(defn started? [c]
-  (boolean (some #(contains? (ctx/mem c) %) [:pathed :skipped :cell-tries])))
-
 (defn refused-all
   "The refusals when every pathable pending cell is refused by a zone, claim or plan, else nil."
   [c]
@@ -124,30 +124,46 @@
                        (pending c))]
     (when (and (seq verdicts) (every? #(not= ::open %) verdicts)) verdicts)))
 
-(defn problem
-  "Why the call cannot run now, or nil. Bad cells args are impossible. Otherwise a cause map: no zone list read (unless
-  :ignore-zones?), before the first round every pathable cell refused by a zone, claim or plan, and (before the first
-  round) cells to path with no shovel that may be fetched."
+(defn valid-cells
+  "The cells of the call, nil when its cells args are wrong."
+  [c]
+  (try (cells (:args c)) (catch :default _ nil)))
+
+(defn bad-args
+  "Impossible :bad-args when the cells args are wrong."
   [c]
   (let [cs (try (cells (:args c)) (catch :default e (ex-message e)))]
-    (if (string? cs)
-      (contract/impossible {:reason :bad-args :why cs})
-      (or (common/no-zones c :path.declined "path")
-          (when-let [vs (and (not (started? c)) (not (:ignore-zones? (:args c))) (refused-all c))]
-            (let [fields (assoc (access/refusal-fields vs) :reason :refused)]
-              (ctx/warn-once! c [:access :refused] :path.declined
-                              (assoc fields :text (str "path declined: every target is refused by " (access/refusal-text fields))))
-              fields))
-          (when (and (seq (pending c)) (not (started? c)) (nil? (shovel c)) (nil? (fetch-opts c)))
-            no-shovel)))))
+    (when (string? cs) (contract/impossible {:reason :bad-args :why cs}))))
 
-(def conditions [[:fn problem]])
+(defn no-zones
+  "The cause :no-zones when no zone list could be read (unless :ignore-zones?)."
+  [c]
+  (when (valid-cells c) (common/no-zones c :path.declined "path")))
+
+(def all-refused
+  "At the start: every pathable cell refused by a zone, claim or plan (unless :ignore-zones?), as the cause :refused."
+  (started/at-start
+   (fn [c]
+     (when-let [vs (and (valid-cells c) (not (:ignore-zones? (:args c))) (refused-all c))]
+       (let [fields (assoc (access/refusal-fields vs) :reason :refused)]
+         (ctx/warn-once! c [:access :refused] :path.declined
+                         (assoc fields :text (str "path declined: every target is refused by " (access/refusal-text fields))))
+         fields)))))
+
+(def shovel-lacking
+  "At the start: the cause :no-tool when cells are left to path, no shovel is carried and :fetch will not get one."
+  (started/at-start
+   (fn [c]
+     (when (and (valid-cells c) (seq (pending c)) (nil? (shovel c)) (nil? (fetch-opts c)))
+       no-shovel))))
+
+(def conditions [[:fn bad-args] [:fn no-zones] [:fn all-refused] [:fn shovel-lacking]])
 
 (defn done?
-  "Counts only (the round ends the call with its data): the cells pathed this call and the cells left to path."
+  "Done when every cell is a path; else the cells pathed this call and the cells left to path."
   [c]
-  (let [cs (try (cells (:args c)) (catch :default _ nil))]
-    {:done? false :units :cells :done (count (:pathed (ctx/mem c))) :left (if cs (count (pending c)) 0)}))
+  (let [cs (valid-cells c)]
+    {:done? (boolean (and (seq cs) (every? #(= "dirt_path" (u/seen-name (:primitives c) %)) cs))) :units :cells :done (count (:pathed (ctx/mem c))) :left (if cs (count (pending c)) 0)}))
 
 (defn quote-of [c]
   (let [cs (try (cells (:args c)) (catch :default _ nil))

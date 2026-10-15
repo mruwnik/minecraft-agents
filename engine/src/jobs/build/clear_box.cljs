@@ -9,6 +9,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
+            [jobs.lib.started :as started]
             [jobs.lib.step-off :as step-off]))
 
 (def doc
@@ -26,7 +27,8 @@
   Ends with data {:dug n :skipped {pos reason} :kept n :fluids {name count}}: done when it dug some (the least accepted
   is :least, cells) or had nothing to dig; with none dug and cells skipped, condition-failed for :zone, :footprint and
   :cannot, else nothing-possible (:unreachable, :hazard, :refused), the cause the one skip reason or :nothing-dug when
-  mixed. done? counts the cells dug this call and the cells left.")
+  mixed. Already done when every cell is loaded and air, fluid or kept; done? counts the cells dug this call and the
+  cells left.")
 
 (a/defargs args
   {:from {:doc "box corner (inclusive); any order; [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
@@ -38,6 +40,7 @@
 
 (a/defargs settings
   {::max-cells {:default 400 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
+   ::time-s {:default 600 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}
    ::cell-s {:default 1.5 :doc "Mean seconds one cell takes (walk, dig, pick up, pace), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
@@ -96,6 +99,15 @@
          (remove (fn [[_ n]] (and n (or (air n) (fluids n) (kept? keep n)))))
          vec)))
 
+(defn pending-all
+  "pending, skipped cells included."
+  [c]
+  (let [keep (:keep (:args c) [])]
+    (->> (cells (:args c))
+         (map (fn [pos] [pos (u/seen-name (:primitives c) pos)]))
+         (remove (fn [[_ n]] (and n (or (air n) (fluids n) (kept? keep n)))))
+         vec)))
+
 (defn split-by-rules
   "{:allowed [[pos name] ..] :refused [[pos verdict] ..]}: the todo cells split by the verdict of rules input in."
   [in accept todo]
@@ -111,34 +123,37 @@
   [c todo]
   (split-by-rules (access/rules-input c) (:accept (:args c)) todo))
 
-(defn started?
-  "Whether a round has left anything in memory (dug, skipped, tried or started on a cell)."
+(defn bad-args
+  "Impossible :bad-args for a missing corner or too big a box."
   [c]
-  (boolean (some #(contains? (ctx/mem c) %) [:dug :skipped :cell-tries :target])))
+  (when-let [text (box-error (:args c))]
+    (contract/impossible {:reason :bad-args :why text})))
 
-(defn problem
-  "Why the call cannot run now, or nil. A missing corner or too big a box is impossible. Otherwise a cause map: no zone
-  list read (unless :ignore-zones?), also in the middle of the job, and before the first round every pending cell
-  refused by a zone or plan."
+(defn no-zones
+  "The cause :no-zones when no zone list could be read (unless :ignore-zones?), also in the middle of the job."
   [c]
-  (if-let [text (box-error (:args c))]
-    (contract/impossible {:reason :bad-args :why text})
-    (or (common/no-zones c :clear-box.declined "clear-box")
-        (when-not (started? c)
-          (let [{:keys [allowed refused]} (sort-out c (pending c))]
-            (when (and (empty? allowed) (seq refused))
-              (let [fields (assoc (access/refusal-fields (map second refused)) :reason :refused)]
-                (ctx/warn-once! c [:access :refused] :clear-box.declined
-                                (assoc fields :text (str "clear-box declined: every target is refused by " (access/refusal-text fields))))
-                fields)))))))
+  (when-not (box-error (:args c)) (common/no-zones c :clear-box.declined "clear-box")))
+
+(def all-refused
+  "At the start: every pending cell refused by a zone or plan, as the cause :refused."
+  (started/at-start
+   (fn [c]
+     (when-not (box-error (:args c))
+       (let [{:keys [allowed refused]} (sort-out c (pending c))]
+         (when (and (empty? allowed) (seq refused))
+           (let [fields (assoc (access/refusal-fields (map second refused)) :reason :refused)]
+             (ctx/warn-once! c [:access :refused] :clear-box.declined
+                             (assoc fields :text (str "clear-box declined: every target is refused by " (access/refusal-text fields))))
+             fields)))))))
 
 (def target [:from :to])
-(def conditions [[:fn problem]])
+(def defaults {:spend {:time ::time-s}})
+(def conditions [[:fn bad-args] [:fn no-zones] [:fn all-refused]])
 
 (defn done?
-  "Counts only (the round ends the call with its data): the cells dug this call and the cells left to dig."
+  "Done when every cell is loaded and nothing is left to dig; else the cells dug this call and the cells left to dig."
   [c]
-  {:done? false :units :cells :done (:dug (ctx/mem c) 0) :left (if (box-error (:args c)) 0 (count (pending c)))})
+  {:done? (and (not (box-error (:args c))) (empty? (pending-all c))) :units :cells :done (:dug (ctx/mem c) 0) :left (if (box-error (:args c)) 0 (count (pending c)))})
 
 (defn quote-of [c]
   (let [p (:primitives c)

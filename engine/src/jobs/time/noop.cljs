@@ -17,9 +17,19 @@
 
 (def target [])
 
+(a/defargs settings
+  {::time-s {:default 3600 :doc "Seconds one pause may take." :spec (a/int-in 1 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
+
 (def conditions [])
 
 (defn left-ms [c] (max 0 (- (* 1000 (:seconds (:args c) 0)) (:waited-ms (ctx/mem c) 0))))
+
+(defn done?
+  "Never done before it runs: a pause has no state that can hold before it."
+  [c]
+  {:done? false :units :ms :done (:waited-ms (ctx/mem c) 0) :left (left-ms c)})
 
 (defn quote-of [c] (let [s (:seconds (:args c) 0)] {:uses {:time [s s s]}}))
 

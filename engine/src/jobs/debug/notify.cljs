@@ -20,7 +20,8 @@
    :to {:doc "whisper the text to this player instead of saying it to all" :spec a/name? :default nil}})
 
 (a/defargs settings
-  {::hostile-radius {:default 16 :doc "Blocks within which a hostile mob is reported." :spec (a/int-in 0 nil)}})
+  {::time-s {:default 10 :doc "Seconds one report may take." :spec (a/int-in 1 nil)}
+   ::hostile-radius {:default 16 :doc "Blocks within which a hostile mob is reported." :spec (a/int-in 0 nil)}})
 (defn hostile-radius [] (settings/get settings ::hostile-radius))
 
 (def notify-policy {:cap 20 :ttl 600000})
@@ -37,6 +38,13 @@
          ", time " (.-timeOfDay s) ", hostiles " hostiles)))
 
 (def target [])
+
+(def defaults {:spend {:time ::time-s}})
+
+(defn done?
+  "Never done before it runs: a report has no state that can hold before it."
+  [_c]
+  {:done? false :units :reports :done 0 :left 1})
 
 (def conditions [])
 

@@ -1,5 +1,6 @@
 (ns jobs.build.pen
   (:require [engine.args :as a] [jobs.lib.fetch :as fetch]
+            [engine.contract :as contract]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.check-cache :as check-cache]
@@ -32,14 +33,16 @@
   Endings: done when the pen holds (info pen-build.done); nothing-possible with the :reason as cause when it does not
   (one warn pen-build.leaky naming the leaks {:pos :why} (:gap :open-gate :climb :open :unloaded; at most 12) and what
   the build left (:refused, :given-up, :short)); nothing-possible :inside when the body cannot get out of the finished
-  pen. The builder's own condition-failed ending (:no-items, :refused, :no-zones) is this job's.
+  pen. An ending of the builder's conditions (no data: :no-items, :no-zones) is this job's; a builder that ended
+  short or refused after its work (data) goes on to the check, which reports the shortage as leaks with :built. A
+  shut-gate child that did not end done is named in the data as :shut.
   Start facts, all failed conditions (one pen-build.declined warn naming the cells or the reason):
   - {:reason :plan-trouble :why text}: the plan is missing, unreadable, has no cells (in :part) or no fence cells.
   - {:reason :uneven :why text}: its ring steps more than 1 between neighbouring fences, or a gate is more than 1 above
     the ground of an inside neighbour (animals will not step down 2), unless :uneven? true.
   - {:reason :no-zones}: no zone list has been read (unless :ignore-zones?).
   - {:reason :no-items}: the builder's own (jobs.build.from-plan): nothing to place is carried or fetchable.
-  A pen already sound is done at once with nothing placed. Nothing is rebuilt after a restart: the world is the memory.")
+  A pen already sound with the body outside it is done at once with nothing placed. Nothing is rebuilt after a restart: the world is the memory.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
@@ -54,6 +57,9 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it (passed to jobs.build.from-plan)" :spec boolean? :default false}})
 
 ;; ------------------------------------------------------------------ the pen from the plan
+
+(a/defargs settings
+  {::time-s {:default 1800 :doc "Seconds one pen build may take." :spec (a/int-in 1 nil)}})
 
 (defn want-blocks
   "The block names a want can place: one for a block or a state map, the choices of an :any."
@@ -178,14 +184,29 @@
                            :text (str "pen build declines plan " (:plan (:args c)) ": " why)})
           {:reason :uneven :why why})))))
 
+(def defaults {:spend {:time ::time-s}})
+
 (def conditions
   [[:fn plan-problem] [:fn (started/at-start uneven-problem)] [:fn (started/at-start from-plan/no-items)]])
 
+(defn inside?
+  "Whether the body's column is in the box (a little above or below it too)."
+  [box self]
+  (let [[x y z] (map #(int (js/Math.floor %)) [(:x self) (:y self) (:z self)])]
+    (and (<= (:x (:min box)) x (:x (:max box)))
+         (<= (:z (:min box)) z (:z (:max box)))
+         (<= (- (:y (:min box)) 2) y (+ (:y (:max box)) 2)))))
+
+(defn outside?
+  "Whether the body stands outside the pen's box."
+  [c cells]
+  (not (inside? (barrier-box cells) (u/self-pos c))))
+
 (defn done?
-  "Counts only (the round ends the call with its data): the cells still owed."
+  "Done when nothing is owed, the pen holds and the body is outside it; else the cells still owed."
   [c]
   (let [{:keys [cells trouble]} (judged-plan c)]
-    {:done? false :units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))}))
+    {:done? (boolean (and (not trouble) (sound? c cells) (outside? c cells))) :units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))}))
 
 (defn ^:async quote-of [c]
   (select-keys (await (ctx/quote c 'jobs.build.from-plan (build-args c))) [:uses :yields]))
@@ -201,7 +222,8 @@
   (let [plan (:plan (:args c))
         built (:built (ctx/mem c))
         answer (pen/summary (read-pen c cells))
-        result (assoc answer :built built)
+        result (cond-> (assoc answer :built built)
+                 (:shut (ctx/mem c)) (assoc :shut (:shut (ctx/mem c))))
         left (plan/left-text built)]
     (if (:closed? answer)
       (do (ctx/emit! c :pen-build.done :info {:plan plan :cells (:cells answer) :placed (:placed built)
@@ -227,14 +249,6 @@
       (or (= :done (:kind r)) (and (:data r) (#{:nothing-possible :condition-failed} (:kind r)))) (do (ctx/update-mem! c assoc :phase :exit :built (:data r))
                                                  :again)
       :else (ctx/end c (:kind r) (:cause r)))))
-
-(defn inside?
-  "Whether the body's column is in the box (a little above or below it too)."
-  [box self]
-  (let [[x y z] (map #(int (js/Math.floor %)) [(:x self) (:y self) (:z self)])]
-    (and (<= (:x (:min box)) x (:x (:max box)))
-         (<= (:z (:min box)) z (:z (:max box)))
-         (<= (- (:y (:min box)) 2) y (+ (:y (:max box)) 2)))))
 
 (defn exit-cell
   "The cell {:x :y :z} just outside the box beside a gate of cells, or nil without a gate on the box's edge."
@@ -267,7 +281,9 @@
   (let [r (await (ctx/call c :shut 'jobs.animals.shut-gate {:plan (:plan (:args c))}))]
     (if (= :continue r)
       :continue
-      (do (ctx/update-mem! c assoc :phase :check) :again))))
+      (do (ctx/update-mem! c #(cond-> (assoc % :phase :check)
+                                (not= :done (:kind r)) (assoc :shut (contract/cause-key r))))
+          :again))))
 
 (defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)

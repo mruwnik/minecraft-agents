@@ -1,7 +1,6 @@
 (ns jobs.build.from-plan.text
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [jobs.lib.spent :as spent]
             [plan.shape :as shape]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
@@ -56,11 +55,9 @@
                                        :text (str "build of " plan " left " (count wrong) " wrong blocks: "
                                                   (cells-text wrong #(str (pr-str (:pos %)) " " (:found %)
                                                                           (when (:short %) (str ", needs " (:want %) " (short)")))))}))
-    (ctx/emit! c :build.done :info (merge {:plan plan :placed (:placed result) :missing (count left)
-                                           :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left)
-                                                      (when-let [sp (:wood result)] (str ", wood " sp))
-                                                      (some->> (spent/text (spent/log c) "plan") (str "; ")))}
-                                          (some-> (spent/log c) spent/summary)))))
+    (ctx/emit! c :build.done :info {:plan plan :placed (:placed result) :missing (count left)
+                                    :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left)
+                                               (when-let [sp (:wood result)] (str ", wood " sp)))})))
 
 (defn fetch-failed-text
   "The booked failed fetches of the short items, in words: 'could not fetch birch_log: no-source (why)'."

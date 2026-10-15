@@ -141,7 +141,7 @@
                           (when-not (= :clear want) [(apply h/cell-key pos) (shape/want-block want)])))
                (:cells (shape/expand plan {})))))
 
-(deftest a-sound-line-resubmitted-finishes-at-once-with-one-done-and-places-nothing
+(deftest a-sound-line-resubmitted-finishes-at-once-and-places-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -152,7 +152,7 @@
                                               {"line" plan} [])
                 _ (core/submit! eng (list job {:plan "line"}) {})]
             (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
-            (is (= 1 (count (h/events-of seen :rail-build.done))) (pr-str pos))
+            (is (= 0 (count (h/events-of seen :rail-build.done))) (str "ended by done? before any round " (pr-str pos)))
             (is (= 0 (count (h/events-of seen :rail-build.declined))) (pr-str pos))
             (is (= 0 (count (h/calls p "place"))) (pr-str pos))
             (is (empty? (:list (core/state eng))) (pr-str pos))))))))

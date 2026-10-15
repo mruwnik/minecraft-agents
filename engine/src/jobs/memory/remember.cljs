@@ -28,6 +28,11 @@
 
 (def target [:kind])
 
+(a/defargs settings
+  {::time-s {:default 5 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
+
 (defn quote-of [_c] {:uses {:time [0 0 1]}})
 
 (defn refusal [reason text] {:reason reason :text text})
@@ -61,6 +66,11 @@
       :else r)))
 
 (def conditions [[:fn bad-args]])
+
+(defn done?
+  "Never done before it runs: it writes a fresh entry each call."
+  [_c]
+  {:done? false :units :entries :done 0 :left 1})
 
 (defn round [c]
   (let [r (resolve-args (ctx/view c) (:args c))]

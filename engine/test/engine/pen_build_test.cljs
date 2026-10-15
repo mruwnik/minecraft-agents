@@ -220,7 +220,8 @@
         (let [r (await (declines (spec kit built-pen) {"pen" (ring-plan)} {:plan "pen"}))]
           (is (= 0 (:places r)))
           (is (= [] (:declined r)))
-          (is (= 1 (:done r))))))))
+          (is (= 0 (:done r)) "ended by done? before any round: no pen-build.done event")
+          (is (empty? (:listed r))))))))
 
 (deftest a-built-but-leaky-pen-is-worked-so-the-leak-is-reported
   (async done

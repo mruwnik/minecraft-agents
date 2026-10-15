@@ -62,16 +62,10 @@
                                ['(jobs.explore.look {:block-names ["no_such_block"]}) :bad-args]]]
           (is (= {:event :stopped :kind :impossible :reason reason} (await (stopped-data spec))) (pr-str spec)))))))
 
-(deftest a-refused-leaf-call-is-a-failed-condition-not-a-done-result
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [[spec reason] [['(jobs.memory.forget-place {:name :nowhere}) :no-such-place]]]
-          (is (= {:event :stopped :kind :condition-failed :reason reason} (await (stopped-data spec))) (pr-str spec)))))))
-
 (deftest an-accepted-leaf-call-ends-done
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [spec ['(jobs.memory.remember {:kind :bred-cows}) '(jobs.debug.notify {}) '(jobs.explore.look {})]]
+        (doseq [spec ['(jobs.memory.remember {:kind :bred-cows}) '(jobs.debug.notify {}) '(jobs.explore.look {})
+                    '(jobs.memory.forget-place {:name :nowhere})]]
           (is (= {:event :completed :kind :done} (await (stopped-data spec))) (pr-str spec)))))))

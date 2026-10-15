@@ -14,7 +14,8 @@
   last step out of water. When a nearer node lies behind a step it cannot undo (a drop of more than a block, a
   gap jump down), it ends there: :no-path with :reason :one-way, :one-way {:kind :at} (that step) and :near (blocks from the goal). If the body ends off the plan it re-plans, at
   most 5 times.
-  Result {:status ...}: :arrived, :refused (:kind :at), :no-path (:reason; :abilities with :kind :at when only a
+  Ends :done when it arrived, impossible when the world has no pathWorld (:unsupported) or :to is wrong (:bad-args),
+  else nothing-possible with the status as the cause; the data is the result {:status ...}: :arrived, :refused (:kind :at), :no-path (:reason; :abilities with :kind :at when only a
   step the executor cannot do leads there), :stuck (:why :at), :gave-up (:reason :replan-limit), :failed
   (:reason), :unsupported (no pathWorld), :bad-args. Plus :replans.
   Events: :walk-plan.plan per plan, :walk-plan.replan and :walk-plan.result. The result has :ms, :walked (blocks
@@ -28,7 +29,19 @@
    :timeout-s {:doc "bound of one walk (one plan followed), at most 120" :spec (a/num-in 0 120) :default 60}
    :weight {:doc "planner heuristic weight (policy: 1.2)" :spec (a/num-in 0 nil) :default walk/default-weight}})
 
-(defn check [_c] true)
+(def target [:to])
+
+(a/defargs settings
+  {::time-s {:default 300 :doc "Seconds one walk may take." :spec (a/int-in 1 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
+
+(def conditions [])
+
+(defn done?
+  "Never done before it runs: a walk has no state that can hold before it."
+  [_c]
+  {:done? false :units :walks :done 0 :left 1})
 
 (defn finish!
   "Hand result over (ctx/result!), emit it as a :walk-plan.result event (info when arrived, else warn)."
@@ -37,13 +50,15 @@
         full (cond-> (assoc result :ms ms :walked walked :walk-ms walk-ms)
                (= :arrived (:status result))
                (assoc :blocks-per-s (/ (js/Math.round (* 100 (/ walked (max 0.001 (/ walk-ms 1000))))) 100)))]
-    (ctx/result! c result)
     ;; an event's :kind is its own: the refused step kind goes as :refused-kind
     (ctx/emit! c :walk-plan.result (if (= :arrived (:status result)) :info :warn)
                (-> full
                    (set/rename-keys {:kind :refused-kind})
                    (assoc :text (str "walk " (name (:status result)) " in " ms " ms"))))
-    :done))
+    (condp contains? (:status result)
+      #{:arrived} (ctx/end c :done nil result)
+      #{:unsupported :bad-args} (ctx/end c :impossible (:status result) result)
+      (ctx/end c :nothing-possible (:status result) result))))
 
 (defn ^:async round [c]
   (let [{:keys [to range timeout-s weight]} (:args c)

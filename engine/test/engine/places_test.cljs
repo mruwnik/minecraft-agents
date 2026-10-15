@@ -264,12 +264,19 @@
     (await (run-job eng (list forget-place {:name :bed})))
     (is (empty? (entries eng :bed)))))))
 
+(deftest forget-place-of-a-name-with-no-place-is-already-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen reasons]} (await (try-job identity forget-place {:name :home}))]
+          (is (empty? reasons))
+          (is (empty? (events-of seen :place.forgotten))))))))
+
 (deftest forget-place-refuses-what-it-should-not-touch
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args prepare! reason] [[{:name :home} identity :no-such-place]
-                                        [{:name :hurt} #(mem/write! (:store %) :hurt {:health 3}) :reserved-name]
+        (doseq [[args prepare! reason] [[{:name :hurt} #(mem/write! (:store %) :hurt {:health 3}) :reserved-name]
                                         [{:name :my-notes} #(mem/write! (:store %) :my-notes {:n 1}) :not-a-place]
                                         [{:name "Not Valid"} identity :bad-name]
                                         [{} identity :bad-name]]]

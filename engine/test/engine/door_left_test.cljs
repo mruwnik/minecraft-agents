@@ -157,7 +157,7 @@
           (core/submit! eng '(jobs.maintenance.shut-doors) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 5))
           (is (open? p gate-cell))
-          (is (= 0 (:shut (first (filter #(= :shut-doors.done (:kind %)) @seen))))))))))
+          (is (nil? (first (filter #(= :shut-doors.done (:kind %)) @seen))) "nothing left open: done before any round"))))))
 
 (deftest an-unreachable-left-gate-is-given-up-with-one-warn
   (async done
@@ -356,7 +356,7 @@
           (is (true? (hs/door-open? p)) "no record, default: untouched")
           (await (run-shut! s {:unrecorded? true} 20))
           (is (true? (hs/door-open? p)) "not near home and no plan of the body's: untouched")
-          (is (= 0 (:shut (done-event seen)))))))))
+          (is (nil? (done-event seen)) "nothing of its own left open: done before any round"))))))
 
 (deftest an-unrecorded-own-door-that-stays-open-is-not-reported-done
   (async done

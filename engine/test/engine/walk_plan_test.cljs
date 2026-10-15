@@ -28,8 +28,8 @@
         out (atom :not-done)
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                         (let [r (await (ctx/call c :kid job args))]
+                           (when-not (= :continue r) (reset! out (:data r)))
                            r))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)

@@ -28,6 +28,11 @@
 
 (def target [:name])
 
+(a/defargs settings
+  {::time-s {:default 5 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
+
 (defn standing
   "The cell the body stands in."
   [c]
@@ -44,6 +49,14 @@
       (cond-> {:reason (:reason r) :text (:message r)} (not= :not-a-place (:reason r)) contract/impossible))))
 
 (def conditions [[:fn bad-args]])
+
+(defn done?
+  "Done when the place is already recorded at the cell the call resolves to."
+  [c]
+  (let [p (:primitives c)
+        r (places/resolve-set (ctx/view c) #(u/block-name p %) (standing c) (:args c))
+        set? (and (not (:reason r)) (= (:pos r) (mem/place (ctx/view c) (:name r))))]
+    {:done? set? :units :places :left (if set? 0 1)}))
 
 (defn quote-of [_c] {:uses {:time [0 0 1]}})
 

@@ -176,15 +176,19 @@
   [c]
   (check-cache/cached c :planned #(planned c)))
 
+(defn trouble-cause
+  "The cause of a plan trouble, at the start and mid-run alike: no zone list read, or a plan missing or unreadable (it
+  may be saved or fixed later) is a plain cause (condition-failed); rail cells that are not one chain are impossible."
+  [trouble]
+  (if (#{:no-zones :plan} (:reason trouble))
+    (dissoc trouble :text)
+    (contract/impossible (dissoc trouble :text))))
+
 (defn plan-problem
-  "No zone list read, or a plan missing or unreadable (it may be saved or fixed later): failed conditions. Rail cells
-  that are not one chain are impossible."
+  "The trouble of the plan as a condition (trouble-cause), or nil."
   [c]
-  (let [{:keys [trouble]} (judged-plan c)]
-    (cond
-      (nil? trouble) nil
-      (#{:no-zones :plan} (:reason trouble)) (dissoc trouble :text)
-      :else (contract/impossible (dissoc trouble :text)))))
+  (when-let [trouble (:trouble (judged-plan c))]
+    (trouble-cause trouble)))
 
 (defn ready-problem
   "Why a line not yet begun and not sound may not be begun (not-ready): a failed condition."
@@ -193,13 +197,15 @@
     (when-not (or trouble (sound? c cells))
       (check-cache/cached c :ready #(not-ready c cells)))))
 
+(def defaults {:spend {:time ::time-s}})
+
 (def conditions [[:fn plan-problem] [:fn (started/at-start ready-problem)]])
 
 (defn done?
-  "Counts only (the round ends the call with its data): the cells placed and the cells still owed."
+  "Done when the line is sound; else the cells placed and the cells still owed."
   [c]
   (let [{:keys [cells trouble]} (judged-plan c)]
-    {:done? false :units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))}))
+    {:done? (boolean (and (not trouble) (sound? c cells))) :units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))}))
 
 (defn ^:async quote-of [c]
   (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :reach :give-up :accept :ignore-zones?]))) [:uses :yields]))
@@ -255,7 +261,8 @@
 (defn break-text [{:keys [pos why]}] (str (name why) " " (pr-str pos)))
 
 (a/defargs settings
-  {::max-breaks {:default 12 :doc "Blocks broken for one rail line before it gives up." :spec (a/int-in 0 nil)}})
+  {::time-s {:default 1800 :doc "Seconds one rail line may take." :spec (a/int-in 1 nil)}
+   ::max-breaks {:default 12 :doc "Blocks broken for one rail line before it gives up." :spec (a/int-in 0 nil)}})
 (defn max-breaks [] (settings/get settings ::max-breaks))
 
 (defn finish!
@@ -282,7 +289,10 @@
   (let [{:keys [cells trouble]} (planned c)
         phase (:phase (ctx/mem c))]
     (cond
-      trouble (ctx/end c :condition-failed (dissoc trouble :text))
+      trouble (let [cause (trouble-cause trouble)]
+                (if-let [why (contract/impossible-cause cause)]
+                  (ctx/end c :impossible why)
+                  (ctx/end c :condition-failed cause)))
       (= :check phase) (finish! c cells)
       (= :switch phase) (await (switch-step! c cells))
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
