@@ -123,3 +123,12 @@
             (is (pos? @runs) "the mine ran")
             (is (= {:kind :nothing-possible :cause cause} (kc @out)) (str cause))
             (is (re-find (re-pattern (name cause)) (str (get-in @out [:cause :why]))))))))))
+
+(deftest done-carries-the-got-and-tried-for-a-limit-ending
+  (let [done? (export 'jobs.items.obtain :done?)
+        c (fn [m inventory] {:primitives (tu/fake {:inventory inventory}) :root "j1" :slots [] :args {:item "oak_log" :count 3}
+                             :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data m}]}}})})
+        d (done? (c {:start {:have 1 :target 4} :tried [:craft]} [{:name "oak_log" :count 3}]))]
+    (is (= {:done? false :done 2 :left 1 :data {:got 2 :tried [:craft] :item "oak_log"}}
+           (select-keys d [:done? :done :left :data])))
+    (is (= {:got 0} (:data (done? (c {} [])))) "before the start")))

@@ -313,21 +313,20 @@
 
 (defn ^:async step [c]
   (hold-gates! c)
-  (do
-    (let [{:keys [phase]} (ctx/mem c)
-          a (when (:animal (ctx/mem c)) (escort/animal-now c))]
-      (when a (ctx/update-mem! c #(-> % (dissoc :unseen-since) (assoc :last-seen (u/pos-of (.-pos a))))))
-      (cond
-        (:ending (ctx/mem c)) (await (escort/close-up! c conclude!))
-        (time-up? c) (finish! c :timeout)
-        (nil? phase) (do (ctx/update-mem! c assoc :method :lure :origin (u/self-pos c) :phase :start) :again)
-        (= :start phase) (await (u/untimed! c #(start! c)))
-        (nil? a) (if-let [next-one (successor c)]
-                   (do (ctx/update-mem! c #(-> % (assoc :animal (animals/key-of next-one)) (dissoc :unseen-since))) :again)
-                   (if (= :lost (escort/escort-problem c escort/safe-gap))
-                     (finish! c :lost)
-                     (await (escort/wait-for-animal! c))))
-        :else (do (await (watch/watch! c {})) (await (walk! c)))))))
+  (let [{:keys [phase]} (ctx/mem c)
+        a (when (:animal (ctx/mem c)) (escort/animal-now c))]
+    (when a (ctx/update-mem! c #(-> % (dissoc :unseen-since) (assoc :last-seen (u/pos-of (.-pos a))))))
+    (cond
+      (:ending (ctx/mem c)) (await (escort/close-up! c conclude!))
+      (time-up? c) (finish! c :timeout)
+      (nil? phase) (do (ctx/update-mem! c assoc :method :lure :origin (u/self-pos c) :phase :start) :again)
+      (= :start phase) (await (u/untimed! c #(start! c)))
+      (nil? a) (if-let [next-one (successor c)]
+                 (do (ctx/update-mem! c #(-> % (assoc :animal (animals/key-of next-one)) (dissoc :unseen-since))) :again)
+                 (if (= :lost (escort/escort-problem c escort/safe-gap))
+                   (finish! c :lost)
+                   (await (escort/wait-for-animal! c))))
+      :else (do (await (watch/watch! c {})) (await (walk! c))))))
 
 (defn ^:async round
   "The whole attempt: steps until the job ends; yields only while a child waits on the world."

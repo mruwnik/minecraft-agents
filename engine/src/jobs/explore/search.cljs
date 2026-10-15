@@ -47,7 +47,7 @@
   :failed [{:pos :reason}] :skipped :farthest} :why}) and the ending:
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :legs (:max-legs walked) or :stuck (three failed walks in a row).
-  - :limit-reached :time (the call's :spend :time, default ::time-s; the engine ends it, round time only, so go-to's wait for day in a shelter does not count), with the data of done? ({:found}).
+  - :limit-reached :time (the call's :spend :time, default ::time-s; the engine ends it, round time only, so go-to's wait for day in a shelter does not count), with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - :condition-failed :not-loaded (leg columns never loaded). A call with no :target waits (condition :no-target).
 
   Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
@@ -204,11 +204,14 @@
 
 (def conditions [[:fn (started/at-start no-target)]])
 
+(defn coverage [m]
+  {:legs (:legs m 0) :scans (:scans m 0) :failed (:failed m []) :skipped (:skipped m 0) :farthest (:farthest m 0)})
+
 (defn done?
   "The targets found against :count. Never :done? itself: the search ends with its event and data."
   [c]
   (let [n (count (:found (ctx/mem c)))]
-    {:done? false :units :found :done n :left (max 0 (- (:count (:args c)) n)) :data {:found (:found (ctx/mem c) []) :why :time}}))
+    {:done? false :units :found :done n :left (max 0 (- (:count (:args c)) n)) :data {:found (:found (ctx/mem c) []) :coverage (coverage (ctx/mem c)) :why :time}}))
 
 (defn time-limit "Seconds the call may search." [c]
   (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
@@ -235,8 +238,7 @@
   [c reason why]
   (let [m (ctx/mem c)
         result (cond-> {:reason reason :found (:found m [])
-                        :coverage {:legs (:legs m 0) :scans (:scans m 0) :failed (:failed m []) :skipped (:skipped m 0)
-                                   :farthest (:farthest m 0)}}
+                        :coverage (coverage m)}
                  why (assoc :why why))
         what (str/join "/" (targets c))]
     (if (= :found reason)

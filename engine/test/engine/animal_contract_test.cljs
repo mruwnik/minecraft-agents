@@ -277,4 +277,4 @@
           (is (= {:event :stopped :kind :impossible :reason :no-destination} (await (ending '(jobs.animals.lure-to {:mob "cow"}) world))))
           (is (= {:event :stopped :kind :condition-failed :reason :no-food} (await (lure {} (assoc world :inventory [])))))
           (is (= {:event :stopped :kind :nothing-possible :reason :no-animal} (await (lure {} (assoc world :entities [])))))
-          (is (= {:event :stopped :kind :limit-reached :reason :timeout} (await (lure {:spend {:time 0}} world)))))))))
+          (is (= {:event :stopped :kind :limit-reached :reason :time} (await (lure {:spend {:time 0}} world)))))))))
