@@ -12,6 +12,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.started :as started]
             [jobs.lib.step-off :as step-off]))
 
 (def doc
@@ -33,8 +34,8 @@
   :guarded (work done, nothing left), :limit (:max reached), :safe, :no-fire, :no-carpet, :no-campfire, :need, a skip
   reason (:unreachable, :on-fire, :occupied, :cannot, :place-failed, :refused) or :gave-up (3 fruitless fires
   in a row). Every end but :guarded and :limit also warns apiary.guard-gave-up.
-  The ending: :done for :guarded, :limit, :safe, and any other reason when the call's :least (default 1) actions
-  were done; else condition-failed for :no-fire, :no-carpet, :no-campfire, :occupied, :refused and :no-zones,
+  The ending: :done for :guarded, :limit, :safe, and any other reason when the call's :least (default 1; :all =
+  every fire worked, so only those three) actions were done; else condition-failed for :no-fire, :no-carpet, :no-campfire, :occupied, :refused and :no-zones,
   nothing-possible for the rest, with the reason as the cause and the result as its data.
   Zones: a fire in another owner's zone or claim, or in a plan's footprint, is left out of the survey (all refused
   ends :no-fire). Each dig and place is checked again before it (a refusal skips the fire as :refused). The job
@@ -69,7 +70,8 @@
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-strikes {:default 3 :doc "Strikes at one target before the job gives up on it." :spec (a/int-in 0 nil)}
    ::max-sink-steps {:default 8 :doc "Steps of the sink walk before it gives up." :spec (a/int-in 0 nil)}
-   ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+   ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::time-s {:default 120 :doc "Seconds a guard run may take." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-strikes [] (settings/get settings ::max-strikes))
 
@@ -123,7 +125,7 @@
   were done, else condition-failed for failed-conditions, else nothing-possible; result is its data."
   [c reason result]
   (let [least (:least (ctx/frozen-call c) 1)
-        need (if (number? least) least 1)]
+        need (if (= :all least) ##Inf least)]
     (cond
       (or (#{:guarded :limit :safe} reason) (>= (actions (ctx/mem c)) need)) (ctx/end c :done nil result)
       (failed-conditions reason) (ctx/end c :condition-failed reason result)
@@ -219,7 +221,7 @@
 (defn ^:async collect-carpet!
   "Pick up the carpet that was dug up."
   [c carpet]
-  (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 6 :filter [carpet]})))
+  (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius 6 :filter [carpet]})))
 
 (defn abandon!
   "Give up the sink: clear it and skip the fire."
@@ -305,26 +307,25 @@
 
 (def target [:box :center])
 
-(def defaults {:least 1})
+(def defaults {:least 1 :spend {:time ::time-s}})
 
 (defn start-fact
   "The cause that bars the first step, or nil: no fire needs work, the body carries no carpet or campfire the work
   needs, or the zone rules refuse every fire. Asks for a look first while the body has not looked round near here."
   [c]
-  (when-not (:started (ctx/mem c))
-    (let [{:keys [box radius center]} (:args c)
-          center (or center (u/self-pos c))
-          fires (apiary/fires (:primitives c) {:box box :center center :radius radius})
-          seen (survey c center true)
-          cause (cond
-                  (seq (:todo seen)) nil
-                  (and (seq (:left seen)) (nil? (fetch/parse-arg (:fetch (:args c))))) {:reason (first (vals (:left seen)))}
-                  (seq (:left seen)) nil
-                  (and (seq fires) (zero? (:fires seen))) {:reason (:refusal (gate/look c :dig (map :pos fires) {}))}
-                  :else {:reason :nothing-to-guard})]
-      (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first))))
+  (let [{:keys [box radius center]} (:args c)
+        center (or center (u/self-pos c))
+        fires (apiary/fires (:primitives c) {:box box :center center :radius radius})
+        seen (survey c center true)
+        cause (cond
+                (seq (:todo seen)) nil
+                (and (seq (:left seen)) (nil? (fetch/parse-arg (:fetch (:args c))))) {:reason (first (vals (:left seen)))}
+                (seq (:left seen)) nil
+                (and (seq fires) (zero? (:fires seen))) {:reason (:refusal (gate/look c :dig (map :pos fires) {}))}
+                :else {:reason :nothing-to-guard})]
+    (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first)))
 
-(def conditions "Wait on a start fact (start-fact)." [[:fn start-fact]])
+(def conditions "A start fact (start-fact), at the call's start only." [[:fn (started/at-start start-fact)]])
 
 (defn done?
   "The fires worked, and the fires still to work."
@@ -359,7 +360,7 @@
   collect waits on the world, or :done."
   [c]
   (let [center (apiary/center-of c)
-        _ (ctx/update-mem! c assoc :started true :center center)
+        _ (ctx/update-mem! c assoc :center center)
         _ (settle-carpet! c)
         _ (await (look/survey! c))
         m (ctx/mem c)]

@@ -11,7 +11,8 @@
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.lib.pace :as pace]))
+            [jobs.lib.pace :as pace]
+            [jobs.lib.started :as started]))
 
 (def doc
   "Take the honey of the ripe hives (honey_level 5) near a centre, nearest first, at most :max hives, all in one call
@@ -33,9 +34,11 @@
   :harvested (some taken, nothing more to do), :limit (:max reached), :no-tool, :no-hive, :not-ripe,
   :not-smoked, :open-fire, :need, :unreachable or :gave-up (3 fruitless hives in a row). Declines and give-ups also warn
   apiary.gave-up.
-  The ending: :done for :harvested, :limit and any other reason when the call's :least (default 1) hives were
-  taken; else condition-failed for :no-hive, :not-ripe, :not-smoked, :open-fire, :no-tool, :refused and :no-zones,
-  nothing-possible for the rest, with the reason as the cause and the result as its data.
+  The ending: :done once the call's :least (default 1, at most :max; :all = every hive worked) hives were taken,
+  whatever stopped the run; else, with none taken, condition-failed for :no-hive, :not-ripe, :not-smoked,
+  :open-fire, :no-tool, :refused and :no-zones, nothing-possible for the rest; some taken but fewer than :least is
+  nothing-possible with the reason that stopped the last one (:harvested then names what was left: :not-ripe,
+  :no-hive ..), the result as its data.
   Zones: a hive in another owner's zone or claim, or in a plan's footprint, is left out of the survey (all refused
   ends :no-hive) and checked again before the click. The job warns apiary.declined once, with :reason :refused (or
   :no-zones when no zone list was read). :ignore-zones? true skips the check.")
@@ -53,7 +56,8 @@
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-strikes {:default 3 :doc "Strikes at one target before the job gives up on it." :spec (a/int-in 0 nil)}
    ::comb-waits {:default 10 :doc "Rounds a shears harvest waits for its comb to show before it goes on without." :spec (a/int-in 0 nil)}
-   ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+   ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::time-s {:default 120 :doc "Seconds a harvest run may take." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-strikes [] (settings/get settings ::max-strikes))
 (def tool-item {:shears "shears" :bottle "glass_bottle"})
@@ -133,21 +137,31 @@
 (def failed-conditions "Reasons that end condition-failed: the world or the zones bar the work. The rest are nothing-possible."
   #{:no-hive :not-ripe :not-smoked :open-fire :no-tool :refused :no-zones})
 
+(defn enough?
+  "Whether taken hives meet the call's :least (default 1, at most :max); :all: the run stopped for :harvested or :limit."
+  [c reason taken]
+  (let [least (:least (ctx/frozen-call c) 1)]
+    (if (= :all least)
+      (and (pos? taken) (boolean (#{:harvested :limit} reason)))
+      (>= taken (min least (:max (:args c)))))))
+
 (defn ending-of
-  "The ending of a run that stopped for reason: :done for :harvested and :limit or when the call's :least hives were
-  taken, else condition-failed for failed-conditions, else nothing-possible; result is its data."
+  "The ending of a run that stopped for reason: :done when enough? hives were taken, else with none taken
+  condition-failed for failed-conditions, else nothing-possible; result is its data."
   [c reason result]
-  (let [least (:least (ctx/frozen-call c) 1)
-        need (if (number? least) least 1)]
+  (let [taken (:harvested result)]
     (cond
-      (or (#{:harvested :limit} reason) (>= (:harvested result) need)) (ctx/end c :done nil result)
-      (failed-conditions reason) (ctx/end c :condition-failed reason result)
+      (enough? c reason taken) (ctx/end c :done nil result)
+      (and (zero? taken) (failed-conditions reason)) (ctx/end c :condition-failed reason result)
       :else (ctx/end c :nothing-possible reason result))))
 
 (defn finish!
   "Emit the outcome and end the job (ending-of)."
-  [c reason seen]
+  [c reason0 seen]
   (let [m (ctx/mem c)
+        reason (if (and (= :harvested reason0) (not (enough? c reason0 (:harvested m 0))))
+                 (idle-reason (dissoc m :harvested) seen)
+                 reason0)
         result {:harvested (:harvested m 0)
                 :reason reason
                 :with (:tool m)
@@ -174,14 +188,15 @@
   comb-waits rounds while no comb shows yet (the spawn may not have reached the body); any other end of it
   (done, declined) closes the phase."
   [c]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 8 :filter ["honeycomb"]}))
-        got (if (= :done r) (:collected (ctx/child-result c :collect) 0) 0)
+  (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius 8 :filter ["honeycomb"]}))
+        done? (= :done (:kind e))
+        got (if done? (get-in e [:data :collected] 0) 0)
         waits (:comb-waits (ctx/mem c) 0)]
-    (when (= :done r)
+    (when done?
       (ctx/update-mem! c update :collected (fnil + 0) got))
     (cond
-      (= :continue r) :continue
-      (and (= :done r) (zero? got) (< waits (comb-waits))) (do (ctx/update-mem! c assoc :comb-waits (inc waits)) :continue)
+      (= :continue e) :continue
+      (and done? (zero? got) (< waits (comb-waits))) (do (ctx/update-mem! c assoc :comb-waits (inc waits)) :continue)
       :else (do (ctx/update-mem! c #(-> % (dissoc :phase) (assoc :comb-waits 0))) :again))))
 
 (defn book-harvest!
@@ -231,26 +246,25 @@
 
 (def target [:box :center])
 
-(def defaults {:least 1})
+(def defaults {:least 1 :spend {:time ::time-s}})
 
 (defn start-fact
   "The cause that bars the first step, or nil: no hive can be worked (idle-reason), none of :with is carried or the zone
   rules refuse every hive. Asks for a look first while the body has not looked round near here."
   [c]
-  (when-not (:center (ctx/mem c))
-    (let [center (apiary/center-of c)
-          found (found-hives c center)
-          hs (hives c center true)
-          seen (classify c hs)
-          refusal (when (and (seq found) (empty? hs)) (:refusal (gate/look c :harvest (map :pos found) {:own-plans-ok? true})))
-          cause (cond
-                  refusal {:reason refusal}
-                  (empty? (:todo seen)) {:reason (idle-reason {} seen)}
-                  (and (nil? (tool-for (:with (:args c)) (u/inventory (:primitives c))))
-                       (nil? (fetch/parse-arg (:fetch (:args c))))) {:reason :no-tool})]
-      (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first))))
+  (let [center (apiary/center-of c)
+        found (found-hives c center)
+        hs (hives c center true)
+        seen (classify c hs)
+        refusal (when (and (seq found) (empty? hs)) (:refusal (gate/look c :harvest (map :pos found) {:own-plans-ok? true})))
+        cause (cond
+                refusal {:reason refusal}
+                (empty? (:todo seen)) {:reason (idle-reason {} seen)}
+                (and (nil? (tool-for (:with (:args c)) (u/inventory (:primitives c))))
+                     (nil? (fetch/parse-arg (:fetch (:args c))))) {:reason :no-tool})]
+    (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first)))
 
-(def conditions "Wait on a start fact (start-fact)." [[:fn start-fact]])
+(def conditions "A start fact (start-fact), at the call's start only." [[:fn (started/at-start start-fact)]])
 
 (defn done?
   "The hives harvested, and the ripe hives still to work."

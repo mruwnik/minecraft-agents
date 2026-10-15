@@ -8,6 +8,7 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
+            [jobs.lib.started :as started]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.apiary.guard :as guard]
@@ -176,9 +177,9 @@
     (boolean (some #(:call (decide % (:args c) f)) steps))))
 
 (defn not-ready
-  "Why the job does not start: nothing would run, with a look first while part of the area was never seen. A started run goes on."
+  "Why the job does not start: nothing would run, with a look first while part of the area was never seen."
   [c]
-  (when-not (or (ctx/frozen-call c) (would-run? c))
+  (when-not (would-run? c)
     (cond-> {:reason :nothing-to-do}
       (and (look/unseen? (:primitives c) (apiary/watched-cells c)) (not (look/surveyed? c :near))) contract/look-first)))
 
@@ -217,12 +218,12 @@
   (-> m (update :todo rest) (dissoc :call-args) (assoc-in [:report step] entry)))
 
 (defn entry-of
-  "The report entry of a child's ending e: its summary; a child that did not start (no data) is {:skipped :declined
-  :reason cause}, one that stopped carries :stopped kind."
+  "The report entry of a child's ending e: its summary; a child whose condition failed before its first round (kind
+  condition-failed or impossible, no data) is {:skipped :declined :reason cause}, any other ending carries :stopped kind."
   [step e]
   (cond
     (= :done (:kind e)) (summary step (:data e))
-    (empty? (:data e)) {:skipped :declined :reason (contract/cause-key e)}
+    (and (#{:condition-failed :impossible} (:kind e)) (empty? (:data e))) {:skipped :declined :reason (contract/cause-key e)}
     :else (assoc (summary step (merge {:reason (contract/cause-key e)} (:data e))) :stopped (:kind e))))
 
 (defn ^:async run-child!
@@ -269,7 +270,7 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(def conditions [[:fn not-ready]])
+(def conditions [[:fn (started/at-start not-ready)]])
 
 (defn done?
   "Never done before the round says so: the steps left are decided from the facts at each step."

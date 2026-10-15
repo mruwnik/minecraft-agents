@@ -116,3 +116,13 @@
         (is (= {:event :stopped :reason :need}
                (select-keys (await (ends guard (-> (g/fire-world {:inventory (g/inv "stick" 1)}) (g/open-side "3,64,0")
                                                    (assoc-in [:blocks "2,65,0"] "white_carpet")))) [:event :reason])))))))
+
+(deftest harvest-below-least-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (h/world {:inventory (h/inv "shears" 1)})]
+          (is (= {:event :completed} (select-keys (await (ends '(jobs.apiary.harvest {}) w)) [:event])))
+          (is (= {:event :stopped :kind :nothing-possible :reason :not-ripe}
+                 (await (ends '(jobs.apiary.harvest {:least 3}) w)))
+              "one hive taken of three asked: the hive left is not ripe"))))))
