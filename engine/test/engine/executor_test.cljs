@@ -768,29 +768,13 @@
     (is (= {:status :refused :kind :corner-jump :at [11 65 1]} (select-keys (ex/refusal no-sprint steps) [:status :kind :at])))
     (is (nil? (ex/refusal no-sprint corner-jump-steps)))))
 
-;; a rise jumped straight up when pressed on its wall
-
 (def rise-north [(step 5 64 5 :start) (step 5 65 4 :jump)])
-
-(deftest a-jump-up-at-its-wall-goes-up-before-forward
-  (are [ps forward jump] (= {:forward forward :jump jump}
-                            (select-keys (controls-of (ex/tick p (state-at rise-north 1) ps)) [:forward :jump]))
-    (pose 5.5 64 5.31) false true          ; pressed on the wall: straight up
-    (pose 5.5 64 5.35) false true
-    (pose 5.5 64 5.5) true true            ; a body further off runs at it as before
-    (pose 5.5 65.0013 5.31) true false     ; up on the step's height: forward
-    (pose 5.5 64.5 5.31 {:on-ground false}) false false))
 
 (deftest a-jump-in-water-or-round-a-corner-keeps-forward
   (are [st ps] (:forward (controls-of (ex/tick p st ps)))
     (state-at rise-north 1) (pose 5.5 64 5.31 {:in-water true})
     (state-at [(step 5 64 5 :start) (step 5 65 4 :jump {:cx 1})] 1) (pose 5.5 64 5.31)
     (state-at [(step 4 64 5 :start) (step 5 65 4 :jump {:corner true})] 1) (pose 5.5 64 5.31)))
-
-(deftest a-diagonal-jump-with-free-sides-pressed-on-its-block-goes-up-first
-  (are [ps forward] (= forward (:forward (controls-of (ex/tick p (state-at [(step 4 64 5 :start) (step 5 65 4 :jump)] 1) ps))))
-    (pose 5.5 64 5.31) false
-    (pose 5.5 65.0013 5.31) true))
 
 ;; The planner asks planner-limits about every gap jump and corner jump it looks at; its answers must be the executor's own
 ;; refusals (gap-refused with low-ceiling?, high-corner?), whatever form they take.
@@ -832,12 +816,6 @@
     vine-exit-steps 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable false}) true
     [(step 0 64 3 :start) (step 0 66 3 :climb-up {:px 0.5 :pz 3.5})] 1 (pose 0.3 64.9 3.5 {:on-ground false :on-climbable true}) true
     [(step 0 64 3 :start) (step 1 66 3 :walk)] 1 (pose 0.5 64.9 3.5 {:on-ground false :on-climbable true}) true))
-
-;; in lava a jump gives no rise, so the body keeps pressing forward: the wall collision is what lifts it out
-(deftest in-lava-at-the-wall-keeps-pressing-forward
-  (are [extra forward?] (= forward? (:forward (controls-of (ex/tick p (state-at rise-steps 1) (pose 2.69 64 3.5 extra)))))
-    {}              false
-    {:in-lava true} true))
 
 (deftest a-bend-step-is-reached-only-within-its-point
   (let [bend (step 2 64 3 :walk {:bend true :px 2.3 :pz 3.5})]

@@ -38,8 +38,6 @@
    :rise constants/step-height ; a rise above this (vanilla step height) needs a jump
    :pressed-rise 0.01      ; pressed on a block ahead, any rise above this is jumped (a step under a low ceiling is refused
                            ; by the client physics, which lifts the body by the step height first)
-   :wall-gap 0.05          ; a rise is jumped straight up (no forward) while the body is within this of the wall it climbs
-                           ; (half the body's width apart): forward on that wall made the client sink into it
    :body-half constants/body-half-width ; half the body's width, as the client physics has it
    :body-height constants/body-height ; a corner jump needs the side cells clear this far over the landing's stand height
    :walk-accel 0.098       ; client physics: a walking (not sprinting) body on the ground gains this much speed per tick
@@ -529,28 +527,6 @@
   [x z ax az]
   (Math/atan2 (- (- ax x)) (- (- az z))))
 
-(defn wall-gap
-  "Horizontal distance from the body's edge to the cell of step: 0 pressed on it, negative inside its columns."
-  [policy step {:keys [x z]}]
-  (let [gx (- (Math/abs (- x (+ (:x step) 0.5))) 0.5)
-        gz (- (Math/abs (- z (+ (:z step) 0.5))) 0.5)]
-    (- (max gx gz) (:body-half policy))))
-
-(defn rise-first?
-  "True when a jump up must go straight up first: a straight or free diagonal jump (no corner slide), the body
-  at the wall it climbs and below the step's stand height. Pushing forward there moves the client 0.02 into the
-  wall, and the server rejects that position every time. Never in lava: a jump gives no rise there, and only
-  pressing into the wall lifts the body out."
-  [policy prev step {:keys [y in-water in-lava] :as pose}]
-  (and (= :jump (:move step))
-       (not in-water)
-       (not in-lava)
-       (nil? (:cx step))
-       (some? prev)
-       (not (:corner step))
-       (> (- (stand-y step) y) (:pressed-rise policy))
-       (<= (wall-gap policy step pose) (:wall-gap policy))))
-
 (defn climb-hold?
   "A body on a climbable above the stand height of a non-climb step: pushing forward there with a block over the exit makes
   the client climb, so it holds (no forward) and falls to the floor first."
@@ -567,7 +543,6 @@
         yaw' (if moving? (yaw-to x z ax az) (or yaw 0))
         prev (when (pos? i) (nth steps (dec i)))
         forward? (and moving?
-                      (not (rise-first? policy prev step pose))
                       (not (climb-hold? policy step pose)))]
     {:state (cond-> state moving? (assoc :yaw yaw'))
      :controls {:forward forward? :back false :left false :right false

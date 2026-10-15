@@ -283,3 +283,16 @@
     [8610.78 8192.31]
     [8610.9 8192.32]
     [8610.55 8192.31]))
+
+;; A straight one-block rise pressed on its wall: forward + jump keeps the body's box (the client's, as wide as the server's
+;; or wider) out of the wall block until it is above it.
+(def wall-up
+  [[8600 60 8180 8620 66 8200 "stone" {}]
+   [8611 67 8192 8611 67 8192 "grass_block" {:snowy false}]])
+
+(deftest a-straight-jump-up-pressed-on-the-block-never-enters-it
+  (are [at] (let [{:keys [done poses]} (walk wall-up [8610 67 8192] [8611 68 8192] at)]
+              (and (= :arrived (:status done)) (not-any? #(in-wall? [8611 67 8192] %) poses)))
+    [8610.5 8192.5]
+    [8610.69 8192.31]
+    [8610.69 8192.69]))
