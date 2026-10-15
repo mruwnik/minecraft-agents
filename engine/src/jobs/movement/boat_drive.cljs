@@ -80,7 +80,7 @@
   [c]
   (let [left (left-of c)
         near? (and left (<= left (:range (:args c))))]
-    {:done? false :units :cells :done (if near? 1 0) :left (if near? 0 1)}))
+    {:done? (boolean near?) :units :cells :done (if near? 1 0) :left (if near? 0 1)}))
 
 (defn quote-of [c]
   (let [cell (cell-of-call c)

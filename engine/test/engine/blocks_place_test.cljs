@@ -113,7 +113,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :blocks {"2,64,0" "cobblestone"} :inventory cobble})
               result (await (bd/child-outcome eng job {:pos at :item "cobblestone"} 5))]
-          (is (= {:placed false :reason :already} (select-keys result [:placed :reason])))
+          (is (= {:status :done :already? true} (select-keys result [:status :already?])) "the engine ends it before a round")
           (is (empty? (bd/calls p "place"))))))))
 
 (deftest grass-or-a-flower-in-the-cell-is-dug-first
@@ -170,12 +170,9 @@
       (fn ^:async t []
         (let [a (bd/setup {:self body :blocks {"2,64,0" "stone" "2,63,0" "stone"} :inventory cobble})
               _ (await (bd/child-outcome (:eng a) job {:pos at :item "cobblestone"} 5))
-              b (bd/setup {:self body :blocks {"2,64,0" "cobblestone"} :inventory cobble})
-              _ (await (bd/child-outcome (:eng b) job {:pos at :item "cobblestone"} 5))
               c (bd/setup {:self body :inventory cobble})
               _ (await (bd/child-outcome (:eng c) job {:pos [2 64 0] :item "cobblestone"} 5))]
           (is (= "did not place cobblestone at [2 64 0]: occupied by stone" (done-text (:seen a))))
-          (is (= "did not place cobblestone at [2 64 0]: already" (done-text (:seen b))))
           (is (= "placed cobblestone at [2 64 0]" (done-text (:seen c)))))))))
 
 (deftest a-cell-in-anothers-zone-waits-not-allowed-and-ignore-zones-records-it

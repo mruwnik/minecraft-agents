@@ -58,10 +58,12 @@
 
 
 (defn done?
-  "Aboard the wanted vehicle or not; the round ends with its event."
+  "Done when aboard the wanted vehicle: :id its entity id, :name its entity name."
   [c]
-  (let [aboard (some? (vehicle/vehicle-of (.self (:primitives c))))]
-    {:done? false :units :vehicles :done (if aboard 1 0) :left (if aboard 0 1)}))
+  (let [{:keys [id] wanted :name} (:args c)
+        ride (vehicle/vehicle-of (.self (:primitives c)))
+        aboard (and ride (if id (= id (:id ride)) (or (nil? wanted) (= wanted (:name ride)))))]
+    {:done? (boolean aboard) :units :vehicles :done (if aboard 1 0) :left (if aboard 0 1)}))
 
 (defn nearest-named
   "The id of the nearest sensed entity named name, a free one before an occupied one, or nil."

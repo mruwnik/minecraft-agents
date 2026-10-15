@@ -141,7 +141,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self body})
               result (await (child-outcome eng job {:pos at} 5))]
-          (is (= {:dug false :reason :already-clear} (select-keys result [:dug :reason])))
+          (is (= {:status :done :already? true} (select-keys result [:status :already?])) "the engine ends it before a round")
           (is (empty? (calls p "dig"))))))))
 
 (deftest without-a-harvesting-tool-it-waits-no-tool-naming-the-cheapest

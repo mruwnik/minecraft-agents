@@ -200,12 +200,12 @@
 (def conditions [[:fn away] [:fn (started/at-start start-fact)]])
 
 (defn done?
-  "Progress only: the row is finished by a round that sees the body at its end."
+  "Done when the row's blocks are all in the ledger."
   [c]
   (let [{:keys [heading length]} (:args c)
         start (:start (ctx/mem c))
         built (if start (count (placed c (ledger/open-entries (ctx/view c)) start heading)) 0)]
-    {:done? false :units :blocks :done built :left (max 0 (- (or length 0) built))}))
+    {:done? (boolean (and (pos? (or length 0)) (>= built length))) :units :blocks :done built :left (max 0 (- (or length 0) built))}))
 
 (defn quote-of [c]
   (let [{:keys [length item]} (:args c)

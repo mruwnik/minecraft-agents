@@ -179,7 +179,7 @@
 (defn done? [c]
   (let [{:keys [pos]} (b/parse (:args c))
         air? (boolean (some-> (b/target-name (:primitives c) pos b/hidden-guess) b/air))]
-    {:done? false :units :blocks :done (if air? 1 0) :left (if air? 0 1)}))
+    {:done? air? :units :blocks :done (if air? 1 0) :left (if air? 0 1)}))
 
 (defn quote-of [c]
   (let [{:keys [pos]} (b/parse (:args c))

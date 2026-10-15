@@ -259,8 +259,8 @@
 (def conditions [[:fn (started/at-start moved-since-submit)] [:fn (started/at-start too-few-blocks)]])
 
 (defn done?
-  "The blocks of this job in the ledger against :height. Never :done? itself: the round ends the pillar with its
-  event and cells."
+  "The blocks of this job in the ledger against :height. Never :done? itself: the ledger holds the blocks of the
+  whole job tree, not of this call, so a second pillar of one go-to would read as done at its start."
   [c]
   (let [n (count (built c (ledger/open-entries (ctx/view c))))]
     {:done? false :units :blocks :done n :left (max 0 (- (:height (:args c)) n))}))

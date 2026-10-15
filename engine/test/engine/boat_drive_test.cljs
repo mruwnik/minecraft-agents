@@ -47,7 +47,7 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [2 63 2]}))]
           (is (= :done (:status res)))
-          (is (zero? (:strokes res))))))))
+          (is (true? (:already? res)) "the engine ends it before a stroke"))))))
 
 (deftest stops-with-the-reason
   (async done

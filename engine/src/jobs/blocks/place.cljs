@@ -153,11 +153,11 @@
 (def conditions [[:fn problem]])
 
 (defn done?
-  "Counts only: the end of a call that finds the block there already is the round's, which tells :already."
+  "Done when the cell already holds one of the wanted blocks."
   [c]
   (let [{:keys [pos items error]} (parse c)
         n (if (and (not error) (some #{(b/target-name (:primitives c) pos "air")} items)) 1 0)]
-    {:done? false :units :blocks :done n :left (- 1 n)}))
+    {:done? (= 1 n) :units :blocks :done n :left (- 1 n)}))
 
 (defn quote-of [c]
   (let [{:keys [pos items error]} (parse c)
