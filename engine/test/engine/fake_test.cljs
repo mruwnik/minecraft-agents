@@ -1047,6 +1047,15 @@
               [(get-in r [:placed :name]) (get-in r [:placed :properties :facing]) (get-in r [:placed :properties :half])]))
        (is (= ["east" "top"] [(get-in b [:properties :facing]) (get-in b [:properties :half])]))))))
 
+(deftest place-with-a-click-without-a-look-faces-the-way-the-body-was-turned
+  (async-test
+   (fn ^:async t []
+     (let [p (builder {"1,64,0" "stone"} ["oak_stairs"])
+           _ (await (act p "look" {:yaw js/Math.PI :pitch 0}))
+           click {:against (at 1 64 0) :cursor {:x 0 :y 0.25 :z 0.5}}
+           r (got (await (act p "place" {:pos (at 0 64 0) :item "oak_stairs" :click click})))]
+       (is (= "south" (get-in r [:placed :properties :facing])))))))
+
 (deftest place-with-a-click-on-air-has-no-support-and-keeps-the-item
   (async-test
    (fn ^:async t []

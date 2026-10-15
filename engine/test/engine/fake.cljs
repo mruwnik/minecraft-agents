@@ -387,7 +387,7 @@
   (let [c (or click (plain-click w pos))
         r (if c
             (placing/placed-blocks w {:item item :pos pos :face (mapv - pos (:against c)) :cursor (:cursor c)
-                                      :yaw (or (:yaw c) (:yaw w)) :pitch (or (:pitch c) (:pitch w))})
+                                      :yaw (or (:yaw c) (* (- 180 (:yaw w)) (/ js/Math.PI 180))) :pitch (or (:pitch c) (* (- (:pitch w)) (/ js/Math.PI 180)))})
             {:blocks [{:pos pos :name item :properties {}}]})]
     (if (:refused r)
       [w {:status "failed" :reason (str "Server refused to place " item " at (" (str/join ", " pos) "): " (:refused r))}]
