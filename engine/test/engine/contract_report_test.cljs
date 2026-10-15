@@ -52,14 +52,14 @@
 (defn ^:async eat! [c] (await (ctx/act c :eat #js {:item "bread"})))
 
 (def leaf
-  {:name :leaf :check (constantly true)
+  {:name :leaf :conditions []
    :round (fn ^:async leaf-round [c] (await (eat! c)) (ctx/update-mem! c assoc :ate true) :continue)})
 
 (def mid
-  {:name :mid :check (constantly true)
+  {:name :mid :conditions []
    :round (fn ^:async mid-round [c]
             (await (eat! c))
-            (await (ctx/call-child c :b leaf {}))
+            (await (ctx/call c :b leaf {}))
             :continue)})
 
 (defn setup []
@@ -69,28 +69,28 @@
         p (tu/fake {:self (assoc fake/default-self :food 2)
                     :inventory [{:name "bread" :count 9} {:name "oak_log" :count 3}]})
         eng (core/create {:primitives p :dir dir :now #(deref clock)
-                          :jobs {'top {:check (constantly true)
+                          :jobs {'top {:conditions []
                                        :round (fn ^:async top-round [c]
                                                 (let [n (:n (ctx/mem c) 0)]
                                                   (ctx/update-mem! c assoc :n (inc n))
                                                   (if (zero? n)
-                                                    (await (ctx/call-child c :a mid {}))
+                                                    (await (ctx/call c :a mid {}))
                                                     (await (eat! c)))
                                                   :continue))}
-                                 'eats {:check (constantly true)
+                                 'eats {:conditions []
                                         :round (fn ^:async eats-round [c] (await (eat! c)) :continue)}
-                                 'timed {:check (constantly true)
+                                 'timed {:conditions []
                                          :round (fn ^:async timed-round [c]
                                                   (swap! clock + 100)
-                                                  (await (ctx/call-child c :t {:name :slow :check (constantly true)
-                                                                               :round (fn [_] (swap! clock + 300) :done)}
+                                                  (await (ctx/call c :t {:name :slow :conditions []
+                                                                               :round (fn [c] (swap! clock + 300) (ctx/end c :done nil))}
                                                                          {}))
                                                   (swap! clock + 50)
-                                                  :done)}
-                                 'craft {:check (constantly true)
+                                                  (ctx/end c :done nil))}
+                                 'craft {:conditions []
                                          :round (fn ^:async craft-round [c]
                                                   (await (ctx/act c :craft #js {:item "oak_planks" :count 4}))
-                                                  :done)}}
+                                                  (ctx/end c :done nil))}}
                           :triggers {}
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :clock clock :seen seen :dir dir}))
@@ -180,5 +180,5 @@
           (await (core/tick! eng))
           (let [report {:uses {:items {"oak_log" 1} :time 0} :yields {:items {"oak_planks" 4}}}]
             (is (= report (:report (first (filter #(= :completed (:kind %)) @seen)))))
-            (is (= [{:job 'craft :report report}]
+            (is (= [{:job 'craft :report report :kind :done :cause nil}]
                    (mapv :data (mem/entries (mem/view (:store eng)) :job-report))))))))))

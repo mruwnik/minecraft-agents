@@ -14,17 +14,17 @@
 
 (defn ^:async away-round [c]
   (await (ctx/act c :offline #js {:ms 20000}))
-  :done)
+  (ctx/end c :done nil))
 
 (defn ^:async eat-round [c]
   (await (ctx/act c :eat #js {}))
-  :done)
+  (ctx/end c :done nil))
 
 (def probes (atom 0))
 
 (def jobs
-  {'away {:check always :round away-round}
-   'eat {:check always :round eat-round}})
+  {'away {:conditions [] :round away-round}
+   'eat {:conditions [] :round eat-round}})
 
 (def triggers
   {:probe {:name :probe :job '(eat) :when (fn [_ _ _] (swap! probes inc) false)}

@@ -295,34 +295,10 @@
           (is (contract/passes-through? e))
           (is (contract/passes-through? (doto (js/Error. "cut") (aset "code" "cut"))))
           (is (not (contract/passes-through? (js/Error. "boom"))))
-          (let [runs (with-redefs [ctx/call-child (fn [_ _ _ _] (js/Promise.reject e))
-                       ctx/call (fn [_ _ _ _] (js/Promise.reject e))]
+          (let [runs (with-redefs [ctx/call (fn [_ _ _ _] (js/Promise.reject e))]
                        [(rejected (village-maintain/run-child! c :roll-1 {}))
                         (rejected (apiary-maintain/run-child! c :hives {}))])
                 thrown (await (js/Promise.all (clj->js runs)))]
             (is (every? #(identical? e %) thrown))
             (is (nil? (:booked @world)) "not booked as a failed step")))))))
 
-(def cleans-up-old-call
-  {:conditions [] :defaults {:floor {:health 12}}
-   :round (fn ^:async cleans-up-old-round [c]
-            (hurt! c 11)
-            (try
-              (await (look! c))
-              (catch :default e
-                (try (await (ctx/call-child c :old {:check (constantly true)
-                                                    :round (fn [_] (swap! world assoc :old-kid-ran true) :done)} {}))
-                     (catch :default e2 (swap! world assoc :call-refused (contract/passes-through? e2))))
-                (throw e)))
-            :continue)})
-
-(deftest an-unwinding-frame-may-not-call-an-old-child-either
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'cleans-up cleans-up-old-call})]
-          (core/submit! eng '(cleans-up) {})
-          (await (core/tick! eng))
-          (is (true? (:call-refused @world)))
-          (is (nil? (:old-kid-ran @world)))
-          (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))

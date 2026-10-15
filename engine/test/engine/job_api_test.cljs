@@ -7,10 +7,10 @@
             [engine.test-util :as tu]))
 (defn setup []
   (let [p (tu/fake {})
-        jobs {'wait {:args {:ms {:default 1000}} :check (constantly true)
+        jobs {'wait {:args {:ms {:default 1000}} :conditions []
                      :round (fn ^:async round [ctx] (await (ctx/act ctx :wait #js {:ms 1000})) :continue)}
-              'done {:args {} :check (constantly true) :round (fn [_] :done)}
-              'fail {:args {} :check (constantly true) :round (fn [_] (throw (js/Error. "test failure")))}}
+              'done {:args {} :conditions [] :round #(ctx/end % :done nil)}
+              'fail {:args {} :conditions [] :round (fn [_] (throw (js/Error. "test failure")))}}
         eng (core/create {:primitives p :jobs jobs :triggers {} :dir (tu/tmp-dir)
                           :events (events/make {:stdout? false})})]
     {:eng eng :p p :jobs jobs}))
@@ -133,10 +133,10 @@
       (fn ^:async run []
         (let [p (tu/fake {})
               [seen sink] (tu/legacy-capture-sink)
-              jobs {'wait {:args {:ms {:default 1000}} :check (constantly true)
+              jobs {'wait {:args {:ms {:default 1000}} :conditions []
                            :round (fn ^:async round [ctx] (await (ctx/act ctx :wait #js {:ms 1000})) :continue)}
-                    'done {:args {} :check (constantly true) :round (fn [_] :done)}
-                    'fail {:args {} :check (constantly true) :round (fn [_] (throw (js/Error. "test failure")))}}
+                    'done {:args {} :conditions [] :round #(ctx/end % :done nil)}
+                    'fail {:args {} :conditions [] :round (fn [_] (throw (js/Error. "test failure")))}}
               eng (core/create {:primitives p :jobs jobs :dir (tu/tmp-dir)
                                 :triggers {:probe {:name :probe :job '(done) :when (fn [_ _ _] false)}}
                                 :events (events/make {:stdout? false :sinks [sink]})})]
@@ -176,7 +176,7 @@
     (tu/run-async done
       (fn ^:async run []
         (let [p (tu/fake {})
-              jobs {'wait {:args {:ms {:default 1000}} :check (constantly true)
+              jobs {'wait {:args {:ms {:default 1000}} :conditions []
                            :round (fn ^:async round [ctx] (await (ctx/act ctx :wait #js {:ms 1000})) :continue)}}
               eng (core/create {:primitives p :jobs jobs :dir (tu/tmp-dir)
                                 :triggers {:probe {:name :probe :job '(wait) :when (fn [_ _ _] true)}}
@@ -201,7 +201,7 @@
       (fn ^:async run []
         (let [p (tu/fake {})
               [seen sink] (tu/legacy-capture-sink)
-              jobs {'wait {:args {:ms {:default 1000}} :check (constantly true)
+              jobs {'wait {:args {:ms {:default 1000}} :conditions []
                            :round (fn ^:async round [ctx] (await (ctx/act ctx :wait #js {:ms 1000})) :continue)}}
               eng (core/create {:primitives p :jobs jobs :dir (tu/tmp-dir)
                                 :triggers {:probe {:name :probe :job '(wait) :when (fn [_ _ _] true)}}

@@ -4,6 +4,7 @@
   test/contract/drive-contract.json runs through them here."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
@@ -17,17 +18,17 @@
 
 (defn ^:async eat-round [c]
   (await (.eat (:primitives c) (:token c) #js {}))
-  :done)
+  (ctx/end c :done nil))
 
 (defn ^:async walk-round [c]
   (await (.moveTo (:primitives c) (:token c) #js {:pos #js {:x 5 :y 64 :z 0}}))
-  :done)
+  (ctx/end c :done nil))
 
 (def jobs
   (merge registry/jobs
-         {'walk {:check (constantly true) :round walk-round}
-          'eat-up {:check (constantly true) :round eat-round}
-          'nop {:check (constantly true) :round (fn [_] :done)}}))
+         {'walk {:conditions [] :round walk-round}
+          'eat-up {:conditions [] :round eat-round}
+          'nop {:conditions [] :round #(ctx/end % :done nil)}}))
 
 (def triggers
   (merge real-triggers/all

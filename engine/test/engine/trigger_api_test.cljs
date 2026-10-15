@@ -35,14 +35,14 @@
   "One moveTo answered with @status, then done: a fruitless round while @status is a failure."
   [c]
   (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y 64 :z 0} :status @status}))
-  :done)
+  (ctx/end c :done nil))
 
 (def always (constantly true))
 
 (def jobs
-  {'quick {:check always :round (fn [_] :done) :args {}}
-   'spin {:check always :round (fn [_] :continue) :args {}}
-   'bump {:check always :round bump-round :args {}}})
+  {'quick {:conditions [] :round #(ctx/end % :done nil) :args {}}
+   'spin {:conditions [] :round (fn [_] :continue) :args {}}
+   'bump {:conditions [] :round bump-round :args {}}})
 
 (def base-triggers
   {:high {:name :high :when (fn [_ _ args & _] (>= @level (:at args 5))) :job '(quick) :args {:at 5}

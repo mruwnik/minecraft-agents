@@ -431,7 +431,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 1 0)]})
               hits (atom 0)
-              hurting {:check (constantly true)
+              hurting {:conditions []
                        :round (fn ^:async hurt-yield [_c]
                                 (swap! hits inc)
                                 (fake/swap-self! p update :health dec)
@@ -449,7 +449,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 1 0)]})
               hits (atom 0)
-              pausing {:check (constantly true)
+              pausing {:conditions []
                        :round (fn ^:async pause [c]
                                 (swap! hits inc)
                                 (ctx/update-mem! c update-in [:struck 7 :hits] (fnil inc 0))
@@ -467,13 +467,13 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 1 0)]})
               calls (atom 0)
-              blink {:check (constantly true)
-                     :round (fn ^:async blink [_c]
+              blink {:conditions []
+                     :round (fn ^:async blink [c]
                               (let [n (swap! calls inc)
                                     es (:entities @(fake/state p))]
                                 (swap! (fake/state p) assoc :entities [])
                                 (when (= 1 n) (js/setImmediate #(swap! (fake/state p) assoc :entities es)))
-                                (if (= 1 n) :continue :done)))}
+                                (if (= 1 n) :continue (ctx/end c :done nil))))}
               eng (assoc-in eng [:jobs 'jobs.survival.fight-back] blink)]
           (core/submit! eng respond {})
           (dotimes [_ 3] (await (core/tick! eng)))
@@ -485,7 +485,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:health 20} :inventory [{:name "stone_sword" :count 1}] :entities [(zombie 7 1 0)]})
               fights (atom 0)
-              hitter {:check (constantly true)
+              hitter {:conditions []
                       :round (fn ^:async hit [c]
                                (swap! fights inc)
                                (ctx/update-mem! c assoc-in [:struck 7] {:hits 3 :health 2})

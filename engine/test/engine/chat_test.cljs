@@ -29,8 +29,8 @@
   "Run job-def as a one-round top-level job; the value its round returns."
   [{:keys [eng]} round]
   (let [out (atom nil)
-        job {:check (constantly true)
-             :round (fn ^:async r [c] (reset! out (await (round c))) :done)}
+        job {:conditions []
+             :round (fn ^:async r [c] (reset! out (await (round c))) (ctx/end c :done nil))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'chat-job job))]
     (core/submit! eng '(chat-job) {})
     (await (core/tick! eng))

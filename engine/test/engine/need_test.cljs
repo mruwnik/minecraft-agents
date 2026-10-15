@@ -11,19 +11,24 @@
 
 (def got (atom []))
 
+(def ending-of
+  "The [kind cause] a fetch child ends with for a step's reason; any other reason is :nothing-possible."
+  {:no-source [:condition-failed :no-source]
+   :timeout [:limit-reached {:line :time :reason :timeout}]})
+
 (defn stopper
-  "An old fetch job: each round records its args and slot, then does (step c), which ends it :done (nil) or stops it
-  with a reason; :continue yields instead."
+  "A fetch job: each round records its args and slot, then does (step c), which ends it :done (nil) or with the
+  reason's ending (ending-of); :continue yields instead."
   [seen step]
   {:ways [:chest :craft :smelt :gather]
-   :check (fn [_] true)
+   :conditions []
    :round (fn ^:async r [c]
             (swap! seen conj (assoc (:args c) :slot (peek (:slots c))))
             (let [s (step c)]
               (cond
                 (= :continue s) :continue
-                s (do (ctx/result! c {:status :stopped :reason s}) :done)
-                :else :done)))})
+                s (let [[kind cause] (get ending-of s [:nothing-possible s])] (ctx/end c kind cause))
+                :else (ctx/end c :done nil))))})
 
 (defn setup
   "An engine with the caller job running (call-fn c) each round, obtain and get-tool as stoppers doing obtain-step and
@@ -36,13 +41,13 @@
         walks (atom [])
         p (tu/fake {})
         [seen sink] (tu/capture-sink)
-        walker {:check (fn [_] true)
+        walker {:conditions []
                 :ways [:walk :clear-seal]
                 :round (fn [c]
                          (let [{:keys [x y z]} (:pos (:args c))]
                            (swap! walks conj (:args c))
                            (swap! (fake/state p) assoc-in [:self :pos] [(+ x 0.5) y (+ z 0.5)])
-                           :done))}
+                           (ctx/end c :done nil)))}
         jobs {'jobs.items.obtain (stopper obtain (or obtain-step (constantly nil)))
               'jobs.items.get-tool (stopper tool (or tool-step (constantly nil)))
               'jobs.movement.go-to walker

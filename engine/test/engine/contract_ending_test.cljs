@@ -41,7 +41,7 @@
    :round (fn [c] (ctx/end c :done nil))})
 
 (deftest call-keys-are-specced-for-every-job
-  (let [reg {'wayed wayed 'plain {:check (constantly true) :round (constantly :done) :args nil}}]
+  (let [reg {'wayed wayed 'plain {:conditions [] :round #(ctx/end % :done nil) :args nil}}]
     (is (nil? (expr/problem reg '(wayed {:ways #{:craft} :spend {:time 30 :items {"dirt" 4}} :floor {:health 12}
                                         :least :all :deadline 5}))))
     (is (nil? (expr/problem reg '(plain {:spend {:time 30}}))) "a job that does not read them still takes them")
@@ -464,35 +464,6 @@
        (filter #(= :cut-off (:status (:data %))))
        (mapv (juxt #(get-in % [:context :job-id] (:job %)) #(get-in % [:data :ending :cause])))))
 
-(def calls-leaf
-  "An old job whose round starts the contract leaf (it goes on) and ends :done, or stopped with the world's :old-result."
-  {:check (constantly true)
-   :round (fn ^:async calls-leaf [c]
-            (await (ctx/call c :leaf leaf {}))
-            (when-let [r (:old-result @world)] (ctx/result! c r))
-            :done)})
-
-(deftest an-old-root-that-ends-cuts-off-its-started-contract-child
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'calls-leaf calls-leaf
-                                         'calls-kid {:check (constantly true)
-                                                     :round (fn ^:async calls-kid [c]
-                                                              (await (ctx/call-child c :kid calls-leaf {}))
-                                                              :continue)}})
-              a (core/submit! eng '(calls-leaf) {})]
-          (swap! world assoc :leaf-ok true)
-          (await (core/tick! eng))
-          (swap! world assoc :leaf-ok true :old-result {:status :stopped :reason :no-way})
-          (let [b (core/submit! eng '(calls-leaf) {})]
-            (await (core/tick! eng))
-            (is (= [[(str a "/leaf") :ended] [(str b "/leaf") :ended]] (cut-offs seen))))
-          (swap! world dissoc :old-result)
-          (let [k (core/submit! eng '(calls-kid) {})]
-            (await (core/tick! eng))
-            (is (= [(str k "/kid/leaf") :ended] (last (cut-offs seen))) "so does an old child called with call-child")))))))
-
 (defn ^:async next-turn [] (await (js/Promise. (fn [r] (js/setTimeout r 0)))))
 
 (def reflex-jobs
@@ -501,7 +472,7 @@
                                    (await (ctx/call c :leaf leaf {}))
                                    (await (js/Promise. (fn [r] (swap! world assoc :release r))))
                                    (ctx/end c :done nil))}
-   'old-done {:check (constantly true) :round (fn ^:async old-done [c] (await (ctx/call c :leaf leaf {})) :done)}})
+   'old-done {:conditions [] :round (fn ^:async old-done [c] (await (ctx/call c :leaf leaf {})) (ctx/end c :done nil))}})
 
 (def reflex-triggers
   (into {} (for [k [:abandons :holds :old-done]]

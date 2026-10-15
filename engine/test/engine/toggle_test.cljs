@@ -6,8 +6,6 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.expr :as expr]
-            [engine.job-api :as job-api]
-            [engine.job-api :as job-api]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.access.toggle :as toggle]))
@@ -22,20 +20,14 @@
      {:eng eng :p p :seen seen})))
 
 (defn ^:async child-outcome
-  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result, or {:waiting w} when the child declined and its parent waits."
+  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's outcome."
   [eng job args n]
   (let [out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent job args out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (let [id (core/submit! eng '(recording-parent) {})]
-      (await (run-until-empty eng n))
-      (if-let [w (:waiting (job-api/summary eng id))]
-        {:waiting w}
-        @out))))
+    (core/submit! eng '(recording-parent) {})
+    (await (run-until-empty eng n))
+    @out))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn props [p pos] (js->clj (.-properties (.blockAt p (clj->js pos))) :keywordize-keys true))
@@ -157,12 +149,13 @@
   (is (re-find #"jobs.access.toggle :state must be one of .*, got :ajar"
                (expr/problem registry/jobs (list 'jobs.access.toggle {:pos at :state :ajar})))))
 
-(deftest an-unloaded-cell-is-declined-not-loaded
+(deftest an-unloaded-cell-is-a-failed-condition-not-loaded
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [result p]} (await (run (assoc (world "oak_door" {:open false}) :unloaded ["3,64,0"]) {:pos at :state :open}))]
-          (is (= :not-loaded (get-in result [:waiting :reason])) "the child declines: its parent waits")
+          (is (= [:stopped :not-loaded] ((juxt :status :reason) result)))
+          (is (= :condition-failed (:kind (:ending result))))
           (is (empty? (calls p "useOn"))))))))
 
 (deftest the-body-standing-in-a-door-is-not-shut-in-but-may-open-it
@@ -175,12 +168,12 @@
                                    (assoc-in [:blocks "3,65,0"] "oak_door")
                                    (assoc-in [:states "3,65,0"] {:open true}))
                                {:pos (assoc at :y 65) :state :closed}))]
-          (is (= :standing-in (get-in shut [:result :waiting :reason])))
-          (is (= :standing-in (get-in upper [:result :waiting :reason])) "the door's upper half")
+          (is (= :standing-in (get-in shut [:result :reason])))
+          (is (= :standing-in (get-in upper [:result :reason])) "the door's upper half")
           (is (empty? (calls (:p shut) "useOn")))
           (is (= :changed (:reason (:result open)))))))))
 
-(deftest naming-the-upper-half-of-a-door-whose-lower-half-is-at-the-heads-is-declined-standing-in
+(deftest naming-the-upper-half-of-a-door-whose-lower-half-is-at-the-heads-fails-standing-in
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -192,7 +185,7 @@
                     (assoc-in [:blocks "3,66,0"] "oak_door")
                     (assoc-in [:states "3,66,0"] {:open true :half "upper"}))
               {:keys [result p]} (await (run w {:pos (assoc at :y 66) :state :closed}))]
-          (is (= :standing-in (get-in result [:waiting :reason])))
+          (is (= :standing-in (:reason result)))
           (is (empty? (calls p "useOn"))))))))
 
 ;; ------------------------------------------------------------------ gave up after one click

@@ -27,18 +27,17 @@
   (let [world (.-world (:primitives c))]
     (swap! (.-state world) assoc :entities [])
     (.respawn world)
-    :done))
+    (ctx/end c :done nil)))
 
 (defn ^:async respawn-stopped-round [c]
   (await (respawn-round c))
-  (ctx/result! c {:status :stopped :reason :no_land})
-  :done)
+  (ctx/end c :nothing-possible :no_land))
 
 (def jobs
   (merge registry/jobs
-         {'respawn-stopped {:check (constantly true) :round respawn-stopped-round}
-          'respawn-away {:check (constantly true) :round respawn-round}
-          'nop {:check (constantly true) :round (fn [_] :done)}}))
+         {'respawn-stopped {:conditions [] :round respawn-stopped-round}
+          'respawn-away {:conditions [] :round respawn-round}
+          'nop {:conditions [] :round #(ctx/end % :done nil)}}))
 
 (def triggers
   (merge real-triggers/all

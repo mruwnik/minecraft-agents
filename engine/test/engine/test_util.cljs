@@ -247,17 +247,23 @@
     (cond-> (assoc (:data e) :status :done) (= :already (:cause e)) (assoc :already? true))
     (assoc (:data e) :status :stopped :reason (contract/cause-key e) :ending e)))
 
+(defn recording-parent
+  "A contract job that calls job (a symbol or a definition) with args as its child :kid until it ends, puts (f ending)
+  (default: its outcome) in the atom out and ends done."
+  ([job args out] (recording-parent job args out outcome))
+  ([job args out f]
+   {:conditions []
+    :round (fn ^:async recording-round [c]
+             (let [r (await (ctx/call c :kid job args))]
+               (if (= :continue r)
+                 :continue
+                 (do (reset! out (f r)) (ctx/end c :done nil)))))}))
+
 (defn ^:async child-outcome
   "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's outcome."
   [eng job args n]
   (let [out (atom :not-done)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call c :kid job args))]
-                           (if (= :continue r)
-                             :continue
-                             (do (reset! out (outcome r)) (ctx/end c :done nil)))))}
-        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent job args out)))]
     (core/submit! eng '(recording-parent) {})
     (await (run-until-empty eng n))
     @out))

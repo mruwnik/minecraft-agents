@@ -354,11 +354,7 @@
         p (tu/fake (cond-> {:self {:pos self} :blocks blocks :inventory [{:name "iron_sword" :count 1}]} drops (assoc :drops drops)))
         out (atom :not-done)
         w (world/of-data {} {} zones)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job (or args {})))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent job (or args {}) out)
         make (fn [] (core/create {:primitives p :jobs (merge registry/jobs jobs {'recording-parent parent})
                                   :triggers triggers/all :dir dir :now #(deref clock) :world w
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))

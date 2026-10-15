@@ -17,7 +17,7 @@
   [c]
   (await (ctx/atomic c (:level (:args c)) :tree #(walk! c)))
   (await (walk! c))
-  :done)
+  (ctx/end c :done nil))
 
 (defn ^:async nested
   "A comfort tree section holding an urgent pillar section around one walk, then a walk in the tree section only."
@@ -26,22 +26,22 @@
                      (fn ^:async tree []
                        (await (ctx/atomic c :urgent :pillar #(walk! c)))
                        (await (walk! c)))))
-  :done)
+  (ctx/end c :done nil))
 
 (defn ^:async two-sections
   "Two comfort sections one after the other, a walk in each."
   [c]
   (await (ctx/atomic c :comfort :first #(walk! c)))
   (await (ctx/atomic c :comfort :second #(walk! c)))
-  :done)
+  (ctx/end c :done nil))
 
 (def always (constantly true))
 
 (def jobs
-  {'eat {:check always :round (fn ^:async eat [c] (await (ctx/act c :eat #js {})) :done)}
-   'section-then-walk {:check always :round section-then-walk}
-   'nested {:check always :round nested}
-   'two-sections {:check always :round two-sections}})
+  {'eat {:conditions [] :round (fn ^:async eat [c] (await (ctx/act c :eat #js {})) (ctx/end c :done nil))}
+   'section-then-walk {:conditions [] :round section-then-walk}
+   'nested {:conditions [] :round nested}
+   'two-sections {:conditions [] :round two-sections}})
 
 (defn food [w] (.-food (.self w)))
 

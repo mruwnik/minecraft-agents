@@ -160,14 +160,15 @@
 
 (defn ^:async script-round
   "One moveTo per entry of :statuses (the fake answers with that status), then
-  :end (:continue, :done, :declined, :stopped or :throw)."
+  :end (:continue, :done, :stopped or :throw)."
   [c]
   (doseq [s (:statuses (:args c))]
     (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y 64 :z 0} :status s})))
   (case (:end (:args c))
     :throw (throw (js/Error. "boom"))
-    :stopped (do (ctx/result! c {:status :stopped :reason :no-way}) :done)
-    (:end (:args c) :done)))
+    :stopped (ctx/end c :nothing-possible :no-way)
+    :continue :continue
+    (ctx/end c :done nil)))
 
 (defn ^:async bump-round
   "One moveTo, answered with whatever status holds."
@@ -177,7 +178,7 @@
 
 (defn ^:async bump-once-round [c]
   (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y 64 :z 0} :status @status}))
-  :done)
+  (ctx/end c :done nil))
 
 (def plan (atom []))
 
@@ -186,7 +187,7 @@
   [c]
   (doseq [[a s m] @plan]
     (await (ctx/act c a #js {:pos #js {:x 0 :y 64 :z 0} :status s :move m})))
-  :done)
+  (ctx/end c :done nil))
 
 (defn ^:async idle-round [c]
   (ctx/update-mem! c update :n (fnil inc 0))
@@ -196,7 +197,7 @@
   "One useOn, answered with whatever status holds."
   [c]
   (await (ctx/act c :useOn #js {:status @status}))
-  :done)
+  (ctx/end c :done nil))
 
 (def alt-rounds (atom 0))
 
@@ -211,14 +212,14 @@
 
 (def jobs
   (merge registry/jobs
-         {'script {:check always :round script-round :args {:statuses {:default []} :end {:default :done}}}
-          'bump {:check always :round bump-round}
-          'use-on {:check always :round use-on-round}
-          'bump-once {:check always :round bump-once-round}
-          'idle {:check always :round idle-round}
-          'alternating {:check always :round alternating-round}
-          'quick {:check always :round (fn [_] :done)}
-          'planned {:check always :round planned-round}}))
+         {'script (assoc (tu/job script-round) :args {:statuses {:default []} :end {:default :done}})
+          'bump (tu/job bump-round)
+          'use-on (tu/job use-on-round)
+          'bump-once (tu/job bump-once-round)
+          'idle (tu/job idle-round)
+          'alternating (tu/job alternating-round)
+          'quick (tu/job)
+          'planned (tu/job planned-round)}))
 
 (def triggers
   {:always {:name :always :job '(bump-once) :persistence :retry :when always}
@@ -276,8 +277,6 @@
                                          [["blocked" "arrived"] :done 0]
                                          [["arrived" "blocked"] :done 0]
                                          [["blocked"] :throw 0]
-                                         [[] :declined 1]
-                                         [["arrived"] :declined 0]
                                          [[] :stopped 1]
                                          [["blocked"] :stopped 1]
                                          [["arrived"] :stopped 0]]]
@@ -593,7 +592,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [end [:done :declined :stopped]]
+        (doseq [end [:done :stopped]]
           (let [{:keys [eng seen] :as r} (conclusion-setup end)]
             (core/register-reflex! eng {:trigger :t})
             (dotimes [_ 3] (await (tick-at r t0)))
@@ -669,14 +668,14 @@
   "A blocked moveTo each round; :continue twice, then :done on the third."
   [c]
   (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y 64 :z 0} :status "blocked"}))
-  (if (< (swap! calls inc) 3) :continue :done))
+  (if (< (swap! calls inc) 3) :continue (ctx/end c :done nil)))
 
 (deftest a-round-that-ends-the-job-is-not-fruitless
   (async done
     (tu/run-async done
       (fn ^:async t []
         (reset! calls 0)
-        (let [{:keys [seen eng] :as r} (setup {:jobs (assoc jobs 'third {:check always :round third-round})})]
+        (let [{:keys [seen eng] :as r} (setup {:jobs (assoc jobs 'third (tu/job third-round))})]
           (core/submit! eng '(third) {})
           (dotimes [i 3] (await (tick-at r (+ t0 (* i 60000)))))
           (is (= 1 (count (of-kind seen :completed))))

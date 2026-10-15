@@ -27,7 +27,7 @@
 
 (def job 'engine.args-test)
 
-(def reg {job {:check (constantly true) :round noop-round :args args}})
+(def reg {job {:conditions [] :round noop-round :args args}})
 
 (defn problem [form] (expr/problem reg form))
 
@@ -72,7 +72,7 @@
 
 (deftest a-hand-built-job-declares-its-specs-at-run-time
   (let [data (a/declare! 'engine.args-test.hand {:n {:spec (a/int-in 0 5) :default 1 :form '(a/int-in 0 5)}})
-        r {'engine.args-test.hand {:check (constantly true) :round noop-round :args data}}]
+        r {'engine.args-test.hand {:conditions [] :round noop-round :args data}}]
     (is (= '(a/int-in 0 5) (get-in data [:n :spec])) "the data map keeps the form")
     (is (re-find #"engine.args-test.hand :n must be a whole number from 0 to 5, got 9" (expr/problem r '(engine.args-test.hand {:n 9}))))))
 

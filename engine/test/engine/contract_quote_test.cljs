@@ -61,7 +61,7 @@
 ;; ---------------------------------------------------------------- default quote
 
 (def plain {:conditions [] :args no-args :round (fn [c] (ctx/end c :done nil))})
-(def old {:check (constantly true) :args no-args :round (constantly :done)})
+(def old {:conditions [] :args no-args :round #(ctx/end % :done nil)})
 
 (deftest the-default-quote-is-the-mean-of-the-reports-else-the-default-time
   (async done

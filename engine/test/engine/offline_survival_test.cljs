@@ -12,9 +12,9 @@
 
 (defn ^:async away-round [c]
   (await (ctx/act c :offline #js {:ms 20000}))
-  :done)
+  (ctx/end c :done nil))
 
-(def jobs {'away {:check (constantly true) :round away-round}})
+(def jobs {'away {:conditions [] :round away-round}})
 
 (defn engine-with-sink [p clock]
   (let [[seen sink] (tu/legacy-capture-sink)
@@ -96,7 +96,7 @@
 
 (defn ^:async night-round [c]
   (await (ctx/act c :offline #js {:ms 20000 :why "logged-out-for-night"}))
-  :done)
+  (ctx/end c :done nil))
 
 (deftest a-deliberate-log-out-tells-why-and-when-back-while-away-and-nothing-after
   (async done
@@ -105,7 +105,7 @@
         (let [clock (atom 1000000)
               p (tu/fake {:offlineScale 0.01})
               [seen sink] (tu/legacy-capture-sink)
-              eng (core/create {:primitives p :jobs {'night {:check (constantly true) :round night-round}}
+              eng (core/create {:primitives p :jobs {'night {:conditions [] :round night-round}}
                                 :triggers {} :dir (tu/tmp-dir) :now #(deref clock) :body "Fake"})
               _ (swap! (:events eng) update :sinks conj sink)
               id (core/submit! eng '(night) {})

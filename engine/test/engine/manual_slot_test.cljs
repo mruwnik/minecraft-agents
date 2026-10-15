@@ -4,6 +4,7 @@
   whatever it returns; only a round in flight beats the lease."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.job-api :as api]
             [engine.registry :as registry]
@@ -16,17 +17,15 @@
 
 (defn ^:async walk-round [c]
   (await (.moveTo (:primitives c) (:token c) #js {:pos #js {:x 5 :y 64 :z 0}}))
-  :done)
-
-(defn ctx-wait [c] (reset! (:wait c) {:reason :no-tool :need :axe}))
+  (ctx/end c :done nil))
 
 (def jobs
   (merge registry/jobs
-         {'walk {:check (constantly true) :round walk-round}
-          'spin {:check (constantly true) :round (fn [_] :continue)}
-          'blocked {:check (fn [c] (ctx-wait c) false) :round (fn [_] :done)}
-          'boom {:check (constantly true) :round (fn [_] (throw (js/Error. "boom")))}
-          'nop {:check (constantly true) :round (fn [_] :done)}}))
+         {'walk {:conditions [] :round walk-round}
+          'spin {:conditions [] :round (fn [_] :continue)}
+          'blocked (tu/job [(constantly {:reason :no-tool :need :axe})] nil)
+          'boom {:conditions [] :round (fn [_] (throw (js/Error. "boom")))}
+          'nop {:conditions [] :round #(ctx/end % :done nil)}}))
 
 (def triggers
   (merge real-triggers/all
@@ -139,7 +138,7 @@
           (await (core/tick! eng))
           (is (= ["spin" :stopped] ((juxt :name :status) (get (core/recent-results eng) "j1")))))))))
 
-(deftest a-slot-job-whose-check-fails-ends-at-once-with-the-checks-reason
+(deftest a-slot-job-whose-condition-fails-ends-at-once-with-its-cause
   (let [{:keys [eng seen]} (setup)]
     (takeover/take! eng me)
     (submit-as eng "claude" '(blocked))
@@ -148,7 +147,8 @@
     (is (empty? (ran seen)))
     (let [[e] (kinds seen :stopped)]
       (is (= :no-tool (:reason e)))
-      (is (= :axe (:need e))))))
+      (is (= :axe (get-in e [:cause :need])
+)))))
 
 (deftest no-trigger-is-evaluated-while-a-slot-job-runs-and-a-reflex-end-is-deferred
   (async done

@@ -681,7 +681,7 @@
 (def noop-stub
   "A jobs.time.noop stand-in that records each pause asked of it and ends at once."
   (fn [pauses]
-    {:check (constantly true)
+    {:conditions []
      :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}))
 
 (deftest recover-drops-waits-for-the-respawn-in-noop-pause-children

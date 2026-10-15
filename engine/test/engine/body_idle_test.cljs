@@ -14,18 +14,18 @@
 (defn ^:async filler-round [c]
   (await (ctx/act c :look #js {:pos #js {:x 0 :y 64 :z 3}}))
   (await (ctx/act c :wait #js {:ms 2000}))
-  :done)
+  (ctx/end c :done nil))
 
 (defn ^:async work-round [c]
   (await (ctx/act c :look #js {:pos #js {:x 3 :y 64 :z 0}}))
   :continue)
 
-(defn no-source [c] (ctx/wait c {:reason :no-source :why "no stone in sight"}))
+(defn no-source [_] {:reason :no-source :why "no stone in sight"})
 
 (def jobs
-  {'filler {:check always :round filler-round :idle-ok true}
-   'work {:check always :round work-round}
-   'stuck {:check no-source :round work-round}})
+  {'filler {:conditions [] :round filler-round :idle-ok true}
+   'work {:conditions [] :round work-round}
+   'stuck (tu/job [no-source] work-round)})
 
 (defn setup [opts]
   (let [clock (atom 1000000)
@@ -72,7 +72,7 @@
           (await (run-for eng clock 12000))
           (let [[e :as all] (idles seen)]
             (is (= 1 (count all)))
-            (is (= [{:job "j1" :name "stuck" :waiting {:reason :no-source :why "no stone in sight"}}
+            (is (= [{:job "j1" :name "stuck" :waiting {:reason :no-source :cause {:reason :no-source :why "no stone in sight"}}}
                     {:job "j2" :name "(repeat filler)" :idle-ok true}]
                    (:jobs e)))
             (is (re-find #"j1 stuck waiting: no-source" (:text e)) (:text e))))))))
