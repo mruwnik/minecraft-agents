@@ -326,7 +326,7 @@
       (do (ctx/warn-once! c [plan trouble] :build.declined
                           {:plan plan :part part :reason trouble
                            :text (str "build declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble}))))
+          {:trouble trouble :later? (and (not= no-zones trouble) (known/unreadable? answer))}))))
 
 (def neighbour-steps [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
 

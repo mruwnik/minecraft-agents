@@ -219,8 +219,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[plans args reason] [[{} {:plan "nope"} "no such plan"]
-                                     [{"pen" (pen-plan)} {:plan "pen" :part "nope"} "no cells to build"]]]
+        (doseq [[plans args reason] [[{"pen" (pen-plan)} {:plan "pen" :part "nope"} "no cells to build"]]]
           (let [{:keys [eng seen]} (start {:inventory kit} plans)
                 result (await (child-outcome eng job args 200))]
             (is (= :stopped (:status result)) reason)

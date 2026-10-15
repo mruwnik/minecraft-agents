@@ -73,7 +73,7 @@
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   Start facts (one build.declined warn naming the plan and the reason): no zone list read (unless :ignore-zones?) is a
   failed condition {:reason :no-zones}; a plan that is missing, unreadable or has no cells to
-  build (in :part) is impossible {:reason :plan-trouble :why text}, at the start and later in the call; at the start, with nothing to place, dig, fetch or
+  build (in :part) is impossible {:reason :plan-trouble :why text} (a plan missing or unreadable waits), at the start and later in the call; at the start, with nothing to place, dig, fetch or
   look at, a failed condition {:reason :no-items :needs {item n}}.
   Wood: a generic wood want (jobs.build.wood: planks, logs, wooden_stairs, wooden_slabs, wooden_doors, wooden_fences,
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
@@ -107,14 +107,21 @@
   [c]
   (check-cache/cached c :planned #(planned c)))
 
-(defn plan-problem
-  "Later :no-zones while no zone list is read. A plan that is missing, unreadable or has no cells to build (in :part) is
-  never: the cause is {:reason :plan-trouble :why text}."
+(defn plan-now
+  "The plan as the check or the round reads it: a check (no token) judged once per check-cache window, a round afresh."
   [c]
-  (let [{:keys [trouble]} (judged-plan c)]
+  (if (:token c) (planned c) (judged-plan c)))
+
+(defn plan-problem
+  "Later :no-zones while no zone list is read, later :plan-trouble for a plan that is missing or unreadable (it may be
+  saved or fixed later). A readable plan with no cells to build (in :part) is never: the cause is
+  {:reason :plan-trouble :why text}."
+  [c]
+  (let [{:keys [trouble later?]} (plan-now c)]
     (cond
       (nil? trouble) (contract/ok :plan "the plan can be built")
       (= no-zones trouble) (contract/later :no-zones "no zone list has been read")
+      later? (contract/later :plan-trouble trouble :why trouble)
       :else (contract/never :plan-trouble trouble :why trouble))))
 
 (def no-items
@@ -143,7 +150,7 @@
   "Done when the plan has nothing owed, no block came out wrong (the round ends it with its build.wrong warn); the cells placed this call, the cells still owed and the result so far. A check (no token)
   reads the plan judged once per check-cache window, a round afresh."
   [c]
-  (let [{:keys [cells trouble]} (if (:token c) (planned c) (judged-plan c))
+  (let [{:keys [cells trouble]} (plan-now c)
         placed (:placed (ctx/mem c) 0)
         left (count (owed cells))
         plan (:plan (:args c))

@@ -40,7 +40,7 @@
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
   With :plan and :part the pen is that part of the plan: its :box, and :mob and :target from its :herd
-  {:mob :target}; it waits :plan-trouble while the plan, the part or its :herd is missing. A pass that leaves
+  {:mob :target}; it waits :plan-trouble while the plan is missing or unreadable, and ends impossible :plan-trouble when the part or its :herd is missing. A pass that leaves
   a step that would still run rests the pen 10 minutes (jobs.lib.standing): it waits {:reason :nothing-to-do
   :backed-off [pen]}, so the job can stand in the queue under repeat without starving other jobs.
 
@@ -189,8 +189,8 @@
           answer (known/plan c id)
           found (some #(when (= part (:id %)) %) (:parts (:plan answer)))]
       (cond
-        (nil? answer) {:trouble "no such plan"}
-        (:broken answer) {:trouble (str "the plan cannot be read: " (:broken answer))}
+        (nil? answer) {:trouble "no such plan" :later? true}
+        (:broken answer) {:trouble (str "the plan cannot be read: " (:broken answer)) :later? true}
         (not found) {:trouble (str "no part " (pr-str part))}
         (not (and (:box found) (:herd found))) {:trouble (str "part " part " has no :box and :herd")}
         :else {:args (assoc (:herd found) :box (corner-box (:box found)))}))))
@@ -216,11 +216,14 @@
                           :skipped (into {} (map (fn [[step d]] [step (:skip d)])) decisions)))))))
 
 (defn can-run?
-  "Later :plan-trouble while the plan, the part or its herd is missing."
+  "Later :plan-trouble while the plan is missing or unreadable (it may be saved or fixed later); never when it has no such
+  part or the part has no box and herd."
   [c]
-  (if-let [trouble (:trouble (pen-of c))]
-    (contract/later :plan-trouble trouble :why trouble)
-    (contract/ok :pen "the pen can be read")))
+  (let [{:keys [trouble later?]} (pen-of c)]
+    (cond
+      (nil? trouble) (contract/ok :pen "the pen can be read")
+      later? (contract/later :plan-trouble trouble :why trouble)
+      :else (contract/never :plan-trouble trouble :why trouble))))
 
 (defn can-start?
   "Never :no-box without a box or a plan; later for :plan-trouble, a resting pen or nothing to do."
@@ -231,7 +234,7 @@
         resting (get (standing/rested c 'jobs.animals.tend) (pen-key c))]
     (cond
       (not (or plan box)) (contract/never :no-box "tend needs a :box or a :plan")
-      trouble (contract/later :plan-trouble trouble :why trouble)
+      trouble (can-run? c)
       resting (contract/later :nothing-to-do "the pen is resting" :backed-off [(pen-key c)] :until (:until resting))
       :else (pen-fact c))))
 

@@ -97,14 +97,13 @@
           (is (= {:kind :nothing-possible :cause :leak} (kc leaky)))
           (is (= :leak (get-in leaky [:data :reason]))))))))
 
-(deftest a-plan-the-world-may-fix-and-no-zone-list-are-failed-conditions
+(deftest a-plan-without-fence-cells-is-impossible-and-no-zone-list-a-failed-condition
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [stone {:id "pen" :parts [{:id "s" :cells [[2 64 2]] :want "stone"}]}]
           (doseq [[plans zones kind reason]
-                  [[{} [] :condition-failed :plan-trouble]
-                   [{"pen" stone} [] :condition-failed :plan-trouble]
+                  [[{"pen" stone} [] :impossible :plan-trouble]
                    [{"pen" (ring-plan)} nil :condition-failed :no-zones]]]
             (let [e (await (ending-of (b/start (spec kit) plans zones) job {:plan "pen"} 10))]
               (is (= [kind reason] [(:kind e) (get-in e [:cause :reason])])))))))))

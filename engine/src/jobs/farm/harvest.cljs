@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
             [jobs.farm.field :as fld]
             [jobs.lib.blocks :as blocks]
@@ -35,7 +36,7 @@
   Zones: a crop or bare cell in another owner's zone or claim, or in another's plan footprint (never the body's own plan), is left alone (one
   harvest.declined warn, :reason :refused); :ignore-zones? true skips the check.
   Refused before it starts, as failed conditions: {:reason :no-zones} (no zone list read, unless :ignore-zones?),
-  {:reason :plan-trouble :why} (the plan is missing, unreadable or has no crop cells), :refused (every ripe crop is
+  {:reason :plan-trouble :why} (the plan is missing or unreadable: a wait; it has no crop cells: impossible, also later in the call), :refused (every ripe crop is
   refused) and :nothing-to-do (no ripe crop and nothing owed).
   Ends with data {:cut :replanted :bare :lost :gave-up}: cells that could not be replanted, or stopped being a crop
   afterwards, are named in :bare and a harvest.bare warn. Done when it cut or replanted some and the number meets :least
@@ -191,7 +192,7 @@
         (do (ctx/warn-once! c [id trouble] :harvest.declined
                             {:plan id :part part :reason trouble
                              :text (str "harvest declines plan " id (when part (str " part " part)) ": " trouble)})
-            {:trouble trouble})))))
+            {:trouble trouble :later? (known/unreadable? answer)})))))
 
 (defn with-field
   "c over the field of planned (nil: unchanged): :plan-cells set, :center and :radius of the args around them."
@@ -254,7 +255,7 @@
             c (with-field c field)
             m (ctx/mem c)]
         (cond
-          (:trouble field) {:reason :plan-trouble :why (:trouble field)}
+          (:trouble field) nil ; can-run? says it
           (or (:center m)
               (if field (or (seq (sowable c)) (seq (:replant m))) (seq (:replant m)))
               (:collect m)
@@ -263,7 +264,17 @@
           (and (cutting? c) (seq (ripe-raw c (:skipped m)))) {:reason :refused}
           :else {:reason :nothing-to-do}))))
 
-(def can-start? (checks/refusing :work "something to harvest" problem))
+(defn can-run?
+  "Later :plan-trouble while the plan is missing or unreadable (it may be saved or fixed later); never when it has no crop
+  cells."
+  [c]
+  (let [{:keys [trouble later?]} (planned c)]
+    (cond
+      (nil? trouble) (contract/ok :plan "no plan trouble")
+      later? (contract/later :plan-trouble trouble :why trouble)
+      :else (contract/never :plan-trouble trouble :why trouble))))
+
+(def can-start? (cond/and can-run? (checks/refusing :work "something to harvest" problem)))
 
 (declare lost-cells)
 
@@ -507,7 +518,7 @@
 (defn ^:async step [c]
   (let [field (planned c)]
     (if (:trouble field)
-      (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble field)} {:cut (:cut (ctx/mem c) 0) :replanted (:replanted (ctx/mem c) 0)})
+      :continue
       (await (work (with-field c field))))))
 
 (defn ^:async round

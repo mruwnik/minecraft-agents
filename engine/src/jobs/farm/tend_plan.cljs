@@ -45,14 +45,14 @@
     (let [part (:part (:args c))
           answer (known/plan c id)
           crops (fld/crop-cells answer part)
-          trouble (or (fld/plan-trouble answer crops)
-                      (when (nil? (known/zones c)) "no zone list has been read"))]
+          no-zones (when (nil? (known/zones c)) "no zone list has been read")
+          trouble (or (fld/plan-trouble answer crops) no-zones)]
       (if-not trouble
         {:answer answer :crops crops}
         (do (ctx/warn-once! c [id trouble] :farm-tend.declined
                             {:plan id :part part :reason trouble
                              :text (str "tend declines plan " id (when part (str " part " part)) ": " trouble)})
-            {:trouble trouble})))))
+            {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))})))))
 
 (defn ground-cell
   "{:pos :name :above} of a ground cell."

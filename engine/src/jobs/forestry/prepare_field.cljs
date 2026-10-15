@@ -26,14 +26,14 @@
   (let [{:keys [plan part]} (:args c)
         answer (known/plan c plan)
         trees (maintain/tree-cells answer part)
-        trouble (or (maintain/plan-trouble answer trees)
-                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list"))]
+        no-zones (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list")
+        trouble (or (maintain/plan-trouble answer trees) no-zones)]
     (if-not trouble
       {:trees trees :planned (set (map (comp vec :pos) (:cells answer)))}
       (do (ctx/warn-once! c [plan trouble] :prepare.declined
                           {:plan plan :part part :reason trouble
                            :text (str "prepare declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble}))))
+          {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))}))))
 
 (declare place-verdict)
 

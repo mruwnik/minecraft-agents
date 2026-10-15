@@ -10,6 +10,11 @@
   [ctx id]
   (world/plan (:world (:engine ctx)) id))
 
+(defn unreadable?
+  "Whether a plan answer is missing or broken: the plan may be saved or fixed later, so a job waits for it."
+  [answer]
+  (boolean (or (nil? answer) (:broken answer))))
+
 (defn zones
   "The body's world's zone list [{:name :min [x y z] :max [x y z] :owner :allow #{..}} ...] (see jobs.lib.zone-file).
   nil when the zone file is missing or was never readable: a dig or place job declines on nil, with one warn.

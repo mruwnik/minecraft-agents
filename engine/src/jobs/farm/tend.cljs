@@ -76,8 +76,8 @@
   {:parts {part {:steps :field}}}. A part (or the whole field) whose pass leaves a step that would
   still run rests 10 minutes (jobs.lib.standing): its condition fails for that long, the cause names it as :backed-off, and the
   other parts go on; so the job can stand in the queue under repeat without starving other jobs.
-  Condition-failed {:reason :plan-trouble :why text} (one farm-tend.declined warn) while the plan is missing, unreadable,
-  has no crop cells, or no zone list has been read; a started run ends so in its next round if the plan stops being workable.")
+  {:reason :plan-trouble :why text} (one farm-tend.declined warn): a wait while the plan is missing or unreadable or no zone
+  list has been read; impossible when it has no crop cells, also in a started run if the plan stops being workable.")
 
 (a/defargs args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :spec a/box? :default nil}
@@ -316,11 +316,23 @@
           (empty? statuses) (checks/cause-status :later {:reason :nothing-to-do :backed-off (vec (sort (keys rested)))})
           :else (or (first (filter #(= :look (first %)) statuses)) (last statuses)))))))
 
+(defn can-run?
+  "Later :plan-trouble while the plan is missing or unreadable or no zone list has been read; never when it has no crop
+  cells."
+  [c]
+  (let [{:keys [trouble later?]} (when (:plan (:args c)) (tend-plan/planned c))]
+    (cond
+      (nil? trouble) (contract/ok :plan "no plan trouble")
+      later? (contract/later :plan-trouble trouble :why trouble)
+      :else (contract/never :plan-trouble trouble :why trouble))))
+
 (defn can-start?
-  "usable-args, then problem (it reads the box)."
+  "usable-args, then can-run?, then problem (it reads the box)."
   [c]
   (let [args (usable-args c)]
-    (if (= :ok (first args)) (problem c) args)))
+    (if (= :ok (first args))
+      (let [run (can-run? c)] (if (= :ok (first run)) (problem c) run))
+      args)))
 
 (defn worked?
   "Whether the summary of a step says it changed something."
@@ -491,7 +503,7 @@
   [c]
   (cond
     (and (:plan (:args c)) (:trouble (tend-plan/planned c)))
-    (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble (tend-plan/planned c))})
+    :continue
     (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (needs-look? c))
     (await (look/survey! c))
     :else (await (work c))))

@@ -41,8 +41,8 @@
   Ends :done with data {:dug n :collected n :kept [...] :wrong [...] :refused [...]}; over a tidy
   field it digs nothing and is done. When strays were found, none dug and some refused, it ends condition-failed
   :refused with the same data.
-  Condition-failed {:reason :plan-trouble :why text} (one tidy.declined warn naming the plan and the reason) while the
-  plan is missing, unreadable or has no cells (in :part), and while no zone list has been read.
+  {:reason :plan-trouble :why text} (one tidy.declined warn naming the plan and the reason): a wait while the plan is
+  missing or unreadable or no zone list has been read; impossible when it has no cells (in :part), also later in the call.
   Quote: time only, the strays are not counted.")
 
 (a/defargs args
@@ -134,20 +134,25 @@
   [c]
   (let [{:keys [plan part]} (:args c)
         answer (known/plan c plan)
-        trouble (or (plan-trouble answer part)
-                    (let [{:keys [zones ignore-zones?]} (tr/access-world c)]
-                      (when (and (nil? zones) (not ignore-zones?)) "no zone list has been read")))]
+        no-zones (let [{:keys [zones ignore-zones?]} (tr/access-world c)]
+                   (when (and (nil? zones) (not ignore-zones?)) "no zone list has been read"))
+        trouble (or (plan-trouble answer part) no-zones)]
     (if-not trouble
       {:answer answer}
       (do (ctx/warn-once! c [plan trouble] :tidy.declined
                           {:plan plan :part part :reason trouble
                            :text (str "tidy declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble}))))
+          {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))}))))
 
-(def plan-ok
-  (checks/refusing :plan "the plan is readable"
-                   (fn [c] (when-let [trouble (:trouble (planned c))]
-                             {:reason :plan-trouble :why trouble}))))
+(defn can-run?
+  "Later :plan-trouble while the plan is missing or unreadable or no zone list has been read; never when it has no cells
+  (in :part)."
+  [c]
+  (let [{:keys [trouble later?]} (planned c)]
+    (cond
+      (nil? trouble) (contract/ok :plan "the plan is readable")
+      later? (contract/later :plan-trouble trouble :why trouble)
+      :else (contract/never :plan-trouble trouble :why trouble))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -299,7 +304,7 @@
 (defn ^:async step [c]
   (let [{:keys [answer trouble]} (planned c)]
     (if trouble
-      (ctx/end c :condition-failed {:reason :plan-trouble :why trouble})
+      :continue
       (let [cells (work-cells (:cells answer) (:part (:args c)))
             found (strays cells #(tr/world-block (:primitives c) %))
             _ (settle-digging! c found)
@@ -324,7 +329,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def can-start? plan-ok)
+(def can-start? can-run?)
 
 (defn done?
   "Ok once no stray is left in the plan's cells, none is refused or wrong (finish! warns of them), no sweep is owed

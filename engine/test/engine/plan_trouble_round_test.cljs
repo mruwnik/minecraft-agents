@@ -78,3 +78,40 @@
         (let [w (ew/of-data {"pen" tt/pen-plan} {} [])
               {:keys [eng]} (h/setup {:inventory [(tt/wheat 4)] :entities [(tt/cow 1 2) (tt/cow 2 3)]} 0 w)]
           (is (true? (await (alive-after-plan-loss? eng w 'jobs.animals.tend '(jobs.animals.tend {:plan "pen" :part "cows"}) 3)))))))))
+
+(def stone-plan {:id "pen" :parts [{:id "s" :cells [[2 64 2]] :want "stone"}]})
+
+(defn ^:async alive?
+  "Whether the job sym with args is still on the list after 12 ticks: it waits, not ended."
+  [[eng] sym args]
+  (core/submit! eng (list sym args) {})
+  (dotimes [_ 12] (await (core/tick! eng)))
+  (boolean (seq (:list (core/state eng)))))
+
+(defn starts
+  "Per job: [sym args start-fn] over plans, the kit and pen worlds."
+  [plans]
+  (let [tend-world (fn [] (let [w (ew/of-data plans {} [])]
+                            [(:eng (h/setup {:inventory [(tt/wheat 4)] :entities [(tt/cow 1 2)]} 0 w))]))]
+    (merge
+     {'jobs.build.from-plan [(fn [] [(:eng (bfp/start {:inventory bfp/kit} plans))]) {:plan "pen" :part "nope"}]
+      'jobs.build.pen [(fn [] [(:eng (bfp/start (pb/spec pb/kit) plans []))]) {:plan "pen"}]
+      'jobs.build.rail-line [(fn [] [(:eng (bfp/start (rl/spec "stone" 63 (rl/kit {})) plans []))]) {:plan "line"}]
+      'jobs.animals.pen-check [(fn [] [(:eng (bfp/start (pb/spec [] pb/built-pen) plans []))]) {:plan "pen"}]
+      'jobs.animals.tend [tend-world {:plan "pen" :part "nowhere"}]}
+     (into {} (map (fn [sym] [sym [(fn [] [(:eng (bfp/start {} plans))]) {:plan "pen"}]]))
+           '[jobs.farm.harvest jobs.farm.plant jobs.farm.tend jobs.farm.tidy jobs.forestry.prepare jobs.forestry.maintain]))))
+
+(deftest a-missing-plan-waits-in-every-plan-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[sym [start args]] (starts {})]
+          (is (true? (await (alive? (start) sym args))) (str sym)))))))
+
+(deftest a-readable-plan-that-cannot-be-built-ends-in-every-plan-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[sym [start args]] (starts {"pen" stone-plan "line" {:id "line" :parts [{:id "x" :cells [] :want "stone"}]}})]
+          (is (false? (await (alive? (start) sym args))) (str sym)))))))

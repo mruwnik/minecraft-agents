@@ -38,7 +38,7 @@
   short or refused after its work (data) goes on to the check, which reports the shortage as leaks with :built. A
   shut-gate child that did not end done is named in the data as :shut.
   Start facts, all waits or refusals of can-start? (one pen-build.declined warn naming the cells or the reason):
-  - {:reason :plan-trouble :why text}: the plan is missing, unreadable, has no cells (in :part) or no fence cells.
+  - {:reason :plan-trouble :why text}: a wait while the plan is missing or unreadable; never when it has no cells (in :part) or no fence cells.
   - {:reason :uneven :why text}: its ring steps more than 1 between neighbouring fences, or a gate is more than 1 above
     the ground of an inside neighbour (animals will not step down 2), unless :uneven? true.
   - {:reason :no-zones}: no zone list has been read (unless :ignore-zones?).
@@ -135,7 +135,7 @@
       (do (ctx/warn-once! c [plan trouble] :pen-build.declined
                           {:plan plan :part part :reason trouble
                            :text (str "pen build declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble}))))
+          {:trouble trouble :later? (and (not= plan/no-zones trouble) (known/unreadable? answer))}))))
 
 (defn read-pen
   "The pen check over the cells the body has seen: an unseen cell is an :unloaded leak."
@@ -163,14 +163,15 @@
   (check-cache/cached c :planned #(planned c)))
 
 (defn plan-problem
-  "Later for a plan that is missing, unreadable or without fence cells, or no zone list read (the plan may be saved or
-  fixed later)."
+  "Later for a plan that is missing or unreadable, or no zone list read (the plan may be saved or fixed later); never
+  for a readable plan without cells or fence cells."
   [c]
-  (let [{:keys [trouble]} (judged-plan c)]
+  (let [{:keys [trouble later?]} (judged-plan c)]
     (cond
       (nil? trouble) (contract/ok :plan "the plan can be built")
       (= plan/no-zones trouble) (contract/later :no-zones "no zone list has been read")
-      :else (contract/later :plan-trouble trouble :why trouble))))
+      later? (contract/later :plan-trouble trouble :why trouble)
+      :else (contract/never :plan-trouble trouble :why trouble))))
 
 (def uneven-problem
   "Later :uneven for a ring that steps over max-step or a gate that drops too far onto the seen ground, unless :uneven?

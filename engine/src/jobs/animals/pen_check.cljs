@@ -16,7 +16,7 @@
   is not taken) from the feet cell :at [x y z], or from every surface inside :box (or the columns a :plan's fence, wall and gate cells close in), where a step out of the box
   is a leak. Reads what the body has seen; a pen it has not seen closed is checked again after it looks at the
   cells it has not seen (jobs.lib.sense/decide!); a cell that stays unseen (hidden behind a block) is walked to, at
-  most 3 times, until the eye sees it. Never digs or places. Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or has no fence, wall or gate cells.
+  most 3 times, until the eye sees it. Never digs or places. Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or unreadable and ends impossible :plan-trouble when it has no fence, wall or gate cells.
 
   The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
@@ -74,11 +74,14 @@
     (when-not (or at box plan) {:reason :no-pen :why "needs :at, :box or :plan"})))
 
 (defn can-run?
-  "Later :plan-trouble while :plan is missing or has no fence, wall or gate cells (it may be saved or fixed later)."
+  "Later :plan-trouble while :plan is missing or unreadable (it may be saved or fixed later); never when it has no
+  fence, wall or gate cells."
   [c]
-  (if-let [t (:trouble (pen-box c))]
-    (contract/later :plan-trouble t :why t)
-    (contract/ok :pen "a pen to read")))
+  (let [{:keys [trouble later?]} (pen-box c)]
+    (cond
+      (nil? trouble) (contract/ok :pen "a pen to read")
+      later? (contract/later :plan-trouble trouble :why trouble)
+      :else (contract/never :plan-trouble trouble :why trouble))))
 
 (defn can-start?
   "Never :no-pen without :at, :box and :plan."

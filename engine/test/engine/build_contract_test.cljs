@@ -161,23 +161,11 @@
           (is (nil? (contract/quote-problem q)) (pr-str q))
           (is (= [0 9 9] (:done q))))))))
 
-(deftest from-plan-trouble-after-the-start-is-impossible-like-at-the-start
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p w] :as s} (bfp/start {:inventory bfp/kit} {"pen" (bfp/pen-plan)})
-              place (.-place p)]
-          (aset p "place" (fn [& args]
-                            (ew/set-data! w {} {})
-                            (swap! h/clock + 600000)
-                            (.apply place p (to-array args))))
-          (is (= [:impossible :plan-trouble] (bad-args (await (ending-of s from-plan {:plan "pen"} 300))))))))))
-
 (deftest from-plan-start-facts
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [:impossible :plan-trouble] (bad-args (await (plan-ending {:inventory bfp/kit} {} {:plan "nope"})))))
+        (is (= [:condition-failed :plan-trouble] (bad-args (await (plan-ending {:inventory bfp/kit} {} {:plan "nope"})))))
         (is (= [:impossible :plan-trouble] (bad-args (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen" :part "nope"})))))
         (is (= [:condition-failed :no-zones]
                (bad-args (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen"} nil)))))

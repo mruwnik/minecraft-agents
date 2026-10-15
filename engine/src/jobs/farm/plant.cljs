@@ -34,7 +34,7 @@
   of other active plans are asked before choosing a cell and again before the place; a cell another owner's zone or a
   plan refuses is left bare (one plant.declined warn, :reason :refused, names it), :ignore-zones? true skips the check.
   Refused before it starts: impossible {:reason :bad-args :why}; failed conditions {:reason :no-zones} (no zone list read, unless
-  :ignore-zones?), {:reason :plan-trouble :why} (the plan is missing, unreadable or has no crop cells), :refused
+  :ignore-zones?), {:reason :plan-trouble :why} (the plan is missing or unreadable: a wait; it has no crop cells: impossible, also later in the call), :refused
   (every bare cell is refused), :food-reserve (a food-crop seed is carried but the reserve keeps it, with :seed :held :kept
   :reserve-points; nothing is fetched), {:reason :need ..} (no seed, :fetch false) and :nothing-to-do (no bare cell; a
   field of dried-back dirt names :untilled n).
@@ -178,7 +178,7 @@
 (defn plan-problem [c]
   (let [{:keys [trouble cells]} (planned c)]
     (if trouble
-      {:reason :plan-trouble :why trouble}
+      nil ; can-run? says it
       (let [{:keys [ready short]} (sowing c cells)]
         (cond
           (seq ready) nil
@@ -219,7 +219,17 @@
                          cause)
     (contract/ok :work "a field to sow")))
 
-(def can-start? (cond/and bad-args work))
+(defn can-run?
+  "Later :plan-trouble while the plan is missing or unreadable (it may be saved or fixed later); never when it has no crop
+  cells."
+  [c]
+  (let [{:keys [trouble later?]} (planned c)]
+    (cond
+      (nil? trouble) (contract/ok :plan "no plan trouble")
+      later? (contract/later :plan-trouble trouble :why trouble)
+      :else (contract/never :plan-trouble trouble :why trouble))))
+
+(def can-start? (cond/and bad-args can-run? work))
 
 (declare result-of)
 
@@ -264,7 +274,7 @@
         (do (ctx/warn-once! c [id trouble] :plant.declined
                             {:plan id :part part :reason trouble
                              :text (str "plant declines plan " id (when part (str " part " part)) ": " trouble)})
-            {:trouble trouble})))))
+            {:trouble trouble :later? (known/unreadable? answer)})))))
 
 (defn sowing
   "How the planned bare cells divide: {:ready [{:pos :seed}] (seed carried, not skipped, permitted) :short #{seed}
@@ -436,7 +446,7 @@
       unseen? (await (look/survey! c :cell))
       fetched fetched
       (nil? field) (await (box-round c))
-      (:trouble field) (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble field)} (result-of c nil))
+      (:trouble field) :continue
       :else (await (plan-round c field)))))
 
 (defn ^:async round

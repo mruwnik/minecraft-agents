@@ -94,13 +94,14 @@
                      ps))))
 
 (defn plan-box
-  "{:box} around the barrier cells of plan id (of part, when given), or {:trouble text}."
+  "{:box} around the barrier cells of plan id (of part, when given), or {:trouble text}, with :later? true when the
+  plan is missing or unreadable (it may be saved or fixed later)."
   [c id part]
   (let [answer (known/plan c id)
         cells (filter #(or (nil? part) (= part (:part %))) (:cells answer))
         box (when (and answer (not (:broken answer))) (barrier-box cells))]
     (cond
-      (nil? answer) {:trouble "no such plan"}
-      (:broken answer) {:trouble (str "the plan cannot be read: " (:broken answer))}
+      (nil? answer) {:trouble "no such plan" :later? true}
+      (:broken answer) {:trouble (str "the plan cannot be read: " (:broken answer)) :later? true}
       (nil? box) {:trouble "the plan has no fence, wall or gate cells"}
       :else {:box box})))

@@ -41,8 +41,8 @@
   :lit-brake :no-bed :blocked :wet :no-buffer :launch-trap :unloaded; at most 12) and what the build left (:refused
   :given-up :short)).
   Start facts (one rail-build.declined warn (:plan :reason) each):
-  - impossible: its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails).
-  - condition-failed: the plan is missing or unreadable (:plan); no zone list has been read (:no-zones); a cell wanting
+  - impossible: its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails); the plan has no cells to build (:no-cells).
+  - condition-failed: the plan is missing or unreadable (:plan, a wait); no zone list has been read (:no-zones); a cell wanting
     a redstone block holds another block (:source-blocked, :cells; the builder never digs, so on natural ground put a
     torch or lever in the plan, or use a raised bed); a cell still to build is refused by the access rules
     (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :all-carried (the default) and :fetch off for items, items for
@@ -82,8 +82,8 @@
                 (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))
         chain (when (seq cells) (rail/line cells))
         trouble (cond
-                  (plan/plan-trouble answer cells) {:reason :plan :why (plan/plan-trouble answer cells)
-                                                     :text (plan/plan-trouble answer cells)}
+                  (plan/plan-trouble answer cells) {:reason (if (known/unreadable? answer) :plan :no-cells) :why (plan/plan-trouble answer cells)
+                                                                    :text (plan/plan-trouble answer cells)}
                   (:error chain) (merge {:reason :not-a-line :why (:error chain)
                                          :text (str "its rail cells are not one line: " (name (:error chain))
                                                     (when (:at chain) (str " at " (pr-str (:at chain)))))}

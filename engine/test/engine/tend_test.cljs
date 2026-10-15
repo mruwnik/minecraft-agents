@@ -328,15 +328,24 @@
           (is (= {:mob "cow" :target 4} (select-keys (done-event s) [:mob :target])))
           (is (true? (finished? s))))))))
 
-(deftest a-part-that-is-no-pen-or-a-missing-plan-starts-no-run-and-the-wait-says-so
+(deftest a-missing-plan-starts-no-run-and-the-wait-says-so
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[plan part] [["pen" "nowhere"] ["none" "cows"]]]
-          (let [s (await (plan-scenario (list 'jobs.animals.tend {:plan plan :part part}) {"pen" pen-plan}
-                                        {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 6))]
-            (is (empty? (interacts s)))
-            (is (= [:plan-trouble] (distinct (map :reason (events-of s :waiting)))))))))))
+        (let [s (await (plan-scenario (list 'jobs.animals.tend {:plan "none" :part "cows"}) {"pen" pen-plan}
+                                      {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 6))]
+          (is (empty? (interacts s)))
+          (is (= [:plan-trouble] (distinct (map :reason (events-of s :waiting))))))))))
+
+(deftest a-part-that-is-no-pen-starts-no-run-and-ends-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (plan-scenario (list 'jobs.animals.tend {:plan "pen" :part "nowhere"}) {"pen" pen-plan}
+                                      {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 6))]
+          (is (empty? (interacts s)))
+          (is (empty? (events-of s :waiting)))
+          (is (true? (finished? s))))))))
 
 (deftest a-pass-that-leaves-a-step-to-run-rests-the-pen-so-a-standing-job-does-not-starve-the-queue
   (async done

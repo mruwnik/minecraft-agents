@@ -1,6 +1,7 @@
 (ns jobs.forestry.prepare
   (:require [engine.args :as a]
             [engine.contract :as contract]
+            [jobs.lib.cond :as cond]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.trees :as forestry]
@@ -57,8 +58,8 @@
   short of saplings is left alone, with one note per cell (prepare.wrong, prepare.no-soil, prepare.cramped,
   prepare.wet) and one per species short (prepare.short {:species :missing}). The job wakes when what it lacked
   is carried. A started job runs on to finish.
-  Condition-failed {:reason :plan-trouble :why text} (one prepare.declined warn) while the plan is missing,
-  unreadable or has no tree cells (in :part), and while no zone list is loaded. A cell held back by cells never seen
+  {:reason :plan-trouble :why text} (one prepare.declined warn): a wait while the plan is missing or unreadable or no zone
+  list is loaded; impossible when it has no tree cells (in :part), also later in the call. A cell held back by cells never seen
   (the cell, the ground under it, its growth space) starts the job: it looks around once, then at each unseen cell.
   Ends :done with data {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped
   :wet :refused :text} when it cleared, soiled, planted or dammed a cell and no cell is left, or (done?) when every cell
@@ -380,7 +381,7 @@
 (defn ^:async step [c]
   (let [field (field/planned c)]
     (if (:trouble field)
-      (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble field)})
+      :continue
       (or (await (maintain/survey-field! c field))
           (do
             (when-not (:begun (ctx/mem c))
@@ -407,7 +408,9 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def can-start? not-ready)
+(defn can-run? [c] (maintain/trouble-status (field/planned c)))
+
+(def can-start? (cond/and can-run? not-ready))
 
 (defn done?
   "Every cell of the field is seen and in its state: nothing to work, nothing held back, refused or receding, the drops

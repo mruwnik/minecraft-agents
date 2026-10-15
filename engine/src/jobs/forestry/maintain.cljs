@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [jobs.lib.access.rules :as rules]
             [engine.contract :as contract]
+            [jobs.lib.cond :as cond]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
@@ -40,9 +41,9 @@
   - planting it was refused or failed three times.
   Does not start (condition-failed, a skipped job) unless a grown tree stands on a planned cell that is not left, or a
   bare planned cell has its sapling carried: the cause is the worst blocked state ({:reason :cells-foreign
-  :cells-unplantable :no-sapling :cells [..]}) or :nothing-to-do. Condition-failed {:reason :plan-trouble :why text}
-  (one forest.declined warn) while the plan is missing, unreadable or has no tree cells, and while no zone list is loaded.
-  A started job always runs on to finish.
+  :cells-unplantable :no-sapling :cells [..]}) or :nothing-to-do. {:reason :plan-trouble :why text}
+  (one forest.declined warn): a wait while the plan is missing or unreadable or no zone list is loaded; impossible when it
+  has no tree cells, also later in the call.
   Ends :done with data {:felled :planted :left :bare} when it felled or planted a tree. With none of
   those it ends nothing-possible :left when it left trees standing, else condition-failed :nothing-to-do.")
 
@@ -159,14 +160,23 @@
   (let [{:keys [plan part]} (:args c)
         answer (known/plan c plan)
         trees (tree-cells answer part)
-        trouble (or (plan-trouble answer trees)
-                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list"))]
+        no-zones (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list")
+        trouble (or (plan-trouble answer trees) no-zones)]
     (if-not trouble
       {:trees trees}
       (do (ctx/warn-once! c [plan trouble] :forest.declined
                           {:plan plan :part part :reason trouble
                            :text (str "forest declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble}))))
+          {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))}))))
+
+(defn trouble-status
+  "The status of a planned field: later :plan-trouble while the plan is missing or unreadable or no zone list is loaded
+  (it may be saved or fixed later); never when it has no tree cells."
+  [{:keys [trouble later?]}]
+  (cond
+    (nil? trouble) (contract/ok :plan "no plan trouble")
+    later? (contract/later :plan-trouble trouble :why trouble)
+    :else (contract/never :plan-trouble trouble :why trouble)))
 
 (defn note-cells!
   "Say, once each, which planned cells hold something foreign, cannot take a sapling, or want a sapling not carried."
@@ -428,7 +438,7 @@
 (defn ^:async step [c]
   (let [field (planned c)]
     (if (:trouble field)
-      (ctx/end c :condition-failed {:reason :plan-trouble :why (:trouble field)})
+      :continue
       (let [trees (:trees field)]
         (or (await (survey-field! c field))
             (do (when-not (:begun (ctx/mem c))
@@ -456,7 +466,9 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def can-start? not-ready)
+(defn can-run? [c] (trouble-status (planned c)))
+
+(def can-start? (cond/and can-run? not-ready))
 
 (defn done?
   "Ok once the forest is in order: no tree to collect, fell or replant, no cell blocked or left, the field seen and no
