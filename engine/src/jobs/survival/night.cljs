@@ -5,7 +5,6 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
-            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
             [jobs.survival.retreat-doors :as retreat-doors]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -133,7 +132,7 @@
 (defn done?
   "Already sheltered with nothing for the night to do: only before the start, the round ends a night it began."
   [c]
-  (checks/goal (and (not (started/running? c)) (boolean (:shelter (quiet-night c))))
+  (checks/goal (and (not (checks/running? c)) (boolean (:shelter (quiet-night c))))
                [:sheltered "sheltered, nothing for the night to do"] [:night "the night is not over"] {:units :nights}))
 
 (defn quote-of

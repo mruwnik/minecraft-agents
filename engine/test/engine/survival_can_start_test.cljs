@@ -38,7 +38,8 @@
 (deftest fight-back-needs-a-hostile-in-range
   (are [world expected] (= expected (start-of 'jobs.survival.fight-back world {:range 4 :ranged-range 16 :leash 20 :skip []}))
     {} [:later :no-target]
-    {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} [:ok :target]))
+    {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} [:ok :target]
+    {:self {:health 2} :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} [:ok :target]))
 
 (deftest get-food-rests-after-a-too-dangerous-call-while-fragile-and-empty-handed
   (let [entry [[:food-too-dangerous {:why :creeper} {:cap 1 :ttl 3600000}]]
@@ -49,15 +50,16 @@
       {:food 5 :health 2} [{:name "bread" :count 1}] [:ok :food-to-try])))
 
 (defn done-of
-  "[kind reason] of job's done? over a fake body, asked before the call starts or once it runs (its :contract :call written)."
-  [job world args running?]
+  "[kind reason] of job's done? over a fake body, asked before the call starts or once it runs (its :contract :call written, an entry of `entries`)."
+  [job world args entries]
   (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
-    (mem/write! store :home home mem/place-policy)
-    (when running? (mem/write! store (mem/job-kind "1") {:contract {:call {:spend {}}}} {:cap 1 :ttl :forever}))
+    (doseq [[kind data policy] (cons [:home home mem/place-policy] entries)] (mem/write! store kind data policy))
     (tu/kind-reason ((:done? (get registry/jobs job))
                      {:primitives (tu/seeing-all (tu/fake world)) :view (fn [] (mem/view store)) :root "1" :slots [] :args args}))))
 
+(def running [[(mem/job-kind "1") {:contract {:call {:spend {}}}} {:cap 1 :ttl :forever}]])
+
 (deftest a-goal-the-round-wraps-up-holds-only-before-the-start
-  (are [job world args] (= [[:ok] [:later]] [(take 1 (done-of job world args false)) (take 1 (done-of job world args true))])
+  (are [job world args] (= [[:ok] [:later]] [(take 1 (done-of job world args [])) (take 1 (done-of job world args running))])
     'jobs.survival.go-home {:time st/noon :self {:pos {:x 12.5 :y 64 :z 0.5}}} {}
     'jobs.survival.respond-to-hostile {:time st/noon} {:range 4 :ranged-range 16}))

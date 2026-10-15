@@ -4,7 +4,6 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
-            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -87,7 +86,7 @@
     (if (= :ok (first n)) (contract/all [n (contract/asked c bed-status)]) n)))
 
 (defn done? [c]
-  (let [d (and (not (started/running? c)) (sh/sleeping? (:primitives c)))]
+  (let [d (and (not (checks/running? c)) (sh/sleeping? (:primitives c)))]
     (checks/goal d [:sleeping "already asleep"] [:awake "not asleep"] {:units :sleeps :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [c]

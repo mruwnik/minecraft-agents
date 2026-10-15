@@ -11,6 +11,12 @@
             [jobs.lib.submitted :as submitted]
             [jobs.lib.world :as known]))
 
+(defn running?
+  "Whether c's call has started its rounds: a done? asked before the start sees the would-be call (:quote-call) in
+  ctx/frozen-call, so that alone cannot tell."
+  [c]
+  (and (nil? (:quote-call c)) (some? (ctx/frozen-call c))))
+
 (defn args-fit
   "The check that ok? (a fn of the ctx) holds of the call's args: :ok :args, else :never :bad-args with text."
   [text ok?]

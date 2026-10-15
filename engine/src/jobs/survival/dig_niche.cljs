@@ -6,7 +6,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
-            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dl]
             [jobs.lib.access.rules :as rules]
@@ -72,7 +71,7 @@
   (let [m (ctx/mem c)
         p (:primitives c)
         d (and (sh/roofed? p (:roof-height (:args c))) (reach/closed-room? p (sh/feet p))
-               (or (:ended m) (and (nil? (:site m)) (not (started/running? c)))))]
+               (or (:ended m) (and (nil? (:site m)) (not (checks/running? c)))))]
     (checks/goal d [:roomed "shut in a closed room under a roof"] [:exposed "not shut in a closed room"]
                  {:units :shelters :done (if d 1 0) :left (if d 0 1)})))
 
