@@ -1,6 +1,7 @@
 (ns jobs.items.obtain.gather
   "The gather source: the child for a raw need, its tool, and the search for what is not seen."
-  (:require [engine.contract :as contract]
+  (:require [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.obtain.base :refer [max-fruitless sheep-radius tried! ways-of]]
@@ -19,7 +20,7 @@
   "The text of a hunt ending that left animals alone (its :spared-by, a count per rule: pen, keep ..), else nil."
   [res]
   (when-let [by (not-empty (:spared-by res))]
-    (str "left alone: " (clojure.string/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))
+    (str "left alone: " (str/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))
 
 (defn fruitless-limit
   "Fruitless runs that end the gather source: the need's :max-runs, but only for a run that happened; a child that
@@ -70,7 +71,7 @@
         o (explore-opts c)
         here (.-pos (.self (:primitives c)))
         _ (ctx/emit! c :obtain.exploring :info
-                     {:message (str "nothing seen to get " (clojure.string/join "/" targets) ": walking to look for it, up to " (:max-distance o)
+                     {:message (str "nothing seen to get " (str/join "/" targets) ": walking to look for it, up to " (:max-distance o)
                                     " blocks out and " (:max-legs o) " legs, from " (js/Math.floor (.-x here)) " "
                                     (js/Math.floor (.-y here)) " " (js/Math.floor (.-z here)))
                       :attention :notice
