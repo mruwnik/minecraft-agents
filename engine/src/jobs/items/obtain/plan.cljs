@@ -5,7 +5,7 @@
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.items.obtain.base :refer [craft-radius plan-allowed? seen-radius]]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source wool-keep]]
-            [jobs.items.obtain.table :refer [dirt-blocks gather-needs grass-seeds leaves-of material-blocks source-opts wool-color wool?]]
+            [jobs.items.obtain.table :refer [dirt-blocks gather-needs grass-seeds leaves-of material-blocks source-opts stalks wool-color wool?]]
             [jobs.items.recipes :as recipes]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
@@ -83,7 +83,8 @@
         plan-of (fn [name]
                   (if-let [seen-of-name (cond (= "dirt" name) dirt-blocks
                                               (leaves-of name) #{(leaves-of name)}
-                                              (grass-seeds name) (grass-seeds name))]
+                                              (grass-seeds name) (grass-seeds name)
+                                              (stalks name) #{name})]
                     (when (or (= name (get-in (ctx/mem c) [:gather :item]))
                               (seq (look/seen-blocks p {:names (vec seen-of-name) :radius (seen-radius) :max 1})))
                       {:steps [] :gather {name n} :item name})

@@ -149,3 +149,13 @@
     {} :continue :continue
     {:reflex :needs-weapon} :again :again
     {:reflex :needs-weapon} [:done] [:done]))
+
+(deftest sugar-cane-is-cut-from-a-seen-stand-by-get-seeds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stand (into {} (for [y [64 65 66]] [(str "3," y ",0") "sugar_cane"]))
+              s (f/start (update (f/bare []) :blocks merge stand) [f/own-zone])
+              e (await (ending-of s 'jobs.items.obtain {:item "sugar_cane" :explore false} 60))]
+          (is (= :done (:kind e)))
+          (is (= {:got 1 :item "sugar_cane"} (select-keys (:data e) [:got :item]))))))))

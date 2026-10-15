@@ -36,6 +36,8 @@
   "The seed items broken out of grass, and the grass blocks that drop them."
   {"wheat_seeds" #{"short_grass" "tall_grass"}})
 
+(def stalks "The stalks cut from a wild stand (jobs.gather.get-seeds), the base left to grow again." #{"sugar_cane" "bamboo"})
+
 (defn material-blocks
   "The blocks mining which gives a stone-material (stone: cobblestone), or nil for any other item. A block
   that drops itself (blackstone) is its own."
@@ -87,6 +89,9 @@
           (for [[seed n] gather :when (grass-seeds seed)]
             {:key seed :count n :job 'jobs.gather.get-seeds :seen (grass-seeds seed) :max-runs 1
              :args {:item seed :count n}})
+          (for [[k n] gather :when (stalks k)]
+            {:key k :count n :job 'jobs.gather.get-seeds :seen #{k} :max-runs 1
+             :args {:item k :count n}})
           (for [[k n] gather :when (mob-drops k)]
             {:key k :count n :job 'jobs.combat.hunt :mob (mob-drops k) :max-runs 1
              :args {:mob (mob-drops k) :count n :radius (sheep-radius) :drops [k]}})
