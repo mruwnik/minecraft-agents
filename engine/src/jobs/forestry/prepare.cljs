@@ -8,12 +8,14 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
             [jobs.lib.look :as look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
             [jobs.forestry.maintain :as maintain]
-            [jobs.forestry.prepare-field :as field]))
+            [jobs.forestry.prepare-field :as field]
+            [jobs.forestry.prepare-rule :as rule]))
 
 (def doc
   "Get the planting spots of a forest plan ready. A spot is a planned tree cell (want {:tree species}); the cell
@@ -56,8 +58,8 @@
   prepare.wet) and one per species short (prepare.short {:species :missing}). The job wakes when what it lacked
   is carried. A started job runs on to finish.
   Condition-failed {:reason :plan-trouble :why text} (one prepare.declined warn) while the plan is missing,
-  unreadable or has no tree cells (in :part), and while no zone list is loaded. With a planned cell never seen, the
-  body looks around once from where it stands (again after moving over 3 blocks) before the check decides.
+  unreadable or has no tree cells (in :part), and while no zone list is loaded. A cell held back by cells never seen
+  (the cell, the ground under it, its growth space) starts the job: it looks around once, then at each unseen cell.
   Ends :done with data {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped
   :wet :refused} (info prepare.done) when it cleared, soiled, planted or dammed a cell. With none of those, it ends
   condition-failed :refused when cells were skipped, else with the worst blocked state.
@@ -130,24 +132,30 @@
   (let [read #(field/assessments c field)]
     (if (look/unseen? (:primitives c) cells) (read) (check-cache/cached c :states read))))
 
+(defn unseen-room?
+  "Whether a cell reads :unloaded for a cell the body never saw (a look shows it), not for an unloaded chunk."
+  [c states]
+  (let [p (:primitives c)
+        over (:headroom (:args c))]
+    (boolean (some (fn [{:keys [state pos species]}]
+                     (and (= :unloaded state)
+                          (look/unseen? p (cons (maintain/down pos)
+                                                (map #(update pos :y + %) (range (or (rule/headroom-of species over) 1)))))))
+                   (vals states)))))
+
 (defn not-ready
-  "Whether the job may start: ok while a step can be taken on a planned cell. The field is assessed once per
-  check-cache window; the round says (warns) what is wrong with each cell."
+  "Whether the job may start: ok while a step can be taken on a planned cell or a look would show a cell. The field
+  is assessed once per check-cache window; the round says (warns) what is wrong with each cell."
   [c]
   (let [field (field/planned c)]
     (if (:trouble field)
       (checks/cause-status :later {:reason :plan-trouble :why (:trouble field)})
-      (let [cells (maintain/field-cells field)
-            states (states-of c field cells)]
+      (let [states (states-of c field (maintain/field-cells field))]
         (cond
           (seq (field/todo c states)) (contract/ok :work "a step can be taken on a planned cell")
+          (unseen-room? c states) (contract/ok :look "a cell never seen is looked at")
           (seq (:recede (ctx/mem c))) (checks/cause-status :later {:reason :receding :ready-at (apply min (vals (:recede (ctx/mem c))))})
-          :else (checks/cause-status
-                 (if (and (or (some #(= :unloaded (:state %)) (vals states)) (look/unseen? (:primitives c) cells))
-                          (not (look/surveyed? c :near)))
-                   :look
-                   :later)
-                 (or (blocked-reason states) {:reason :nothing-to-do})))))))
+          :else (checks/cause-status :later (or (blocked-reason states) {:reason :nothing-to-do})))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -361,7 +369,8 @@
           (do
             (when-not (:begun (ctx/mem c))
               (ctx/update-mem! c assoc :begun true))
-            (let [states (field/assessments c field)
+            (let [states (await (sense/decide! c ::states #(field/assessments c field)
+                                               {:retry? (fn [states] (some #(= :unloaded (:state %)) (vals states)))}))
                   work (field/todo c states)
                   target (first work)
                   owed (:collect (ctx/mem c))]

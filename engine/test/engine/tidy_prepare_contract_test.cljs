@@ -5,7 +5,6 @@
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
-            [engine.memory :as mem]
             [engine.farm-tidy-test :as ft]
             [engine.forest-maintain-test :as fm :refer [ground]]
             [engine.forest-prepare-test :as fp]
@@ -129,28 +128,23 @@
             (is (= [:condition-failed :cells-unloaded] [(:kind e) (contract/cause-key e)]))
             (is (= [] (fm/digs p)))))))))
 
-(deftest a-queued-prepare-with-unseen-headroom-looks-once-and-stays-unstarted
+(deftest a-queued-prepare-with-unseen-headroom-looks-up-at-it-and-prepares-the-cell
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [spec (fp/world {"3,64,0" "cobblestone"} (fm/item "iron_pickaxe" 1) (fm/item "oak_sapling" 1))
               p (tu/fake-on-floor spec)
               {:keys [eng]} (fm/start spec {"forest" fp/one-cell} (tu/tmp-dir) p)
-              hidden? #(= 65 (.-y %))
+              looked-up? #(some (fn [c] (and (= "look" (.-name c)) (= 65 (js/Math.floor (.-y (.-pos (.-args c))))))) (.-calls (.-world p)))
+              hidden? #(and (= 65 (.-y %)) (not (looked-up?)))
               seen-at (.-seenBlockAt p)
-              sensed-at (.-sensedAt p)
-              looks #(count (filter (fn [c] (= "look" (.-name c))) (.-calls (.-world p))))
-              id (core/submit! eng '(jobs.forestry.prepare {:plan "forest"}) {})]
+              sensed-at (.-sensedAt p)]
           (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (seen-at pos))))
           (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (sensed-at pos))))
-          (await (tu/run-until-empty eng 6))
-          (let [n (looks)]
-            (is (pos? n) "it looked round")
-            (await (tu/run-until-empty eng 6))
-            (is (= n (looks)) "once from this place"))
-          (is (= [id] (:list (core/state eng))) "stays queued")
-          (is (nil? (:call (:contract (mem/job-mem (mem/view (:store eng)) id [])))) "never started")
-          (is (= [] (fm/digs p))))))))
+          (core/submit! eng '(jobs.forestry.prepare {:plan "forest"}) {})
+          (await (tu/run-until-empty eng 40))
+          (is (= [[3 64 0]] (fm/digs p)))
+          (is (= [[3 64 0 "oak_sapling"]] (fm/places p))))))))
 
 ;; ------------------------------------------------------------------ forestry.maintain
 
