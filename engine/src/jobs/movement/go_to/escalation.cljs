@@ -124,9 +124,12 @@
   {:cap 100 :ttl (* 6 60 60 1000)})
 
 (defn own-placed-fn
-  "(own? cell block): go-to itself placed block at cell (a put-back), so it is not someone's build."
+  "(own? cell block): go-to itself placed block at cell (a put-back), or the body's scaffold ledger holds it there (a
+  pillar, a plug: its own temporary block), so it is not someone's build."
   [c]
-  (let [placed (set (map (comp (juxt :cell :block) :data) (ctx/entries c :escalation-placed)))]
+  (let [placed (into (set (map (comp (juxt :cell :block) :data) (ctx/entries c :escalation-placed)))
+                     (map (juxt :cell :item))
+                     (ledger/open-entries (ctx/view c)))]
     (fn [cell block] (contains? placed [(vec cell) block]))))
 
 (defn note-placed! [c cell]

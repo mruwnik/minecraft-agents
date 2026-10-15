@@ -9,6 +9,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [jobs.lib.escape :as escape]
+            [jobs.lib.ledger :as ledger]
             [plan.shape :as shape]
             [jobs.movement.go-to.escalation :as esc]
             [engine.registry :as registry]
@@ -594,6 +595,24 @@
             (is (= {:step :none :why :no-dig} (:escalation @out)) wall)
             (is (empty? (events-of seen :go-to.escalated)) wall)
             (is (empty? (calls p "dig")) wall)))))))
+
+(deftest go-to-digs-out-through-a-wall-of-its-own-scaffold-blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inner (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z))
+              walled (apply dissoc (merge room (box -3 64 -3 3 65 3 "cobblestone")) inner)
+              own (for [x (range -3 4) z (range -3 4) y [64 65]
+                        :when (or (= 3 (abs x)) (= 3 (abs z)))]
+                    {:cell [x y z] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed})
+              {:keys [eng p]} (setup (merge in-room {:blocks walled}))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1})))]
+          (ledger/write! (:store eng) own)
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 1000))
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (seq (calls p "dig")) "it dug its own cobblestone"))))))
 
 (deftest go-to-never-digs-in-another-s-zone
   (async done
