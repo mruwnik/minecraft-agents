@@ -1075,6 +1075,24 @@
     (is (= {[2 64 2] :refused [3 64 3] :unreachable}
            (:given-up (build/retry-walks m {:x 0 :y 64 :z 0} true))) "finishing: retried in place")))
 
+(deftest a-cell-whose-walk-keeps-failing-is-reopened-max-retries-times-then-stays-given-up
+  (let [pos [1 64 1]
+        fail-round (fn [m at] (reduce (fn [m _] (build/walk-fail m pos :unreachable 2 at)) m (range 2)))
+        step (fn [m] (build/retry-walks (fail-round m {:x 0 :y 64 :z 0}) {:x 0 :y 64 :z 0} true))
+        runs (iterate step {})]
+    (is (= {pos :unreachable} (:given-up (fail-round {} {:x 0 :y 64 :z 0}))))
+    (is (= {:x 5 :y 64 :z 5} (get-in (fail-round {} {:x 5 :y 64 :z 5}) [:walk-given pos])) "noted where the body stood at the first give-up")
+    (is (= {} (:given-up (nth runs 1))) "reopened once")
+    (is (= {} (:given-up (nth runs 2))) "reopened twice")
+    (is (= {pos :unreachable} (:given-up (nth runs 3))) "the third give-up stays")
+    (is (= (:walk-given (nth runs 3)) {pos {:x 0 :y 64 :z 0}}))))
+
+(deftest walk-fail-notes-only-newly-given-up-cells
+  (let [at1 {:x 0 :y 64 :z 0}
+        m (build/walk-fail {:given-up {[1 64 1] :unreachable}} [1 64 1] :unreachable 1 at1)]
+    (is (not (contains? (:walk-given m) [1 64 1])) "already given up: no note")
+    (is (= at1 (get-in (build/walk-fail {} [2 64 2] :unreachable 1 at1) [:walk-given [2 64 2]])))))
+
 ;; ---------------------------------------------------------------- wood species
 
 (def wood-ground (into {} (for [x (range 8 15) z (range -3 4)] [(h/cell-key x 63 z) "stone"])))
