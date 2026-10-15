@@ -36,6 +36,14 @@
                  (walk/choose-target walled-pond-world from [threat] nil [] 6 {:swim-factor 2.2}))
       "a drowned or a lost breath waits in water: a dry step of 3 beats a full swim"))
 
+(deftest a-refused-end-is-never-chosen-again
+  (let [flat (fn [{:keys [y]}] (if (<= y 63) "stone" "air"))
+        first-end (walk/choose-target flat from [threat] nil [] 6)
+        refused #{[(:x first-end) (:y first-end) (:z first-end)]}
+        again (walk/choose-target flat from [threat] nil [] 6 {:refused refused})]
+    (is (some? again) "another heading is open")
+    (is (not= first-end again) "the refused end is left out")))
+
 (deftest a-flight-without-options-keeps-the-preferred-direction
   (is (= {:x 6 :y 63 :z 0} (walk/choose-target pond-world from [threat] nil [] 6))))
 

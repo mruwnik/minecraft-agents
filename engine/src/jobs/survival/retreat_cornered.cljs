@@ -11,6 +11,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.escape :as escape]
+            [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
@@ -202,6 +203,7 @@
                                                               :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
                                                               :retry false :look-round false :floor {:health 1}}))
         res (when (contract/ending? r) (:data r))
+        _ (when (= :goal-not-standable (result/why r)) (ctx/update-mem! c update :refused (fnil conj #{}) (mapv target [:x :y :z])))
         s (/ (- (ctx/now c) t0) 1000)
         d (u/dist from (u/self-pos c))]
     (ctx/emit! c :retreat.step-speed :debug {:slot slot :blocks (/ (js/Math.round (* 10 d)) 10) :seconds (/ (js/Math.round (* 10 s)) 10)

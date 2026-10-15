@@ -420,6 +420,29 @@
             (await (run-job! s 'backer {}))
             (is (= want @out) (str "go-to " label))))))))
 
+(defn stepper
+  "A job that takes one flee step to a fixed cell and keeps the refused ends the flight remembers."
+  [out]
+  {:conditions []
+   :round (fn ^:async stepper-round [c]
+            (await (cornered/leg-step! c :step {:x 7 :y 64 :z 2} 0 5))
+            (reset! out (:refused (ctx/mem c)))
+            (ctx/end c :done nil))})
+
+(deftest a-flee-end-go-to-refuses-as-not-standable-is-remembered-for-the-flight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[why want] [[:goal-not-standable #{[7 64 2]}] [:no-progress nil]]]
+          (let [out (atom :unset)
+                s (setup {:entities [(zombie 7 2 {})]})
+                s (update-in (assoc-in s [:eng :jobs 'stepper] (stepper out)) [:eng :jobs] merge
+                             {'jobs.movement.go-to {:conditions []
+                                                    :ways (:ways (get registry/jobs 'jobs.movement.go-to))
+                                                    :round (fn ^:async refuse [c] (ctx/end c :nothing-possible :unreachable {:arrived false :why why}))}})]
+            (await (run-job! s 'stepper {}))
+            (is (= want @out) (str "go-to ends " why))))))))
+
 (deftest every-option-failing-in-two-sweeps-in-a-row-is-cannot-escape
   (is (not (retreat-flight/cannot-escape? (retreat-flight/count-sweep {}))))
   (is (retreat-flight/cannot-escape? (retreat-flight/count-sweep (retreat-flight/count-sweep {})))))

@@ -136,6 +136,7 @@
      (walk/choose-target (cornered/block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
                          (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?
                           :avoid (flight/avoid-ends c)
+                          :refused (:refused (ctx/mem c))
                           :floor (flight/floor c)
                           :known (ledger/ways-of c)})))))
 
