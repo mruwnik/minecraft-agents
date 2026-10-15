@@ -78,12 +78,16 @@ export const logRun = (entry) => fs.appendFileSync(path.join(dir(), 'log.jsonl')
 // Pure: total need of grants still ramping.
 export const reservedMb = (grants, now, rampMs, alive = () => true) =>
   grants.filter((g) => now - g.t < rampMs && alive(g.pid)).reduce((a, g) => a + g.needMb, 0)
-// Heavy waiters: <dir>/heavy-wait/<kind>.<pid>. While one is alive, light runs of the kind do not start, so a freed slot reaches the heavy run.
+// Heavy waiters: <dir>/heavy-wait/<kind>.<pid>[.<n>], holding the JSON list of slots the waiter tries (empty: any slot). While one is alive, light runs of the kind leave those slots alone, so a freed slot reaches the heavy run.
 export const isHeavy = (cwd = process.cwd()) => !!process.env.RES_SLOT_HEAVY || hasHeavyMarker(cwd)
+// Pure: the free slots a light run may take. waits: one entry per live heavy waiter, the slots it tries, or null (any slot).
+export const freeForLight = (free, waits) => waits.includes(null) ? [] : free.filter((i) => !waits.some((w) => w.includes(i)))
 export const heavyWaitFile = (kind, pid = process.pid, n = '') => path.join(dir(), 'heavy-wait', `${kind}.${pid}${n && `.${n}`}`)
-export const heavyWaiting = (kind, self = process.pid) => {
+const readWait = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return null } }
+export const heavyWaits = (kind, self = process.pid) => {
   const d = path.join(dir(), 'heavy-wait')
-  return fs.existsSync(d) && fs.readdirSync(d).some((f) => f.startsWith(`${kind}.`) && Number(f.split('.')[1]) !== self && pidAlive(Number(f.split('.')[1])))
+  if (!fs.existsSync(d)) return []
+  return fs.readdirSync(d).filter((f) => f.startsWith(`${kind}.`) && Number(f.split('.')[1]) !== self && pidAlive(Number(f.split('.')[1]))).map((f) => readWait(path.join(d, f)))
 }
 const grantDir = () => path.join(dir(), 'grants')
 const pidAlive = (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
@@ -150,11 +154,13 @@ const main = async () => {
   let lastLine = t0, lastReason = ''
   for (;;) {
     if (heavy) fs.mkdirSync(path.dirname(heavyWaitFile(kind)), { recursive: true }), fs.writeFileSync(heavyWaitFile(kind), '')
-    const free = usableSlots([...Array(k.max).keys()].filter((i) => !held(kind, i)), k.max, k.reserve ?? 0, heavy)
+    const open = usableSlots([...Array(k.max).keys()].filter((i) => !held(kind, i)), k.max, k.reserve ?? 0, heavy)
+    let free = open
+    const blockers = () => free.length ? '' : open.length ? '; free slots kept for a waiting heavy run' : `; held by ${holders(kind, k.max)}`
     const gated = await withGate(() => {
       const reserved = currentReserved()
-      const lightDeferred = !heavy && heavyWaiting(kind)
-      const d = decide({ freeSlots: lightDeferred ? 0 : free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved })
+      free = heavy ? open : freeForLight(open, heavyWaits(kind))
+      const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved })
       if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now() }))
       return d
     })
@@ -169,16 +175,16 @@ const main = async () => {
         process.exit(code)
       }
       dropGrant()
-    } else if (d.action === 'busy') { fs.rmSync(heavyWaitFile(kind), { force: true }); console.error(`res-slot: busy (${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}), retry later (gave up waiting after ${Math.round((Date.now() - t0) / 1000)}s)`); process.exit(75) }
+    } else if (d.action === 'busy') { fs.rmSync(heavyWaitFile(kind), { force: true }); console.error(`res-slot: busy (${d.why}${blockers()}), retry later (gave up waiting after ${Math.round((Date.now() - t0) / 1000)}s)`); process.exit(75) }
     else {
       // live-tests phase line (TEST_EVENTS=1), once per change of reason (digits ignored: free MB drifts)
       const reason = d.why.replace(/\d+/g, '#')
-      if (process.env.TEST_EVENTS && reason !== lastReason) console.log(`@@test ${JSON.stringify({ event: 'phase', name: `waiting: ${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}`.slice(0, 300) })}`)
+      if (process.env.TEST_EVENTS && reason !== lastReason) console.log(`@@test ${JSON.stringify({ event: 'phase', name: `waiting: ${d.why}${blockers()}`.slice(0, 300) })}`)
       lastReason = reason
     }
     if (d.action === 'wait' && Date.now() - lastLine >= (Number(process.env.RES_SLOT_STATUS_MS) || 60000)) {
       lastLine = Date.now()
-      console.error(`res-slot: waiting for ${kind} (${heldSlots(kind, k.max).length}/${k.max} slots in use, ${Math.round(availableMb())} MB free, ${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}), ${Math.round((Date.now() - t0) / 1000)}s`)
+      console.error(`res-slot: waiting for ${kind} (${heldSlots(kind, k.max).length}/${k.max} slots in use, ${Math.round(availableMb())} MB free, ${d.why}${blockers()}), ${Math.round((Date.now() - t0) / 1000)}s`)
     }
     await sleep(pollMs + Math.random() * 300)
   }

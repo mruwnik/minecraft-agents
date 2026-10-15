@@ -100,13 +100,13 @@ export const eventForwarder = (write, shardNs) => {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// Runs cmd under the first free slot; polls until one is free. A heavy run (integration) also tries the reserved slot first and, while it waits, keeps light res-slot runs from starting.
+// Runs cmd under the first free slot; polls until one is free. A heavy run (integration) also tries the reserved slot first and, while it waits, keeps light res-slot runs off those slots.
 let waitSeq = 0
 const runInSlot = async (slots, cmd, opts, onOut = () => {}, onWait = () => {}) => {
   const t0 = Date.now()
   const heavy = isHeavy(), order = candidateSlots(slots, RES.kinds.tests.max, RES.kinds.tests.reserve ?? 0, heavy)
   const wait = heavyWaitFile('tests', process.pid, waitSeq++)
-  if (heavy) fs.mkdirSync(path.dirname(wait), { recursive: true }), fs.writeFileSync(wait, '')
+  if (heavy) fs.mkdirSync(path.dirname(wait), { recursive: true }), fs.writeFileSync(wait, JSON.stringify(order))
   try { return await tryInSlots(order, slots, cmd, opts, onOut, onWait, t0) } finally { fs.rmSync(wait, { force: true }) }
 }
 const tryInSlots = async (order, slots, cmd, opts, onOut, onWait, t0) => {

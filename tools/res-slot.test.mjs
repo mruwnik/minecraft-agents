@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { candidateSlots, decide, hasHeavyMarker, loadConfig, reservedMb, usableSlots } from './res-slot.mjs'
+import { candidateSlots, decide, freeForLight, hasHeavyMarker, loadConfig, reservedMb, usableSlots } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -289,5 +289,24 @@ test('integration: a heavy run keeps its heavy-wait marker until its command hol
   const script = new URL('./res-slot.mjs', import.meta.url).pathname
   const r = spawnSync('node', [script, 't', '--heavy', '--', 'sh', '-c', `ls ${dir}/heavy-wait`], { cwd: dir, encoding: 'utf8', env })
   assert.equal(r.status, 0); assert.match(r.stdout, /^t\.\d+$/m)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('freeForLight: a light run avoids only the slots heavy waiters try; a marker without a slot list blocks all', () => {
+  assert.deepEqual(freeForLight([0, 1, 2], []), [0, 1, 2])
+  assert.deepEqual(freeForLight([0, 1, 2], [[4, 0], [4]]), [1, 2])
+  assert.deepEqual(freeForLight([0, 1, 2], [[4], null]), [])
+})
+
+test('integration: a heavy waiter that wants another slot does not hold back a light run', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 2 } } }))
+  fs.mkdirSync(path.join(dir, 'heavy-wait'))
+  fs.writeFileSync(path.join(dir, 'heavy-wait', `t.${process.pid}.0`), JSON.stringify([1]))
+  const env = { ...process.env, RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '100' }
+  delete env.RES_SLOT_HEAVY
+  const r = spawnSync('node', [new URL('./res-slot.mjs', import.meta.url).pathname, 't', '--', 'echo', 'ran'], { cwd: dir, encoding: 'utf8', env })
+  assert.equal(r.status, 0); assert.match(r.stdout, /ran/)
   fs.rmSync(dir, { recursive: true, force: true })
 })
