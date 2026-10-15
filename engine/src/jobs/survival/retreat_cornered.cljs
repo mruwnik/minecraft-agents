@@ -191,16 +191,16 @@
 (defn lost-memory-ms [] (settings/get settings :jobs.survival.retreat-cornered/lost-memory-ms))
 
 (defn ^:async leg-step!
-  "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :escalate false, and plans no route deeper or higher than y-margin (16) blocks past body and target;
+  "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :ways #{:walk :clear-seal}, and plans no route deeper or higher than y-margin (16) blocks past body and target;
   known dangers stay costed): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
   ([c slot target range leg-s] (await (leg-step! c slot target range leg-s retreat-goal/leg-margin)))
   ([c slot target range leg-s y-margin]
   (let [from (u/self-pos c)
         t0 (ctx/now c)
-        r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :escalate false :y-margin y-margin :at-night :go
-                                                              :warn false :leg-s leg-s
+        r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal} :y-margin y-margin :at-night :go
+                                                              :warn false :spend {:time leg-s}
                                                               :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
-                                                              :retry false :look-round false :allow-over-budget true}))
+                                                              :retry false :look-round false :floor {:health 1}}))
         res (when (contract/ending? r) (:data r))
         s (/ (- (ctx/now c) t0) 1000)
         d (u/dist from (u/self-pos c))]

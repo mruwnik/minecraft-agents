@@ -108,7 +108,7 @@
         unseen (when (= :unloaded (:reason checked)) (unseen-leak checked))
         walks (:walks (ctx/mem c) 0)
         walk (when (and unseen (< walks max-walks))
-               (await (near/go-near! c unseen 1 {:doors :never :escalate false})))]
+               (await (near/go-near! c unseen 1 {:doors :never :ways #{:walk :clear-seal}})))]
     (case walk
       :partial :continue
       :there (do (ctx/update-mem! c update :walks (fnil inc 0)) :continue)

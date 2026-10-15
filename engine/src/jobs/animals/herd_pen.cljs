@@ -241,7 +241,7 @@
       (u/within? (u/self-pos c) g (gate-look-range))
       (do (ctx/update-mem! c #(-> % (assoc :gate-visited true) (dissoc :looked-pen)))
           :continue)
-      (= :blocked (await (near/go-near! c g (gate-look-range) {:doors :never :escalate false}))) (finish! c :no-pen (unseen-extra answer))
+      (= :blocked (await (near/go-near! c g (gate-look-range) {:doors :never :ways #{:walk :clear-seal}}))) (finish! c :no-pen (unseen-extra answer))
       :else :continue)))
 
 (defn ^:async check-unknown!
@@ -256,7 +256,7 @@
     (cond
       (nil? unk) (await (look-from-gate! c answer))
       (not (u/within? here unk (look-range)))
-      (if (= :blocked (await (near/go-near! c unk (look-range) {:doors :never :escalate false})))
+      (if (= :blocked (await (near/go-near! c unk (look-range) {:doors :never :ways #{:walk :clear-seal}})))
         (await (look-from-gate! c answer))
         :continue)
       :else (do (await (sense/look-at! c (cell unk)))
@@ -311,7 +311,7 @@
 (defn ^:async survey! [c]
   (let [centre (box-centre (:box (:args c)))]
     (if (> (u/dist (u/self-pos c) centre) (near-pen))
-      (if (= :blocked (await (near/go-near! c centre (approach-range) {:doors :never :escalate false})))
+      (if (= :blocked (await (near/go-near! c centre (approach-range) {:doors :never :ways #{:walk :clear-seal}})))
         (finish! c :unreachable)
         :continue)
       (let [answer (await (pen-read/read! c (pen-opts c) #(= :unloaded (:reason %))))]
@@ -377,7 +377,7 @@
   failure counted in :dash-tries."
   [c]
   (hold-gate! c)
-  (let [r (await (near/go-near! c (u/cell-pos (nth (:axis (ctx/mem c)) out-1)) 0 {:escalate false}))
+  (let [r (await (near/go-near! c (u/cell-pos (nth (:axis (ctx/mem c)) out-1)) 0 {:ways #{:walk :clear-seal}}))
         outside? (body-outside? c)
         open? (gate-open? c)]
     (cond
@@ -406,7 +406,7 @@
 (defn ^:async go!
   "One round of a go-to (range 0, :doors :never) to the cell: :arrived, :failed or nil while it goes on."
   [c cell]
-  (let [r (await (child/call-walk* c :walk {:pos (u/cell-pos cell) :range 0 :doors :never :escalate false}))]
+  (let [r (await (child/call-walk* c :walk {:pos (u/cell-pos cell) :range 0 :doors :never :ways #{:walk :clear-seal}}))]
     (cond
       (= :continue r) nil
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived

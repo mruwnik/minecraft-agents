@@ -268,7 +268,7 @@
       (do (ctx/update-mem! c assoc :phase (if (:exited (ctx/mem c)) :shut :check))
           :again)
       (if-let [out (exit-cell box cells)]
-        (let [r (await (child/call-walk* c :exit {:pos out :range 0 :escalate false}))]
+        (let [r (await (child/call-walk* c :exit {:pos out :range 0 :ways #{:walk :clear-seal}}))]
           (cond
             (= :continue r) :continue
             (= :done (:kind r)) (do (ctx/update-mem! c assoc :exited true) :again)

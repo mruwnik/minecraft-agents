@@ -118,7 +118,7 @@
       :else (assoc-in e [:data :got] (got c)))))
 
 (defn ^:async walk! [c {:keys [land]}]
-  (let [r (await (child/call-walk* c :bank {:pos (select-keys land [:x :y :z]) :range 1 :escalate false :zone-tolls true}))]
+  (let [r (await (child/call-walk* c :bank {:pos (select-keys land [:x :y :z]) :range 1 :ways #{:walk :clear-seal} :zone-tolls true}))]
     (cond
       (= :continue r) :continue
       (= :done (:kind r)) :arrived

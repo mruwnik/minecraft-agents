@@ -167,7 +167,7 @@
             hold? (do (ctx/update-mem! c update :held-since #(or % (ctx/now c)))
                       (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
                       :held)
-            :else (await (near/go-near! c tpos 2 {:leg-s chase-timeout-s :dangers false :escalate false :look-round false})))]
+            :else (await (near/go-near! c tpos 2 {:spend {:time chase-timeout-s} :dangers false :ways #{:walk :clear-seal} :look-round false})))]
     (when (= :blocked r) (note-blocked! c target))
     (when (= :there r)
       (ctx/update-mem! c assoc :last-attack (ctx/now c))

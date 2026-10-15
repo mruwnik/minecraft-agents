@@ -202,7 +202,7 @@
       (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach)) (await (trade! c))
       :else
       (let [r (await (child/call-walk* c :walk
-                                      {:pos (u/pos-of (.-pos e)) :range (reach) :leg-s chase-timeout-s :escalate false :warn false}))]
+                                      {:pos (u/pos-of (.-pos e)) :range (reach) :spend {:time chase-timeout-s} :ways #{:walk :clear-seal} :warn false}))]
         (cond
           (= :continue r) :continue
           (let [res (:data r)] (or (:arrived res) (:leg res))) :again

@@ -206,7 +206,7 @@
   ([c] (wait-for-animal! c :leave-open))
   ([c doors]
   (if-let [to (:back-to (ctx/mem c))]
-    (if (= :continue (await (child/call-walk* c :back {:pos to :range 2 :doors doors :escalate false :zone-tolls true
+    (if (= :continue (await (child/call-walk* c :back {:pos to :range 2 :doors doors :ways #{:walk :clear-seal} :zone-tolls true
                                                        :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
       :yield
       :again)
@@ -239,7 +239,7 @@
           (let [{:keys [leg searching]} (await (leg-plan c target range))
                 r (when-not searching
                     (await (child/call-walk* c slot
-                                             {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+                                             {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :ways #{:walk :clear-seal} :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
             (when-not searching (ctx/update-mem! c dissoc :search-rounds))
             (cond
               searching (let [n (inc (:search-rounds (ctx/mem c) 0))]

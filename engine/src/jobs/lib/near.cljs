@@ -226,14 +226,14 @@
 (defn ^:async go-near!
   "Walk until the body's cell is within range cells of pos's cell (u/within?), as a jobs.movement.go-to child in slot :walk,
   so a body shut in escalates (pillar, stair, dig a way out and put back). Resolves to :there, :partial (the child waits on the world: yield and call
-  again; also a :leg-s leg that got nearer) or :blocked (it gave up or declined). opts: :doors (jobs.lib.pass policy, default :shut; a job that works gates itself passes :never), :dangers (false: plan
-  straight past known dangers), :tolls (cells the plan prices), :zone-tolls (true adds other bodies' zone cells), :escalate (default true; false is go-to's :ways #{:walk :clear-seal}), :leg-s (a leg of at most that many s, :partial when it got nearer, for a
+  again; also a :spend :time leg that got nearer) or :blocked (it gave up or declined). opts: :doors (jobs.lib.pass policy, default :shut; a job that works gates itself passes :never), :dangers (false: plan
+  straight past known dangers), :tolls (cells the plan prices), :zone-tolls (true adds other bodies' zone cells), :ways (go-to's), :spend (go-to's; {:time s} is a leg of at most that many s, :partial when it got nearer, for a
   caller chasing something that moves; default one 60 s steer), :look-round (default true; false for a caller that keeps moving),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always :retry false (the job counts its own
   tries), :at-night (go-to's arg; :go walks on at night); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
-  ([c pos range {:keys [doors dangers tolls zone-tolls escalate leg-s look-round one-way see at-night] :or {doors :shut dangers true escalate true look-round true one-way :closed}}]
+  ([c pos range {:keys [doors dangers tolls zone-tolls ways spend look-round one-way see at-night] :or {doors :shut dangers true look-round true one-way :closed}}]
    (let [cell (cell-of pos)]
      (cond
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
@@ -243,8 +243,8 @@
                                               (cond-> {:pos cell :range range :doors doors :dangers dangers :tolls tolls :zone-tolls (boolean zone-tolls)
                                                        :look-round look-round :one-way one-way :see (boolean see) :warn false :retry false :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                                                 at-night (assoc :at-night at-night)
-                                                (not escalate) (assoc :ways #{:walk :clear-seal})
-                                                leg-s (assoc :spend {:time leg-s}))))]
+                                                ways (assoc :ways ways)
+                                                spend (assoc :spend spend))))]
                (if (= :continue e)
                  :partial
                  (do (ctx/update-mem! c assoc :near-walk e)

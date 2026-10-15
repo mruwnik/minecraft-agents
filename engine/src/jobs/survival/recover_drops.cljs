@@ -174,7 +174,7 @@
   [c pos]
   (if-let [d (threatened? c)]
     [:danger d]
-    [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :at-night :go :leg-s (:leg-s (:args c))}))]))
+    [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :at-night :go :spend {:time (:leg-s (:args c))}}))]))
 
 (defn ^:async go!
   "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg (the danger and the
@@ -221,7 +221,7 @@
   reason). Not an arrival ends the trip :partial too."
   [c [x y z] pos names radius pile]
   (ctx/update-mem! c assoc :looked true)
-  (await (child/run!* c :look 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :escalate false}))
+  (await (child/run!* c :look 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :ways #{:walk :clear-seal}}))
   (let [again (pl/pile-ids c pos names radius)]
     (if (seq again)
       (do (ctx/update-mem! c update :passes (fnil inc 0)) (dth/save-trip! c) :next)
@@ -234,7 +234,7 @@
   (ctx/update-mem! c assoc :searched true)
   (loop [cells (map-indexed (fn [i [dx dz]] [i {:x (+ x dx) :y y :z (+ z dz)}]) [[3 0] [0 3] [-3 0] [0 -3]])]
     (when-let [[i cell] (first cells)]
-      (await (child/run!* c (keyword (str "search" i)) 'jobs.movement.go-to {:pos cell :range 1 :escalate false}))
+      (await (child/run!* c (keyword (str "search" i)) 'jobs.movement.go-to {:pos cell :range 1 :ways #{:walk :clear-seal}}))
       (or (seq (pl/pile-ids c pos names radius)) (recur (rest cells))))))
 
 (defn ^:async collect!

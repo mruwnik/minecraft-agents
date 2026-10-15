@@ -205,10 +205,10 @@
          (finally (aset near/go-near! k orig)))))
 
 (defn as-near
-  "The go-near! arguments [pos range opts] for walk-style args [pos range opts]: :timeout-s becomes :leg-s, no escalation."
+  "The go-near! arguments [pos range opts] for walk-style args [pos range opts]: :timeout-s becomes :spend :time, no escalation."
   [[pos range opts]]
-  [pos range (cond-> (merge {:escalate false} (dissoc opts :timeout-s))
-               (:timeout-s opts) (assoc :leg-s (:timeout-s opts)))])
+  [pos range (cond-> (merge {:ways #{:walk :clear-seal}} (dissoc opts :timeout-s))
+               (:timeout-s opts) (assoc :spend {:time (:timeout-s opts)}))])
 
 (defn shutdown-at!
   "On the nth call of the fake act named act, the engine shuts down (the round is cut, the act undone): the job stays

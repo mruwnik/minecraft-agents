@@ -852,7 +852,7 @@
               result (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
             (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 6)))))]
           (is (seq @opts))
-          (is (every? #(false? (:escalate %)) @opts) "a walk to a stand never digs through the build")
+          (is (every? #(= #{:walk :clear-seal} (:ways %)) @opts) "a walk to a stand never digs through the build")
           (is (every? :zone-tolls @opts))
           (is (not= :unreachable (get-in result [:given-up [40 64 0]]))))))))
 
@@ -867,7 +867,7 @@
               _ (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
                          (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 6)))))]
           (is (seq @opts))
-          (is (every? :escalate @opts) "shut in by its own dig: go-to may pillar or stair out"))))))
+          (is (every? (comp nil? :ways) @opts) "shut in by its own dig: go-to may pillar or stair out"))))))
 
 (deftest a-body-that-cannot-climb-out-of-its-hole-stops-shut-in-at-once
   (async done

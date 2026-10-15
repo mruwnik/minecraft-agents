@@ -170,7 +170,7 @@
   "Walk to within look-back-range of where the animal was last listed, so it is loaded and listed again; then it is booked looked-for.
   :continue while the walk goes on."
   [c {:keys [key pos]}]
-  (let [r (await (near/go-near! c pos (look-back-range) {:doors :never :escalate false}))]
+  (let [r (await (near/go-near! c pos (look-back-range) {:doors :never :ways #{:walk :clear-seal}}))]
     (if (= :partial r)
       :continue
       (do (ctx/update-mem! c update :looked-back (fnil conj []) key) :continue))))

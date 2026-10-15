@@ -128,7 +128,8 @@
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (near/go-near! c tpos 2 (cond-> {:zone-tolls true :leg-s (:walk-timeout-s (:args c)) :escalate false :look-round false}
+      (let [r (await (near/go-near! c tpos 2 (cond-> {:zone-tolls true :ways #{:walk :clear-seal} :look-round false}
+                                               (:walk-timeout-s (:args c)) (assoc :spend {:time (:walk-timeout-s (:args c))})
                                                doors (assoc :doors doors))))]
         (case r
           :there (do (when reset-row? (reset-row! c)) :there)

@@ -285,7 +285,7 @@
            (<= (u/dist (u/self-pos c) cell) (max-return-distance))
            (not (:returned (ctx/mem c))))
       (do (ctx/update-mem! c assoc :returned true)
-          (await (child/call-walk* c :go {:pos cell :range (max-scoop-return-range) :escalate false :at-night :go}))
+          (await (child/call-walk* c :go {:pos cell :range (max-scoop-return-range) :ways #{:walk :clear-seal} :at-night :go}))
           :again)
 
       (> (u/eye-dist (u/self-pos c) cell) u/bucket-reach)

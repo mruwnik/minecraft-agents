@@ -155,8 +155,8 @@
   "One go-to leg to the villager at pos. A leg or arrival resets the blocked count, anything else counts (the third in a
   row ends unreachable); the legs since the last toss are bounded by max-walks. :again, :continue or :done."
   [c pos]
-  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach) :leg-s (leg-s) :doors :shut
-                                            :escalate false :warn false :retry false :zone-tolls true}))]
+  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach) :spend {:time (leg-s)} :doors :shut
+                                            :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true}))]
     (if (= :continue r)
       :continue
       (let [res (:data r)

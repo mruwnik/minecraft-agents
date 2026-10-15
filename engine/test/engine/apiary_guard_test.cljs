@@ -302,7 +302,7 @@
           (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
             (fn ^:async b [] (await (child-outcome eng job {:radius 30} 6)))))
           (is (seq @opts))
-          (is (every? #(false? (:escalate %)) @opts) "a walk to a fire never digs or pillars")
+          (is (every? #(= #{:walk :clear-seal} (:ways %)) @opts) "a walk to a fire never digs or pillars")
           (is (every? :zone-tolls @opts))
           (is (empty? (calls p "place"))))))))
 
