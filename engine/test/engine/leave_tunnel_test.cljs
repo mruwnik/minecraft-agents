@@ -54,8 +54,8 @@
     (is (= :sealed (leave-tunnel/reached shut tunnel {})) "torch cell filled, mouth shut")
     (is (nil? (leave-tunnel/reached (world {[0 64 -1] "wall_torch"}) tunnel {})) "a torch stands")
     (is (nil? (leave-tunnel/reached (world {[0 64 -1] "air"}) tunnel {})) "the mouth is open")
-    (is (= :open (leave-tunnel/reached (world {[0 64 -1] "air"}) tunnel {:open [{:cell [0 64 -1] :reason :no-blocks}]}))
-        "an open cell booked with its reason")
+    (is (nil? (leave-tunnel/reached (world {[0 64 -1] "air"}) tunnel {:open [{:cell [0 64 -1] :reason :no-blocks}]}))
+        "an open cell booked with its reason is not sealed")
     (is (nil? (leave-tunnel/reached (fn [cell] (when (not= cell [0 65 0]) "stone")) tunnel {})) "the entry is not seen")
     (is (nil? (leave-tunnel/reached (fn [cell] (when (not= cell [0 64 -1]) "stone")) tunnel {})) "a torch cell not seen is not known")
     (is (= :sealed (leave-tunnel/reached (fn [cell] (when (not= cell [0 64 -1]) "stone")) tunnel {:taken [[0 64 -1]]})) "but one taken is")))
@@ -198,7 +198,7 @@
                                                         {:target [6 57 0]} {})))
               res @out]
           (is (= :open (:reason res)))
-          (is (= :done (:status res)))
+          (is (not= :done (:status res)) "an open mouth is not done")
           (is (= mouth (set (map :cell (:open res)))))
           (is (every? #(= :no-blocks (:reason %)) (:open res)))
           (is (empty? (:filled res)))
@@ -335,7 +335,7 @@
               {:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory) :zones-after [zone]}
                                                           {:target [6 57 0]} {} :between block-stair!)))
               escapes (events-of s :leave-tunnel.escape)]
-          (is (= :done (:status @out)) "not parked on the refused heading")
+          (is (= :open (:reason @out)) "not parked on the refused heading: out, with the zoned mouth open")
           (is (= 1 (count escapes)))
           (is (not= :west (:heading (first escapes)))))))))
 

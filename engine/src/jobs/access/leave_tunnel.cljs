@@ -45,15 +45,16 @@
   heading, then the other three (leave-tunnel.escape: info; warn for each stair that stopped), respecting zones unless the caller passed
   :ignore-zones?. The new stair is left as dug, nothing is placed (it is the body's own way out; sealing it risks walling in a body that returns). Once out, torches that
   cannot be reached are left (:walk-failed in :left) and the mouth is sealed. If the entry itself is
-  unreachable it ends :done :open with :escaped true. If every attempt fails it ends :stopped :walk-failed
+  unreachable it ends nothing-possible :open with :escaped true. If every attempt fails it ends :stopped :walk-failed
   with :escape (the stair results). The ledger entries of torches the stair or the fill destroyed are dropped
   when the job ends.
 
-  Ends :done with data {:reason :sealed|:open :at [x y z] :taken [cells] :left [{:cell :site :reason}] :filled [cells]
-  :open [{:cell :reason}]}; :left holds torches not taken. :open with :escaped true: the entry itself was unreachable.
+  Ends :done :sealed with data {:reason :at [x y z] :taken [cells] :left [{:cell :site :reason}] :filled [cells]
+  :open []}; :left holds torches not taken. A mouth cell left open (:open [{:cell :reason}]) ends nothing-possible
+  :open with the same data; :escaped true: the entry itself was unreachable.
   Impossible :bad-args (no :line in the tunnel). Or condition-failed with the cause :no-tool (the escape stair has no pickaxe and
   :fetch is off, or the fetch failed, as its :because), or nothing-possible with :walk-failed (every escape failed; data
-  :escape holds the stair endings). Events: leave-tunnel.done (info, :sealed), leave-tunnel.open (warn, :open),
+  :escape holds the stair endings). Events: leave-tunnel.done (info, :sealed), leave-tunnel.open (warn, mouth open),
   leave-tunnel.stopped (warn, any stop).
 
   :fetch (default true; false ends :no-tool): the escape stair's missing pickaxe is got with jobs.items.get-tool (jobs.lib.need), then
@@ -158,20 +159,18 @@
        (count (:filled result)) ", left " (count (:left result)) " torches and " (count (:open result)) " cells"))
 
 (defn reached
-  "Why the way out is complete (:sealed, or :open with mouth cells booked open), or nil: every torch of the tunnel is
-  taken, left or seen gone, the entry is seen and no mouth cell is open but those booked. A cell not seen is not known."
+  "Whether the way out is complete (:sealed), or nil: every torch of the tunnel is taken, left or seen gone, the
+  entry is seen and no mouth cell is open (none booked open either). A cell not seen is not known."
   [block-at tunnel m]
   (let [dealt (set (concat (:taken m) (map :cell (:left m))))
-        booked (set (map :cell (:open m)))
         entry (first (ln/line-cells (:line tunnel)))
         gone? #(or (dealt %) (some-> (block-at %) (as-> n (not (torch/torch-blocks n)))))]
     (when (and (:line tunnel) (block-at entry) (every? gone? (map :cell (:torches tunnel)))
-               (empty? (remove booked (mouth (:dug tunnel) entry block-at))))
-      (if (empty? (:open m)) :sealed :open))))
+               (empty? (mouth (:dug tunnel) entry block-at)))
+      :sealed)))
 
 (defn done?
-  "Ok once no torch of the tunnel stands and its mouth is shut but for the cells booked open (already, before the
-  start); else the torches taken."
+  "Ok once no torch of the tunnel stands and its mouth is shut (already, before the start); else the torches taken."
   [c]
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
@@ -186,12 +185,8 @@
   [c ending]
   (when (= :done (:kind ending))
     (forget-gone! c (:tunnel (:args c)) (access/sensed-at (:primitives c) nil))
-    (let [result (:data ending)
-          reason (:reason result)
-          text (result-text reason result)]
-      (if (= :open reason)
-        (ctx/emit! c :leave-tunnel.open :warn (assoc result :status :done :text text))
-        (ctx/emit! c :leave-tunnel.done :info (assoc result :status :done :text text)))))
+    (let [result (:data ending)]
+      (ctx/emit! c :leave-tunnel.done :info (assoc result :status :done :text (result-text (:reason result) result)))))
   (ctx/end c :done nil {}))
 
 (defn finish!
@@ -210,6 +205,15 @@
           (ctx/emit! c :leave-tunnel.stopped :warn (assoc result :status status :text (result-text reason result)))
           (ctx/end c (cond (= :bad-args reason) :impossible (condition-reasons reason) :condition-failed :else :nothing-possible) cause result))
       (ctx/end c :done nil result))))
+
+(defn open!
+  "End with the mouth not sealed: nothing possible :open, the cells booked open (and :escaped when the entry was
+  unreachable) in the data; the caller may accept it."
+  [c detail]
+  (let [result (result-of c :open detail nil)]
+    (forget-gone! c (:tunnel (:args c)) (access/sensed-at (:primitives c) nil))
+    (ctx/emit! c :leave-tunnel.open :warn (assoc result :status :nothing-possible :text (result-text :open result)))
+    (ctx/end c :nothing-possible :open result)))
 
 (defn ^:async walk-to!
   "Walk to cell: :continue while the walk waits on the world, :again once there. A walk that did not arrive starts the escape (the way out
@@ -358,8 +362,9 @@
         body (u/self-pos c)
         todo (remove booked (mouth (:dug tunnel) entry (:block-at in)))]
     (cond
-      (not= entry (reach/standing-vec (:primitives c))) (await (walk-to! c entry #(finish! c :done :open {:escaped true :walk %})))
-      (empty? todo) (finish! c :done (if (empty? (:open m)) :sealed :open) {})
+      (not= entry (reach/standing-vec (:primitives c))) (await (walk-to! c entry #(open! c {:escaped true :walk %})))
+      (and (empty? todo) (seq (:open m))) (open! c {})
+      (empty? todo) (finish! c :done :sealed {})
       :else (await (fill! c (first (sort-by (juxt #(% 1) #(- (u/eye-dist body %))) todo)))))))
 
 (defn ^:async work-round [c]
