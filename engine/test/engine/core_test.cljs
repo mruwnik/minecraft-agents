@@ -117,7 +117,7 @@
                                 (= :done (:kind r)) (done c)
                                 :else (ctx/end c (:kind r) (:cause r))))))
    'give-up (tu/job (fn [c] (ctx/end c :nothing-possible :no-way)))
-   'no-check {:round count-round}
+   'old-check {:check (constantly true) :round count-round}
    'eat-parent (tu/job (fn ^:async eat-parent-round [c]
                          (let [r (await (ctx/call c :e (tu/job eat-round) {}))]
                            (if (= :continue r) r (done c)))))})
@@ -241,9 +241,9 @@
           (core/tick! eng)
           (is (= [{:a 1} {:n 1}] @seen-ctx)))))))
 
-(deftest a-job-without-a-check-is-refused
+(deftest a-job-with-an-old-check-is-refused
   (let [{:keys [eng]} (setup)]
-    (is (thrown? js/Error (core/submit! eng '(no-check) {})))))
+    (is (thrown? js/Error (core/submit! eng '(old-check) {})))))
 
 (deftest a-round-returning-anything-else-fails-the-job
   (async done
