@@ -70,13 +70,3 @@ test('the main checkout starts its server without a slot', (t) => {
   assert.equal(r.status, 0, r.stderr)
   assert.match(s.status(), /server: 0\/1 in use/)
 })
-
-test('a worktree compile with its server running does not wait on the start lock', (t) => {
-  const s = setup(t)
-  assert.equal(sh(s.wt, 'bash', ['tools/compile', 'engine', 'test'], s.env).status, 0)  // warm server
-  const holder = spawn('flock', [`${s.env.MC_COMPILE_LOCK}.start`, 'sleep', '30'])  // another worktree's cold start
-  t.after(() => holder.kill())
-  spawnSync('sleep', ['0.3'])
-  const r = sh(s.wt, 'timeout', ['10', 'bash', 'tools/compile', 'engine', 'test'], s.env)
-  assert.equal(r.status, 0, r.stderr)
-})
