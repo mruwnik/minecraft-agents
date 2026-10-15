@@ -694,6 +694,20 @@
           (is (empty? (calls p "dig")))
           (is (= {:arrived true} @(:out open)) "an own pit with no animals in it is dug out of as before"))))))
 
+(deftest go-to-hops-the-1-high-sill-of-its-pen-gap-and-digs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pen (-> (merge (box -10 63 -10 10 63 10 "stone") (box 0 64 -2 4 65 2 "dirt"))
+                      (#(apply dissoc % (for [x (range 1 4) z (range -1 2) y [64 65]] (str x "," y "," z))))
+                      (dissoc "0,65,0"))
+              sheep {:id 7 :name "sheep" :kind "passive" :pos {:x 3.5 :y 64 :z 1.5}}
+              {:keys [out p]} (await (run-job! {:self {:pos {:x 2.5 :y 64 :z 0.5}} :blocks pen :entities [sheep]}
+                                              'jobs.movement.go-to {:pos [-2 64 0] :range 0}
+                                              [{:name "pen" :owner "Fake" :min [0 64 -2] :max [4 65 2]}]))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (empty? (calls p "dig")) "a 1-high sill is hopped, the pen wall stays"))))))
+
 (deftest go-to-pillars-out-of-its-own-wide-pen-pit-holding-animals
   (async done
     (tu/run-async done
