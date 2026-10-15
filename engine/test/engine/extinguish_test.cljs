@@ -360,11 +360,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:onFire true :food 10} :inventory [{:name "bread" :count 2}]
-                                      :blocks (floor 8)})]
+        (let [{:keys [eng p seen]} (setup {:self {:onFire true :food 10} :inventory [{:name "bread" :count 2}]
+                                           :blocks (floor 8)})]
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (is (pos? (count (calls p "eat")))))))))
+          (is (pos? (count (calls p "eat"))))
+          (is (some #(and (= :child_started (:kind %)) (= :eat (:slot %))) @seen) "the meal is a jobs.survival.eat child"))))))
 
 (deftest powder-snow-counts-as-water
   (async done
@@ -435,10 +436,10 @@
             (is (= {:x 0 :y 64 :z 0} (:pos e)))))))))
 
 (defn ^:async cover-run
-  "Ticks n rounds of a burning body with inventory on stone, lava at the cells; the engine's place calls."
+  "Ticks n rounds of a burning body with inventory on stone, lava at the cells (a stone beside the lava at 1,64,0 to place against); the engine's place calls."
   [inv lava n & [zones]]
   (let [w {:self {:onFire true} :inventory inv
-           :blocks (merge (floor 8) (into {} (map (fn [k] [k "lava"]) lava)))}
+           :blocks (merge (floor 8) {"2,64,0" "stone"} (into {} (map (fn [k] [k "lava"]) lava)))}
         {:keys [eng p]} (if zones (zs/setup w zones) (setup w))]
     (core/submit! eng '(jobs.survival.extinguish) {})
     (dotimes [_ n] (await (core/tick! eng)))
@@ -591,6 +592,7 @@
           (is (= (extinguish/max-covers) @places-at-go-to) "covers first, then the go-to")
           (is (= (repeat (extinguish/max-covers) "cobblestone") (mapv (comp :item call-args) (calls p "place"))))
           (is (= 1 @go-tos))
+          (is (some #(and (= :child_started (:kind %)) (= :cover (:slot %))) @seen) "a cover is a jobs.blocks.place child")
           (is (= 1 (count (calls p "moveTo"))) "one blocked step")
           (is (= 1 (count (of-kind seen :completed)))))))))
 

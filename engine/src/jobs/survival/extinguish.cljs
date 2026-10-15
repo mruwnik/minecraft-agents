@@ -30,12 +30,12 @@
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
      Scoring favours distance from those hazards (up to 4 blocks) and height, and charges a small cost per block walked.
   Water also counts powder snow. Not in lava (or in lava once a walk was blocked), with a cover block carried (cobblestone, stone, dirt, ...) it first
-  places one on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
+  places one (a jobs.blocks.place child) on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
   Before each decision from a new cell it looks round (level and down) so the fire at the feet and the lava beside them are seen.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
      With a real danger near (jobs.lib.danger, the hostile-near radii) it ends :condition-failed :hostile-near instead, never standing still beside it.
-     Otherwise it holds still (:burning-wait): emits info extinguish_wait once, eats when food is under 18 and food is carried
+     Otherwise it holds still (:burning-wait): emits info extinguish_wait once, eats (a jobs.survival.eat child) when food is under 18 and food is carried
      (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends :limit-reached :still-burning.
   A walk that is blocked (boxed in, perhaps by its own covers) goes through a go-to from then on (it pillars, stairs or digs
   out when shut in); a go-to still working is not a failure. Three failures (no safe cell, or a go-to that fails, with its reason) end :nothing-possible :stuck.
@@ -305,6 +305,13 @@
                           :pos cell :status status}))
             :done)))))
 
+(defn ^:async cover!
+  "Place a cover block on the lava cell (a jobs.blocks.place child, slot :cover): true when placed, else false (a reflex
+  never yields: a child that waits is no cover this pass)."
+  [c lava]
+  (let [r (await (child/run!* c :cover 'jobs.blocks.place {:pos lava :item (cover-item c) :fetch false :clear false}))]
+    (and (not= :continue r) (= :done (:kind r)))))
+
 (defn ^:async pour-last-resort!
   "No permitted way out is left and the feet cell is refused: pour there anyway, with the warn. :again when poured,
   else nil."
@@ -321,14 +328,12 @@
   max-stand-waits."
   [c]
   (let [p (:primitives c)
-        waits (inc (:stand-waits (ctx/mem c) 0))
-        food (eat/carried-best c)]
+        waits (inc (:stand-waits (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :stand-waits waits)
     (when (= 1 waits)
       (ctx/emit! c :extinguish_wait :info {:text "no water near; standing still off the fire until it goes out"}))
-    (when (and food (< (.-food (.self p)) (eat-below)))
-      (await (ctx/act c :equip #js {:item food}))
-      (await (ctx/act c :eat #js {:item food})))
+    (when (and (eat/carried-best c) (< (.-food (.self p)) (eat-below)))
+      (await (child/run!* c :eat 'jobs.survival.eat {:until (eat-below) :max-bites 1})))
     (await (burning-wait! c (stand-wait-ms)))
     (cond
       (clear? c) :done
@@ -417,7 +422,7 @@
                  (and lava
                       (nil? (access/trespass-refusal c :place lava))
                       (do (ctx/hold-still! c nil)
-                          (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos lava :item (cover-item c)})))))))))
+                          (await (cover! c lava))))))
           (do (ctx/update-mem! c update :covers (fnil inc 0))
               :again)
 
