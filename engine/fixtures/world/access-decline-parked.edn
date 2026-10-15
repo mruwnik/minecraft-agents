@@ -46,7 +46,7 @@
    :body {:at [12.5 0 16.5] :inventory [["lead" 4]]}
    :act [[:summon "cow" [10.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]
-         [:await {:source :job :kind :completed :data {:reason :unleashed}} 90]
+         [:await {:source :job :kind :child_ended :data {:slot :unleash}} 90]
          [:rcon "execute positioned $X $Y $Z run setblock ~18 ~ ~16 iron_door[facing=east,half=lower,open=false]"]
          [:rcon "execute positioned $X $Y $Z run setblock ~18 ~1 ~16 iron_door[facing=east,half=upper,open=false]"]]
    :expect [{:event {:source :job :kind :toggle.declined :data {:reason :needs-redstone}} :within-s 120 :of-job true}

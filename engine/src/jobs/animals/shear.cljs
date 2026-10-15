@@ -27,8 +27,8 @@
   - :done :shorn: the count was reached. Any stop after at least :least sheep were shorn (default 1; :all =
     :count, every sheep in radius when nil) is done, with the stop as the data reason.
   - :nothing-possible :shears-broke (the shears were gone after some, fewer than :least, were shorn).
-  - :condition-failed :no-shears (none carried and :fetch false,
-    or the fetch failed: the cause names the shears, :because the fetch's ending), or with nothing shorn :refused / :no-zones
+  - :condition-failed :no-shears (none carried and :fetch false), a failed fetch ends with the fetch's own ending,
+    reason :need (its cause names the shears), or with nothing shorn :refused / :no-zones
     when the zone rules refused every candidate.
   - :nothing-possible with nothing shorn: :unreachable if one was given up as unreachable, else :all-sheared (adults present
     but all sheared) or :none.
@@ -42,7 +42,7 @@
    :walk-timeout-s {:doc "bound of one walk towards a sheep" :spec (a/num-in 0 nil) :default 5}
    :color {:doc "shear only sheep of this wool colour (e.g. \"white\"); nil: any" :spec a/name? :default nil}
    :collect {:doc "pick up the wool afterwards" :spec boolean? :default true}
-   :fetch {:doc "get shears when none are carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-shears" :spec need/option? :default true}
+   :fetch {:doc "get shears when none are carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-shears; a failed fetch ends :need" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings

@@ -23,7 +23,7 @@
   Ends with a warn leash.gave-up unless the reason is :leashed. The data {:reason :animal key
   :id entity-id :given-up {key reason}} and the ending by the reason:
   - :done :leashed: an animal is on the lead.
-  - :condition-failed :no-lead (no lead carried and none fetched; a listed call with :fetch false waits for one; or the server found none; after a failed fetch the cause names the lead, :because the fetch's ending),
+  - :condition-failed :no-lead (no lead carried and none fetched; a listed call with :fetch false waits for one; or the server found none; after a failed fetch the job ends with the fetch's own ending, reason :need, its cause naming the lead),
     :refused (others given up, or the zone rules refused the animals) or :no-zones (no zone list was read).
   - :nothing-possible when no candidate is left: :unreachable if one was given up as unreachable, else :all-leashed
     (animals present but all led) or :none. The same after three fruitless animals in a row.
@@ -37,7 +37,7 @@
    :center {:doc "where :radius is measured from; the body's own spot when nil" :spec ::a/pos :default nil}
    :skip {:doc "keys (uuids, else ids) of animals never to leash" :spec (a/coll-of (a/or-of string? number?)) :default []}
    :walk-timeout-s {:doc "bound of one walk towards the animal" :spec (a/num-in 0 nil) :default 5}
-   :fetch {:doc "get a lead when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-lead" :spec need/option? :default true}
+   :fetch {:doc "get a lead when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-lead; a failed fetch ends :need" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings

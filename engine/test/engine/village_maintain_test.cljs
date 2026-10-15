@@ -191,6 +191,16 @@
           (is (= :incomplete (:reason (done-event s))))
           (is (re-find #"roll-0 no-pos" (:text (done-event s)))))))))
 
+(deftest a-filled-role-beside-a-role-without-a-cell-ends-stopped-incomplete
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [roles [{:profession "farmer"} {:profession "librarian"}]
+              s (await (scenario {:roles roles} (world (villager 1 3 {:profession "farmer"})) {}))]
+          (is (= {:skipped :filled} (step s :roll-0)))
+          (is (= {:skipped :no-pos} (step s :roll-1)))
+          (is (= [:stopped :incomplete] (ending s))))))))
+
 (deftest a-role-without-a-cell-alone-still-runs-the-pass
   (async done
     (tu/run-async done

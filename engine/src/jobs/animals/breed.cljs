@@ -30,8 +30,7 @@
   - :done :fed: :count animals were fed. Any stop after at least :least animals were fed (default 2: a pair) is
     done, with the stop as the data reason (warn breed.gave-up); :least :all is :count.
   - :condition-failed :unknown-mob (no breeding food is known for :mob), :bees-indoors (bees at night or in rain),
-    :no-food (none carried and none fetched, nothing fed yet; a listed call with :fetch false waits for food; after a failed fetch the cause names the food, :because
-    the fetch's ending), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
+    :no-food (none carried and none fetched, nothing fed yet; a listed call with :fetch false waits for food; a failed fetch ends with the fetch's own ending, reason :need, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
     :refused (some refused, none ate) or :no-zones (the zone rules refused the adults).
   - :nothing-possible :food-out (the food ran out below :least fed), :unreachable (one was given up as unreachable)
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
@@ -52,7 +51,7 @@
    :count {:doc "animals to feed" :spec (a/int-in 1 nil) :default 2}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :walk-timeout-s {:doc "bound of one walk towards an animal" :spec (a/num-in 0 nil) :default 5}
-   :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
+   :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food; a failed fetch ends :need" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
