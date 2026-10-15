@@ -57,6 +57,7 @@
 (def walks-twice
   (let [n (atom 0)]
     {:conditions []
+     :ways [:walk :clear-seal]
      :round (fn ^:async w [c]
               (if (< (swap! n inc) 3) :continue (ctx/end c :done nil {:arrived true})))}))
 

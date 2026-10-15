@@ -552,6 +552,7 @@
         p (tu/seeing-all (tu/fake (or world {:self {:onFire true} :blocks (merge (floor 8) {"1,64,0" "fire"})})))
         n (atom 0)
         go-to {:conditions []
+               :ways [:walk :clear-seal]
                :round (fn ^:async go-to-round [c] (step c p (swap! n inc)))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'jobs.movement.go-to go-to) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)

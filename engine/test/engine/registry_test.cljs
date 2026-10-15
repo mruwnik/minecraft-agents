@@ -1,4 +1,5 @@
 (ns engine.registry-test
+  (:require-macros [engine.registry-test-macros :refer [describe-message]])
   (:require [cljs.test :refer [deftest is]]
             [engine.expr :as expr]
             [engine.registry :as registry]
@@ -144,3 +145,8 @@
   (is (not (choose/use-spec? :tools :swim)))
   (is (not (choose/use-spec? :blocks :nonsense)))
   (is (not (choose/use-spec? :food :build))))
+
+(deftest a-job-file-with-a-check-and-no-conditions-fails-to-load
+  (is (re-find #"defines check but no conditions"
+               (describe-message "(ns jobs.probe)\n(defn check [c] nil)\n(defn round [c] :continue)")))
+  (is (nil? (describe-message "(ns jobs.probe)\n(def conditions [])\n(defn round [c] :continue)"))))

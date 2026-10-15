@@ -302,8 +302,8 @@
 
 (def continuing-go-to
   "A go-to whose every round ends :continue, as one waiting on its own child does."
-  {'jobs.movement.go-to {:conditions [] :ways (:ways (get registry/jobs 'jobs.movement.go-to)) :args {} :round
- (fn ^:async r [_c] :continue)}})
+  {'jobs.movement.go-to {:conditions [] :ways (:ways (get registry/jobs 'jobs.movement.go-to)) :args {}
+                                :round (fn ^:async r [_c] :continue)}})
 
 (deftest a-block-the-body-stands-in-stays-left-with-its-entry-for-a-later-run
   (async done

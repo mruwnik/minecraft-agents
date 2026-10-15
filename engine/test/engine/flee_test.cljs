@@ -412,7 +412,6 @@
         (doseq [[label go-to want] [["walks" {} {:r :again :tried false}]
                                     ["gives up" {'jobs.movement.go-to {:conditions []
                                                                        :ways (:ways (get registry/jobs 'jobs.movement.go-to))
-
                                                                        :round (fn ^:async no-leg [c] (ctx/end c :nothing-possible :unreachable {:arrived false}))}}
                                      {:r nil :tried true}]]]
           (let [out (atom nil)
