@@ -21,18 +21,18 @@
   "Fell the logs of the tree at :base that are out of reach from the ground, standing on a pillar that is taken back.
   jobs.lib.access.approach/plan picks the stand or the pillar base for the highest logs (the logs cut so far are
   collected first, jobs.forestry.collect-drops), the body walks there (go-to), builds the pillar (jobs.access.pillar,
-  every block in the scaffold ledger), digs the logs in reach top-down (jobs.blocks.dig) and jobs.access.cleanup takes
-  the pillar back before the call ends (the same cleanup runs when the call starts with this job's scaffold still open).
+  every block in the scaffold ledger), digs the logs in reach top-down (jobs.blocks.dig) and the cleanup export
+  (jobs.access.cleanup) takes the pillar back however the call ends, a cut included (and when the call starts with
+  this job's scaffold still open).
   The pillar is built of dirt, cobblestone and the logs cut so far; with too few of those carried it gets the height in
   blocks with jobs.lib.need unless :fetch is false.
   The build, dig and clean are one urgent section (ctx/atomic): reflexes at or below that level wait for it, up to their caps.
   Zones: a pillar a zone, claim or footprint refuses warns fell-tree.declined (:reason :refused, :why :pillar), as does
   one the planner finds no way for (its :reason).
-  Ends :done with {:logs n} when a log was dug and the pillar is gone. Condition-failed {:reason :need ...} when the
-  blocks cannot be had (the fetch's cause is the :because; with :fetch false, :any-of and :count in the cause) and
+  Ends :done with {:logs n} when a log was dug (a pillar the cleanup could not take back is its :cleanup-open).
+  Condition-failed {:reason :need ...} when the blocks cannot be had (the fetch's cause is the :because; with :fetch false, :any-of and :count in the cause) and
   :refused; nothing-possible :no-stand (or the planner's reason), :walk, :build, :dig or :no-log-in-reach after the
-  pillar was taken back, and :cleanup-open when it could not be (data {:logs n}); :resumed when the call began with
-  a scaffold of an earlier call open, took it back and dug nothing.
+  pillar was taken back; :resumed when the call began with a scaffold of an earlier call open and dug nothing.
   Quote: time by the logs standing.")
 
 (a/defargs args
@@ -229,18 +229,24 @@
           (pillar-failed! c (if (#{:unreachable :cannot :refused :blocked} r) :dig r)))))))
 
 (defn ^:async pillar-clean!
-  "Take the pillar back (jobs.access.cleanup child for this job's blocks); then the call ends: done when a log was
-  dug and the pillar did not fail, else nothing-possible with the failure. A cleanup that leaves the ledger open ends it
-  :cleanup-open."
+  "The call ends: done when a log was dug and the pillar did not fail, else nothing-possible with the failure. The
+  pillar comes down in cleanup."
   [c {:keys [failed]}]
-  (let [e (await (ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c)}))]
-    (cond
-      (= :continue e) :continue
-      (log/open-scaffold? c) (ctx/end c :nothing-possible :cleanup-open (result c))
-      :else (do (ctx/update-mem! c dissoc :pillar)
-                (if failed
-                  (ctx/end c :nothing-possible failed (result c))
-                  (ctx/end c :done nil (result c)))))))
+  (if failed
+    (ctx/end c :nothing-possible failed (result c))
+    (ctx/end c :done nil (result c))))
+
+(defn ^:async cleanup
+  "However the call ends: take the pillar back (jobs.access.cleanup child for this job's blocks) when its scaffold is
+  open. Done when the ledger is closed, else nothing-possible :cleanup-open."
+  [c _]
+  (if-not (log/open-scaffold? c)
+    (ctx/end c :done nil)
+    (let [e (await (ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c)}))]
+      (cond
+        (= :continue e) :continue
+        (log/open-scaffold? c) (ctx/end c :nothing-possible :cleanup-open (result c))
+        :else (ctx/end c :done nil)))))
 
 (defn ^:async pillar-phase!
   "One phase of the pillar: pick up the logs, walk to its base (or stand), build it, dig from it, take it back."

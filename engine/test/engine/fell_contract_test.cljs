@@ -16,6 +16,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.forestry.fell-tree :as fell-tree]
+            [jobs.forestry.fell-tree.log :as log]
             [engine.memory :as mem]))
 
 (def jobs '[jobs.forestry.fell-tree jobs.forestry.fell-from-pillar])
@@ -150,3 +151,23 @@
                                   (await (fell-ending ft/tall 'jobs.forestry.fell-tree {:radius 10} 200)))]
           (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end)))
           (is (= [] (ledger/open-entries (mem/view (:store eng))))))))))
+
+(deftest a-pillar-job-cut-on-its-pillar-takes-it-back-in-its-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fm/start ft/tall {})
+              eng (:eng s)
+              open #(ledger/open-entries (mem/view (:store eng)))
+              dug (atom nil)
+              dig! log/dig-log!]
+          (ft/eye-reach! (:p s) (:lose-logs? ft/tall))
+          (with-redefs [log/dig-log! (fn ^:async cut-first [& args]
+                                       (when-not @dug
+                                         (reset! dug (seq (open)))
+                                         (core/cancel! eng (first (:list (core/state eng)))))
+                                       (await (apply dig! args)))]
+            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}) {})
+            (await (tu/run-until-empty eng 200)))
+          (is (seq @dug) "the cut came while the pillar stood")
+          (is (= [] (open)) "the cleanup took the pillar back"))))))
