@@ -44,7 +44,7 @@
 (a/defargs args
   {:reach {:doc "how far from the body to look for a face, 1 to 32" :spec (a/int-in 1 32) :default 16}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :spec need/option? :default true}
+   :fetch {:doc "get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-tool" :spec need/option? :default true}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :spec (a/int-in 1 32) :default sh/default-roof-height}})
 
 (defn start-fact
@@ -264,7 +264,7 @@
   [c w]
   (let [o (need/opts c 'jobs.survival.dig-niche)]
     (when (and o (contains? (:what o) :tool))
-      (let [e (await (need/tool! c {:block (:block w)} (select-keys o [:how :depth :explore])))]
+      (let [e (await (need/tool! c {:block (:block w)} (select-keys o [:how :explore])))]
         (cond (= :continue e) :continue
               (= :done (:kind e)) :again)))))
 

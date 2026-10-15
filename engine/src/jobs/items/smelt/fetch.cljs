@@ -16,7 +16,7 @@
   [c stage]
   (let [o (need/parse-arg (:fetch (:args c)))]
     (when (and o (or (nil? (:what o)) (contains? (:what o) :item)))
-      (-> (select-keys o [:how :depth :explore])
+      (-> (select-keys o [:how :explore])
           (assoc :slot (keyword (str "need-" (name stage))))))))
 
 (defn want-count

@@ -205,7 +205,7 @@
   (let [end! #(if (seq (:shorn (ctx/mem c))) (go-collect! c :shears-broke) (finish! c :no-shears))]
     (if-not (fetchable? c)
       (end!)
-      (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :depth :explore])
+      (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :explore])
             e (await (need/item! c "shears" 1 limits))]
         (cond
           (= :continue e) :continue

@@ -115,7 +115,7 @@
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :spec (a/coll-of #{:water :lava :falling-block}) :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :note {:doc "a map (go-to's escalation): each cell dug in another's zone, claim or plan is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!), each floor placed to the scaffold ledger (take-back-floor?)" :spec map? :default nil}
-   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :spec need/option? :default true}
+   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.need), and a block to seal lava with: true, a set of kinds or a map of limits" :spec need/option? :default true}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :by-hand {:doc "dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default false}
    :spent-ok {:doc "dig on with tools down to jobs.lib.trip's ::spent-uses (3) uses instead of stopping :tool-spent before the last breaks; true for a way out" :spec boolean? :default false}
@@ -317,7 +317,7 @@
   (let [limits (fetch-limits c)]
     (if (= block (:fetched-for (ctx/mem c)))
       (give-up-fetch! c block limits nil)
-      (let [e (await (need/tool! c {:block block} (assoc (select-keys limits [:how :depth :explore]) :return? true)))]
+      (let [e (await (need/tool! c {:block block} (assoc (select-keys limits [:how :explore]) :return? true)))]
         (cond
           (= :continue e) :continue
           (= :done (:kind e)) (do (ctx/update-mem! c assoc :fetched-for block) :again)

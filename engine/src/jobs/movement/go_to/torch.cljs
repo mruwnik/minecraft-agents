@@ -74,7 +74,7 @@
 (defn fetch-opts
   "The need options of the torch fetch under the :fetch arg: nil when :fetch is off."
   [c]
-  (some-> (need/opts c 'jobs.movement.go-to) (select-keys [:how :depth :explore]) (assoc :slot :need-torch)))
+  (some-> (need/opts c 'jobs.movement.go-to) (select-keys [:how :explore]) (assoc :slot :need-torch)))
 
 (defn torch-fetching? [c] (boolean (:torch-fetching (ctx/mem c))))
 

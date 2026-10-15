@@ -101,10 +101,10 @@
        (seq (targets c))))
 
 (defn fetch-opts
-  "The limits {:how :depth :explore} for fetching bone meal, nil when :fetch does not allow items."
+  "The limits {:how :explore} for fetching bone meal, nil when :fetch does not allow items."
   [c]
   (when-let [o (need/opts c 'jobs.farm.fertilize)]
-    (when (contains? (:what o) :item) (select-keys o [:how :depth :explore]))))
+    (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
 
 (defn problem
   "Why the call cannot run now, a cause map, or nil: no zone list read, or bone meal to get with :fetch off."

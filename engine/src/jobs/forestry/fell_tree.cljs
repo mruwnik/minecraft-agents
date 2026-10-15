@@ -243,11 +243,11 @@
        (axe-worth-fetching? (count logs))))
 
 (defn axe-fetch-opts
-  "The limits {:how :depth :explore} for getting an axe, nil when :fetch does not allow tools."
+  "The limits {:how :explore} for getting an axe, nil when :fetch does not allow tools."
   [c]
   (when-let [o (need/opts c job)]
     (when (contains? (:what o) :tool)
-      (select-keys (need/tighten o (axe-fetch-limits)) [:how :depth :explore]))))
+      (select-keys (need/tighten o (axe-fetch-limits)) [:how :explore]))))
 
 (defn ^:async axe!
   "Get an axe before the first log of a tree it pays for: nil to go on (one came, or none could be had: the failure is

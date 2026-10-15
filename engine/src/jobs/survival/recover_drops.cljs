@@ -9,7 +9,6 @@
             [jobs.lib.body :as body]
             [jobs.lib.child :as child]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -45,7 +44,7 @@
   A skip for danger alone (the pile would be fetched were the route safe) is not final: the run ends condition-failed :danger and the death stays open. The danger is remembered (:recover-danger) for ::danger-memory-ms (an assumed killer alone: while its guard lasts): the died trigger rests and the job waits :danger-remembered for that death meanwhile, cutting no other job; then the pile is weighed anew, until the window closes. :retry weighs it now. A skip for value is final.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
   Kit: before the decision, when the pile is worth the trip were the route safe, a body with no weapon or with an empty armour slot, whose killer or the hostiles it knows make the route
-  dangerous, fetches the best weapon and armour piece a chest of known stock (:fetch/stock) holds (jobs.lib.fetch, chests only,
+  dangerous, fetches the best weapon and armour piece a chest of known stock (:fetch/stock) holds (jobs.lib.need, chests only,
   :fetch false: off) and wears the armour (jobs.items.wear); nothing known to be in a chest: unchanged.
   A kit fetch waiting on the world is waited for (declared hold :fetching-kit); a fetch that ended the job drops the kit (warn recover-drops.kit-dropped).
   Fetch: walks to the death point (jobs.movement.go-to, in legs of :leg-s seconds; after each leg a danger within :danger-radius ends the run condition-failed :danger and the value and cost are weighed again, a pile gone dear with danger being retried later), then collects (passes, up to 3) the pile's items it can see within :collect-radius
@@ -70,7 +69,7 @@
    :value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :spec (a/num-in 0 nil) :default 8}
-   :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.fetch limits); false: no kit fetch" :spec need/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
+   :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.need limits); false: no kit fetch" :spec need/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
    :leg-s {:doc "the walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again" :spec (a/num-in 0.1 120) :default 6}
    :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}
    :accept-night-risk {:doc "walk out of a shelter at night for the pile even while it would last until day (by default only a pile that despawns before dawn is fetched then, weighed by its route danger)" :spec boolean? :default false}

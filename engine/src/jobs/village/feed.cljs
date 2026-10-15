@@ -37,7 +37,7 @@
    :item {:doc "food to give; nil: the first carried of bread, carrot, potato, beetroot" :spec a/item? :default nil}
    :count {:doc "how many items the villager is to take" :spec (a/int-in 1 64) :default 1}
    :radius {:doc "how far to look for the villager" :spec (a/int-in 1 96) :default 48}
-   :fetch {:doc "get food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}})
+   :fetch {:doc "get food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}})
 
 (def foods ["bread" "carrot" "potato" "beetroot"])
 (def wanted (into (set foods) ["wheat" "wheat_seeds" "beetroot_seeds" "torchflower_seeds" "pitcher_pod"]))

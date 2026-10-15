@@ -178,7 +178,7 @@
   [c]
   (if-not (fetchable? c)
     (finish! c :no-lead nil)
-    (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :depth :explore])
+    (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :explore])
           e (await (need/item! c "lead" 1 limits))]
       (cond
         (= :continue e) :continue

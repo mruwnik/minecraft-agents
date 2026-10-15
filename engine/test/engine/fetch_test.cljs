@@ -17,7 +17,6 @@
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.stock :as stock]
             [engine.memory :as mem]
@@ -29,17 +28,6 @@
 
 (def sight-opts {:radius 16 :ray-deg 2})
 
-(def fetch-driver
-  "A job whose only work is jobs.lib.fetch/fetch! for a pickaxe to dig stone: the failure-memory tests drive the lib
-  through it, as no contract job calls fetch! for a tool any more."
-  {:args {:fetch {:default true}}
-   :check (constantly true)
-   :round (fn ^:async fetch-driver [c]
-            (let [r (await (fetch/fetch! c 'fetch-driver
-                                         #(when-not (some (fn [i] (= "wooden_pickaxe" (.-name i))) (.-inventory (.self (:primitives %))))
-                                            {:reason :no-tool :block "stone"})))]
-              (if (= :continue r) :continue :done)))})
-
 (defn start
   "An engine over a fake world on an andesite floor, seeing through perception (one sight pass first), with zones."
   ([world zones] (start world zones sight-opts))
@@ -48,7 +36,7 @@
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor (assoc world :floor-block "andesite"))
         p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc sight :now #(deref clock))))
-        eng (core/create {:primitives p :jobs (assoc registry/jobs (quote fetch-driver) fetch-driver) :triggers triggers/all :dir (tu/tmp-dir)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
@@ -84,7 +72,6 @@
 
 (defn equip-spec [extra] (list 'jobs.items.equip (merge {:item "wooden_pickaxe"} extra)))
 
-(defn driver-spec [extra] (list 'fetch-driver extra))
 
 (defn stopped-reasons [s] (mapv :reason (events-of s :stopped)))
 
@@ -107,31 +94,30 @@
   (is (nil? (need/parse-arg false)))
   (is (= {} (need/parse-arg true)))
   (is (= {:what #{:tool}} (need/parse-arg #{:tool})))
-  (is (= {:how #{:chest} :depth 2} (need/parse-arg {:how #{:chest} :depth 2})))
+  (is (= {:how #{:chest} :minutes 2} (need/parse-arg {:how #{:chest} :minutes 2})))
   (is (:error (need/parse-arg "yes")))
-  (is (:error (need/parse-arg {:depth -1})))
+  (is (:error (need/parse-arg {:minutes -1})))
   (is (:error (need/parse-arg {:what #{:tools}}))))
 
 (deftest limits-precedence-call-over-job-default-over-built-in
-  (is (= 7 (:depth (need/merge-limits nil nil))))
   (is (= 10 (:minutes (need/merge-limits nil nil))))
-  (is (= 6 (:depth (need/merge-limits {:depth 6} nil))) "job code default over the built-in")
-  (is (= 1 (:depth (need/merge-limits {:depth 6} {:depth 1}))) "the call wins"))
+  (is (= 6 (:minutes (need/merge-limits {:minutes 6} nil))) "job code default over the built-in")
+  (is (= 1 (:minutes (need/merge-limits {:minutes 6} {:minutes 1}))) "the call wins"))
 
 (deftest a-need-above-64-is-fetched-whole
   (let [o (need/merge-limits nil nil)]
-    (is (= {:item "cobblestone" :count 100 :explore false} (:args (fetch/plan-for {:reason :need :item "cobblestone" :count 100} o))) "no 64 cap on one fetch")
-    (is (= {:any-of ["dirt"] :count 100 :explore false} (:args (fetch/plan-for {:reason :need :any-of ["dirt"] :count 100} o))))))
+    (is (= {:item "cobblestone" :count 100 :explore false} (:args (need/plan-for {:reason :need :item "cobblestone" :count 100} o))) "no 64 cap on one fetch")
+    (is (= {:any-of ["dirt"] :count 100 :explore false} (:args (need/plan-for {:reason :need :any-of ["dirt"] :count 100} o))))))
 
 (deftest a-wait-maps-to-a-fetch-only-for-wanted-kinds
   (let [o (need/merge-limits nil nil)]
-    (is (= 'jobs.items.get-tool (:job (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
-    (is (= {:block "stone" :explore false} (:args (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
-    (is (= {:item "oak_planks" :count 1 :explore false} (:args (fetch/plan-for {:reason :need :item "oak_planks" :pos {}} o))))
-    (is (= {:any-of ["dirt" "cobblestone"] :count 1 :explore false} (:args (fetch/plan-for {:reason :need :any-of ["dirt" "cobblestone"]} o))))
-    (is (nil? (fetch/plan-for {:reason :no-tool :block "stone"} (assoc o :what #{:item}))))
-    (is (nil? (fetch/plan-for {:reason :inventory-full :pos {}} o)))
-    (is (nil? (fetch/plan-for {:reason :not-allowed :pos {}} o)))))
+    (is (= 'jobs.items.get-tool (:job (need/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
+    (is (= {:block "stone" :explore false} (:args (need/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
+    (is (= {:item "oak_planks" :count 1 :explore false} (:args (need/plan-for {:reason :need :item "oak_planks" :pos {}} o))))
+    (is (= {:any-of ["dirt" "cobblestone"] :count 1 :explore false} (:args (need/plan-for {:reason :need :any-of ["dirt" "cobblestone"]} o))))
+    (is (nil? (need/plan-for {:reason :no-tool :block "stone"} (assoc o :what #{:item}))))
+    (is (nil? (need/plan-for {:reason :inventory-full :pos {}} o)))
+    (is (nil? (need/plan-for {:reason :not-allowed :pos {}} o)))))
 
 ;; ------------------------------------------------------------------ dig with :fetch, the chest source
 
@@ -260,61 +246,6 @@
           (is (empty? (inspects s)))
           (is (empty? (transfers s)))
           (is (= [:no-tool] (stopped-reasons s))))))))
-
-(deftest a-failure-is-remembered-and-a-second-fetch-does-not-look-again
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (world {chest-at [{:name "dirt" :count 3}]}) [own-zone])]
-          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
-          (await (run-ticks s 25))
-          (is (= 1 (count (inspects s))) "the chest was looked into once")
-          (is (empty? (transfers s)))
-          (is (= 1 (count (events-of s :fetch.failed))))
-          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
-          (await (run-ticks s 15))
-          (is (= 1 (count (inspects s))) "not again within the failure's time")
-          (is (= 1 (count (events-of s :fetch.failed)))))))))
-
-(deftest a-failure-is-forgotten-when-the-body-gets-material-for-it
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (world {}) [own-zone])]
-          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
-          (await (run-ticks s 25))
-          (is (= 1 (count (events-of s :fetch.failed))))
-          (swap! (fake/state (:p s)) fake/give "oak_log" 4)
-          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
-          (await (run-ticks s 60))
-          (is (= 1 (count (events-of s :fetch.failed))) "no second failure: the fetch ran again")
-          (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
-
-(deftest a-failure-stays-when-the-body-picks-up-something-unrelated
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (world {}) [own-zone])]
-          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
-          (await (run-ticks s 25))
-          (swap! (fake/state (:p s)) fake/give "dirt" 4)
-          (core/submit! (:eng s) (driver-spec {:fetch true}) {})
-          (await (run-ticks s 25))
-          (is (= 1 (count (events-of s :fetch.failed))))
-          (is (nil? (get (inv s) "wooden_pickaxe"))))))))
-
-(deftest a-failure-expires-after-fail-minutes
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (world {chest-at [{:name "dirt" :count 3}]}) [own-zone])]
-          (core/submit! (:eng s) (driver-spec {:fetch {:fail-minutes 1}}) {})
-          (await (run-ticks s 25))
-          (is (= 1 (count (events-of s :fetch.failed))))
-          (swap! (:clock s) + 70000)
-          (core/submit! (:eng s) (driver-spec {:fetch {:fail-minutes 1}}) {})
-          (await (run-ticks s 25))
-          (is (= 2 (count (events-of s :fetch.failed))) "tried again after the minute"))))))
 
 (deftest fetch-what-item-does-not-fetch-a-tool
   (async done
@@ -456,29 +387,6 @@
             (finally (set! ctx/call orig)))
           (is (< @n 5) (str "tool fetches asked " @n))
           (is (seq (mem/entries (mem/view (:store (:eng s))) :stair-tool-failed))))))))
-
-(defn with-fake-mem
-  "Run (f c mem-atom) with ctx/mem and ctx/update-mem! on an atom and ctx/emit! dropped."
-  [f]
-  (let [m (atom {})
-        orig-mem ctx/mem orig-update ctx/update-mem! orig-emit ctx/emit!]
-    (set! ctx/mem (fn [_] @m))
-    (set! ctx/update-mem! (fn [_ g & args] (apply swap! m g args)))
-    (set! ctx/emit! (fn [& _] nil))
-    (try (f {} m)
-         (finally (set! ctx/mem orig-mem) (set! ctx/update-mem! orig-update) (set! ctx/emit! orig-emit)))))
-
-(deftest repeat-done-is-an-identical-wait-after-a-done-fetch-child
-  (with-fake-mem
-    (fn [c m]
-      (let [key [:tool "oak_leaves"] w {:reason :no-tool :block "oak_leaves"}]
-        (is (not (fetch/repeat-done? c key w)) "nothing fetched yet")
-        (fetch/mark-done! c key w)
-        (is (fetch/repeat-done? c key w) "same key, same wait")
-        (is (not (fetch/repeat-done? c key (assoc w :block "stone"))) "another wait is progress")
-        (is (not (fetch/repeat-done? c [:tool "stone"] w)) "another key is progress")
-        (fetch/settle! c)
-        (is (not (fetch/repeat-done? c key w)) "settle! clears the mark: the same wait back fetches again")))))
 
 (deftest stair-without-fetch-waits-no-tool
   (async done
@@ -1225,11 +1133,6 @@
           (is (empty? (listed s)))
           (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
 
-(deftest a-tool-fetch-is-named-as-a-tool
-  (is (= "a tool for stone" (fetch/need-name {:block "stone"})))
-  (is (= "a pickaxe" (fetch/need-name {:kind "pickaxe"})))
-  (is (= "torch" (fetch/need-name {:item "torch"}))))
-
 ;; ------------------------------------------------------------------ exploring for what is not seen
 
 (defn ^:async with-explore-stub
@@ -1325,8 +1228,8 @@
   (let [o (assoc (need/merge-limits nil {:explore true}) :explore true)]
     (is (true? (:explore (need/merge-limits nil {:explore true}))))
     (is (false? (:explore (need/merge-limits {:explore true} {:explore false}))) "the call wins")
-    (is (= {:item "oak_log" :count 2 :explore true} (:args (fetch/plan-for {:reason :need :item "oak_log" :count 2} o))))
-    (is (= {:block "stone" :explore true} (:args (fetch/plan-for {:reason :no-tool :block "stone"} o))))
+    (is (= {:item "oak_log" :count 2 :explore true} (:args (need/plan-for {:reason :need :item "oak_log" :count 2} o))))
+    (is (= {:block "stone" :explore true} (:args (need/plan-for {:reason :no-tool :block "stone"} o))))
     (is (nil? (need/limit-error {:explore {:max-distance 10}})))
     (is (some? (need/limit-error {:explore "yes"})))))
 
@@ -1337,6 +1240,6 @@
   (is (= :no-table (obtain-craft/stop-why {:kind :condition-failed :cause {:reason :no-table}}))))
 
 (deftest fetch-limits-become-the-childs-call-keys
-  (is (= {:ways #{:craft :smelt :gather} :spend {:time 120}} (need/child-limits 'jobs.items.obtain {:how #{:craft :gather} :minutes 2 :depth 3})))
+  (is (= {:ways #{:craft :smelt :gather} :spend {:time 120}} (need/child-limits 'jobs.items.obtain {:how #{:craft :gather} :minutes 2})))
   (is (= {:ways #{:chest :gather}} (need/child-limits 'jobs.items.get-tool {:how #{:chest :gather}})))
-  (is (= {} (need/child-limits 'jobs.items.get-tool {:depth 3}))))
+  (is (= {} (need/child-limits 'jobs.items.get-tool {}))))

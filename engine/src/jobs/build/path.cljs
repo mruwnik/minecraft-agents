@@ -87,10 +87,10 @@
     (some #(when (and (.endsWith (:name %) "_shovel") (or (nil? only) (only (:name %)))) (:name %)) (u/inventory (:primitives c)))))
 
 (defn fetch-opts
-  "The limits {:how :depth :explore} for fetching a shovel, nil when :fetch does not allow tools."
+  "The limits {:how :explore} for fetching a shovel, nil when :fetch does not allow tools."
   [c]
   (when-let [o (need/opts c 'jobs.build.path)]
-    (when (contains? (:what o) :tool) (select-keys o [:how :depth :explore]))))
+    (when (contains? (:what o) :tool) (select-keys o [:how :explore]))))
 
 (defn shovel-wanted
   "What the fetch gets: a listed shovel by name, else any shovel."

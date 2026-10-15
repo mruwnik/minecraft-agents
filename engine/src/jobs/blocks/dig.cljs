@@ -324,7 +324,7 @@
   [c tool-problem]
   (let [limits (fetch-limits c)
         what (if (use-tools c) {:item (:needs tool-problem)} {:block (:block tool-problem)})
-        r (when (and limits (:needs tool-problem)) (await (need/tool! c what (select-keys limits [:how :depth :explore]))))]
+        r (when (and limits (:needs tool-problem)) (await (need/tool! c what (select-keys limits [:how :explore]))))]
     (cond
       (or (nil? limits) (nil? (:needs tool-problem))) (ctx/end c :condition-failed tool-problem)
       (= :continue r) :continue

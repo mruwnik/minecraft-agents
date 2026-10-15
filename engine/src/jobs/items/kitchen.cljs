@@ -13,7 +13,7 @@
 
 (def doc
   "Keep the store chest stocked with ready food, as one standing job (put it under repeat). done? is true when the
-  chest's booked stock (jobs.lib.fetch, from the last deposit, withdraw or look) holds every :stock entry; unknown
+  chest's booked stock (jobs.lib.need, from the last deposit, withdraw or look) holds every :stock entry; unknown
   stock is not done. One run is one pass over four steps, each a child job, each using only what the shortfall needs
   (the shortfall of an item is its :stock entry less the chest's stock and what the pass has made of it):
   - :smelt (jobs.items.smelt), once per raw food of :foods carried above its :reserve entry, in the order of :foods:

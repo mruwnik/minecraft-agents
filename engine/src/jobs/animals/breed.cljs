@@ -282,7 +282,7 @@
   (if-not (fetchable? c)
     (await (no-food! c))
     (let [{:keys [mob] n :count} (:args c)
-          limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :depth :explore])
+          limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :explore])
           e (await (need/blocks! c (get animals/breeding-food mob) (- n (count (:fed (ctx/mem c)))) limits))]
       (cond
         (= :continue e) :continue

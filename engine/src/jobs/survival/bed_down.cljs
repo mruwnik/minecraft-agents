@@ -4,7 +4,6 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.child :as child]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.access :as access]
@@ -77,7 +76,7 @@
       (cond
         (not (sh/night? p)) :not-night
         :else (when-let [w (problem c)]
-                (when-not (some->> (need/opts c job) (fetch/plan-for w))
+                (when-not (some->> (need/opts c job) (need/plan-for w))
                   (cond-> {:reason :no-bed :text "no bed to use and none carried to put down"}
                     (not (look/surveyed? c)) contract/look-first)))))))
 

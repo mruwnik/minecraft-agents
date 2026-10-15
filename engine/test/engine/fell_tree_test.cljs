@@ -14,7 +14,6 @@
             [jobs.lib.access.approach :as approach]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.table :as table]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.trees :refer [axe-fetch-limits]]
             [jobs.lib.ledger :as ledger]
@@ -222,8 +221,8 @@
 
 (deftest a-fetch-plan-for-a-need-asks-for-the-count
   (let [o {:what #{:item} :how #{:chest} :depth 2}]
-    (is (= {:any-of ["dirt" "cobblestone"] :count 4 :explore false} (:args (fetch/plan-for {:reason :need :any-of ["dirt" "cobblestone"] :count 4} o))))
-    (is (= {:item "dirt" :count 3 :explore false} (:args (fetch/plan-for {:reason :need :item "dirt" :count 3} o))))))
+    (is (= {:any-of ["dirt" "cobblestone"] :count 4 :explore false} (:args (need/plan-for {:reason :need :any-of ["dirt" "cobblestone"] :count 4} o))))
+    (is (= {:item "dirt" :count 3 :explore false} (:args (need/plan-for {:reason :need :item "dirt" :count 3} o))))))
 
 (deftest cut-logs-are-the-pillars-blocks-so-a-seen-chest-of-dirt-is-left-alone
   (async done
@@ -414,7 +413,7 @@
 
 (deftest the-axe-wait-plans-a-chest-or-craft-get-tool-and-no-gather
   (let [lim (need/tighten (merge need/built-in {}) (axe-fetch-limits))
-        pl (fetch/plan-for {:reason :no-tool :kind "axe"} lim)]
+        pl (need/plan-for {:reason :no-tool :kind "axe"} lim)]
     (is (= 'jobs.items.get-tool (:job pl)))
     (is (= "axe" (:kind (:args pl))))
     (is (= #{:chest :craft} (:how lim)) "no :gather: felling logs for the axe would come back to fell-tree")

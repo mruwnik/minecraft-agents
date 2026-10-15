@@ -415,7 +415,7 @@
   works, :again once it ended :done, else the stop :no-tool with the fetch's reason."
   [c {:keys [block tool] :as wait}]
   (let [e (await (need/tool! c (cond block {:block block} :else {:kind (or tool "pickaxe")})
-                             (assoc (select-keys (fetch-limits c) [:how :depth :explore]) :return? true)))]
+                             (assoc (select-keys (fetch-limits c) [:how :explore]) :return? true)))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c dissoc :fetch-wait) :again)

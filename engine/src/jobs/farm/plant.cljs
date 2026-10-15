@@ -168,10 +168,10 @@
             (seed-need seed (count bare))))))))
 
 (defn fetch-opts
-  "The limits {:how :depth :explore} for fetching seeds, nil when :fetch does not allow items."
+  "The limits {:how :explore} for fetching seeds, nil when :fetch does not allow items."
   [c]
   (when-let [o (need/opts c job-sym)]
-    (when (contains? (:what o) :item) (select-keys o [:how :depth :explore]))))
+    (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
 
 (defn plan-problem [c]
   (let [{:keys [trouble cells]} (planned c)]

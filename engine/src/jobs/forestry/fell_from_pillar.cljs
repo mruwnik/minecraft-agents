@@ -130,10 +130,10 @@
       {:reason :need :any-of pillar-items :count (- (:height plan) (logs-carried c))})))
 
 (defn fetch-opts
-  "The limits {:how :depth :explore} for getting the pillar's blocks, nil when :fetch does not allow items."
+  "The limits {:how :explore} for getting the pillar's blocks, nil when :fetch does not allow items."
   [c]
   (when-let [o (need/opts c 'jobs.forestry.fell-tree)]
-    (when (contains? (:what o) :item) (select-keys o [:how :depth :explore]))))
+    (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
 
 (defn ^:async blocks!
   "Get the blocks a planned pillar lacks: nil when none is lacking, :continue while the fetch waits on the world, :again

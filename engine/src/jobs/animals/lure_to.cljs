@@ -52,7 +52,7 @@
    :range {:doc "how close to :pos counts as there" :spec (a/num-in 0 nil) :default 2}
    :radius {:doc "animals within this many blocks of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
    :watch-radius {:doc "how far from the body the lured animal is looked for" :spec (a/num-in 0 nil) :default 64}
-   :fetch {:doc "get the food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
+   :fetch {:doc "get the food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
    :uuid {:doc "lead only this animal (its uuid, as the entities tool shows; the id when it has none); nothing else takes its place" :spec string? :default nil}
    :include-penned? {:doc "also lure animals standing in a closed pen" :default false :spec boolean?}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})

@@ -6,7 +6,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.farm.field :as fld]
-            [jobs.lib.fetch :as fetch]
+            [engine.ctx :as ctx]
+            [jobs.lib.need :as need]
             [jobs.lib.world-files :as ew]
             [jobs.lib.toll-cells :as tc]
             [jobs.lib.walk :as walk]))
@@ -169,7 +170,7 @@
           (is (not (on-strip? trail -5 5))))))))
 
 (defn ^:async walk-back-trail
-  "job-trail of fetch/walk-back! from the origin to [40 64 0], run by a job with args."
+  "job-trail of need/return! from the origin to [40 64 0], run by a job with args."
   [args]
   (let [{:keys [p] :as w} (setup {} [(zone "Other")])
         trail (atom [])]
@@ -180,14 +181,15 @@
                    (impl token (walk/steer-args (.-timeoutS a) logged)))))
     (let [job {:check (constantly true)
                :round (fn ^:async back-round [c]
-                        (loop [i 0] (when (< i 6) (await (fetch/walk-back! c [40 64 0])) (recur (inc i))))
+                        (ctx/update-mem! c assoc :need/return {:cell [40 64 0] :back true})
+                        (loop [i 0] (when (< i 6) (await (need/return! c)) (recur (inc i))))
                         :done)}
           eng (assoc-in (:eng w) [:jobs 'back-job] job)]
       (core/submit! eng (list 'back-job args) {})
       (await (tu/tick-until-idle! eng 60)))
     @trail))
 
-(deftest fetch-walk-back-bends-round-another-bodys-zone-unless-ignoring-zones
+(deftest need-return-bends-round-another-bodys-zone-unless-ignoring-zones
   (async done
     (tu/run-async done
       (fn ^:async t []
