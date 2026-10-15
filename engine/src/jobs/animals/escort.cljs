@@ -214,6 +214,25 @@
         (ctx/hold-still! c nil)
         :again))))
 
+(def lead-deeper-gap "An animal this near the body (flat) and outside the box has stopped tempted: lead on." 3.5)
+
+(defn deep-cell
+  "The middle of the box cell farthest from the animal, one cell in from its far edge when the box is wider than two."
+  [{:keys [min max]} animal-pos]
+  (let [axis (fn [lo hi a] (let [far (if (< a (/ (+ lo hi) 2)) hi lo)
+                                 in (if (< 2 (- hi lo)) (+ far (if (= far hi) -1 1)) far)]
+                             (+ in 0.5)))]
+    {:x (axis (:x min) (:x max) (:x animal-pos)) :y (:y min) :z (axis (:z min) (:z max) (:z animal-pos))}))
+
+(defn ^:async lead-deeper!
+  "A tempted animal stops a couple of blocks behind the food, so a body that stopped at the box edge leaves it outside:
+  walk to the far side of the box once (slot :deeper). :yield while the walk goes on, else :again."
+  [c box animal-pos]
+  (if (= :continue (await (child/call-walk* c :deeper {:pos (deep-cell box animal-pos) :range 1 :doors :leave-open :ways #{:walk :clear-seal}
+                                                       :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+    :yield
+    (do (ctx/update-mem! c assoc :led-deeper true) :again)))
+
 (def max-search-rounds
   "Calls in a row a walk may spend on the plan search of its next leg (about 80 ms each) before it counts as :failed."
   40)

@@ -260,6 +260,24 @@
           (is (re-find #"outside" (:text (first (stopped s)))))
           (is (not (in-pen-box? (cow-of s 1)))))))))
 
+(deftest a-body-stopping-short-of-the-box-leads-on-until-the-animal-is-in-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 22 :y 64 :z 0}} :inventory wheat :entities [(cow 1 20)]} 50)
+              ;; a tempted cow stops 2.4 blocks behind the food, so a body at the box edge leaves it outside
+              trail! (fn [token a impl]
+                       (.then (impl token a)
+                              (fn [r]
+                                (let [bx (.. p self -pos -x)]
+                                  (when (>= bx 24) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [(- bx 2.4) 64 0]) es)))))
+                                r)))]
+          (doseq [act ["steer" "wait"]] (.override (.-world p) act trail!))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :box pen-box}) {})
+          (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
+          (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
+          (is (in-pen-box? (cow-of s 1))))))))
+
 (deftest an-animal-left-5-blocks-short-of-the-spot-has-not-arrived
   (async done
     (tu/run-async done

@@ -327,18 +327,20 @@
 
 (defn ^:async arrive!
   "The body stands at :pos: the job ends :arrived once the led animal is at the destination; until then the body holds
-  still for it, and ends :animal-outside (seen outside) or :lost (not seen) after max-wait-ms."
+  still for it (with :box and the animal stopped just outside, after one walk to the far side of the box), and ends :animal-outside (seen outside) or :lost (not seen) after max-wait-ms."
   [c]
   (let [a (escort/animal-now c)
         now (ctx/now c)
         since (or (:arrive-since (ctx/mem c)) now)]
     (cond
       (and a (at-destination? c a)) (finish! c :arrived)
+      (and a (:box (:args c)) (not (:led-deeper (ctx/mem c))) (<= (u/flat-dist (u/self-pos c) (u/pos-of (.-pos a))) escort/lead-deeper-gap))
+      (await (escort/lead-deeper! c (:box (:args c)) (u/pos-of (.-pos a))))
       (> (- now since) escort/max-wait-ms) (finish! c (if a :animal-outside :lost))
       :else (do (ctx/update-mem! c assoc :arrive-since since)
                 (await (escort/wait-for-animal! c))))))
 
-(defn ^:async walk-legs! [c]
+(defn ^:async walk-legs-to-pos! [c]
   (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) escort/safe-gap))]
     (cond
       (= :waiting r) :yield
@@ -348,6 +350,11 @@
       (= :failed r) (finish! c :unreachable)
       (and (= :lead-broke (:problem r)) (not (hr/holds-food? c))) :again
       :else (finish! c (:problem r)))))
+
+(defn ^:async walk-legs! [c]
+  (if (:led-deeper (ctx/mem c))
+    (await (arrive! c))
+    (await (walk-legs-to-pos! c))))
 
 (defn ^:async walk! [c]
   (if-not (hr/holds-food? c)
