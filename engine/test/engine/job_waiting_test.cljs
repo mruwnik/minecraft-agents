@@ -110,7 +110,8 @@
     (tu/run-async done
       (fn ^:async t []
         (reset! gate {:reason :no-tree :near 3})
-        (doseq [spec ['(seq (gated)) '(any (gated)) '(repeat (gated)) '(until (never) (gated))]]
+        (doseq [spec ['(seq (gated)) '(any (gated)) '(repeat (gated)) '(until (never) (gated))
+                      '(seq (repeat (gated))) '(until (never) (any (seq (gated))))]]
           (let [{:keys [eng seen]} (setup)]
             (core/submit! eng spec {})
             (await (ticks eng 3))

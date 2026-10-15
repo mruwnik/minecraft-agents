@@ -10,6 +10,7 @@
             [engine.core.list-edits :refer [submit!]]
             [engine.core.round :refer [check-ctx]]
             [engine.core.settle :refer [end-slot! judge-deferred-ends! start-round!]]
+            [engine.ctx :as ctx]
             [engine.expr :as expr]
             [engine.memory :as mem]
             [engine.settings :as settings]))
@@ -41,13 +42,13 @@
   (some-> (:waiting eng) deref (get id)))
 
 (defn check-passes?
-  "Whether listed instance id's check passes now. A declining check's reason (ctx/wait) is told once with
+  "Whether listed instance id would start now (ctx/check-wait). Its wait reason is told once with
   note-waiting!. A throwing check is a bug, not a world state: the job is parked like a round that threw."
   [eng id]
   (let [inst (get-in (state eng) [:instances id])
         wait (atom nil)
-        ok? (try (boolean (let [[def args] (job-of eng inst)]
-                            ((:check def) (check-ctx eng inst args wait))))
+        ok? (try (let [[def args] (job-of eng inst)]
+                   (nil? (reset! wait (ctx/check-wait (check-ctx eng inst args) def))))
                  (catch :default e
                    (let [error (str e)]
                      (emit! eng {:source :system :kind :error :level :warn :job id

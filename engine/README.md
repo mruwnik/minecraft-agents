@@ -248,11 +248,11 @@ Wherever a job is named (scenarios, register entries, `submit!`, `do-now!`, the 
 |---|---|
 | `(jobs.survival.eat {:item "bread"})` | a leaf: the job namespace with optional args |
 | `(seq e1 e2 ...)` | run children in order, one child round per round |
-| `(any e1 e2 ...)` | each round, call the first child whose check passes |
+| `(any e1 e2 ...)` | each round, call the first child that would not wait |
 | `(repeat e)` | when the child is done, start it fresh; never done; a child done `:already` (a `seq` whose children all were, an `any` whose child was) is not counted and rests |
 | `(repeat n e)` | the same, done after `n` runs |
-| `(until g e)` | repeat `e`; done at the top of a round once `g`'s check passes (`g` never runs), e.g. `(until (jobs.time.wait-for-dusk) e)`; a daily routine is `(repeat (seq (jobs.time.wait-for-day) ... (jobs.time.wait-for-dusk)))` |
-| a refused child | combinators are contract jobs calling children with `ctx/call`; a child ending other than `:done` ends `seq` with its kind and cause (the child's ending as `:because`); `any` skips it and tries the next, ending as the last refusal; `repeat` and `until` end so only when it was impossible or cut off (or in a reflex job), else rest (`:engine.composite/rest-s` 30 s, doubled for each such run in a row up to `rest-max-s` 600 s; wait `:resting`) and run it again. A child whose check would wait is not called: a listed combinator waits with its reason, a reflex one ends `:condition-failed` |
+| `(until g e)` | repeat `e`; done at the top of a round once `g` would not wait (`g` never runs), e.g. `(until (jobs.time.wait-for-dusk) e)`; a daily routine is `(repeat (seq (jobs.time.wait-for-day) ... (jobs.time.wait-for-dusk)))` |
+| a refused child | combinators are contract jobs calling children with `ctx/call`; a child ending other than `:done` ends `seq` with its kind and cause (the child's ending as `:because`); `any` skips it and tries the next, ending as the last refusal; `repeat` and `until` end so only when it was impossible or cut off (or in a reflex job), else rest (`:engine.composite/rest-s` 30 s, doubled for each such run in a row up to `rest-max-s` 600 s; wait `:resting`) and run it again. A child that would wait is not called: a combinator's one condition gives that child's wait map, so a listed combinator waits with its reason, a reflex one ends `:condition-failed` |
 | `(hold e)` | like `e`, but the list entry holds the body; around a whole spec only, not in a register entry |
 
 An unknown symbol, a wrong arity, an undeclared arg, a bad position arg (`[x y z]` or `{:x :y :z}`) or a nested `hold`
@@ -278,8 +278,8 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/left ctx)` | what is left of the call's limits and its callers' (each line the least): `{:spend {line n} :floor {line n} :deadline ms}` |
 | `(await (ctx/quote ctx job args quote-deadline?))` | what a call would use and yield (Quotes), or the `:duplicate-call` ending |
 | `(await (ctx/next-way ctx quote-of-way thing?))` | `{:way k :dropped {way why}}`, the next way to try (Quotes) |
-| `(ctx/check-child ctx slot job args)` | the child's check, for a parent's check |
-| `(ctx/child-wait ctx slot job args)` | why the child would wait now: its check's reason as `{:reason ..}`, nil when it would start |
+| `(ctx/check-wait ctx def)` | why def would wait now as `{:reason ..}`: its check's reason, or (a combinator) its first failing condition's cause; nil when it would start |
+| `(ctx/child-wait ctx slot job args)` | `check-wait` of the child in slot |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
 | `(ctx/submit! ctx spec opts)` | put a peer job at the end of the list; returns its id |

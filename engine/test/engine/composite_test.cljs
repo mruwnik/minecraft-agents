@@ -110,6 +110,18 @@
           (dotimes [_ 10] (await (round! d c mem)))
           (is (= :r9 (:cause (await (round! d c mem))))))))))
 
+(deftest every-combinator-waits-through-its-conditions-with-its-childs-reason
+  (let [w {:reason :no-tree :near 3}
+        waits {:check #(ctx/wait % w) :round (fn [_] :done)}
+        never [{:check (constantly false) :round (fn [_] :done)} {}]
+        c {:view (constantly nil) :slots []}]
+    (with-redefs [ctx/mem (constantly {})]
+      (doseq [[label d] [[:seq (composite/seq-def [[waits {}]])] [:any (composite/any-def [[waits {}] [waits {}]])]
+                         [:repeat (composite/repeat-def [waits {}] nil)] [:until (composite/until-def never [waits {}])]
+                         [:nested (composite/seq-def [[(composite/repeat-def [waits {}] nil) {}]])]]]
+        (is (nil? (:check d)) (str label ": no check export"))
+        (is (= w (ctx/check-wait c d)) (str label ": the child's reason"))))))
+
 ;; ------------------------------------------------------------------ on the engine
 
 (defn ending-kid

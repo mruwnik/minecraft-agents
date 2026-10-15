@@ -166,26 +166,23 @@
   (some-> (:wait ctx) (reset! reason))
   false)
 
-(defn check-child
-  "Run job's check as the child in slot would see it, for a parent's check. A reason the child's check gives with
-  wait is the parent's too, when the parent declines."
-  [ctx slot job args]
-  (let [[def args] (child-job ctx job args)
-        slots (conj (:slots ctx) slot)]
-    ((:check def) (assoc ctx :slots slots :args args))))
+(defn check-wait
+  "Why def would wait now under ctx, as a map {:reason kw ...}, or nil when it would start: its check's wait reason
+  ({:reason :not-ready} for a plain false), or, for a def with conditions and no check (a combinator), its first
+  failing condition's cause."
+  [ctx def]
+  (let [as-map #(cond (map? %) % (some? %) {:reason %} :else {:reason :not-ready})]
+    (if-let [check (:check def)]
+      (let [a (atom nil)]
+        (when-not (check (assoc ctx :wait a)) (as-map @a)))
+      (some->> (:conditions def) (some (fn [[_ f]] (f ctx))) as-map))))
 
 (defn child-wait
   "Why the child job (a registry symbol, or a definition) in slot with args would wait now, for a parent that asks before
-  it calls: its check's wait reason as a map {:reason kw ...} ({:reason :not-ready} for a plain false), or nil when the
-  child would start."
+  it calls (check-wait), or nil when the child would start."
   [ctx slot job args]
-  (let [a (atom nil)
-        [def args] (child-job ctx job args)]
-    (when-not ((:check def) (assoc ctx :wait a :slots (conj (:slots ctx) slot) :args args))
-      (let [r @a]
-        (cond (map? r) r
-              (some? r) {:reason r}
-              :else {:reason :not-ready})))))
+  (let [[def args] (child-job ctx job args)]
+    (check-wait (assoc ctx :slots (conj (:slots ctx) slot) :args args) def)))
 
 (defn submit!
   "Put a job spec (an expression, see engine.expr) at the end of the list;

@@ -355,7 +355,7 @@
         (tally/add-time! eng (:id run) [] (- (now eng) t0))))))
 
 (defn check-ctx
-  "The ctx a listed job's check receives: memory and sensing, no token. wait is the atom ctx/wait notes a reason in."
-  [eng inst args wait]
+  "The ctx a listed job's check receives: memory and sensing, no token."
+  [eng inst args]
   (make-ctx eng {:root (:id inst) :slots [] :chain [(:id inst)] :token nil
-                 :args args :round (:round inst) :reflex (:reflex inst) :wait wait}))
+                 :args args :round (:round inst) :reflex (:reflex inst)}))
