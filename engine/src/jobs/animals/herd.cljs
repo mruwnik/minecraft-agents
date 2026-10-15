@@ -32,7 +32,7 @@
   A lured animal follows the food only within about 10 blocks: from where it was met the body walks to the pen in short legs,
   holding still while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s after a walk back to where it was last seen, :animal-stalled when it stops coming nearer for 10 s) rather than outrun it.
 
-  The pen checks. At the start the pen as the body sees and remembers it is judged (a start condition, :precheck? false
+  The pen checks. At the start the pen as the body sees and remembers it is judged (a start condition, the setting herd-pen/precheck? false
   skips it): a refusal waits (condition-failed under a parent) with the cause {:reason :text} and the fields below. A pen
   it cannot read from where it stands is read at the pen, where a refusal ends the run condition-failed.
   A lure run gets its food before the walk. The reasons:
@@ -109,7 +109,6 @@
    :radius {:doc "animals within this many blocks of where the body started the run are fetched" :spec (a/num-in 0 nil) :default 24}
    :method {:doc "how animals are brought: :lead (each on a lead), :lure (following the food in hand), :auto (a lead when one is carried or can be crafted from a carried slime ball, else the food)" :spec #{:auto :lead :lure} :default :auto}
    :fetch {:doc "get the food when none is carried and the run lures (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
-   :precheck? {:doc "judge the pen from what the body sees and remembers before the start (leak, no gate, too shallow); false judges it at the pen only" :default true :spec boolean?}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def leading

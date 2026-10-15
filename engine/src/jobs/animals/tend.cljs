@@ -21,7 +21,7 @@
   - :cull (jobs.animals.cull): adults exceed :keep, the larger of 2 and :target minus the babies.
   - :shear (jobs.animals.shear): sheep, shears carried, an adult not sheared.
   - :collect (jobs.forestry.collect-drops): items lie in the box, only those item names.
-  - :deposit (jobs.storage.deposit): a :chest is given and produce of the kind is carried above its :keep
+  - :deposit (jobs.storage.deposit): a :chest is given and produce of the kind is carried above its :carry
     entry. Produce is the hunt drops table plus eggs for chickens, never tools or breeding food.
 
   A body outside the box that lists no animal of the kind in it first walks to the box (go-to, once; the server
@@ -55,7 +55,7 @@
    :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; required without :plan" :spec a/box? :default nil}
    :target {:doc "adult herd size wanted; babies count toward it, they grow" :spec (a/int-in 0 nil) :default 4}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
-   :keep {:doc "{item-name count}: how many of a produce item deposit leaves carried" :spec (a/map-of string? number?) :default {}}})
+   :carry {:doc "{item-name count}: how many of a produce item deposit leaves carried" :spec (a/map-of string? number?) :default {}}})
 
 (def target [:plan :part :box])
 
@@ -111,7 +111,7 @@
      :drops (drops-in-box c)
      :shears (boolean (some #(= "shears" (:name %)) inventory))
      :shearable (count (remove #(true? (.-sheared %)) adults))
-     :stored (to-store inventory (produce (:mob (:args c))) (:keep (:args c)))
+     :stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))
      :food (animals/food-carried (:primitives c) (:mob (:args c)))
      :reach (cull/reach c)}))
 
@@ -139,11 +139,11 @@
     :else {:call {:slot :shear :job (jobs :shear) :args {:radius reach}}}))
 
 (defn decide-deposit
-  [{:keys [chest keep]} {:keys [stored]}]
+  [{:keys [chest carry]} {:keys [stored]}]
   (cond
     (nil? chest) {:skip :no-chest}
     (empty? stored) {:skip :nothing-to-store}
-    :else {:call {:slot :deposit :job (jobs :deposit) :args {:chest chest :items stored :keep keep}}}))
+    :else {:call {:slot :deposit :job (jobs :deposit) :args {:chest chest :items stored :keep carry}}}))
 
 (defn decide-collect
   [_args {:keys [drops reach]}]

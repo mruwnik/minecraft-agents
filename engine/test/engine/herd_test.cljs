@@ -729,6 +729,15 @@
           (is (re-find #"11 64 3" (str (:text w))))
           (is (empty? (calls-of s "moveTo")) "refused before any walk"))))))
 
+(deftest the-precheck-setting-off-leaves-the-pen-to-be-judged-at-the-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings {:jobs.animals.herd-pen/precheck? false}
+                 (fn ^:async unchecked []
+                   (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks shallow-wall} 5))]
+                     (is (empty? (events-of s :waiting)) "no refusal from the start")))))))))
+
 (deftest a-box-too-narrow-for-the-walk-in-is-impossible-naming-its-size
   (async done
     (tu/run-async done

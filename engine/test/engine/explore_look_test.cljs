@@ -1,17 +1,22 @@
 (ns engine.explore-look-test
-  (:require [cljs.test :refer [deftest is async]] [engine.core :as core]
+  (:require [cljs.test :refer [deftest is are async]] [engine.core :as core] [engine.expr :as expr]
             [engine.events :as events] [engine.registry :as registry]
             [engine.test-util :as tu] [jobs.explore.look :as look]))
-(deftest limits-and-name-filters-are-validated-before-sensing
+(deftest limits-and-types-are-the-arg-specs
+  (are [form] (some? (expr/problem registry/jobs form))
+    '(jobs.explore.look {:radius 1000})
+    '(jobs.explore.look {:max-blocks 100})
+    '(jobs.explore.look {:max-entities -1})
+    '(jobs.explore.look {:entity-names ["sheep" 3]})
+    '(jobs.explore.look {:properties? "true"})
+    '(jobs.explore.look {:bogus 1})))
+(deftest name-filters-are-validated-before-sensing
   (is (= ["stone"] (:block-names (look/options {:block-names "stone"}))))
-  (is (:error (look/options {:radius 1000})))
-  (is (:error (look/options {:max-blocks 100})))
-  (is (:error (look/options {:max-entities -1})))
-  (is (:error (look/options {:entity-names ["sheep" 3]})))
-  (is (:error (look/options {:properties? "true"})))
+  (is (:error (look/options {:block-names []})))
+  (is (:error (look/options {:block-names ["Stone Brick"]})))
+  (is (:error (look/options {:useful? true :block-names ["stone"]})))
   (is (:error (look/options {:at [1 nil 3]}))))
-(deftest unknown-keys-and-block-names-are-refused-by-name
-  (is (re-find #"bogus" (:error (look/options {:bogus 1}))))
+(deftest block-names-are-refused-by-name
   (is (re-find #"stone_bricks_x" (:error (look/options {:block-names ["stone" "stone_bricks_x"]} (fn [n] (= n "stone"))))))
   (is (nil? (:error (look/options {:block-names ["stone"]} (fn [n] (= n "stone"))))))
   (is (nil? (:error (look/options {:block-names ["nonsense"]})))))

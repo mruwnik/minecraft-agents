@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.choose :as choose]
             [jobs.lib.need :as need]
             [jobs.lib.placement :as placement]
@@ -36,7 +37,7 @@
   Returns an ending with data {:placed true|false :pos :item :reason :text}; a placed block carries :block
   {:name :state} as the place act reported it. Done: :reason :placed, or :already (the cell holds the block, nothing
   done). condition-failed: :occupied (another block fills the cell), :need (the item is missing after the fetch; the fetch's ending is its :because), or a cell reason that appeared during the
-  call (the conditions' causes). Impossible: :bad-args (with a blocks.place.declined warn). nothing-possible :unreachable (the walk
+  call (the conditions' causes). Impossible: :bad-args (from can-start?). nothing-possible :unreachable (the walk
   failed twice or the place is out of reach, :why).
   nothing-possible: :clear-failed (the plant could not be dug) or :failed (the primitive refused: :primitive its status,
   :why its reason text, else one from its status). The caller decides whether to try again.
@@ -144,7 +145,12 @@
           :else (or (when-not (fetching? c) (when-let [n (needs c items)] (assoc n :reason :need :pos pos)))
                     (when-not (or (boats? items) (b/support? p pos) (b/unseen-near? p pos) (and (fetching? c) (nil? (b/chosen c items)))) {:reason :no-support :pos pos})))))))
 
-(def can-start? (checks/refusing :placeable "the cell takes the block" problem))
+(defn bad-args [c]
+  (if-let [error (:error (parse c))]
+    (contract/never :bad-args (str "blocks.place " error))
+    (contract/ok :args "a cell and a block to place")))
+
+(def can-start? (cond/and bad-args (checks/refusing :placeable "the cell takes the block" problem)))
 
 (defn done?
   "Ok when the cell already holds one of the wanted blocks; else later."
@@ -276,9 +282,6 @@
                 d)))))))
 
 (defn ^:async round [c]
-  (let [{:keys [pos items error]} (parse c)]
-    (if error
-      (do (ctx/emit! c :blocks.place.declined :warn {:reason :bad-args :text (str "blocks.place " error)})
-          (ctx/end c :impossible {:reason :bad-args :text error} {:placed false :reason :bad-args :text error}))
-      (do (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
-          (await (attempt! c pos items))))))
+  (let [{:keys [pos items]} (parse c)]
+    (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
+    (await (attempt! c pos items))))
