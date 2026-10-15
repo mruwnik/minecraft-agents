@@ -50,8 +50,7 @@
   ([world args zones]
    (let [{:keys [eng clock] :as s} (setup world zones)
          out (atom :not-done)
-         parent {:conditions []
-                 :round (fn ^:async recording-round [c]
+         parent {:round (fn ^:async recording-round [c]
                           (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
                             (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
@@ -603,8 +602,7 @@
           (let [world {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge flat (zipmap (map #(clojure.string/join "," %) seal-cells) (repeat "dirt")))}
                 {:keys [eng clock] :as s} (setup world [])
                 out (atom :not-done)
-                parent {:conditions []
-                        :round (fn ^:async sealed-round [c]
+                parent {:round (fn ^:async sealed-round [c]
                                  (let [e (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}}))]
                                    (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
@@ -624,8 +622,7 @@
                 world {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge flat wall)}
                 {:keys [eng clock] :as s} (setup world [])
                 out (atom :not-done)
-                parent {:conditions []
-                        :round (fn ^:async plug-round [c]
+                parent {:round (fn ^:async plug-round [c]
                                  (let [e (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}}))]
                                    (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
@@ -683,8 +680,7 @@
               check pen/check
               {:keys [eng clock seen]} (setup (pen-world true 3) [])
               pos {:x 20 :y 64 :z -3}
-              twice {:conditions []
-                     :round (fn ^:async twice-round [c]
+              twice {:round (fn ^:async twice-round [c]
                               (cut/start-attempt! c pos)
                               (cut/start-attempt! c pos)
                               (ctx/end c :done nil))}
@@ -701,8 +697,7 @@
       (fn ^:async t []
         (let [{:keys [eng clock seen]} (setup (pen-world false 3) [])
               pos {:x 20 :y 64 :z -3}
-              cut-at-gate {:conditions []
-                           :round (fn ^:async cut-at-gate-round [c]
+              cut-at-gate {:round (fn ^:async cut-at-gate-round [c]
                                     (cut/start-attempt! c pos)
                                     (await (pass/open-block! c gate-cell true))
                                     (cut/start-attempt! c pos)

@@ -1,5 +1,5 @@
 (ns engine.declined-test
-  "Ending-returning call helpers (jobs.lib.child, jobs.lib.blocks) and ctx/child-wait."
+  "Ending-returning call helpers (jobs.lib.child, jobs.lib.blocks)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -12,10 +12,6 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]))
 
-(defn contract-kid [need]
-  {:conditions [[:fn (fn [_] (when @need {:reason :need :what "thing"}))]]
-   :round (fn ^:async kid-round [c] (ctx/end c :done nil))})
-
 ;; ------------------------------------------------------------------ ending-returning call helpers (L1)
 
 (defn ^:async in-parent
@@ -25,8 +21,7 @@
   ([go-to-def f seen]
   (let [clock (atom 1000000)
         out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async r [c] (reset! out [(await (f c))]) (ctx/end c :done nil))}
+        parent {:round (fn ^:async r [c] (reset! out [(await (f c))]) (ctx/end c :done nil))}
         eng (core/create {:primitives (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :floor [-5 -5 5 5]})
                           :jobs (assoc registry/jobs 'parent parent 'jobs.movement.go-to go-to-def)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
@@ -40,24 +35,20 @@
     (first @out))))
 
 (def walker
-  {:conditions []
-   :ways [:walk :clear-seal]
+  {:ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/end c :done nil {:arrived true}))})
 
 (def stranded
-  {:conditions []
-   :ways [:walk :clear-seal]
+  {:ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/end c :nothing-possible :unreachable {:why :no-route}))})
 
 (def contract-gave-up
-  {:conditions []
-   :ways [:walk :clear-seal]
+  {:ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/end c :nothing-possible :tree-unreachable {:tried 2}))})
 
 (def walks-twice
   (let [n (atom 0)]
-    {:conditions []
-     :ways [:walk :clear-seal]
+    {:ways [:walk :clear-seal]
      :round (fn ^:async w [c]
               (if (< (swap! n inc) 3) :continue (ctx/end c :done nil {:arrived true})))}))
 
@@ -77,7 +68,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= :continue (await (in-parent {:conditions [] :round (fn ^:async w [_] :continue)}
+        (is (= :continue (await (in-parent {:round (fn ^:async w [_] :continue)}
                                            (fn ^:async f [c] (await (child/call-walk* c :walk {:pos [1 65 0]}))))))
             "no ending yet")))))
 
@@ -87,7 +78,7 @@
       (fn ^:async t []
         (is (= :done (:kind (await (in-parent walks-twice (fn ^:async f [c] (await (child/run!* c :kid 'jobs.movement.go-to {:pos [1 65 0]}))))))))
         (is (= :nothing-possible (:kind (await (in-parent contract-gave-up (fn ^:async f [c] (await (child/walk-into!* c :in [1 65 0]))))))))
-        (is (= :continue (await (in-parent {:conditions [] :round (fn ^:async w [_] :continue)}
+        (is (= :continue (await (in-parent {:round (fn ^:async w [_] :continue)}
                                            (fn ^:async f [c] (await (child/run!* c :kid 'jobs.movement.go-to {:pos [1 65 0]} {:max-calls 2}))))))
             "max-calls gives the round back")))))
 
@@ -100,19 +91,8 @@
         (is (= [:nothing-possible :out-of-reach]
                ((juxt :kind :cause) (await (in-parent walker (fn ^:async f [c] (await (b/walk!* c [4 65 4]))))))) "arrived, still out of reach")))))
 
-(deftest ctx-child-wait-reads-the-childs-wait-without-running-it
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [need (atom true)
-              wait (fn [] (in-parent (contract-kid need) (fn ^:async f [c] (ctx/child-wait c :kid 'jobs.movement.go-to {}))))]
-          (is (= {:reason :need :cause {:reason :need :what "thing"}} (await (wait))) "a contract child's failing condition")
-          (reset! need false)
-          (is (nil? (await (wait))) "passing conditions wait on nothing"))))))
-
 (def night-walker
-  {:conditions []
-   :ways [:walk :clear-seal]
+  {:ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/update-mem! c assoc :hold :night-sheltered) :continue)})
 
 (deftest a-walk-that-waits-on-the-world-holds-still-with-its-reason

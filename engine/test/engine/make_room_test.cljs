@@ -71,8 +71,7 @@
   "A parent that calls make-room with args as its child, keeps every call's return in returns and the child's result in
   out. seed, when given, is put in the child's memory before its first call (left by an earlier, cut round)."
   [out returns args seed]
-  {:conditions []
-   :round (fn ^:async returns-round [c]
+  {:round (fn ^:async returns-round [c]
             (when (and seed (empty? @returns) (nil? (get-in (ctx/mem c) [:children :kid])))
               (ctx/update-mem! c assoc-in [:children :kid] (merge {:args args :children {}} seed)))
             (let [e (await (ctx/call c :kid 'jobs.storage.make-room args))
@@ -673,8 +672,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:inventory (many "junk" 35)})
               walks (atom 0)
-              go-to {:conditions []
-                     :ways [:walk :clear-seal]
+              go-to {:ways [:walk :clear-seal]
                      :round (fn ^:async go-to-round [c] (if (= 1 (swap! walks inc)) :continue (ctx/end c :done nil)))}
               returns (atom [])
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
@@ -753,8 +751,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:inventory (same "diamond" 35 1)})
               walks (atom 0)
-              go-to {:conditions []
-                     :ways [:walk :clear-seal]
+              go-to {:ways [:walk :clear-seal]
                      :round (fn ^:async go-to-round [c] (swap! walks inc) (ctx/end c :done nil))}
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
@@ -770,8 +767,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:inventory (same "diamond" 35 1)})
               walks (atom 0)
-              go-to {:conditions []
-                     :ways [:walk :clear-seal]
+              go-to {:ways [:walk :clear-seal]
                      :round (fn ^:async go-to-round [c] (swap! walks inc) (ctx/end c :done nil))}
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
@@ -787,8 +783,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory (same "diamond" 35 1) :blocks {"-2,64,0" "stone" "-2,65,0" "stone"}})
               goals (atom [])
-              go-to {:conditions []
-                     :ways [:walk :clear-seal]
+              go-to {:ways [:walk :clear-seal]
                      :round (fn ^:async go-to-round [c] (swap! goals conj (:pos (:args c))) (ctx/end c :done nil))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
           (tu/seeing-all p)

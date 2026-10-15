@@ -21,8 +21,7 @@
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor {:floor [-5 -20 45 20] :blocks pillar :self {:pos [0 67 0]} :entities [zombie]})
         out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async planning-round [c]
+        parent {:round (fn ^:async planning-round [c]
                          (reset! out (await (near/plan! (assoc c :args {}) [20 64 0] 0 :never (wworld/body-policy c) [] false nil nil true dangers)))
                          (ctx/end c :done nil))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'planning-parent parent)

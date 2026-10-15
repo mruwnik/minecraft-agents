@@ -28,7 +28,7 @@
 
 (deftest every-survival-combat-and-food-contract-job-exports-a-target-and-a-time-spend
   (doseq [[sym def] registry/jobs
-          :when (and (some some? ((juxt :conditions :can-start? :can-run?) def)) (re-find #"^jobs\.(survival|combat|food)\." (str sym)))]
+          :when (and (some some? ((juxt :can-start? :can-run?) def)) (re-find #"^jobs\.(survival|combat|food)\." (str sym)))]
     (is (vector? (:target def)) (str sym " has a target"))
     (is (some? (get-in def [:defaults :spend :job-time])) (str sym " has a default :spend :job-time"))))
 

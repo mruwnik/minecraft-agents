@@ -40,9 +40,9 @@
 (def always (constantly true))
 
 (def jobs
-  {'quick {:conditions [] :round #(ctx/end % :done nil) :args {}}
-   'spin {:conditions [] :round (fn [_] :continue) :args {}}
-   'bump {:conditions [] :round bump-round :args {}}})
+  {'quick {:round #(ctx/end % :done nil) :args {}}
+   'spin {:round (fn [_] :continue) :args {}}
+   'bump {:round bump-round :args {}}})
 
 (def base-triggers
   {:high {:name :high :when (fn [_ _ args & _] (>= @level (:at args 5))) :job '(quick) :args {:at 5}

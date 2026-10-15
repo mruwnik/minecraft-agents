@@ -138,8 +138,7 @@
               [seen sink] (tu/legacy-capture-sink)
               p (tu/fake-on-floor (night-hut {}))
               rounds (atom [])
-              parent {:conditions []
-                      :round (fn ^:async walker [c]
+              parent {:round (fn ^:async walker [c]
                                (let [r (await (ctx/call c :walk 'jobs.movement.go-to {:pos [15 64 0]}))]
                                  (swap! rounds conj r)
                                  (if (= :continue r) r (ctx/end c :done nil))))}
@@ -160,8 +159,7 @@
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
               p (tu/fake-on-floor (night-hut {}))
-              parent {:conditions []
-                      :round (fn ^:async walker [c]
+              parent {:round (fn ^:async walker [c]
                                (await (child/call-walk c :walk {:pos [15 64 0]})))}
               eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
                                 :dir (tu/tmp-dir) :now #(deref clock)
@@ -195,8 +193,7 @@
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
               p (tu/fake-on-floor (night-hut {}))
-              parent {:conditions []
-                      :round (fn ^:async walker [c]
+              parent {:round (fn ^:async walker [c]
                                (await (child/run!* c :walk 'jobs.movement.go-to {:pos [15 64 0]})))}
               eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
                                 :dir (tu/tmp-dir) :now #(deref clock)

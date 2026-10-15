@@ -54,10 +54,10 @@
         symbol)))
 
 (def check-names "The exports that make a file defining round a job (a contract job, engine.contract)."
-  '#{conditions can-start? can-run?})
+  '#{can-start? can-run?})
 
 (defn job?
-  "A job file defines round and conditions, can-start? or can-run? (round alone: no old check either); any other file under jobs/ is a helper."
+  "A job file defines round and can-start? or can-run? (round alone: no old check either); any other file under jobs/ is a helper."
   [defines]
   (boolean (and (defines 'round) (or (some defines check-names) (not (defines 'check))))))
 
@@ -72,7 +72,7 @@
         defines (defined-names forms)]
     (cond
       (and (defines 'round) (defines 'check) (not (some defines check-names)))
-      (throw (ex-info (str "job file " (.getPath file) " defines check but no conditions, can-start? or can-run?; a job declares those")
+      (throw (ex-info (str "job file " (.getPath file) " defines check but no can-start? or can-run?; a job declares those")
                       {:file (.getPath file)}))
       (not (job? defines)) nil
       (not= want ns-sym)
@@ -146,7 +146,7 @@
   []
   (if-let [dir (jobs-dir)]
     (vec (concat (keep (fn [f] (let [id (expected-ns dir f)]
-                                 (when (job? (try (defined-names (read-forms f)) (catch Exception _ #{'conditions 'round})))
+                                 (when (job? (try (defined-names (read-forms f)) (catch Exception _ #{'round})))
                                    (file-metadata id f))))
                        (job-files dir))
                  (let [file (primitive-file)]
@@ -156,7 +156,7 @@
 
 (defmacro job-registry
   "{ns-symbol {:check :round :doc :args :idle-ok}} for every job namespace under jobs/; a contract job's entry also
-  holds :conditions :can-start? :can-run? :target :ways :defaults :done? :quote-of :cleanup :cleanup-defaults :legacy-args and its namespace's
+  holds :can-start? :can-run? :target :ways :defaults :done? :quote-of :cleanup :cleanup-defaults :legacy-args and its namespace's
   :settings. Each
   primitive of the engine/primitive.cljs table is a job too, as jobs.primitive.<kebab-case> (jobs.primitive/job)."
   []
@@ -166,7 +166,7 @@
                  [(list 'quote ns) (cond-> {:check (ref 'check) :round (ref 'round)
                                             :doc (ref 'doc) :args (ref 'args) :idle-ok (ref 'idle-ok)}
                                      (job? defines)
-                                     (merge {:conditions (ref 'conditions) :can-start? (ref 'can-start?) :can-run? (ref 'can-run?)
+                                     (merge {:can-start? (ref 'can-start?) :can-run? (ref 'can-run?)
                                              :target (ref 'target) :ways (ref 'ways)
                                              :defaults (ref 'defaults) :done? (ref 'done?) :quote-of (ref 'quote-of)
                                              :cleanup (ref 'cleanup) :cleanup-defaults (ref 'cleanup-defaults)

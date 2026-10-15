@@ -20,8 +20,7 @@
         [seen sink] (tu/capture-sink)
         p (tu/seeing-all (tu/fake-on-floor (merge {:floor ft/big-floor} world)))
         now (tu/act-clock clock p ft/ms-per-call)
-        caller {:conditions []
-                :round (fn ^:async caller-round [c]
+        caller {:round (fn ^:async caller-round [c]
                          (let [r (await (ctx/call c :flee 'jobs.survival.retreat {}))]
                            (if (= :continue r) :continue (do (reset! out r) (ctx/end c :done nil)))))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'caller caller) :triggers triggers/all :dir (tu/tmp-dir)

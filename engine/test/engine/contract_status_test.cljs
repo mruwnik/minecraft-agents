@@ -33,16 +33,6 @@
     (is (= :look (kind {:can-start? ok :can-run? peek})))
     (is (= "not yet" (second (contract/verdict {} {:can-start? later}))))))
 
-(deftest the-reader-maps-old-condition-returns-onto-statuses
-  (let [kind #(first (contract/verdict {} {:conditions [[:fn (constantly %)]]}))]
-    (is (= :ok (kind nil)))
-    (is (= :ok (kind false)) "the old verdict ignored a false")
-    (is (= :later (kind :no-tree)))
-    (is (= :later (kind {:reason :no-tree :near 3})))
-    (is (= :never (kind (contract/impossible :bad-args))))
-    (is (= :look (kind (contract/look-first :unseen))))
-    (is (= :ok (kind (contract/ok :x "x"))) "a status passes as it is")))
-
 (defn odd-check [_] :not-a-status)
 
 (deftest an-export-that-returns-no-status-is-an-error-naming-it
@@ -195,9 +185,9 @@
 (defn looks-at [p] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
 
 (defn kinds-job
-  "A job whose old condition asks for a look and whose can-run? says status k."
+  "A job whose can-start? asks for a look and whose can-run? says status k."
   [k]
-  {:conditions [[:fn (fn [_] (contract/look-first :unseen))]]
+  {:can-start? (constantly (contract/look :unseen "unseen"))
    :can-run? (constantly (case k :later (contract/later :paused "paused") :never (contract/never :gone "gone")))
    :round (fn [c] (ctx/end c :done nil))})
 
@@ -220,7 +210,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'held {:can-start? (constantly (contract/never :not-yet "no")) :done? (fn [_] {:done? true :units :items :done 0 :left 0})
+        (let [{:keys [eng seen]} (setup {'held {:can-start? (constantly (contract/never :not-yet "no")) :done? (constantly (contract/ok :done "done" :units :items :done 0 :left 0))
                                                 :round (fn [c] (ctx/end c :done nil))}})]
           (core/submit! eng '(held) {})
           (await (core/tick! eng))
@@ -253,12 +243,12 @@
           (await (core/tick! eng))
           (is (= ["waiting: torches 0 < 4"] (mapv :message (job-ev seen :waiting)))))))))
 
-(deftest an-old-conditions-never-beats-a-goal-that-holds
+(deftest a-can-start-never-bad-args-beats-a-goal-that-holds
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'bad {:conditions [[:fn (fn [_] (contract/impossible {:reason :bad-args :text "count 0"}))]]
-                                               :done? (fn [_] {:done? true :units :items :done 0 :left 0})
+        (let [{:keys [eng seen]} (setup {'bad {:can-start? (constantly (contract/never :bad-args "count 0"))
+                                               :done? (constantly (contract/ok :done "done" :units :items :done 0 :left 0))
                                                :round (fn [c] (ctx/end c :done nil))}})]
           (core/submit! eng '(bad) {})
           (await (core/tick! eng))

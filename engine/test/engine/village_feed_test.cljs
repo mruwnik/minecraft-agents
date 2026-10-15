@@ -41,8 +41,7 @@
   ([world args n prepare seed prepare-eng]
   (let [s (h/setup world)
         out (atom :not-done)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (when (and seed (nil? (get-in (ctx/mem c) [:children :kid])))
                            (ctx/update-mem! c assoc-in [:children :kid] (merge {:args args :children {}} seed)))
                          (await ((:round (tu/recording-parent job args out)) c)))}

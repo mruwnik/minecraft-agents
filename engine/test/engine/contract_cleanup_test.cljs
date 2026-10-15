@@ -27,8 +27,7 @@
 (defn look! [c] (ctx/act c :look #js {:yaw 0 :pitch 0}))
 
 (def tidy
-  {:conditions []
-   :round (fn [c] (log! :round) (ctx/end c :done nil {:a 1}))
+  {:round (fn [c] (log! :round) (ctx/end c :done nil {:a 1}))
    :cleanup (fn [c e]
               (log! [:cleanup (:kind e)])
               (swap! clock + 2000)
@@ -49,15 +48,13 @@
                 "cleanup's time is in the job's report")))))))
 
 (def stuck
-  {:conditions []
-   :round (fn [c] (ctx/end c :nothing-possible :stuck))
+  {:round (fn [c] (ctx/end c :nothing-possible :stuck))
    :cleanup (fn [c e]
               (log! [:cleanup (:kind e) (:cause e)])
               (if (< (:n (swap! world update :n (fnil inc 0))) 3) :continue (ctx/end c :done nil {:let-go true})))})
 
 (def parent
-  {:conditions []
-   :round (fn ^:async parent [c]
+  {:round (fn ^:async parent [c]
             (let [e (await (ctx/call c :kid 'stuck {}))]
               (if (= :continue e)
                 (do (log! :parent-continue) :continue)
@@ -78,8 +75,7 @@
                  (select-keys (:kid @world) [:kind :cause :data]))))))))
 
 (def fails
-  {:conditions []
-   :round (fn [c] (ctx/end c :done nil))
+  {:round (fn [c] (ctx/end c :done nil))
    :cleanup (fn [c _] (ctx/end c :nothing-possible :gate-stuck {:gate 1}))})
 
 (deftest a-failed-cleanup-keeps-the-ending-and-is-told
@@ -95,8 +91,7 @@
                  (mapv #(select-keys (:data %) [:kind :cause]) (job-ev seen :cleanup_failed)))))))))
 
 (def overruns
-  {:conditions []
-   :cleanup-defaults {:spend {:job-time 1}}
+  {:cleanup-defaults {:spend {:job-time 1}}
    :round (fn [c] (ctx/end c :nothing-possible :stuck))
    :cleanup (fn [_ _] (log! :cleanup) (swap! clock + 2000) :continue)})
 
@@ -113,7 +108,7 @@
           (is (= 1 (count (job-ev seen :cleanup_failed)))))))))
 
 (def slow
-  {:conditions [] :defaults {:spend {:job-time 5}}
+  {:defaults {:spend {:job-time 5}}
    :round (fn [_] (swap! clock + 6000) :continue)
    :cleanup (fn ^:async cleanup [c e]
               (await (look! c))
@@ -132,15 +127,14 @@
           (is (= :limit-reached (:kind (:data (first (job-ev seen :stopped)))))))))))
 
 (def boss
-  {:conditions [] :defaults {:spend {:job-time 5}}
+  {:defaults {:spend {:job-time 5}}
    :round (fn ^:async boss [c]
             (let [e (await (ctx/call c :kid 'runner {}))]
               (if (= :continue e) :continue (ctx/end c :done nil))))
    :cleanup (fn [c e] (log! [:boss-cleanup (:kind e)]) (ctx/end c :done nil))})
 
 (def runner
-  {:conditions []
-   :round (fn [_] (swap! clock + 6000) :continue)
+  {:round (fn [_] (swap! clock + 6000) :continue)
    :cleanup (fn [c e] (log! [:runner-cleanup (:kind e)]) (ctx/end c :done nil))})
 
 (deftest a-parents-end-runs-the-cleanups-innermost-first
@@ -154,8 +148,7 @@
           (is (= :limit-reached (:kind (:data (first (job-ev seen :stopped)))))))))))
 
 (def endless
-  {:conditions []
-   :round (fn [_] (log! :round) :continue)
+  {:round (fn [_] (log! :round) :continue)
    :cleanup (fn [c e]
               (log! [:cleanup (:kind e) (:cause e)])
               (if (= 2 (count (filter vector? (:log @world)))) (ctx/end c :done nil) :continue))})
@@ -178,8 +171,7 @@
           (is (= [] (:list (core/state eng)))))))))
 
 (def self-cancelling
-  {:conditions []
-   :round (fn [_] (log! :round) :continue)
+  {:round (fn [_] (log! :round) :continue)
    :cleanup (fn [c _]
               (log! :cleanup)
               (core/cancel! (:eng @world) (:job @world))
@@ -235,8 +227,7 @@
           (is (= [{:kind :nothing-possible :let-go true}] (mapv #(select-keys (:data %) [:kind :let-go]) (job-ev seen :stopped)))))))))
 
 (def waits-for-the-world
-  {:conditions []
-   :round (fn [c] (ctx/end c :nothing-possible :stuck))
+  {:round (fn [c] (ctx/end c :nothing-possible :stuck))
    :cleanup (fn [c _]
               (swap! clock + 1000)
               (when-not (:timer @world)
@@ -254,8 +245,7 @@
                  (mapv #(select-keys (:data %) [:kind :let-go :cleanup]) (job-ev seen :stopped)))))))))
 
 (def yields
-  {:conditions []
-   :round (fn [_] (log! :round) :continue)
+  {:round (fn [_] (log! :round) :continue)
    :cleanup (fn [c e]
               (log! [:cleanup (:kind e)])
               (if (< (count (:log @world)) 3) :continue (ctx/end c :done nil)))})
@@ -279,8 +269,7 @@
             :done)})
 
 (defn caller-of [job]
-  {:conditions []
-   :round (fn ^:async caller [c]
+  {:round (fn ^:async caller [c]
             (let [r (await (ctx/call-child c :kid job {}))]
               (swap! world assoc :kid [r (ctx/child-result c :kid)])
               (ctx/end c :done nil)))})
@@ -305,11 +294,10 @@
           (is (= [:done {:status :stopped :reason :stuck :let-go true}]
                  (update (:kid @world) 1 select-keys [:status :reason :let-go]))))))))
 
-(def quick {:conditions [] :round (fn [c] (log! :quick) (ctx/end c :done nil))})
+(def quick {:round (fn [c] (log! :quick) (ctx/end c :done nil))})
 
 (defn ends-slot-mid-cleanup [end!]
-  {:conditions []
-   :round (fn [_] (log! :round) :continue)
+  {:round (fn [_] (log! :round) :continue)
    :cleanup (fn [c e]
               (log! [:cleanup (:kind e)])
               (when (= 2 (count (:log @world))) (end! (:engine c) (:root c)))
@@ -345,8 +333,7 @@
           (is (= [:round [:cleanup :cut-off] [:cleanup :cut-off] [:cleanup :cut-off] :quick] (:log @world))))))))
 
 (def paused-low
-  {:conditions []
-   :round (fn [c] (ctx/end c :nothing-possible :stuck))
+  {:round (fn [c] (ctx/end c :nothing-possible :stuck))
    :cleanup (fn [c e]
               (log! [:low-cleanup (:kind e)])
               (when (= 1 (count (:log @world)))
@@ -354,7 +341,7 @@
                 (js/setTimeout #(core/tick! (:engine c)) 0))
               (if (< (count (:log @world)) 4) :continue (ctx/end c :done nil {:let-go true})))})
 
-(def high {:conditions [] :round (fn [c] (log! :high) (ctx/end c :done nil))})
+(def high {:round (fn [c] (log! :high) (ctx/end c :done nil))})
 
 (deftest a-reflex-cut-by-a-higher-one-mid-cleanup-resumes-its-cleanup-after
   (async done
@@ -377,7 +364,7 @@
                  (mapv (juxt (comp :reflex-id :context) (comp :outcome :data)) (filter #(= [:reflex :ended] [(:source %) (:kind %)]) @seen)))))))))
 
 (def high-removing-low
-  {:conditions [] :round (fn [c] (log! :high) (core/remove-reflex! (:engine c) :low) (ctx/end c :done nil))})
+  {:round (fn [c] (log! :high) (core/remove-reflex! (:engine c) :low) (ctx/end c :done nil))})
 
 (deftest a-paused-reflex-whose-entry-left-the-register-still-resumes-its-cleanup
   (async done
@@ -421,8 +408,7 @@
             :done)})
 
 (def cut-in-cleanup
-  {:conditions []
-   :round (fn [_] :continue)
+  {:round (fn [_] :continue)
    :cleanup (fn [c e]
               (log! [:cleanup (:kind e)])
               (when (= 1 (count (:log @world))) (core/do-now! (:engine c) '(quick)))

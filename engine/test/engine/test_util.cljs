@@ -225,12 +225,13 @@
                    (impl token a))))))
 
 (defn job
-  "A contract job for tests: round under conditions, each a fn of ctx giving nil (passes) or the cause it fails with.
-  The default round ends done."
+  "A contract job for tests: round under checks, each a fn of ctx giving a status, asked as its can-start?. The default
+  round ends done."
   ([] (job [] nil))
   ([round] (job [] round))
-  ([conditions round]
-   {:conditions (mapv #(vector :fn %) conditions) :round (or round #(ctx/end % :done nil))}))
+  ([checks round]
+   (cond-> {:round (or round #(ctx/end % :done nil))}
+     (seq checks) (assoc :can-start? (fn [c] (contract/all (mapv #(% c) checks)))))))
 
 (defn ^:async run-until-empty
   "Tick eng until its job list is empty, at most n ticks; the ticks run."
@@ -254,8 +255,7 @@
   (default: its outcome) in the atom out and ends done."
   ([job args out] (recording-parent job args out outcome))
   ([job args out f]
-   {:conditions []
-    :round (fn ^:async recording-round [c]
+   {:round (fn ^:async recording-round [c]
              (let [r (await (ctx/call c :kid job args))]
                (if (= :continue r)
                  :continue

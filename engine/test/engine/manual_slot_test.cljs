@@ -2,7 +2,8 @@
   "Manual control runs one slot: the driver's job. No trigger, no loop; a new driver job replaces the slot's;
   others' jobs wait in the normal queue; release cancels the slot. The slot job gets one call and leaves the slot
   whatever it returns; only a round in flight beats the lease."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.contract :as contract]
+            [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -21,11 +22,11 @@
 
 (def jobs
   (merge registry/jobs
-         {'walk {:conditions [] :round walk-round}
-          'spin {:conditions [] :round (fn [_] :continue)}
-          'blocked (tu/job [(constantly {:reason :no-tool :need :axe})] nil)
-          'boom {:conditions [] :round (fn [_] (throw (js/Error. "boom")))}
-          'nop {:conditions [] :round #(ctx/end % :done nil)}}))
+         {'walk {:round walk-round}
+          'spin {:round (fn [_] :continue)}
+          'blocked (tu/job [(constantly (contract/later :no-tool "no axe" :need :axe))] nil)
+          'boom {:round (fn [_] (throw (js/Error. "boom")))}
+          'nop {:round #(ctx/end % :done nil)}}))
 
 (def triggers
   (merge real-triggers/all
@@ -147,8 +148,7 @@
     (is (empty? (ran seen)))
     (let [[e] (kinds seen :stopped)]
       (is (= :no-tool (:reason e)))
-      (is (= :axe (get-in e [:cause :need])
-)))))
+      (is (= :axe (:need e))))))
 
 (deftest no-trigger-is-evaluated-while-a-slot-job-runs-and-a-reflex-end-is-deferred
   (async done

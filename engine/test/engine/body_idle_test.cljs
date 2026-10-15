@@ -1,7 +1,8 @@
 (ns engine.body-idle-test
   "body.idle: one agent-facing event per stretch with no useful act (only idle-ok jobs act, the rest wait), on the
   fake clock."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.contract :as contract]
+            [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -20,11 +21,11 @@
   (await (ctx/act c :look #js {:pos #js {:x 3 :y 64 :z 0}}))
   :continue)
 
-(defn no-source [_] {:reason :no-source :why "no stone in sight"})
+(defn no-source [_] (contract/later :no-source "no stone in sight"))
 
 (def jobs
-  {'filler {:conditions [] :round filler-round :idle-ok true}
-   'work {:conditions [] :round work-round}
+  {'filler {:round filler-round :idle-ok true}
+   'work {:round work-round}
    'stuck (tu/job [no-source] work-round)})
 
 (defn setup [opts]
@@ -72,10 +73,10 @@
           (await (run-for eng clock 12000))
           (let [[e :as all] (idles seen)]
             (is (= 1 (count all)))
-            (is (= [{:job "j1" :name "stuck" :waiting {:reason :no-source :cause {:reason :no-source :why "no stone in sight"}}}
+            (is (= [{:job "j1" :name "stuck" :waiting {:reason :no-source :text "no stone in sight"}}
                     {:job "j2" :name "(repeat filler)" :idle-ok true}]
                    (:jobs e)))
-            (is (re-find #"j1 stuck waiting: no-source" (:text e)) (:text e))))))))
+            (is (re-find #"j1 stuck waiting: no stone in sight" (:text e)) (:text e))))))))
 
 (deftest a-real-job-acting-is-not-idle
   (async done

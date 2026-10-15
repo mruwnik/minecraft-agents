@@ -37,11 +37,11 @@
 ;; ---------------------------------------------------------------- call keys at submit
 
 (def wayed
-  {:conditions [] :ways [:carried :craft] :args nil
+  {:ways [:carried :craft] :args nil
    :round (fn [c] (ctx/end c :done nil))})
 
 (deftest call-keys-are-specced-for-every-job
-  (let [reg {'wayed wayed 'plain {:conditions [] :round #(ctx/end % :done nil) :args nil}}]
+  (let [reg {'wayed wayed 'plain {:round #(ctx/end % :done nil) :args nil}}]
     (is (nil? (expr/problem reg '(wayed {:ways #{:craft} :spend {:job-time 30 :items {"dirt" 4}} :floor {:health 12}
                                         :least :all :deadline 5}))))
     (is (nil? (expr/problem reg '(plain {:spend {:job-time 30}}))) "a job that does not read them still takes them")
@@ -71,10 +71,13 @@
 
 (defn raw-mem [eng root slots] (mem/job-mem (mem/view (:store eng)) root slots))
 
-(defn gate [k cause] (fn [_] (when-not (get @world k) cause)))
+(defn gate [k reason] (fn [_] (if (get @world k) (contract/ok :open "open") (contract/later reason (name reason)))))
+
+(defn goal "A done? status: :ok while holds?, data the count." [holds? & data]
+  (apply (if holds? contract/ok contract/later) (if holds? :done :not-done) "goal" data))
 
 (def leaf
-  {:conditions [[:fn (gate :leaf-ok :no-leaf)]]
+  {:can-start? (gate :leaf-ok :no-leaf)
    :round (fn [c]
             (swap! world update :leaf-rounds (fnil inc 0))
             (swap! world assoc :leaf-call (ctx/frozen-call c) :leaf-way? (ctx/way? c :craft) :leaf-use (ctx/use c :tools))
@@ -90,15 +93,15 @@
       (if (= :continue e) :continue (ending-of c e)))))
 
 (def jobs
-  {'parent {:conditions [] :round (parent-round (fn [c _] (ctx/end c :nothing-possible :no-leaf-way)))}
-   'explains {:conditions [] :round (parent-round (fn [c _] (assoc (ctx/end c :nothing-possible :mine) :because {:kind :cut-off})))}
-   'gated {:conditions [[:fn (gate :go {:fact :go :why :not-yet})]]
+  {'parent {:round (parent-round (fn [c _] (ctx/end c :nothing-possible :no-leaf-way)))}
+   'explains {:round (parent-round (fn [c _] (assoc (ctx/end c :nothing-possible :mine) :because {:kind :cut-off})))}
+   'gated {:can-start? (gate :go :not-yet)
            :round (fn [c] (if-let [e (:end @world)] (apply ctx/end c e) :continue))}
-   'abandons {:conditions [] :round (fn ^:async abandons [c]
+   'abandons {:round (fn ^:async abandons [c]
                                       (await (ctx/call c :leaf leaf {}))
                                       (ctx/end c :nothing-possible :gave-up))}
-   'finished {:conditions [] :round (fn [_] (swap! world assoc :ran true) :continue)
-              :done? (fn [_] {:done? (boolean (:all-in @world)) :units :items :done 3 :left 0})}})
+   'finished {:round (fn [_] (swap! world assoc :ran true) :continue)
+              :done? (fn [_] (goal (:all-in @world) :units :items :done 3 :left 0))}})
 
 (deftest a-child-whose-conditions-fail-ends-condition-failed-without-a-round
   (async done
@@ -108,9 +111,9 @@
               id (core/submit! eng '(parent) {})]
           (await (core/tick! eng))
           (is (nil? (:leaf-rounds @world)) "the child's round never ran")
-          (is (= {:kind :condition-failed :cause :no-leaf} (dissoc (:child-ending @world) :report)))
+          (is (= {:kind :condition-failed :cause {:reason :no-leaf :text "no-leaf"}} (dissoc (:child-ending @world) :report)))
           (is (map? (:report (:child-ending @world))) "the engine fills the report")
-          (is (= {:kind :nothing-possible :cause :no-leaf-way :because {:kind :condition-failed :cause :no-leaf}}
+          (is (= {:kind :nothing-possible :cause :no-leaf-way :because {:kind :condition-failed :cause {:reason :no-leaf :text "no-leaf"}}}
                  (select-keys (:data (first (job-ev seen :stopped))) [:kind :cause :because]))
               "the parent's ending carries the child's as its because")
           (is (= :no-leaf-way (:reason (:data (first (job-ev seen :stopped))))) "today's readers read :reason")
@@ -150,7 +153,7 @@
             (is (map? (get-in ended [:data :report])))))))))
 
 (def digger
-  {:conditions [] :defaults {:use {:tools :dig}}
+  {:defaults {:use {:tools :dig}}
    :round (fn [c] (swap! world assoc :dig-use (ctx/use c :tools) :dig-call (ctx/frozen-call c)) (ctx/end c :done nil))})
 
 (defn pick [name left] {:name name :count 1 :durability left :max-durability 250})
@@ -180,7 +183,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[use-defaults inventory args expected] purposes]
-          (let [job {:conditions [] :defaults {:use use-defaults}
+          (let [job {:defaults {:use use-defaults}
                      :round (fn [c] (swap! world assoc :call (ctx/frozen-call c)) (ctx/end c :done nil))}
                 {:keys [eng]} (setup {'purposed job} nil inventory)]
             (core/submit! eng (list 'purposed args) {})
@@ -199,16 +202,13 @@
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= [id] (:list (core/state eng))) "not started: it waits")
-          (is (= [{:reason :go :cause {:fact :go :why :not-yet}}] (mapv #(select-keys (:data %) [:reason :cause]) (job-ev seen :waiting))))
+          (is (= [:not-yet] (mapv #(:reason (:data %)) (job-ev seen :waiting))))
           (is (empty? (job-ev seen :round_started)))
-          (swap! world assoc :go true)
+          (swap! world assoc :go true :end [:nothing-possible :stuck])
           (await (core/tick! eng))
           (is (= 1 (count (job-ev seen :round_started))))
-          (swap! world assoc :go false)
-          (await (core/tick! eng))
-          (is (= {:status :stopped :kind :condition-failed :cause {:fact :go :why :not-yet} :reason :go}
-                 (select-keys (:data (first (job-ev seen :stopped))) [:status :kind :cause :reason]))
-              "once started, failing conditions end it")
+          (is (= {:status :stopped :kind :nothing-possible :cause :stuck}
+                 (select-keys (:data (first (job-ev seen :stopped))) [:status :kind :cause])))
           (is (empty? (:list (core/state eng)))))))))
 
 (deftest a-done-ending-completes-and-a-ready-job-ends-without-a-round
@@ -228,14 +228,14 @@
                  (select-keys (:report (:data (second (job-ev seen :completed)))) [:units :done :left]))))))))
 
 (def never
-  {:conditions [[:fn (gate :go :not-yet)] [:fn (fn [_] (contract/impossible {:reason :not-smeltable :item "diamond"}))]]
+  {:can-start? (constantly (contract/never :not-smeltable "diamond" :item "diamond"))
    :round (fn [_] (swap! world assoc :never-ran true) :continue)})
 
 (def looks
   "Waits on :tree; the condition can tell only after a look from here."
-  {:conditions [[:fn (fn [c] (cond (:tree @world) nil
-                                   (:looked (ctx/mem c)) (when-not (:tree-after-look @world) :no-tree)
-                                   :else (contract/look-first :no-tree)))]]
+  {:can-start? (fn [c] (cond (or (:tree @world) (and (:looked (ctx/mem c)) (:tree-after-look @world))) (contract/ok :tree "tree")
+                             (:looked (ctx/mem c)) (contract/later :no-tree "no tree")
+                             :else (contract/look :no-tree "no tree seen")))
    :round (fn [c] (swap! world update :looks-rounds (fnil inc 0)) (ctx/end c :done nil))})
 
 (defn looks-at [p] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
@@ -245,8 +245,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'never never
-                                         'calls-never {:conditions []
-                                                       :round (fn ^:async calls-never [c]
+                                         'calls-never {:round (fn ^:async calls-never [c]
                                                                 (swap! world assoc :child-ending (await (ctx/call c :kid never {})))
                                                                 (ctx/end c :nothing-possible :kid))}})]
           (core/submit! eng '(never) {})
@@ -254,27 +253,26 @@
           (is (nil? (:never-ran @world)) "its round never ran")
           (is (empty? (:list (core/state eng))) "removed from the queue, though another condition only skips")
           (is (empty? (job-ev seen :waiting)))
-          (is (= {:status :stopped :kind :impossible :cause {:reason :not-smeltable :item "diamond"} :reason :not-smeltable}
+          (is (= {:status :stopped :kind :impossible :cause {:reason :not-smeltable :item "diamond" :text "diamond"} :reason :not-smeltable}
                  (select-keys (:data (first (job-ev seen :stopped))) [:status :kind :cause :reason])))
           (core/submit! eng '(calls-never) {})
           (await (core/tick! eng))
-          (is (= {:kind :impossible :cause {:reason :not-smeltable :item "diamond"}} (dissoc (:child-ending @world) :report))))))))
+          (is (= {:kind :impossible :cause {:reason :not-smeltable :item "diamond" :text "diamond"}} (dissoc (:child-ending @world) :report))))))))
 
 (def holds
   "Its goal holds while :holds; done? keeps the call it was asked under."
-  {:conditions [[:fn (gate :go :not-needed)]]
+  {:can-start? (gate :go :not-needed)
    :defaults {:spend {:job-time 20}}
    :round (fn [_] (swap! world assoc :holds-ran true) :continue)
    :done? (fn [c] (swap! world assoc :asked-call (ctx/frozen-call c))
-            {:done? (boolean (:holds @world)) :units :items :done 0 :left 0})})
+            (goal (:holds @world) :units :items :done 0 :left 0))})
 
 (deftest a-goal-that-already-holds-ends-done-before-its-conditions-are-asked
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'holds holds
-                                         'calls-holds {:conditions []
-                                                       :round (fn ^:async calls-holds [c]
+                                         'calls-holds {:round (fn ^:async calls-holds [c]
                                                                 (swap! world assoc :child-ending (await (ctx/call c :kid holds {})))
                                                                 (ctx/end c :done nil))}})]
           (swap! world assoc :holds true)
@@ -298,7 +296,7 @@
 (defn held-goal [start]
   {:can-start? (constantly start)
    :round (fn [_] (swap! world assoc :ran true) :continue)
-   :done? (constantly {:done? true :units :items :done 0 :left 0})})
+   :done? (constantly (goal true :units :items :done 0 :left 0))})
 
 (deftest bad-args-beat-a-goal-that-holds-but-another-never-does-not
   (async done
@@ -313,28 +311,8 @@
           (is (= {:kind :done :cause :already} (await (ended '(other)))))
           (is (= {:kind :done} (select-keys (await (ended '(bare))) [:kind])) "a job with only a round runs"))))))
 
-(def wraps-up
-  "Reaches its goal in its first round and yields; its second round wraps up."
-  {:conditions []
-   :round (fn [c]
-            (if (:holds @world)
-              (do (swap! world assoc :wrapped true) (ctx/end c :done nil {:placed 1}))
-              (do (swap! world assoc :holds true) :continue)))
-   :done? (fn [_] {:done? (boolean (:holds @world)) :units :blocks :done 1 :left 0})})
-
-(deftest once-started-the-jobs-own-round-decides-it-is-done
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'wraps-up wraps-up})]
-          (core/submit! eng '(wraps-up) {})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (:wrapped @world) "the wrap-up round ran though done? held")
-          (is (= {:kind :done :placed 1} (select-keys (:data (first (job-ev seen :completed))) [:kind :cause :placed])))
-          (is (= :blocks (:units (:report (:data (first (job-ev seen :completed)))))) "done?'s count is still reported"))))))
-
 (def done-throws
-  {:conditions [[:fn (gate :go :not-yet)]]
+  {:can-start? (gate :go :not-yet)
    :round (fn [c] (swap! world assoc :ran true) (ctx/end c :done nil))
    :done? (fn [_] (throw (js/Error. "no input")))})
 
@@ -368,54 +346,6 @@
           (dotimes [_ 5] (await (core/tick! eng)))
           (is (= 2 (fired)) "backs off after :after runs that ended :already")
           (is (seq (core/backoff-entries eng))))))))
-
-(deftest an-impossible-condition-wins-over-a-goal-that-holds
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'never (assoc never :done? (constantly {:done? true}))})]
-          (core/submit! eng '(never) {})
-          (await (core/tick! eng))
-          (is (= :impossible (:kind (:data (first (job-ev seen :stopped))))))
-          (is (empty? (job-ev seen :completed))))))))
-
-(def tried
-  {:conditions [[:fn (ctx/after-tries 2 (fn [_] (:cause @world)))]]
-   :round (fn [c] (swap! world assoc :tried-ran true) (ctx/end c :done nil))})
-
-(deftest a-job-held-up-n-times-turns-impossible
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'tried tried})
-              step! (fn ^:async step [cause] (swap! world assoc :cause cause) (await (core/tick! eng)))]
-          (core/submit! eng '(tried) {})
-          (await (step! :a))
-          (await (step! :a))
-          (is (= 1 (:tries (raw-mem eng "j1" []))) "a wait that goes on is one try")
-          (await (step! :b))
-          (is (= 2 (:tries (raw-mem eng "j1" []))))
-          (is (seq (:list (core/state eng))) "still queued after two tries")
-          (await (step! :c))
-          (is (empty? (:list (core/state eng))) "the third check is impossible")
-          (is (nil? (:tried-ran @world)))
-          (is (= {:kind :impossible :cause {:reason :tries :tries 2 :cause :c}}
-                 (select-keys (:data (first (job-ev seen :stopped))) [:kind :cause]))))))))
-
-(deftest a-reason-whose-detail-changes-is-one-try
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup {'tried tried})
-              step! (fn ^:async step [cause] (swap! world assoc :cause cause) (await (core/tick! eng)))]
-          (core/submit! eng '(tried) {})
-          (await (step! {:reason :far :distance 9}))
-          (await (step! {:reason :far :distance 7}))
-          (await (step! {:reason :far :distance 5}))
-          (is (= 1 (:tries (raw-mem eng "j1" []))) "same reason kind, detail changing")
-          (is (seq (:list (core/state eng))))
-          (await (step! {:reason :dark}))
-          (is (= 2 (:tries (raw-mem eng "j1" []))) "a new reason kind is a try"))))))
 
 (deftest a-condition-that-needs-a-look-looks-once-then-the-job-waits-unstarted
   (async done
@@ -506,11 +436,11 @@
 
 (def reflex-jobs
   {'abandons (get jobs 'abandons)
-   'holds {:conditions [] :round (fn ^:async holds [c]
+   'holds {:round (fn ^:async holds [c]
                                    (await (ctx/call c :leaf leaf {}))
                                    (await (js/Promise. (fn [r] (swap! world assoc :release r))))
                                    (ctx/end c :done nil))}
-   'old-done {:conditions [] :round (fn ^:async old-done [c] (await (ctx/call c :leaf leaf {})) (ctx/end c :done nil))}})
+   'old-done {:round (fn ^:async old-done [c] (await (ctx/call c :leaf leaf {})) (ctx/end c :done nil))}})
 
 (def reflex-triggers
   (into {} (for [k [:abandons :holds :old-done]]
@@ -560,7 +490,7 @@
 
 (def refusing-jobs
   {'never never
-   'gives-up {:conditions [] :round (fn [c] (swap! world assoc :call (ctx/frozen-call c)) (ctx/end c :nothing-possible :gave-up))}})
+   'gives-up {:round (fn [c] (swap! world assoc :call (ctx/frozen-call c)) (ctx/end c :nothing-possible :gave-up))}})
 
 (def refusing-triggers
   (into {} (for [k [:never :gives-up]]
@@ -579,7 +509,7 @@
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= 1 (fired :never)) "impossible: not fired again while the trigger holds")
           (is (= :impossible (get-in (first (ev seen :reflex :ended)) [:data :kind])))
-          (is (= {:job 'never :kind :impossible :cause {:reason :not-smeltable :item "diamond"}}
+          (is (= {:job 'never :kind :impossible :cause {:reason :not-smeltable :item "diamond" :text "diamond"}}
                  (select-keys (:data (mem/latest (mem/view (:store eng)) :job-report)) [:job :kind :cause]))
               "the ending is remembered with the report")
           (swap! world assoc :fire #{:gives-up})
@@ -603,8 +533,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'drops {:conditions []
-                                                 :round (fn ^:async drops [c]
+        (let [{:keys [eng seen]} (setup {'drops {:round (fn ^:async drops [c]
                                                           (if (:drop @world)
                                                             (ctx/update-mem! c update :children dissoc :leaf)
                                                             (await (ctx/call c :leaf leaf {})))
@@ -626,7 +555,7 @@
             (let [r (:old @world)] (if (map? r) (do (ctx/result! c r) :done) r)))})
 
 (def calls-old
-  {:conditions [] :round (fn ^:async calls-old [c]
+  {:round (fn ^:async calls-old [c]
                            (swap! world assoc :old-ending (await (ctx/call c :kid old-kid {})))
                            :continue)})
 
@@ -659,7 +588,7 @@
    :round (constantly :continue)})
 
 (defn calls-waiting [job]
-  {:conditions [] :round (fn ^:async calls-waiting [c]
+  {:round (fn ^:async calls-waiting [c]
                            (swap! world assoc :old-ending (await (ctx/call c :kid job {})))
                            :continue)})
 
@@ -682,8 +611,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {'calls-seeded {:conditions []
-                                                   :round (fn ^:async calls-seeded [c]
+        (let [{:keys [eng]} (setup {'calls-seeded {:round (fn ^:async calls-seeded [c]
                                                             (ctx/update-mem! c assoc-in [:children :kid] {:args {} :children {} :saved 1})
                                                             (swap! world assoc :old-ending (await (ctx/call c :kid waits-on {})))
                                                             :continue)}})]
@@ -741,7 +669,7 @@
   (is (= :low-health (:reason (legacy/result-of (legacy/ending-of :done {:status :stopped :reason :low-health} nil))))))
 
 (def migrated
-  {:conditions [] :round (fn [c] (ctx/end c :done nil)) :args nil
+  {:round (fn [c] (ctx/end c :done nil)) :args nil
    :legacy-args (fn [{:keys [timeout-s] :as args}]
                   (cond-> (dissoc args :timeout-s) timeout-s (assoc :spend {:job-time timeout-s})))})
 
@@ -750,6 +678,3 @@
     (is (nil? (expr/problem reg '(migrated {:timeout-s 30}))))
     (is (= {:job-time 30} (:spend (second (expr/leaf reg 'migrated {:timeout-s 30})))))
     (is (re-find #"migrated has no arg :bogus" (expr/problem reg '(migrated {:bogus 1}))))))
-
-(deftest registering-a-job-with-a-condition-that-is-no-fn-is-refused-naming-it
-  (is (thrown-with-msg? js/Error #"a condition is \[:fn f\]" (ending/wrap {:conditions ['(daytime)]}))))

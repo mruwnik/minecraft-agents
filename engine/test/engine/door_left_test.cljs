@@ -81,8 +81,7 @@
 ;; ---------------------------------------------------------------- a walk cut in the gate
 
 (defn walker [args]
-  {:conditions []
-   :round (fn ^:async walk-round [c]
+  {:round (fn ^:async walk-round [c]
             (await (apply near/go-near! c (tu/as-near args)))
             (ctx/end c :done nil))})
 
@@ -302,7 +301,7 @@
 
 (def continuing-go-to
   "A go-to whose every round ends :continue, as one waiting on its own child does."
-  {'jobs.movement.go-to {:conditions [] :ways (:ways (get registry/jobs 'jobs.movement.go-to)) :args {}
+  {'jobs.movement.go-to {:ways (:ways (get registry/jobs 'jobs.movement.go-to)) :args {}
                                 :round (fn ^:async r [_c] :continue)}})
 
 (deftest a-block-the-body-stands-in-stays-left-with-its-entry-for-a-later-run

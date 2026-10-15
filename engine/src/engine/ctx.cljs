@@ -24,21 +24,6 @@
   [ctx f & args]
   ((:update-mem ctx) f args))
 
-(defn tries
-  "How often this job has been held up (a wait that began or changed its reason kind), kept across restarts."
-  [ctx]
-  (or (:tries (mem ctx)) 0))
-
-(defn after-tries
-  "Condition f that turns impossible, {:reason :tries :tries n :cause its cause}, once the job has been held up n times
-  and f still skips."
-  [n f]
-  (fn [c]
-    (let [r (f c)]
-      (if (and r (not (contract/impossible-cause r)) (not (contract/look-cause r)) (>= (tries c) n))
-        (contract/impossible {:reason :tries :tries n :cause r})
-        r))))
-
 ;; ------------------------------------------------------------------ the contract (engine.contract)
 
 (defn frozen-call
@@ -175,8 +160,9 @@
       (if (check (assoc ctx :wait a))
         (contract/ok :ready "ready")
         (let [w @a
-              w (cond (map? w) w (some? w) {:reason w} :else {:reason :not-ready})]
-          (contract/from-old :later w w))))
+              w (cond (map? w) w (some? w) {:reason w} :else {:reason :not-ready})
+              reason (if (keyword? (:reason w)) (:reason w) :not-ready)]
+          [:later (or (:text w) (name reason)) (assoc w :reason reason)])))
     (contract/verdict ctx def)))
 
 (defn child-status
@@ -185,20 +171,6 @@
   [ctx slot job args]
   (let [[def args] (child-job ctx job args)]
     (check-status (assoc ctx :slots (conj (:slots ctx) slot) :args args) def)))
-
-(defn old-wait
-  "Status s as an old wait: nil for :ok, (contract/impossible cause) for :never, (contract/look-first cause) for :look,
-  else its wait map."
-  [[kind _ data :as s]]
-  (case kind
-    :ok nil
-    :never (contract/impossible (contract/status-cause s))
-    :look (contract/look-first (contract/status-cause s))
-    (or (::contract/wait data) (contract/wait-reason s))))
-
-(defn check-wait "check-status as an old wait (old-wait)." [ctx def] (old-wait (check-status ctx def)))
-
-(defn child-wait "child-status as an old wait (old-wait)." [ctx slot job args] (old-wait (child-status ctx slot job args)))
 
 (defn can-run
   "This job's can-run? status now, asked between steps (jobs.lib.pace/steps!); :ok when it has none."

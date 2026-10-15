@@ -311,7 +311,7 @@
   (let [asked (atom [])
         {:keys [eng]} (setup {:containers {"10,64,0" stone-chest} :blocks {} :recipes hoe-recipes})
         eng (assoc-in eng [:jobs 'jobs.items.obtain]
-                      {:conditions [] :args {} :round (fn [c] (swap! asked conj (:item (:args c))) (ctx/end c :done nil))})]
+                      {:args {} :round (fn [c] (swap! asked conj (:item (:args c))) (ctx/end c :done nil))})]
     (await (child-outcome eng job args 60))
     @asked))
 

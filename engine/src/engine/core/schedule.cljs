@@ -12,6 +12,7 @@
             [engine.core.list-edits :refer [submit!]]
             [engine.core.round :refer [check-ctx]]
             [engine.core.settle :refer [end-slot! judge-deferred-ends! start-round!]]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.expr :as expr]
             [engine.memory :as mem]
@@ -33,8 +34,6 @@
       (let [r (wait-reason reason)]
         (when (not= before r)
           (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
-          (when (not= (:reason before) (:reason r))
-            (mem/update-job! (:store eng) id [] update :tries (fnil inc 0)))
           (emit! eng (merge (job-fields eng id)
                             {:source :job :kind :waiting :level :info :data r :text (waiting-text r)})))))))
 
@@ -44,14 +43,15 @@
   (some-> (:waiting eng) deref (get id)))
 
 (defn check-passes?
-  "Whether listed instance id would start now (ctx/check-wait; a job closing for its cleanup always would). Its wait reason is told once with
+  "Whether listed instance id would start now (ctx/check-status; a job closing for its cleanup always would). Its wait reason is told once with
   note-waiting!. A throwing check is a bug, not a world state: the job is parked like a round that threw."
   [eng id]
   (let [inst (get-in (state eng) [:instances id])
         wait (atom nil)
         ok? (try (let [[def args] (job-of eng inst)]
                    (or (cleanup/closing? eng id [])
-                       (nil? (reset! wait (ctx/check-wait (check-ctx eng inst args) def)))))
+                       (let [s (ctx/check-status (check-ctx eng inst args) def)]
+                         (or (= :ok (first s)) (do (reset! wait (contract/status-cause s)) false)))))
                  (catch :default e
                    (let [error (str e)]
                      (emit! eng {:source :system :kind :error :level :warn :job id

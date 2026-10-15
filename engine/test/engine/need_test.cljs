@@ -21,7 +21,7 @@
   reason's ending (ending-of); :continue yields instead."
   [seen step]
   {:ways [:chest :craft :smelt :gather]
-   :conditions []
+  
    :round (fn ^:async r [c]
             (swap! seen conj (assoc (:args c) :slot (peek (:slots c))))
             (let [s (step c)]
@@ -41,8 +41,7 @@
         walks (atom [])
         p (tu/fake {})
         [seen sink] (tu/capture-sink)
-        walker {:conditions []
-                :ways [:walk :clear-seal]
+        walker {:ways [:walk :clear-seal]
                 :round (fn [c]
                          (let [{:keys [x y z]} (:pos (:args c))]
                            (swap! walks conj (:args c))
@@ -51,7 +50,7 @@
         jobs {'jobs.items.obtain (stopper obtain (or obtain-step (constantly nil)))
               'jobs.items.get-tool (stopper tool (or tool-step (constantly nil)))
               'jobs.movement.go-to walker
-              'caller {:conditions [] :args {}
+              'caller {:args {}
                        :round (fn ^:async r [c]
                                 (let [e (await (call-fn c))]
                                   (swap! got conj e)

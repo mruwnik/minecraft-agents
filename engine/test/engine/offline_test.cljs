@@ -23,8 +23,8 @@
 (def probes (atom 0))
 
 (def jobs
-  {'away {:conditions [] :round away-round}
-   'eat {:conditions [] :round eat-round}})
+  {'away {:round away-round}
+   'eat {:round eat-round}})
 
 (def triggers
   {:probe {:name :probe :job '(eat) :when (fn [_ _ _] (swap! probes inc) false)}

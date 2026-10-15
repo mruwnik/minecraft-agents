@@ -26,8 +26,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake {:blocks blocks :self {:pos pos}})
         out (atom :not-done)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call c :kid job args))]
                            (when-not (= :continue r) (reset! out (:data r)))
                            r))}

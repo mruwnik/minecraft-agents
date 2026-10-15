@@ -53,21 +53,21 @@
 (deftest seq-waits-without-calling-a-step-whose-check-fails
   (async done
     (let [[c mem calls] (stub refuses)
-          d (composite/seq-def [[(tu/job [(constantly :not-ready)] nil) {}]])]
+          d (composite/seq-def [[(tu/job [(constantly (contract/later :not-ready "not ready"))] nil) {}]])]
       (-> (round! d c mem)
           (.then (fn [r]
                    (is (= :continue r))
                    (is (= [] @calls))
                    (-> (round! d (assoc c :reflex :r) mem)
                        (.then (fn [r2]
-                                (is (= [:condition-failed :not-ready] [(:kind r2) (:cause r2)])
+                                (is (= [:condition-failed :not-ready] [(:kind r2) (contract/cause-key r2)])
                                     "a reflex job ends instead: it runs one round")
                                 (done))))))))))
 
 (deftest until-stops-when-its-child-is-impossible
   (async done
     (let [[c mem] (stub impossible)
-          d (composite/until-def [(tu/job [(constantly :not-ready)] nil) {}] kid)]
+          d (composite/until-def [(tu/job [(constantly (contract/later :not-ready "not ready"))] nil) {}] kid)]
       (-> (round! d c mem)
           (.then (fn [r]
                    (is (= :impossible (:kind r)))
@@ -111,43 +111,41 @@
           (is (= :r9 (:cause (await (round! d c mem))))))))))
 
 (deftest every-combinator-waits-through-its-conditions-with-its-childs-reason
-  (let [w {:reason :no-tree :near 3}
-        waits (tu/job [(constantly w)] nil)
-        never [(tu/job [(constantly :not-ready)] nil) {}]
+  (let [waits (tu/job [(constantly (contract/later :no-tree "no tree" :near 3))] nil)
+        never [(tu/job [(constantly (contract/later :not-ready "not ready"))] nil) {}]
         c {:view (constantly nil) :slots []}]
     (with-redefs [ctx/mem (constantly {})]
       (doseq [[label d] [[:seq (composite/seq-def [[waits {}]])] [:any (composite/any-def [[waits {}] [waits {}]])]
                          [:repeat (composite/repeat-def [waits {}] nil)] [:until (composite/until-def never [waits {}])]
                          [:nested (composite/seq-def [[(composite/repeat-def [waits {}] nil) {}]])]]]
         (is (nil? (:check d)) (str label ": no check export"))
-        (is (= w (ctx/check-wait c d)) (str label ": the child's reason"))))))
+        (is (= {:reason :no-tree :near 3} (select-keys (nth (ctx/check-status c d) 2) [:reason :near])) (str label ": the child's reason"))))))
 
 (deftest combinators-pass-on-their-childs-impossible-and-look
-  (let [never [{:conditions [[:fn (constantly (contract/impossible :never))]] :round (fn [c] (ctx/end c :done nil))} {}]
-        peek [{:conditions [[:fn (constantly (contract/look-first :unseen))]] :round (fn [c] (ctx/end c :done nil))} {}]
+  (let [never [{:can-start? (constantly (contract/never :never "never")) :round (fn [c] (ctx/end c :done nil))} {}]
+        peek [{:can-start? (constantly (contract/look :unseen "unseen")) :round (fn [c] (ctx/end c :done nil))} {}]
         c {:view (constantly nil) :slots []}]
     (with-redefs [ctx/mem (constantly {})]
-      (doseq [[label mk] [[:seq #(composite/seq-def [%])] [:repeat #(composite/repeat-def % nil)] [:until #(composite/until-def [(tu/job [(constantly :not-ready)] nil) {}] %)]
+      (doseq [[label mk] [[:seq #(composite/seq-def [%])] [:repeat #(composite/repeat-def % nil)] [:until #(composite/until-def [(tu/job [(constantly (contract/later :not-ready "not ready"))] nil) {}] %)]
 ]]
-        (is (= (contract/impossible :never) (ctx/check-wait c (mk never))) (str label ": impossible child"))
-        (is (= (contract/look-first :unseen) (ctx/check-wait c (mk peek))) (str label ": look-first child"))))))
+        (is (= [:never :never] (tu/kind-reason (ctx/check-status c (mk never)))) (str label ": impossible child"))
+        (is (= [:look :unseen] (tu/kind-reason (ctx/check-status c (mk peek)))) (str label ": look-first child"))))))
 
 (deftest repeat-ends-impossible-when-its-child-never-can-start
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [never [{:conditions [[:fn (constantly (contract/impossible :never))]] :round (fn [c] (ctx/end c :done nil))} {}]
+        (let [never [{:can-start? (constantly (contract/never :never "never")) :round (fn [c] (ctx/end c :done nil))} {}]
               [c mem] (stub {})
               r (await (round! (composite/repeat-def never nil) c mem))]
-          (is (= [:impossible :never] [(:kind r) (:cause r)])))))))
+          (is (= [:impossible :never] [(:kind r) (contract/cause-key r)])))))))
 
 ;; ------------------------------------------------------------------ on the engine
 
 (defn ending-kid
   "A contract job that ends with @ending ([kind cause]) and counts its runs in runs."
   [ending runs]
-  {:conditions []
-   :round (fn ^:async kid-round [c] (swap! runs inc) (let [[k cause] @ending] (ctx/end c k cause)))})
+  {:round (fn ^:async kid-round [c] (swap! runs inc) (let [[k cause] @ending] (ctx/end c k cause)))})
 
 (defn repeat-setup
   ([kind spec] (repeat-setup kind spec []))
@@ -155,7 +153,7 @@
    (let [clock (atom 1000000)
          ending (atom [kind :nothing-to-do])
          runs (atom 0)
-         eng (core/create {:primitives (tu/fake {}) :jobs {'kid (ending-kid ending runs) 'never (tu/job [(constantly :not-ready)] nil)} :triggers {} :dir (tu/tmp-dir)
+         eng (core/create {:primitives (tu/fake {}) :jobs {'kid (ending-kid ending runs) 'never (tu/job [(constantly (contract/later :not-ready "not ready"))] nil)} :triggers {} :dir (tu/tmp-dir)
                            :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks sinks :now #(deref clock)})})]
      (core/submit! eng spec {})
@@ -241,8 +239,8 @@
         (doseq [spec ['(repeat (holds)) '(repeat (seq (holds) (holds))) '(repeat (any (holds) (holds)))]]
           (let [clock (atom 1000000)
                 [seen sink] (tu/capture-sink)
-                holds {:conditions [[:fn (constantly :not-needed)]] :round (fn [_] :continue)
-                       :done? (constantly {:done? true :units :items :done 0 :left 0})}
+                holds {:can-start? (constantly (contract/later :not-needed "not needed")) :round (fn [_] :continue)
+                       :done? (constantly (contract/ok :done "done" :units :items :done 0 :left 0))}
                 eng (core/create {:primitives (tu/fake {}) :jobs {'holds holds} :triggers {} :dir (tu/tmp-dir)
                                   :now #(deref clock) :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
                 s {:eng eng :clock clock}

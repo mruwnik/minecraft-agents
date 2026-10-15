@@ -30,13 +30,13 @@
 (defn asking
   "A contract job whose round runs (f c), keeps what it returns in world :got and ends :done."
   [f]
-  {:conditions [] :defaults {:spend {:job-time 100} :floor {:health 5}} :args no-args
+  {:defaults {:spend {:job-time 100} :floor {:health 5}} :args no-args
    :round (fn ^:async asking-round [c] (swap! world assoc :got (await (f c))) (ctx/end c :done nil))})
 
 ;; ---------------------------------------------------------------- the quote ctx
 
 (def kid
-  {:conditions [] :target [:pos] :ways [:a :b] :defaults {:ways #{:a} :spend {:job-time 30}} :args pos-args
+  {:target [:pos] :ways [:a :b] :defaults {:ways #{:a} :spend {:job-time 30}} :args pos-args
    :quote-of (fn ^:async kid-quote [c]
                (swap! world assoc :seen {:pos (:pos (:args c)) :left (ctx/left c) :a (ctx/way? c :a) :b (ctx/way? c :b)
                                          :mem (ctx/mem c)})
@@ -60,8 +60,8 @@
 
 ;; ---------------------------------------------------------------- default quote
 
-(def plain {:conditions [] :args no-args :round (fn [c] (ctx/end c :done nil))})
-(def old {:conditions [] :args no-args :round #(ctx/end % :done nil)})
+(def plain {:args no-args :round (fn [c] (ctx/end c :done nil))})
+(def old {:args no-args :round #(ctx/end % :done nil)})
 
 (deftest the-default-quote-is-the-mean-of-the-reports-else-the-default-time
   (async done
@@ -82,11 +82,11 @@
 ;; ---------------------------------------------------------------- the quote deadline
 
 (def slow-quote
-  {:conditions [] :args no-args :round (constantly :continue)
+  {:args no-args :round (constantly :continue)
    :quote-of (fn [_] (swap! world update :slow-quotes (fnil inc 0)) (swap! clock + 5000) {:uses {:job-time [1 1 1]}})})
 
 (def outer
-  {:conditions [] :args no-args :round (constantly :continue)
+  {:args no-args :round (constantly :continue)
    :quote-of (fn ^:async outer-quote [c]
                (swap! world assoc :handed (:quote-deadline c))
                (swap! world assoc :inner (await (ctx/quote c 'slow {})))
@@ -111,7 +111,7 @@
 ;; ---------------------------------------------------------------- duplicates
 
 (def ping
-  {:conditions [] :target [:pos] :args pos-args
+  {:target [:pos] :args pos-args
    :quote-of (fn ^:async ping-quote [c]
                (swap! world assoc :inner (await (ctx/quote c 'ping {:pos (:pos (:args c))})))
                {:uses {:job-time [1 1 1]}})
@@ -135,8 +135,8 @@
 ;; ---------------------------------------------------------------- the least check
 
 (def field
-  {:conditions [] :args no-args
-   :done? (fn [_] {:done? false :done 0 :left 4 :units :cells})
+  {:args no-args
+   :done? (fn [_] (contract/later :not-done "not done" :done 0 :left 4 :units :cells))
    :quote-of (fn [_] {:uses {:job-time [1 1 1]} :done [0 2 2]})
    :round (fn [c] (swap! world assoc :ran true) (ctx/end c :done nil))})
 
@@ -168,8 +168,8 @@
 
 ;; ---------------------------------------------------------------- next-way
 
-(def failer {:conditions [] :args no-args :round (fn [c] (ctx/end c :nothing-possible :empty))})
-(def winner {:conditions [] :args no-args :round (fn [c] (ctx/end c :done nil))})
+(def failer {:args no-args :round (fn [c] (ctx/end c :nothing-possible :empty))})
+(def winner {:args no-args :round (fn [c] (ctx/end c :done nil))})
 
 (defn way-quote [way]
   (case way
@@ -178,7 +178,7 @@
     {:uses {:job-time [1 2 3]}}))
 
 (def chooser
-  {:conditions [] :ways [:a :b :c :d :e] :defaults {:ways #{:b :c :d :e} :spend {:job-time 10}} :args no-args
+  {:ways [:a :b :c :d :e] :defaults {:ways #{:b :c :d :e} :spend {:job-time 10}} :args no-args
    :round (fn ^:async chooser-round [c]
             (let [w1 (await (ctx/next-way c way-quote :x))
                   _ (await (ctx/call c :try 'failer {}))
@@ -207,7 +207,7 @@
                    w4))))))))
 
 (def booker
-  {:conditions [] :ways [:a :b :c] :defaults {:ways #{:c}} :args no-args
+  {:ways [:a :b :c] :defaults {:ways #{:c}} :args no-args
    :round (fn ^:async booker-round [c]
             (let [w1 (await (ctx/next-way c way-quote :x))
                   _ (await (ctx/call c :ok 'winner {}))

@@ -1,6 +1,7 @@
 (ns engine.farm-tidy-test
   "jobs.farm.tidy: which blocks over a plan are strays (pure), and whole runs against the fake world."
-  (:require [engine.child-ends :as ce]
+  (:require [engine.contract :as contract]
+            [engine.child-ends :as ce]
             [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -172,7 +173,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [dig (get registry/jobs 'jobs.blocks.dig)
-              declining (assoc dig :conditions [[:fn (fn [_] {:reason :not-allowed :why "claimed"})]])
+              declining (assoc dig :can-start? (constantly (contract/later :not-allowed "claimed")))
               {:keys [eng]} (start tidy-spec {"field" field-plan} [] (assoc registry/jobs 'jobs.blocks.dig declining))
               result (await (outcome eng {:plan "field" :give-up 1} 200))]
           (is (seq (:refused result)))

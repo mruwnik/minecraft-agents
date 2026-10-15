@@ -14,7 +14,7 @@
   (await (ctx/act c :offline #js {:ms 20000}))
   (ctx/end c :done nil))
 
-(def jobs {'away {:conditions [] :round away-round}})
+(def jobs {'away {:round away-round}})
 
 (defn engine-with-sink [p clock]
   (let [[seen sink] (tu/legacy-capture-sink)
@@ -105,7 +105,7 @@
         (let [clock (atom 1000000)
               p (tu/fake {:offlineScale 0.01})
               [seen sink] (tu/legacy-capture-sink)
-              eng (core/create {:primitives p :jobs {'night {:conditions [] :round night-round}}
+              eng (core/create {:primitives p :jobs {'night {:round night-round}}
                                 :triggers {} :dir (tu/tmp-dir) :now #(deref clock) :body "Fake"})
               _ (swap! (:events eng) update :sinks conj sink)
               id (core/submit! eng '(night) {})

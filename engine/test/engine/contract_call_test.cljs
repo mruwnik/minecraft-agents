@@ -25,12 +25,12 @@
     e))
 
 (def jobs
-  {'ping {:conditions [] :target [:pos] :args {:pos {:doc "target" :default nil} :again {:doc "calls" :default nil}}
+  {'ping {:target [:pos] :args {:pos {:doc "target" :default nil} :again {:doc "calls" :default nil}}
           :round (fn ^:async ping [c]
                    (when-let [again (:again (:args c))]
                      (await (call-noting c :pong 'pong {:again again})))
                    (ctx/end c :done nil))}
-   'pong {:conditions [] :args {:again {:doc "calls" :default nil}}
+   'pong {:args {:again {:doc "calls" :default nil}}
           :round (fn ^:async pong [c]
                    (doseq [pos (:again (:args c))]
                      (await (call-noting c (keyword (str "p" pos)) 'ping {:pos pos})))
@@ -56,11 +56,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'ping {:conditions [] :target [:pos] :args {:pos {:doc "target" :default nil}}
+        (let [{:keys [eng seen]} (setup {'ping {:target [:pos] :args {:pos {:doc "target" :default nil}}
                                                 :round (fn ^:async ping [c]
                                                          (let [e (await (ctx/call c :pong 'pong {}))]
                                                            (if (= :done (:kind e)) (ctx/end c :done nil) e)))}
-                                         'pong {:conditions [] :args {}
+                                         'pong {:args {}
                                                 :round (fn ^:async pong [c]
                                                          (need/ending-for (await (ctx/call c :ping 'ping {:pos 1}))
                                                                           :need {:item "ping"}))}})]

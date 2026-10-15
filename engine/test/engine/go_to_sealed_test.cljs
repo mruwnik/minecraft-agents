@@ -21,14 +21,12 @@
          {"0,66,0" "dirt"}))
 
 (def parent
-  {:conditions []
-   :round (fn ^:async walker [c] (await (child/call-walk c :walk {:pos [15 64 0] :ways #{:walk :clear-seal}})))})
+  {:round (fn ^:async walker [c] (await (child/call-walk c :walk {:pos [15 64 0] :ways #{:walk :clear-seal}})))})
 
 (def hopper
   "Like parent, but each round walks in a fresh child slot, the way a stair or tunnel parent issues a go-to per step."
   (let [n (atom 0)]
-    {:conditions []
-     :round (fn ^:async hop [c] (await (child/call-walk c (keyword (str "step" (swap! n inc))) {:pos [15 64 0] :ways #{:walk :clear-seal}})))}))
+    {:round (fn ^:async hop [c] (await (child/call-walk c (keyword (str "step" (swap! n inc))) {:pos [15 64 0] :ways #{:walk :clear-seal}})))}))
 
 (defn sealed-holds
   "The :sealed-hostile-near holds; a walk with the way open may also hold :searching, as long as its search takes."

@@ -1,5 +1,6 @@
 (ns engine.core-test
-  (:require [cljs.test :refer [deftest is are async testing]]
+  (:require [engine.contract :as contract]
+            [cljs.test :refer [deftest is are async testing]]
             [cljs.reader :as reader]
             [engine.core :as core]
             [engine.core.base :as base]
@@ -79,7 +80,7 @@
 
 (def flag (atom false))
 
-(def gated-job (tu/job [(fn [_] (when-not @flag :not-ready))] count-round))
+(def gated-job (tu/job [(fn [_] (if @flag (contract/ok :go "go") (contract/later :not-ready "not ready")))] count-round))
 
 (defn ^:async recurse-round
   "Calls itself as a child in slot :deeper until :depth levels exist."
@@ -234,8 +235,9 @@
         (let [seen-ctx (atom nil)
               {:keys [eng]} (setup)
               eng (assoc-in eng [:jobs 'peek]
-                            (tu/job [(fn [c] (reset! seen-ctx [(:args c) (dissoc (ctx/mem c) :args :children :contract)]) nil)]
-                                    count-round))]
+                            {:can-run? (fn [c] (reset! seen-ctx [(:args c) (dissoc (ctx/mem c) :args :children :contract)])
+                                         (contract/ok :seen "seen"))
+                             :round count-round})]
           (core/submit! eng (list 'peek {:a 1}) {})
           (await (core/tick! eng))
           (core/tick! eng)
@@ -494,7 +496,7 @@
               c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
           (.setOwner (:primitives eng) "tx")
           (await (ctx/call c :x child-job {:rounds 2}))
-          (await (ctx/call c :g (tu/job [(constantly :no-seeds)] count-round) {}))
+          (await (ctx/call c :g (tu/job [(constantly (contract/later :no-seeds "no seeds"))] count-round) {}))
           (await (ctx/call c :s stopping-child {}))
           (let [chain-x ["j9" "j9/x"]]
             (is (= [{:kind :child_started :job "j9/x" :slot :x :chain chain-x}
@@ -1473,7 +1475,7 @@
 
 (def expr-registry
   (merge registry {'twice (tu/job twice-round)
-                   'twice-b (tu/job [(fn [_] (when-not @flag-b :not-ready))] twice-round)
+                   'twice-b (tu/job [(fn [_] (if @flag-b (contract/ok :go "go") (contract/later :not-ready "not ready")))] twice-round)
                    'defaults (assoc (tu/job count-round) :args {:a {:doc "a" :default 1} :b {:doc "b" :default 2}})}))
 
 (defn expr-setup []

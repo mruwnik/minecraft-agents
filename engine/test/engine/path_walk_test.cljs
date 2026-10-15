@@ -32,8 +32,7 @@
         p (tu/fake {:blocks blocks :self {:pos pos}})
         out (atom nil)
         announced (atom [])
-        parent {:conditions []
-                :round (fn ^:async driving-round [c]
+        parent {:round (fn ^:async driving-round [c]
                          (reset! out (await (walk/walk-to! c {:to goal :range 0 :weight 1.2 :timeout-s 60
                                                               :announce! (fn [kind _] (swap! announced conj kind))})))
                          (ctx/end c :done nil))}

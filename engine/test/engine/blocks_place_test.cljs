@@ -22,8 +22,7 @@
   it does not end)."
   [env args n]
   (let [out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) (ctx/end c :done nil)))))}
         eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
@@ -357,8 +356,7 @@
           (let [env (bd/setup {:self body :inventory cobble})
                 _ (.override (.-world (:p env)) "useOn" (fn ^:async f [_ _ _] #js {:status status}))
                 out (atom nil)
-                parent {:conditions []
-                        :round (fn ^:async r [c]
+                parent {:round (fn ^:async r [c]
                                  (let [e (await (ctx/call c :kid use-on {:pos at}))]
                                    (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) (ctx/end c :done nil)))))}
                 eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
@@ -372,8 +370,7 @@
       (fn ^:async t []
         (let [env (bd/setup {:self body :inventory cobble})
               out (atom [])
-              parent {:conditions []
-                      :round (fn ^:async r [c]
+              parent {:round (fn ^:async r [c]
                                (doseq [[j args] [[job {:pos at :item "cobblestone"}] [job {:pos [30 64 0] :item "cobblestone"}]
                                                  [use-on {:pos [30 64 0]}]]]
                                  (swap! out conj (await (ctx/quote c j args))))

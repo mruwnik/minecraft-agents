@@ -32,8 +32,7 @@
   (nil when it does not end); a nil cause is left out."
   [eng job args n]
   (let [out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
                            (if (= :continue e) :continue (do (reset! out (into {} (remove (comp nil? val)) (select-keys e [:kind :cause :data]))) (ctx/end c :done nil)))))}
         eng (assoc-in eng [:jobs 'recording-parent] parent)]

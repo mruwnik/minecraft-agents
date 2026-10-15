@@ -301,8 +301,7 @@
                                                (do (swap! (fake/state p) assoc-in [:self :food] 20) :again)
                                                (await (real c))))]
             (let [out (atom nil)
-                  parent {:conditions []
-                          :round (fn ^:async r [c]
+                  parent {:round (fn ^:async r [c]
                                    (let [e (await (ctx/call c :kid 'jobs.survival.get-food {}))]
                                      (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) (ctx/end c :done nil)))))}
                   eng (assoc-in eng [:jobs 'rec-parent] parent)]
@@ -401,16 +400,14 @@
 (defn counting-child
   "A child that answers :continue n times (counted in its memory), then :done; calls counts every call."
   [n calls]
-  {:conditions []
-   :round (fn ^:async counting-round [c]
+  {:round (fn ^:async counting-round [c]
             (swap! calls inc)
             (let [k (inc (:k (ctx/mem c) 0))]
               (ctx/update-mem! c assoc :k k)
               (if (> k n) (ctx/end c :done nil) :continue)))})
 
 (defn run-parent [kid args opts out]
-  {:conditions []
-   :round (fn ^:async parent-round [c]
+  {:round (fn ^:async parent-round [c]
             (let [r (await (child/run!* c :kid kid args opts))
                   kind (if (map? r) (:kind r) r)]
               (swap! out conj [kind (get-in (ctx/mem c) [:children :kid :k])])
@@ -457,8 +454,7 @@
               args (atom {:a 1})
               kid (counting-child 10 n)
               {:keys [eng]} (setup {})
-              eng (assoc eng :jobs (assoc (:jobs eng) 'p {:conditions []
-                                                          :round (fn ^:async p-round [c]
+              eng (assoc eng :jobs (assoc (:jobs eng) 'p {:round (fn ^:async p-round [c]
                                                                    (await (child/run!* c :kid kid @args {:max-calls 2}))
                                                                    (swap! out conj (get-in (ctx/mem c) [:children :kid :k]))
                                                                    :continue)}))]

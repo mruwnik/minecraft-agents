@@ -737,8 +737,7 @@
   [world args]
   (let [{:keys [eng p]} (setup world)
         out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid 'jobs.items.smelt args))]
                            (if (= :continue e) e (do (reset! out e) (ctx/end c :done nil)))))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
@@ -837,8 +836,7 @@
 
 (def refusing-place
   "A jobs.blocks.place that always refuses, naming the footprint of another plan."
-  {:conditions []
-   :round (fn ^:async refuse [c] (ctx/end c :nothing-possible {:reason :footprint :text "the cell is inside another plan's footprint"}))})
+  {:round (fn ^:async refuse [c] (ctx/end c :nothing-possible {:reason :footprint :text "the cell is inside another plan's footprint"}))})
 
 (deftest a-carried-furnace-that-cannot-be-put-down-names-the-refusal
   (async done

@@ -27,7 +27,6 @@
         args {'jobs.build.clear-box cbt/box 'jobs.build.path pt/box 'jobs.build.from-plan {:plan "pen"}}]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
-      (is (nil? (:conditions job)) (str sym " has no old conditions"))
       (is (some? (:can-run? job)) (str sym " has can-run?"))
       (is (some? (:can-start? job)) (str sym " has can-start?"))
       (is (nil? (:check job)) (str sym " has no old check"))

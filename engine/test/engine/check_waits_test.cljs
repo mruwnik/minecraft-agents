@@ -53,7 +53,7 @@
           (is (= "time-of-day 6000 < 12000" (:text (:observed dusk)))))))))
 
 (deftest the-pilots-check-with-can-start-built-from-the-library
-  (are [sym] (= [true false] [(fn? (get-in registry/jobs [sym :can-start?])) (some? (get-in registry/jobs [sym :conditions]))])
+  (are [sym] (fn? (get-in registry/jobs [sym :can-start?]))
     'jobs.time.wait-for-day
     'jobs.time.wait-for-dusk
     'jobs.survival.sleep

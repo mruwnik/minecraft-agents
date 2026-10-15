@@ -183,8 +183,7 @@
         {:keys [w p] :as world} (sensed-only spec)
         _ (when setup (setup world))
         out (atom :not-done)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
                            (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
         eng (core/create (cond-> {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers {}
@@ -253,8 +252,7 @@
         [_ sink] (tu/legacy-capture-sink)
         {:keys [w]} (sensed-only spec)
         out (atom :not-done)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [r (await (step-off/step-off! c {:x 0 :y 64 :z 0} opts))]
                            (when-not (= :continue r) (reset! out r))
                            (if (= :continue r) :continue (ctx/end c :done nil))))}
@@ -464,11 +462,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [torches (atom :none)
-              child {:conditions []
-                     :round (fn [c] (reset! torches (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory (:primitives c))))))
+              child {:round (fn [c] (reset! torches (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory (:primitives c))))))
                               (ctx/end c :done nil))}
-              parent {:conditions []
-                      :round (fn ^:async r [c]
+              parent {:round (fn ^:async r [c]
                                (let [c (assoc c :unknown true)]
                                  (await (torch/hold-torch! c))
                                  (ctx/update-mem! c assoc :escalation {:step :clear-path :heading [1 0]})
@@ -530,8 +526,7 @@
                                   :states {"5,64,0" {:open true :half "lower" :facing "east"}
                                            "5,65,0" {:open true :half "upper" :facing "east"}}})
         out (atom nil)
-        job {:conditions []
-             :round (fn ^:async door-round [c]
+        job {:round (fn ^:async door-round [c]
                       (reset! out (await (pass/await-open! c {:x 5 :y 64 :z 0})))
                       (ctx/end c :done nil))}
         eng (core/create {:primitives w :jobs (assoc registry/jobs 'door-poll job) :triggers {} :dir (tu/tmp-dir)

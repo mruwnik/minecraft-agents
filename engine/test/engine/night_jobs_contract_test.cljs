@@ -24,8 +24,7 @@
         [seen sink] (tu/legacy-capture-sink)
         _ (reset! seen-events seen)
         out (atom :not-done)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call c :kid job args))]
                            (if (= :continue r) r (do (reset! out r) (ctx/end c :done nil)))))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)

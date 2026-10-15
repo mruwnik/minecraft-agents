@@ -10,8 +10,7 @@
 (defn probe
   "A job that calls go-near! toward pos each round and keeps its outcome in out and its last-walk in walk."
   [out walk pos range & [opts]]
-  {:conditions []
-   :round (fn ^:async probe-round [c]
+  {:round (fn ^:async probe-round [c]
             (let [w (await (near/go-near! c pos range (merge {:zone-tolls true} opts)))]
               (if (= :partial w)
                 :continue
@@ -63,8 +62,7 @@
     ((fn ^:async t []
        (let [{:keys [eng p]} (e/setup {:blocks (floor -2 -3 60 3)})
              firsts (atom [])
-             job {:conditions []
-                  :round (fn ^:async leg-round [c]
+             job {:round (fn ^:async leg-round [c]
                            (swap! firsts conj (await (near/go-near! c {:x 35 :y 64 :z 0} 0 {:spend {:job-time 1} :ways #{:walk :clear-seal}})))
                            (ctx/end c :done nil))}
              eng (assoc eng :jobs (assoc (:jobs eng) 'leg-probe job))]

@@ -27,8 +27,7 @@
   {:kind :cause :data}."
   [world job args]
   (let [out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (core/create {:primitives (tu/seeing-all (tu/fake-on-floor world)) :jobs (assoc registry/jobs 'recording-parent parent)

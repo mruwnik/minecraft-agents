@@ -185,7 +185,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [pauses (atom [])
-              stub {:conditions [] :target []
+              stub {:target []
                     :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
               {:keys [eng p]} (lt/setup {})
               res (await (tu/child-outcome (assoc-in eng [:jobs 'jobs.time.noop] stub) 'jobs.movement.look-around {:every-ms 1500} 20))]

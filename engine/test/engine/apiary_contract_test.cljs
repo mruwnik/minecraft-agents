@@ -16,7 +16,6 @@
 (deftest each-job-exports-the-contract-and-quotes-validly
   (doseq [sym ['jobs.apiary.guard 'jobs.apiary.harvest 'jobs.apiary.maintain]]
     (is (some? (:can-start? (job sym))) (str sym " has can-start?"))
-    (is (nil? (:conditions (job sym))) (str sym " has no old conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))

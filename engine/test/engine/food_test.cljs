@@ -233,8 +233,7 @@
   [world args]
   (let [{:keys [eng]} (setup world)
         out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async r [c]
+        parent {:round (fn ^:async r [c]
                          (let [e (await (ctx/call c :kid 'jobs.survival.eat args))]
                            (reset! out e)
                            (if (= :continue e) :continue (ctx/end c :done nil))))}

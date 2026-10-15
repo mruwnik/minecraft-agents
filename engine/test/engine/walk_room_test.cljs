@@ -22,8 +22,7 @@
   "Runs go-to with args as its child, out its ending; before the first call, the clock moves on ahead-ms."
   [out clock ahead-ms args]
   (let [begun (atom false)]
-    {:conditions []
-     :round (fn ^:async parent-round [c]
+    {:round (fn ^:async parent-round [c]
               (when-not @begun
                 (swap! clock + ahead-ms)
                 (reset! begun true))

@@ -27,8 +27,7 @@
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor (merge {:floor [-5 -20 45 20]} world))
         out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async planning-round [c]
+        parent {:round (fn ^:async planning-round [c]
                          (doseq [t remembered] (threats/remember! c t))
                          (reset! out (await (near/plan! (assoc c :args (or args {})) [40 64 0] 0 :never (wworld/body-policy c) [] false nil nil true dangers)))
                          (ctx/end c :done nil))}

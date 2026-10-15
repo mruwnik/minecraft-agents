@@ -53,11 +53,11 @@
 (defn ^:async eat! [c] (await (ctx/act c :eat #js {:item "bread"})))
 
 (def leaf
-  {:name :leaf :conditions []
+  {:name :leaf
    :round (fn ^:async leaf-round [c] (await (eat! c)) (ctx/update-mem! c assoc :ate true) :continue)})
 
 (def mid
-  {:name :mid :conditions []
+  {:name :mid
    :round (fn ^:async mid-round [c]
             (await (eat! c))
             (await (ctx/call c :b leaf {}))
@@ -70,26 +70,22 @@
         p (tu/fake {:self (assoc fake/default-self :food 2)
                     :inventory [{:name "bread" :count 9} {:name "oak_log" :count 3}]})
         eng (core/create {:primitives p :dir dir :now #(deref clock)
-                          :jobs {'top {:conditions []
-                                       :round (fn ^:async top-round [c]
+                          :jobs {'top {:round (fn ^:async top-round [c]
                                                 (let [n (:n (ctx/mem c) 0)]
                                                   (ctx/update-mem! c assoc :n (inc n))
                                                   (if (zero? n)
                                                     (await (ctx/call c :a mid {}))
                                                     (await (eat! c)))
                                                   :continue))}
-                                 'eats {:conditions []
-                                        :round (fn ^:async eats-round [c] (await (eat! c)) :continue)}
-                                 'timed {:conditions []
-                                         :round (fn ^:async timed-round [c]
+                                 'eats {:round (fn ^:async eats-round [c] (await (eat! c)) :continue)}
+                                 'timed {:round (fn ^:async timed-round [c]
                                                   (swap! clock + 100)
-                                                  (await (ctx/call c :t {:name :slow :conditions []
+                                                  (await (ctx/call c :t {:name :slow
                                                                                :round (fn [c] (swap! clock + 300) (ctx/end c :done nil))}
                                                                          {}))
                                                   (swap! clock + 50)
                                                   (ctx/end c :done nil))}
-                                 'craft {:conditions []
-                                         :round (fn ^:async craft-round [c]
+                                 'craft {:round (fn ^:async craft-round [c]
                                                   (await (ctx/act c :craft #js {:item "oak_planks" :count 4}))
                                                   (ctx/end c :done nil))}}
                           :triggers {}

@@ -577,8 +577,7 @@
   "Run tend with args as a ctx/call child of a recording parent in setup s, at most n ticks: the child's {:kind :cause :data}."
   [s args n]
   (let [out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid 'jobs.farm.tend args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in (:eng s) [:jobs 'recording-parent] parent)]

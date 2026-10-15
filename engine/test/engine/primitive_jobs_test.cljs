@@ -93,7 +93,7 @@
     (is (= :unreachable (:cause (end "unreachable"))))))
 
 (defn drops-to [y]
-  {:conditions [] :defaults {:floor {:health 15}}
+  {:defaults {:floor {:health 15}}
    :round (fn ^:async drop-round [c]
             (swap! world assoc :moved (.-status (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y y :z 9} :maxDropDown 4}))))
             :continue)})
@@ -135,7 +135,7 @@
                  (mapv #(select-keys (:data %) [:cause :most :left]) (job-ev seen :limit_reached)))))))))
 
 (defn places-in-a-section [n]
-  {:conditions [] :defaults {:spend {:items {"cobblestone" 1}}}
+  {:defaults {:spend {:items {"cobblestone" 1}}}
    :round (fn ^:async place-round [c]
             (await (ctx/atomic c :comfort :wall
                                (fn ^:async wall []
@@ -191,7 +191,7 @@
             (is (= 1 (count (completed seen))) k)))))))
 
 (def quoter
-  {:conditions [] :defaults {:spend {:job-time 100}} :args {}
+  {:defaults {:spend {:job-time 100}} :args {}
    :round (fn ^:async quoter-round [c]
             (swap! world assoc :quote (await (ctx/quote c 'jobs.primitive.eat {:item "bread"})))
             (ctx/end c :done nil))})
@@ -207,13 +207,12 @@
           (is (zero? (calls p "eat")) "a quote does not act"))))))
 
 (deftest a-primitive-job-without-what-the-act-needs-is-impossible
-  (let [[_ condition] (first (:conditions (primitive-job/job :place 'jobs.primitive.place)))]
-    (is (= {:reason :bad-args :missing [:pos :item]} (contract/impossible-cause (condition {:args {:pos nil}}))))
-    (is (nil? (condition {:args {:pos {:x 0 :y 64 :z 0} :item "dirt"}})))))
+  (let [can-start? (:can-start? (primitive-job/job :place 'jobs.primitive.place))]
+    (is (= [:never {:reason :bad-args :missing [:pos :item]}] ((juxt first #(dissoc (nth % 2) :text)) (can-start? {:args {:pos nil}}))))
+    (is (= :ok (first (can-start? {:args {:pos {:x 0 :y 64 :z 0} :item "dirt"}}))))))
 
 (defn waits-for [ms]
-  {:conditions []
-   :round (fn ^:async wait-round [c]
+  {:round (fn ^:async wait-round [c]
             (await (ctx/act c :wait #js {:ms ms}))
             (swap! world update :waited (fnil inc 0))
             :continue)})
@@ -245,7 +244,7 @@
                                  (stopped seen))))))))))
 
 (def digs
-  {:conditions [] :defaults {:spend {:wear {"iron_pickaxe" 0}}}
+  {:defaults {:spend {:wear {"iron_pickaxe" 0}}}
    :round (fn ^:async dig-round [c] (await (ctx/act c :dig #js {:pos #js {:x 0 :y 63 :z 0}})) :continue)})
 
 (deftest a-dig-past-the-tool-wear-left-is-refused
@@ -261,7 +260,7 @@
                  (stopped seen))))))))
 
 (defn calls-kid [kid defaults]
-  {:conditions [] :defaults defaults
+  {:defaults defaults
    :round (fn ^:async parent-round [c]
             (await (ctx/call c :kid kid {:spend {:job-time 100}}))
             (swap! world assoc :parent-went-on true)
@@ -279,7 +278,7 @@
                                  (stopped seen))))))))))
 
 (defn cleans-up-with [defaults]
-  {:conditions [] :defaults defaults
+  {:defaults defaults
    :round (fn ^:async cleanup-round [c]
             (fake/swap-self! (:primitives c) assoc :health 11)
             (try

@@ -9,7 +9,7 @@
             [engine.test-util :as tu]))
 
 (def pauser
-  {:conditions [] :target []
+  {:target []
    :round (fn ^:async pauser-round [c]
             (let [e (await (ctx/call c :pause 'jobs.time.noop {:seconds (or (:seconds (:args c)) 25) :why :testing}))]
               (ctx/end c :done nil {:pause (:kind e)})))})

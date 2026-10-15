@@ -25,15 +25,15 @@
 (defn leaf
   "[def args] for job symbol sym with args merged over its defaults (a declared group key by key) and conformed by
   its spec (engine.args: positions become {:x :y :z}); the call keys (engine.contract/call-keys) are checked apart.
-  Throws when sym is not in the registry, is no contract job (a round and conditions, can-start? or can-run?) or a value does not fit."
+  Throws when sym is not in the registry, is no contract job (a round and can-start? or can-run?, or no old check) or a value does not fit."
   [registry sym args]
   (let [entry (get registry sym)
         data (:args entry)
         args (legacy/given-args entry args)]
     (cond
       (nil? entry) (throw (ex-info (str "unknown job " sym) {:job sym}))
-      (not (and (or (some some? ((juxt :conditions :can-start? :can-run?) entry)) (nil? (:check entry)) (:engine.core.ending/wrapped entry)) (fn? (:round entry))))
-      (throw (ex-info (str "job " sym " needs a round and no old check, or conditions, can-start? or can-run?") {:job sym}))
+      (not (and (or (some some? ((juxt :can-start? :can-run?) entry)) (nil? (:check entry)) (:engine.core.ending/wrapped entry)) (fn? (:round entry))))
+      (throw (ex-info (str "job " sym " needs a round and no old check, or can-start? or can-run?") {:job sym}))
       :else (if-let [problem (contract/call-problem sym (:ways entry) args)]
               (fail problem args)
               (try [entry (a/conform sym data (a/merge-args data (a/defaults data) args))]

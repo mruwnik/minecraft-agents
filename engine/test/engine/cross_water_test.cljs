@@ -130,8 +130,7 @@
   [world land]
   (let [{:keys [eng p seen]} (lt/setup world)
         out (atom :not-done)
-        parent {:conditions []
-                :round (fn ^:async saving-round [c]
+        parent {:round (fn ^:async saving-round [c]
                          (when-not (seq (ctx/entries c cw/crossing-kind))
                            (ctx/remember! c cw/crossing-kind {:job (:root c) :land land} cw/crossing-policy))
                          (await ((:round (tu/recording-parent 'jobs.movement.cross-water {} out)) c)))}

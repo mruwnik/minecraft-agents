@@ -203,8 +203,8 @@
         p (or (:p opts) (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans))))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
-        parent (assoc (tu/recording-parent job args out (if (:raw opts) identity tu/outcome))
-                      :conditions (if (:raw opts) [] [[:fn #(ctx/child-wait % :kid job args)]]))
+        parent (cond-> (tu/recording-parent job args out (if (:raw opts) identity tu/outcome))
+                 (not (:raw opts)) (assoc :can-start? #(ctx/child-status % :kid job args)))
         eng (core/create {:primitives p :jobs (merge registry/jobs {'recording-parent parent} (:jobs opts))
                           :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -672,7 +672,7 @@
 (defn get-tool-stub
   "A jobs.items.get-tool that records its args in calls and hands over give (a pickaxe name) or, when nil, stops :no-source."
   [calls p give]
-  {:ways [:chest :craft :gather] :conditions []
+  {:ways [:chest :craft :gather]
    :round (fn ^:async get-tool [c]
             (swap! calls conj (:args c))
             (if give

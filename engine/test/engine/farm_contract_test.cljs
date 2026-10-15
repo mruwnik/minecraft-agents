@@ -26,7 +26,6 @@
             :let [job (get registry/jobs sym)]]
       (is (nil? (:check job)) (str sym " is a contract job"))
       (is (nil? (:check job)) (str sym " has no old check"))
-      (is (nil? (:conditions job)) (str sym " has no conditions"))
       (is (vector? (:target job)) (str sym " has a target"))
       (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args (get args sym)}))) (str sym)))))
 
@@ -35,8 +34,7 @@
   when it does not end)."
   [{:keys [eng]} job args n]
   (let [out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in eng [:jobs 'recording-parent] parent)]

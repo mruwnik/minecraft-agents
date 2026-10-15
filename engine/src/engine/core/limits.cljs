@@ -127,3 +127,6 @@
   "Why the call of contract ctx c, (call-fn), may not start or go on now: {:floor :min}."
   [c call-fn]
   (contract/below-floor (call-fn) (levels (:primitives c))))
+
+(defn floor-wait "floor-cause {:floor line :min f} as a wait reason {:reason line :cause}." [cause]
+  {:reason (:floor cause) :cause cause})

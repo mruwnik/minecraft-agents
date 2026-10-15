@@ -1,12 +1,12 @@
 (ns engine.deposit-test
   "jobs.storage.deposit against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.contract :as contract]
+            [cljs.test :refer [deftest is async]]
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.core :as core]
             [engine.core.ending :as ending]
             [engine.ctx :as ctx]
-            [jobs.blocks.place :as place]
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.triggers :as triggers]
@@ -244,12 +244,12 @@
           ;; the first spot answers declined once (as a place check that waits would)
           (let [refused (atom #{})
                 eng (assoc-in eng [:jobs 'jobs.blocks.place]
-                              (ending/wrap (assoc place-fn :conditions
-                                     [[:fn (fn [c]
-                                             (let [pos (storage/cell-of (:pos (:args c)))]
-                                               (if (= [11 64 0] pos)
-                                                 (do (swap! refused conj pos) {:reason :not-allowed :pos pos})
-                                                 (place/problem c))))]])))
+                              (ending/wrap (assoc place-fn :can-start?
+                                     (fn [c]
+                                       (let [pos (storage/cell-of (:pos (:args c)))]
+                                         (if (= [11 64 0] pos)
+                                           (do (swap! refused conj pos) (contract/later :not-allowed "claimed" :pos pos))
+                                           ((:can-start? place-fn) c)))))))
                 result (await (wt/ending-of eng job {:items ["dirt"]} 60))
                 new-cells (disj (chests-in p) [10 64 0])]
             (is (= {:kind :done} result))
@@ -304,7 +304,7 @@
           (wt/know-place! eng :chest chest)
           (full-at p [10 64 0])
           (let [eng (assoc-in eng [:jobs 'jobs.blocks.place]
-                              (ending/wrap (assoc place-fn :conditions [[:fn (fn [c] {:reason :not-allowed :pos (storage/cell-of (:pos (:args c)))})]])))
+                              (ending/wrap (assoc place-fn :can-start? (fn [c] (contract/later :not-allowed "claimed" :pos (storage/cell-of (:pos (:args c))))))))
                 result (await (wt/ending-of eng job {:items ["dirt"]} 80))]
             (is (= {:kind :nothing-possible :cause :no-chest-spot} (select-keys result [:kind :cause])))
             (is (= #{[10 64 0]} (chests-in p)))))))))

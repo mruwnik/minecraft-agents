@@ -1,7 +1,8 @@
 (ns engine.go-to-escalate-test
   "jobs.movement.go-to escalation (pillar, stair, clear-path, a walk to a wall) and jobs.lib.escape, against the fake
   world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.contract :as contract]
+            [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.go-to-test :as gt]
@@ -35,8 +36,7 @@
 (defn recording-parent
   "A parent that runs job with args as its child and keeps the child's result in out."
   [out job args]
-  {:conditions []
-   :round (fn ^:async recording-round [c]
+  {:round (fn ^:async recording-round [c]
             (let [e (await (ctx/call c :kid job args))]
               (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))})
 
@@ -989,7 +989,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [place (get registry/jobs 'jobs.blocks.place)
-              flaky (assoc place :conditions [[:fn (constantly :flaky)]])
+              flaky (assoc place :can-start? (constantly (contract/later :flaky "flaky")))
               {:keys [out p seen eng]} (with-redefs [registry/jobs (assoc registry/jobs 'jobs.blocks.place flaky)]
                                          (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
                                                           'jobs.movement.go-to (merge {:pos [10 64 0] :range 1 :ways #{:walk :stair}} trespass) foreign)))

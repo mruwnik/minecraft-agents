@@ -46,8 +46,7 @@
   "Run the night with args as a ctx/call child of a recording parent on eng: the child's {:kind :cause :data}."
   [eng args]
   (let [out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid night-job args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in eng [:jobs 'recording-parent] parent)]

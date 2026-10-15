@@ -13,10 +13,9 @@
     jobs.storage.deposit jobs.storage.haul jobs.storage.kit jobs.storage.make-room jobs.storage.withdraw
     jobs.food.fish jobs.memory.forget-place jobs.memory.remember jobs.memory.set-place])
 
-(deftest no-job-of-the-area-keeps-the-old-conditions
+(deftest every-job-of-the-area-has-a-check
   (doseq [sym area
           :let [job (get registry/jobs sym)]]
-    (is (nil? (:conditions job)) (str sym " has no conditions"))
     (is (some some? ((juxt :can-start? :can-run?) job)) (str sym " has a check"))))
 
 (defn view-with

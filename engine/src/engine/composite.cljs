@@ -42,7 +42,7 @@
   [c s]
   (cond
     (= :never (first s)) (ctx/end c :impossible (contract/status-cause s))
-    (:reflex c) (let [w (ctx/old-wait s)] (ctx/end c :condition-failed (if (= [:reason] (keys w)) (:reason w) w)))
+    (:reflex c) (ctx/end c :condition-failed (contract/status-cause s))
     :else :continue))
 
 (defn ^:async call

@@ -764,8 +764,7 @@
 
 (def standing-go-to
   "A go-to whose walk stands searching: it ends a leg at once, the body where it was."
-  (fn [n] {:conditions []
-           :ways (:ways (get registry/jobs 'jobs.movement.go-to))
+  (fn [n] {:ways (:ways (get registry/jobs 'jobs.movement.go-to))
            :round (fn ^:async stand [c] (swap! n inc) (ctx/end c :limit-reached {:reason :leg :line :job-time} {:arrived false :leg true}))}))
 
 

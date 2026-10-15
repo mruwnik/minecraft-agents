@@ -431,8 +431,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 1 0)]})
               hits (atom 0)
-              hurting {:conditions []
-                       :round (fn ^:async hurt-yield [_c]
+              hurting {:round (fn ^:async hurt-yield [_c]
                                 (swap! hits inc)
                                 (fake/swap-self! p update :health dec)
                                 (when (= 6 @hits) (swap! (fake/state p) assoc :entities []))
@@ -449,8 +448,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 1 0)]})
               hits (atom 0)
-              pausing {:conditions []
-                       :round (fn ^:async pause [c]
+              pausing {:round (fn ^:async pause [c]
                                 (swap! hits inc)
                                 (ctx/update-mem! c update-in [:struck 7 :hits] (fnil inc 0))
                                 (when (= 6 @hits) (swap! (fake/state p) assoc :entities []))
@@ -467,8 +465,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 1 0)]})
               calls (atom 0)
-              blink {:conditions []
-                     :round (fn ^:async blink [c]
+              blink {:round (fn ^:async blink [c]
                               (let [n (swap! calls inc)
                                     es (:entities @(fake/state p))]
                                 (swap! (fake/state p) assoc :entities [])
@@ -485,8 +482,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:health 20} :inventory [{:name "stone_sword" :count 1}] :entities [(zombie 7 1 0)]})
               fights (atom 0)
-              hitter {:conditions []
-                      :round (fn ^:async hit [c]
+              hitter {:round (fn ^:async hit [c]
                                (swap! fights inc)
                                (ctx/update-mem! c assoc-in [:struck 7] {:hits 3 :health 2})
                                (swap! (fake/state p) assoc :entities [])

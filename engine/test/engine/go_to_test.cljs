@@ -61,8 +61,7 @@
 (defn recording-parent
   "A parent that runs go-to with args as its child (ctx/call) and keeps the child's result (result-of) in out."
   [out args]
-  {:conditions []
-   :round (fn ^:async recording-round [c]
+  {:round (fn ^:async recording-round [c]
             (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
               (if (= :continue e)
                 :continue
@@ -595,8 +594,7 @@
   "A parent that calls go-to with args as its child, keeps every call's return in returns and the child's result in out.
   seed, when given, is put in the child's memory before its first call (a stale hint left by an earlier round)."
   [out returns args seed]
-  {:conditions []
-   :round (fn ^:async returns-round [c]
+  {:round (fn ^:async returns-round [c]
             (when (and seed (empty? @returns) (nil? (get-in (ctx/mem c) [:children :kid])))
               (ctx/update-mem! c assoc-in [:children :kid] (merge {:args args :children {}} seed)))
             (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))
@@ -963,8 +961,7 @@
               opens (atom [])
               {:keys [eng]} (setup {:blocks flat})
               eng (assoc eng :jobs (assoc (:jobs eng) 'open-parent
-                                          {:conditions []
-                                           :round (fn ^:async open-round [c]
+                                          {:round (fn ^:async open-round [c]
                                                     (let [r (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0}))]
                                                       (swap! opens conj (get-in (ctx/mem c) [:children :kid :open] :none))
                                                       (if (= :continue r) r (ctx/end c :done nil))))}))]

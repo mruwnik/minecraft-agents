@@ -34,7 +34,7 @@
 (defn hurt! [c health] (fake/swap-self! (:primitives c) assoc :health health))
 
 (def slow
-  {:conditions [] :defaults {:spend {:job-time 5}}
+  {:defaults {:spend {:job-time 5}}
    :round (fn [_] (swap! clock + 6000) (swap! world update :slow-rounds (fnil inc 0)) :continue)})
 
 (deftest its-own-clock-ends-a-job-past-its-time
@@ -49,8 +49,7 @@
           (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen))))))))
 
 (def waits
-  {:conditions []
-   :round (fn [_] (swap! world update :wait-rounds (fnil inc 0)) :continue)})
+  {:round (fn [_] (swap! world update :wait-rounds (fnil inc 0)) :continue)})
 
 (deftest waiting-spends-no-time-but-counts-as-elapsed-from-the-start
   (async done
@@ -97,15 +96,14 @@
           (is (= {:kind :limit-reached :cause {:line :job-time :spend 4}} (stopped seen))))))))
 
 (def counted
-  (assoc slow :done? (fn [_] (if (when-let [n (:done-throws @world)] (>= (:slow-rounds @world 0) n)) (throw (js/Error. "boom")) {:done? false :units :cells :done 5 :left 3 :data {:dug [1 2]}}))))
+  (assoc slow :done? (fn [_] (if (when-let [n (:done-throws @world)] (>= (:slow-rounds @world 0) n)) (throw (js/Error. "boom")) (contract/later :not-done "not done" :units :cells :done 5 :left 3 :result {:dug [1 2]})))))
 
 (deftest a-limit-ending-reports-the-units-done-and-left-and-the-jobs-data
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'counted counted
-                                         'top {:conditions []
-                                               :round (fn ^:async top [c]
+                                         'top {:round (fn ^:async top [c]
                                                         (let [e (await (ctx/call c :kid 'counted {:least 6}))]
                                                           (if (= :continue e)
                                                             :continue
@@ -144,8 +142,7 @@
 ;; ---------------------------------------------------------------- handed down
 
 (defn kid [f]
-  {:conditions []
-   :round (fn ^:async kid-round [c]
+  {:round (fn ^:async kid-round [c]
             (swap! world assoc :kid-call (ctx/frozen-call c))
             (await (f c))
             (await (look! c))
@@ -153,8 +150,7 @@
             :continue)})
 
 (defn caller [kid-def kid-args]
-  {:conditions []
-   :round (fn ^:async caller-round [c]
+  {:round (fn ^:async caller-round [c]
             (let [e (await (ctx/call c :kid kid-def kid-args))]
               (swap! world assoc :kid-ending e)
               :continue))})
@@ -240,7 +236,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [careful {:conditions [] :defaults {:floor {:health ::min-health}} :settings {::min-health {:default 10}}
+        (let [careful {:defaults {:floor {:health ::min-health}} :settings {::min-health {:default 10}}
                        :round (fn [_] (swap! world update :careful-rounds (fnil inc 0)) :continue)}
               {:keys [eng seen p]} (setup {'careful careful})]
           (fake/swap-self! p assoc :health 8)
@@ -259,7 +255,7 @@
 ;; ---------------------------------------------------------------- unwinding
 
 (def cleans-up
-  {:conditions [] :defaults {:floor {:health 12}}
+  {:defaults {:floor {:health 12}}
    :round (fn ^:async cleans-up-round [c]
             (hurt! c 11)
             (try
@@ -288,7 +284,7 @@
           (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))
 
 (def shuts-the-door
-  {:conditions [] :defaults {:floor {:health 12}}
+  {:defaults {:floor {:health 12}}
    :round (fn ^:async door-round [c]
             (hurt! c 11)
             (await (ctx/atomic c :comfort :door (fn ^:async door [] (await (look! c)) (await (look! c)))))

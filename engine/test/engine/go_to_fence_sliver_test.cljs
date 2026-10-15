@@ -13,8 +13,7 @@
   [world first second]
   (let [{:keys [eng clock] :as s} (gd/setup world [])
         outs (atom [])
-        parent {:conditions []
-                :round (fn ^:async two-walks-round [c]
+        parent {:round (fn ^:async two-walks-round [c]
                          (let [r (await (ctx/call c :a 'jobs.movement.go-to first))]
                            (if (= :continue r)
                              r

@@ -96,8 +96,7 @@
         tun (atom :not-done)
         out (atom :not-done)
         w (world/of-data {} {} (get spec :zones []))
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (if-let [t (:tunnel (ctx/mem c))]
                            (let [r (await (ctx/call c :kid job (assoc largs :tunnel t)))]
                              (if (= :continue r) r (do (reset! out (tu/outcome r)) (ctx/end c :done nil))))
@@ -376,7 +375,7 @@
       (fn ^:async t []
         (let [calls (atom [])
               body (atom nil)
-              stub {:ways [:chest :craft :gather] :conditions []
+              stub {:ways [:chest :craft :gather]
                     :round (fn ^:async get-tool [c]
                              (swap! calls conj (:args c))
                              (fake/add-item! @body "iron_pickaxe" 1)
@@ -396,7 +395,7 @@
       (fn ^:async t []
         (let [calls (atom [])
               body (atom nil)
-              stub {:ways [:chest :craft :gather] :conditions []
+              stub {:ways [:chest :craft :gather]
                     :round (fn ^:async get-tool [c]
                              (swap! calls conj (:args c))
                              (fake/add-item! @body "iron_pickaxe" 1)
@@ -416,7 +415,7 @@
       (fn ^:async t []
         (let [calls (atom [])
               body (atom nil)
-              stub {:ways [:chest :craft :gather] :conditions []
+              stub {:ways [:chest :craft :gather]
                     :round (fn ^:async get-tool [c]
                              (swap! calls conj (:args c))
                              (fake/add-item! @body "iron_pickaxe" 1)

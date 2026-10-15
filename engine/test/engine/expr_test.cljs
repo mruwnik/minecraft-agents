@@ -8,15 +8,15 @@
 (defn ^:async noop-round [_] :done)
 
 (def reg
-  {'jobs.a {:conditions [] :round noop-round
+  {'jobs.a {:round noop-round
             :args {:n {:doc "n" :default 1} :m {:doc "m" :default 2}}}
-   'jobs.p {:conditions [] :round noop-round
+   'jobs.p {:round noop-round
             :args (a/declare! 'jobs.p {:at {:doc "cell" :spec ::a/pos :default nil} :n {:doc "n" :spec number? :default 1}})}
-   'jobs.t {:conditions [] :round noop-round
+   'jobs.t {:round noop-round
             :args (a/declare! 'jobs.t {:k {:spec keyword?} :i {:spec (a/int-in nil nil)} :x {:spec (a/num-in 0 10)} :b {:spec boolean?}
                                        :s {:spec string?} :it {:spec a/item?} :e {:spec #{:a :b}} :u {:doc "any map" :spec map?}})}
-   'jobs.b {:conditions [] :round noop-round :args nil}
-   'jobs.free {:conditions [] :round noop-round}})
+   'jobs.b {:round noop-round :args nil}
+   'jobs.free {:round noop-round}})
 
 (defn problem [form]
   (try (expr/parse-spec reg form) nil
@@ -123,7 +123,7 @@
     :e :c #"jobs.t :e must be one of :a, :b, got :c"))
 
 (deftest a-default-of-the-wrong-type-is-refused-too
-  (let [r {'jobs.d {:conditions [] :round noop-round :args (a/declare! 'jobs.d {:n {:spec (a/int-in nil nil) :default "x"}})}}]
+  (let [r {'jobs.d {:round noop-round :args (a/declare! 'jobs.d {:n {:spec (a/int-in nil nil) :default "x"}})}}]
     (is (re-find #"jobs.d :n must be a whole number" (try (expr/parse-spec r '(jobs.d)) nil (catch :default e (ex-message e)))))))
 
 (def pos-args

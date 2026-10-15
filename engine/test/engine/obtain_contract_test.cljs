@@ -20,8 +20,7 @@
   "What job quotes for args, asked by a parent's round."
   [{:keys [eng]} job args]
   (let [out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async quoting-round [c] (reset! out (await (ctx/quote c job args))) (ctx/end c :done nil))}
+        parent {:round (fn ^:async quoting-round [c] (reset! out (await (ctx/quote c job args))) (ctx/end c :done nil))}
         eng (assoc-in eng [:jobs 'quoting-parent] parent)]
     (core/submit! eng '(quoting-parent) {})
     (await (tu/run-until-empty eng 5))
@@ -113,8 +112,7 @@
           (let [runs (atom 0)
                 mine (assoc (get registry/jobs 'jobs.gather.mine) :round (fn ^:async stuck [c] (swap! runs inc) (ctx/end c :nothing-possible cause {:got 0})))
                 out (atom nil)
-                parent {:conditions []
-                        :round (fn ^:async recording-round [c]
+                parent {:round (fn ^:async recording-round [c]
                                  (let [e (await (ctx/call c :kid 'jobs.items.obtain {:item "raw_iron" :explore false}))]
                                    (if (= :continue e) :continue (do (reset! out e) (ctx/end c :done nil)))))}
                 s (with-redefs [registry/jobs (assoc registry/jobs 'jobs.gather.mine mine 'recording-parent parent)]

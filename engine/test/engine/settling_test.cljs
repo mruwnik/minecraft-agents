@@ -35,9 +35,9 @@
 
 (def jobs
   (merge registry/jobs
-         {'respawn-stopped {:conditions [] :round respawn-stopped-round}
-          'respawn-away {:conditions [] :round respawn-round}
-          'nop {:conditions [] :round #(ctx/end % :done nil)}}))
+         {'respawn-stopped {:round respawn-stopped-round}
+          'respawn-away {:round respawn-round}
+          'nop {:round #(ctx/end % :done nil)}}))
 
 (def triggers
   (merge real-triggers/all

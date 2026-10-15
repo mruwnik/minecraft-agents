@@ -543,7 +543,7 @@
     (is (not-any? #(contains? (event-api/catalog-entry eng "job" "jobs.demo.old") %) [:target :ways :defaults]))))
 
 (def quoted-job
-  {:conditions [] :args {:pos {:doc "where" :default nil}} :target [:pos]
+  {:args {:pos {:doc "where" :default nil}} :target [:pos]
    :quote-of (fn [_] {:uses {:job-time [1 2 3]}})
    :round (fn [c] (ctx/end c :done nil))})
 

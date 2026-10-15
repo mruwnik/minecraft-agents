@@ -38,10 +38,10 @@
 (def always (constantly true))
 
 (def jobs
-  {'eat {:conditions [] :round (fn ^:async eat [c] (await (ctx/act c :eat #js {})) (ctx/end c :done nil))}
-   'section-then-walk {:conditions [] :round section-then-walk}
-   'nested {:conditions [] :round nested}
-   'two-sections {:conditions [] :round two-sections}})
+  {'eat {:round (fn ^:async eat [c] (await (ctx/act c :eat #js {})) (ctx/end c :done nil))}
+   'section-then-walk {:round section-then-walk}
+   'nested {:round nested}
+   'two-sections {:round two-sections}})
 
 (defn food [w] (.-food (.self w)))
 

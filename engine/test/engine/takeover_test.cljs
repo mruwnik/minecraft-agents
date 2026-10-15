@@ -26,9 +26,9 @@
 
 (def jobs
   (merge registry/jobs
-         {'walk {:conditions [] :round walk-round}
-          'eat-up {:conditions [] :round eat-round}
-          'nop {:conditions [] :round #(ctx/end % :done nil)}}))
+         {'walk {:round walk-round}
+          'eat-up {:round eat-round}
+          'nop {:round #(ctx/end % :done nil)}}))
 
 (def triggers
   (merge real-triggers/all

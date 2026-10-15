@@ -1,6 +1,7 @@
 (ns engine.apiary-maintain-test
   "jobs.apiary.maintain against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.contract :as contract]
+            [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.hostile-test :as h]
@@ -193,8 +194,7 @@
       (fn ^:async t []
         (let [runs (atom 0)
               boom (fn [jobs] (assoc jobs 'jobs.apiary.harvest
-                                     {:conditions []
-                                      :round (fn [_c] (swap! runs inc) (throw (js/Error. "boom")))}))
+                                     {:round (fn [_c] (swap! runs inc) (throw (js/Error. "boom")))}))
               s (await (scenario {:chest chest} (world {:inventory (into kit (inv "honey_bottle" 2)) :chest? true}) 60 boom))]
           (is (= 1 @runs))
           (is (= :failed (:skipped (step s :harvest))))
@@ -257,7 +257,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [waits (fn [jobs] (assoc jobs 'jobs.apiary.harvest (tu/job [(constantly {:reason :boom})] nil)))
+        (let [waits (fn [jobs] (assoc jobs 'jobs.apiary.harvest (tu/job [(constantly (contract/later :boom "boom"))] nil)))
               s (await (scenario {} (world {:inventory kit}) 30 waits))]
           (is (= {:skipped :declined :reason :boom} (step s :harvest))))))))
 
@@ -269,7 +269,7 @@
         (let [got (atom {})
               spy (fn [jobs] (reduce (fn [jobs k]
                                        (assoc jobs (symbol (str "jobs.apiary." (name k)))
-                                              {:conditions [] :round (fn [c] (swap! got assoc k (:fetch (:args c))) (ctx/end c :done nil))}))
+                                              {:round (fn [c] (swap! got assoc k (:fetch (:args c))) (ctx/end c :done nil))}))
                                      jobs [:guard :harvest]))
               w (quiet-world (world {:inventory (inv "stick" 1)}))
               _ (await (scenario {} w 10 spy))
@@ -285,7 +285,7 @@
       (fn ^:async t []
         (let [n (atom 0)
               waits (fn [jobs] (assoc jobs 'jobs.apiary.harvest
-                                      (tu/job [(fn [_] {:reason (keyword (str "wait-" (swap! n inc)))})] nil)))
+                                      (tu/job [(fn [_] (contract/later (keyword (str "wait-" (swap! n inc))) "waits"))] nil)))
               s (await (scenario {} (world {:inventory kit}) 30 waits))
               reason (:reason (step s :harvest))]
           (is (= "wait-" (subs (name reason) 0 5)))
@@ -295,7 +295,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [waits (fn [jobs] (assoc jobs 'jobs.apiary.harvest (tu/job [(constantly {:reason :boom})] nil)))
+        (let [waits (fn [jobs] (assoc jobs 'jobs.apiary.harvest (tu/job [(constantly (contract/later :boom "boom"))] nil)))
               s (await (scenario {} (quiet-world (world {:inventory (inv "shears" 1)})) 30 waits))]
           (is (nil? (done-event s)) "the report is not a maintain.done")
           (is (true? (finished? s)))

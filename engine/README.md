@@ -205,7 +205,7 @@ built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to t
 
 ## Jobs
 
-A job is a namespace under `src/jobs/` exporting `round` (and `conditions`, `can-start?`, `can-run?`, each defaulting to `:ok`; Contract jobs below), and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
+A job is a namespace under `src/jobs/` exporting `round` (and `can-start?`, `can-run?`, each defaulting to `:ok`; Contract jobs below), and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
 `body.idle`). The namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
 
 ```clojure
@@ -216,7 +216,6 @@ A job is a namespace under `src/jobs/` exporting `round` (and `conditions`, `can
 (def doc "Eat the best food carried.")                       ; optional
 (a/defargs args                                              ; optional
   {:item {:doc "the food to eat" :default nil :spec a/item?}})
-(def conditions [])                                          ; [[:fn f] ...], f: ctx -> nil or a cause
 (defn ^:async round [c]                                      ; ctx -> :continue | an ending (ctx/end)
   (await (ctx/act c :eat #js {}))
   (ctx/end c :done nil))
@@ -224,10 +223,10 @@ A job is a namespace under `src/jobs/` exporting `round` (and `conditions`, `can
 
 **Args.** `engine.args/defargs` declares args as cljs.spec: every arg has a `:spec`, a predicate of `engine.args` (`int-in`, `num-in`, `pos-num?`, `item?`, `name?`, `position?`, `box?`, `coll-of`, `set-of`, `map-of`, `map-with`, `or-of`, `valid-by`), a set of the allowed values, a core predicate (`boolean?`, `string?`, `keyword?`, `map?` ...) or `::a/pos` (`[x y z]` or `{:x :y :z}`, conformed to `{:x :y :z}`). A group `{:doc :keys {k entry}}` is a nested map of args; a caller's group merges over its defaults key by key. nil = unset. At submit undeclared keys are refused at every level, then the args are conformed; a misfit is refused as one line naming job, key path, what the spec wants and the value (`jobs.x :risk :min-health must be a whole number from 1 to 20, got 30`). A child call (`ctx/call-child`) and a restore conform the same way. A predicate built with `a/pred` carries its want text; the catalog shows each `:spec` as that text. `(a/declare! sym data)` registers a hand-built job's args (tests).
 
-There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:conditions :round :doc :args}}`,
+There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:can-start? :round :doc :args}}`,
 built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
-that defines `round` and no old `check`, or `round` and one of `conditions`, `can-start?`, `can-run?` (others are helpers), fails the compile when such a file's `ns` does not match its
-path or a file defines `round` and `check` but none of those, and the macro `engine.registry/job-registry` emits the map, with each `engine.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args). `conditions` and `round` must be top-level `def`/`defn` forms, and a job must not
+that defines `round` and no old `check`, or `round` and `can-start?` or `can-run?` (others are helpers), fails the compile when such a file's `ns` does not match its
+path or a file defines `round` and `check` but none of those, and the macro `engine.registry/job-registry` emits the map, with each `engine.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args). The exports must be top-level `def`/`defn` forms, and a job must not
 require `engine.registry`.
 
 - **round**: returns `:continue` or an ending (`ctx/end`, Contract jobs below; the job leaves the list, its memory is
@@ -276,7 +275,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/left ctx)` | what is left of the call's limits and its callers' (each line the least): `{:spend {line n} :floor {line n} :deadline ms}` |
 | `(await (ctx/quote ctx job args quote-deadline?))` | what a call would use and yield (Quotes), or the `:duplicate-call` ending |
 | `(await (ctx/next-way ctx quote-of-way thing?))` | `{:way k :dropped {way why}}`, the next way to try (Quotes) |
-| `(ctx/check-status ctx def)`, `(ctx/child-status ctx slot job args)`, `check-wait`/`child-wait` (the same as an old wait) | the status def (the child in slot) would start with now; `jobs.lib.pace/steps!` also asks `(ctx/can-run ctx)` between steps |
+| `(ctx/check-status ctx def)`, `(ctx/child-status ctx slot job args)` | the status def (the child in slot) would start with now; `jobs.lib.pace/steps!` also asks `(ctx/can-run ctx)` between steps |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
 | `(ctx/submit! ctx spec opts)` | put a peer job at the end of the list; returns its id |
@@ -296,7 +295,7 @@ a round's time to its own frame (`:job-time`, time spent); `:wall-time` is the w
 started, yields and waits included (both spend lines). Endings and a root's `completed`/`stopped`/`cancelled`/`reflex.ended` carry `:report`;
 a finished job's goes to body memory `:job-report` (cap 256), with its ending's `:kind` and `:cause`.
 
-**Contract jobs.** Export `conditions` and `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
+**Contract jobs.** Export `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
 `defaults` (a settings key value reads the setting; a fn value is called with the args, the catalog shows `:from-args`), `done?`,
 `cleanup` (`(cleanup ctx ending)`, `:continue` or an ending; `engine.core.cleanup`): run once however a started job ends
 (limit, parent's end or cancel; innermost first; not on a reflex cut, death or restart), before the caller sees the ending,
@@ -307,12 +306,8 @@ leave on `:continue`: ending `:cut-off :ended`) and a call-child child run their
 (`:ok :later :never :look`, data with `:reason`; `contract/ok|later|never|look`; an ending's cause is data plus `:text`).
 `can-start?` (until the start) and `can-run?` (every round, between steps) give one (none: `:ok`): `:later` waits (a
 called child ends `:condition-failed`; from `can-run?` it yields, bounded by the call's limits; a reflex ends
-`:condition-failed`), `:never` ends `:impossible`, `:look` looks once (aimed first at the cells in its `:look-at`), then counts as `:later`. Old conditions are read
-as statuses. A condition
-`[:fn f]` gives nil (start), a cause (skip: a listed job not started stays queued and waits, else `:condition-failed`),
-`(contract/impossible cause)` (ends `:impossible`, the job leaves the queue) or `(contract/look-first cause)` (the
-engine looks round once, hook `:look/around`, then asks again). Checks of current state are `jobs.lib.cond` fns
-(Conditions): `(def can-start? (cond/because :day-not-come (cond/daytime)))`. Job-only checks are `jobs.lib.checks` fns (`checks/low-health`). Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` returns a status with data `{:units :done :left :result}`; it is asked before every round and between steps (`pace/steps!`), ahead of every check (an old condition's impossible and, before the start, a can-start? `:never :bad-args` aside; a throw counts as not done, warn `job.done_failed`; once per round): `:ok` ends the job `:done` (`:already` before the start, which never waits), its `:result` and text the ending's data; a job may also end `:done` itself; a goal that holds while a child is under way is `:later` (`checks/child-under-way?`: the child still wraps up); an old `{:done? bool}` map is asked before the start only; done?'s units go in the `:report` of every ending but an impossible or `:duplicate-call` one, and its `:result` is the data of a `:limit-reached` or `:cut-off` ending without its own (a cancel too, from the last status asked: a cancel asks nothing and never fails); a reflex run that ends `:already` is fruitless (backoff); endings are `{:kind :cause :because :report :data}`. A
+`:condition-failed`), `:never` ends `:impossible`, `:look` looks once (aimed first at the cells in its `:look-at`), then counts as `:later` (hook `:look/around`). Any other return is an error naming the export and the job. Checks of current state are `jobs.lib.cond` fns
+(Conditions): `(def can-start? (cond/because :day-not-come (cond/daytime)))`. Job-only checks are `jobs.lib.checks` fns (`checks/low-health`). `:never` only for args, game data or counts that only grow. `done?` returns a status with data `{:units :done :left :result}`; it is asked before every round and between steps (`pace/steps!`), ahead of every check (before the start a can-start? `:never :bad-args` aside; a throw counts as not done, warn `job.done_failed`; once per round): `:ok` ends the job `:done` (`:already` before the start, which never waits), its `:result` and text the ending's data; a job may also end `:done` itself; a goal that holds while a child is under way is `:later` (`checks/child-under-way?`: the child still wraps up); done?'s units go in the `:report` of every ending but an impossible or `:duplicate-call` one, and its `:result` is the data of a `:limit-reached` or `:cut-off` ending without its own (a cancel too, from the last status asked: a cancel asks nothing and never fails); a reflex run that ends `:already` is fruitless (backoff); endings are `{:kind :cause :because :report :data}`. A
 
 **Quotes (engine.core.quote).** `{:uses {:job-time fig :health fig :food fig :items {name fig} :wear {tool fig}} :yields
 {:items {name fig}} :done fig :moves-to [x y z]}`, fig `[least mean most]` (`##Inf` allowed). `quote-of` runs token-less

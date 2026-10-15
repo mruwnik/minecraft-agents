@@ -22,7 +22,6 @@
                       ['jobs.village.trade {:villager "v-1" :buy "bread" :count 2}]
                       ['jobs.village.roll {:villager "v-1" :pos [2 64 0] :item "lectern" :want "enchanted_book"}]]]
     (is (some? (:can-start? (job sym))) (str sym " has can-start?"))
-    (is (nil? (:conditions (job sym))) (str sym " has no old conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))

@@ -48,8 +48,7 @@
 (deftest the-ported-animal-jobs-export-can-start-only
   (doseq [sym ['jobs.animals.shear 'jobs.animals.leash 'jobs.animals.unleash 'jobs.animals.breed 'jobs.animals.pen-check
                'jobs.animals.cull 'jobs.animals.shut-gate 'jobs.animals.tend 'jobs.animals.lead-to 'jobs.animals.lure-to 'jobs.animals.herd 'jobs.combat.hunt]]
-    (is (some? (:can-start? (job sym))) (str sym " has can-start?"))
-    (is (nil? (:conditions (job sym))) (str sym " has no old conditions"))))
+    (is (some? (:can-start? (job sym))) (str sym " has can-start?"))))
 
 (defn ^:async angle
   [args world]

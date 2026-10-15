@@ -379,8 +379,7 @@
 
 (def sweeper
   "A contract job that runs retreat's blocked! until it ends the job."
-  {:conditions []
-   :round (fn ^:async sweeper-round [c]
+  {:round (fn ^:async sweeper-round [c]
             (loop [n 1]
               (let [r (await (cornered/blocked! c "test"))]
                 (if (= :again r) (recur (inc n)) r))))})
@@ -398,8 +397,7 @@
 (defn backer
   "A job that backs off once from the zombie and keeps what back-off! answered and whether the option stays tried."
   [out]
-  {:conditions []
-   :round (fn ^:async backer-round [c]
+  {:round (fn ^:async backer-round [c]
             (let [threat (first (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
                   r (await (cornered/back-off! c threat))]
               (reset! out {:r r :tried (retreat-flight/tried? c :back-off)})
@@ -410,8 +408,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label go-to want] [["walks" {} {:r :again :tried false}]
-                                    ["gives up" {'jobs.movement.go-to {:conditions []
-                                                                       :ways (:ways (get registry/jobs 'jobs.movement.go-to))
+                                    ["gives up" {'jobs.movement.go-to {:ways (:ways (get registry/jobs 'jobs.movement.go-to))
                                                                        :round (fn ^:async no-leg [c] (ctx/end c :nothing-possible :unreachable {:arrived false}))}}
                                      {:r nil :tried true}]]]
           (let [out (atom nil)
@@ -423,8 +420,7 @@
 (defn stepper
   "A job that takes one flee step to a fixed cell and keeps the refused ends the flight remembers."
   [out]
-  {:conditions []
-   :round (fn ^:async stepper-round [c]
+  {:round (fn ^:async stepper-round [c]
             (await (cornered/leg-step! c :step {:x 7 :y 64 :z 2} 0 5))
             (reset! out (:refused (ctx/mem c)))
             (ctx/end c :done nil))})
@@ -437,8 +433,7 @@
           (let [out (atom :unset)
                 s (setup {:entities [(zombie 7 2 {})]})
                 s (update-in (assoc-in s [:eng :jobs 'stepper] (stepper out)) [:eng :jobs] merge
-                             {'jobs.movement.go-to {:conditions []
-                                                    :ways (:ways (get registry/jobs 'jobs.movement.go-to))
+                             {'jobs.movement.go-to {:ways (:ways (get registry/jobs 'jobs.movement.go-to))
                                                     :round (fn ^:async refuse [c] (ctx/end c :nothing-possible :unreachable {:arrived false :why why}))}})]
             (await (run-job! s 'stepper {}))
             (is (= want @out) (str "go-to ends " why))))))))
@@ -599,8 +594,7 @@
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
               clock (:clock s)
-              declining {:conditions []
-                         :round (fn ^:async idle-flight [c] (swap! clock + 1000) (ctx/end c :done nil))}
+              declining {:round (fn ^:async idle-flight [c] (swap! clock + 1000) (ctx/end c :done nil))}
               s (assoc-in s [:eng :jobs 'jobs.survival.retreat] declining)
               {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= [:done] calls))
@@ -612,8 +606,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
-              cornered {:conditions []
-                        :round (fn ^:async no-escape [c] (ctx/end c :nothing-possible :cannot_escape))}
+              cornered {:round (fn ^:async no-escape [c] (ctx/end c :nothing-possible :cannot_escape))}
               s (assoc-in s [:eng :jobs 'jobs.survival.retreat] cornered)
               {:keys [out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= {:status :stopped :reason :cannot_escape} (select-keys out [:status :reason])))
@@ -626,8 +619,7 @@
       (fn ^:async t []
         (doseq [kind [:impossible :limit-reached]]
           (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
-                ending {:conditions []
-                        :round (fn ^:async ends [c] (ctx/end c kind :stub))}
+                ending {:round (fn ^:async ends [c] (ctx/end c kind :stub))}
                 s (assoc-in s [:eng :jobs 'jobs.survival.retreat] ending)
                 {:keys [out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
             (is (= kind (get-in out [:ending :kind])))))))))
@@ -639,8 +631,7 @@
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
               clock (:clock s)
               p (:p s)
-              hiding {:conditions []
-                      :round (fn ^:async long-hide [c]
+              hiding {:round (fn ^:async long-hide [c]
                                (swap! clock + 400000)
                                (swap! (fake/state p) assoc :entities [])
                                (ctx/end c :done nil {:fled [7] :ended :hidden}))}
@@ -674,8 +665,7 @@
 (defn targeter
   "A job that picks one flight target (cover/flight-target!) away from the hostiles it knows, kept in out."
   [out]
-  {:conditions []
-   :round (fn ^:async targeter-round [c]
+  {:round (fn ^:async targeter-round [c]
             (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})]
               (reset! out (await (cover/flight-target! c threats)))
               (ctx/end c :done nil)))})
@@ -979,8 +969,7 @@
 
 (def walker
   "A listed job whose memory holds an open go-to walk to (10 64 16), as one cut on its way."
-  {:conditions []
-   :round (fn ^:async walker-round [c]
+  {:round (fn ^:async walker-round [c]
             (ctx/update-mem! c assoc :children {:go {:open 1 :goal {:x 10 :y 64 :z 16}}})
             :continue)})
 
@@ -1060,8 +1049,7 @@
         (let [s (buried-setup {:entities [(zombie 7 6 {})]})
               digs (atom 0)
               _ (.override (.-world (:p s)) "dig" (fn ^:async f [_ _ _] (swap! digs inc) #js {:status "failed"}))
-              job {:conditions []
-                   :round (fn ^:async again [c]
+              job {:round (fn ^:async again [c]
                             (dotimes [_ 3]
                               (ctx/update-mem! c dissoc :tried)
                               (await (cover/dig-pocket! c)))
@@ -1078,8 +1066,7 @@
       (fn ^:async t []
         (let [counts (atom [])
               raw-atom (atom nil)
-              job {:conditions []
-                   :round (fn ^:async twice [c]
+              job {:round (fn ^:async twice [c]
                             (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})]
                               (dotimes [_ 3]
                                 (await (cover/flight-target! c threats))

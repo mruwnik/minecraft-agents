@@ -10,7 +10,7 @@
   "The :gave-up event a job emits at level with fields, as collected by the sink."
   [level fields]
   (let [[seen sink] (tu/legacy-capture-sink)
-        jobs {'say {:args {} :conditions []
+        jobs {'say {:args {}
                     :round (fn [c] (ctx/emit! c :gave-up level fields) (ctx/end c :done nil))}}
         eng (core/create {:primitives (tu/fake {}) :jobs jobs :triggers {} :dir (tu/tmp-dir)
                           :events (events/make {:stdout? false :sinks [sink]})})]

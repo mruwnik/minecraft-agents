@@ -155,8 +155,7 @@
         _ (prepare p)
         out (atom nil)
         announced (atom [])
-        parent {:conditions []
-                :round (fn ^:async driving-round [c]
+        parent {:round (fn ^:async driving-round [c]
                          (reset! out (await (walk/walk-to! c {:to goal :range 0 :weight 1.2 :timeout-s 60
                                                               :announce! (fn [kind data] (swap! announced conj [kind data]))})))
                          (ctx/end c :done nil))}
@@ -269,8 +268,7 @@
         p (tu/fake world)
         _ (prepare p)
         out (atom :not-done)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
                            (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all

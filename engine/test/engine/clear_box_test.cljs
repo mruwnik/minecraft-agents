@@ -320,8 +320,7 @@
       (fn ^:async t []
         (let [t1 {:x 1 :y 64 :z 1}
               seen* (atom {:rs [] :skipped :none})
-              parent {:conditions []
-                      :round (fn recording-round [c]
+              parent {:round (fn recording-round [c]
                                (dotimes [_ 5]
                                  (swap! seen* update :rs conj (clear-box/declined! c t1 {:reason :not-loaded :pos t1})))
                                (swap! seen* assoc :skipped (:skipped (ctx/mem c) {}) :cell-tries (:cell-tries (ctx/mem c) {}))

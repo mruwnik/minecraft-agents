@@ -1,7 +1,8 @@
 (ns engine.job-waiting-test
   "A listed job whose condition fails is never silent: one job.waiting event with its cause, again only when
   the cause changes, and the cause shown in jobs show and observe."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.contract :as contract]
+            [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -11,14 +12,11 @@
             [jobs.lib.cond :as cond]))
 
 (def gate
-  "What the gated job's condition answers: true (passes), a cause it waits for, or nil (a bare failure)."
+  "What the gated job's check answers: true (passes), or the :later status it waits with."
   (atom true))
 
 (defn gate-condition [_]
-  (let [g @gate]
-    (cond (true? g) nil
-          (nil? g) :not-ready
-          :else g)))
+  (let [g @gate] (if (true? g) (contract/ok :open "open") g)))
 
 (defn ^:async count-round [c]
   (ctx/update-mem! c update :n (fnil inc 0))
@@ -26,7 +24,7 @@
 
 (def registry
   {'gated (tu/job [gate-condition] count-round)
-   'never (tu/job [(constantly :not-ready)] count-round)
+   'never (tu/job [(constantly (contract/later :not-ready "not ready"))] count-round)
    'torch-lit {:can-start? (cond/because :few-torches (cond/>= (cond/inventory "torch") 4)) :round count-round}})
 
 (defn setup []
@@ -45,7 +43,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (reset! gate :no-furnace)
+        (reset! gate (contract/later :no-furnace "no furnace"))
         (let [{:keys [eng seen]} (setup)
               id (core/submit! eng '(gated) {})]
           (await (ticks eng 5))
@@ -59,38 +57,28 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (reset! gate {:reason :cooking :ready-at 5})
+        (reset! gate (contract/later :cooking "cooking" :ready-at 5))
         (let [{:keys [eng seen]} (setup)
               id (core/submit! eng '(gated) {})]
           (await (ticks eng 3))
-          (reset! gate {:reason :cooking :ready-at 9})
+          (reset! gate (contract/later :cooking "cooking" :ready-at 9))
           (await (ticks eng 3))
-          (is (= [{:reason :cooking :ready-at 5} {:reason :cooking :ready-at 9}] (mapv :cause (waits seen))))
+          (is (= [5 9] (mapv :ready-at (waits seen))))
           (reset! gate true)
           (await (ticks eng 1))
           (is (nil? (:waiting (job-api/summary eng id))) "a passing condition clears the reason"))))))
-
-(deftest a-bare-failing-condition-still-says-it-waits
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (reset! gate nil)
-        (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng '(gated) {})
-          (await (ticks eng 3))
-          (is (= [:not-ready] (mapv :reason (waits seen)))))))))
 
 (deftest a-composite-reports-its-childs-cause
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (reset! gate {:reason :no-tree :near 3})
+        (reset! gate (contract/later :no-tree "no tree" :near 3))
         (doseq [spec ['(seq (gated)) '(any (gated)) '(repeat (gated)) '(until (never) (gated))
                       '(seq (repeat (gated))) '(until (never) (any (seq (gated))))]]
           (let [{:keys [eng seen]} (setup)]
             (core/submit! eng spec {})
             (await (ticks eng 3))
-            (is (= [{:reason :no-tree :near 3}] (mapv :cause (waits seen))) (str spec))))))))
+            (is (= [[:no-tree 3]] (mapv (juxt :reason :near) (waits seen))) (str spec))))))))
 
 (deftest wait-is-false-outside-a-scheduler-check
   (is (false? (ctx/wait {} :anything))))

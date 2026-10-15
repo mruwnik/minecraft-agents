@@ -1,6 +1,7 @@
 (ns engine.get-seeds-test
   "jobs.gather.get-seeds against the fake world."
-  (:require [engine.child-ends :as ce]
+  (:require [engine.contract :as contract]
+            [engine.child-ends :as ce]
             [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -269,7 +270,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng] :as s} (setup-with-jobs {:blocks {"6,64,0" "short_grass"} :drops seed-drops}
-                                                    {'jobs.movement.go-to {:conditions [] :ways [:walk :clear-seal] :round (fn [_] :continue)}})]
+                                                    {'jobs.movement.go-to {:ways [:walk :clear-seal] :round (fn [_] :continue)}})]
           (core/submit! eng (spec {:count 1}) {})
           (await (run-ticks s 6 700))
           (is (zero? (dig-count s)))
@@ -594,7 +595,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (setup-with-jobs {} {'jobs.storage.withdraw (tu/job [(constantly :not-ready)] nil)})]
+        (let [s (setup-with-jobs {} {'jobs.storage.withdraw (tu/job [(constantly (contract/later :not-ready "not ready"))] nil)})]
           (let [out (await (tu/child-outcome (:eng s) 'jobs.gather.get-seeds {:count 2 :chest {:x 10 :y 64 :z 0}} 40))]
             (is (= :condition-failed (get-in out [:ending :kind])))
             (is (= :withdraw-declined (:reason out))))

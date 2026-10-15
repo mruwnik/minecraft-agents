@@ -22,8 +22,7 @@
   ([eng job args n] (ending-of eng job args n tu/run-until-empty))
   ([eng job args n run-until-empty]
   (let [out (atom nil)
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in eng [:jobs 'recording-parent] parent)]

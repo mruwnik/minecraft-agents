@@ -71,8 +71,7 @@
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake gate-world)
         cell {:x 5 :y 64 :z 0}
-        job {:conditions []
-             :round (fn ^:async leftover-round [c]
+        job {:round (fn ^:async leftover-round [c]
                       (ctx/remember! c :opened {:cell cell :by (if (= :self by) (:id c) by) :t 0 :shut? (not (false? shut?))} pass/opened-policy)
                       (await (pass/shut-leftovers! c))
                       (ctx/end c :done nil))}

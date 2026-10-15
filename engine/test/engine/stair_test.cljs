@@ -273,8 +273,7 @@
         p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans :wrap-rounds :raw)))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
-        parent {:conditions []
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call c :kid job (if (satisfies? IDeref args) @args args)))]
                            (if (= :continue r)
                              r

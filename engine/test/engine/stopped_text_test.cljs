@@ -14,8 +14,7 @@
   [result]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        job {:conditions []
-             :round (fn ^:async r [c] (ctx/end c :nothing-possible (:reason result) (dissoc result :status :reason)))}
+        job {:round (fn ^:async r [c] (ctx/end c :nothing-possible (:reason result) (dissoc result :status :reason)))}
         eng (core/create {:primitives (tu/fake {:self {:pos {:x 0 :y 65 :z 0}}})
                           :jobs (assoc registry/jobs 'stopper job)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])

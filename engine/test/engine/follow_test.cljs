@@ -180,8 +180,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [pauses (atom [])
-              stub {:conditions []
-                    :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
+              stub {:round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
               s (setup {:entities [(steve 1)]} {:player "Steve" :range 3 :radius 10})]
           (await (run-ticks (assoc-in s [:eng :jobs 'jobs.time.noop] stub) 3 500))
           (is (= [{:seconds 0.5 :why :following}] (distinct @pauses)))

@@ -81,7 +81,7 @@
   does not arrive."
   [results]
   (let [left (atom results)]
-    {:conditions [] :target [] :ways #{:walk :clear-seal}
+    {:target [] :ways #{:walk :clear-seal}
      :round (fn ^:async stub-round [c]
               (let [r (first @left)]
                 (swap! left rest)
@@ -163,8 +163,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [pauses (atom [])
-              stub {:conditions []
-                    :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
+              stub {:round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
               s (setup {} {:pos {:x 2 :y 64 :z 0} :range 3 :wait-s 30} {'jobs.time.noop stub})]
           (await (run-ticks s 4 500))
           (is (= [{:seconds 0.5 :why :lingering}] (distinct @pauses)) "each look is a pause child, not a bare wait act")

@@ -1982,7 +1982,7 @@
         _ (when before (before s))
         out (atom nil)
         fetched (atom [])
-        stub {:ways [:chest :craft :gather] :conditions []
+        stub {:ways [:chest :craft :gather]
               :round (fn ^:async get-tool [c]
                        (swap! fetched conj (:args c))
                        (if give
@@ -1992,8 +1992,7 @@
                          (ctx/end c :condition-failed :no-source)))
               :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
                      :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
-        parent {:conditions []
-                :round (fn ^:async mining-parent [c]
+        parent {:round (fn ^:async mining-parent [c]
                          (let [e (await (ctx/call c :kid 'jobs.gather.mine args))]
                            (if (= :continue e) :continue (do (reset! out e) (ctx/end c :done nil)))))}
         eng (assoc (:eng s) :jobs (merge (assoc (:jobs (:eng s)) 'mining-parent parent 'jobs.items.get-tool stub) jobs))]
@@ -2570,8 +2569,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [why [:off-plan :needs-health]]
-          (let [stub {:conditions []
-                      :round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why why} {:arrived false}))}
+          (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why why} {:arrived false}))}
                 s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
             (core/submit! (:eng s) (spec {:block "sand" :count 4 :tunnel-length 0 :mend false}) {})
             (await (run-ticks s 60))
@@ -2584,7 +2582,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [waiting {:conditions [] :round (fn ^:async w [_] :continue)}
+        (let [waiting {:round (fn ^:async w [_] :continue)}
               s (start {:world {:blocks {"15,64,0" "sand"}} :jobs (assoc registry/jobs 'jobs.movement.go-to waiting)})]
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0 :mend false}) {})
           (await (run-ticks s 60))
