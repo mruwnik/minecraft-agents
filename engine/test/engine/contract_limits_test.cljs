@@ -48,6 +48,29 @@
           (is (= 1 (:slow-rounds @world)) "the round after the crossing does not run")
           (is (= {:kind :limit-reached :cause {:line :time :spend 5}} (stopped seen))))))))
 
+(def waits
+  {:conditions []
+   :round (fn [_] (swap! world update :wait-rounds (fnil inc 0)) :continue)})
+
+(deftest waiting-spends-no-time-but-counts-as-elapsed-from-the-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'waits waits})]
+          (core/submit! eng '(waits {:spend {:time 5 :elapsed 10}}) {})
+          (swap! clock + 60000)
+          (await (core/tick! eng))
+          (swap! clock + 4000)
+          (await (core/tick! eng))
+          (swap! clock + 4000)
+          (await (core/tick! eng))
+          (is (= 3 (:wait-rounds @world)) "yields spend no :time; time queued before the start is not elapsed")
+          (swap! clock + 3000)
+          (await (core/tick! eng))
+          (is (= 3 (:wait-rounds @world)))
+          (is (= {:kind :limit-reached :cause {:line :elapsed :spend 10}} (stopped seen)))
+          (is (= {:time 0 :elapsed 11} (get-in (first (job-ev seen :limit_reached)) [:data :report :uses]))))))))
+
 (deftest the-limit-that-ends-a-job-is-told-with-its-amount-and-report
   (async done
     (tu/run-async done

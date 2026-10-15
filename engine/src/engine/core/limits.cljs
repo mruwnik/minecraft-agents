@@ -28,7 +28,7 @@
             (range (inc (count slots)))))))
 
 (defn crossings
-  "{:slots :cause :amount :state :extra-ms} of each line frames cross, outermost frame first (engine.contract/crossings).
+  "{:slots :cause :amount :state :now :extra-ms} of each line frames cross, outermost frame first (engine.contract/crossings).
   t0s: when each frame's round in flight started."
   [eng frames t0s]
   (let [lv (levels (:primitives eng))
@@ -36,20 +36,20 @@
     (for [[s state] frames
           :let [extra-ms (- t (nth t0s (count s) t))]
           [cause amount] (contract/crossings state lv t extra-ms)]
-      {:slots s :cause cause :amount amount :state state :extra-ms extra-ms})))
+      {:slots s :cause cause :amount amount :state state :now t :extra-ms extra-ms})))
 
 (defn chain-of [root slots] (mapv #(mem/path->id root (subvec slots 0 %)) (range (inc (count slots)))))
 
 (defn tag!
   "Tag the frame the crossing x ends, tell job.limit_reached (the line, its amount and the frame's report); the limit
   error that ends it."
-  [eng root {:keys [slots cause amount state extra-ms]}]
+  [eng root {:keys [slots cause amount state extra-ms] t :now}]
   (let [id (mem/path->id root slots)]
     (mem/update-job! (:store eng) root slots assoc-in [:contract :limit] {:frame id :cause cause})
     (emit! eng (merge {:source :job :kind :limit_reached :level :info :job id :chain (chain-of root slots)
                        :name (or (:job state)
                                  (when (empty? slots) (some-> (get-in @(:state eng) [:instances root :spec]) expr/label)))
-                       :cause cause :call (:call state) :report (contract/report state extra-ms)}
+                       :cause cause :call (:call state) :report (contract/report state t extra-ms)}
                       amount))
     (contract/limit-error id cause)))
 
@@ -92,7 +92,7 @@
       (for [[s state] frames
             :let [extra-ms (- t (nth t0s (count s) t))]
             [cause amount] (contract/most-crossings state q lv t extra-ms)]
-        {:slots s :cause (assoc cause :act k) :amount amount :state state :extra-ms extra-ms}))))
+        {:slots s :cause (assoc cause :act k) :amount amount :state state :now t :extra-ms extra-ms}))))
 
 (defn check-act!
   "check! before act k with args, then the act's most against what every frame has left. A crossing refuses the act,

@@ -1,7 +1,7 @@
 (ns engine.contract
   "The job contract (docs/goals-and-actions.md), pure parts. A frame's :contract state in its job memory is
   {:call {call keys, frozen at call start} :tally {:uses {:items {name n} :wear {tool uses} :health hp}
-  :yields {:items {name n}}} :ran-ms n}."
+  :yields {:items {name n}}} :ran-ms n :started-ms wall-clock ms its call froze}."
   (:require [clojure.string :as str]
             [clojure.walk :as walk]
             [engine.args :as a]))
@@ -61,12 +61,17 @@
 
 (defn add [a b] (merge-with (fn [x y] (if (map? x) (add x y) (+ x y))) a b))
 
+(defn used
+  "What a frame's :contract state has used of each spend line at wall-clock now: :time the s its rounds ran (plus
+  extra-ms, the round in flight's), :elapsed the s since its call started, yields and waits included."
+  [{:keys [tally ran-ms started-ms]} now extra-ms]
+  (cond-> (assoc (:uses tally) :time (/ (+ (or ran-ms 0) extra-ms) 1000))
+    started-ms (assoc :elapsed (/ (- now started-ms) 1000))))
+
 (defn report
-  "The report of a frame's :contract state: its tally with the time its rounds ran (plus extra-ms), in seconds, among
-  the uses."
-  ([state] (report state 0))
-  ([{:keys [tally ran-ms]} extra-ms]
-   (assoc-in tally [:uses :time] (/ (+ (or ran-ms 0) extra-ms) 1000))))
+  "The report of a frame's :contract state at now: its tally with what used gives among the uses."
+  ([state now] (report state now 0))
+  ([state now extra-ms] (assoc (:tally state) :uses (used state now extra-ms))))
 
 ;; ------------------------------------------------------------------ endings
 
@@ -157,10 +162,10 @@
          :spec (a/map-of keyword? (a/coll-of (a/or-of a/item? map?)))}
    :ways {:doc "the ways allowed, a set of the job's way keywords; default the job's defaults, else all" :default nil
           :spec (a/set-of keyword?)}
-   :spend {:doc "what the job may use up: {:time s :health hp :food pts :items {name n} :wear {tool uses}}"
+   :spend {:doc "what the job may use up: {:time s (its rounds ran) :elapsed s (since it started) :health hp :food pts :items {name n} :wear {tool uses}}"
            :default nil
-           :spec (a/valid-by "a map {:time s :health hp :food pts :items {name n} :wear {tool uses}} of numbers >= 0"
-                             (partial lines-problem #{:time :health :food} #{:items :wear}))}
+           :spec (a/valid-by "a map {:time s :elapsed s :health hp :food pts :items {name n} :wear {tool uses}} of numbers >= 0"
+                             (partial lines-problem #{:time :elapsed :health :food} #{:items :wear}))}
    :floor {:doc "levels the job does not go below: {:health hp :food pts}" :default nil
            :spec (a/valid-by "a map {:health hp :food pts} of numbers >= 0" (partial lines-problem #{:health :food} #{}))}
    :deadline {:doc "the wall-clock ms by which the call must have ended; default the caller's" :default nil
@@ -212,25 +217,21 @@
    ::quote-s {:default 2 :spec (a/num-in 0 nil)
               :doc "The wall-clock budget of a quote asked with no quote deadline; past it the quote's time is ##Inf."}})
 
-(defn used
-  "What a frame's :contract state has used of each spend line, its time in s with extra-ms (the round in flight's)."
-  [{:keys [tally ran-ms]} extra-ms]
-  (assoc (:uses tally) :time (/ (+ (or ran-ms 0) extra-ms) 1000)))
-
 (defn remainder
-  "What is left of each spend line the call of a frame's :contract state sets, extra-ms as for used."
-  [state extra-ms]
-  (let [u (used state extra-ms)
+  "What is left of each spend line the call of a frame's :contract state sets, now and extra-ms as for used."
+  [state now extra-ms]
+  (let [u (used state now extra-ms)
         left #(max 0 (- %2 (or %1 0)))]
     (into {} (map (fn [[k v]]
                     [k (if (map? v) (into {} (map (fn [[n x]] [n (left (get-in u [k n]) x)])) v) (left (get u k) v))]))
           (get-in state [:call :spend]))))
 
 (defn left
-  "What is left of the call of a frame's :contract state: {:spend (remainder) :floor :deadline}, extra-ms as for used."
-  [state extra-ms]
+  "What is left of the call of a frame's :contract state: {:spend (remainder) :floor :deadline}, now and extra-ms as for
+  used."
+  [state now extra-ms]
   (let [{:keys [floor deadline]} (:call state)]
-    (cond-> {:spend (remainder state extra-ms)} floor (assoc :floor floor) deadline (assoc :deadline deadline))))
+    (cond-> {:spend (remainder state now extra-ms)} floor (assoc :floor floor) deadline (assoc :deadline deadline))))
 
 (defn least-left
   "The least of lefts (left of each frame of a chain): each spend line's least remainder, each floor's highest level,
@@ -249,13 +250,13 @@
   crossed past it, a floor below it."
   [{:keys [call] :as state} levels now extra-ms]
   (let [{:keys [spend floor deadline]} call
-        u (used state extra-ms)]
+        u (used state now extra-ms)]
     (concat (when (and deadline (> now deadline)) [[{:line :deadline :deadline deadline} {:now now}]])
             (for [k [:health :food]
                   :let [f (get floor k) l (get levels k)]
                   :when (and f (number? l) (< l f))]
               [{:line k :floor f} {k l}])
-            (for [k [:time :health :food]
+            (for [k [:time :elapsed :health :food]
                   :let [s (get spend k) x (get u k 0)]
                   :when (and s (> x s))]
               [{:line k :spend s} {:used x}])
@@ -271,7 +272,7 @@
   now and extra-ms as for crossings."
   [{:keys [call] :as state} q levels now extra-ms]
   (let [{:keys [spend floor deadline]} call
-        u (used state extra-ms)
+        u (used state now extra-ms)
         uses (:uses q)
         most #(when (vector? %) (nth % 2))
         crossed (set (map first (crossings state levels now extra-ms)))
@@ -282,10 +283,10 @@
                         :let [f (get floor k) l (get levels k)]
                         :when (and f (number? l))]
                     (over {:line k :floor f} (most (get uses k)) (- l f)))
-                  (for [k [:time :health :food]
+                  (for [k [:time :elapsed :health :food]
                         :let [s (get spend k)]
                         :when s]
-                    (over {:line k :spend s} (most (get uses k)) (- s (get u k 0))))
+                    (over {:line k :spend s} (most (get uses (if (= :elapsed k) :time k))) (- s (get u k 0))))
                   (for [[k what] [[:items :item] [:wear :tool]]
                         [n s] (get spend k)]
                     (over {:line k what n :spend s} (most (get-in uses [k n])) (- s (get-in u [k n] 0))))))))
@@ -415,6 +416,7 @@
                            above (when (and f (number? (get levels k))) (- (get levels k) f))]
                        (if (and s above) (min s above) (or s above))))]
     (or (over :time (:time u) (:time spend))
+        (when (:elapsed spend) (over :elapsed (:time u) (:elapsed spend)))
         (when deadline (over :deadline (:time u) (/ (- deadline now) 1000)))
         (over :health (:health u) (room :health))
         (over :food (:food u) (room :food))

@@ -43,7 +43,7 @@
     (update-frames! eng root [(mem/slot-path slots)] #(update % :ran-ms (fnil + 0) ms))))
 
 (defn report [eng root slots]
-  (contract/report (:contract (mem/job-mem (mem/view (:store eng)) root slots))))
+  (contract/report (:contract (mem/job-mem (mem/view (:store eng)) root slots)) ((:now eng))))
 
 (defn remember!
   "Keep {:job sym :report report} (and :target, the args the job's target names, and the :kind and :cause of its

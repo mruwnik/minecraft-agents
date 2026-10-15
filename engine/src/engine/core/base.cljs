@@ -210,7 +210,7 @@
       (emit! eng {:source :job :kind :child_ended :level :debug :job id :slot slot
                   :chain (mapv #(mem/path->id root (subvec slots 0 %)) (range (inc (count slots))))
                   :status :cut-off :ending {:kind :cut-off :cause cause}
-                  :report (contract/report (:contract child))}))
+                  :report (contract/report (:contract child) (now eng))}))
     (cut-off! eng root slots child cause)))
 
 (defn cut-off-dropped!

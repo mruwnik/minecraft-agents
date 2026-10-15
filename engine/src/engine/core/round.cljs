@@ -101,7 +101,7 @@
      :quote-deadline (:quote-deadline base)
      :left #(let [t (now eng)]
               (contract/least-left (for [[s state] (limits/frames eng root slots)]
-                                     (contract/left state (- t (nth (:t0s base) (count s) t))))))
+                                     (contract/left state t (- t (nth (:t0s base) (count s) t))))))
      :section-depth (:section-depth base) :held (:held base) :section-closed #(limits/section-closed! eng base)
      :view #(mem/view store)
      :fact (fn [sym vs] (condition/fact-value {:world (:primitives eng) :memory (mem/view store)} sym vs))
@@ -257,7 +257,7 @@
             id (mem/path->id (:root base) (conj (:slots base) slot))
             c (child-ctx eng (cond-> b ident (update :quoting (fnil conj []) [ident id])) slot args)
             call (first (ending/call-of c def))]
-        (assoc c :quote-call call :left (constantly (contract/left {:call call} 0)) :job-ways (:ways def))))))
+        (assoc c :quote-call call :left (constantly (contract/left {:call call} (now eng) 0)) :job-ways (:ways def))))))
 
 (defn ^:async old-round
   "One round of old job def as the ctx/call child c (its id child-id) under parent base: :continue or its ending

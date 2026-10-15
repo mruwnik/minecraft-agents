@@ -53,7 +53,7 @@
         call (fill-use c def (contract/freeze (assoc def :defaults defaults) (:args c) (:call caller)))]
     (if (:call caller)
       (let [t (now (:engine c))]
-        (contract/clamp call (:call caller) (contract/remainder caller (- t (nth (:t0s c) (dec (count (:slots c))) t)))))
+        (contract/clamp call (:call caller) (contract/remainder caller t (- t (nth (:t0s c) (dec (count (:slots c))) t)))))
       [call []])))
 
 (defn frame-identity
@@ -86,7 +86,7 @@
         [call lines] (call-of c def)]
     (when-not (owner? eng (:token c)) (throw (cut-error)))
     (mem/update-job! (:store eng) (:root c) (:slots c) update :contract
-                     #(cond-> (assoc % :call call) (:sym def) (assoc :job (:sym def))))
+                     #(cond-> (assoc % :call call :started-ms (now eng)) (:sym def) (assoc :job (:sym def))))
     (when (seq lines) (ctx/emit! c :budget_clamped :debug {:lines lines :call call}))))
 
 (defn done-now
