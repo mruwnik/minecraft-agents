@@ -35,7 +35,7 @@
   - the obtain child's kind and cause (:no-source, a walk cause such as :zone-exit or :not-home, :time ..; :item is then the furnace material when that failed);
   - condition-failed {:reason :needs-food :cause c :food :min-food} (the starving body found no food, or :food is false);
   - nothing-possible {:reason :wear-failed}.
-  Quote: a guess per missing item. done? counts the items carried or worn.")
+  Quote: a guess per missing item. done? is ok when every item is carried or worn.")
 
 (def iron-kit
   ["iron_pickaxe" "iron_sword" "iron_axe" "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots"])
@@ -126,12 +126,18 @@
 (defn can-start? [c] (checks/never-with (bad-args c)))
 
 (defn done?
-  "Counts the items carried or worn (the round ends the call, after the armour is worn)."
+  "Ok when every item is carried or worn (with :wear, no carried piece is left to put on) and no child is under way."
   [c]
   (let [st (state c)
         items (:items (:args c))
-        n (count (filter #(had? (:carried st) (:worn st) %) items))]
-    (contract/later :kitting (str "get-kit: " n " of " (count items) " item(s) had") :units :items :done n :left (- (count items) n))))
+        had (filterv #(had? (:carried st) (:worn st) %) items)
+        n (count had)
+        data [:units :items :done n :left (- (count items) n) :result {:have had :made (vec (:made (ctx/mem c)))}]
+        text (str "get-kit: " n " of " (count items) " item(s) had")]
+    (cond
+      (checks/child-under-way? c) (apply contract/later :wrapping-up text data)
+      (and (= n (count items)) (not (and (:wear (:args c)) (seq (to-wear items st))))) (apply contract/ok :kitted text data)
+      :else (apply contract/later :kitting text data))))
 
 (defn quote-of
   "A guess of the seconds each missing item takes."

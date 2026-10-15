@@ -37,7 +37,8 @@
 (defn done?
   "Never done before the round has run: the items are not known to be worth it."
   [c]
-  (contract/later :collecting "pick-up-loose: the round ends the call" :units :items :done (:collected (ctx/mem c) 0)))
+  (contract/later :collecting "pick-up-loose: the round ends the call" :units :items :done (:collected (ctx/mem c) 0)
+                  :result {:collected (:collected (ctx/mem c) 0)}))
 
 (defn names-of [items] (vec (distinct (keep #(some-> (.-item %) .-name) items))))
 

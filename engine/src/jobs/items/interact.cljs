@@ -42,10 +42,11 @@
 (defn can-start? [c] (checks/never-with (problem c)))
 
 (defn done?
-  "Counts only (the round ends the call with its data): whether the click was made."
+  "Ok once the click was made."
   [c]
-  (let [used (if (:used (ctx/mem c)) 1 0)]
-    (contract/later :not-used "interact: the round ends the call" :units :uses :done used :left (- 1 used))))
+  (if (:used (ctx/mem c))
+    (contract/ok :used "interact: the click was made" :units :uses :done 1 :left 0 :result {:used true})
+    (contract/later :not-used "interact: the round ends the call" :units :uses :done 0 :left 1 :result {:used false})))
 
 (defn quote-of [_c]
   (let [click (settings/get settings ::click-s)

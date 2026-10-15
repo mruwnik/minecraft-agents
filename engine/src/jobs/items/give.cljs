@@ -32,7 +32,7 @@
   give.gave-up) with the status or :litter as the cause.
   A cut after the toss leaves the drop where it lies.
   One call is the whole give; it yields :continue only while it waits for the player to appear or to take the drop.
-  done? counts the items given so far.")
+  done? is ok once the drop is seen taken.")
 
 (a/defargs args
   {:player {:spec a/name? :default nil}
@@ -84,11 +84,16 @@
     (max 0 (- tossed back))))
 
 (defn done?
-  "Counts only (the round ends the call with its data)."
+  "Ok once the toss is seen taken (and nothing is collected back); until then a count."
   [c]
-  (let [n (given-so-far c)
-        want (or (:count (:args c)) (:had (ctx/mem c)))]
-    (contract/later :giving (str "give: " n " given") :units :items :done n :left (max 0 (- (or want n) n)) :result {:given n})))
+  (let [{:keys [confirmed collecting]} (ctx/mem c)
+        n (given-so-far c)
+        want (or (:count (:args c)) (:had (ctx/mem c)))
+        left (max 0 (- (or want n) n))
+        data [:units :items :done n :left left :result {:given n}]]
+    (if (and confirmed (not collecting) (zero? left))
+      (apply contract/ok :given (str "give: " n " given") data)
+      (apply contract/later :giving (str "give: " n " given") data))))
 
 (defn quote-of [c]
   (let [n (or (:count (:args c)) 1)
@@ -109,7 +114,8 @@
 (defn finish!
   "The ending of kind with cause; data carries what was given (0 unless said)."
   [c kind cause data]
-  (ctx/end c kind cause (merge {:given 0} data)))
+  (let [d (merge {:given 0} data)]
+    (ctx/end c kind cause (merge {:text (str "gave " (:given d) " " (:item (:args c)) (when cause (str " (" (name cause) ")")))} d))))
 
 (defn enough?
   "Whether n given meets the call's :least (default 1; :all wants every one asked)."
@@ -223,7 +229,8 @@
       (empty? lying)
       (if collecting
         (returned! c given back)
-        (gave! c tossed :short {:text (str "gave " tossed)}))
+        (do (ctx/update-mem! c assoc :confirmed true)
+            (gave! c tossed :short {:text (str "gave " tossed)})))
 
       (and (not collecting) (< since (* 1000 wait-s)))
       (await (idle! c))

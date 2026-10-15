@@ -65,7 +65,8 @@
         set? (and (not (:reason r)) (= (:pos r) (mem/place (ctx/view c) (:name r))))]
     (if set?
       (contract/ok :set (str "place " (:name r) " is at " (pr-str (:pos r))) :units :places :done 1 :left 0 :result {:name (:name r) :pos (:pos r)})
-      (contract/later :not-set (str "place " (or (:name r) (:name (:args c))) " not at the cell asked") :units :places :done 0 :left 1))))
+      (contract/later :not-set (str "place " (or (:name r) (:name (:args c))) " not at the cell asked") :units :places :done 0 :left 1
+                      :result (select-keys r [:name :pos])))))
 
 (defn quote-of [_c] {:uses {:job-time [0 0 1]}})
 

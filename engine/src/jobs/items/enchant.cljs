@@ -34,7 +34,7 @@
   One call is the whole enchant (it yields :continue only while go-to waits on the world).
   A failed enchant is never repeated, as it may have taken the price. The attempt is written to memory before the
   call. After a restart that finds the item enchanted, the job reports it (:resumed true, enchants unknown).
-  done? counts the item enchanted.")
+  done? is ok once the item is enchanted.")
 
 (a/defargs args
   {:item {:doc "name of the item to enchant, from the inventory" :spec a/item? :default nil}
@@ -97,10 +97,11 @@
   (contract/all [(checks/never-with (problem c)) (checks/later-with (lacking c)) (checks/later-with (unaffordable c))]))
 
 (defn done?
-  "Counts only (the round ends the call with its data)."
+  "Ok once the offer is bought (the round ends the call with the data)."
   [c]
-  (let [n (if (:enchanted (ctx/mem c)) 1 0)]
-    (contract/later :enchanting "enchant: the round ends the call" :units :items :done n :left (- 1 n))))
+  (if (:enchanted (ctx/mem c))
+    (contract/ok :enchanted "enchanted" :units :items :done 1 :left 0 :result {:enchanted true})
+    (contract/later :enchanting "enchant: the round ends the call" :units :items :done 0 :left 1 :result {:enchanted false})))
 
 (defn quote-of [_c]
   (let [walk (settings/get settings ::walk-s)

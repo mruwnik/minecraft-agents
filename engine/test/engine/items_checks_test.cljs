@@ -25,7 +25,8 @@
   ([m more]
    {:now 1000 :data {:entries (into {(mem/job-kind "j") [{:t 1000 :data m}]}
                                     (map (fn [[k ds]] [k (mapv (fn [d] {:t 1000 :data d}) ds)]))
-                                    more)}}))
+                                    more)
+                     :policies (zipmap (keys more) (repeat mem/place-policy))}}))
 
 (defn ctx-of [sym world args & [m more]]
   {:primitives (tu/fake-on-floor world) :args args :view (fn [] (view-with (or m {}) more)) :root "j" :slots []
@@ -128,3 +129,65 @@
     {:inventory [{:name "iron_helmet" :count 1}] :equipment {:head {:name "diamond_helmet" :count 1}}} [:ok :worn]
     {:inventory [{:name "iron_helmet" :count 1}]} [:later :to-wear]
     {:inventory [{:name "dirt" :count 1}]} [:ok :worn]))
+
+(deftest wear-result-lists-the-pieces-worn-so-far
+  (let [helmet {:inventory [{:name "iron_helmet" :count 1}]}
+        put [{:item "iron_boots" :slot :feet}]]
+    (are [world m status result] (= [status result] ((juxt first #(:result (nth % 2))) (done-of 'jobs.items.wear world {} m)))
+      {} {} :ok {:worn []}
+      {} {:worn put} :ok {:worn put}
+      helmet {:worn put} :later {:worn put}
+      helmet {} :later {:worn []})))
+
+(deftest a-later-done-carries-a-result-map
+  (doseq [sym '[jobs.items.enchant jobs.items.interact jobs.items.get-kit jobs.storage.haul jobs.storage.kit
+                jobs.items.pick-up-loose jobs.storage.withdraw jobs.memory.remember jobs.items.kitchen
+                jobs.memory.set-place jobs.memory.forget-place]
+          :let [s (done-of sym {} (done-args sym))]]
+    (is (map? (:result (nth s 2))) (str sym " done? carries a :result"))))
+
+(def kit-world {:inventory [{:name "iron_pickaxe" :count 1}]})
+(def kit-args {:items ["iron_pickaxe"]})
+(def cell [1 64 0])
+
+(deftest a-whole-goal-that-can-be-read-from-state-is-ok
+  (are [sym world args m reason] (= reason (tu/kind-reason (done-of sym world args m)))
+    'jobs.items.enchant {} {:item "iron_sword"} {:enchanted true} [:ok :enchanted]
+    'jobs.items.enchant {} {:item "iron_sword"} {} [:later :enchanting]
+    'jobs.items.interact {} {:id 7} {:used true} [:ok :used]
+    'jobs.items.interact {} {:id 7} {} [:later :not-used]
+    'jobs.items.get-kit kit-world kit-args {} [:ok :kitted]
+    'jobs.items.get-kit kit-world kit-args {:children {:obtain {}}} [:later :wrapping-up]
+    'jobs.items.get-kit {} kit-args {} [:later :kitting]
+    'jobs.items.get-kit (assoc kit-world :inventory [{:name "iron_pickaxe" :count 1} {:name "iron_helmet" :count 1}])
+    {:items ["iron_pickaxe" "iron_helmet"] :wear true} {} [:later :kitting]
+    'jobs.storage.haul {} {:from [cell]} {:empty [cell]} [:ok :hauled]
+    'jobs.storage.haul {} {:from [cell]} {} [:later :hauling]
+    'jobs.storage.haul {:inventory [{:name "oak_log" :count 5}]} {:from [cell]} {:empty [cell]} [:later :hauling]
+    'jobs.storage.haul {} {:from [cell]} {:empty [cell] :children {:deposit {}}} [:later :wrapping-up]))
+
+(deftest give-is-ok-once-the-toss-is-confirmed-taken
+  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.items.give {} {:player "Steve" :item "bread" :count 2} m)))
+    {:tossed 2 :had 2 :confirmed true} [:ok :given]
+    {:tossed 2 :had 2} [:later :giving]
+    {:tossed 2 :had 2 :confirmed true :collecting true} [:later :giving]
+    {:tossed 1 :had 2 :confirmed true} [:later :giving]
+    {:tossed 2 :had 2 :confirmed true :back 1} [:later :giving]))
+
+(def full-bag {:inventory (vec (repeat 36 {:name "dirt" :count 64}))})
+(def bread {:inventory [{:name "bread" :count 1}]})
+(def home-cell {:x 3 :y 64 :z 5})
+
+(deftest the-shape-only-jobs-are-ok-when-the-goal-holds
+  (are [sym world args m more reason] (= reason (tu/kind-reason (done-of sym world args m more)))
+    'jobs.storage.make-room {} {} {} {} [:ok :room]
+    'jobs.storage.make-room {} {} {:acted true} {} [:later :wrapping-up]
+    'jobs.storage.make-room full-bag {} {} {} [:later :short]
+    'jobs.food.fish {:inventory [{:name "cod" :count 2}]} {:count 2} {:base 0} {} [:ok :caught]
+    'jobs.food.fish {:inventory [{:name "cod" :count 2}]} {:count 2} {:base 1} {} [:later :fishing]
+    'jobs.storage.withdraw bread {:items {"bread" 1}} {} {} [:ok :carried]
+    'jobs.storage.withdraw {} {:items {"bread" 1}} {} {} [:later :short]
+    'jobs.memory.set-place {} {:name :home :pos [3 64 5]} {} {:home [{:pos home-cell}]} [:ok :set]
+    'jobs.memory.set-place {} {:name :home :pos [3 64 5]} {} {} [:later :not-set]
+    'jobs.memory.forget-place {} {:name :home} {} {} [:ok :forgotten]
+    'jobs.memory.forget-place {} {:name :home} {} {:home [{:pos home-cell}]} [:later :recorded]))

@@ -166,7 +166,8 @@
   [c]
   (let [left (count (needs (u/inventory (:primitives c)) (:args c)))
         all (inc (count (:tools (:args c))))]
-    (contract/later :stocking (str "kit: " left " kind(s) short") :units :kinds :done (- all left) :left left)))
+    (contract/later :stocking (str "kit: " left " kind(s) short") :units :kinds :done (- all left) :left left
+                    :result {:short (into {} (needs (u/inventory (:primitives c)) (:args c)))})))
 
 (defn quote-of
   "A walk and a visit per kind."

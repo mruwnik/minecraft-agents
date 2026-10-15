@@ -73,8 +73,8 @@
 
 (defn done?
   "Never done before it runs: it writes a fresh entry each call."
-  [_c]
-  (contract/later :unwritten "remember writes a fresh entry each call" :units :entries :done 0 :left 1))
+  [c]
+  (contract/later :unwritten "remember writes a fresh entry each call" :units :entries :done 0 :left 1 :result {:kind (:kind (:args c))}))
 
 (defn round [c]
   (let [r (resolve-args (ctx/view c) (:args c))]

@@ -72,7 +72,8 @@
         want (reduce + 0 (vals items))]
     (if (zero? left)
       (contract/ok :carried carried-text :units :items :done want :left 0)
-      (contract/later :short (str "withdraw: " left " item(s) short") :units :items :done (- want left) :left left))))
+      (contract/later :short (str "withdraw: " left " item(s) short") :units :items :done (- want left) :left left
+                      :result {:short (into {} (shortfall inv items))}))))
 
 (defn quote-of
   "Time for the walk and one transfer a name short; yields up to the shortfall, none when the chest lacks it."

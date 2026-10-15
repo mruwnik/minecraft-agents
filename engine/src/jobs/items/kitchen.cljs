@@ -78,7 +78,7 @@
   (let [{:keys [stock]} (:args c)
         chest-stock (chest-stock-of c)
         left (count (remove (fn [[item n]] (>= (get chest-stock item 0) n)) stock))
-        data [:units :stock-entries :done (- (count stock) left) :left left]]
+        data [:units :stock-entries :done (- (count stock) left) :left left :result {:steps (or (:report (ctx/mem c)) {})}]]
     (cond
       (not (reached? (:args c) chest-stock)) (apply contract/later :short (str "kitchen: " left " stock entries short") data)
       (:todo (ctx/mem c)) (apply contract/later :pass-under-way "kitchen: stocked, the pass goes on" data)

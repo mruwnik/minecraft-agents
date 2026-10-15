@@ -52,7 +52,7 @@
   [c]
   (let [{:keys [ok put]} (plan-of c)
         left (count put)
-        data [:units :pieces :done 0 :left left :result {:worn []}]]
+        data [:units :pieces :done (count (:worn (ctx/mem c))) :left left :result {:worn (vec (:worn (ctx/mem c)))}]]
     (if (and ok (zero? left))
       (apply contract/ok :worn "nothing better to wear" data)
       (apply contract/later :to-wear (if ok (str left " armour piece(s) to put on") (str "cannot wear " (:item (:args c)))) data))))
@@ -67,7 +67,11 @@
   (let [p (:primitives c)
         worn (armour/worn-of (.-equipment (.self p)))
         carried (map :name (u/inventory p))
-        r (await (armour/wear! (fn [i slot] (ctx/act c :equip (clj->js {:item i :dest slot}))) worn carried (:item (:args c))))
+        r (await (armour/wear! (fn ^:async equip-piece [i slot]
+                                     (let [r (await (ctx/act c :equip (clj->js {:item i :dest slot})))]
+                                       (when (= "equipped" (:status (js->clj r :keywordize-keys true))) (ctx/update-mem! c update :worn (fnil conj []) {:item i :slot slot}))
+                                       r))
+                                   worn carried (:item (:args c))))
         data {:worn (:worn r)}]
     (cond
       (:ok r)

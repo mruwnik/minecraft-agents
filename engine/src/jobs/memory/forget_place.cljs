@@ -45,7 +45,7 @@
   (let [gone? (= :no-such-place (:reason (places/resolve-forget (ctx/view c) (:name (:args c)))))]
     (if gone?
       (contract/ok :forgotten (str "no place " (:name (:args c)) " recorded") :units :places :done 1 :left 0 :result {:name (:name (:args c))})
-      (contract/later :recorded (str "place " (:name (:args c)) " recorded") :units :places :done 0 :left 1))))
+      (contract/later :recorded (str "place " (:name (:args c)) " recorded") :units :places :done 0 :left 1 :result {:name (:name (:args c))}))))
 
 (defn quote-of [_c] {:uses {:job-time [0 0 1]}})
 

@@ -53,11 +53,19 @@
 
 (defn can-start? [c] (contract/all [(checks/later-with (no-source c)) (checks/later-with (no-chest c))]))
 
+(defn progress-data [c] (select-keys (ctx/mem c) [:trips :moved]))
+
 (defn done?
-  "The source chests looked at so far; ends by the round, which also needs a last deposit."
+  "Ok when every source chest was looked at, nothing spare is carried and no child is under way."
   [c]
-  (let [pending (count (remove (set (:empty (ctx/mem c))) (map storage/cell-of (:from (:args c)))))]
-    (contract/later :hauling (str "haul: " pending " chest(s) to empty") :units :chests :done (- (count (:from (:args c))) pending) :left pending)))
+  (let [pending (count (remove (set (:empty (ctx/mem c))) (map storage/cell-of (:from (:args c)))))
+        text (str "haul: " pending " chest(s) to empty")
+        data [:units :chests :done (- (count (:from (:args c))) pending) :left pending :result (progress-data c)]]
+    (cond
+      (or (pos? pending) (empty? (:from (:args c)))) (apply contract/later :hauling text data)
+      (checks/child-under-way? c) (apply contract/later :wrapping-up text data)
+      (deposit/to-deposit (u/inventory (:primitives c)) nil) (apply contract/later :hauling "haul: a last deposit to do" data)
+      :else (apply contract/ok :hauled text data))))
 
 (defn quote-of
   "Per source chest ::chest-s; at most the time default."
@@ -79,8 +87,6 @@
        (remove #(some #{(:name %)} keep))
        (take slots)
        (reduce (fn [m {:keys [name count]}] (update m name #(+ (or % (storage/carried inv name)) count))) {})))
-
-(defn progress-data [c] (select-keys (ctx/mem c) [:trips :moved]))
 
 (defn end!
   "ctx/end, but done when the items moved to the main storage meet the call's :least (:all never: the total is unknown)."
