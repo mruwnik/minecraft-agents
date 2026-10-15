@@ -51,11 +51,11 @@
   (reset! (:asked eng) {}))
 
 (defn ^:async looked
-  "Statuses [start run], or after one look round (the :look/around hook) when they come to :look (no :never or :later
-  among them), the statuses then; a second :look counts as :later."
+  "Statuses [start run], or after one look round (the :look/around hook, given the :look-at cells of the :look statuses)
+  when they come to :look (no :never or :later among them), the statuses then; a second :look counts as :later."
   [def c ss]
   (if (= :look (first (contract/all ss)))
-    (do (await ((:look/around hooks/all) c))
+    (do (await ((:look/around hooks/all) c (into [] (comp (filter #(= :look (first %))) (mapcat #(:look-at (nth % 2 nil)))) ss)))
         (mapv #(cond-> % (= :look (first %)) (assoc 0 :later)) (statuses def c)))
     ss))
 

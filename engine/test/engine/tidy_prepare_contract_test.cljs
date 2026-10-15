@@ -118,7 +118,7 @@
               e (await (ending-of eng prepare {:plan "forest"} 40))]
           (is (= [:condition-failed :cells-wrong] [(:kind e) (contract/cause-key e)])))))))
 
-(deftest prepare-whose-headroom-stays-unseen-after-the-look-ends-condition-failed-saying-so
+(deftest prepare-whose-headroom-stays-unseen-after-the-look-waits-saying-so
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -131,7 +131,7 @@
           (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (seen-at pos))))
           (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (sensed-at pos))))
           (let [e (await (ending-of eng prepare {:plan "forest"} 40))]
-            (is (= [:condition-failed :cells-unloaded] [(:kind e) (contract/cause-key e)]))
+            (is (= [:condition-failed :unseen-room] [(:kind e) (contract/cause-key e)]))
             (is (= [] (fm/digs p)))))))))
 
 (deftest a-queued-prepare-with-unseen-headroom-looks-up-at-it-and-prepares-the-cell

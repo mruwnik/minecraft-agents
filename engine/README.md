@@ -307,7 +307,7 @@ leave on `:continue`: ending `:cut-off :ended`) and a call-child child run their
 (`:ok :later :never :look`, data with `:reason`; `contract/ok|later|never|look`; an ending's cause is data plus `:text`).
 `can-start?` (until the start) and `can-run?` (every round, between steps) give one (none: `:ok`): `:later` waits (a
 called child ends `:condition-failed`; from `can-run?` it yields, bounded by the call's limits; a reflex ends
-`:condition-failed`), `:never` ends `:impossible`, `:look` looks once, then counts as `:later`. Old conditions are read
+`:condition-failed`), `:never` ends `:impossible`, `:look` looks once (aimed first at the cells in its `:look-at`), then counts as `:later`. Old conditions are read
 as statuses. A condition
 `[:fn f]` gives nil (start), a cause (skip: a listed job not started stays queued and waits, else `:condition-failed`),
 `(contract/impossible cause)` (ends `:impossible`, the job leaves the queue) or `(contract/look-first cause)` (the

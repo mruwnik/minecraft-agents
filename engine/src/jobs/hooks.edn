@@ -2,4 +2,4 @@
 {:world/open jobs.lib.world-files/open
  :world/blank jobs.lib.world-files/blank
  :use/default jobs.lib.choose/default-use
- :look/around jobs.lib.look/look-around!}
+ :look/around jobs.lib.sense/look-round!}

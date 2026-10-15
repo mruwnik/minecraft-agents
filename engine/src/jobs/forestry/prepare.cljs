@@ -126,25 +126,32 @@
               {:reason reason :cells (vec (sort (map (comp maintain/cell-vec :pos) cells)))}))
           blocked-states)))
 
-(defn states-of
-  "The cell states of the field: read afresh while a cell was never seen, else once per check-cache window."
-  [c field cells]
-  (let [read #(field/assessments c field)]
-    (if (look/unseen? (:primitives c) cells) (read) (check-cache/cached c :states read))))
-
-(defn unseen-room?
-  "Whether a cell reads :unloaded for a cell the body never saw (a look shows it), not for an unloaded chunk."
+(defn unseen-room
+  "The cells of the :unloaded cells' ground and growth space that the body never saw (a look shows them; an unloaded
+  chunk's stay unseen), as maps for the :look-at of a :look status."
   [c states]
   (let [p (:primitives c)
         over (:headroom (:args c))]
-    (boolean (some (fn [{:keys [state pos species]}]
-                     (and (= :unloaded state)
-                          (look/unseen? p (cons (maintain/down pos)
-                                                (map #(update pos :y + %) (range (or (rule/headroom-of species over) 1)))))))
-                   (vals states)))))
+    (vec (distinct
+          (for [{:keys [state pos species]} (vals states)
+                :when (= :unloaded state)
+                cell (cons (maintain/down pos)
+                           (map #(update pos :y + %) (range (or (rule/headroom-of species over) 1))))
+                :when (look/unseen? p [cell])]
+            ((juxt :x :y :z) cell))))))
+
+(defn states-of
+  "The cell states of the field: read afresh while a cell or the room around one may not have been seen (a state :unloaded), else once
+  per check-cache window."
+  [c field cells]
+  (let [read #(field/assessments c field)]
+    (if (look/unseen? (:primitives c) cells)
+      (read)
+      (let [states (check-cache/cached c :states read)]
+        (if (some #(= :unloaded (:state %)) (vals states)) (read) states)))))
 
 (defn not-ready
-  "Whether the job may start: ok while a step can be taken on a planned cell or a look would show a cell. The field
+  "Whether the job may start: ok while a step can be taken on a planned cell or a look is asked for cells never seen. The field
   is assessed once per check-cache window; the round says (warns) what is wrong with each cell."
   [c]
   (let [field (field/planned c)]
@@ -153,7 +160,7 @@
       (let [states (states-of c field (maintain/field-cells field))]
         (cond
           (seq (field/todo c states)) (contract/ok :work "a step can be taken on a planned cell")
-          (unseen-room? c states) (contract/ok :look "a cell never seen is looked at")
+          (seq (unseen-room c states)) (contract/look :unseen-room "cells never seen are looked at" :look-at (unseen-room c states))
           (seq (:recede (ctx/mem c))) (checks/cause-status :later {:reason :receding :ready-at (apply min (vals (:recede (ctx/mem c))))})
           :else (checks/cause-status :later (or (blocked-reason states) {:reason :nothing-to-do})))))))
 

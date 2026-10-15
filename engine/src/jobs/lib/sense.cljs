@@ -73,6 +73,13 @@
       (unknown? (:primitives c) cell) (do (await (look-at! c cell)) (recur more (inc looks) (conj passed cell)))
       :else (recur more looks (conj passed cell)))))
 
+(defn ^:async look-round!
+  "The :look/around hook: look at each unknown one of cells (a :look status's :look-at), at most ::max-looks looks,
+  then look-around!."
+  [c cells]
+  (await (look-at-unknown! c (targets (:primitives c) (u/self-pos c) cells #{}) (max-looks)))
+  (await (look/look-around! c)))
+
 (defn step-ms
   "[total max] ms perception's sight steps have taken so far, nil without a perception."
   [p]

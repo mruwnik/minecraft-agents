@@ -438,6 +438,27 @@
           (is (= 1 (:looks-rounds @world)))
           (is (= 1 (count (job-ev seen :completed)))))))))
 
+(def looks-up
+  "Starts once the cell above the body was looked at; until then it asks for a look at it."
+  {:can-start? (fn [c]
+                 (if (some #(and (= "look" (.-name %)) (= 70 (js/Math.floor (.-y (.-pos (.-args %))))))
+                           (.-calls (.-world (:primitives c))))
+                   (contract/ok :seen "seen")
+                   (contract/look :unseen "cell above never seen" :look-at [[0 70 0]])))
+   :round (fn [c] (swap! world update :looks-rounds (fnil inc 0)) (ctx/end c :done nil))})
+
+(deftest a-look-status-names-the-cells-the-look-round-aims-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {'looks-up looks-up})
+              sensed-at (.-sensedAt p)]
+          (aset p "sensedAt" (fn [pos] (if (= 70 (.-y pos)) #js {:unknown true} (sensed-at pos))))
+          (core/submit! eng '(looks-up) {})
+          (await (core/tick! eng))
+          (is (= 1 (:looks-rounds @world)) "the look at the named cell made the check ok at once")
+          (is (= 1 (count (job-ev seen :completed)))))))))
+
 (deftest a-look-that-finds-it-starts-the-job-in-the-same-round
   (async done
     (tu/run-async done
