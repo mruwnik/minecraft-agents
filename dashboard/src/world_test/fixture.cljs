@@ -595,9 +595,13 @@
 (declare reply-pos)
 
 (defn start-hurt
-  "The setup error when the events logged while the case set up show the body suffocating (it stood in a block), else nil."
-  [events]
-  (when-let [e (some #(when (and (= :hurt (:kind %)) (some #{"suffocation"} (get-in % [:data :causes]))) %) events)]
+  "The setup error when the events logged while the case set up show the body suffocating (it stood in a block), else nil.
+  A hurt whose merge window began before parked-at (ms) is a hit from the body's login, not from the start."
+  [parked-at events]
+  (when-let [e (some #(when (and (= :hurt (:kind %)) (some #{"suffocation"} (get-in % [:data :causes]))
+                                 (>= (get-in % [:data :since-ms] 0) parked-at))
+                        %)
+                     events)]
     (str "the body was hurt by suffocation at the start (" (get-in e [:data :amount]) " damage): it stood inside a block")))
 
 (defn survival-commands [body] [(str "gamemode survival " body)])

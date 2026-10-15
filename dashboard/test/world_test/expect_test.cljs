@@ -115,6 +115,7 @@
         stopped (x/stop-early (x/judge-all es [fired] (assoc opts :now-ms 3000)))]
     (is (= [:fail :fail] (mapv :status stopped)))
     (is (= "not judged: the run stopped at the first failure" (:evidence (first stopped))))
+    (is (true? (:not-judged (first stopped))))
     (is (re-find #"unwanted" (:evidence (second stopped))))))
 
 (deftest a-no-event-until-ignores-until-events-before-its-window

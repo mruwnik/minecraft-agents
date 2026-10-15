@@ -99,14 +99,14 @@ const withStatus = (formText, status, extra) => {
   const e = entries(formText).find((x) => x.key === ':status')
   return `${formText.slice(0, e.start)}:${status}${formText.slice(e.end, -1)} ${extra}}`
 }
-// which check a failed case failed on: the :expect map of its first failed expectation, else its :why ('' when neither)
+// which check a failed case failed on: the :expect map of its first failed expectation (not one left unjudged), else its :why ('' when neither)
 export const failSig = (formText) => {
   const list = valueOf(formText, ':expects')
   if (list?.startsWith('[')) {
     for (let i = skipSpace(list, 1); i < list.length && list[i] !== ']'; i = skipSpace(list, i)) {
       const end = skipValue(list, i)
       const item = list.slice(i, end)
-      if (valueOf(item, ':status') === ':fail') return valueOf(item, ':expect') ?? ''
+      if (valueOf(item, ':status') === ':fail' && valueOf(item, ':not-judged') !== 'true') return valueOf(item, ':expect') ?? ''
       i = end
     }
   }

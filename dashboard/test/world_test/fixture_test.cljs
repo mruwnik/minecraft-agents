@@ -90,8 +90,9 @@
   (is (not (f/mob-case? {:act [[:wait-s 1]]}))))
 
 (deftest suffocation-at-start-is-a-setup-error
-  (is (nil? (f/start-hurt [{:kind :hurt :data {:causes ["fall"]}} {:kind :moved}])))
-  (is (re-find #"suffocation" (f/start-hurt [{:kind :hurt :data {:causes ["suffocation"] :amount 3}}]))))
+  (is (nil? (f/start-hurt 0 [{:kind :hurt :data {:causes ["fall"]}} {:kind :moved}])))
+  (is (re-find #"suffocation" (f/start-hurt 0 [{:kind :hurt :data {:causes ["suffocation"] :amount 3 :since-ms 100}}])))
+  (is (nil? (f/start-hurt 200 [{:kind :hurt :data {:causes ["suffocation"] :amount 3 :since-ms 100}}])) "its window began before the body was parked"))
 
 (deftest large-plot-setup-covers-every-block-in-small-commands
   (let [g (f/case-grid {:plot {:length 400 :width 32}})

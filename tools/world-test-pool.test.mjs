@@ -37,6 +37,7 @@ test('failSig: the :why of a failed case without a failed expectation, else empt
   assert.equal(failSig('{:status :fail, :why "no body", :id "a/x"}'), '"no body"')
   assert.equal(failSig('{:status :fail, :expects [{:status :pass}], :why "late"}'), '"late"')
   assert.equal(failSig('{:status :fail, :id "a/x"}'), '')
+  assert.equal(failSig('{:status :fail, :expects [{:status :fail, :not-judged true, :expect {:event {:kind :a}}} {:status :fail, :expect {:event {:kind :b}}}]}'), '{:event {:kind :b}}', 'a not-judged expectation is not the failing check')
 })
 test('summarize: reads the top-level :status, not a nested expectation status', () => {
   assert.equal(summarize(form('a/x', 'fail')).status, 'fail')

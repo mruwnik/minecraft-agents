@@ -18,11 +18,20 @@
        (when evidence (str ": " evidence))))
 
 (defn message
-  "The first unmet expectation, else the first failed :after check, else the run's :why; nil for a pass."
+  "The first unmet expectation (one the run stopped before judging only after the failed :after checks), else the first failed :after check, else the run's :why; nil for a pass."
   [{:keys [expects afters why]}]
-  (or (some-> (first (remove #(= :pass (:status %)) expects)) unmet-text)
-      (some #(when-not (:pass? %) (str "after " (pr-str (:check %)) ": " (:evidence %))) afters)
-      why))
+  (let [unmet (remove #(= :pass (:status %)) expects)]
+    (or (some-> (first (remove :not-judged unmet)) unmet-text)
+        (some #(when-not (:pass? %) (str "after " (pr-str (:check %)) ": " (:evidence %))) afters)
+        (some-> (first unmet) unmet-text)
+        why)))
+
+(defn with-why
+  "A failed case r with its first failure as :why when it has none, so no failed result says nothing."
+  [{:keys [status why] :as r}]
+  (if (and (= :fail status) (not why))
+    (cond-> r (message r) (assoc :why (message r)))
+    r))
 
 (def outcomes {:pass "passed" :fail "failed" :error "error" :skipped "skipped" :flaky "flaky"})
 

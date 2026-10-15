@@ -1495,6 +1495,7 @@
         stop-sweep (atom (fn []))
         pre-register (atom nil)
         setup-cursor (atom nil)
+        parked-at (atom nil)
         start-cursor (log-cursor (events-file opts))
         weather (atom nil)
         result (fn [m] (cond-> (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m)
@@ -1544,6 +1545,7 @@
                        (.then #(read-weather! rcon!))
                        (.then #(reset! weather %))
                        (.then (fn [] (ev/emit! (ev/phase :setup)) (rcon! (f/park-commands (:body opts)))))
+                       (.then #(reset! parked-at (js/Date.now)))
                        (.then (fn [] (build-plot! {:send rcon! :sleep sleep} grid origin rc)))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(write-plans-settled! opts rc))
@@ -1558,7 +1560,7 @@
                        (.then #(reset! pre-register {:offset (log-cursor (events-file opts)) :from-ms (js/Date.now)}))
                        (.then #(when register (ev/emit! (ev/phase :register)) (put-register! opts register origin)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
-                       (.then (fn [] (when-let [why (f/start-hurt (read-events-from (events-file opts) @setup-cursor))] (throw (js/Error. why)))))
+                       (.then (fn [] (when-let [why (f/start-hurt @parked-at (read-events-from (events-file opts) @setup-cursor))] (throw (js/Error. why)))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then (fn []
                                 (let [t0 (js/Date.now)
@@ -1571,8 +1573,8 @@
                                                         (.then (after-checks! opts origin rc)
                                                                (fn [afters]
                                                                  (mark-stalled
-                                                                  (result (cond-> {:status (if (and (x/passed? expects) (every? :pass? afters)) :pass :fail)
-                                                                                   :expects expects :afters afters}
+                                                                  (result (cond-> (ev/with-why {:status (if (and (x/passed? expects) (every? :pass? afters)) :pass :fail)
+                                                                                                :expects expects :afters afters})
                                                                             (some :ended-early-s expects) (assoc :ended-early-s (some :ended-early-s expects)
                                                                                                           :idle-grace-s (:idle-grace-s rc 3)))))))))))))))))))
         (.catch (fn [e] (result {:status :error :why (.-message e)})))
