@@ -27,6 +27,6 @@
    :body {:at [16.5 0 16.5] :yaw 270 :inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :fetch false})]]
    :expect [{:event {:source :job :kind :mine.flooded} :within-s 60 :of-job true}
-            {:event {:source :job :kind :result :data {:reason :flooded}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :flooded}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :mine.flooded}}]
    :after [[:block [17 0 16] "coal_ore"] [:block [17 1 16] "coal_ore"]]}]}

@@ -21,7 +21,7 @@
    :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
          [:wait-s 2]
          [:job (jobs.strip.loot-cart {:id 99999999})]]
-   :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :gone}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]}
   {:name "cart-in-another-plans-footprint-is-refused"

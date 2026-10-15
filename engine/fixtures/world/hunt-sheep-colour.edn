@@ -28,7 +28,7 @@
   {:name "hunt-white-all-sheared-stops-no-color"
    :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:0b,Sheared:1b}"] [:summon "sheep" [21.5 0 16.5] "{NoAI:1b,Color:0b,Sheared:1b}"] [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b,Sheared:1b}"]
          [:job (jobs.combat.hunt {:mob "sheep" :color "white" :count 1})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-color}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-color}} :within-s 40 :of-job true}]
    :after [[:entities "type=sheep,tag=wt" [[0 0 0] [31 3 31]] 3]]}
   {:name "obtain-white-wool-from-four-white-sheep-takes-two"
    :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:0b}"]

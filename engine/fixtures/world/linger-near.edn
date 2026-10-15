@@ -10,9 +10,9 @@
  :cases
  [{:name "walks-back-and-waits"
    :act [[:job (jobs.movement.linger-near {:pos #at [16 0 16] :range 3 :wait-s 6})]]
-   :expect [{:event {:source :job :kind :result :data {:lingered true :reason "waited"}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:lingered true :reason "waited"}} :within-s 60 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 4]]}
   {:name "pos-sealed-in-rock-ends-unreachable"
    :blocks [[:fill [14 0 14] [18 4 18] "stone"]]
    :act [[:job (jobs.movement.linger-near {:pos #at [16 1 16] :range 1 :wait-s 6})]]
-   :expect [{:event {:source :job :kind :result :data {:lingered false :reason :unreachable}} :within-s 80 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:lingered false :reason :unreachable}} :within-s 80 :of-job true}]}]}

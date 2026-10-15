@@ -70,7 +70,7 @@
   {:name "pick-up-loose-out-of-radius-names-the-radius"
    :act [[:summon "item" [16.5 0 28.5] "{Item:{id:\"minecraft:wheat_seeds\",count:16}}"]
          [:job (jobs.items.pick-up-loose {:radius 8})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :nothing-worth-it} :message [:contains "radius"]} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-worth-it} :message [:contains "radius"]} :within-s 30 :of-job true}]
    :after [[:item "wheat_seeds" 0]]
    :limit-s 50}
   ;; card 911d6b54: sealed in a 1x2 pocket the tossed junk lies at the feet and is picked up at once; the trigger rests, no toss loop
