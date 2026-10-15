@@ -2,6 +2,7 @@
   "Edits of the job list: submit! (at the end, next or now), cancel! and retry!."
   (:require [engine.core.base :refer [add-instance delete-root! driver? drop-reflex-job! emit! free-owner! job-fields job-of manual-job new-id! remove-listed running save-memory! state]]
             [engine.core.attention :refer [resolve-job-attention!]]
+            [engine.core.cleanup :as cleanup]
             [engine.core.tally :as tally]
             [engine.expr :as expr]
             [engine.memory :as mem]))
@@ -32,28 +33,54 @@
     (cond-> (update state :list #(into (conj (subvec % 0 pos) id) (subvec % pos)))
       (< pos cursor) (update :cursor inc))))
 
+(defn drop-cancelled!
+  "Remove listed job id cancelled by by, its memory cut off; job.cancelled with its report and data (by default the
+  :cut-off ending's)."
+  [eng id by report data]
+  (let [fields (job-fields eng id)]
+    (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
+    (swap! (:fruitless eng) dissoc id)
+    (swap! (:rounds eng) dissoc id)
+    (delete-root! eng id by)
+    (save-memory! eng)
+    (emit! eng (merge (into {} (filter val) (select-keys fields [:name :reflex]))
+                      {:source :job :kind :cancelled :level :info :job id :chain [id] :by by :report report
+                       :data (merge data {:kind :cut-off :cause by})}))))
+
 (defn cancel!
   "End job id (cutting its round if it is the one running): a listed job is removed, cut off by by (job.cancelled
   :data, ending e's data and report over it); a reflex job ends with reflex.ended :cancelled and its trigger may fire
-  again. by names who asked."
+  again. by names who asked. A listed job that owes a cleanup (engine.core.cleanup) stays listed until it has run
+  (job.cleaning_up now, job.cancelled then, e its ending); a cancel while it runs does not cut it. A death (by :death)
+  runs none."
   ([eng id] (cancel! eng id :agent))
   ([eng id by] (cancel! eng id by nil))
   ([eng id by e]
    (let [fields (job-fields eng id)
-         report (merge (tally/report eng id []) (:report e))]
-   (when (= id (:id (running eng)))
-     (free-owner! eng)
-     (reset! (:running eng) nil))
-   (if-let [reflex (get-in (state eng) [:instances id :reflex])]
-     (drop-reflex-job! eng id reflex :cancelled {:how :cancelled :by by})
-     (do (resolve-job-attention! eng id :job-cancelled #(remove-listed % id))
-         (swap! (:fruitless eng) dissoc id)
-         (swap! (:rounds eng) dissoc id)
-         (delete-root! eng id by)
-         (save-memory! eng)))
-   (emit! eng (merge (into {} (filter val) (select-keys fields [:name :reflex]))
-                     {:source :job :kind :cancelled :level :info :job id :chain [id] :by by :report report
-                      :data (merge (:data e) {:kind :cut-off :cause by})})))))
+         report (merge (tally/report eng id []) (:report e))
+         inst (get-in (state eng) [:instances id])
+         m (mem/job-mem (mem/view (:store eng)) id [])
+         cleans? (and inst (not (:reflex inst)) (not= :death by)
+                      (or (cleanup/closing? eng id []) (cleanup/owes? eng (first (job-of eng inst)) m)))]
+     (when (= id (:id (running eng)))
+       (free-owner! eng)
+       (reset! (:running eng) nil)
+       (when cleans? (swap! (:state eng) assoc :resume id :current nil)))
+     (cond
+       cleans?
+       (do (when-not (cleanup/closing? eng id [])
+             (cleanup/mark-closing! eng id [] (or (dissoc e :report) {:kind :cut-off :cause by})))
+           (emit! eng (merge (into {} (filter val) (select-keys fields [:name]))
+                             {:source :job :kind :cleaning_up :level :info :job id :chain [id] :by by
+                              :text "cancelled: the job's cleanup runs first"})))
+
+       (:reflex inst)
+       (do (drop-reflex-job! eng id (:reflex inst) :cancelled {:how :cancelled :by by})
+           (emit! eng (merge (into {} (filter val) (select-keys fields [:name :reflex]))
+                             {:source :job :kind :cancelled :level :info :job id :chain [id] :by by :report report
+                              :data (merge (:data e) {:kind :cut-off :cause by})})))
+
+       :else (drop-cancelled! eng id by report (:data e))))))
 
 (defn submit!
   "Put a job spec (an expression, see engine.expr) on the list. Returns the instance id; throws on a bad spec.

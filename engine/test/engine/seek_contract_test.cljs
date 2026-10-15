@@ -81,7 +81,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :stopped :kind :limit-reached :reason :timeout}
+        (is (= {:event :stopped :kind :limit-reached :reason :job-time}
                (await (fight {:targets [7] :spend {:job-time 3} :no-damage-hits 100 :max-hits 1000}
                              {:inventory h/sword :entities [(zed 7 2 {:invulnerable true})]}))))))))
 

@@ -6,6 +6,7 @@
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
             [engine.core.list-edits :refer [submit!]]
+            [engine.core.cleanup :as cleanup]
             [engine.core.ending :as ending]
             [engine.core.legacy :as legacy]
             [engine.core.limits :as limits]
@@ -181,6 +182,13 @@
     (and (= :declined status) wait) {:status :declined :reason (:reason wait)}
     :else {:status status}))
 
+(defn ctx-below
+  "The ctx of the frame at rel (slots relative to c's frame) below c, each with its args from memory."
+  [eng c rel]
+  (reduce (fn [c slot]
+            (child-ctx eng c slot (:args (mem/job-mem (mem/view (:store eng)) (:root c) (conj (:slots c) slot)))))
+          c rel))
+
 (defn ^:async call-child
   "One round of the child job def in slot under parent base (see README.md).
   The child's memory is the parent's [:children slot] sub-map. It is created
@@ -302,14 +310,18 @@
           t0 (now eng)
           c (child-ctx eng base slot args)
           own-limit #(ending/with-progress def c (limits/ending eng (:root base) slots %))
-          r (try (limits/check! eng c)
-                 (or (own-limit nil)
-                     (let [r (await (if (ending/contract-job? def) ((:round def) c) (old-round base c child-id def)))]
-                       (if (= :done (:kind r)) r (or (own-limit nil) r))))
-                 (catch :default e
-                   (or (own-limit e)
-                       (do (when-not (contract/passes-through? e) (emit! eng (assoc fields :kind :child_ended :status :error)))
-                           (throw e))))
+          below #(ctx-below eng %1 %2)
+          r (try (if (cleanup/closing? eng (:root base) slots)
+                   (await (cleanup/step eng def c below))
+                   (let [r (try (limits/check! eng c)
+                                (or (own-limit nil)
+                                    (let [r (await (if (ending/contract-job? def) ((:round def) c) (old-round base c child-id def)))]
+                                      (if (= :done (:kind r)) r (or (own-limit nil) r))))
+                                (catch :default e
+                                  (or (own-limit e)
+                                      (do (when-not (contract/passes-through? e) (emit! eng (assoc fields :kind :child_ended :status :error)))
+                                          (throw e)))))]
+                     (if (= :continue r) r (await (cleanup/close eng def c r below)))))
                  (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))]
       (when-not (owner? eng (:token base)) (throw (cut-error)))
       (if (= :continue r)
@@ -343,15 +355,17 @@
     (try
       (when ident
         (mem/update-job! (:store eng) (:id run) [] update :contract merge ident))
-      (limits/check! eng c)
-      (let [r (or (own-limit nil) (await ((:round def) c)))]
-        (assoc (normalize-result (if (or (= :done r) (= :done (:kind r))) r (or (own-limit nil) r)))
-               :result (get @results (:id run)) :child-wait @child-wait))
+      (let [below #(ctx-below eng %1 %2)
+            r (if (cleanup/closing? eng (:id run) [])
+                (await (cleanup/step eng def c below))
+                (let [r (try (limits/check! eng c)
+                             (let [r (or (own-limit nil) (await ((:round def) c)))]
+                               (if (or (= :done r) (= :done (:kind r))) r (or (own-limit nil) r)))
+                             (catch :default e (or (own-limit e) (throw e))))]
+                  (if (contract/ending? r) (await (cleanup/close eng def c r below)) r)))]
+        (assoc (normalize-result r) :result (get @results (:id run)) :child-wait @child-wait))
       (catch :default e
-        (cond
-          (own-limit e) {:status :ended :ending (own-limit e)}
-          (cut? e) {:status :cut :error e}
-          :else {:status :error :error e}))
+        (if (cut? e) {:status :cut :error e} {:status :error :error e}))
       (finally
         (tally/add-time! eng (:id run) [] (- (now eng) t0))))))
 

@@ -17,15 +17,18 @@
   (let [s (.self p)] {:health (.-health s) :food (.-food s)}))
 
 (defn frames
-  "[slots state] of each started contract frame from root down to slots."
+  "[slots state] of each started contract frame from root down to slots, from the innermost one in its cleanup
+  (engine.core.cleanup) on when there is one: a cleanup's own call bounds it, not its callers'."
   [eng root slots]
   (let [m (mem/job-mem (mem/view (:store eng)) root [])]
     (when (seq m)
-      (keep (fn [i]
-              (let [s (subvec slots 0 i)
-                    state (:contract (get-in m (mem/slot-path s)))]
-                (when (:call state) [s state])))
-            (range (inc (count slots)))))))
+      (let [fs (vec (keep (fn [i]
+                            (let [s (subvec slots 0 i)
+                                  state (:contract (get-in m (mem/slot-path s)))]
+                              (when (:call state) [s state])))
+                          (range (inc (count slots)))))
+            i (last (keep-indexed #(when (:cleanup (second %2)) %1) fs))]
+        (cond->> fs i (drop i))))))
 
 (defn crossings
   "{:slots :cause :amount :state :now :extra-ms} of each line frames cross, outermost frame first (engine.contract/crossings).

@@ -45,24 +45,24 @@
   lead-to.gather-short (:distance from :pos) and :gathered false. :gathered is true when the animal was within
   :gather-radius, or tied.
 
-  The legs let doors and gates stay open for the animal to follow; when the leading ends, in any outcome, a
-  jobs.maintenance.shut-doors child shuts the ones the legs opened.
+  Cleanup (however the job ends, the engine's limit and a cancel included): an animal still on this body's lead is let
+  go (jobs.animals.unleash), then a jobs.maintenance.shut-doors child shuts the doors and gates the legs left open for
+  the animal; the ending's :still-led is then false.
 
   Ends with info lead-to.done and a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
-  {:reason :animal key :still-led bool :at pos :gathered bool :text}. Reasons and endings:
+  {:reason :animal key :still-led bool (when the leading ended, before cleanup) :at pos :gathered bool :text}. Reasons
+  and endings:
   - :tied, :unleashed: done.
-  - :none (no animal seen within :radius), :lead-broke, :lost, :animal-stalled (the animal is still on the lead): as above.
-  - :unreachable: the walk gave up (the animal is still on the lead).
-  - :tie-failed: the post did not take the animal (still on the lead).
+  - :none (no animal seen within :radius), :lead-broke, :lost, :animal-stalled: as above.
+  - :unreachable: the walk gave up.
+  - :tie-failed: the post did not take the animal.
   - :no-fence: condition-failed, the post turned out not to be a fence on arrival.
   - :no-lead: no lead carried and obtain could not get one (the :text says why; the fetch's ending is the :because).
   - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :all-leashed) when no animal got on the lead, or
     of jobs.animals.unleash (:unreachable, :none) when the lead would not come off; :refused and :no-zones are
     condition-failed.
-  - :timeout: less than ::wrap-up-s (at most a quarter of the call's :spend :job-time) is left: an animal on the lead is let
-    go (jobs.animals.unleash) and the gates shut before the job ends :limit-reached. An end by the engine's limit
-    carries {:animal :still-led} (done?'s :data).
-  All but done, condition-failed and the timeout end nothing-possible with the reason as the cause.
+  - the engine's limit (default :spend :job-time ::timeout-s): :limit-reached with {:animal :still-led} (done?'s :data).
+  All but done and condition-failed end nothing-possible with the reason as the cause.
 
   Zones: the leash child refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
   :ignore-zones? true is passed to it.")
@@ -80,7 +80,6 @@
 
 (a/defargs settings
   {::timeout-s {:default 180 :doc "Seconds from the first round before the leading gives up." :spec (a/num-in 0 nil)}
-   ::wrap-up-s {:default 30 :doc "A leading with less time left than this (at most a quarter of its time) lets the animal go, shuts the gates and ends :timeout." :spec (a/num-in 0 nil)}
    ::max-ties {:default 2 :doc "Ties tried before the job gives up." :spec (a/int-in 0 nil)}
    ::tie-settle-ms {:default 250 :doc "How long to wait between looks at the animal after the click on the post." :spec (a/int-in 0 nil)}
    ::tie-settle-tries {:default 6 :doc "How often the animal is looked at again after the click before the tie counts as not taken." :spec (a/int-in 0 nil)}})
@@ -102,8 +101,7 @@
    :unleashed [:done nil]
    :no-fence [:condition-failed :no-fence]
    :refused [:condition-failed :refused]
-   :no-zones [:condition-failed :no-zones]
-   :timeout [:limit-reached {:line :job-time :reason :timeout}]})
+   :no-zones [:condition-failed :no-zones]})
 
 (defn end!
   "End the call with the ending of reason (ending-of) and data; a failed child's ending kept in :because is attached."
@@ -132,8 +130,7 @@
     (end! c reason (cond-> result (not ok?) (assoc :text (stop-text c reason))))))
 
 (defn finish!
-  "End the leading with reason: the gates its walks left open are shut first (close-up!), then conclude!. Any reason but
-  :tied and :unleashed is a stop."
+  "End the leading with reason (conclude! at the next step). Any reason but :tied and :unleashed is a stop."
   [c reason]
   (ctx/update-mem! c assoc :ending reason)
   :again)
@@ -176,12 +173,6 @@
 
 (defn time-limit "Seconds the leading may take." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (timeout-s)))
-
-(defn time-up?
-  "Whether the call has less time left (ctx/left) than its wrap-up margin."
-  [c]
-  (some-> (get-in (ctx/left c) [:spend :job-time])
-          (< (min (settings/get settings ::wrap-up-s) (/ (time-limit c) 4)))))
 
 (defn quote-of [c]
   (let [most (time-limit c)]
@@ -268,7 +259,7 @@
            (:steps plan)))))
 
 (defn ^:async walk! [c]
-  (let [r (await (escort/walk-legs! c :walk (destination c) (:range (:args c)) escort/safe-gap time-up?))]
+  (let [r (await (escort/walk-legs! c :walk (destination c) (:range (:args c)) escort/safe-gap))]
     (cond
       (= :waiting r) :yield
       (#{:searching :stopped} r) :again
@@ -291,7 +282,7 @@
   (let [d (u/flat-dist animal-pos (:pos (:args c)))]
     (if (await (path-leaves-reach? c target animal-pos))
       (stop-gathering! c d)
-      (let [r (await (escort/walk-legs! c :pull target pull-range escort/follow-reach time-up?))]
+      (let [r (await (escort/walk-legs! c :pull target pull-range escort/follow-reach))]
         (cond
           (= :waiting r) :yield
           (#{:searching :stopped} r) :again
@@ -326,7 +317,6 @@
                     (await (pull! c target animal-pos))))))))
 
 (defn ^:async let-go! [c]
-  (set-phase! c :release)
   (let [e (await (ctx/call c :unleash 'jobs.animals.unleash {:mob (:mob (:args c)) :animal (:animal (ctx/mem c))
                                                               :radius (:watch-radius (:args c))
                                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
@@ -334,16 +324,7 @@
       (= :continue e) :yield
       (not= :done (:kind e)) (fail-with! c (child-reason e) e)
       :else (do (ctx/update-mem! c assoc :still-led false)
-                (finish! c (if (:timed-out (ctx/mem c)) :timeout (child-reason e)))))))
-
-(defn time-up!
-  "Out of time: an animal on the lead is let go first (phase :release), then the job ends :timeout."
-  [c]
-  (let [{:keys [still-led phase]} (ctx/mem c)]
-    (ctx/update-mem! c assoc :timed-out true)
-    (if (and still-led (#{:walk :gather :arrive} phase))
-      (do (set-phase! c :release) :again)
-      (finish! c :timeout))))
+                (finish! c (child-reason e))))))
 
 (defn tied?
   "True when the animal is held by something else than this body."
@@ -396,8 +377,7 @@
           a (when animal (escort/animal-now c))]
       (when a (ctx/update-mem! c dissoc :unseen-since))
       (cond
-        (:ending (ctx/mem c)) (await (escort/close-up! c conclude!))
-        (and (not (:timed-out (ctx/mem c))) (time-up? c)) (time-up! c)
+        (:ending (ctx/mem c)) (conclude! c (:ending (ctx/mem c)))
         (and fence (contains? #{nil :arrive} phase) (not-fence? c)) (finish! c :no-fence)
         (nil? phase) (do (ctx/update-mem! c assoc :origin (u/self-pos c))
                          (set-phase! c (if (animals/lead-carried? c) :leash :get-lead)) :again)
@@ -410,7 +390,6 @@
         (= :walk phase) (do (await (watch/watch! c {})) (await (walk! c)))
         (= :gather phase) (do (await (watch/watch! c {})) (await (gather! c a)))
         (= :arrive phase) (await (arrive! c))
-        (= :release phase) (await (let-go! c))
         :else (finish! c :lost)))))
 
 (defn ^:async round
@@ -422,3 +401,19 @@
         :again (recur)
         :yield :continue
         r))))
+
+(defn ^:async cleanup
+  "However the leading ended: an animal still on this body's lead is let go (jobs.animals.unleash; its ending when it
+  fails), then the doors and gates the legs left open are shut (escort/close-up!). Done with {:still-led false}."
+  [c _]
+  (if (:still-led (ctx/mem c))
+    (let [e (await (ctx/call c :unleash 'jobs.animals.unleash {:mob (:mob (:args c)) :animal (:animal (ctx/mem c))
+                                                                :radius (:watch-radius (:args c))
+                                                                :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+      (cond
+        (= :continue e) :continue
+        (not= :done (:kind e)) e
+        :else (do (ctx/update-mem! c assoc :still-led false)
+                  (await (cleanup c nil)))))
+    (let [r (await (escort/close-up! c (fn [c _] (ctx/end c :done nil {:still-led false}))))]
+      (if (= :yield r) :continue r))))

@@ -7,6 +7,7 @@
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
             [engine.core.ending :refer [clear-asked!]]
+            [engine.core.cleanup :as cleanup]
             [engine.core.activity :refer [check-body-idle! check-idle! restart-body-idle! section-level sections]]
             [engine.core.list-edits :refer [submit!]]
             [engine.core.round :refer [check-ctx]]
@@ -43,13 +44,14 @@
   (some-> (:waiting eng) deref (get id)))
 
 (defn check-passes?
-  "Whether listed instance id would start now (ctx/check-wait). Its wait reason is told once with
+  "Whether listed instance id would start now (ctx/check-wait; a job closing for its cleanup always would). Its wait reason is told once with
   note-waiting!. A throwing check is a bug, not a world state: the job is parked like a round that threw."
   [eng id]
   (let [inst (get-in (state eng) [:instances id])
         wait (atom nil)
         ok? (try (let [[def args] (job-of eng inst)]
-                   (nil? (reset! wait (ctx/check-wait (check-ctx eng inst args) def))))
+                   (or (cleanup/closing? eng id [])
+                       (nil? (reset! wait (ctx/check-wait (check-ctx eng inst args) def)))))
                  (catch :default e
                    (let [error (str e)]
                      (emit! eng {:source :system :kind :error :level :warn :job id

@@ -119,7 +119,7 @@
           (is (<= escort/max-wait-ms waited) "the cow was waited for the whole bound")
           (is (< waited (+ escort/max-wait-ms 3000)) "and given up soon after it"))))))
 
-(deftest a-tie-walk-that-cannot-arrive-ends-unreachable-with-the-cow-still-led
+(deftest a-tie-walk-that-cannot-arrive-ends-unreachable-and-its-cleanup-lets-the-cow-go
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -128,7 +128,8 @@
               s (await (scenario {:fence {:x 10 :y 64 :z 5}} {:inventory lead :blocks post :entities [(cow 1 3)] :unreachable near} 14))]
           (is (finished? s))
           (is (= :unreachable (:reason (done-event s))))
-          (is (true? (:still-led (done-event s)))))))))
+          (is (false? (:still-led (first (events-of s :stopped)))))
+          (is (not (:leashed-to-me (cow-of s 1)))))))))
 
 (deftest gathers-a-trailing-cow-to-the-spot-before-letting-it-go
   (async done
@@ -389,16 +390,16 @@
           (is (finished? s))
           (is (= :lost (:reason (done-event s)))))))))
 
-(deftest an-unreachable-spot-ends-with-the-cow-still-on-the-lead
+(deftest an-unreachable-spot-ends-and-its-cleanup-lets-the-cow-go
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3)] :unreachable ["30,64,0"]} 14))
-              c (cow-of s 1)]
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3)] :unreachable ["30,64,0"]} 14))]
           (is (finished? s))
           (is (= :unreachable (:reason (done-event s))))
-          (is (true? (:leashed-to-me c)))
-          (is (true? (:still-led (done-event s)))))))))
+          (is (not (:leashed-to-me (cow-of s 1))))
+          (is (= 1 (count-of s "lead")))
+          (is (false? (:still-led (first (events-of s :stopped))))))))))
 
 (def animal-at-3 {:x 3 :y 64 :z 0})
 
@@ -559,7 +560,7 @@
       (fn ^:async t []
         (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 9})]} 60))]
           (is (= :animal-stalled (:reason (done-event s))))
-          (is (true? (:still-led (done-event s))))
+          (is (false? (:still-led (first (events-of s :stopped)))) "the cleanup let it go")
           (is (< (first (:pos (fake/self (:p s)))) 14) "the body stopped when the cow fell 8 or more behind"))))))
 
 (deftest a-spot-in-the-air-is-still-walked-in-legs
@@ -724,7 +725,7 @@
               s {:eng eng :clock clock :p p}]
           (await (submit s {} 1))
           (is (seq @pauses) "the wait is a pause child")
-          (is (= #{{:seconds (/ escort/wait-look-ms 1000) :why :waiting-for-animal}} (set @pauses))))))))
+          (is (contains? (set @pauses) {:seconds (/ escort/wait-look-ms 1000) :why :waiting-for-animal})))))))
 
 (deftest a-started-lead-is-not-refused-for-a-post-that-stopped-being-a-fence
   (let [f (second (first lead-to/conditions))
@@ -732,7 +733,7 @@
     (is (= :no-fence (:reason (lead-to/start-fact c))) "the fact refuses")
     (is (nil? (f (assoc c :quote-call {}))) "started: step ends it through finish!")))
 
-(deftest a-leading-short-of-time-lets-the-cow-go-and-ends-on-its-timeout
+(deftest a-leading-out-of-time-ends-on-the-engines-limit-and-its-cleanup-lets-the-cow-go
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -740,9 +741,7 @@
           (.override (.-world p) "steer" (fn [token args impl] (swap! clock + 10000) (impl token args)))
           (await (submit s {:spend {:job-time 120}} 30))
           (is (finished? s))
-          (is (= :timeout (:reason (done-event s))))
-          (is (false? (:still-led (done-event s))))
-          (is (not (true? (:leashed (cow-of s 1)))) "the cow is let go before the budget runs out")
-          (is (= 1 (count-of s "lead")))
-          (is (= [:timeout] (mapv :reason (events-of s :lead-to.gave-up))))
-          (is (= [:timeout] (mapv :reason (events-of s :stopped))) "the job's own ending, not the engine's"))))))
+          (is (= [:job-time] (mapv :reason (events-of s :stopped))) "the engine's limit ends it")
+          (is (false? (:still-led (first (events-of s :stopped)))))
+          (is (not (true? (:leashed (cow-of s 1)))) "the cleanup lets the cow go")
+          (is (= 1 (count-of s "lead"))))))))

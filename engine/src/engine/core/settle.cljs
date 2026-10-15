@@ -4,6 +4,7 @@
   (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! job-fields manual-job manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
             [engine.core.fruitless :refer [book-round! note-fruitless!]]
+            [engine.core.list-edits :refer [drop-cancelled!]]
             [engine.core.register :refer [trigger-holds?]]
             [engine.core.round :refer [run-round]]
             [engine.core.tally :as tally]
@@ -84,6 +85,8 @@
         fields (job-fields eng id)]
     (case status
       :ended
+      (if (= :cut-off (:kind ending))
+        (drop-cancelled! eng id (:cause ending) (ending-report eng id ending) (:data ending))
       (let [report (ending-report eng id ending)
             data (ending-data ending)]
         (resolve-job-attention! eng id :job-completed
@@ -95,7 +98,7 @@
                                     :data data :report report}
                             (when (:text data) {:text (:text data)}))
                      (merge fields {:source :job :kind :stopped :level :warn :attention :notice
-                                    :data data :text (stopped-text data) :report report}))))
+                                    :data data :text (stopped-text data) :report report})))))
 
       :done
       (let [report (tally/end-root! eng id true)]

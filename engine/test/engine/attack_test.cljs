@@ -233,16 +233,16 @@
           (is (= [[7 :too-many-hits]] (mapv (juxt :target :reason) (events-of s :attack.gave-up))))
           (is (= :gave-up (:reason (done-event s)))))))))
 
-(deftest times-out
+(deftest the-engines-limit-ends-a-fight-past-its-time
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:targets [7] :spend {:job-time 3} :no-damage-hits 100 :max-hits 1000}
                                  {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 7))]
           (is (finished? s))
-          (is (= [:timeout] (mapv :reason (events-of s :stopped))) "it ends itself before the engine's limit")
-          (is (= 1 (count (events-of s :attack.timeout))))
-          (is (= :timeout (:reason (done-event s)))))))))
+          (is (= [:job-time] (mapv :reason (events-of s :stopped))) "the engine's limit ends it")
+          (is (= [] (:killed (first (events-of s :stopped)))) "with done?'s data")
+          (is (= [] (events-of s :attack.timeout))))))))
 
 (deftest equips-the-weapon-once
   (async done
