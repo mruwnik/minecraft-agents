@@ -88,7 +88,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup (merge aside {:inventory [{:name "stone" :count 2}]}) [(zs/whole-zone "Miles")])]
           (seed! eng [dug])
-          (let [r (await (bd/child-outcome eng 'jobs.survival.restore-broken {} 20))]
+          (let [r (await (tu/child-outcome eng 'jobs.survival.restore-broken {} 20))]
             (is (= {:status :done :restored 1} r))))
         (let [{:keys [eng p seen]} (restore! aside [(zs/whole-zone "Miles")] [])]
           (await (zs/run-until-empty eng 6))

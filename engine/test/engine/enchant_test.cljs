@@ -83,11 +83,7 @@
   "Run the job as the child of a recording parent until the list is empty, at most n ticks; the child's result."
   [eng job-form n]
   (let [out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid (first job-form) (second job-form)))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent (first job-form) (second job-form) out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
     (core/submit! eng '(recording-parent) {})
     (await (run-until-empty eng n))

@@ -32,9 +32,16 @@
 
 (defn xyz [[x y z]] {:x x :y y :z z})
 
+(defn ending-of
+  "The ending of a stub's result r: stopped with its :reason when its :status is :stopped, else done; the rest its data."
+  [c r]
+  (if (= :stopped (:status r))
+    (ctx/end c :nothing-possible (:reason r) (dissoc r :status :reason))
+    (ctx/end c :done nil (dissoc r :status))))
+
 (defn stub-of [real round-fn]
-  (assoc (dissoc real :conditions :target :quote-of) :check (constantly true)
-         :round (fn ^:async stub-round [c] (round-fn c) :done)))
+  (assoc (dissoc real :target :quote-of :done?) :conditions []
+         :round (fn ^:async stub-round [c] (ending-of c (round-fn c)))))
 
 (defn ending-job
   "The real job of sym with its round replaced by one that ends with kind and cause."
@@ -48,24 +55,25 @@
 
 (defn smelt-stub
   "jobs.items.smelt over a furnaces atom {furnace {:phase :cooking|:ready :item :count}}: the first call loads and yields, the
-  check declines :cooking until the furnace is :ready, then the next call gives the ingots; :fail makes it stop with that reason."
+  condition fails :cooking until the furnace is :ready, then the next call gives the ingots; :fail makes it stop with that reason."
   [p calls furnaces fail]
   (let [key-of (comp pr-str :furnace :args)]
-    (assoc (dissoc (get registry/jobs 'jobs.items.smelt) :conditions :target :done? :quote-of)
-           :check (fn [c] (or (not= :cooking (:phase (get @furnaces (key-of c)))) (do (ctx/wait c {:reason :cooking}) false)))
+    (assoc (dissoc (get registry/jobs 'jobs.items.smelt) :target :done? :quote-of)
+           :conditions [[:fn #(when (= :cooking (:phase (get @furnaces (key-of %)))) :cooking)]]
            :round (fn ^:async smelt-round [c]
                     (swap! calls conj ['jobs.items.smelt (:args c)])
                     (let [{:keys [furnace item count]} (:args c)
                           state (get @furnaces (key-of c))]
                       (cond
-                        fail (do (ctx/result! c {:status :stopped :reason fail}) :done)
-                        (nil? state) (do (swap! (fake/state p) update :inventory (fn [inv] (mapv #(if (= item (:name %)) (update % :count - count) %) inv)))
+                        fail (ctx/end c :nothing-possible fail)
+                        (= :cooking (:phase state)) (ctx/end c :condition-failed :cooking)
+                        (nil? state)
+ (do (swap! (fake/state p) update :inventory (fn [inv] (mapv #(if (= item (:name %)) (update % :count - count) %) inv)))
                                          (swap! furnaces assoc (key-of c) {:phase :cooking :item item :count count})
                                          :continue)
                         :else (do (fake/add-item! p "iron_ingot" (:count state))
                                   (swap! furnaces dissoc (key-of c))
-                                  (ctx/result! c {:smelted (:count state) :wanted (:count state)})
-                                  :done)))))))
+                                  (ctx/end c :done nil {:smelted (:count state) :wanted (:count state)}))))))))
 
 (defn ready! [furnaces] (swap! furnaces update-vals #(assoc % :phase :ready)))
 
@@ -97,13 +105,13 @@
                                          (let [r (let [r (get @results sym res)] (if (fn? r) (r (:args c)) r))]
                                            (when (and (= 'jobs.items.get-tool sym) (not= :stopped (:status r))) (fake/add-item! p "shears" 1))
                                            (when (= 'jobs.access.stair sym) (swap! (fake/state p) assoc-in [:self :pos 1] (:y (:args c))))
-                                           (ctx/result! c r))))]))
+                                           r)))]))
         go-to (stub-of (get registry/jobs 'jobs.movement.go-to)
                        (fn [c]
                          (let [pos (:pos (:args c))
                                [x y z] (if (map? pos) [(:x pos) (:y pos) (:z pos)] pos)]
                            (swap! (fake/state p) assoc-in [:self :pos] [x y z])
-                           (ctx/result! c {:arrived true}))))
+                           {:arrived true})))
         clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         eng (core/create {:primitives p :jobs (merge (assoc (merge registry/jobs stubs) 'jobs.movement.go-to go-to 'jobs.items.smelt (smelt-stub p calls furnaces fail-smelt)) ending-jobs)

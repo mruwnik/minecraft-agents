@@ -128,11 +128,7 @@
         (let [{:keys [eng p]} (setup {:blocks eight})
               world (.-world p)
               out (atom nil)
-              parent {:check (constantly true)
-                      :round (fn ^:async r [c]
-                               (let [r (await (ctx/call-child c :kid job box))]
-                                 (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :status)))
-                                 r))}
+              parent (tu/recording-parent job box out #(dissoc (tu/outcome %) :status))
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
           (.hold world "dig")
@@ -155,11 +151,7 @@
               {:keys [eng p]} (setup {:blocks {"30,64,30" "dirt" "31,64,30" "dirt"} :floor [-5 -5 35 35]
                                       :unloaded ["30,64,30" "31,64,30"]})
               out (atom :not-done)
-              parent {:check (constantly true)
-                      :round (fn ^:async r [c]
-                               (let [r (await (ctx/call-child c :kid job far))]
-                                 (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :status)))
-                                 r))}
+              parent (tu/recording-parent job far out #(dissoc (tu/outcome %) :status))
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
           (await (core/tick! eng))
@@ -317,11 +309,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks eight})
               out (atom :not-done)
-              parent {:check (constantly true)
-                      :round (fn ^:async r [c]
-                               (let [r (await (ctx/call-child c :kid job box))]
-                                 (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :status)))
-                                 r))}
+              parent (tu/recording-parent job box out #(dissoc (tu/outcome %) :status))
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
           (await (core/tick! eng))
@@ -333,12 +321,12 @@
       (fn ^:async t []
         (let [t1 {:x 1 :y 64 :z 1}
               seen* (atom {:rs [] :skipped :none})
-              parent {:check (constantly true)
+              parent {:conditions []
                       :round (fn recording-round [c]
                                (dotimes [_ 5]
                                  (swap! seen* update :rs conj (clear-box/declined! c t1 {:reason :not-loaded :pos t1})))
                                (swap! seen* assoc :skipped (:skipped (ctx/mem c) {}) :cell-tries (:cell-tries (ctx/mem c) {}))
-                               :done)}
+                               (ctx/end c :done nil))}
               {:keys [eng]} (setup {:blocks {"1,64,1" "dirt"}})
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})

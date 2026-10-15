@@ -247,11 +247,7 @@
       (fn ^:async t []
         (let [{:keys [eng clock]} (h/setup {:inventory h/sword :entities [(cow 1 3) (cow 2 5)]} 20)
               out (atom nil)
-              parent {:check (constantly true)
-                      :round (fn ^:async hunting-parent [c]
-                               (let [r (await (ctx/call-child c :kid 'jobs.combat.hunt {:count 2 :keep 0}))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                 r))}
+              parent (tu/recording-parent 'jobs.combat.hunt {:count 2 :keep 0} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'hunting-parent parent))]
           (core/submit! eng '(hunting-parent) {})
           (dotimes [_ 60]

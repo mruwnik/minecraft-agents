@@ -189,11 +189,7 @@
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks four})
               world (.-world p)
               out (atom nil)
-              parent {:check (constantly true)
-                      :round (fn ^:async r [c]
-                               (let [r (await (ctx/call-child c :kid job box))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                 r))}
+              parent (tu/recording-parent job box out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
           (.hold world "useOn")

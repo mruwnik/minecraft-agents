@@ -573,10 +573,10 @@
   "The tend condition, evaluated in a round of a probe job beside wait-for-dusk, as for a call with :quote-call? (started)."
   [s args started?]
   (let [out (atom ::none)
-        probe {:check (constantly true)
+        probe {:conditions []
                :round (fn ^:async probe-round [c]
                         (reset! out ((second (first tend/conditions)) (cond-> (assoc c :args args) started? (assoc :quote-call {}))))
-                        :done)}
+                        (ctx/end c :done nil))}
         eng (assoc-in (:eng s) [:jobs 'probe] probe)]
     (core/submit! eng '(jobs.time.wait-for-dusk) {})
     (core/submit! eng '(probe) {})
@@ -604,10 +604,10 @@
   "Run tend with args as a ctx/call child of a recording parent in setup s, at most n ticks: the child's {:kind :cause :data}."
   [s args n]
   (let [out (atom nil)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid 'jobs.farm.tend args))]
-                           (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) :done))))}
+                           (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in (:eng s) [:jobs 'recording-parent] parent)]
     (core/submit! eng '(recording-parent) {})
     (dotimes [_ n]

@@ -24,11 +24,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent job args out)
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -97,13 +93,12 @@
           (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")
           (is (empty? (worn p))))))))
 
-(deftest a-missing-item-waits-on-its-condition
+(deftest a-missing-item-is-a-failed-condition
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng out]} (await (wear (stacks "dirt") {:item "iron_helmet"}))]
-          (is (= :not-done @out) "the round never ran")
-          (is (seq (:list (core/state eng)))))))))
+        (let [{:keys [out]} (await (wear (stacks "dirt") {:item "iron_helmet"}))]
+          (is (= [:condition-failed :no-item] ((juxt (comp :kind :ending) :reason) @out))))))))
 
 (deftest nothing-better-than-worn-is-done-before-any-round
   (let [job (get registry/jobs job)

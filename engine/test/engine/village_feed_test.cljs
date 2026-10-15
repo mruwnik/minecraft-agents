@@ -41,13 +41,11 @@
   ([world args n prepare seed prepare-eng]
   (let [s (h/setup world)
         out (atom :not-done)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
                          (when (and seed (nil? (get-in (ctx/mem c) [:children :kid])))
                            (ctx/update-mem! c assoc-in [:children :kid] (merge {:args args :children {}} seed)))
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+                         (await ((:round (tu/recording-parent job args out)) c)))}
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'recording-parent parent))]
     (prepare (:p s))
     (when prepare-eng (prepare-eng eng))
@@ -153,7 +151,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out]} (await (feed {:entities [(villager 2)]} {:villager "v-1" :fetch false} 20 identity))]
-          (is (= :not-done @out) "declined at the check")
+          (is (= [:condition-failed :need] ((juxt (comp :kind :ending) :reason) @out)) "a failed condition, no round")
           (is (empty? (tosses p))))))))
 
 (deftest food-is-fetched-from-a-seen-chest-by-default

@@ -22,11 +22,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
         out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent job args out)
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -67,14 +63,13 @@
         (let [{:keys [out]} (await (equip (assoc (stacks "iron_pickaxe") :self {:held "iron_pickaxe"}) {:item "iron_pickaxe"}))]
           (is (= {:status :done :already? true} @out)))))))
 
-(deftest a-missing-item-waits-as-a-failed-condition
+(deftest a-missing-item-is-a-failed-condition
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out seen]} (await (equip (stacks "dirt") {:item "iron_pickaxe" :fetch false}))]
-          (is (= :not-done @out))
-          (is (nil? (held p)))
-          (is (some #{"job.waiting"} (tu/kinds seen))))))))
+        (let [{:keys [p out]} (await (equip (stacks "dirt") {:item "iron_pickaxe" :fetch false}))]
+          (is (= [:condition-failed :no-item] [(:kind (:ending @out)) (:reason @out)]))
+          (is (nil? (held p))))))))
 
 (deftest an-unknown-item-name-is-impossible
   (async done

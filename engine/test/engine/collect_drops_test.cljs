@@ -31,7 +31,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks steps})]
           (drop! p [3 61 0] "porkchop")
           (seen-from-above! p)
-          (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["porkchop"]} 30))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["porkchop"]} 30))]
             (is (= 1 (:collected result)))
             (is (= :done (:status result)))
             (is (= 1 (bd/carried p "porkchop")))
@@ -45,7 +45,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,62,0" "stone"}})]
           (drop! p [0 63 0] "dirt")
-          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
             (is (= 1 (:collected result)))
             (is (empty? (bd/left-drops seen)))
             (is (= [1] (mapv :maxDropDown (collect-args p))))))))))
@@ -56,7 +56,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,63,0" "air" "0,61,0" "stone"}})]
           (drop! p [0 62 0] "dirt")
-          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
             (is (= 0 (:collected result)))
             (is (= [:too-deep] (mapv :reason (bd/left-drops seen))))
             (is (empty? (bd/calls p "collect")))))))))
@@ -68,7 +68,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,62,0" "stone" "1,63,0" "lava"}})]
           (aset p "sensedAt" (fn [pos] (if (= [1 63 0] [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
           (drop! p [0 63 0] "dirt")
-          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
             (is (= 0 (:collected result)))
             (is (= [:unseen-cell] (mapv :reason (bd/left-drops seen))))
             (is (seq (filter #(= :sense.looked (:kind %)) @seen)) "it looked before it left the drop")
@@ -81,7 +81,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,63,0" "air" "1,59,0" "stone"}})]
           (drop! p [1 60 0] "dirt")
           (seen-from-above! p)
-          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
             (is (= 0 (:collected result)))
             (is (= [:too-deep] (mapv :reason (bd/left-drops seen))))
             (is (not-any? #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "no go-to walk down the hole")
@@ -97,7 +97,7 @@
               {:keys [eng p seen]} (bd/setup {:self body :blocks pocket})]
           (drop! p [5 58 0] "dirt")
           (seen-from-above! p)
-          (let [result (await (bd/child-outcome eng job {:radius 8} 30))]
+          (let [result (await (tu/child-outcome eng job {:radius 8} 30))]
             (is (= 0 (:collected result)))
             (is (= :nothing-possible (get-in result [:ending :kind])) "drops seen, none collected: never :done")
             (is (= :none-collected (:reason result)))
@@ -109,7 +109,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (bd/setup {:self body})
-              result (await (bd/child-outcome eng job {:radius 6} 10))]
+              result (await (tu/child-outcome eng job {:radius 6} 10))]
           (is (= 0 (:collected result)))
           (is (= :done (:status result))))))))
 
@@ -132,7 +132,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,63,0" "air" "0,62,0" "air" "0,61,0" "stone"}})]
           (drop! p [0 62 0] "dirt")
           (falling-first! p)
-          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
             (is (= 0 (:collected result)))
             (is (= [:too-deep] (mapv :reason (bd/left-drops seen))))
             (is (empty? (bd/calls p "collect")))))))))
@@ -147,7 +147,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :blocks leaf-wall})]
           (drop! p [4 64 0] "oak_log")
-          (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
@@ -157,7 +157,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :blocks leaf-wall})]
           (drop! p [4 64 0] "oak_log")
-          (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0}} 30))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0}} 30))]
             (is (= 0 (:collected result)))
             (is (= 0 (bd/carried p "oak_log")))))))))
 
@@ -167,7 +167,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body})]
           (drop! p [1 64 0] "oak_log")
-          (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3 :want 3} 80))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3 :want 3} 80))]
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
@@ -180,7 +180,7 @@
         (let [{:keys [eng p]} (bd/setup {:self body :time night-ms :blocks (assoc leaf-wall "0,66,0" "stone")})]
           (drop! p [4 64 0] "oak_log")
           (let [result (with-redefs [sh/buried? (constantly true)]
-                         (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60)))]
+                         (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60)))]
             (is (= 1 (:collected result)))))))))
 
 (deftest a-search-held-by-the-night-gives-up-with-a-reason
@@ -189,7 +189,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (bd/setup {:self body :time night-ms :blocks (assoc leaf-wall "0,67,0" "stone")})]
           (drop! p [4 64 0] "oak_log")
-          (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
             (is (= 0 (:collected result)))
             (is (= :search-waited (:reason result)))
             (is (= :nothing-possible (get-in result [:ending :kind])) "a search that waited too long found nothing it could do")
@@ -202,7 +202,7 @@
         (let [{:keys [eng p]} (bd/setup {:self body :blocks leaf-wall})]
           (drop! p [-1 64 0] "oak_sapling")
           (drop! p [4 64 0] "oak_log")
-          (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log" "oak_sapling"] :want-items ["oak_log"]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log" "oak_sapling"] :want-items ["oak_log"]
                                                          :near {:x 4 :y 64 :z 0} :search 3 :want 1} 80))]
             (is (= 2 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
@@ -214,7 +214,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body})]
           (drop! p [4 64 0] "oak_log")
           (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible false) es)))
-          (let [result (await (bd/child-outcome eng job {:radius 6 :ids [999]} 30))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :ids [999]} 30))]
             (is (= 0 (:collected result)))
             (is (= [{:reason :unseen :ids [999]}] (:left result)))
             (is (= [:unseen] (mapv :reason (bd/left-drops seen))))))))))
@@ -231,7 +231,7 @@
                        (fn [token args impl]
                          (swap! (fake/state p) update :entities (fn [es] (mapv #(cond-> % (= b (:id %)) (assoc :visible false)) es)))
                          (impl token args)))
-            (let [result (await (bd/child-outcome eng job {:radius 8 :ids [a b]} 30))]
+            (let [result (await (tu/child-outcome eng job {:radius 8 :ids [a b]} 30))]
               (is (= [{:reason :unseen :ids [b] :last {b [4 64 1]}}] (:left result))))))))))
 
 (deftest a-drop-in-a-sealed-pocket-is-dug-to-with-dig-true
@@ -244,7 +244,7 @@
               {:keys [eng p seen]} (bd/setup {:self body :inventory [{:name "wooden_pickaxe" :count 1}] :blocks pocket})]
           (drop! p [5 58 0] "dirt")
           (seen-from-above! p)
-          (let [result (await (bd/child-outcome eng job {:radius 8 :dig true} 80))]
+          (let [result (await (tu/child-outcome eng job {:radius 8 :dig true} 80))]
             (is (pos? (:collected result)) "the dug stone came in with it")
             (is (= 1 (bd/carried p "dirt")))
             (is (empty? (:left result)))))))))
@@ -266,7 +266,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,62,0" "stone"}})]
           (drop! p [0 63 0] "dirt")
           (collect-unreachable-first! p 5)
-          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
             (is (= 0 (:collected result)))
             (is (= [:unreachable] (mapv :reason (:left result))))
             (is (= [:unreachable] (mapv :reason (bd/left-drops seen))))))))))
@@ -278,7 +278,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,62,0" "stone"}})]
           (drop! p [0 63 0] "dirt")
           (collect-unreachable-first! p 1)
-          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]] :dig true} 20))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :holes [[0 63 0]] :dig true} 20))]
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "dirt")))
             (is (empty? (:left result)))

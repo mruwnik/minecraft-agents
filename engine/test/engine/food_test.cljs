@@ -216,11 +216,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 20} :inventory [{:name "bread" :count 2}]})
               out (atom nil)
-              parent {:check (constantly true)
-                      :round (fn ^:async r [c]
-                               (let [s (await (ctx/call-child c :kid 'jobs.survival.eat {:until 21}))]
-                                 (reset! out (ctx/child-result c :kid))
-                                 s))}
+              parent (tu/recording-parent 'jobs.survival.eat {:until 21} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'eat-parent parent))]
           (core/submit! eng '(eat-parent) {})
           (await (core/tick! eng))
@@ -233,11 +229,11 @@
   [world args]
   (let [{:keys [eng]} (setup world)
         out (atom nil)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async r [c]
                          (let [e (await (ctx/call c :kid 'jobs.survival.eat args))]
                            (reset! out e)
-                           (if (= :continue e) :continue :done)))}
+                           (if (= :continue e) :continue (ctx/end c :done nil))))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'eat-parent parent))]
     (core/submit! eng '(eat-parent) {})
     (await (core/tick! eng))
@@ -269,11 +265,7 @@
         (let [world {:self {:food 4} :inventory [{:name "bread" :count 5}]}
               {:keys [eng]} (setup world)
               out (atom nil)
-              parent {:check (constantly true)
-                      :round (fn ^:async r [c]
-                               (let [s (await (ctx/call-child c :kid 'jobs.survival.eat {:max-bites 2}))]
-                                 (reset! out (ctx/child-result c :kid))
-                                 s))}
+              parent (tu/recording-parent 'jobs.survival.eat {:max-bites 2} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'eat-parent parent))
               job (get registry/jobs 'jobs.survival.eat)
               c {:primitives (tu/fake world) :view (fn [] {:data mem/empty-data :now 0}) :args {:until 18 :allow-bad false :item nil :max-bites nil}}

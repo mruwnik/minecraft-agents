@@ -551,7 +551,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake (or world {:self {:onFire true} :blocks (merge (floor 8) {"1,64,0" "fire"})})))
         n (atom 0)
-        go-to {:check (fn [_] true)
+        go-to {:conditions []
                :round (fn ^:async go-to-round [c] (step c p (swap! n inc)))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'jobs.movement.go-to go-to) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
@@ -566,7 +566,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen go-tos]} (setup-blocked (fn [c p _] (put-out! p) ((:result c) {:status :done :arrived true}) :done))]
+        (let [{:keys [eng p seen go-tos]} (setup-blocked (fn [c p _] (put-out! p) (ctx/end c :done nil {:arrived true})))]
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= 1 @go-tos))
@@ -586,8 +586,7 @@
               {:keys [eng p seen go-tos]} (setup-blocked (fn [c p _]
                                                            (reset! places-at-go-to (count (calls p "place")))
                                                            (swap! (fake/state p) update :self assoc :onFire false :inLava false)
-                                                           ((:result c) {:status :done :arrived true})
-                                                           :done)
+                                                           (ctx/end c :done nil {:arrived true}))
                                                          world)]
           (await (run-until-empty eng 3))
           (is (= (extinguish/max-covers) @places-at-go-to) "covers first, then the go-to")
@@ -605,7 +604,7 @@
               {:keys [eng p seen go-tos]} (setup-blocked (fn [c p n]
                                                            (if (< n 6)
                                                              :continue
-                                                             (do (put-out! p) ((:result c) {:status :done :arrived true}) :done))))]
+                                                             (do (put-out! p) (ctx/end c :done nil {:arrived true})))))]
           (await (run-until-empty eng many))
           (is (= [] (:list (core/state eng))))
           (is (= 6 @go-tos) "continued five times, arrived on the sixth")
@@ -617,8 +616,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen go-tos]} (setup-blocked (fn [c _ _]
-                                                           ((:result c) {:status :stopped :arrived false :reason :unreachable :text "walled in"})
-                                                           :done))]
+                                                           (ctx/end c :nothing-possible :unreachable {:arrived false :text "walled in"})))]
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= :stuck (stopped-reason seen)))
@@ -632,10 +630,9 @@
       (fn ^:async t []
         (let [{:keys [eng p seen go-tos]} (setup-blocked (fn [c p n]
                                                            (when (= 6 n) (put-out! p))
-                                                           ((:result c) (if (#{3 6} n)
-                                                                          {:status :done :arrived true}
-                                                                          {:status :stopped :arrived false :reason :unreachable :text "walled in"}))
-                                                           :done))]
+                                                           (if (#{3 6} n)
+                                                             (ctx/end c :done nil {:arrived true})
+                                                             (ctx/end c :nothing-possible :unreachable {:arrived false :text "walled in"}))))]
           (await (run-until-empty eng 10))
           (is (= 6 @go-tos))
           (is (= [] (of-kind seen :extinguish_stuck)))
@@ -645,7 +642,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen go-tos]} (setup-blocked (fn [c _ _] ((:result c) {:status :done :arrived true}) :done))]
+        (let [{:keys [eng seen go-tos]} (setup-blocked (fn [c _ _] (ctx/end c :done nil {:arrived true})))]
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= :still-burning (stopped-reason seen)))
@@ -845,7 +842,7 @@
 (def noop-stub
   "A jobs.time.noop stand-in that records each pause asked of it and ends at once."
   (fn [pauses]
-    {:check (constantly true)
+    {:conditions []
      :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}))
 
 (deftest standing-off-the-fire-waits-in-noop-pause-children

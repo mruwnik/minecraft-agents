@@ -43,7 +43,7 @@
         raw (tu/fake-on-floor (assoc w :floor-block "andesite"))
         p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc sight :now #(deref clock))))
         out (atom :not-done)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
                            (when-not (= :continue e)
@@ -51,7 +51,7 @@
                                                 {:kind (:kind e)
                                                  :status (if (= :done (:kind e)) :done :stopped)}
                                                 (when (not= :done (:kind e)) {:reason (contract/cause-key e)}))))
-                           (if (= :continue e) :continue :done)))}
+                           (if (= :continue e) :continue (ctx/end c :done nil))))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock) :world (ew/of-data {} {} [f/own-zone])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

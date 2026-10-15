@@ -388,11 +388,7 @@
   [job-ns args spec plans zones n]
   (let [s (setup spec plans zones)
         out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job-ns args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent job-ns args out)
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'recording-parent parent))]
     (core/submit! eng '(recording-parent) {})
     (dotimes [_ n]

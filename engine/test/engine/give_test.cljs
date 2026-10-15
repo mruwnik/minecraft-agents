@@ -26,11 +26,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
         out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :ending :status)))
-                           r))}
+        parent (tu/recording-parent job args out #(dissoc (tu/outcome %) :ending :status))
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -122,7 +118,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (give {:entities [(steve 10)]} {:player "Steve" :item "bread"} 5 true))]
-          (is (= :not-done @out) "waits on its :no-item condition")
+          (is (= {:reason :no-item} @out) "fails its :no-item condition")
           (is (empty? (calls p "toss"))))))))
 
 (deftest a-player-who-is-never-there-is-gone-after-two-seconds

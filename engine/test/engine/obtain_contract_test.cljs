@@ -19,8 +19,8 @@
   "What job quotes for args, asked by a parent's round."
   [{:keys [eng]} job args]
   (let [out (atom nil)
-        parent {:check (constantly true)
-                :round (fn ^:async quoting-round [c] (reset! out (await (ctx/quote c job args))) :done)}
+        parent {:conditions []
+                :round (fn ^:async quoting-round [c] (reset! out (await (ctx/quote c job args))) (ctx/end c :done nil))}
         eng (assoc-in eng [:jobs 'quoting-parent] parent)]
     (core/submit! eng '(quoting-parent) {})
     (await (tu/run-until-empty eng 5))
@@ -112,10 +112,10 @@
           (let [runs (atom 0)
                 mine (assoc (get registry/jobs 'jobs.gather.mine) :round (fn ^:async stuck [c] (swap! runs inc) (ctx/end c :nothing-possible cause {:got 0})))
                 out (atom nil)
-                parent {:check (constantly true)
+                parent {:conditions []
                         :round (fn ^:async recording-round [c]
                                  (let [e (await (ctx/call c :kid 'jobs.items.obtain {:item "raw_iron" :explore false}))]
-                                   (if (= :continue e) :continue (do (reset! out e) :done))))}
+                                   (if (= :continue e) :continue (do (reset! out e) (ctx/end c :done nil)))))}
                 s (with-redefs [registry/jobs (assoc registry/jobs 'jobs.gather.mine mine 'recording-parent parent)]
                     (f/start (oi/ore-world {"1,64,4" "iron_ore"} [{:name "stone_pickaxe" :count 1}]) []))]
             (core/submit! (:eng s) '(recording-parent) {})

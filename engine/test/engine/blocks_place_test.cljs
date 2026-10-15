@@ -21,10 +21,10 @@
   it does not end)."
   [env args n]
   (let [out (atom nil)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
-                           (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) :done))))}
+                           (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) (ctx/end c :done nil)))))}
         eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
     (core/submit! eng '(recording-parent) {})
     (await (tu/run-until-empty eng n))
@@ -35,7 +35,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (bd/setup {:self body :inventory cobble})
-              result (await (bd/child-outcome eng job {:pos [2 64 0] :item "cobblestone"} 5))]
+              result (await (tu/child-outcome eng job {:pos [2 64 0] :item "cobblestone"} 5))]
           (is (= {:placed true :pos at :item "cobblestone" :reason :placed :block {:name "cobblestone" :state {}}} (dissoc result :status)))
           (is (= "cobblestone" (bd/block-at p at)))
           (is (= 3 (bd/carried p "cobblestone")))
@@ -48,7 +48,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body :inventory cobble})
               why "Server refused to place cobblestone at (2, 64, 0): the block is still air"]
           (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason why}))
-          (let [result (await (bd/child-outcome eng job {:pos at :item "cobblestone"} 5))
+          (let [result (await (tu/child-outcome eng job {:pos at :item "cobblestone"} 5))
                 done-event (first (filter #(= :blocks.place.done (:kind %)) @seen))]
             (is (= :stopped (:status result)))
             (is (= why (:why result)))
@@ -64,7 +64,7 @@
                          [#js {:status "weird"} #"weird"]]]
           (let [{:keys [eng p]} (bd/setup {:self body :inventory cobble})
                 _ (.override (.-world p) "place" (fn ^:async f [_ _ _] r))
-                result (await (bd/child-outcome eng job {:pos at :item "cobblestone"} 5))]
+                result (await (tu/child-outcome eng job {:pos at :item "cobblestone"} 5))]
             (is (= :failed (:reason result)))
             (is (re-find why (str (:why result))) (.-status r))))))))
 
@@ -74,7 +74,7 @@
       (fn ^:async t []
         (doseq [args [{:use {:blocks ["cobblestone" "dirt"]}} {:any-of ["cobblestone" "dirt"]}]]
           (let [{:keys [eng p]} (bd/setup {:self body :inventory [{:name "dirt" :count 1}]})
-                result (await (bd/child-outcome eng job (assoc args :pos at) 5))]
+                result (await (tu/child-outcome eng job (assoc args :pos at) 5))]
             (is (= {:placed true :item "dirt"} (select-keys result [:placed :item])) (pr-str args))
             (is (= "dirt" (bd/block-at p at)))))))))
 
@@ -83,7 +83,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :inventory cobble})
-              result (await (bd/child-outcome eng job {:pos at} 5))]
+              result (await (tu/child-outcome eng job {:pos at} 5))]
           (is (= {:placed true :item "cobblestone"} (select-keys result [:placed :item])))
           (is (= "cobblestone" (bd/block-at p at))))))))
 
@@ -92,7 +92,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :inventory cobble})
-              result (await (bd/child-outcome eng job {:pos {:x 12 :y 64 :z 0} :item "cobblestone"} 20))]
+              result (await (tu/child-outcome eng job {:pos {:x 12 :y 64 :z 0} :item "cobblestone"} 20))]
           (is (:placed result))
           (is (= "cobblestone" (bd/block-at p {:x 12 :y 64 :z 0}))))))))
 
@@ -112,7 +112,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :blocks {"2,64,0" "cobblestone"} :inventory cobble})
-              result (await (bd/child-outcome eng job {:pos at :item "cobblestone"} 5))]
+              result (await (tu/child-outcome eng job {:pos at :item "cobblestone"} 5))]
           (is (= {:status :done :already? true} (select-keys result [:status :already?])) "the engine ends it before a round")
           (is (empty? (bd/calls p "place"))))))))
 
@@ -122,7 +122,7 @@
       (fn ^:async t []
         (doseq [plant ["short_grass" "poppy" "snow"]]
           (let [{:keys [eng p]} (bd/setup {:self body :blocks {"2,64,0" plant "2,63,0" "grass_block"} :inventory cobble})
-                result (await (bd/child-outcome eng job {:pos at :item "cobblestone"} 8))]
+                result (await (tu/child-outcome eng job {:pos at :item "cobblestone"} 8))]
             (is (:placed result) plant)
             (is (= [[2 64 0]] (mapv #(let [a (.-pos (.-args %))] [(.-x a) (.-y a) (.-z a)]) (bd/calls p "dig"))) plant)
             (is (= "cobblestone" (bd/block-at p at)) plant)))))))
@@ -141,7 +141,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (bd/setup {:self body :blocks {"2,64,0" "stone" "2,63,0" "stone"} :inventory cobble})]
-          (let [r (await (bd/child-outcome (:eng env) job {:pos at :item "cobblestone"} 5))]
+          (let [r (await (tu/child-outcome (:eng env) job {:pos at :item "cobblestone"} 5))]
             (is (= {:placed false :reason :occupied :block "stone"} (select-keys r [:placed :reason :block]))))
           (is (empty? (bd/calls (:p env) "dig"))))
         (let [env (bd/setup {:self body :blocks {"2,64,0" "stone" "2,63,0" "stone"} :inventory cobble})
@@ -169,9 +169,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [a (bd/setup {:self body :blocks {"2,64,0" "stone" "2,63,0" "stone"} :inventory cobble})
-              _ (await (bd/child-outcome (:eng a) job {:pos at :item "cobblestone"} 5))
+              _ (await (tu/child-outcome (:eng a) job {:pos at :item "cobblestone"} 5))
               c (bd/setup {:self body :inventory cobble})
-              _ (await (bd/child-outcome (:eng c) job {:pos [2 64 0] :item "cobblestone"} 5))]
+              _ (await (tu/child-outcome (:eng c) job {:pos [2 64 0] :item "cobblestone"} 5))]
           (is (= "did not place cobblestone at [2 64 0]: occupied by stone" (done-text (:seen a))))
           (is (= "placed cobblestone at [2 64 0]" (done-text (:seen c)))))))))
 
@@ -183,7 +183,7 @@
           (is (= {:reason :not-allowed :pos at :by :zone :zone "farm" :owner "Miles"}
                  (:cause (await (bd/waiting-after env (list job {:pos at :item "cobblestone"}) 3))))))
         (let [{:keys [eng p]} (bd/setup {:self body :inventory cobble :zones [bd/farm-zone]})
-              result (await (bd/child-outcome eng job {:pos at :item "cobblestone" :ignore-zones? true} 5))]
+              result (await (tu/child-outcome eng job {:pos at :item "cobblestone" :ignore-zones? true} 5))]
           (is (:placed result))
           (is (= [{:cell [2 64 0] :action :place :was "air" :now "cobblestone"}]
                  (mapv #(select-keys (:data %) [:cell :action :was :now]) (mem/entries (mem/view (:store eng)) :tidy))))
@@ -209,7 +209,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (bd/setup {:self body})]
           (is (= {:kind :impossible :cause :bad-args} (update (await (ending-of {:eng eng} {:pos at} 3)) :cause :reason)))
-          (is (= {:placed false :reason :bad-args} (select-keys (await (bd/child-outcome eng job {:pos at} 3)) [:placed :reason]))))))))
+          (is (= {:placed false :reason :bad-args} (select-keys (await (tu/child-outcome eng job {:pos at} 3)) [:placed :reason]))))))))
 
 (deftest a-cell-of-the-bodys-own-plan-is-placed-another-bodys-plan-refuses
   (async done
@@ -218,7 +218,7 @@
         (let [plan {:id "hut" :parts [{:id "w" :cells [[2 64 0]] :want "cobblestone"}]}
               own (bd/setup {:self body :inventory cobble :plans {"hut" (shape/with-author plan "Fake")}})
               other (bd/setup {:self body :inventory cobble :plans {"hut" (shape/with-author plan "Miles")}})]
-          (is (:placed (await (bd/child-outcome (:eng own) job {:pos at :item "cobblestone"} 5))))
+          (is (:placed (await (tu/child-outcome (:eng own) job {:pos at :item "cobblestone"} 5))))
           (is (= {:reason :not-allowed :by :footprint :plan "hut"}
                  (select-keys (:cause (await (bd/waiting-after other (list job {:pos at :item "cobblestone"}) 3))) [:reason :by :plan]))))))))
 
@@ -273,7 +273,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :blocks {"0,63,0" "farmland"} :inventory [{:name "wheat_seeds" :count 2}]})
-              result (await (bd/child-outcome eng job {:pos [0 64 0] :item "wheat_seeds"} 5))]
+              result (await (tu/child-outcome eng job {:pos [0 64 0] :item "wheat_seeds"} 5))]
           (is (= {:placed true :item "wheat_seeds"} (select-keys result [:placed :item])))
           (is (= "wheat" (bd/block-at p {:x 0 :y 64 :z 0}))))))))
 
@@ -303,7 +303,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (pen-env)
-              result (await (bd/child-outcome eng job {:pos [16 64 0] :item "dirt"} 40))]
+              result (await (tu/child-outcome eng job {:pos [16 64 0] :item "dirt"} 40))]
           (is (= true (:placed result)))
           (is (zero? (gate-clicks p)) "the gates stay shut, the walk went round"))))))
 
@@ -312,12 +312,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (pen-env)
-              declined (await (bd/child-outcome eng job {:pos [9 64 0] :item "dirt"} 40))]
+              declined (await (tu/child-outcome eng job {:pos [9 64 0] :item "dirt"} 40))]
           (is (not= true (:placed declined)))
           (is (zero? (gate-clicks p)))
           (is (some #(and (= :blocks.pen-kept-out (:kind %)) (re-find #"\[5 64 0\]" (:text %))) @seen)))
         (let [{:keys [eng]} (pen-env)
-              allowed (await (bd/child-outcome eng job {:pos [9 64 0] :item "dirt" :enter-pens true} 40))]
+              allowed (await (tu/child-outcome eng job {:pos [9 64 0] :item "dirt" :enter-pens true} 40))]
           (is (= true (:placed allowed))))))))
 
 (def use-on 'jobs.blocks.use-on)
@@ -328,7 +328,7 @@
       (fn ^:async t []
         (doseq [pos [[5 64 0] [7 63 2]]]
           (let [{:keys [eng p seen]} (pen-env)
-                result (await (bd/child-outcome eng use-on {:pos pos} 40))]
+                result (await (tu/child-outcome eng use-on {:pos pos} 40))]
             (is (not= :unreachable (:reason result)) (pr-str pos))
             (is (= 1 (gate-clicks p)) (pr-str pos))
             (is (empty? (filter #(= :blocks.pen-kept-out (:kind %)) @seen)) (pr-str pos))))))))
@@ -338,12 +338,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (pen-env)
-              declined (await (bd/child-outcome eng use-on {:pos [10 63 0]} 40))]
+              declined (await (tu/child-outcome eng use-on {:pos [10 63 0]} 40))]
           (is (= :unreachable (:reason declined)))
           (is (zero? (gate-clicks p)))
           (is (some #(and (= :blocks.pen-kept-out (:kind %)) (re-find #"\[5 64 0\]" (:text %))) @seen)))
         (let [{:keys [eng]} (pen-env)
-              allowed (await (bd/child-outcome eng use-on {:pos [10 63 0] :enter-pens true} 40))]
+              allowed (await (tu/child-outcome eng use-on {:pos [10 63 0] :enter-pens true} 40))]
           (is (not= :unreachable (:reason allowed))))))))
 
 (deftest a-use-on-ends-by-its-click-status
@@ -356,10 +356,10 @@
           (let [env (bd/setup {:self body :inventory cobble})
                 _ (.override (.-world (:p env)) "useOn" (fn ^:async f [_ _ _] #js {:status status}))
                 out (atom nil)
-                parent {:check (constantly true)
+                parent {:conditions []
                         :round (fn ^:async r [c]
                                  (let [e (await (ctx/call c :kid use-on {:pos at}))]
-                                   (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) :done))))}
+                                   (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) (ctx/end c :done nil)))))}
                 eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
             (core/submit! eng '(recording-parent) {})
             (await (tu/run-until-empty eng 5))
@@ -371,12 +371,12 @@
       (fn ^:async t []
         (let [env (bd/setup {:self body :inventory cobble})
               out (atom [])
-              parent {:check (constantly true)
+              parent {:conditions []
                       :round (fn ^:async r [c]
                                (doseq [[j args] [[job {:pos at :item "cobblestone"}] [job {:pos [30 64 0] :item "cobblestone"}]
                                                  [use-on {:pos [30 64 0]}]]]
                                  (swap! out conj (await (ctx/quote c j args))))
-                               :done)}
+                               (ctx/end c :done nil))}
               eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
           (core/submit! eng '(recording-parent) {})
           (await (tu/run-until-empty eng 5))

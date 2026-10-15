@@ -236,11 +236,7 @@
       (fn ^:async t []
         (let [{:keys [eng clock]} (setup-seeing {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops})
               out (atom nil)
-              parent {:check (constantly true)
-                      :round (fn ^:async seeding-parent [c]
-                               (let [r (await (ctx/call-child c :kid 'jobs.gather.get-seeds {:count 2}))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                 r))}
+              parent (tu/recording-parent 'jobs.gather.get-seeds {:count 2} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'seeding-parent parent))]
           (core/submit! eng '(seeding-parent) {})
           (dotimes [_ 40]
@@ -272,7 +268,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng] :as s} (setup-with-jobs {:blocks {"6,64,0" "short_grass"} :drops seed-drops}
-                                                    {'jobs.movement.go-to {:check (constantly true) :round (fn [_] :continue)}})]
+                                                    {'jobs.movement.go-to {:conditions [] :round (fn [_] :continue)}})]
           (core/submit! eng (spec {:count 1}) {})
           (await (run-ticks s 6 700))
           (is (zero? (dig-count s)))
@@ -586,7 +582,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (setup-with-jobs {} {'jobs.storage.withdraw {:check (constantly false) :round (fn [_] :done)}})]
+        (let [s (setup-with-jobs {} {'jobs.storage.withdraw (tu/job [(constantly :not-ready)] nil)})]
           (core/submit! (:eng s) (spec {:count 2 :chest {:x 10 :y 64 :z 0}}) {})
           (await (run-ticks s 30 700))
           (is (= :withdraw-declined (:reason (done-event s))))

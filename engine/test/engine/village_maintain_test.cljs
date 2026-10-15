@@ -17,19 +17,21 @@
 
 (defn stubs
   "Recording stand-ins for the child jobs: calls collects [job args]; ends maps a job to its result (default {}), :boom,
-  {:decline reason} (its check waits), or a fn of the ctx and the call count that returns :continue or a result."
+  {:decline reason} (its condition fails), or a fn of the ctx and the call count that returns :continue or a result
+  (ends :nothing-possible with its :reason when its :status is :stopped, or with its :kind and :cause when given; else done)."
   [calls ends]
   (fn [jobs]
     (reduce (fn [m j]
               (let [e (get ends j {})]
-                (assoc m j {:check (fn [c] (swap! calls conj [:check j]) (or (not (:decline e)) (ctx/wait c {:reason (:decline e)})))
+                (assoc m j {:conditions [[:fn (fn [_] (swap! calls conj [:check j]) (when (:decline e) {:reason (:decline e)}))]]
                             :round (fn [c]
                                      (swap! calls conj [j (:args c)])
                                      (let [r (if (fn? e) (e c (count (filter #(= j (first %)) @calls))) e)]
                                        (when (= :boom r) (throw (js/Error. "boom")))
                                        (cond
                                          (= :continue r) :continue
-                                         :else (do (ctx/result! c r) :done))))})))
+                                         (= :stopped (:status r)) (ctx/end c (:kind r :nothing-possible) (:cause r (:reason r)) (dissoc r :status :reason :kind :cause))
+                                         :else (ctx/end c :done nil (dissoc r :status)))))})))
             jobs (vals children))))
 
 (defn ^:async scenario
@@ -155,7 +157,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:plan "p" :target 4} (apply world pair)
-                                 {'jobs.build.from-plan {:status :stopped :reason :timeout}}))]
+                                 {'jobs.build.from-plan {:status :stopped :kind :limit-reached :cause {:line :time :reason :timeout}}}))]
           (is (empty? (ran s 'jobs.village.breed)) "no later step is called")
           (is (= [:stopped :timeout] (ending s))))))))
 

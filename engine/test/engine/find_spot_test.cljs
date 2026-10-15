@@ -234,11 +234,7 @@
               orig (.-blockAt p)
               _ (set! (.-blockAt p) (fn [pos] (swap! reads inc) (.call orig p pos)))
               out (atom :not-done)
-              parent {:check (constantly true)
-                      :round (fn ^:async recording-round [c]
-                               (let [r (await (ctx/call-child c :kid job a))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                 r))}
+              parent (tu/recording-parent job a out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))
               ;; one patch row: (2*range+1) z cells x w columns, each reading at most the
               ;; top scan (2*depth) + 1 + the sky scan (2*depth + 8)
@@ -261,11 +257,7 @@
               orig (.-blockAt p)
               _ (set! (.-blockAt p) (fn [pos] (swap! reads inc) (.call orig p pos)))
               out (atom :not-done)
-              parent {:check (constantly true)
-                      :round (fn ^:async recording-round [c]
-                               (let [r (await (ctx/call-child c :kid job a))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                 r))}
+              parent (tu/recording-parent job a out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
           (await (run-until-empty eng 40))
@@ -282,11 +274,7 @@
               expected (scan-at world {:x 0 :y 64 :z 0} a {:x 0 :y 64 :z 0})
               {:keys [eng p]} (setup {:blocks world})
               out (atom :not-done)
-              parent {:check (constantly true)
-                      :round (fn ^:async recording-round [c]
-                               (let [r (await (ctx/call-child c :kid job a))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                 r))}
+              parent (tu/recording-parent job a out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
           (await (core/tick! eng))

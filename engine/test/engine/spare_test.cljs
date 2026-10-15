@@ -55,8 +55,8 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (bd/setup {:self bd/body :blocks {"2,64,0" "stone" "2,64,1" "stone"}
                                             :inventory [worn]})]
-          (await (bd/child-outcome eng 'jobs.blocks.dig {:pos [2 64 0]} 10))
-          (await (bd/child-outcome eng 'jobs.blocks.dig {:pos [2 64 1]} 10))
+          (await (tu/child-outcome eng 'jobs.blocks.dig {:pos [2 64 0]} 10))
+          (await (tu/child-outcome eng 'jobs.blocks.dig {:pos [2 64 1]} 10))
           (is (= 1 (count (filter #(= :tool.low (:kind %)) @seen)))))))))
 
 (deftest a-spare-fetched-from-afar-does-not-move-the-stairs-start

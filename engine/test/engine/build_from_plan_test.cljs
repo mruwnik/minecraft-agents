@@ -910,11 +910,7 @@
         (let [{:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan)})
               out (atom nil)
               cut? (atom false)
-              parent {:check (constantly true)
-                      :round (fn ^:async r [c]
-                               (let [r (await (ctx/call-child c :kid job {:plan "pen"}))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                 r))}
+              parent (tu/recording-parent job {:plan "pen"} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (.override (.-world p) "place"
                      (fn ^:async f [token args impl]

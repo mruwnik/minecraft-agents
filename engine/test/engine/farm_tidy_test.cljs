@@ -47,11 +47,7 @@
   "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result."
   [eng args n]
   (let [out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (dissoc (ctx/child-result c :kid) :status)))
-                           r))}
+        parent (tu/recording-parent job args out #(dissoc (tu/outcome %) :status))
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
     (core/submit! eng '(recording-parent) {})
     (await (run-until-empty eng n))

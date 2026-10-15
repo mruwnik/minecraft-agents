@@ -48,7 +48,7 @@
 (def spider {:id 9 :name "cave_spider" :kind "hostile" :pos {:x 3 :y 64 :z 0} :health 12})
 (def pick-torches (into kit [{:name "torch" :count 8}]))
 
-(defn run! [{:keys [eng]} a] (bd/child-outcome eng job a 400))
+(defn run! [{:keys [eng]} a] (tu/child-outcome eng job a 400))
 (defn gone? [p cells] (every? #(#{"air" "cave_air"} (bd/block-at p %)) cells))
 (defn cart [id pos] {:id id :name "chest_minecart" :kind "other" :pos pos :health 5
                      :items [{:name "iron_ingot" :count 3}] :drops [{:name "chest_minecart" :count 1}]})

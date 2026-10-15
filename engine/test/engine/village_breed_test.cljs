@@ -43,11 +43,7 @@
         p (or p (tu/fake-on-floor (merge {:floor h/flight-floor} world)))
         now (tu/act-clock clock p 0)
         out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async r [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent job args out)
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent) :triggers {}
                           :dir (or dir (tu/tmp-dir)) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
@@ -118,7 +114,7 @@
             (is (= [:stopped :no-pair] ((juxt :status :reason) @out)) "after one look the child ends condition-failed :no-pair; the job never starts")
             (is (empty? (tosses p)))))
         (let [{:keys [p out]} (await (breed {:entities pair} (assoc args :fetch false) 30 identity))]
-          (is (= :not-done @out) "no food is a condition: the job waits, not started")
+          (is (= [:condition-failed :no-food] ((juxt (comp :kind :ending) :reason) @out)) "no food is a condition: the job never starts")
           (is (empty? (tosses p))))))))
 
 (deftest an-adult-walking-into-view-is-not-a-birth

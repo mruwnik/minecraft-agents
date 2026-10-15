@@ -49,11 +49,7 @@
   "Run the job as the child of a recording parent, the clock moving 700 ms a tick, until the list is empty (at most n ticks)."
   [{:keys [eng clock]} args n]
   (let [out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent job args out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]

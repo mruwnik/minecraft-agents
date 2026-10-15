@@ -20,7 +20,7 @@
 (defn world [& {:keys [at inventory extra zones] :or {at -3 inventory (into cobble tools)}}]
   (bd/setup {:self {:pos {:x at :y 64 :z 0}} :blocks (merge corridor extra) :inventory inventory :drops drops :zones (or zones [])}))
 
-(defn run! [{:keys [eng]} a] (bd/child-outcome eng job a 120))
+(defn run! [{:keys [eng]} a] (tu/child-outcome eng job a 120))
 (defn solid? [p cell] (= "cobblestone" (bd/block-at p cell)))
 (defn feet-x [p] (js/Math.floor (.-x (.-pos (.self p)))))
 (defn placed-cells [p] (mapv #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (bd/calls p "place")))

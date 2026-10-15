@@ -621,11 +621,7 @@
   [world args]
   (let [{:keys [eng p clock]} (setup world)
         out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid 'jobs.items.smelt args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent 'jobs.items.smelt args out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
@@ -727,7 +723,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {pos-key "furnace"} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}]})
-              result (await (bd/child-outcome eng 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "cooked_chicken" :count 1} 2))]
+              result (await (tu/child-outcome eng 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "cooked_chicken" :count 1} 2))]
           (is (= {:name "chicken" :count 1} (:input (furnace-of p))))
           (is (nil? (:reason result))))))))
 
@@ -736,10 +732,10 @@
   [world args]
   (let [{:keys [eng p]} (setup world)
         out (atom nil)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid 'jobs.items.smelt args))]
-                           (if (= :continue e) e (do (reset! out e) :done))))}
+                           (if (= :continue e) e (do (reset! out e) (ctx/end c :done nil)))))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
     (core/submit! eng '(recording-parent) {})
     (await (ticks eng 3))
@@ -758,7 +754,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:inventory [{:name "coal" :count 2}]})
-              result (await (bd/child-outcome eng 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 1} 3))]
+              result (await (tu/child-outcome eng 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 1} 3))]
           (is (= :stopped (:status result))))))))
 
 (deftest without-a-furnace-and-none-seen-it-ends-with-a-reason
@@ -812,11 +808,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
         out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid 'jobs.items.smelt args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent 'jobs.items.smelt args out)
         eng (assoc eng :jobs (merge (:jobs eng) jobs {'recording-parent parent}))]
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
@@ -1012,7 +1004,7 @@
                 gave-up-rows
                 (fn ^:async one [[label world item reason]]
                   (let [{:keys [eng]} (setup world)
-                        r (await (bd/child-outcome eng 'jobs.items.smelt (assoc contract-args :item item) 8))]
+                        r (await (tu/child-outcome eng 'jobs.items.smelt (assoc contract-args :item item) 8))]
                     (is (= :condition-failed (get-in r [:ending :kind])) label)
                     (is (= (keyword reason) (:reason r)) label)
                     (is (zero? (:smelted r 0)) label)))))))))
@@ -1024,11 +1016,7 @@
         (let [world {:blocks {pos-key "furnace"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 1}]}
               {:keys [eng p clock]} (setup world)
               out (atom nil)
-              parent {:check (constantly true)
-                      :round (fn ^:async rec [c]
-                               (let [r (await (ctx/call-child c :kid 'jobs.items.smelt contract-args))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                 r))}
+              parent (tu/recording-parent 'jobs.items.smelt contract-args out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
           (await (ticks eng 1))
