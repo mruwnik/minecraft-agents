@@ -115,6 +115,17 @@ sleep 1.5
 flock -n "$MC_COMPILE_LOCK" true; check "lock free while a worktree waits for a slot" "$?" 0
 wait $WP; check "worktree without a slot exits 75" "$?" 75
 
+# a worktree's server start queues for a slot (long default wait, periodic status line) and succeeds once one frees
+printf '#!/bin/sh\nshift\necho "$RES_SLOT_MAX_WAIT_MS" > "%s/maxwait"\necho "res-slot: waiting for server (6/6 slots in use)" >&2\nwhile [ ! -e "%s/release" ]; do sleep 0.1; done\nexec "$@"\n' "$T" "$T" > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
+rm -f "$T/wt/dashboard/.shadow-cljs/"*
+printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\n' > "$T/bin/npx"
+MC_COMPILE_MIN_START_MB=0 MC_COMPILE_WAIT_LINE_S=0 timeout 60 "$T/wt/tools/compile" engine test >"$T/q.out" 2>&1 & QP=$!
+for _ in $(seq 1 100); do grep -q 'queued for a server slot' "$T/q.out" && break; sleep 0.1; done
+grep -q 'queued for a server slot: waiting for server' "$T/q.out"; check "queued compile prints the slot line" "$?" 0
+touch "$T/release"; wait $QP; check "queued compile succeeds once a slot frees" "$?" 0
+check "worktree server waits 45 min for a slot by default" "$(cat "$T/maxwait")" 2700000
+kill "$(cat "$T/wt/dashboard/.shadow-cljs/server.pid")" 2>/dev/null; rm -f "$T/release"
+
 # a worktree's server stops after an idle time (no compile): the slot frees; a compile within the time keeps it
 printf '#!/bin/sh\nshift\nexec "$@"\n' > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
 rm -f "$T/wt/dashboard/.shadow-cljs/"*
