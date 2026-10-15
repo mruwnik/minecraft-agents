@@ -438,6 +438,18 @@
           (is (re-find #"no seen chest that may hold dirt" (no-source-why s :stopped)))
           (is (re-find #"no recipe makes dirt" (no-source-why s :stopped))))))))
 
+(deftest obtain-books-a-chest-that-would-not-open-as-blocked-not-empty
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {chest-at []}) (assoc :inventory [{:name "dirt" :count 2}])) [own-zone])]
+          (.override (.-world (:p s)) "inspectContainer" (fn [_ _ _] #js {:status "timeout"}))
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 3 :ways #{:chest}}) {})
+          (await (run-ticks s 5))
+          (is (= 1 (count (inspects s))) "asked once, not again")
+          (is (re-find #"could not be opened.*timeout" (no-source-why s :stopped)))
+          (is (re-find #"-2 64 3" (no-source-why s :stopped))))))))
+
 (deftest obtain-cobblestone-wait-names-the-missing-pickaxe
   (async done
     (tu/run-async done

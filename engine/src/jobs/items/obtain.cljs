@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.items.obtain.base :refer [args-error carried-of holds makes? max-gap-ms max-inspections names-of tried! wanted-fields way?]]
-            [jobs.items.obtain.chest :refer [candidates inspect! withdraw!]]
+            [jobs.items.obtain.chest :refer [blocked-text candidates inspect! withdraw!]]
             [jobs.items.obtain.craft :refer [craft-step!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
             [jobs.items.obtain.need :refer [explorable? gather-held gather-viable?]]
@@ -204,7 +204,7 @@
             (cond
               known (await (withdraw! c (:pos known) (:stock known) names have))
               (and unknown (< (:inspected m 0) (max-inspections))) (await (inspect! c (:pos unknown)))
-              :else (tried! c :chest (if (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :none-seen))))
+              :else (tried! c :chest (cond (seq (:blocked-chests m)) :blocked (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :else :none-seen))))
           (and (makes? c) (not (get-in m [:tried :craft]))
                (or (not (way? c :gather)) (get-in m [:craft :step]) (get-in m [:craft :table-unreachable]) (craft-plan c names (- target have))))
           (await (craft-step! c names have target))
@@ -219,6 +219,7 @@
             (ctx/end c :nothing-possible (merge {:reason k :why why} (wanted-fields a)) (assoc data :tried (:tried m) :why why)))
           :else
           (let [why (str "no source for " (clojure.string/join "/" names) ": " (no-source-why c names (:count a))
+                         (blocked-text (:blocked-chests m))
                          (tried-text (:tried m) (get-in m [:gather :why]) (get-in m [:craft :detail])))]
             (ctx/end c :nothing-possible (merge {:reason :no-source :why why} (wanted-fields a))
                      (assoc data :tried (:tried m) :why why))))))))

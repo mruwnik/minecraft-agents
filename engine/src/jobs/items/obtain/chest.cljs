@@ -33,16 +33,25 @@
   "Walk to within 3 of the chest (a go-to child), look into it and book its stock. :continue while go-to waits, else :again."
   [c pos]
   (let [cell (stock/cell-of pos)
-        mark! #(ctx/update-mem! c (fn [m] (-> m (update :done-chests (fnil conj #{}) cell) (update :inspected (fnil inc 0)))))
+        mark! (fn [why]
+                (ctx/update-mem! c (fn [m] (-> m (update :done-chests (fnil conj #{}) cell) (update :inspected (fnil inc 0))
+                                               (assoc-in [:blocked-chests pos] why)))))
         w (when-not (u/within? (u/self-pos c) pos 3)
             (await (child/call-walk* c :walk {:pos pos :range 3 :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true})))]
     (cond
       (= :continue w) :continue
-      (and w (not (:arrived (:data w)))) (do (mark!) :again)
+      (and w (not (:arrived (:data w)))) (do (mark! "unreachable") :again)
       :else
       (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos pos})))]
         (if (= "ok" (.-status seen))
           (do (stock/note-stock! c pos (.-items seen))
               (ctx/update-mem! c update :inspected (fnil inc 0)))
-          (mark!))
+          (mark! (str (.-status seen))))
         :again))))
+
+(defn blocked-text
+  "\"; chest at x y z could not be opened (status)\" for each chest given up unopened, or nil."
+  [blocked]
+  (not-empty
+   (apply str (for [[p why] blocked]
+                (str "; chest at " (:x p) " " (:y p) " " (:z p) " could not be " (if (= "unreachable" why) "reached" (str "opened (" why ")")))))))
