@@ -4,9 +4,11 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as b]
+            [jobs.lib.choose :as choose]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.found :as found]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.access.rules :as rules]))
@@ -23,7 +25,9 @@
   Every cell of the section that is not a solid block is closed with a carried block of the call's :use {:blocks} (default the :seal fillers; a
   jobs.blocks.place child).
   Loose things in it (rails, cobwebs, torches, fences, ladders ...) are dug first (jobs.blocks.dig child, no fetch) and
-  the drops picked up (torches come back). The rows go up from the bottom, the centre bottom cell last, so the body
+  the drops picked up (torches come back).
+  With none of the blocks carried they are fetched first (jobs.lib.need, :fetch; a failed fetch ends the call with its
+  ending as the :because), before the walk to the stand; with :fetch off for items it stops :no-blocks at once. The rows go up from the bottom, the centre bottom cell last, so the body
   keeps its view. A container in the section is never dug (:blocked). Zones, claims and plans are the place rules'.
 
   done? is :ok when the section is shut, its drops picked up and no child under way: ends :done {:placed n} (0 =
@@ -46,6 +50,7 @@
    :side {:doc "the side the body ends on: :from (lower coordinate) or :to" :spec #{:from :to} :default nil}
    :width {:doc "cells across the corridor" :spec (a/int-in 1 9) :default 3}
    :height {:doc "cells up the corridor" :spec (a/int-in 1 9) :default 3}
+   :fetch {:doc "get the blocks to close with (jobs.lib.need): true, a set of kinds or a map of limits; false (or without :item) stops :no-blocks" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def loose #"(^|_)(rail|torch|fence|fence_gate|ladder|lantern|button|lever|carpet|sign|banner|pressure_plate)$|^cobweb$")
@@ -138,6 +143,24 @@
   [c]
   (ctx/use c :blocks))
 
+(defn fetch-opts
+  "The limits {:how :explore :minutes} for fetching blocks, nil when :fetch does not allow items."
+  [c]
+  (when-let [o (need/opts c 'jobs.strip.seal)]
+    (when (contains? (:what o) :item) (select-keys o [:how :explore :minutes]))))
+
+(defn ^:async fetch-blocks!
+  "With none of the blocks carried: :continue while the fetch waits, :again once got, the failed ending, or the :no-blocks
+  stop with :fetch off. nil when one is carried."
+  [c open]
+  (when-not (b/chosen c (blocks c))
+    (if-let [o (fetch-opts c)]
+      (let [e (await (need/blocks! c (or (seq (blocks c)) (choose/fillers :seal)) open o))]
+        (cond (= :continue e) :continue
+              (= :done (:kind e)) :again
+              :else e))
+      (stop! c :no-blocks {:short open}))))
+
 (defn ^:async place! [c cell open]
   (let [{:keys [ignore-zones?]} (:args c)
         item (b/chosen c (blocks c))]
@@ -170,6 +193,7 @@
       (:collect (ctx/mem c)) (await (collect! c))
       (empty? todo) (finish! c :done nil {})
       (some #(= :container (second %)) todo) (stop! c :blocked {:cell (first (first (filter #(= :container (second %)) todo)))})
+      (not (b/chosen c (blocks c))) (await (fetch-blocks! c (count todo)))
       (not= (stand at axis side) (reach/standing-vec (:primitives c))) (await (go-stand! c at axis side))
       (= :loose k) (await (dig! c cell))
       :else (await (place! c cell (count todo))))))

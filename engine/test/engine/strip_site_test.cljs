@@ -85,10 +85,10 @@
 (defn setup
   "An engine over the site with every child of the job stubbed. results: job symbol -> (fn [ctx]) giving the child's result,
   the default being success."
-  [& {:keys [results inventory dir pos plans fail-smelt entities triggers ending-jobs]}]
+  [& {:keys [results inventory dir pos plans fail-smelt entities triggers ending-jobs food]}]
   (let [results (atom results)
         furnaces (atom {})
-        p (tu/seeing-all (tu/fake {:self {:pos (or pos {:x 0 :y -27 :z 10})} :blocks (cond-> site-blocks pos (assoc "0,63,100" "stone" "12,63,100" "stone" "12,59,100" "stone"))
+        p (tu/seeing-all (tu/fake {:self (cond-> {:pos (or pos {:x 0 :y -27 :z 10})} food (assoc :food food)) :blocks (cond-> site-blocks pos (assoc "0,63,100" "stone" "12,63,100" "stone" "12,59,100" "stone"))
                                    :inventory (or inventory [{:name "torch" :count 32} {:name "iron_pickaxe" :count 1}])
                                    :entities (or entities [])}))
         calls (atom [])
@@ -102,7 +102,8 @@
                   'jobs.strip.seal {:status :done :reason :sealed :placed 9}
                   'jobs.storage.haul {:gave-up false :moved {"rail" 7}}
                   'jobs.storage.deposit {:gave-up false}
-                  'jobs.items.obtain {:status :done}}
+                  'jobs.items.obtain {:status :done}
+                  'jobs.survival.get-food {:status :done}}
         stubs (into {} (for [[sym res] defaults]
                          [sym (stub-of (get registry/jobs sym)
                                        (fn [c]
@@ -240,6 +241,53 @@
           (is (= {:status :stopped :reason :no-torches :phase :strip} (select-keys r [:status :reason :phase])))
           (is (= ["torch"] (mapv :item (called env 'jobs.items.obtain))))
           (is (empty? (called env 'jobs.strip.corridor))))))))
+
+(defn hungry-env
+  "A site run whose first corridor call stops :food-short, the body hungry with nothing to eat and get-food known to have failed."
+  [& {:as opts}]
+  (let [n (atom 0)
+        first-food-short (fn [_] (if (= 1 (swap! n inc)) {:status :stopped :reason :food-short} {:status :done :taken {:wood 2}}))
+        env (apply setup (apply concat (merge {:food 2 :results {'jobs.strip.corridor first-food-short}} opts)))]
+    (mem/write! (:store (:eng env)) :hungry {:food 2} {:cap 10 :ttl 3600000})
+    env))
+
+(deftest a-food-trip-gets-food-with-get-food-and-goes-back-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [penv (atom nil)
+              env (hungry-env :results {'jobs.strip.corridor (let [n (atom 0)] (fn [_] (if (= 1 (swap! n inc)) {:status :stopped :reason :food-short} {:status :done :taken {:wood 2}})))
+                                        'jobs.survival.get-food (fn [_] (fake/add-item! (:p @penv) "bread" 1) {:status :done})})
+              _ (reset! penv env)
+              r (await (start! env args))]
+          (is (= :done (:status r)))
+          (is (= 1 (count (called env 'jobs.survival.get-food)))))))))
+
+(deftest a-food-trip-that-gets-no-food-stops-food-short-after-one-try
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (hungry-env)
+              r (await (start! env args))]
+          (is (= {:status :stopped :reason :food-short} (select-keys r [:status :reason])))
+          (is (= 1 (count (called env 'jobs.survival.get-food)))))))))
+
+(deftest a-food-trip-with-fetch-off-stops-food-short-without-get-food
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (hungry-env)
+              r (await (start! env (assoc args :fetch false)))]
+          (is (= {:status :stopped :reason :food-short} (select-keys r [:status :reason])))
+          (is (empty? (called env 'jobs.survival.get-food))))))))
+
+(deftest the-seal-child-gets-the-fetch-arg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup)
+              _ (await (start! env (assoc args :fetch #{:tool})))]
+          (is (= [#{:tool}] (distinct (map :fetch (called env 'jobs.strip.seal))))))))))
 
 (deftest a-shaft-plan-is-taken-down-with-the-stair-through-it
   (async done
