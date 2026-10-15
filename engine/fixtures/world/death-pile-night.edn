@@ -1,0 +1,17 @@
+;; Card bcf0465d: the :died trigger comes before :night, so a body that respawns at night goes for a valuable pile 31 blocks away
+;; before sheltering. Needs night: run with --allow-time. No mobs. Should-succeed: the pile is collected and no dig-in seal is placed
+;; until then. (The register starts before the plot is set, so the night trigger may fire once at the stale start; it is cut by :died.)
+{:defaults
+ {:tags [:survival :death :night :jobs]
+  :time :night
+  :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}
+             {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}}]
+  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
+         :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
+  :act [[:wait-s 1] [:kill-body]]
+  :limit-s 220}
+ :cases
+ [{:name "night-respawn-fetches-the-pile-before-sealing-in"
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 200 :until {:source :job :kind :recover-drops.decided}}]
+   :after [[:item "raw_iron" 24]]}]}

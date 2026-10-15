@@ -1,0 +1,31 @@
+;; Cards 028b6806 and eff4e83f: a pile the walk cannot simply reach.
+;; Seal: the body dies at [26 0 26] in a bedrock cell block with a dirt plug (2 cells, noted in the scaffold ledger as its own) across the only way in, plus a far
+;; ledger plug at [4 0 12]. It respawns at [4 0 4]. Should-succeed: recover-drops.seal, the plug near the pile is taken back, the pile collected; the far plug stays.
+;; Unseen: the drops are moved after the respawn behind a 3 wide wall south of the pile; the pile cell shows none. Should-succeed: one look from a cell
+;; round the pile (recover-drops.look-round or collect-drops.left :unseen first), then collected.
+{:defaults
+ {:tags [:survival :death :jobs]
+  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]] :inventory [["raw_iron" 24]]}
+  :act [[:wait-s 1]
+        [:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:wait-s 3]]
+  :limit-s 220}
+ :cases
+ [{:name "own-seal-plug-taken-back-then-pile-collected"
+   :blocks [[:fill [23 0 24] [29 3 28] "bedrock"] [:fill [25 0 26] [27 1 26] "air"] [:fill [23 0 26] [24 1 26] "air"]
+            [:fill [24 0 26] [24 1 26] "dirt"] [:set [4 0 12] "dirt"]]
+   :memory [{:kind :scaffold :policy {:cap 1 :ttl :forever}
+             :data {:entries [{:cell #at [24 0 26] :item "dirt" :before "air" :job "j1" :purpose :retreat :state :placed}
+                              {:cell #at [24 1 26] :item "dirt" :before "air" :job "j1" :purpose :retreat :state :placed}
+                              {:cell #at [4 0 12] :item "dirt" :before "air" :job "j1" :purpose :retreat :state :placed}]}}]
+   :act [[:job (jobs.survival.recover-drops)]]
+   :expect [{:event {:source :job :kind :recover-drops.seal} :within-s 120 :of-job true}
+            {:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200 :of-job true}]
+   :after [[:item "raw_iron" 24] [:not-block [24 0 26] "dirt"] [:block [4 0 12] "dirt"]]}
+  {:name "drops-behind-a-wall-found-by-a-look-from-round-the-pile"
+   :blocks [[:fill [25 0 27] [27 2 27] "stone"]]
+   :act [[:rcon "execute positioned $X $Y $Z as @e[type=item,$BOX] run tp @s ~26.5 ~0.1 ~28.5"]
+         [:job (jobs.survival.recover-drops)]]
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200 :of-job true}]
+   :after [[:item "raw_iron" 24]]}]}

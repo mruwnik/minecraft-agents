@@ -1,0 +1,27 @@
+;; Card 6a5f090e: a pile in water is priced as wet danger (30 points, named "water") whatever killed the body. The body dies at [26 0 26]
+;; in a 5x5x3 stone basin full of water with 24 raw_iron and respawns at [4 0 4], 31 blocks away in sight of the basin.
+;; Should-succeed: a pile worth little (raw_iron overridden to 8 each) is skipped for the water alone (not final: :retry) while the same pile
+;; on dry ground is fetched; a rich pile in the water still goes. Should-fail: the cheap wet pile gets no fetch.
+{:defaults
+ {:tags [:survival :death :jobs]
+  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]] :inventory [["raw_iron" 24]]}
+  :act [[:wait-s 1]
+        [:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:wait-s 3]]
+  :limit-s 150}
+ :cases
+ [{:name "cheap-pile-in-water-skipped-for-the-water"
+   :blocks [[:fill [23 0 23] [29 2 29] "stone"] [:fill [24 0 24] [28 2 28] "water"]]
+   :act [[:job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 8}})]]
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :skip :retry true :text [:contains "water 30"]}} :within-s 60}
+            {:no-event {:source :job :kind :recover-drops.fetching} :for-s 60 :until {:source :job :kind :recover-drops.decided}}]}
+  {:name "same-cheap-pile-on-dry-ground-is-fetched"
+   :act [[:job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 8}})]]
+   :expect [{:event {:source :job :kind :recover-drops.fetching} :within-s 60}
+            {:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 140}]
+   :after [[:item "raw_iron" 24]]}
+  {:name "rich-pile-in-water-still-goes"
+   :blocks [[:fill [23 0 23] [29 2 29] "stone"] [:fill [24 0 24] [28 2 28] "water"]]
+   :act [[:job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 60}})]]
+   :expect [{:event {:source :job :kind :recover-drops.fetching} :within-s 60}]}]}
