@@ -151,13 +151,17 @@
   1-wide leg in the window ahead for mob-still-ticks ticks. seen: an atom {id [cell first-tick]}, kept up to date."
   [{:keys [mobs seen]} here i2 tick pw]
   (let [solid? (wworld/solid-fn pw)
-        legs (into {} (mapcat (fn [k] (let [prev (nth here (dec k)) step (nth here k)]
-                                        (map (fn [cell] [cell [prev step]]) (step-cells prev step))))
-                              (range (max 1 i2) (min (count here) (+ i2 (:window watch-policy))))))
-        found (into {} (for [^js e (mobs)
+        ms (remove #(= "item" (.-kind ^js %)) (mobs))
+        ;; most ticks see no mob: skip the legs' cells then
+        legs (if (empty? ms)
+               {}
+               (into {} (mapcat (fn [k] (let [prev (nth here (dec k)) step (nth here k)]
+                                          (map (fn [cell] [cell [prev step]]) (step-cells prev step))))
+                                (range (max 1 i2) (min (count here) (+ i2 (:window watch-policy)))))))
+        found (into {} (for [^js e ms
                              :let [pos (.-pos e)
                                    cell [(js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos))]]
-                             :when (and (not= "item" (.-kind e)) (contains? legs cell))]
+                             :when (contains? legs cell)]
                          [(.-id e) cell]))]
     (swap! seen (fn [m] (into {} (for [[id cell] found] [id (if (= cell (first (m id))) (m id) [cell tick])]))))
     (vec (for [[id cell] found

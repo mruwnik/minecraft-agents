@@ -300,20 +300,24 @@
 
 (def path-world-cache
   "The last path-world: [inputs result]. A world is an immutable map, so the snapshot is rebuilt only when a map that
-  path-world reads is no longer the identical one (any block, state or marker write replaces it), or the body moved
-  while its position matters (a view window, or buried cells that skip the body's own)."
+  path-world reads is no longer the identical one (any block, state or marker write replaces it), or the body's position
+  changed what it reads: its chunk under a view window, its position with buried cells (which skip the body's own)."
   (atom nil))
 
-(defn path-world-inputs [w]
-  (let [pos-matters (or (:view-chunks w) (seq (:unreachable w)) (seq (:no-path w)))]
-    [(:blocks w) (:states w) (:unreachable w) (:no-path w) (:view-chunks w) (when pos-matters (get-in w [:self :pos]))]))
+(defn path-world-inputs
+  "[maps where]: the maps path-world reads, and what of the body's position it reads."
+  [w]
+  (let [[bx _ bz :as pos] (get-in w [:self :pos])]
+    [[(:blocks w) (:states w) (:unreachable w) (:no-path w) (:view-chunks w)]
+     [(when (:view-chunks w) [(bit-shift-right (floor bx) 4) (bit-shift-right (floor bz) 4)])
+      (when (or (seq (:unreachable w)) (seq (:no-path w))) pos)]]))
 
 (defn path-world
-  "path-world-build, reused while its inputs are the identical values (callers do not mutate the snapshot)."
+  "path-world-build, reused while its inputs are the same (callers do not mutate the snapshot)."
   [w]
-  (let [inputs (path-world-inputs w)
-        [last-inputs result] @path-world-cache]
-    (if (and last-inputs (every? true? (map identical? inputs last-inputs)))
+  (let [[maps where :as inputs] (path-world-inputs w)
+        [[last-maps last-where] result] @path-world-cache]
+    (if (and last-maps (every? true? (map identical? maps last-maps)) (= where last-where))
       result
       (let [result (path-world-build w)]
         (reset! path-world-cache [inputs result])

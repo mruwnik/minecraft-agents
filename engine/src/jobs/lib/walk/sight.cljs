@@ -83,27 +83,33 @@
               :when (or fw st)]
           (cond-> {:sneak sn} fw (assoc fw true) st (assoc st true)))))
 
+(defn deltas
+  "The velocity change [dvx dvz] of each of inputs at yaw under model, in inputs' order."
+  [model yaw]
+  (mapv #(heading % yaw (:a model)) inputs))
+
 (defn brake
-  "The input of inputs that leaves the least speed after this tick at yaw (no reversing past what that input gives)."
-  [[_ _ vx vz] model yaw]
+  "Of the velocity changes ds (deltas), the one that leaves the least speed after this tick (no reversing past what that
+  input gives)."
+  [[_ _ vx vz] ds]
   (let [vx (zeroed vx) vz (zeroed vz)]
-    (apply min-key (fn [in] (let [[dx dz] (heading in yaw (:a model))] (js/Math.hypot (+ vx dx) (+ vz dz)))) inputs)))
+    (apply min-key (fn [[dx dz]] (js/Math.hypot (+ vx dx) (+ vz dz))) ds)))
 
 (defn rollout
-  "The positions [[x z] ...] of a body braking as hard as it can (brake each tick) from state until still, at most 60
-  ticks; the last is where it stops."
-  [state model yaw]
+  "The positions [[x z] ...] of a body braking as hard as it can (brake each tick, ds the deltas at its yaw) from state
+  until still, at most 60 ticks; the last is where it stops."
+  [state model ds]
   (loop [s state n 0 out []]
     (let [[x z vx vz] s]
       (if (or (>= n 60) (and (zero? (zeroed vx)) (zero? (zeroed vz))))
         (conj out [x z])
-        (let [s' (step s model (heading (brake s model yaw) yaw (:a model)))]
+        (let [s' (step s model (brake s ds))]
           (recur s' (inc n) (conj out [(s' 0) (s' 1)])))))))
 
 (defn brake-dist
   "The distance a body at speed v (along one line) covers braking as hard as it can under model."
   [v model]
-  (let [[x] (peek (rollout [0 0 v 0] model (- (/ js/Math.PI 2))))] x))
+  (let [[x] (peek (rollout [0 0 v 0] model (deltas model (- (/ js/Math.PI 2)))))] x))
 
 ;; ---------------------------------------------------------------- marks and gates
 
@@ -187,9 +193,10 @@
   :none when no input is best."
   [box T model yaw {:keys [x z vx vz]}]
   (let [s [x z vx vz]
-        rated (for [in inputs
-                    :let [s1 (step s model (heading in yaw (:a model)))
-                          path (rollout s1 model yaw)
+        ds (deltas model yaw)
+        rated (for [[in d] (map vector inputs ds)
+                    :let [s1 (step s model d)
+                          path (rollout s1 model ds)
                           [rx rz] (peek path)
                           out (reduce + (map #(excess box %) (cons [(s1 0) (s1 1)] path)))]]
                 {:in in :out out :d (+ (js/Math.hypot (- rx (T 0)) (- rz (T 1))) (if (seq in) 0.005 0))})

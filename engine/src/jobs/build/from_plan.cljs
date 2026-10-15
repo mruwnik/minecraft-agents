@@ -278,9 +278,10 @@
   (let [p (:primitives c)
         by (js/Math.floor (:y (u/self-pos c)))
         cy (second cell)]
+    ;; the flood with the cell solid first: most cells do not shut the body in, and then the second flood is skipped
     (boolean (and (<= by cy (+ by 2))
-                  (not (reach/enclosed? p))
-                  (reach/enclosed? p #{(vec cell)})))))
+                  (reach/enclosed? p #{(vec cell)})
+                  (not (reach/enclosed? p))))))
 
 (defn exit-point
   "A cell two blocks outside the box of the planned cells, on the side nearest the body, at its feet height."
