@@ -861,12 +861,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [roof (into {} (for [x (range 10 14) z [-1 0 1]] [(str x ",66," z) "stone"]))
-              {:keys [eng p]} (await (night-at-home (update bed-world :blocks merge roof) {:x 10 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home bed-world {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
           (is (<= 9 (:x (st/pos-of p))) "walked into the home first")
-          (is (= [] (filterv #(not (contains? roof (let [{:keys [x z]} (st/arg-pos %)] (str x ",66," z)))) (bed-places p)))
-              "no bed was set down on the open ground")
+          (is (= [] (filterv #(< (:x (st/arg-pos %)) 9) (bed-places p))) "no bed was set down on the open ground")
           (is (seq (bed-places p)) "it was set down in the home"))))))
 
 (deftest a-home-that-cannot-be-entered-leaves-the-carried-bed-in-the-bag
@@ -896,7 +894,9 @@
     (merge (into {} (for [x (range 9 14) y [64 65] z (range -1 3) :when (not (inside? x z))] [(str x "," y "," z) "stone"]))
            (into {} (for [x (range 10 13) z [0 1]] [(str x ",66," z) "stone"])))))
 
-(deftest a-carried-bed-in-a-home-go-to-dug-into-goes-under-the-roof-behind-a-shut-doorway
+(defn block-at [p pos] (.-name (.blockAt p (clj->js pos))))
+
+(deftest a-carried-bed-in-a-home-go-to-dug-into-goes-under-the-roof-behind-a-shut-doorway-opened-at-dawn
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -904,32 +904,67 @@
               calls (vec (.-calls (.-world p)))
               slept-at (first (keep-indexed #(when (= "sleep" (.-name %2)) %1) calls))
               before-sleep (subvec calls 0 (or slept-at 0))
-              cells-of (fn [pred] (set (map st/arg-pos (filter pred before-sleep))))
-              dug (cells-of #(= "dig" (.-name %)))]
+              cells-of (fn [pred cs] (set (map st/arg-pos (filter pred cs))))
+              dug (cells-of #(= "dig" (.-name %)) before-sleep)
+              filled (cells-of #(and (= "place" (.-name %)) (not= "red_bed" (.-item (.-args %)))) before-sleep)]
           (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "walked into the home once")
           (is (some? slept-at) "slept")
           (is (= [] (filterv #(not (let [{:keys [x z]} (st/arg-pos %)] (and (<= 10 x 12) (<= 0 z 1)))) (bed-places p)))
               "the bed went down under the roof, never outside it")
           (is (seq dug) "go-to dug its way in")
-          (is (= dug (into #{} (filter dug) (cells-of #(and (= "place" (.-name %)) (not= "red_bed" (.-item (.-args %)))))))
-              "every cell it dug was filled again before the sleep"))))))
+          (is (= dug (into #{} (filter dug) filled)) "every cell it dug was filled again before the sleep")
+          (is (seq filled))
+          (is (every? (cells-of #(= "dig" (.-name %)) (subvec calls (or slept-at 0))) filled) "at dawn the filled cells were dug again")
+          (is (every? #(= "air" (block-at p %)) filled) "the doorway is open as it was"))))))
 
-(deftest a-carried-door-shuts-the-dug-doorway
+(deftest a-carried-door-shuts-the-dug-doorway-and-is-taken-out-at-dawn
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (dug-into-home stone-room {:name "oak_door" :count 1}))]
-          (is (seq (filter #(= "oak_door" (.-item (.-args %))) (st/calls p "place"))) "the door went in the doorway")
-          (is (seq (st/calls p "sleep"))))))))
+        (let [{:keys [p]} (await (dug-into-home stone-room {:name "oak_door" :count 1}))
+              door (first (filter #(= "oak_door" (.-item (.-args %))) (st/calls p "place")))]
+          (is (some? door) "the door went in the doorway")
+          (is (seq (st/calls p "sleep")))
+          (is (= "air" (block-at p (st/arg-pos door))) "the door was taken out in the morning"))))))
 
-(deftest a-carried-bed-in-a-dug-into-home-with-no-room-for-it-stays-in-the-bag
+(def room-with-doorway
+  "stone-room with a doorway in its north wall at 11,64,-1, open to the sky."
+  (dissoc stone-room "11,64,-1" "11,65,-1"))
+
+(deftest a-doorway-never-shut-is-filled
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p log]} (await (dug-into-home (update-vals walled-home #(if (= "stone_bricks" %) "stone" %))))]
-          (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "walked into the home once, not back and forth with the bed walk")
-          (is (= [] (bed-places p)) "no bed in the open beside the home")
-          (is (= [] (st/calls p "sleep")) "and no sleep out there"))))))
+        (let [{:keys [p]} (await (dug-into-home room-with-doorway))]
+          (is (seq (filterv #(= -1 (:z (st/arg-pos %))) (st/calls p "place"))) "the doorway was filled"))))))
+
+(deftest a-doorway-with-an-animal-in-it-is-not-filled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> bed-world (update :blocks merge room-with-doorway)
+                        (assoc :entities [{:id 8 :name "sheep" :kind "passive" :pos {:x 11.5 :y 64 :z -0.5}}]))
+              {:keys [eng p]} (await (night-at-home world {:x 10 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 60))
+          (is (= [] (filterv #(= [11 -1] ((juxt :x :z) (st/arg-pos %))) (st/calls p "place"))) "no block in the sheep's cell"))))))
+
+(deftest a-doorway-shut-on-a-night-that-ended-before-dawn-is-opened-by-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge stone-room) {:x 10 :y 64 :z 0}))
+              _ (await (with-child-log #(tu/run-until-empty eng 60)
+                         (fn [c k _ _] (when (= :bed-down k)
+                                         (ctx/remember! c :bed-place-failed {:pos (sh/feet p)} sh/bed-place-failed-policy)
+                                         {:kind :nothing-possible :data {:reason :bed-place-failed}}))))
+              filled (set (map st/arg-pos (st/calls p "place")))]
+          (is (seq filled) "the doorway was shut")
+          (is (= [] (st/calls p "sleep")) "no sleep")
+          (.setTime (.-world p) noon)
+          (is ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}) "by day the night trigger holds for the shut doorway")
+          (core/submit! eng (list 'jobs.survival.night {}) {})
+          (await (tu/run-until-empty eng 40))
+          (is (every? #(= "air" (block-at p %)) filled) "the night job by day opened it"))))))
 
 ;; ------------------------------------------------------------------ flee somewhere safer
 

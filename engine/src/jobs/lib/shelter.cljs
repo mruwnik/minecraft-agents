@@ -275,6 +275,10 @@
   "Policy of the :bed-placed entries: a bed the night job put down outside the body's own zones, picked up by day."
   {:cap 4 :ttl (* 7 ms-per-day)})
 
+(def doorway-filled-policy
+  "Policy of the :doorway-filled entries: a doorway cell the night filled (jobs.survival.night.doorway), opened by day."
+  {:cap 4 :ttl ms-per-day})
+
 (defn carried-bed
   "The name of a bed item the body carries (any colour), or nil."
   [p]
@@ -400,6 +404,15 @@
       (when (and pos (.endsWith (or (u/seen-name p pos) "") "_bed")
                  (not (spawn-bed-at? view pos)))
         pos))))
+
+(defn doorway-to-open
+  "By day: the cells {:x :y :z} of the :doorway-filled entries that still hold a block, oldest first; nil when none."
+  [p view]
+  (when-not (night? p)
+    (seq (keep #(let [cell (:cell (:data %))
+                      n (u/seen-name p cell)]
+                  (when (and n (not (#{"air" "cave_air"} n))) cell))
+               (mem/entries view :doorway-filled)))))
 
 (defn bed
   "The remembered bed position when it is within radius of the body, else nil."
@@ -703,7 +716,8 @@
                 (breached-home? p view)
                 (seq (open-doors p view))))
        (or (shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
-           (some? (bed-to-collect p view)))))))
+           (some? (bed-to-collect p view))
+           (some? (doorway-to-open p view)))))))
 
 (defn home-target
   "The place to go home to before night: the remembered :home, else :bed (view: an engine.memory view)."

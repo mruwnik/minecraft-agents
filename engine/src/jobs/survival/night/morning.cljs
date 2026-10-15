@@ -1,5 +1,5 @@
 (ns jobs.survival.night.morning
-  "The night's morning: out of the shelter, a bed it put down picked up, and the night's ending."
+  "The night's morning: a doorway it filled opened, out of the shelter, a bed it put down picked up, and the night's ending."
   (:require [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.dawn :as dawn]
@@ -7,6 +7,8 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.spent :as spent]
             [jobs.lib.tidy :as tidy]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
             [jobs.survival.night.hold :as hold]
             [jobs.survival.night.sites :as sites]))
 
@@ -30,6 +32,25 @@
                   (ctx/remember! c :bed {:gone true :was pos} mem/place-policy))
                 (ctx/update-mem! c assoc :pickup pos))))
           (ctx/forget-where! c :bed-placed (constantly true))
+          :again))))
+
+(defn ^:async open-doorway!
+  "By day: dig the cells the night filled in a doorway (sh/doorway-to-open), after a walk within reach of the first, and
+  walk over the drop. One try: every :doorway-filled entry is dropped whatever happens."
+  [c cells]
+  (let [arrived (await (walk! c :doorway-open (first cells) 3))]
+    (if (= :continue arrived)
+      :again
+      (do (when arrived
+            (loop [[cell & more] cells dug nil]
+              (let [n (when cell (u/seen-name (:primitives c) cell))]
+                (cond
+                  (nil? cell) (when dug (ctx/update-mem! c assoc :pickup dug))
+                  (#{"air" "cave_air"} n) (recur more dug)
+                  :else (let [_ (await (tools/equip-for! c n {:fast true}))
+                              r (await (tidy/dig! c cell))]
+                          (recur more (or dug (when (= "dug" (.-status r)) cell))))))))
+          (ctx/forget-where! c :doorway-filled (constantly true))
           :again))))
 
 (defn ^:async pick-up-drop!
@@ -70,14 +91,17 @@
       (ctx/end c :done nil (done-data c how)))))
 
 (defn ^:async morning-step!
-  "By day, nothing to walk over: out of a dig-in pit first, then a bed picked up, then the end."
+  "By day, nothing to walk over: a filled doorway opened or out of a dig-in pit first, then a bed picked up, then the end."
   [c]
   (cond
-    (and (or (= :dug-in (:sheltered (ctx/mem c))) (dig-leave/sheltered-in c)) (dawn/hostile-hold? (:primitives c)))
+    (and (or (= :dug-in (:sheltered (ctx/mem c))) (dig-leave/sheltered-in c) (sh/doorway-to-open (:primitives c) (ctx/view c)))
+         (dawn/hostile-hold? (:primitives c)))
     (do (when-not (:dawn-noted (ctx/mem c))
           (ctx/update-mem! c assoc :dawn-noted true)
           (ctx/emit! c :night.dawn-hold :info {:text "first light, but a hostile is known near the shelter; staying in until it is gone or the grace is over"}))
         (await (hold/hold! c "first light: hostile near")))
+    (sh/doorway-to-open (:primitives c) (ctx/view c))
+    (await (open-doorway! c (sh/doorway-to-open (:primitives c) (ctx/view c))))
     (or (#{:dug-in :exposed} (:sheltered (ctx/mem c))) (:dig-out (ctx/mem c)) (dig-leave/sheltered-in c))
     (let [r (await (dig-leave/leave! c {:take-back? (:take-back? (:args c))}))]
       (cond
