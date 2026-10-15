@@ -246,6 +246,32 @@
           (is (= 22 (count (:dug @out))) "8 steps of 3 cells, less the air over the ground, and the cell over the target")
           (is (= 1 (count (events-of s :tunnel.done)))))))))
 
+(def beside-target
+  (-> ground
+      (assoc "6,57,0" "iron_ore")
+      (dissoc "5,57,0" "5,58,0" "6,58,0")))
+
+(deftest standing-beside-the-target-with-the-cell-over-it-open-is-already-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (tunnel! {:blocks beside-target :self {:pos {:x 5 :y 57 :z 0}}}
+                                              {:target [6 57 0]} (fn [_])))]
+          (is (= :done (:status @out)))
+          (is (:already? @out))
+          (is (empty? (digs p)))
+          (is (= [5 57 0] (feet p))))))))
+
+(deftest standing-beside-the-target-with-the-cell-over-it-shut-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (tunnel! {:blocks (assoc beside-target "6,58,0" "stone") :self {:pos {:x 5 :y 57 :z 0}}}
+                                              {:target [6 57 0]} (fn [_])))]
+          (is (= :done (:status @out)))
+          (is (not (:already? @out)))
+          (is (= "air" (block-at p [6 58 0]))))))))
+
 (deftest a-tunnel-plans-round-the-floor-of-an-earlier-stair
   (async done
     (tu/run-async done

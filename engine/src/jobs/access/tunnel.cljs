@@ -101,7 +101,7 @@
   On the run it digs the exposed ores within reach (:pick-up-ores, jobs.lib.ore-pick), never the target; :ores lists them
   with those of the stair child.
 
-  Ends :done {:reason :reached}; a stop is condition-failed for a fact (the reasons above, :no-tool, :no-way-back, the
+  Done (:already before the start) when the body stands beside :target at its height with the cell over it open. Ends :done {:reason :reached}; a stop is condition-failed for a fact (the reasons above, :no-tool, :no-way-back, the
   stair's) and nothing-possible for a failed attempt (:walk-in-failed, :step-failed, :dig-failed, :refills);
   :tool-spent is a fact (no tool left above its reserve). Data of every ending: {:reason :target :entry :heading :stand :at
   [x y z] :dug [{:cell :block}] :ores :inside bool :keep bool :line {:entry :heading :dir :steps :run :stand :target}
@@ -196,29 +196,32 @@
     (when (pos? (or run-steps 0))
       (ledger/record-tunnel! c (:end (ln/line plan)) (shape/headings (:heading plan)) run-steps))))
 
-(defn finish!
-  "End the tunnel: its event, and the ending: :done when reached, else by reason a kind (facts, the rest nothing
-  possible) with the detail in the cause and the whole result as data."
+(defn result-of
+  "The result data of the tunnel now: {:reason r :target :at :dug :ores :inside :keep :torches :unlit} plus the line's
+  entry, heading and stand once one is chosen, then detail."
   [c reason detail]
   (let [{:keys [plan dug unlit ores]} (ctx/mem c)
-        feet (reach/standing-vec (:primitives c))
-        reached? (= :reached reason)
-        result (merge (cond-> {:reason reason :target (target-of c)
-                               :at feet :dug (or dug []) :ores (into (vec ores) (ore-pick/picked c)) :inside (boolean (and plan (not= feet (:entry plan))))
-                               :keep (boolean (:keep (:args c))) :torches [] :unlit (or unlit [])}
-                        plan (assoc :line (select-keys plan [:entry :heading :dir :steps :run :stand :target])
-                                    :torches (torches/standing-torches (:block-at (stair/rules-in c feet)) plan)))
-                      (select-keys plan [:entry :heading :stand])
-                      detail)
+        feet (reach/standing-vec (:primitives c))]
+    (merge (cond-> {:reason reason :target (target-of c)
+                    :at feet :dug (or dug []) :ores (into (vec ores) (ore-pick/picked c)) :inside (boolean (and plan (not= feet (:entry plan))))
+                    :keep (boolean (:keep (:args c))) :torches [] :unlit (or unlit [])}
+             plan (assoc :line (select-keys plan [:entry :heading :dir :steps :run :stand :target])
+                         :torches (torches/standing-torches (:block-at (stair/rules-in c feet)) plan)))
+           (select-keys plan [:entry :heading :stand])
+           detail)))
+
+(defn finish!
+  "End the tunnel: :done when reached (its event and the tunnel-way are cleanup's), else by reason a kind (facts, the
+  rest nothing possible) with the detail in the cause and the whole result as data."
+  [c reason detail]
+  (let [result (result-of c reason detail)
         cause (assoc (select-keys detail cause-keys) :reason reason)]
-    (record-run! c)
-    (if reached?
-      (ctx/emit! c :tunnel.done :info (assoc result :status :done :text (str "tunnel reached " (pr-str (:stand plan)))))
-      (ctx/emit! c :tunnel.stopped :warn
-                 (assoc result :status :stopped :text (str "tunnel stopped: " (name reason) (some->> (:cell detail) pr-str (str " at "))))))
-    (cond
-      reached? (ctx/end c :done nil result)
-      :else (ctx/end c (cond (= :bad-args reason) :impossible (facts reason) :condition-failed :else :nothing-possible) cause result))))
+    (if (= :reached reason)
+      (ctx/end c :done nil result)
+      (do (record-run! c)
+          (ctx/emit! c :tunnel.stopped :warn
+                     (assoc result :status :stopped :text (str "tunnel stopped: " (name reason) (some->> (:cell detail) pr-str (str " at ")))))
+          (ctx/end c (cond (= :bad-args reason) :impossible (facts reason) :condition-failed :else :nothing-possible) cause result)))))
 
 (defn ending-result
   "The old child result of ending e: its data with a :status and a :reason."
@@ -288,14 +291,36 @@
   [cells feet]
   (first (keep-indexed (fn [i cell] (when (and (= cell feet) (< i (dec (count cells)))) i)) cells)))
 
+(defn at-stand?
+  "Whether the body stands beside the target at its height with the cell over the target open: the goal, whatever
+  line got it there."
+  [c]
+  (let [feet (reach/standing-vec (:primitives c))
+        [tx ty tz :as t] (target-of c)
+        block-at (:block-at (stair/rules-in c feet))]
+    (boolean (and t (not (bad-target? t)) (= 1 (apply + (map #(js/Math.abs %) (map - t feet)))) (= ty (feet 1))
+                  (rules/air (block-at [tx (inc ty) tz]))))))
+
 (defn done?
-  "The steps and run cells walked against the line's; before a line is chosen, against the estimate."
+  "Ok once the body stands beside :target at its height with the cell over the target open and settled (before the
+  start: already); else the steps walked against the line's, or against the estimate before a line is chosen."
   [c]
   (let [{:keys [plan]} (ctx/mem c)
         feet (reach/standing-vec (:primitives c))
         n (if plan (+ (:steps plan) (:run plan)) (if-let [t (target-of c)] (steps-estimate feet t) 0))
         k (if plan (or (line-index (ln/line-cells plan) feet) 0) 0)]
-    (contract/later :digging "the tunnel is being dug" :units :steps :done k :left (max 0 (- n k)))))
+    (if (and (at-stand? c) (or (nil? plan) (:over-open (ctx/mem c))))
+      (contract/ok :reached (str "stands beside " (pr-str (target-of c))) :units :steps :done n :left 0
+                   :result (result-of c :reached {:stand feet}))
+      (contract/later :digging "the tunnel is being dug" :units :steps :done k :left (max 0 (- n k))))))
+
+(defn ^:async cleanup
+  "After a tunnel that reached its stand: the level run walked is remembered (:tunnel-way) and tunnel.done told."
+  [c ending]
+  (when (= :done (:kind ending))
+    (record-run! c)
+    (ctx/emit! c :tunnel.done :info (assoc (:data ending) :status :done :text (str "tunnel reached " (pr-str (:stand (:data ending)))))))
+  (ctx/end c :done nil {}))
 
 (defn segment-end
   "The line index the stair child cuts to from k: the standing cell (s+1) of the next site s >= k, else the stair's end."
@@ -471,7 +496,9 @@
       :else (let [r (await (work! c))]
               (cond
                 (#{:again :continue} r) r
-                (= :reached r) (finish! c :reached {})
+                (= :reached r) (if (:over-open m)
+                                 (finish! c :reached {})
+                                 (do (ctx/update-mem! c assoc :over-open true) :again))
                 :else (or (fetch-for-stop! c r) (stop! c r)))))))
 
 (defn ^:async step!
