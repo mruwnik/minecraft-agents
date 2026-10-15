@@ -185,6 +185,10 @@
              (seq beside) {:cell (first beside) :range 0}
              :else {:cell start :range 1}))))
 
+(def home-ways
+  "Every way but :pillar: a pillar would spend the mined blocks the run counts and leave one in the shaft."
+  #{:walk :clear-seal :clear-path :stair :dig-out})
+
 (defn ^:async home-by-go-to!
   "The way home through a go-to child, with its escalation, to the goal home-round! decided (mem :home-goal). :continue while the walk
   goes on, else the job ends."
@@ -194,7 +198,7 @@
         r (if (arrived?)
             :arrived
             (await (child/call-walk* c :home
-                                   (cond-> {:pos {:x (+ (:x cell) 0.5) :y (:y cell) :z (+ (:z cell) 0.5)} :range range :escalate true :zone-tolls true
+                                   (cond-> {:pos {:x (+ (:x cell) 0.5) :y (:y cell) :z (+ (:z cell) 0.5)} :range range :ways home-ways :zone-tolls true
                                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                                      y-margin (assoc :y-margin y-margin)))))]
     (if (= :continue r)
