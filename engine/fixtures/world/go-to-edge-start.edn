@@ -1,0 +1,21 @@
+;; go-to from a body whose client box only just reaches a neighbour's floor: it stands in a cell whose own floor is air
+;; (a one-cell hole) at z fraction .693, so its client box (half width .31) rests on the floor of the +z cell while the server
+;; box (.3) does not reach it. The planner starts from the neighbour cell (it used to end start-not-standable on every plan).
+;; Should-succeed: the walk south (away from the hole) and the walk north (round the hole) both arrive.
+;; The body truly over a hole with no floor under its box cannot be held in the air: unit test only (planner-start-edge-test).
+{:defaults
+ {:tags [:movement :go-to :planner]
+  :time :any
+  :plot {:height 6}
+  :blocks [[:set [16 -1 16] "air"]]
+  :body {:at [16.5 0 16.693] :settle-s 3}
+  :limit-s 60}
+ :cases
+ [{:name "edge-start-walks-south"
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 24] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 50 :of-job true}]
+   :after [[:body-near [16.5 0 24.5] 2]]}
+  {:name "edge-start-walks-north-round-the-hole"
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 8] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 50 :of-job true}]
+   :after [[:body-near [16.5 0 8.5] 2]]}]}

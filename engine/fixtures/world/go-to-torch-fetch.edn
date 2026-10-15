@@ -1,0 +1,28 @@
+;; jobs.movement.go-to :unknown with :place-torches: the way goes down a 3-block ledge onto a floor the body cannot see in the dark,
+;; and no torch is carried, so go-to fetches torches once a call through jobs.lib.need, then lights the floor and arrives.
+;; Sealed rock: a corridor (x 11..13, feet y 3) ends in a ledge over a low corridor (x 14..24, feet y 0), the goal at its east end.
+;; Should-succeed: a seen chest next to the body holds torches: 4 are taken, one is placed at the takeoff, the body arrives.
+;; Should-fail: no torch anywhere in view: the call ends unreachable :unseen-floor-dark, nothing placed, and the failed fetch is
+;; booked in body memory (:go-to/torch-fetch-failed) so a later call within 10 min does not fetch again.
+{:defaults
+ {:tags [:movement :go-to :torch :fetch :jobs]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [10 0 14] [26 8 18] "stone"]
+           [:fill [11 3 16] [13 4 16] "air"]
+           [:fill [14 0 16] [24 4 16] "air"]
+           [:set [12 3 15] "air"]]
+  :body {:at [11.5 3 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "chest-of-torches-is-fetched-and-the-dark-drop-is-lit"
+   :blocks [[:set [12 3 15] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :escalate false :unknown true :place-torches true :ignore-zones? true})]]
+   :expect [{:event {:kind :walk.torch-placed} :within-s 100 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 110 :of-job true}]
+   :after [[:item "torch" [:>= 1]] [:body-near [24.5 0 16.5] 3]]}
+  {:name "no-torch-in-view-ends-unseen-floor-dark-and-books-the-failure"
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :escalate false :unknown true :place-torches true :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :unreachable :data {:why :unseen-floor-dark}} :within-s 100 :of-job true}
+            {:no-event {:kind :walk.torch-placed} :for-s 10}]
+   :after [[:item "torch" 0] [:memory {:entries {:go-to/torch-fetch-failed [{:t [:any]}]}}]]}]}
