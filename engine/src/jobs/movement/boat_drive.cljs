@@ -53,13 +53,7 @@
   [c]
   (when-not (cell-of-call c) (contract/impossible :bad-args)))
 
-(defn on-foot
-  "The cause :not-aboard while the body is in no vehicle (a listed call waits for a boat to be boarded)."
-  [c]
-  (when-not (vehicle/mounted? (:primitives c))
-    {:reason :not-aboard :hint "board a boat first, e.g. mount"}))
-
-(def conditions [[:fn bad-args] [:fn on-foot]])
+(def conditions [[:fn bad-args] [:holds '(mounted) :not-aboard]])
 
 (defn left-of
   "Blocks (horizontally) from the vehicle to the middle of the cell, or nil when not aboard."

@@ -38,7 +38,7 @@
 
 (def conditions
   [[:fn #(when (= false (:offline-allowed (:args %))) (contract/impossible :offline-forbidden))]
-   [:fn #(when-not (sh/night? (:primitives %)) :not-night)]
+   [:holds '(not (daytime)) :not-night]
    [:fn #(when (sh/log-out-unsupported? (ctx/view %)) (contract/impossible :log-out-unsupported))]])
 
 (a/defargs settings

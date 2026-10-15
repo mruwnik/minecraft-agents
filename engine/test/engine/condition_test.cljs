@@ -345,7 +345,12 @@
       '(suffocating) false
       '(night-unsafe) false
       '(= (blocks-near "stone" 8) 1) true
-      '(= (time-of-day) 13000) true)))
+      '(= (time-of-day) 13000) true
+      '(mounted) false)))
+
+(deftest mounted-is-true-while-riding-a-vehicle
+  (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0} :vehicle 9} :entities [{:id 9 :kind "passive" :name "boat" :pos {:x 0 :y 64 :z 0} :visible true}]})]
+    (is (true? (value '(mounted) (env (tu/seeing-all p) (view 0 {})))))))
 
 (deftest hostile-near-is-a-real-danger-as-the-trigger-defines-it
   (let [wall (into {} (for [[x z] [[4 0] [6 0] [5 1] [5 -1]] y [64 65]] [(str x "," y "," z) "stone"]))

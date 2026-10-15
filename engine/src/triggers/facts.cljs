@@ -44,6 +44,8 @@
              :read (online (fn [_ s] (boolean-or-unknown (.-isDay s))))}
    'time-of-day {:args [] :type :number :cost :cheap :doc "the day's tick, 0 to 23999 (dusk at 12000)"
                  :read (online (fn [_ s] (number-or-unknown (.-timeOfDay s))))}
+   'mounted {:args [] :type :boolean :cost :cheap :doc "the body rides a vehicle (boat, minecart, horse)"
+             :read (online (fn [_ s] (some? (.-vehicle s))))}
    'hostile-near {:args [:number] :type :boolean :cost :cheap
                   :doc "a real danger (as the hostile-near trigger: a mob that can reach the body, or a ranged one with a line of fire) is within that many blocks"
                   :read (online (fn [p _ radius] (danger-q/danger-near? p radius radius)))}
