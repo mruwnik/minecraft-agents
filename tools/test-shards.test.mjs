@@ -1,11 +1,11 @@
 // Why JavaScript: node --test file for tools/test-shards.mjs (a Node launcher).
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -47,6 +47,30 @@ test('memSlots: (available - res-slot.json floor) / shard peak, at least 1, at m
   assert.equal(memSlots(floorMb + peak - 100), 1)
   assert.equal(memSlots(floorMb + 2 * peak + 100), 2)
   assert.equal(memSlots(floorMb + 30000), 3)
+})
+
+test('runInSlot: a waiting heavy shard widens its slot list as memory frees, and its marker follows', async () => {
+  const dir = fs.mkdtempSync(path.join(process.env.TMPDIR ?? '/tmp', 'shard-slots-'))
+  const env = { RES_SLOT_DIR: dir, RES_SLOT_HEAVY: '1' }
+  const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]))
+  Object.assign(process.env, env)
+  const holder = spawn('flock', [path.join(dir, 'tests.4'), 'sleep', '30'], { stdio: 'ignore' })
+  try {
+    await new Promise((r) => setTimeout(r, 300))
+    let slots = 1
+    setTimeout(() => { slots = 3 }, 1500)
+    const markerAt = () => fs.readdirSync(path.join(dir, 'heavy-wait')).map((f) => fs.readFileSync(path.join(dir, 'heavy-wait', f), 'utf8'))
+    const run = runInSlot(() => slots, ['true'], {})
+    await new Promise((r) => setTimeout(r, 700))
+    assert.deepEqual(markerAt(), ['[4]'])
+    assert.equal((await run).code, 0)
+    assert.equal(holder.exitCode, null, 'ran while slot 4 was still held')
+    assert.deepEqual(fs.readdirSync(path.join(dir, 'heavy-wait')), [])
+  } finally {
+    holder.kill()
+    for (const [k, v] of Object.entries(saved)) v === undefined ? delete process.env[k] : process.env[k] = v
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('testNamespaces covers every file under engine/test that contains deftest', () => {
