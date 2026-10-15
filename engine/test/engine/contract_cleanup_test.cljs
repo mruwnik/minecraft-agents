@@ -5,6 +5,8 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.job-api :as api]
+            [engine.takeover :as takeover]
             [engine.test-util :as tu]))
 
 (def world (atom {}))
@@ -208,3 +210,78 @@
           (await (core/tick! eng))
           (is (= [:round] (:log @world)))
           (is (= [] (:list (core/state eng)))))))))
+
+(defn setup-reflex [jobs job]
+  (reset! world {})
+  (reset! clock 1000000)
+  (let [[seen sink] (tu/capture-sink)
+        eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs
+                          :triggers {:go {:name :go :job job :when (fn [_ _ _] (let [first? (not (:fired @world))] (swap! world assoc :fired true) first?))}}
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (core/register-reflex! eng {:trigger :go})
+    {:eng eng :seen seen}))
+
+(def stuck-thrice (assoc stuck :cleanup (fn [c e]
+                                          (log! [:cleanup (:kind e)])
+                                          (if (< (count (:log @world)) 3) :continue (ctx/end c :done nil {:let-go true})))))
+
+(deftest a-reflex-roots-cleanup-runs-to-its-end-in-its-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup-reflex {'stuck stuck-thrice} '(stuck))]
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [[:cleanup :nothing-possible] [:cleanup :nothing-possible] [:cleanup :nothing-possible]] (:log @world)))
+          (is (= [{:kind :nothing-possible :let-go true}] (mapv #(select-keys (:data %) [:kind :let-go]) (job-ev seen :stopped)))))))))
+
+(def yields
+  {:conditions []
+   :round (fn [_] (log! :round) :continue)
+   :cleanup (fn [c e]
+              (log! [:cleanup (:kind e)])
+              (if (< (count (:log @world)) 3) :continue (ctx/end c :done nil)))})
+
+(deftest a-manual-slot-job-that-leaves-the-slot-runs-its-whole-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'yields yields})]
+          (takeover/take! eng {:who "driver" :why "test"})
+          (api/mutate! eng {:op :submit :spec '(yields) :by "driver" :request-id "r1"
+                            :generation-id (:generation-id (core/state eng))})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [:round [:cleanup :cut-off] [:cleanup :cut-off]] (:log @world)))
+          (is (= [] (:list (core/state eng)))))))))
+
+(def old-mid
+  {:check (constantly true)
+   :round (fn ^:async old-mid [c]
+            (await (ctx/call c :kid 'runner {}))
+            :done)})
+
+(defn caller-of [job]
+  {:conditions []
+   :round (fn ^:async caller [c]
+            (let [r (await (ctx/call-child c :kid job {}))]
+              (swap! world assoc :kid [r (ctx/child-result c :kid)])
+              (ctx/end c :done nil)))})
+
+(deftest call-child-of-an-old-job-that-ends-runs-the-cleanup-of-a-contract-child-under-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'top (caller-of old-mid) 'runner runner})]
+          (core/submit! eng '(top) {})
+          (await (core/tick! eng))
+          (is (= [[:runner-cleanup :cut-off]] (:log @world))))))))
+
+(deftest call-child-runs-a-contract-childs-whole-cleanup-in-the-callers-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'top (caller-of 'stuck) 'stuck stuck})]
+          (core/submit! eng '(top) {})
+          (await (core/tick! eng))
+          (is (= (repeat 3 [:cleanup :nothing-possible :stuck]) (:log @world)))
+          (is (= [:done {:status :stopped :reason :stuck :let-go true}]
+                 (update (:kid @world) 1 select-keys [:status :reason :let-go]))))))))

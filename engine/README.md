@@ -302,7 +302,8 @@ a finished job's goes to body memory `:job-report` (cap 256), with its ending's 
 (limit, parent's end or cancel; innermost first; not on a reflex cut, death or restart), before the caller sees the ending,
 on its own call (`cleanup-defaults`, default `{:spend {:job-time 30 :wall-time 60}}`); its data merges into the ending, a
 failed or overrun one adds `:cleanup {:kind :cause}` and warns `job.cleanup_failed`. A cancelled job stays listed
-(`job.cleaning_up`) until it ran; a cancel meanwhile does not cut it. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A check returns a status `[kind text data]`
+(`job.cleaning_up`) until it ran; a cancel meanwhile does not cut it. A reflex root and the driver's slot job (also when they
+leave on `:continue`: ending `:cut-off :ended`) and a call-child child run their cleanups to the end in that round. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A check returns a status `[kind text data]`
 (`:ok :later :never :look`, data with `:reason`; `contract/ok|later|never|look`; an ending's cause is data plus `:text`).
 `can-start?` (until the start) and `can-run?` (every round, between steps) give one (none: `:ok`): `:later` waits (a
 called child ends `:condition-failed`; from `can-run?` it yields, bounded by the call's limits; a reflex ends

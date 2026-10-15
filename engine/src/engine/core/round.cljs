@@ -1,7 +1,7 @@
 (ns engine.core.round
   "One round: the ctx a round or check receives, the act wrapper (token check, memory saves, action
   events) and call-child."
-  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of normalize-result now offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
+  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of manual-job normalize-result now offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
@@ -189,6 +189,16 @@
             (child-ctx eng c slot (:args (mem/job-mem (mem/view (:store eng)) (:root c) (conj (:slots c) slot)))))
           c rel))
 
+(defn ^:async close-child
+  "A call-child child c (def) whose round gave res: when it ended (an ending, or an old :done), its cleanups run to their
+  end in this round, since an old caller does not come back for the rest; res, with a contract child's ending as its
+  cleanup left it."
+  [eng def c res below]
+  (if (#{:ended :done} (:status res))
+    (let [e (await (cleanup/close-now eng def c (or (:ending res) (contract/ending :cut-off :ended nil)) below))]
+      (if (:ending res) (normalize-result e) res))
+    res))
+
 (defn ^:async call-child
   "One round of the child job def in slot under parent base (see README.md).
   The child's memory is the parent's [:children slot] sub-map. It is created
@@ -220,19 +230,24 @@
       (mem/update-job! store (:root base) slots assoc :args args :children {}))
     (let [c (child-ctx eng base slot args)
           wait (atom nil)
-          child-wait (:child-wait base)]
+          child-wait (:child-wait base)
+          closing? (cleanup/closing? eng (:root base) slots)]
       (reset! child-wait nil)
-      (if-not ((:check def) (assoc c :wait wait))
+      (if-not (or closing? ((:check def) (assoc c :wait wait)))
         (let [w (when @wait (wait-reason @wait))]
           (reset! child-wait w)
           (ended! :declined nil w nil)
           :declined)
         (let [t0 (now eng)
-              {:keys [status error ending]} (try (limits/check! eng c)
-                                                 (normalize-result (or (ending/with-progress def c (limits/ending eng (:root base) slots nil))
-                                                                       (await ((:round def) c))))
-                                                 (catch :default e
-                                                   (if-let [l (ending/with-progress def c (limits/ending eng (:root base) slots e))] {:status :ended :ending l} (throw e)))
+              below #(ctx-below eng %1 %2)
+              {:keys [status error ending]} (try (if closing?
+                                                   (normalize-result (await (cleanup/drain eng def c below)))
+                                                   (let [res (try (limits/check! eng c)
+                                                                  (normalize-result (or (ending/with-progress def c (limits/ending eng (:root base) slots nil))
+                                                                                        (await ((:round def) c))))
+                                                                  (catch :default e
+                                                                    (if-let [l (ending/with-progress def c (limits/ending eng (:root base) slots e))] {:status :ended :ending l} (throw e))))]
+                                                     (await (close-child eng def c res below))))
                                                  (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))
               report (merge (tally/report eng (:root base) slots) (:report ending))
               status (if ending :done status)]
@@ -362,7 +377,9 @@
                              (let [r (or (own-limit nil) (await ((:round def) c)))]
                                (if (or (= :done r) (= :done (:kind r))) r (or (own-limit nil) r)))
                              (catch :default e (or (own-limit e) (throw e))))]
-                  (if (contract/ending? r) (await (cleanup/close eng def c r below)) r)))]
+                  (if (contract/ending? r) (await (cleanup/close eng def c r below)) r)))
+            ;; a reflex root and the driver's slot job get this round only
+            r (if (or (:reflex run) (= (:id run) (manual-job eng))) (await (cleanup/run-out eng def c r below)) r)]
         (assoc (normalize-result r) :result (get @results (:id run)) :child-wait @child-wait))
       (catch :default e
         (if (cut? e) {:status :cut :error e} {:status :error :error e}))
