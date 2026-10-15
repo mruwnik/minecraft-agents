@@ -1,0 +1,214 @@
+[{:id "obtain-gather/logs-only-waits-naming-the-unseen-stone", :file "obtain-gather", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:reason :no-source, :why [:contains "cobblestone (from stone)"]}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "obtain-gather/andesite-diorite-granite-are-no-cobblestone-source", :file "obtain-gather", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:reason :no-source, :why [:contains "cobblestone (from stone)"]}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "obtain-gather/nothing-in-view-waits-naming-both-needs", :file "obtain-gather", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:reason :no-source, :why [:contains "log, cobblestone (from stone)"]}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "obtain-gather/how-without-gather-waits-no-source-with-no-gather-text", :file "obtain-gather", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:reason :no-source, :why [:not [:contains "nothing seen to gather"]]}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "cornered-retreat/seals-in-the-dead-end", :file "cornered-retreat", :status :fail :expects [{:expect {:event {:source :job, :kind :retreat_sealed}, :within-s 40}, :status :fail}] :known-failure true}
+ {:id "cross-water/cross-to-the-given-far-shore-and-recover", :file "cross-water", :status :fail :expects [{:expect {:event {:source :job, :kind :boat.landed, :data {:recovered true}}, :within-s 150, :of-job true}, :status :fail}] :known-failure true}
+ {:id "cross-water/cross-without-taking-the-boat-back", :file "cross-water", :status :fail :expects [{:expect {:event {:source :job, :kind :boat.landed, :data {:recovered false}}, :within-s 150, :of-job true}, :status :fail}] :known-failure true}
+ {:id "cross-water/no-shore-far-enough", :file "cross-water", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:kind :condition-failed, :reason :no-far-shore}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "cross-water/no-water-within-radius", :file "cross-water", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:kind :condition-failed, :reason :not-water}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "pen-check/open-gate-leaks", :file "pen-check", :status :fail :expects [{:expect {:event {:source :job, :kind :pen-check.done, :data {:closed? false, :reason :leak, :leaks [{:why :open-gate}]}}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "pen-check/big-pen-mostly-unseen-is-unloaded", :file "pen-check", :status :fail :expects [{:expect {:event {:source :job, :kind :pen-check.done, :data {:closed? false, :reason :unloaded}}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "pen-check/closed-long-pen-with-an-inner-open-gate-is-not-a-leak", :file "pen-check", :status :fail :expects [{:expect {:event {:source :job, :kind :pen-check.done, :data {:closed? true, :leaks []}}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "pen-check/long-pen-with-a-missing-outer-post-still-leaks", :file "pen-check", :status :fail :expects [{:expect {:event {:source :job, :kind :pen-check.done, :data {:closed? false, :reason :leak}}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "get-food-rounds/s3-hunt-cow-a", :file "get-food-rounds", :status :fail :why "" :known-failure true}
+ {:id "get-food-rounds/s3-hunt-cow-b", :file "get-food-rounds", :status :fail :why "" :known-failure true}
+ {:id "get-food-rounds/f2-cut-while-walking-chest-emptied", :file "get-food-rounds", :status :fail :expects [{:expect {:event {:source :job, :kind :food.none, :level :warn}, :within-s 100}, :status :fail}] :known-failure true}
+ {:id "tidy-pending-airborne-retry/reachable-cell-restored-promptly", :file "tidy-pending-airborne-retry", :status :fail :expects [{:expect {:event {:source :reflex, :kind :fired, :context {:reflex-id :tidy-pending}}, :within-s 20}, :status :fail}] :known-failure true}
+ {:id "tidy-pending-airborne-retry/stair-walk-then-hold-no-cut-while-airborne", :file "tidy-pending-airborne-retry", :status :fail :expects [{:expect {:event {:source :job, :kind :tidy.restored, :data {:cells [[:any]]}}, :within-s 80}, :status :fail}] :known-failure true}
+ {:id "get-tool-craft/only-dirt-waits-no-source", :file "get-tool-craft", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:reason :no-source, :why [:contains "no seen chest"]}}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "get-tool-craft/only-dirt-pick-by-item", :file "get-tool-craft", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:reason :no-source, :why [:contains "no seen chest"]}}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "get-tool-craft/stone-pick-no-cobble", :file "get-tool-craft", :status :fail :expects [{:expect {:event {:source :job, :level :warn, :kind :stopped, :data {:reason :no-source}}, :within-s 140, :of-job true}, :status :fail}] :known-failure true}
+ {:id "get-tool-craft/no-material-seen-waits-no-source", :file "get-tool-craft", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:reason :no-source, :why [:contains "cobblestone"]}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "forestry-pillar/no-blocks-waits-need", :file "forestry-pillar", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :need}}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "forestry-pillar/no-chest-fetch-fails-then-waits-need", :file "forestry-pillar", :status :fail :expects [{:expect {:event {:source :job, :kind :fetch.failed}, :within-s 100, :of-job true}, :status :fail}] :known-failure true}
+ {:id "forestry-pillar/chest-dirt-fetched-then-felled", :file "forestry-pillar", :status :fail :expects [{:expect {:event {:source :job, :kind :fetch.started}, :within-s 40, :of-job true}, :status :fail}] :known-failure true}
+ {:id "forestry-pillar/fetch-false-waits-need-despite-chest", :file "forestry-pillar", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :need}}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "plant-sapling-fetch/chest-sapling-fetched-and-planted", :file "plant-sapling-fetch", :status :fail :expects [{:expect {:event {:source :job, :kind :fetch.started}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "plant-sapling-fetch/leaves-broken-for-a-sapling", :file "plant-sapling-fetch", :status :fail :expects [{:expect {:event {:source :job, :kind :fetch.started}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "plant-sapling-fetch/mangrove-propagule-fetched-and-planted", :file "plant-sapling-fetch", :status :fail :expects [{:expect {:event {:source :job, :kind :fetch.started}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "plant-sapling-fetch/leaves-bound-far-leaves-stay", :file "plant-sapling-fetch", :status :fail :expects [{:expect {:event {:source :job, :kind :fetch.started}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "plant-sapling-fetch/no-source-waits-no-sapling", :file "plant-sapling-fetch", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :no-sapling, :species "oak"}}, :within-s 40, :of-job true}, :status :fail}] :known-failure true}
+ {:id "breathe-pond/walled-stops-no-land-2", :file "breathe-pond", :status :flaky}
+ {:id "breathe-pond/equal-shores-walled-first-ledge-east", :file "breathe-pond", :status :fail :why ""}
+ {:id "breathe-pond/equal-shores-walled-first-ledge-west", :file "breathe-pond", :status :flaky}
+ {:id "breathe-pond/ledge-east-hostile-gone-fast-refire-lands", :file "breathe-pond", :status :flaky}
+ {:id "unwedge/s1-steps-to-free-side-1", :file "unwedge", :status :fail :why "" :known-failure true}
+ {:id "unwedge/s1-steps-to-free-side-2", :file "unwedge", :status :fail :why "" :known-failure true}
+ {:id "own-plan-footprint/shut-in-own-walls-go-to-stairs-out-a", :file "own-plan-footprint", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.escalated, :data {:step :stair}}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "own-plan-footprint/shut-in-own-walls-go-to-stairs-out-b", :file "own-plan-footprint", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.escalated, :data {:step :stair}}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "own-plan-footprint/stair-through-own-plan-wall", :file "own-plan-footprint", :status :fail :expects [{:expect {:event {:source :job, :kind :stair.done}, :within-s 60, :of-job true}, :status :fail}] :known-failure true}
+ {:id "animals-fetch/lead-to-crafts-a-lead", :file "animals-fetch", :status :fail :expects [{:expect {:event {:source :job, :kind :lead-to.done, :data {:reason :unleashed, :gathered true}}, :within-s 170, :of-job true}, :status :fail}]}
+ {:id "boat-land/land-and-recover-the-boat", :file "boat-land", :status :fail :expects [{:expect {:event {:source :job, :kind :boat.landed, :data {:recovered true}}, :within-s 120, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-escalate/pit-stair-arrives-and-leaves-holes-for-restore-broken", :file "go-to-escalate", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.restore-skipped}, :within-s 120, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-escalate/sealed-room-clear-path-arrives-and-shuts-the-door", :file "go-to-escalate", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.restored}, :within-s 120, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-escalate/oak-door-with-doors-never-digs", :file "go-to-escalate", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.restored}, :within-s 120, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-escalate/cobblestone-wall-room-is-never-dug", :file "go-to-escalate", :status :fail :expects [{:expect {:event {:source :job, :kind :result, :data {:arrived false, :escalation {:step :none, :why :no-dig}}}, :within-s 90, :of-job true}, :status :fail}]}
+ {:id "go-to-escalate/oak-log-wall-room-is-never-dug", :file "go-to-escalate", :status :flaky}
+ {:id "go-to-escalate/pillar-refused-by-others-plan-stairs-out-and-leaves-holes", :file "go-to-escalate", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.restore-skipped}, :within-s 140, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-escalate/trapped-again-digs-its-own-cobble", :file "go-to-escalate", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.restored}, :within-s 150, :of-job true}, :status :fail}] :known-failure true}
+ {:id "block-arrow-gap-respond/respond-closes-the-doorway-no-walk", :file "block-arrow-gap-respond", :status :fail :expects [{:expect {:event {:source :job, :kind :block-arrow-gap.closed}, :within-s 40, :of-job true}, :status :fail}] :known-failure true}
+ {:id "apiary-rounds/harvest-takes-two-ripe-hives", :file "apiary-rounds", :status :fail :why ""}
+ {:id "mine-ore-depth/gravel-falling-into-the-tunnel-is-dug", :file "mine-ore-depth", :status :fail :expects [{:expect {:event {:source :job, :kind :mine.done, :data {:got 0, :reason :tunnel-length}}, :within-s 200, :of-job true}, :status :fail}] :known-failure true}
+ {:id "restore-broken-seals/window-in-hut-with-doorway-restored", :file "restore-broken-seals", :status :flaky}
+ {:id "tunnel-fetch/tunnel-pickaxe-lost-mid-run-is-fetched-and-the-run-goes-on", :file "tunnel-fetch", :status :error :evidence ""}
+ {:id "go-to-air-gear/turtle-helmet-dive-18s-preview-has-no-drown", :file "go-to-air-gear", :status :error :evidence ""}
+ {:id "go-to-air-budget/replan-low-air-surfaces-and-walks-round", :file "go-to-air-budget", :status :fail :expects [{:expect {:event {:source :job, :kind :result, :context {:chain [[:any]]}, :data {:arrived true}}, :within-s 150, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-air-budget/drowning-body-at-2-hp-seen-air-lethal-refused", :file "go-to-air-budget", :status :fail :expects [{:expect {:event {:source :job, :kind :result, :context {:chain [[:any]]}, :data {:arrived false, :reason :unreachable, :why :air-lethal}}, :within-s 60, :of-job true}, :status :fail}] :known-failure true}
+ {:id "job-waiting-reasons/clear-box-bad-args-is-impossible", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/mine-no-block-is-impossible", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/leave-vehicle-not-mounted-is-done-already", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/breathe-not-underwater-is-done-already", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/extinguish-not-burning-is-done-already", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/get-food-not-hungry-is-done-already", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/night-waits-not-night", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/recover-drops-waits-no-drops", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/respond-to-hostile-no-hostile-is-done-already", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/restore-broken-nothing-to-restore-is-done-already", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/unwedge-not-wedged-is-done-already", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/breathe-runs-when-the-body-is-in-water", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/extinguish-runs-when-the-body-burns", :file "job-waiting-reasons", :status :pass}
+ {:id "job-waiting-reasons/respond-to-hostile-runs-when-a-zombie-is-near", :file "job-waiting-reasons", :status :pass}
+ {:id "walkway-two-wide-gaps/j29-start-east-goal-below-arrives", :file "walkway-two-wide-gaps", :status :flaky}
+ {:id "retreat-quiet-s-override/quiet-s-120-holds-past-a-minute", :file "retreat-quiet-s-override", :status :fail :expects [{:expect {:no-event {:source :reflex, :kind :ended}, :from-event {:source :job, :kind :retreat_sealed}, :for-s 70}, :status :fail}] :known-failure true}
+ {:id "herd-pen/seen-shallow-pen-refused-at-start", :file "herd-pen", :status :flaky}
+ {:id "go-to-cut-again-count/goal-beside-zombie-gives-up-cut-again", :file "go-to-cut-again-count", :status :fail :expects [{:expect {:event {:source :job, :kind :unreachable, :data {:why :cut-again}}, :within-s 115, :of-job true}, :status :fail}]}
+ {:id "fetch-f1/dig-without-fetch-waits-no-tool", :file "fetch-f1", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :no-tool}}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "fetch-f1/chest-never-seen-not-used", :file "fetch-f1", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:kind :nothing-possible, :reason :no-tool}}, :within-s 40, :of-job true}, :status :fail}] :known-failure true}
+ {:id "fetch-big-need/100-cobblestone-fetched-from-a-seen-chest", :file "fetch-big-need", :status :fail :expects [{:expect {:event {:source :job, :kind :build.done, :data {:missing 0}}, :within-s 220, :of-job true}, :status :fail}] :known-failure true}
+ {:id "zone-refusal-zones/stair-refused", :file "zone-refusal-zones", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :refused}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "zone-refusal-zones/till-refused", :file "zone-refusal-zones", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :refused}}, :within-s 30, :of-job true}, :status :fail}]}
+ {:id "rounds-core-backoff/listed-job-blocked-is-flagged-not-backed-off", :file "rounds-core-backoff", :status :fail :expects [{:expect {:event {:source :job, :kind :fruitless}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "plant-field/no-seed-does-not-sow", :file "plant-field", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :need}}, :within-s 20, :of-job true}, :status :fail}]}
+ {:id "flee-whole-flight/chaser-between-body-and-open-ground", :file "flee-whole-flight", :status :fail :expects [{:expect {:event {:source :job, :kind :hostile.chased, :data {:mob "zombie", :flights 3}}, :within-s 85}, :status :fail}] :known-failure true}
+ {:id "blocks-cut-by-reflex/place-cut-then-finishes-b", :file "blocks-cut-by-reflex", :status :fail :why "" :known-failure true}
+ {:id "hostile-line-of-fire/zombie-through-wheat-fires", :file "hostile-line-of-fire", :status :fail :expects [{:expect {:event {:source :reflex, :kind :fired, :context {:reflex-id :hostile-near}}, :within-s 9}, :status :fail}]}
+ {:id "hostile-line-of-fire/zombie-through-carrots-fires", :file "hostile-line-of-fire", :status :fail :expects [{:expect {:event {:source :reflex, :kind :fired, :context {:reflex-id :hostile-near}}, :within-s 9}, :status :fail}]}
+ {:id "hostile-line-of-fire/zombie-through-flowers-fires", :file "hostile-line-of-fire", :status :fail :expects [{:expect {:event {:source :reflex, :kind :fired, :context {:reflex-id :hostile-near}}, :within-s 9}, :status :fail}]}
+ {:id "hostile-line-of-fire/zombie-stone-box-quiet", :file "hostile-line-of-fire", :status :fail :expects [{:expect {:no-event {:source :reflex, :kind :fired, :context {:reflex-id :hostile-near}}, :for-s 10}, :status :fail}]}
+ {:id "hostile-line-of-fire/heard-skeleton-in-the-dark-open-fires", :file "hostile-line-of-fire", :status :fail :expects [{:expect {:event {:source :reflex, :kind :fired, :context {:reflex-id :hostile-near}}, :within-s 9}, :status :fail}]}
+ {:id "zone-refusal-jobs/tunnel-refused", :file "zone-refusal-jobs", :status :flaky}
+ {:id "zone-refusal-jobs/till-refused", :file "zone-refusal-jobs", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :refused}}, :within-s 30, :of-job true}, :status :fail}]}
+ {:id "build-plan-no-seal/closed-box-body-inside-slope", :file "build-plan-no-seal", :status :flaky}
+ {:id "build-plan-no-seal/island-exit-unwalkable", :file "build-plan-no-seal", :status :fail :why "" :known-failure true}
+ {:id "access-pickaxe-wait/tunnel-no-pickaxe-stops-once", :file "access-pickaxe-wait", :status :flaky}
+ {:id "farm-food/plant-with-only-the-reserve-in-carrots-waits-food-reserve", :file "farm-food", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :food-reserve}}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-edge-pit/edge-pit-sealed-no-pickaxe-fails", :file "go-to-edge-pit", :status :fail :expects [{:expect {:event {:source :job, :kind :result, :context {:chain [[:any]]}, :data {:arrived false, :status :stopped}}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-stair-heading/control-goal-west-no-obstacle", :file "go-to-stair-heading", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.restored}, :within-s 150, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-stair-heading/control-obsidian-east-goal-west", :file "go-to-stair-heading", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.restored}, :within-s 150, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-stair-heading/obsidian-east-other-heading-arrives", :file "go-to-stair-heading", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.restored}, :within-s 150, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-stair-heading/obsidian-east-and-north-arrives", :file "go-to-stair-heading", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.restored}, :within-s 150, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-stair-heading/up-stair-over-air-under-floor", :file "go-to-stair-heading", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.restored}, :within-s 150, :of-job true}, :status :fail}] :known-failure true}
+ {:id "pen-gate/gate-beyond-radius-left-open", :file "pen-gate", :status :fail :expects [{:expect {:no-event {:source :reflex, :kind :fired, :context {:reflex-id :pen-gate}}, :for-s 20}, :status :fail}] :known-failure true}
+ {:id "apiary-raised-fire/maintain-harvests-over-a-carpeted-raised-fire", :file "apiary-raised-fire", :status :fail :why "" :known-failure true}
+ {:id "obtain-gone-table/planks-for-the-pickaxe-only-stops-unreachable", :file "obtain-gone-table", :status :fail :expects [{:expect {:event {:source :job, :data {:reason :table-unreachable}}, :within-s 70, :of-job true}, :status :fail}] :known-failure true}
+ {:id "doors-go-to/oak-gate-shut-behind", :file "doors-go-to", :status :fail :expects [{:expect {:event {:source :job, :kind :result, :data {:arrived true}}, :within-s 40, :of-job true}, :status :fail}] :known-failure true}
+ {:id "doors-go-to/door-left-reflex-shuts-a-gate-a-cut-walk-left-open", :file "doors-go-to", :status :fail :expects [{:expect {:event {:source :reflex, :kind :fired, :context {:reflex-id :door-left}}, :within-s 50}, :status :fail}] :known-failure true}
+ {:id "dig-on-fluid/default-waits-on-hazard", :file "dig-on-fluid", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :hazard}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "loose-items/log-four-blocks-off-picked-up", :file "loose-items", :status :flaky}
+ {:id "smelt-cases/full-stack-under-a-short-explicit-budget-is-limit-reached", :file "smelt-cases", :status :fail :expects [{:expect {:event {:source :job, :kind :limit_reached, :data {:cause :time}}, :within-s 60, :of-job true}, :status :fail}]}
+ {:id "dig-to-see-lava/stair-on-lava-stop-stops-lava-exposed", :file "dig-to-see-lava", :status :flaky}
+ {:id "dig-to-see-lava/stair-water-behind-stone-stops-fluid-in-cut", :file "dig-to-see-lava", :status :fail :expects [{:expect {:event {:source :job, :kind :stair.stopped, :data {:reason :fluid-in-cut}}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "dig-to-see-lava/stair-lava-beside-a-cut-flows-in-after-the-dig-is-sealed-and-the-stair-backs-off", :file "dig-to-see-lava", :status :fail :expects [{:expect {:event {:source :job, :kind :stair.stopped, :data {:reason :lava-unsealed, :backed-off true}}, :within-s 110, :of-job true}, :status :fail}] :known-failure true}
+ {:id "village-feed/feeds-three-bread", :file "village-feed", :status :pass}
+ {:id "village-feed/feeds-two-bread-taken-within-4s", :file "village-feed", :status :pass}
+ {:id "village-feed/stray-bread-stays", :file "village-feed", :status :pass}
+ {:id "village-feed/absent-villager-is-gone", :file "village-feed", :status :pass}
+ {:id "village-feed/full-villager-takes-nothing", :file "village-feed", :status :pass}
+ {:id "pillar-knockback/zombie-hit-mid-pillar-done", :file "pillar-knockback", :status :fail :expects [{:expect {:event {:source :job, :kind :pillar.done}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "pillar-knockback/no-blocks-waits-too-few", :file "pillar-knockback", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :too-few-blocks, :cause {:short 5}}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "breathe-ceiling/seen-pocket-is-gone-to", :file "breathe-ceiling", :status :fail :expects [{:expect {:event {:source :job, :kind :child_started, :data {:slot :air}}, :within-s 40}, :status :fail}] :known-failure true}
+ {:id "breathe-ceiling/unseen-pocket-is-not-chosen", :file "breathe-ceiling", :status :flaky}
+ {:id "agent-visibility/hungry-names-raw-chicken-skipped-on-purpose", :file "agent-visibility", :status :fail :expects [{:expect {:event {:source :job, :kind :food.none, :message [:contains "carrying 2 chicken, 5 rotten_flesh, skipped on purpose"]}, :within-s 60, :of-job true}, :status :fail}] :known-failure true}
+ {:id "mine-wide-trench/dark-ore-3-blocks-from-the-cut-end-is-seen-and-dug", :file "mine-wide-trench", :status :fail :expects [{:expect {:event {:source :job, :kind :mine.left-behind}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "mine-wide-trench/dark-ore-7-blocks-from-the-cut-end-not-seen-tunnel-stops-at-trench", :file "mine-wide-trench", :status :fail :expects [{:expect {:event {:source :job, :kind :mine.tunnel-end, :data {:reason :no-floor}}, :within-s 60, :of-job true}, :status :fail}] :known-failure true}
+ {:id "mine-wide-trench/lit-ore-is-seen-and-dug-from-the-cut-end", :file "mine-wide-trench", :status :fail :expects [{:expect {:event {:source :job, :kind :mine.left-behind}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "village-breed/pair-with-beds-breeds", :file "village-breed", :status :fail :expects [{:expect {:event {:source :job, :kind :breed.done}, :within-s 200, :of-job true}, :status :fail}] :known-failure true}
+ {:id "build-path/carried-shovel-paths-the-box", :file "build-path", :status :flaky}
+ {:id "boat-drive/drive-there-and-back", :file "boat-drive", :status :fail :expects [{:expect {:event {:source :job, :kind :boat.driven, :data {:pos [:near [20270.5 149 20335.5] 2]}}, :within-s 100, :of-job true}, :status :fail}]}
+ {:id "boat-drive/on-foot-is-not-aboard", :file "boat-drive", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:reason :not-aboard}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "lead-to-legs/jammed-cow-lagging", :file "lead-to-legs", :status :fail :expects [{:expect {:event {:source :job, :kind :lead-to.done, :data {:reason :lagging, :still-led true}}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "tool-wear-cleanup-prepare/prepare-last-durability-pick-breaks", :file "tool-wear-cleanup-prepare", :status :fail :expects [{:expect {:event {:source :job, :kind :tool.broke}, :within-s 60}, :status :fail}]}
+ {:id "tool-wear-cleanup-prepare/prepare-healthy-pick-no-tool-event", :file "tool-wear-cleanup-prepare", :status :fail :expects [{:expect {:event {:source :job, :kind :prepare.done}, :within-s 60}, :status :fail}]}
+ {:id "tool-wear-cleanup-prepare/prepare-no-pick-digs-by-hand-no-tool-event", :file "tool-wear-cleanup-prepare", :status :fail :expects [{:expect {:event {:source :job, :kind :prepare.no-tool}, :within-s 30}, :status :fail}] :known-failure true}
+ {:id "budget-wrap-up/lead-to-far-spot-short-budget-lets-the-cow-go-and-times-out", :file "budget-wrap-up", :status :fail :expects [{:expect {:event {:source :job, :kind :lead-to.gave-up, :data {:reason :timeout}}, :within-s 90, :of-job true}, :status :fail}]}
+ {:id "tidy-pending-hostile/walled-in-zombie-tidy-restores", :file "tidy-pending-hostile", :status :fail :expects [{:expect {:event {:source :reflex, :kind :fired, :context {:reflex-id :tidy-pending}}, :within-s 30}, :status :fail}] :known-failure true}
+ {:id "mine-branch-torch/ore-far-off-the-line-gets-a-branch-torch", :file "mine-branch-torch", :status :fail :expects [{:expect {:event {:source :job, :kind :mine.done, :data {:got 1}}, :within-s 150, :of-job true}, :status :fail}] :known-failure true}
+ {:id "mount-vehicles/mount-then-dismount-onto-water", :file "mount-vehicles", :status :fail :expects [{:expect {:event {:source :job, :kind :vehicle.mounted}, :within-s 40, :of-job true}, :status :fail}] :known-failure true}
+ {:id "mount-vehicles/mount-twice-is-already", :file "mount-vehicles", :status :fail :expects [{:expect {:event {:source :job, :kind :vehicle.mounted, :data {:already true}}, :within-s 40, :of-job true}, :status :fail}] :known-failure true}
+ {:id "mount-vehicles/hand-full", :file "mount-vehicles", :status :flaky}
+ {:id "farm-tend-zones/till-hoe-breaks-mid-run-rest-skipped-no-hoe", :file "farm-tend-zones", :status :fail :expects [{:expect {:event {:source :job, :kind :till.skipped, :data {:reason :no-hoe}}, :within-s 70, :of-job true}, :status :fail}] :known-failure true}
+ {:id "restore-broken-wear/second-last-durability-pick-breaks", :file "restore-broken-wear", :status :flaky}
+ {:id "extinguish-scoop-walk-back/pour-10-away-is-walked-back-to-and-scooped", :file "extinguish-scoop-walk-back", :status :flaky}
+ {:id "extinguish-scoop-walk-back/pour-4-away-in-a-pit-is-scooped-in-place", :file "extinguish-scoop-walk-back", :status :fail :expects [{:expect {:no-event {:source :job, :kind :extinguish.scoop_failed}, :for-s 15}, :status :fail}] :known-failure true}
+ {:id "go-to-edge-start/edge-start-walks-south", :file "go-to-edge-start", :status :pass}
+ {:id "go-to-edge-start/edge-start-walks-north-round-the-hole", :file "go-to-edge-start", :status :pass}
+ {:id "till-coarse-dirt/coarse-and-rooted-dirt-end-as-farmland", :file "till-coarse-dirt", :status :pass}
+ {:id "till-coarse-dirt/stone-cell-is-skipped-not-tillable", :file "till-coarse-dirt", :status :pass}
+ {:id "shut-gate-animal/cow-stuck-in-gate-stops", :file "shut-gate-animal", :status :flaky}
+ {:id "go-to-torch-fetch/chest-of-torches-is-fetched-and-the-dark-drop-is-lit", :file "go-to-torch-fetch", :status :fail :expects [{:expect {:event {:kind :walk.torch-placed}, :within-s 100, :of-job true}, :status :fail}]}
+ {:id "go-to-torch-fetch/no-torch-in-view-ends-unseen-floor-dark-and-books-the-failure", :file "go-to-torch-fetch", :status :pass}
+ {:id "breathe-kelp/kelp-column-swims-up", :file "breathe-kelp", :status :fail :expects [{:expect {:event {:source :reflex, :kind :ended, :data {:how :cleared}}, :within-s 50}, :status :fail}] :known-failure true}
+ {:id "fight-back-mounted-rider/rider-dies-after-horse-moves-east", :file "fight-back-mounted-rider", :status :error :evidence ""}
+ {:id "bridge/bridges-five-then-cleanup-removes-it", :file "bridge", :status :flaky}
+ {:id "get-food-own-pen/own-plan-pen-surplus-is-hunted-keeping-two", :file "get-food-own-pen", :status :pass}
+ {:id "get-food-own-pen/other-plan-pen-is-spared", :file "get-food-own-pen", :status :fail :expects [{:expect {:event {:source :job, :kind :food.none, :level :warn}, :within-s 90}, :status :fail}]}
+ {:id "approach-zone-widen/ring-radius-3-pillars-from-radius-4", :file "approach-zone-widen", :status :fail :expects [{:expect {:event {:source :job, :kind :blocks.dig.done, :data {:pos [:near [20016 159 20368] 0.5]}}, :within-s 120, :of-job true}, :status :fail}]}
+ {:id "find-spot/pond-18-east-still-wins-over-dry-ground-by-the-body", :file "find-spot", :status :fail :expects [{:expect {:event {:source :job, :kind :find-spot.found, :data {:best [:near [20078 149 20736] 10]}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "find-spot/hillside-finds-best-so-far-spots", :file "find-spot", :status :fail :expects [{:expect {:event {:source :job, :kind :find-spot.found}, :within-s 40, :of-job true}, :status :fail}]}
+ {:id "retreat-ranged-cover/leaf-cover", :file "retreat-ranged-cover", :status :fail :expects [{:expect {:event {:source :job, :kind :completed}, :within-s 40, :of-job true}, :status :fail}]}
+ {:id "retreat-ranged-cover/open-runs", :file "retreat-ranged-cover", :status :flaky}
+ {:id "items-leftovers/kitchen-bakes-chest-wheat-and-stores-the-bread", :file "items-leftovers", :status :pass}
+ {:id "items-leftovers/kitchen-without-a-table-or-wood-stops-no-table", :file "items-leftovers", :status :pass}
+ {:id "items-leftovers/kitchen-crafts-a-table-from-carried-planks-and-bakes", :file "items-leftovers", :status :pass}
+ {:id "items-leftovers/kitchen-fetch-false-skips-no-table-even-with-planks", :file "items-leftovers", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:reason :no-table}}, :within-s 60, :of-job true}, :status :fail}]}
+ {:id "items-leftovers/enchant-without-a-table-gives-up-no-table", :file "items-leftovers", :status :pass}
+ {:id "items-leftovers/enchant-without-lapis-stops-need-lapis", :file "items-leftovers", :status :pass}
+ {:id "items-leftovers/get-tool-unknown-block-is-bad-args", :file "items-leftovers", :status :pass}
+ {:id "heard-mob-rough-b/seen-zombie-in-the-light-is-fought", :file "heard-mob-rough-b", :status :fail :why "" :known-failure true}
+ {:id "farm-fertilize-grass/no-bone-meal-fetch-false-waits-need", :file "farm-fertilize-grass", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :need, :cause {:item "bone_meal"}}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-health-wait/hungry-body-goes-over-its-budget", :file "go-to-health-wait", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.over-budget}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "blocks-dig-place/dig-without-pickaxe-waits", :file "blocks-dig-place", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :no-tool}}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "death-pile-danger/zombie-near-declines-with-danger-then-fetches", :file "death-pile-danger", :status :error :evidence ""}
+ {:id "get-tool-craft-wall-table/walled-table-no-logs-waits-for-material", :file "get-tool-craft-wall-table", :status :fail :expects [{:expect {:event {:source :job, :kind :stopped, :data {:reason :no-source, :why [:contains "no seen chest"]}}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "go-to-marker/marker-with-spaces-and-capitals-arrives", :file "go-to-marker", :status :flaky}
+ {:id "manual-slot-end/done-slot-job-leaves-the-list", :file "manual-slot-end", :status :fail :expects [{:expect {:event {:source :job, :kind :result, :data {:dug false}}, :within-s 20}, :status :fail}] :known-failure true}
+ {:id "toll-big-zone/big-foreign-zone-warns-capped-and-arrives", :file "toll-big-zone", :status :fail :expects [{:expect {:event {:source :job, :level :warn, :kind :toll-cells.capped}, :within-s 60, :of-job true}, :status :fail}] :known-failure true}
+ {:id "get-food-fragile/calm-day-walks-to-the-known-chest-and-eats", :file "get-food-fragile", :status :flaky}
+ {:id "get-food-fragile/creeper-by-the-route-is-too-dangerous", :file "get-food-fragile", :status :flaky}
+ {:id "get-food-fragile/raw-beef-is-cooked-at-the-furnace-on-a-calm-day", :file "get-food-fragile", :status :fail :expects [{:expect {:event {:source :job, :kind :smelt.done}, :within-s 80}, :status :fail}]}
+ {:id "stair-floor-seen-late/stair-through-open-pocket-goes-on", :file "stair-floor-seen-late", :status :flaky}
+ {:id "craft-fetch-table/table-fetched-from-a-seen-chest-and-craft-done", :file "craft-fetch-table", :status :fail :expects [{:expect {:event {:source :job, :kind :fetch.started}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "watch-look-round/lit-creeper-behind-seen-then-reflex", :file "watch-look-round", :status :flaky}
+ {:id "blocks-dig-lava-seal/dig-under-feet-seals-lava-below", :file "blocks-dig-lava-seal", :status :pass}
+ {:id "blocks-dig-lava-seal/dig-under-feet-fetches-seal-block-from-seen-chest", :file "blocks-dig-lava-seal", :status :pass}
+ {:id "blocks-dig-lava-seal/no-block-no-fetch-stops-lava-unsealed-and-steps-clear", :file "blocks-dig-lava-seal", :status :pass}
+ {:id "blocks-dig-lava-seal/dig-seals-lava-beside-the-dug-cell", :file "blocks-dig-lava-seal", :status :pass}
+ {:id "go-to-wide-pit-pillar/wide-pit-no-dig-pillars-out", :file "go-to-wide-pit-pillar", :status :fail :expects [{:expect {:event {:source :job, :kind :go-to.escalated, :data {:step :pillar}}, :within-s 60, :of-job true}, :status :fail}]}
+ {:id "collect-drops-leaf-wall/drop-behind-leaf-wall-found-by-search", :file "collect-drops-leaf-wall", :status :fail :why "" :known-failure true}
+ {:id "equip-hands/main-hand", :file "equip-hands", :status :fail :expects [{:expect {:event {:source :job, :kind :equip.done, :data {:item "iron_pickaxe", :hand "main"}}, :within-s 20, :of-job true}, :status :fail}] :known-failure true}
+ {:id "apiary-guard-step-off/lava-at-x-plus-2-never-ends-on-the-lava", :file "apiary-guard-step-off", :status :fail :expects [{:expect {:event {:kind :apiary.guard-done, :data {:sunk 1, :carpeted 1, :reason :guarded}}, :within-s 100, :of-job true}, :status :fail}] :known-failure true}
+ {:id "jobs-submit-next/next-jumps-ahead-of-an-earlier-plain-submit", :file "jobs-submit-next", :status :error :evidence ""}
+ {:id "tunnel-underground-entry/body-in-the-room-enters-the-line-where-it-stands", :file "tunnel-underground-entry", :status :fail :expects [{:expect {:event {:source :job, :kind :tunnel.plan, :data {:entry [12 4 16]}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "tunnel-underground-entry/body-off-the-line-column-is-too-far", :file "tunnel-underground-entry", :status :fail :expects [{:expect {:event {:source :job, :kind :tunnel.stopped, :data {:reason :too-far}}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "step-off-unseen-floor/never-steps-onto-lava-floor", :file "step-off-unseen-floor", :status :fail :why "" :known-failure true}
+ {:id "make-room-junk-first/no-chest-junk-goes-ores-stay", :file "make-room-junk-first", :status :fail :expects [{:expect {:event {:source :job, :kind :make-room.done, :data {:tossed [{:item "granite", :count 64} {:item "tuff", :count 20}]}}, :within-s 90, :of-job true}, :status :fail}] :known-failure true}
+ {:id "mine-left-behind/drop-across-a-trench-left-behind-body-goes-home", :file "mine-left-behind", :status :fail :expects [{:expect {:event {:source :job, :kind :mine.left-behind}, :within-s 60, :of-job true}, :status :fail}] :known-failure true}
+ {:id "village-trade-unreachable/glass-box-villager-is-unreachable-in-one-call", :file "village-trade-unreachable", :status :fail :expects [{:expect {:event {:source :job, :kind :trade.gave-up, :data {:reason "unreachable"}}, :within-s 60, :of-job true}, :status :fail}] :known-failure true}
+ {:id "manual-lease/queued-job-waits-for-release", :file "manual-lease", :status :error :evidence ""}
+ {:id "go-to-corner-jump-refused-food-6/food-6-refuses-corner-jump", :file "go-to-corner-jump-refused-food-6", :status :flaky}
+ {:id "block-arrow-gap/slit-in-the-wall-is-filled", :file "block-arrow-gap", :status :fail :expects [{:expect {:event {:source :job, :kind :block-arrow-gap.closed}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "block-arrow-gap/wall-without-a-slit-declines", :file "block-arrow-gap", :status :fail :expects [{:expect {:event {:source :job, :kind :waiting, :data {:reason :no-ranged-danger}}, :within-s 30, :of-job true}, :status :fail}]}
+ {:id "shut-rounds-standing-in/standing-in-gate-kept-then-shut-later", :file "shut-rounds-standing-in", :status :error :evidence ""}
+ {:id "collect-drops-slope/drop-3-down-a-slope-collected", :file "collect-drops-slope", :status :flaky}
+ {:id "collect-drops-slope/drop-3-down-a-cliff-collected", :file "collect-drops-slope", :status :flaky}
+ {:id "night-roof-walk/lit-route-25-blocks-torches-every-6-walks-home", :file "night-roof-walk", :status :fail :expects [{:expect {:event {:source :job, :kind :completed, :data {:name "jobs.survival.night"}}, :within-s 100, :of-job true}, :status :fail}]}
+ {:id "dig-in-wet-and-plant-sites/water-in-feet-cell-refuses", :file "dig-in-wet-and-plant-sites", :status :fail :expects [{:expect {:event {:source :job, :kind :dig_in_failed, :message [:contains "where the body stands"]}, :within-s 30, :of-job true}, :status :fail}] :known-failure true}
+ {:id "dig-in-wet-and-plant-sites/poppy-beside-start-digs-3-deep-and-seals", :file "dig-in-wet-and-plant-sites", :status :fail :why "" :known-failure true}
+ {:id "go-to-escalate/own-shelter-does-not-dig", :file "go-to-escalate", :status :error :evidence ""}
+ {:id "go-to-dark-cost/night-dark-direct-corridor-takes-the-lit-detour", :file "go-to-dark-cost", :status :inconclusive}
+ {:id "retreat-weighted-relocate/flee-two-zombies-east-west", :file "retreat-weighted-relocate", :status :fail :why "" :known-failure true}
+ {:id "night-flee/flees-to-an-overhang-and-walls-in", :file "night-flee", :status :fail :expects [{:expect {:event {:source :job, :kind :shelter.fled, :data {:target :cave}}, :within-s 150}, :status :fail}]}
+ {:id "bed-occupied-rule/occupied-bed-skipped", :file "bed-occupied-rule", :status :flaky}
+ {:id "sleep-spawn-bed-durable/durable-spawn-bed-stays-silent-after-the-spawn-set-expired", :file "sleep-spawn-bed-durable", :status :flaky}
+ {:id "hut-bed-review/seen-unknown-bed-nothing-carried-slept", :file "hut-bed-review", :status :fail :expects [{:expect {:event {:source :action, :kind :done, :data {:name "sleep", :status "sleeping"}}, :within-s 60}, :status :fail}]}]

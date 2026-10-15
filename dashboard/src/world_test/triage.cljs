@@ -1,0 +1,203 @@
+(ns world-test.triage
+  "tools/sweep-triage.mjs: reads a sweep's pool results and the board (read-only sqlite) and reports what the sweep agent acts on:
+  each non-passing case as known (the previous sweep failed the same check), new, flaky or inconclusive; each live / needs_fixture card
+  with the cases its live plan names; the cards to tick, to send to pending, to hold and the new failures that need a bug card.
+  Pure parts: classify, card-plan-text, triage, summary."
+  (:require ["child_process" :as cp]
+            ["fs" :as fs]
+            [cljs.reader :as reader]
+            [clojure.string :as str]))
+
+(def usage
+  (str "usage: node tools/sweep-triage.mjs --dir DIR [--previous RESULTS.edn ...] [--rev R] [--repo PATH] [--plans PLANS.edn] [--db FILE] [--board ID | --board-file BOARD.edn] [--out report.edn]\n"
+       "DIR holds sweep-<pass>.edn (day, night, night-exclusive, any sweep-*.edn except sweep-summary.edn). --previous: the earlier sweep's result files, as the pool's --durations.\n"
+       "--plans: EDN map of card id prefix -> text naming fixtures/cases, for a card whose own plan names none. "
+       "--rev (default HEAD) and --repo (default .): a card is covered when its commits are ancestors of the revision. Prints a text summary; --out writes the full EDN report."))
+
+(def default-db (str (.. js/process -env -HOME) "/.local/share/differ/review.db"))
+(def default-board "d6883cd9-f687-4bc4-a73c-2e6c4a0cd7f9")
+
+(defn read-results [file] (reader/read-string (fs/readFileSync file "utf8")))
+
+(defn fail-sig
+  "Which check a failed case failed on: the :expect of its first failed expectation, else its :why; an error's :evidence."
+  [{:keys [status expects why evidence]}]
+  (if (= status :error)
+    evidence
+    (or (some #(when (= :fail (:status %)) (:expect %)) expects) why "")))
+
+(defn last-results
+  "Result vectors in order (later wins) -> id -> [status sig] for the ids whose last result failed or errored."
+  [previous]
+  (let [last-of (reduce (fn [m c] (assoc m (:id c) c)) {} (apply concat previous))]
+    (into {} (keep (fn [[id c]] (when (#{:fail :error} (:status c)) [id [(:status c) (fail-sig c)]]))) last-of)))
+
+(defn classify
+  "Cases + previous result vectors -> the cases with :class (:pass :flaky :known :new :inconclusive) and :sig.
+  Known = the last previous result failed (or errored) on the same check; with no previous result at all the pool's :known-failure flag decides."
+  [cases previous]
+  (let [prev (last-results previous)
+        seen-before? (set (map :id (apply concat previous)))]
+    (mapv (fn [c]
+            (let [sig (fail-sig c)
+                  cls (case (:status c)
+                        :pass :pass
+                        :flaky :flaky
+                        :inconclusive :inconclusive
+                        (cond
+                          (= [(:status c) sig] (prev (:id c))) :known
+                          (and (:known-failure c) (not (seen-before? (:id c)))) :known
+                          :else :new))]
+              (assoc (select-keys c [:id :file :status]) :class cls :sig sig)))
+          cases)))
+
+(defn slug [id] (subs id (inc (.indexOf id "/"))))
+
+(defn tokens [text]
+  (into #{} (comp (map #(str/replace % #"[-_]+$" "")) (remove str/blank?))
+        (str/split (str/lower-case (or text "")) #"[^a-z0-9_/-]+")))
+
+(defn card-plan-text
+  "The text a card's live plan lives in: its title, then each note's text from 'live plan' on (unit-test lists before it do not count); with no such note the description from its first line that mentions live (all of it when none does). :extra-plan is text the sweep agent adds by hand."
+  [{:keys [title description plan-notes extra-plan]}]
+  (let [from-live-plan (fn [n] (when-let [i (str/index-of (str/lower-case n) "live plan")] (subs n i)))
+        notes (keep from-live-plan plan-notes)
+        lines (str/split-lines (or description ""))
+        from-live (drop-while #(not (re-find #"(?i)live" %)) lines)]
+    (str/join "\n" (concat [title extra-plan]
+                           (if (seq notes) notes (if (seq from-live) from-live lines))))))
+
+(defn named-cases
+  "Plan text + all classified cases -> the cases the plan names. A fixture token alone names all its cases; fixture/slug (slug may be cut short) or a bare slug of a named fixture's case narrows it to those."
+  [text cases]
+  (let [toks (tokens text)
+        by-file (group-by :file cases)
+        files (into #{} (keep #(let [f (first (str/split % #"/"))] (when (by-file f) f))) toks)
+        specific (fn [file]
+                   (let [prefix (str file "/")
+                         cuts (into [] (keep #(when (and (str/starts-with? % prefix) (> (count %) (+ 4 (count file)))) (subs % (count prefix)))) toks)]
+                     (filter (fn [c]
+                               (let [s (slug (:id c))]
+                                 (or (toks s) (toks (str prefix s)) (some #(str/starts-with? s %) cuts))))
+                             (by-file file))))]
+    (vec (mapcat (fn [file] (let [sp (specific file)] (if (seq sp) sp (by-file file)))) (sort files)))))
+
+(defn verdict
+  "A named case that failed on a check -> :pending; no failure but an error, an inconclusive or a failure with no reason -> :hold; else :tick."
+  [named]
+  (let [real-fail? #(and (= :fail (:status %)) (not= "" (:sig %)))]
+    (cond
+      (empty? named) :no-plan
+      (some real-fail? named) :pending
+      (some #(or (#{:inconclusive} (:class %)) (#{:error :fail} (:status %))) named) :hold
+      :else :tick)))
+
+(defn bug-matches [bugs {:keys [id file]}]
+  (mapv :id (filter #(let [toks (tokens (:title %))] (or (toks id) (toks file))) bugs)))
+
+(defn triage
+  "{:results cases :previous [vector ...] :cards [{:id :column :title :commits :description :plan-notes}] :bugs [{:id :title}] :ancestor? sha -> bool} -> report."
+  [{:keys [results previous cards bugs ancestor?]}]
+  (let [classified (classify results previous)
+        by-id (into {} (map (juxt :id identity)) classified)
+        card-reports (mapv (fn [c]
+                             (let [named (named-cases (card-plan-text c) classified)
+                                   covered? (every? ancestor? (:commits c))
+                                   v (cond (not covered?) :not-in-rev
+                                           :else (verdict named))]
+                               {:id (:id c) :title (:title c) :column (:column c)
+                                :cases (mapv #(select-keys % [:id :status :class]) named)
+                                :failing (mapv :id (filter #(= :fail (:status %)) named))
+                                :bug-cards (vec (distinct (mapcat #(bug-matches bugs %) (filter #(= :fail (:status %)) named))))
+                                :verdict v}))
+                           cards)
+        named-by (reduce (fn [m c] (reduce #(update %1 (:id %2) (fnil conj []) (:id c)) m (:cases c))) {} (remove #(= :not-in-rev (:verdict %)) card-reports))
+        new-bugs (mapv (fn [c] {:id (:id c) :sig (:sig c) :cards (vec (named-by (:id c))) :existing (bug-matches bugs c)})
+                       (filter #(= :new (:class %)) classified))
+        ids-of #(mapv :id (filter (fn [c] (= % (:verdict c))) card-reports))]
+    {:counts (frequencies (map :class classified))
+     :failures (vec (remove #(#{:pass} (:class %)) classified))
+     :cards card-reports
+     :tick (ids-of :tick)
+     :pending (ids-of :pending)
+     :hold (ids-of :hold)
+     :no-plan (ids-of :no-plan)
+     :new-bugs new-bugs}))
+
+(defn summary [{:keys [counts tick pending hold no-plan new-bugs cards]}]
+  (let [n #(get counts % 0)
+        nplan (count (filter #(= :no-plan (:verdict %)) cards))]
+    (str/join "\n"
+              [(str "cases: pass " (n :pass) ", flaky " (n :flaky) ", known " (n :known) ", new " (n :new) ", inconclusive " (n :inconclusive))
+               (str "cards: " (count cards) " checked; tick " (count tick) ", to pending " (count pending) ", hold " (count hold) ", no plan " nplan)
+               (str "tick: " (str/join " " (map #(subs % 0 8) tick)))
+               "pending (card: failing cases [existing bug cards]):"
+               (str/join "\n" (for [c cards :when (= :pending (:verdict c))]
+                                (str "  " (subs (:id c) 0 8) ": " (str/join ", " (:failing c)) (when (seq (:bug-cards c)) (str " [" (str/join " " (map #(subs % 0 8) (:bug-cards c))) "]")))))
+               (str "hold: " (str/join " " (map #(subs % 0 8) hold)))
+               (str "new failures needing a bug card (" (count new-bugs) "):")
+               (str/join "\n" (map #(str "  " (:id %) (when (seq (:existing %)) (str " [existing " (str/join " " (map (fn [b] (subs b 0 8)) (:existing %))) "]"))
+                                      (when (seq (:cards %)) (str " cards " (str/join " " (map (fn [b] (subs b 0 8)) (:cards %))))))
+                                   new-bugs))])))
+
+;; ---- board and git, the impure edge
+
+(defn sql-json [db sql]
+  (let [r (cp/spawnSync "sqlite3" #js ["-json" (str "file:" db "?mode=ro") sql] #js {:encoding "utf8" :maxBuffer (* 256 1024 1024)})]
+    (when-not (zero? (.-status r)) (throw (js/Error. (str "sqlite3: " (.-stderr r)))))
+    (if (str/blank? (.-stdout r)) [] (js->clj (js/JSON.parse (.-stdout r)) :keywordize-keys true))))
+
+(defn read-board [db board]
+  (let [q (fn [s] (sql-json db (str/replace s "BOARD" (str "'" board "'"))))
+        tasks (q "select id, title, description, status as column from tasks where board_id=BOARD and status in ('live','needs_fixture')")
+        notes (group-by :task_id (q "select task_id, content from task_notes where task_id in (select id from tasks where board_id=BOARD and status in ('live','needs_fixture')) and lower(content) like '%live plan%' order by created_at"))
+        commits (group-by :task_id (q "select task_id, sha from task_commits where task_id in (select id from tasks where board_id=BOARD and status in ('live','needs_fixture'))"))
+        bugs (q "select id, title from tasks where board_id=BOARD and status not in ('done','rejected') and title like 'Bug%'")]
+    {:cards (mapv (fn [t] (assoc t :plan-notes (mapv :content (notes (:id t))) :commits (mapv :sha (commits (:id t))))) tasks)
+     :bugs bugs}))
+
+(defn ancestor-fn
+  "One git call: the revision's history, indexed by the first 7 hex digits; a shorter sha is scanned."
+  [repo rev]
+  (let [r (cp/spawnSync "git" #js ["rev-list" rev] #js {:cwd repo :encoding "utf8" :maxBuffer (* 256 1024 1024)})
+        _ (when-not (zero? (.-status r)) (throw (js/Error. (str "git rev-list " rev ": " (.-stderr r)))))
+        all (str/split-lines (.-stdout r))
+        by-7 (group-by #(subs % 0 7) all)]
+    (fn [sha]
+      (if (< (count sha) 7)
+        (boolean (some #(str/starts-with? % sha) all))
+        (boolean (some #(str/starts-with? % sha) (by-7 (subs sha 0 7))))))))
+
+(defn with-plans [board plans]
+  (update board :cards (fn [cards] (mapv (fn [c] (if-let [t (some (fn [[p t]] (when (str/starts-with? (:id c) p) t)) plans)] (assoc c :extra-plan t) c)) cards))))
+
+(defn parse-args [argv]
+  (loop [[a & more :as args] argv, o {:previous [] :repo "." :rev "HEAD" :db default-db :board default-board}]
+    (cond
+      (empty? args) o
+      (= a "--previous") (let [[files rst] (split-with #(not (str/starts-with? % "--")) more)] (recur rst (update o :previous into files)))
+      (#{"--dir" "--rev" "--repo" "--db" "--board" "--board-file" "--plans" "--out"} a) (recur (rest more) (assoc o (keyword (subs a 2)) (first more)))
+      :else (recur more (update o :extra (fnil conj []) a)))))
+
+(defn result-files [dir]
+  (->> (array-seq (fs/readdirSync dir))
+       (filter #(and (re-matches #"sweep-.*\.edn" %) (not= % "sweep-summary.edn")))
+       sort
+       (mapv #(str dir "/" %))))
+
+(defn main
+  "argv (array) -> exit code."
+  [argv]
+  (let [args (vec (array-seq argv))
+        o (parse-args args)]
+    (cond
+      (or (some #{"--help" "-h"} args) (not (:dir o)) (:extra o)) (do (js/console.log usage) (if (some #{"--help" "-h"} args) 0 2))
+      :else
+      (let [report (triage (merge {:results (vec (mapcat read-results (result-files (:dir o))))
+                                   :previous (mapv read-results (:previous o))
+                                   :ancestor? (ancestor-fn (:repo o) (:rev o))}
+                                  (with-plans (if-let [f (:board-file o)] {:cards (reader/read-string (fs/readFileSync f "utf8")) :bugs []} (read-board (:db o) (:board o)))
+                                              (some-> (:plans o) (fs/readFileSync "utf8") reader/read-string))))]
+        (when (:out o) (fs/writeFileSync (:out o) (pr-str report)))
+        (js/console.log (summary report))
+        0))))
