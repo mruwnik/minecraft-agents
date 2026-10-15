@@ -33,7 +33,7 @@ compile_retry() {
 }
 [ $# -ge 1 ] || { echo "usage: tools/test-engine <ns>... | --full | --changed [<git-rev>]" >&2; exit 2; }
 if [ "$1" = "--changed" ]; then
-  sel="$(node "$repo/tools/changed-tests.mjs" "${2:-HEAD}")" || exit $?
+  sel="$(node "$repo/tools/changed-tests.mjs" ${2:+"$2"})" || exit $?
   if [ "${sel%% *}" = "FULL" ]; then echo "test-engine --changed: running the full suite (${sel#FULL })"; set -- --full
   else
     mapfile -t nss < <(grep '^cljs ' <<<"$sel" | cut -d' ' -f2)

@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/changed-tests.mjs (a Node tool, like the other tools/*.mjs).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { selectTests } from './changed-tests.mjs'
+import { selectTests, fanout, suiteArgs, rangeOf } from './changed-tests.mjs'
 
 const ns = (name, requires = '', extra = '') => `(ns ${name}\n  "doc (:require [fake.x])"\n  (:require ${requires}) ; [commented.out]\n  )\n${extra}`
 // Fake tree: a -> b -> c (src chain); fake is shared test infra; jobs.k only named by a quoted symbol.
@@ -24,6 +24,10 @@ const tree = () => ({
   'engine/js/sub/n.mjs': "import { m } from '../m.mjs'",
   'engine/js/sub/n.test.mjs': "import { n } from './n.mjs'",
   'engine/js/orphan.mjs': 'export {}',
+  'tools/lib/u.mjs': 'export const u = 1',
+  'tools/t.mjs': "import { u } from './lib/u.mjs'",
+  'tools/t.test.mjs': "import './t.mjs'",
+  'tools/lib/u.test.mjs': "import './u.mjs'",
 })
 const sel = (changed, files = tree()) => selectTests(files, changed)
 
@@ -67,4 +71,27 @@ test('changed js selects its test and tests of its importers', () => {
 test('unrelated paths select nothing', () => {
   const r = sel(['README.md', 'dashboard/src/x.cljs'])
   assert.deepEqual([r.cljs, r.js, r.full], [[], [], null])
+})
+
+test('changed tools files select the tools tests of them and of their importers', () => {
+  assert.deepEqual(sel(['tools/t.mjs']).tools, ['tools/t.test.mjs'])
+  assert.deepEqual(sel(['tools/lib/u.mjs']).tools, ['tools/lib/u.test.mjs', 'tools/t.test.mjs'])
+  assert.deepEqual(sel(['tools/t.test.mjs']).tools, ['tools/t.test.mjs'])
+  assert.deepEqual(sel(['engine/js/m.mjs']).tools, [])
+})
+test('fanout lists each changed file with the tests it alone selects, widest first', () => {
+  assert.deepEqual(fanout(tree(), ['engine/src/lib/solo.cljs', 'engine/src/lib/c.cljs']),
+    [{ file: 'engine/src/lib/c.cljs', tests: 2 }, { file: 'engine/src/lib/solo.cljs', tests: 1 }])
+})
+test('suiteArgs gives the run_tests args per suite', () => {
+  const r = sel(['engine/src/lib/c.cljs', 'engine/js/m.mjs', 'tools/t.mjs'])
+  assert.deepEqual(suiteArgs(r), {
+    engine: ['engine.a-test', 'engine.b-test'],
+    'engine-js': ['engine/js/m.test.mjs', 'engine/js/sub/n.test.mjs'],
+    tools: ['tools/t.test.mjs'],
+  })
+})
+test('a range a..b diffs committed files only, a bare rev includes the working tree', () => {
+  assert.deepEqual(rangeOf('abc..def'), { from: 'abc', to: 'def' })
+  assert.deepEqual(rangeOf('abc'), { from: 'abc', to: null })
 })
