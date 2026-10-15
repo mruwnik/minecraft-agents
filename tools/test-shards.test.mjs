@@ -41,10 +41,12 @@ test('shardOutcome: exit 0 with no test logged is a failure; a failed exit keeps
   assert.equal(shardOutcome(1, ok).ok, false)
 })
 
-test('memSlots: (available - 6 GB floor) / shard peak, at least 1, at most 3', () => {
-  assert.equal(memSlots(5900), 1)
-  assert.equal(memSlots(12100), 2)
-  assert.equal(memSlots(30000), 3)
+test('memSlots: (available - res-slot.json floor) / shard peak, at least 1, at most 3', () => {
+  const { floorMb, kinds } = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'res-slot.json'), 'utf8'))
+  const peak = kinds.tests.needMb
+  assert.equal(memSlots(floorMb + peak - 100), 1)
+  assert.equal(memSlots(floorMb + 2 * peak + 100), 2)
+  assert.equal(memSlots(floorMb + 30000), 3)
 })
 
 test('testNamespaces covers every file under engine/test that contains deftest', () => {
