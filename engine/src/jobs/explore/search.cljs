@@ -31,8 +31,8 @@
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
   in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
   counted in :max-legs) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
-  left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, up to :load-wait-s (a body just logged in has no chunks
-  yet), then the search ends :not-loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
+  left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, until they load or the call's time is spent (a body just logged in has no chunks
+  yet). A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck); until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
@@ -47,7 +47,7 @@
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :legs (:max-legs walked) or :stuck (three failed walks in a row).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s; the engine ends it, round time only, so go-to's wait for day in a shelter does not count), with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
-  - :condition-failed :not-loaded (leg columns never loaded). A call with no :target waits (condition :no-target).
+  - A call with no :target waits (condition :no-target).
 
   Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
@@ -68,8 +68,7 @@
    :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}
    :seen-ttl-s {:doc "how long a note of a block seen lasts" :spec (a/num-in 0 nil) :default 259200}
    :entity-ttl-s {:doc "how long a note of an entity seen lasts" :spec (a/num-in 0 nil) :default 600}
-   :searched-ttl-s {:doc "how long a note of searched ground lasts" :spec (a/num-in 0 nil) :default 86400}
-   :load-wait-s {:doc "how long to wait for unloaded leg columns to load when no loaded leg is left" :spec (a/num-in 0 nil) :default 30}})
+   :searched-ttl-s {:doc "how long a note of searched ground lasts" :spec (a/num-in 0 nil) :default 86400}})
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up, not counting the time go-to holds for day in a shelter." :spec (a/num-in 0 nil)}
@@ -250,7 +249,6 @@
                                           (:scans m 0) " looks, " (:farthest m 0) " blocks out"))))
     (case why
       nil (ctx/end c :done nil result)
-      :not-loaded (ctx/end c :condition-failed :not-loaded result)
       (ctx/end c :nothing-possible why result))))
 
 (defn takeable
@@ -394,9 +392,7 @@
     (cond
       (>= (count found) want) (finish! c :found nil)
       (>= (:legs m 0) max-legs) (finish! c :not-found :legs)
-      :else (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)
-                  now (ctx/now c)
-                  waited (- now (:waiting-since m now))]
+      :else (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)]
               (ctx/update-mem! c (fn [m] (-> m
                                              (update :tried (fnil into []) tried)
                                              (update :failed (fnil into []) failed)
@@ -404,18 +400,14 @@
                                              (assoc :choosing (boolean (and more (not leg))))
                                              (assoc :deferred (when (and more (not leg)) unloaded)))))
               (cond
-                leg (do (ctx/update-mem! c (fn [m] (-> m (dissoc :waiting-since) (assoc :leg leg :leg-column column)
+                leg (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column)
                                                        (update :legs (fnil + 0) (if step 0 1)))))
                         (await (walk! c)))
                 more :again
                 (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
                 (empty? unloaded) (finish! c :not-found :distance)
-                (< waited (* 1000 (:load-wait-s (:args c))))
-                (do (ctx/update-mem! c assoc :waiting-since (- now waited))
-                    (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))
-                    :continue)
-                :else (do (ctx/update-mem! c update :failed (fnil into []) unloaded)
-                          (finish! c :not-found :not-loaded)))))))
+                :else (do (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))
+                          :continue))))))
 
 (defn ^:async search-step!
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."

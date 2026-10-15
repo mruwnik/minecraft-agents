@@ -283,10 +283,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 20}
+        (let [s (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}}
                                 {:unloaded ["0,63,-16"] :unreachable ["16,64,0"]}))
-              failed (get-in (event-of s :search.not-found) [:coverage :failed])]
-          (is (= #{{:pos [0 64 -16] :reason :not-loaded} {:pos [16 64 0] :reason :unreachable}} (set failed)))
+              failed (get-in (event-of s :stopped) [:coverage :failed])]
+          (is (= #{{:pos [16 64 0] :reason :unreachable}} (set failed)))
           (is (not-any? #(= {:x 0 :z -16} (select-keys % [:x :z])) (walks s)) "an unloaded column is never walked to"))))))
 
 (def ring-1-cells (mapv (fn [[x z]] (str x ",63," z)) (search/spiral-points [0 0] 16 23)))
@@ -305,15 +305,13 @@
           (is (= 4 (count (walks s))))
           (is (= :distance (:why (event-of s :search.not-found)))))))))
 
-(deftest ground-that-never-loads-ends-it-not-loaded
+(deftest ground-that-never-loads-waits-until-the-call-time-is-spent
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 20} {:unloaded ring-1-cells}))
-              e (event-of s :search.not-found)]
-          (is (= :not-loaded (:why e)))
-          (is (<= (get-in e [:coverage :scans]) 17) "a look every 2 s while waiting, not every tick")
-          (is (= 4 (count (get-in e [:coverage :failed]))))
+        (let [s (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}} {:unloaded ring-1-cells}))]
+          (is (= :job-time (:reason (event-of s :stopped))) "no clock of its own: the engine's time limit ends the wait")
+          (is (nil? (event-of s :search.not-found)))
           (is (= [] (walks s))))))))
 
 ;; a leg whose goal lies by a mob the body would flee is not walked: go-to gives it up (:goal-danger :end), it is recorded
@@ -465,9 +463,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 20} {:blocks {"10,64,0" "diamond_block"}}
+        (let [s (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}} {:blocks {"10,64,0" "diamond_block"}}
                                 400 (fn [{:keys [p]}] (tu/blind p))))
-              e (event-of s :search.not-found)]
+              e (event-of s :stopped)]
           (is (= [] (:found e)))
           (is (not-any? #(= :seen (:kind %)) (file-notes s))))))))
 
