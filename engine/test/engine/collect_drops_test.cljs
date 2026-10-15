@@ -287,7 +287,7 @@
 (deftest the-job-is-a-contract-job-naming-what-it-collects
   (let [{:keys [eng]} (bd/setup {:self body})
         entry (get (:jobs eng) job)]
-    (is (fn? (:can-start? entry)))
+    (is (fn? (:round entry)))
     (is (= [:ids :near] (:target entry)))
     (is (fn? (:quote-of entry)))
     (is (nil? (:ways entry)) "one method: no ways")))

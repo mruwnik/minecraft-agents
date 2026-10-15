@@ -1,6 +1,5 @@
 (ns jobs.forestry.collect-drops
   (:require [engine.args :as a]
-            [jobs.lib.checks :as checks]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
@@ -54,9 +53,6 @@
 (def target [:ids :near])
 
 (def defaults {:least 1})
-
-(def can-start? checks/always)
-
 
 (a/defargs settings
   {::max-settle-waits {:default 10 :doc "Checks of a hole drop that still moves before it counts as settled." :spec (a/int-in 0 nil)}

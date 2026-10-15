@@ -16,7 +16,7 @@
                       ['jobs.maintenance.shut-doors {}]
                       ['jobs.strip.loot-cart {:id 5}]
                       ['jobs.strip.seal {:at [0 64 0] :axis :x :side :from :width 3 :height 3}]]]
-    (is (some (job sym) [:conditions :can-start? :can-run?]) (str sym " has a start check"))
+    (is (nil? (:check (job sym))) (str sym " is a contract job"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
