@@ -4,7 +4,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.items.obtain.base :refer [args-error carried-of holds makes? max-gap-ms max-inspections names-of tried! wanted-fields way?]]
+            [jobs.items.obtain.base :refer [args-error carried-of holds makes? max-inspections names-of tried! wanted-fields way?]]
             [jobs.items.obtain.chest :refer [blocked-text candidates inspect! withdraw!]]
             [jobs.items.obtain.craft :refer [craft-step!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
@@ -14,7 +14,6 @@
             [jobs.lib.body :as body]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
-            [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
             [clojure.string]))
 
@@ -60,7 +59,7 @@
   own check declines (night in a shelter), that cause stands instead.
   Ends :done {:got n :item name} only with the count carried. Nothing-possible {:reason :no-source :why} or
   :table-unreachable when every allowed way was tried, data {:got n :tried {way why} :why}. Limit-reached {:line :job-time
-  :reason :timeout} after :spend :job-time seconds (default ::job-time-s) without a change in what is carried; it keeps its own stall check (a long chain goes on while it makes progress) and an engine end by the total budget takes the data of done? ({:got :tried}). A nested call
+  :reason :timeout} after :spend :job-time seconds (default ::job-time-s); the engine end takes the data of done? ({:got :tried}). A nested call
   for the same item is the engine's :duplicate-call.
   Quote: the plan's figures; yields the count, time a guess per step, no most for a gather.")
 
@@ -73,7 +72,7 @@
    :explore {:doc "walk and look for a raw need not seen: false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}})
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds without a change in what is carried before an obtain ends (a long chain goes on while it makes progress)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 600 :doc "Seconds an obtain may run (its default :spend :job-time)." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:item :any-of])
@@ -172,25 +171,11 @@
        (way? c :chest)
        (empty? (candidates c names))))
 
-(defn progress
-  "The stall clock: prev ({:inv carried-counts :t ms :at ms of the last look}) kept while what is carried is the same, else
-  restarted at now. A gap since the last look beyond max-gap (a preemption, a long wait) does not count."
-  [prev inv now max-gap]
-  (if (= inv (:inv prev))
-    {:inv inv :at now :t (+ (:t prev) (max 0 (- now (:at prev) max-gap)))}
-    {:inv inv :t now :at now}))
-
-(defn stall-s
-  "Seconds without a change in what is carried that end the call: its :spend :job-time."
-  [c]
-  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
-
 (defn ^:async step! [c]
   (let [a (:args c)
         names (names-of a)
         inv (u/inventory (:primitives c))
-        have (carried-of inv names)
-        now (ctx/now c)]
+        have (carried-of inv names)]
     (cond
       (survey-first? c names)
       (do (await (look/survey! c))
@@ -203,17 +188,12 @@
                 (ctx/update-mem! c update :craft dissoc :table-unreachable)
                 (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a)))}))
             {:keys [target] :as start} (:start (ctx/mem c))
-            seen-inv (storage/carried-totals (u/inventory (:primitives c)))
-            prog (progress (:progress (ctx/mem c)) seen-inv now (max-gap-ms))
-            _ (when (not= prog (:progress (ctx/mem c))) (ctx/update-mem! c assoc :progress prog))
-            t (:t prog)
             got (max 0 (- have (:have start)))
             m (ctx/mem c)
             data (merge {:got got} (wanted-fields a))]
         (cond
           (get-in m [:gather :tree]) (await (finish-tree! c))
           (>= have target) (ctx/end c :done nil {:got got :item (held-name inv names)})
-          (> (- now t) (* 1000 (stall-s c))) (ctx/end c :limit-reached {:line :job-time :reason :timeout} (assoc data :tried (:tried m)))
           (and (way? c :chest) (not (get-in m [:tried :chest])))
           (let [cs (candidates c names)
                 known (first (filter :stock cs))
@@ -243,7 +223,7 @@
 
 (defn reflex-step
   "What a step gives the loop: a reflex job runs one round and may not :continue, so a child's yield is another step
-  (the stall limit and a cut end it)."
+  (a cut ends it)."
   [c r]
   (if (and (:reflex c) (= :continue r)) :again r))
 
@@ -251,6 +231,4 @@
   "The whole attempt in one call: step! again until the count is carried or it ends; :continue only while a child waits on the world (a reflex's obtain steps on instead)."
   [c]
   (await (pace/steps! c (fn ^:async obtain-step []
-                          (let [r (await (step! c))]
-                            (when (:progress (ctx/mem c)) (ctx/update-mem! c assoc-in [:progress :at] (ctx/now c)))
-                            (reflex-step c r))))))
+                          (reflex-step c (await (step! c)))))))

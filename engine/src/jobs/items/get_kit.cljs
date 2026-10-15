@@ -28,7 +28,7 @@
   (with :explore, and :stock :min-food to fill the pack) runs before the work and again after each piece (:food false: no child, stops :needs-food instead). A child that
   stops (:no-food, or :no-stock when fed with nothing to stock) ends the job :needs-food with its reason as :cause only
   when the body is starving (jobs.lib.foods/starving?); else a warn kit.no-food names the cause and the work goes on, with
-  no new food search for ::no-food-wait-ms. Get a base first.
+  no new food search unless the body starves. Get a base first.
   A death since the job began (body memory :died) clears the children and what was made; the next round re-plans from
   what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
   Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]}. Every other ending has
@@ -50,7 +50,6 @@
 
 (a/defargs settings
   {::minutes {:default 45 :doc "Time budget of each obtain child of the kit." :spec (a/num-in 0 nil)}
-   ::no-food-wait-ms {:default 300000 :doc "After a food search fails while the body is not starving, how long the kit goes on without asking get-food again." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 10800 :doc "Seconds a kit may last: every child of every piece." :spec (a/num-in 0 nil)}
    ::item-s {:default 120 :doc "Seconds a quote counts for each missing item of the kit." :spec (a/num-in 0 nil)}
    ::min-food {:default 20 :doc "Food points carried before the kit job starts work or a new piece." :spec (a/int-in 0 nil)}})
@@ -73,7 +72,7 @@
 (defn restarted
   "The job memory after a death: the children and what was made went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :materials :made :fed :partial :no-food-until :weapon-tried) (assoc :since now)))
+  (-> m (dissoc :children :materials :made :fed :partial :no-food :weapon-tried) (assoc :since now)))
 
 (defn why-of
   "The text a child ending e gives for its stop: its data's :why, else its cause map's."
@@ -239,11 +238,12 @@
                                                                        :text "no sword or axe to fight with, going on unarmed"}))
                             :again)))
 
-          (and short (< fp min-food) (not (:fed (ctx/mem c))) (not (< (ctx/now c) (or (:no-food-until (ctx/mem c)) 0))))
+          (and short (< fp min-food) (not (:fed (ctx/mem c)))
+               (not (and (:no-food (ctx/mem c)) (not (foods/starving? (.self (:primitives c)) {})))))
           (let [r (when (:food a) (await (run-food! c)))]
             (cond (= :continue r) :continue
                   (and (some? r) (not (foods/starving? (.self (:primitives c)) {})))
-                  (do (ctx/update-mem! c assoc :no-food-until (+ (ctx/now c) (settings/get settings ::no-food-wait-ms)))
+                  (do (ctx/update-mem! c assoc :no-food true)
                       (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
                                                        :text (str "no food found (" (name (:cause r)) "), going on with " fp " food points carried")})
                       :again)

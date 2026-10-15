@@ -46,7 +46,7 @@
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell passes jobs.lib.access.rules/may-place?
   - no seen mob but a hostile stands in the cell: it waits for one to move on (a failed jump while one does is not counted), up to
-    :mob-wait-ms, then gives up :mob-in-cell (:mob its name)
+    :mob-waits looks, then gives up :mob-in-cell (:mob its name)
 
   A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: it waits to land,
   walks back to where it began (go-to child if off the column, then a short centring nudge) and tries again; up to 8 per pillar, then :off-column.
@@ -68,13 +68,13 @@
    :height {:doc "blocks to rise, 1 to 64 (the short form of :y: the feet's y at the start plus this)" :spec (a/int-in 1 64) :default 1}
    :y {:doc "the y the feet end at; nil: the start's y plus :height" :spec (a/int-in -64 320) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :mob-wait-ms {:doc "how long to wait for a mob to leave the cell; nil: ::mob-wait-ms (an escape from danger passes 0)" :spec (a/int-in 0 nil) :default nil}})
+   :mob-waits {:doc "how many looks, ::mob-step-ms apart, to wait for a mob to leave the cell; nil: ::mob-waits (an escape from danger passes 0)" :spec (a/int-in 0 nil) :default nil}})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-height {:default 64 :doc "Tallest pillar a call may ask for, in blocks." :spec (a/int-in 0 nil)}
    ::max-failures {:default 3 :doc "Failed placements before the pillar gives up." :spec (a/int-in 0 nil)}
-   ::mob-wait-ms {:default 10000 :doc "How long a pillar waits for a mob to leave the cell it places into before it gives up :mob-in-cell, in ms." :spec (a/int-in 0 nil)}
+   ::mob-waits {:default 20 :doc "Looks a pillar waits for a mob to leave the cell it places into before it gives up :mob-in-cell." :spec (a/int-in 0 nil)}
    ::mob-step-ms {:default 500 :doc "Wait between looks for a mob in the pillar's cell, in ms." :spec (a/int-in 1 nil)}
    ::land-step-ms {:default 50 :doc "Wait between looks for the ground after a pillar, in ms." :spec (a/int-in 0 nil)}
    ::land-max-steps {:default 20 :doc "Looks for the ground after a pillar before it goes on." :spec (a/int-in 0 nil)}
@@ -321,14 +321,14 @@
 
 (defn mob-wait!
   "Count one wait for a mob in the cell of the next block (reset by a placed block); false once they add up to
-  mob-wait-ms."
+  mob-waits."
   [c]
   (let [n (inc (:mob-waits (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :mob-waits n)
-    (<= (* n (settings/get settings ::mob-step-ms)) (or (:mob-wait-ms (:args c)) (settings/get settings ::mob-wait-ms)))))
+    (<= n (or (:mob-waits (:args c)) (settings/get settings ::mob-waits)))))
 
 (defn ^:async wait-out-mob!
-  "A mob stands in the cell of the next block: wait mob-step-ms for it to move on, :again; after mob-wait-ms of it,
+  "A mob stands in the cell of the next block: wait mob-step-ms for it to move on, :again; after mob-waits of it,
   give up :mob-in-cell."
   [c l {:keys [cell]} mob]
   (if (mob-wait! c)
@@ -339,7 +339,7 @@
 (defn ^:async place!
   "Write the intent, jump-place one block, confirm it when the cell shows it. Three failed jumps in a row give up;
   a failure with the body shoved off or airborne is a knockback and does not count towards the three, nor does one
-  with a mob in the cell (until mob-wait-ms of such waits)."
+  with a mob in the cell (until mob-waits of such waits)."
   [c l {:keys [cell item]}]
   (let [block-at (access/sensed-at (:primitives c) nil)
         l (ledger/intend l {:cell cell :item item :before (block-at cell) :job (:id c) :purpose purpose})

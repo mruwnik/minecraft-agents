@@ -49,7 +49,7 @@
 
   Needs a pickaxe for the blocks it cuts and room for the drops. A call starts only when the first step is not refused by a zone, claim or plan, the args give a length (:steps or :y), the next dig lacks nothing this call cannot get, and, when it was submitted with a :from, the body is still near it (conditions :refused, :no-tool, :no-free-slot, :moved-since-submit; start only). Quote: steps x cells of the step x the time of a cell, ending at the last step.
   - A pack without room is made room in (jobs.storage.make-room child, once per pack content; :make-room), else it ends :no-free-slot.
-  - A missing pickaxe is got with jobs.items.get-tool (:fetch, jobs.lib.need), then the body walks back to the cell it stood on and goes on; a fetch that fails, or that changes nothing, is remembered for its :fail-minutes (memory :stair-tool-failed) and the block is dug bare-handed. With :fetch off it ends :no-tool.
+  - A missing pickaxe is got with jobs.items.get-tool (:fetch, jobs.lib.need), then the body walks back to the cell it stood on and goes on; a fetch that fails, or that changes nothing, is remembered for the call and the block is dug bare-handed. With :fetch off it ends :no-tool.
 
   Each step is judged when chosen and each cell again right before its dig. Stops:
   - Access refusals with their reason: :zone :claim :footprint :not-loaded :no-zones. :ignore-zones? skips all
@@ -338,10 +338,10 @@
           :again))))
 
 (defn give-up-fetch!
-  "The fetch of a tool for block failed or changed nothing: remember it (smem/tool-failed!), so the block is dug by hand and no
-  call asks again for a while. :again."
-  [c block limits e]
-  (smem/tool-failed! c block (:fail-minutes limits 10))
+  "The fetch of a tool for block failed or changed nothing: remember it (smem/tool-failed!), so the block is dug by hand and the
+  call does not ask again. :again."
+  [c block e]
+  (smem/tool-failed! c block)
   (ctx/update-mem! c dissoc :need/return :fetched-for)
   (ctx/emit! c :stair.fetch-failed :warn {:block block :why (some-> e contract/cause-key)
                                          :text (str "stair could not get a tool for " block ": digging it bare-handed")})
@@ -353,12 +353,12 @@
   [c {:keys [block]}]
   (let [limits (fetch-limits c)]
     (if (= block (:fetched-for (ctx/mem c)))
-      (give-up-fetch! c block limits nil)
+      (give-up-fetch! c block nil)
       (let [e (await (need/tool! c {:block block} (assoc (select-keys limits [:how :explore]) :return? true)))]
         (cond
           (= :continue e) :continue
           (= :done (:kind e)) (do (ctx/update-mem! c assoc :fetched-for block) :again)
-          :else (give-up-fetch! c block limits e))))))
+          :else (give-up-fetch! c block e))))))
 
 (defn ^:async step!
   "Walk into the cut step. :again, :continue while the walk waits, or a stop map. A step on the goal cell of a go-to up the

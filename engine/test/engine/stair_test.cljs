@@ -1292,11 +1292,11 @@
           (is (= [1 64 0] (:at (:data e))))
           (is (= 1 (count (:dug (:data e))))))))))
 
-(deftest a-pickaxe-fetch-failing-leaves-a-bare-handed-stair-and-a-note-to-skip-the-next-try
+(deftest a-pickaxe-fetch-failing-leaves-a-bare-handed-stair-and-no-body-memory
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (stair! {:blocks ground :inventory []} east (fn [_])))]
           (is (= :done (:status @(:out s))))
           (is (seq (digs (:p s))) "dug bare-handed")
-          (is (= 1 (count (mem/entries (mem/view (:store (:eng s))) :stair-tool-failed)))))))))
+          (is (empty? (mem/entries (mem/view (:store (:eng s))) :stair-tool-failed)) "the failure lives in the call, not in body memory"))))))

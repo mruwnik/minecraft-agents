@@ -264,18 +264,16 @@
               r (await (child-outcome eng job hoe-args 60))]
           (recur (rest gaps) (conj out [r (count (calls p "craft")) (count (calls p "inspectContainer"))])))))))
 
-(deftest kit-remembers-a-failed-craft-so-repeat-does-not-retry
+(deftest every-kit-call-tries-the-craft-again-after-a-failed-one
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [missing {:kind :condition-failed :cause :chest-lacks :gave-up false :short {"hoe" 1} :missing {"hoe" "cobblestone, oak_log"}}
               [[r1 c1] [r2 c2] [r3 c3]] (await (two-runs [0 1000 (* 11 60 1000)]))]
-          (is (= missing r1))
+          (is (= [missing missing missing] [r1 r2 r3]))
           (is (pos? c1))
-          (is (= missing r2))
-          (is (= c1 c2) "no craft call while the failure is remembered")
-          (is (= missing r3))
-          (is (> c3 c2) "tried again after the memory expired"))))))
+          (is (> c2 c1) "the craft is tried again at once")
+          (is (> c3 c2)))))))
 
 (deftest kit-complete-ends-at-once-without-walking-or-inspecting
   (async done

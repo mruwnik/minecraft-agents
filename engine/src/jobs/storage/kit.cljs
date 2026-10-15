@@ -46,9 +46,6 @@
   it down; a table that cannot be had is \"no-table\".
   The result gets :missing {kind text} for what could not be made (only when non-empty). \"no-table\" and
   \"full\" end the phase for every short kind.
-  A craft phase that ends with a non-empty :missing is remembered as :no-craft in body memory for 10 minutes.
-  While that lives, a take phase that would enter the craft phase ends at once with the short and the remembered
-  :missing.
   Every inspect books what the chest holds in body memory :fetch/stock (jobs.lib.stock).")
 
 (a/defargs args
@@ -231,10 +228,6 @@
 
 (def table-reasons #{"no-table" "not-a-table" "unreachable" "full"})
 
-(def no-craft-ms (* 10 60 1000))
-
-(def no-craft-policy {:cap 1 :ttl no-craft-ms})
-
 (defn mkey
   "Memory key of a kind: the keyword :food is kept as the string \"food\"."
   [kind]
@@ -351,21 +344,7 @@
         missing (cond-> (:missing m) end (merge (zipmap (map mkey kinds) (repeat end))))
         missing (into {} (keep (fn [k] (when-let [t (get missing (mkey k))] [k t]))) kinds)
         short (into {} still)]
-    (when (seq missing) (ctx/remember! c :no-craft {:missing missing} no-craft-policy))
     (finish! c short (when (seq missing) {:missing missing}))))
-
-(defn remembered-missing
-  "The :missing of the live :no-craft entry restricted to the kinds in short, or nil."
-  [c short]
-  (when (pos? (ctx/count-in c :no-craft no-craft-ms))
-    (let [missing (:missing (:data (ctx/latest c :no-craft)))]
-      (not-empty (into {} (filter (fn [[k _]] (contains? short k))) missing)))))
-
-(defn finish-uncrafted!
-  "Finish without a craft phase: the short, plus what the remembered failure says."
-  [c short]
-  (let [missing (remembered-missing c short)]
-    (finish! c short (when missing {:missing missing}))))
 
 (defn ^:async reach-chest!
   "Walk to within 3 of the chest (a go-to child) unless already there: nil when there, :continue while go-to waits,
@@ -448,8 +427,6 @@
                     stacks (stacks-of (.-items seen))
                     {:keys [take short]} (plan (needs inv a stacks) inv stacks)]
                 (cond
-                  (and (empty? take) (:craft a) (pos? (ctx/count-in c :no-craft no-craft-ms)))
-                  (finish-uncrafted! c short)
                   (and (empty? take) (:craft a))
                   (do (ctx/update-mem! c assoc :phase :craft :chest-items (stacks-of (.-items seen)))
                       :again)

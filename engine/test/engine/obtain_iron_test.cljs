@@ -211,11 +211,6 @@
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
           (is (seq (f/calls s "dig")) "a log was felled for the charcoal"))))))
 
-(deftest the-time-limit-counts-from-the-last-change-of-what-is-carried
-  (is (= {:inv {"a" 1} :t 5 :at 5} (obtain/progress nil {"a" 1} 5 60000)))
-  (is (= {:inv {"a" 1} :t 5 :at 9} (obtain/progress {:inv {"a" 1} :t 5 :at 5} {"a" 1} 9 60000)))
-  (is (= {:inv {"a" 2} :t 9 :at 9} (obtain/progress {:inv {"a" 1} :t 5 :at 5} {"a" 2} 9 60000))))
-
 (deftest a-charcoal-smelt-burns-the-planks-kind-carried
   (async done
     (tu/run-async done
@@ -226,12 +221,6 @@
           (.advance (.-world (:p s)) 2000)
           (await (f/run-ticks s 200))
           (is (= 1 (get (f/inv s) "charcoal")) "the cook finished and its output was collected"))))))
-
-(deftest a-long-gap-between-steps-is-not-stall-time
-  (is (= {:inv {"a" 1} :t 85000 :at 100000}
-         (obtain/progress {:inv {"a" 1} :t 0 :at 5000} {"a" 1} 100000 10000)) "a gap of 95 s counts 10 s")
-  (is (= {:inv {"a" 1} :t 0 :at 8000}
-         (obtain/progress {:inv {"a" 1} :t 0 :at 5000} {"a" 1} 8000 10000)) "a short gap counts whole"))
 
 (deftest nuggets-carried-are-combined-into-an-ingot-with-ways-given
   (async done
