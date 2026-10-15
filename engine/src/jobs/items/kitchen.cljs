@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
@@ -25,7 +26,7 @@
   - :deposit (jobs.storage.deposit) of the cooked food and bread this pass made, and wheat taken and not used, into
     :chest; food the body brought or withdrew stays carried. Bread is never withdrawn: carrying food is get-food's.
   :reserve is never used, carried or in the chest (wheat for bait and seed: the default keeps a breeding pair's).
-  A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-chest, :stocked,
+  A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-table (none seen or carried), :no-chest, :stocked,
   :nothing-to-store. A step whose child stops is booked with its summary and the stop as :reason; the pass goes on.
   Needs (conditions, a listed job waits): a run under way, or a step that would run (raw food carried above the
   reserve with a cooked shortfall, wheat for a loaf), so a body with nothing to cook is not held, and not too far from
@@ -88,6 +89,8 @@
   {:carried (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory (:primitives c)))
    :made (made (:report (ctx/mem c)))
    :chest (some? (storage/chest-of (ctx/view c) (:args c)))
+   :table (boolean (or (pos? (storage/carried (u/inventory (:primitives c)) "crafting_table"))
+                       (crafting-table/nearest (:primitives c) 64 nil)))
    :chest-stock (chest-stock-of c)
    :wheat0 (:wheat0 (ctx/mem c))
    :tried (:tried (ctx/mem c))})
@@ -117,7 +120,7 @@
     (min want (quot (+ cu (or chest (* 3 want))) 3))))
 
 (defn decide
-  [step {:keys [furnace chest foods stock reserve ignore-zones?] :as a} {:keys [carried made tried wheat0] chest? :chest :as f}]
+  [step {:keys [furnace chest foods stock reserve ignore-zones?] :as a} {:keys [carried made tried wheat0] chest? :chest table? :table :as f}]
   (let [zone (when ignore-zones? {:ignore-zones? true})
         reserve (or reserve {})]
     (case step
@@ -132,6 +135,7 @@
                   need (- (* 3 want) cu)]
               (cond
                 (not chest?) {:skip :no-chest}
+                (not table?) {:skip :no-table}
                 (not (pos? want)) {:skip :no-wheat}
                 (not (pos? need)) {:skip :stocked}
                 :else {:call {:slot :take :job (jobs :take)
@@ -139,6 +143,7 @@
       :bake (let [n (min (loaves a f) (quot (:carried (usable reserve "wheat" f)) 3))]
               (cond
                 (not chest?) {:skip :no-chest}
+                (not table?) {:skip :no-table}
                 (not (pos? n)) {:skip :no-wheat}
                 :else {:call {:slot :bake :job (jobs :bake) :args {:item "bread" :count n :fetch false}}}))
       :deposit (let [items (vec (filter #(pos? (min (get made % 0) (get carried % 0))) (conj cooked-foods "bread")))
