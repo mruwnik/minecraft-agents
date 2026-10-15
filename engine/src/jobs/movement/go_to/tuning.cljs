@@ -30,6 +30,8 @@
    :jobs.movement.go-to.tuning/plug-wait-min-health {:default 8 :doc "Health at or under which a go-to shut in by its retreat plug no longer holds for a hostile." :spec (a/num-in 0 20)}
    :jobs.movement.go-to.tuning/max-waypoint-misses {:default 3 :doc "Waypoint walks toward a column goal whose ground is only guessed that a call takes while they bring the body no nearer it." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/waypoint-gain {:default 2 :doc "Blocks (across) a waypoint must lie nearer a guessed column goal than the body, and a waypoint walk must bring the body nearer, not to be a miss." :spec (a/num-in 1 nil)}
+   :jobs.movement.go-to.tuning/off-line-radius {:default 16 :doc "Blocks round the body an off-line waypoint (a stand past a cliff on the line to a guessed column goal) is looked for: about what a body sees of the land." :spec (a/num-in 1 nil)}
+   :jobs.movement.go-to.tuning/off-line-cone {:default 60 :doc "The most, in degrees, an off-line waypoint's bearing may turn from the bearing of the column goal." :spec (a/num-in 0 180)}
    :jobs.movement.go-to.tuning/quote-most-factor {:default 3 :doc "A go-to quote's most time for a found route: this many times the planner's seconds (replans, doors, escalation)." :spec (a/num-in 1 nil)}
    :jobs.movement.go-to.tuning/quote-unseen-factor {:default 2 :doc "A go-to quote's mean counts each block still to go past a partial route (or with no route, when the call may change the world) as this many walked blocks of unseen terrain (jobs.lib.cost.planner/walk-floor each)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/max-route-replans {:default 8 :doc "Times a go-to's :dig-route escalation plans its route again, as looks show cells it guessed were rock otherwise, before it fails :no-route." :spec (a/int-in 0 nil)}
@@ -54,6 +56,8 @@
 (defn plug-wait-min-food [] (settings/get settings :jobs.movement.go-to.tuning/plug-wait-min-food))
 (defn plug-wait-min-health [] (settings/get settings :jobs.movement.go-to.tuning/plug-wait-min-health))
 (defn max-waypoint-misses [] (settings/get settings :jobs.movement.go-to.tuning/max-waypoint-misses))
+(defn off-line-radius [] (settings/get settings :jobs.movement.go-to.tuning/off-line-radius))
+(defn off-line-cone [] (settings/get settings :jobs.movement.go-to.tuning/off-line-cone))
 (defn waypoint-gain [] (settings/get settings :jobs.movement.go-to.tuning/waypoint-gain))
 (defn way-looks [] (settings/get settings :jobs.movement.go-to.tuning/way-looks))
 (defn quote-most-factor [] (settings/get settings :jobs.movement.go-to.tuning/quote-most-factor))

@@ -67,7 +67,9 @@
         left (u/dist (u/self-pos c) pos)
         why (when-not (#{"arrived" "partial" "searching"} status) (:why (end/give-up-fields result)))]
     (ctx/update-mem! c #(cond-> (-> % (dissoc :way-looks) (assoc :last-dist left :closest (min left (:closest % left))))
-                          (and why (not= :no-progress why)) (assoc :waypoint-why why)))
+                          (and why (not= :no-progress why)) (assoc :waypoint-why why)
+                          (nil? why) (dissoc :waypoint-why)))
+    (ctx/update-mem! c update :waypoints-tried (fnil conj #{}) [(:x way) (:y way) (:z way)])
     (when (> (across (u/self-pos c)) (- before (waypoint-gain)))
       (ctx/update-mem! c update :waypoint-misses (fnil inc 0)))
     :again))

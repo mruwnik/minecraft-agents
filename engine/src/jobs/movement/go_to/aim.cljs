@@ -152,7 +152,8 @@
   [c pos]
   (when (waypoint-due? c)
     (let [{:keys [x y z]} (u/self-pos c)]
-      (column/waypoint (column/seen-kind-at (:primitives c)) (:x pos) (:z pos) (mapv #(js/Math.floor %) [x y z]) (waypoint-gain)))))
+      (column/waypoint (column/seen-kind-at (:primitives c)) (:x pos) (:z pos) (mapv #(js/Math.floor %) [x y z]) (waypoint-gain)
+                       (:waypoints-tried (ctx/mem c) #{})))))
 
 (defn ^:async look-along!
   "Before a waypoint walk (waypoint-due?): the next of ::way-looks not yet taken since the last waypoint walk (mem

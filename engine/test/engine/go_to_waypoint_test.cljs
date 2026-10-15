@@ -4,6 +4,7 @@
             [engine.go-to-column-test :refer [hiding slope stub-ctx]]
             [engine.fake :as fake]
             [engine.go-to-test :refer [go! at]]
+            [engine.settings :as settings]
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [box]]
             [jobs.lib.near :as near]
@@ -63,9 +64,9 @@
 (defn ^:async waypoint-walk!
   "walk-waypoint! from x 0 toward the column x 60 with near/walk-round! stubbed: the body ends at x to, the walk says
   result/status, and the pose callback sees x 5 (a pose of the walk). The memory after it, and the poses recorded."
-  [to result status]
+  [to result status & [init]]
   (let [p (tu/fake {:self {:pos [0.5 64 0.5]} :blocks (box -2 63 -3 70 63 3 "stone")})
-        mem* (atom {})
+        mem* (atom (or init {}))
         poses (atom [])
         c (stub-ctx p mem* {:pos [60 0] :range 0})]
     (with-redefs [near/walk-round! (fn [c _ _ _]
@@ -95,3 +96,26 @@
           (is (re-find #"waypoint walk toward it failed: needs-health"
                        (end/give-up-words [60 64 0] (end/give-up-fields {:status :no-path :reason :goal-not-standable
                                                                           :waypoint-why (:waypoint-why mem)})))))))))
+
+(deftest a-waypoint-walk-that-went-well-clears-an-earlier-failure-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [mem]} (await (waypoint-walk! 20.5 {:status :arrived} "arrived" {:waypoint-why :needs-health}))]
+          (is (nil? (:waypoint-why mem))))))))
+
+(deftest a-stand-already-walked-to-is-no-waypoint-again
+  (let [p (hiding cliff-with-ramp (fn [[x _ z]] (and (> x 30) (<= z 3))))
+        ka (column/seen-kind-at p)
+        way (column/waypoint ka 60 0 [30 64 0])
+        again (column/waypoint ka 60 0 [30 64 0] 2 #{[(:x way) (:y way) (:z way)]})]
+    (is (not= way again))))
+
+(deftest the-off-line-cone-is-a-setting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (hiding cliff-with-ramp (fn [[x _ z]] (and (> x 30) (<= z 3))))
+              narrow (await (settings/with-settings {:jobs.movement.go-to.tuning/off-line-cone 5}
+                              #(column/waypoint (column/seen-kind-at p) 60 0 [30 64 0])))]
+          (is (nil? narrow)))))))
