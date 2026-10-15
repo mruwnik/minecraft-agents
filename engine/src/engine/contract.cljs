@@ -155,9 +155,9 @@
 (defn look "[:look text {:reason reason ...data}]" [reason text & {:as data}] (status :look reason text data))
 
 (defn status-cause
-  "The cause an ending of status s carries, and a check's wait reason (job.waiting, observe): (assoc data :text text)."
+  "The cause an ending of status s carries, and a check's wait reason (job.waiting, observe): (assoc data :text text), without the :parts of a composite."
   [[_ text data]]
-  (assoc data :text text))
+  (assoc (dissoc data :parts) :text text))
 
 (defn with-slot "Status s with :slot in its data." [s slot] (assoc-in s [2 :slot] slot))
 

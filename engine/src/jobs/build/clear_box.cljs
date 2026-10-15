@@ -151,7 +151,7 @@
 
 (def target [:from :to])
 (def defaults {:spend {:job-time ::time-s}})
-(def can-start? (cond/and {:parts? false} bad-args no-zones all-refused))
+(def can-start? (cond/and bad-args no-zones all-refused))
 (def can-run? no-zones)
 
 (declare result-of)

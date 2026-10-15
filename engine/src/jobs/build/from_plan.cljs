@@ -137,7 +137,7 @@
          {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
           :needs (into {} (shortage (owed cells) carried))})))))
 
-(def can-start? (cond/and {:parts? false} plan-problem no-items))
+(def can-start? (cond/and plan-problem no-items))
 (def can-run? plan-problem)
 
 (declare spawn-cell result-data)

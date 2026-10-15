@@ -198,7 +198,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def can-start? (cond/and {:parts? false} plan-problem ready-problem))
+(def can-start? (cond/and plan-problem ready-problem))
 (def can-run? plan-problem)
 
 (defn done?

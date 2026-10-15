@@ -403,7 +403,7 @@
 
 (def no-tree
   "Later :no-tree as tree-missing; a look first while the body has not looked round within a few blocks of here."
-  (checks/looking #(not (look/surveyed? % :near)) :tree-found "a tree to fell" tree-missing))
+  (checks/refusing #(if (look/surveyed? % :near) :later :look) :tree-found "a tree to fell" tree-missing))
 
 (def can-start? (cond/and sheltered no-tree))
 

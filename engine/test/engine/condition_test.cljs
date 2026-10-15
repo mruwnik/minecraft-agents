@@ -1,6 +1,7 @@
 (ns engine.condition-test
   (:require [cljs.test :refer [deftest is are]]
             [engine.condition :as c]
+            [engine.contract :as contract]
             [engine.triggers :as triggers]
             [engine.memory :as mem]
             [engine.test-util :as tu]
@@ -210,9 +211,10 @@
     (is (= [2 2 2 2] (map (comp deref second) parts)))
     (is (= [ok-a later-a never-a ok-b] (:parts data)))))
 
-(deftest and-with-parts-off-keeps-the-failing-cause-alone
-  (let [[kind _ data] ((apply cond/and {:parts? false} (map (comp first const) [ok-a later-a])) {})]
-    (is (= [:later {:reason :la}] [kind data]))))
+(deftest an-ending-cause-drops-the-parts
+  (let [s ((apply cond/and (map (comp first const) [ok-a later-a])) {})]
+    (is (some? (:parts (nth s 2))))
+    (is (nil? (:parts (contract/status-cause s))))))
 
 (deftest a-check-that-returns-no-status-is-an-error-naming-it
   (is (thrown-with-msg? js/Error #"not a status" ((cond/and (fn bad-check [_] nil)) {}))))

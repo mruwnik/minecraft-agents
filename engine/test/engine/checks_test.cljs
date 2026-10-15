@@ -42,5 +42,10 @@
     [] {} [:ok :zones-read]
     [{:name "a"}] {} [:ok :zones-read]))
 
+(deftest refusing-takes-a-kind-or-a-fn-of-the-call
+  (are [kind expected] (= expected (tu/kind-reason ((checks/refusing kind :ok-r "ok" (constantly :why)) {})))
+    :never [:never :why]
+    (constantly :look) [:look :why]))
+
 (deftest holds-is-ok
   (is (= [:ok :holds] (tu/kind-reason (checks/holds)))))

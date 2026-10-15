@@ -161,7 +161,7 @@
      (when (and (valid-cells c) (seq (pending c)) (nil? (shovel c)) (nil? (fetch-opts c)))
        no-shovel))))
 
-(def can-start? (cond/and {:parts? false} bad-args no-zones all-refused shovel-lacking))
+(def can-start? (cond/and bad-args no-zones all-refused shovel-lacking))
 (def can-run? no-zones)
 
 (declare result-of)

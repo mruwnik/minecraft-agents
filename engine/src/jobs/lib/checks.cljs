@@ -48,13 +48,6 @@
     (cause-status :later away (str "moved " (:distance away) " blocks since submit"))
     (contract/ok :here "where it was submitted")))
 
-(defn zones-read
-  "Later :no-zones while no zone list has been read, unless the call's :ignore-zones?."
-  [c]
-  (if (or (:ignore-zones? (:args c)) (some? (known/zones c)))
-    (contract/ok :zones-read "zones read")
-    (contract/later :no-zones "no zone list has been read")))
-
 (defn goal
   "A done? status: :ok [reason text] when holds?, else :later [reason text]; data: :units :done :left :result."
   [holds? [ok-reason ok-text] [later-reason later-text] data]
@@ -77,20 +70,22 @@
 
 (defn refusing
   "The check of problem (c -> nil, or the cause map the job cannot run for): nil is ok with ok-reason and ok-text, a
-  cause is a status of kind (:later by default)."
+  cause is a status of kind (:later by default; a fn of c, as for a :look while a look round may still change it)."
   ([ok-reason ok-text problem] (refusing :later ok-reason ok-text problem))
   ([kind ok-reason ok-text problem]
-   (fn [c] (if-let [cause (problem c)] (cause-status kind cause) (contract/ok ok-reason ok-text)))))
+   (fn [c] (if-let [cause (problem c)]
+             (cause-status (if (keyword? kind) kind (kind c)) cause)
+             (contract/ok ok-reason ok-text)))))
 
-(defn looking
-  "refusing, but a cause is a :look while (look? c) holds: a look round may still change it."
-  [look? ok-reason ok-text problem]
-  (fn [c] (if-let [cause (problem c)] (cause-status (if (look? c) :look :later) cause) (contract/ok ok-reason ok-text))))
-
-(defn zones-declined
-  "zones-read, with one warn of kind from job-name (jobs.lib.job-common/no-zones)."
-  [kind job-name]
-  (refusing :zones-read "zone list read" #(common/no-zones % kind job-name)))
+(defn zones-read
+  "Later :no-zones while no zone list has been read, unless the call's :ignore-zones?. With (kind job-name) the check
+  of it that also warns once (jobs.lib.job-common/no-zones)."
+  ([c]
+   (if (or (:ignore-zones? (:args c)) (some? (known/zones c)))
+     (contract/ok :zones-read "zones read")
+     (contract/later :no-zones "no zone list has been read")))
+  ([kind job-name]
+   (refusing :zones-read "zone list read" #(common/no-zones % kind job-name))))
 
 (defn night "Night, else :later with reason." [reason] (cond/because reason "not night" (cond/not (cond/daytime))))
 

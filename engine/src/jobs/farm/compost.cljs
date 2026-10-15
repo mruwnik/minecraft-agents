@@ -71,7 +71,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def can-start? (checks/zones-declined :compost.declined "compost"))
+(def can-start? (checks/zones-read :compost.declined "compost"))
 
 (defn done?
   "Ok once :times bone meal is taken; else later with the bone meal taken and the rest of :times."
