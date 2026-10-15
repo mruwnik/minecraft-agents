@@ -2,7 +2,6 @@
   (:require [jobs.lib.choose :as choose]
             [engine.settings :as settings]
             [engine.args :as a]
-            [jobs.lib.checks :as checks]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -105,7 +104,6 @@
 
 (def defaults {:spend {:job-time ::time-s} :use {:blocks :cover}})
 
-(def can-run? checks/always)
 
 (defn done?
   "Out: not burning and no poured water left to scoop."

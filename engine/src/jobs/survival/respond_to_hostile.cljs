@@ -1,7 +1,6 @@
 (ns jobs.survival.respond-to-hostile
   (:require [jobs.lib.choose :as choose]
             [engine.args :as a]
-            [jobs.lib.checks :as checks]
             [jobs.lib.body :as body]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -277,7 +276,6 @@
   [c]
   (some? (get-in (ctx/mem c) [:children :flee :refuge])))
 
-(def can-run? checks/always)
 
 (defn done?
   "Done once no real danger is near and the retreat is not hiding."

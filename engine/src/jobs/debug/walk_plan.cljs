@@ -1,6 +1,5 @@
 (ns jobs.debug.walk-plan
-  (:require [jobs.lib.checks :as checks]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [clojure.set :as set]
             [engine.ctx :as ctx]
             [jobs.lib.walk :as walk]
@@ -37,7 +36,6 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def can-start? checks/always)
 
 (defn done?
   "Never done before it runs: a walk has no state that can hold before it."

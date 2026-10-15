@@ -1,7 +1,6 @@
 (ns jobs.survival.unwedge
   (:require [engine.settings :as settings]
             [engine.args :as a]
-            [jobs.lib.checks :as checks]
             [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]
             [jobs.lib.access :as access]
@@ -33,7 +32,6 @@
 (def ways [:step :dig])
 (def defaults {:spend {:job-time ::time-s} :ways #{:step :dig}})
 
-(def can-run? checks/always)
 
 (defn done? [c]
   (let [wedged (some? (breath/wedged-cell (:primitives c)))]

@@ -22,7 +22,6 @@
 
 (deftest each-job-exports-the-contract-and-quotes-validly
   (doseq [sym ['jobs.survival.fight-back 'jobs.survival.block-arrow-gap 'jobs.survival.extinguish 'jobs.survival.respond-to-hostile]]
-    (is (some? (or (:can-start? (job sym)) (:can-run? (job sym)))) (str sym " has checks"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args {} :quote-call {}}))) (str sym))))

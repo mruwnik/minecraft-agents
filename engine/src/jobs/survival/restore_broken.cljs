@@ -1,7 +1,6 @@
 (ns jobs.survival.restore-broken
   (:require [engine.settings :as settings]
             [engine.args :as a]
-            [jobs.lib.checks :as checks]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
@@ -161,7 +160,6 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def can-run? checks/always)
 
 (defn done?
   "No :tidy entry waits; the cells put back so far against the entries waiting."

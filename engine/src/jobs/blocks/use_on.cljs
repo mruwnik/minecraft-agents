@@ -1,6 +1,5 @@
 (ns jobs.blocks.use-on
-  (:require [jobs.lib.checks :as checks]
-            [engine.settings :as settings]
+  (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
@@ -30,7 +29,6 @@
 (def target [:pos])
 (def defaults {:spend {:job-time ::time-s}})
 
-(def can-start? checks/always)
 
 (def faces #{"up" "down" "north" "south" "east" "west"})
 (a/defargs settings

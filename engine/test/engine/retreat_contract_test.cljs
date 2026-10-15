@@ -38,7 +38,6 @@
       (fn ^:async t []
         (let [def (get registry/jobs 'jobs.survival.retreat)
               c {:primitives (tu/fake {}) :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}}]
-          (is (some? (:can-run? def)))
           (is (nil? (:check def)))
           (is (= {:spend {:job-time :jobs.survival.retreat/time-s}} (:defaults def)))
           (is (= {:done? false :units :hostiles :done 0 :left 0} ((:done? def) c)))
