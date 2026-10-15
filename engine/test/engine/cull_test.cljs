@@ -231,6 +231,19 @@
             (is (= 0 (rounds s)) (pr-str owner reason))
             (is (empty? (attacked s)) (pr-str owner reason))))))))
 
+(deftest a-refusal-met-below-least-waits-not-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2) (cow 2 3)]} 50 (h/zone-store 2 "Miles"))]
+          (core/submit! eng (list 'jobs.animals.cull {:keep 0 :count 2 :least 2}) {})
+          (dotimes [_ 30]
+            (swap! (:clock s) + 700)
+            (await (core/tick! eng)))
+          (is (= [2] (vec (distinct (attacked s)))) "the allowed cow is killed")
+          (is (not (finished? s)) "the refused one is waited for")
+          (is (= :refused (:reason (first (events-of s :waiting))))))))))
+
 (deftest the-reach-covers-the-far-edge-of-the-boxs-max-cells
   (let [c {:primitives #js {:self (fn [] #js {:pos #js {:x 16.5 :y 0 :z 16.5}})}
            :args {:box {:min {:x 19 :y 0 :z 14} :max {:x 23 :y 1 :z 18}}}}

@@ -14,7 +14,7 @@
   The herd is the animals of the kind inside a bound: :box when set, else :radius blocks around :centre
   ({:x :z}, horizontal), else :radius blocks around the body. Babies are never targets and never count as
   adults. With :keep or fewer adults in the bound at the start the goal holds and it ends done :already; it waits
-  while the zone rules refuse every adult, so a held cull never blocks the queue. The weapons are the call's :use :tools (default
+  while the zone rules refuse every adult and fewer than :least are killed (:refused, :no-zones, before every round), so a held cull never blocks the queue. The weapons are the call's :use :tools (default
   the best carried).
 
   One call is the whole run, a loop of these:
@@ -31,12 +31,11 @@
   engine then ends it :done. The census is live at every step, so the last :keep are never taken.
   Ends with the data {:killed n :remaining adults-in-bound :babies n :reason r :skipped [ids]}, r :count or :keep when
   done. Skipped animals stay alive and still count as adults, so they still breed. Any other reason ends :done when
-  the call's :least (default 1) animals were killed; else condition-failed for :refused and :no-zones found after the
-  start, nothing-possible for the rest, with r as the cause. It yields (:continue) only while a child waits on the world.
+  the call's :least (default 1) animals were killed; else nothing-possible with r as the cause. It yields (:continue) only while a child waits on the world.
   Other reasons:
   - :unreachable: no candidate is left, some were skipped (warn cull.gave-up).
-  - :none: no candidate on two looks in a row, with a 1 s wait between (warn cull.gave-up); :refused (or
-    :no-zones) instead when the zone rules refused the adults.
+  - :none: no candidate on two looks in a row, with a 1 s wait between (warn cull.gave-up); the data reason is :refused (or
+    :no-zones) when the zone rules refused the adults.
   - :gave-up: too many skips in a row.
 
   Zones: an adult standing in another owner's zone or claim, or in a plan's footprint, is left alone (warn
@@ -114,28 +113,28 @@
          (sort-by (juxt #(if (false? (.-hittable %)) 1 0)
                         #(u/dist here (u/pos-of (.-pos %))))))))
 
-(defn too-few
-  "The :too-few wait: :mob, :keep and the adults :in-range of the bound."
+(defn least-killed
+  "Animals the call must kill to be done when it stops short: :least (:all = :count, default 1)."
   [c]
-  (let [{:keys [mob keep]} (:args c)
-        in-range (count (:adults (census c)))]
-    (contract/later :too-few (str "cull waits: " in-range " " mob " adults in the bound, keeping " keep)
-                    :mob mob :keep keep :in-range in-range)))
+  (let [least (:least (ctx/frozen-call c) 1)]
+    (if (= :all least) (or (:count (:args c)) 1) least)))
 
-(defn can-start?
-  "Later while :keep or fewer adults stand in the bound, or every adult is refused by the zone rules
-  (:refused, :no-zones; a quiet look, the decline warn comes with the first round)."
+(defn refused
+  "Later :refused or :no-zones while the zone rules refuse every adult and fewer than the call's :least are killed (a
+  quiet look, the decline warn comes with the first round). Once :least is met a refusal ends the run as :none."
   [c]
-  (let [{:keys [keep color ignore-zones?]} (:args c)
+  (let [{:keys [color ignore-zones?]} (:args c)
         adults (:adults (census c))
-        targets (cond->> adults color (filter #(= color (.-color %))))]
-    (cond
-      (<= (count adults) keep) (too-few c)
-      (and (seq targets) (not ignore-zones?))
-      (if-let [why (animals/refusal-of c :harvest targets)]
-        (contract/later why (str "cull waits: every " (:mob (:args c)) " in the bound is refused by the zone rules (" (name why) ")"))
-        (contract/ok :start "an adult above :keep the zone rules allow"))
-      :else (contract/ok :start "an adult above :keep"))))
+        targets (cond->> adults color (filter #(= color (.-color %))))
+        why (when (and (seq targets) (not ignore-zones?) (< (:killed (ctx/mem c) 0) (least-killed c)))
+              (animals/refusal-of c :harvest targets))]
+    (if why
+      (contract/later why (str "cull waits: every " (:mob (:args c)) " in the bound is refused by the zone rules (" (name why) ")"))
+      (contract/ok :start "an adult the zone rules allow"))))
+
+(def can-start? refused)
+
+(def can-run? refused)
 
 (defn result
   "The cull's result so far, its reason r when given."
@@ -165,17 +164,14 @@
   {:uses {:job-time [0 (* 20 (or (:count (:args c)) 4)) ##Inf]}})
 
 (defn finish!
-  "End a cull that stopped for reason short of its goal: :done when the call's :least was killed, :condition-failed for
-  a refusal, else :nothing-possible with reason as the cause; data its result."
+  "End a cull that stopped for reason short of its goal: :done when the call's :least was killed, else
+  :nothing-possible with reason as the cause; data its result."
   [c reason]
   (let [killed (:killed (ctx/mem c) 0)
-        least (:least (ctx/frozen-call c) 1)
-        need (if (= :all least) (or (:count (:args c)) 1) least)
         data (result c reason)]
-    (cond
-      (>= killed need) (ctx/end c :done nil data)
-      (#{:refused :no-zones} reason) (ctx/end c :condition-failed reason data)
-      :else (ctx/end c :nothing-possible reason data))))
+    (if (>= killed (least-killed c))
+      (ctx/end c :done nil data)
+      (ctx/end c :nothing-possible reason data))))
 
 (defn give-up!
   "Warn about the animals left alive, then end with reason."
