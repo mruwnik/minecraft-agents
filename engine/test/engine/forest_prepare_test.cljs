@@ -496,7 +496,7 @@
           (core/submit! eng (list job {:plan "forest"}) {})
           (await (ticks eng 40))
           (is (= before (calls-made p)) "no act in 40 ticks")
-          (is (listed? eng)))))))
+          (is (not (listed? eng)) "done: a prepared field is the goal"))))))
 
 (deftest a-plan-deleted-while-the-job-runs-stops-it
   (async done

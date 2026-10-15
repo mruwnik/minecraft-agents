@@ -65,7 +65,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (equip (assoc (stacks "iron_pickaxe") :self {:held "iron_pickaxe"}) {:item "iron_pickaxe"}))]
-          (is (= {:status :done} @out)))))))
+          (is (= {:status :done :already? true} @out)))))))
 
 (deftest a-missing-item-waits-as-a-failed-condition
   (async done

@@ -89,7 +89,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (outcome {:blocks (fm/ground [[6 0]])} {:radius 12}))]
-          (is (= {:status :done} (select-keys out [:status :tidied]))))))))
+          (is (= {:status :done :tidied 0} (select-keys out [:status :tidied]))))))))
 
 (deftest the-logs-of-a-felled-trunk-are-collected
   (async done
