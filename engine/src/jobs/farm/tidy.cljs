@@ -184,7 +184,7 @@
             :dug (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :holes (fnil conj []) (pos-map pos))))
             :missing nil
             :cannot (ctx/update-mem! c refuse stray {:reason :cannot})
-            :refused (let [why (:reason (blocks/child-wait c :dig 'jobs.blocks.dig (merge {:collect false :need-drop false :fetch false} dig-args {:pos (pos-map pos)})) :hazard)]
+            :refused (let [why (:reason (ctx/child-wait c :dig 'jobs.blocks.dig (merge {:collect false :need-drop false :fetch false} dig-args {:pos (pos-map pos)})) :hazard)]
                        (ctx/update-mem! c count-fail stray why give-up))
             :unreachable (ctx/update-mem! c count-fail stray :unreachable give-up)
             (ctx/update-mem! c count-fail stray :failed give-up)))))))

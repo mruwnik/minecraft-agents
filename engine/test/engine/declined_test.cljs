@@ -159,16 +159,6 @@
         (is (= [:nothing-possible :out-of-reach]
                ((juxt :kind :cause) (await (in-parent old-walker (fn ^:async f [c] (await (b/walk!* c [4 65 4]))))))) "arrived, still out of reach")))))
 
-(deftest child-wait*-is-a-condition-failed-ending-while-the-check-waits
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [need (atom true)
-              wait (fn [] (in-parent (old-kid need) (fn ^:async f [c] (b/child-wait* c :kid 'jobs.movement.go-to {}))))]
-          (is (= [:condition-failed {:reason :need :what "thing"}] ((juxt :kind :cause) (await (wait)))) "the cause is always the wait's map")
-          (reset! need false)
-          (is (nil? (await (wait))) "a passing check waits on nothing"))))))
-
 (deftest ctx-child-wait-reads-the-childs-wait-without-running-it
   (async done
     (tu/run-async done

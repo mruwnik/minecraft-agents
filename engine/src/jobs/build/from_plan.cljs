@@ -190,13 +190,14 @@
       (:refused h) (ctx/update-mem! c assoc-in [:unplaceable pos] (:refused h))
       :else
       (let [_ (ctx/update-mem! c assoc :placing pos)
-            outcome (await (blocks/place-cell! c (zipmap [:x :y :z] pos) item
-                                               {:for-plan (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))
-                                                :click (:click h) :clear false}))
+            e (await (blocks/place-call! c (zipmap [:x :y :z] pos) item
+                                         {:for-plan (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))
+                                          :click (:click h) :clear false}))
+            outcome (blocks/place-outcome e)
             give-up (:give-up (:args c))]
         (case outcome
           :continue :continue
-          :placed (let [wrong (misplaced want item (:block (ctx/child-result c :place)))]
+          :placed (let [wrong (misplaced want item (:block (:data e)))]
                     (ctx/update-mem! c #(cond-> (update (dissoc % :placing) :placed (fnil inc 0))
                                           wrong (assoc-in [:misplaced pos] wrong))))
           :already (ctx/update-mem! c dissoc :placing)

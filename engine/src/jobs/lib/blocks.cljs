@@ -1,12 +1,13 @@
 (ns jobs.lib.blocks
   "Shared parts of jobs.blocks.dig and jobs.blocks.place, and what a parent needs to run them as children.
-  child-wait reads why a child's check would wait. body-wait? tells a reason about the body (tool, item, free slot:
+  body-wait? tells a reason about the body (tool, item, free slot:
   the parent waits too) from one about the cell (the parent skips that cell)."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.set :as set]
             [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.aim :as aim]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
@@ -198,24 +199,6 @@
   (when (seq pens)
     (ctx/emit! c :blocks.pen-kept-out :warn {:pens pens :text (kept-out-text pens)})))
 
-(defn ^:async walk!
-  "The walk to pos: one go-to call (child :walk, range 3), the whole walk. Resolves to :arrived (in reach), :continue
-  (go-to waits on the world), {:held reason} (it waits, and the caller asked to hear what on: held?) or {:unreachable why}
-  (it gave up, or arrived with the block still out of reach). With see? the walk ends only where the eye sees the block
-  (go-to :see). at-night is go-to's :at-night. Unless the job's :enter-pens, the walk keeps out of the gates of pens
-  holding animals (jobs.lib.pen-entry); one that fails then warns :blocks.pen-kept-out naming them."
-  [c pos & [see? held? at-night]]
-  (let [[pens args] (walk-request c pos see? at-night)
-        [r held] (await (child/call-walk-reason c :walk args))
-        res (ctx/child-result c :walk)]
-    (cond
-      (= :continue r) (if (and held? held) {:held held} :continue)
-      (and (= :done r) (:arrived res) (in-reach? c pos see?)) :arrived
-      :else (do (warn-kept-out! c pens)
-                {:unreachable (cond (not= :done r) :declined
-                                    (:arrived res) :out-of-reach
-                                    :else (:why res :unreachable))}))))
-
 (defn ^:async walk!*
   "walk! through ctx/call: :arrived, :continue (go-to waits on the world; the round holds still with its reason), else
   an ending: go-to's when it did not end :done, else nothing-possible :out-of-reach, or go-to's :why (:unreachable)
@@ -240,34 +223,25 @@
 
 (defn body-wait? [reason] (contains? body-reasons (:reason reason)))
 
-(defn child-wait
-  "Why the child job (a registry symbol) in slot with args would wait now: its check's ctx/wait reason as a map
-  {:reason kw ...} ({:reason :not-ready} for a plain false), or nil when its check passes."
-  [c slot job args]
-  (ctx/child-wait c slot job args))
-
-(defn child-wait*
-  "child-wait as an ending: condition-failed with the wait map ({:reason ..}) as its cause, or nil when the child's check
-  passes."
-  [c slot job args]
-  (when-let [w (child-wait c slot job args)]
-    (ctx/end c :condition-failed w)))
-
 (defn dig-outcome
-  "What one round of a jobs.blocks.dig child (its return r, result res, the reason its check waits with) means for the
-  cell: :dug, :missing (nothing there), :continue (the child waits on the world), :refused (a zone, claim, plan or
-  hazard), :unreachable, :cannot, or the failed dig's primitive status (a keyword) or :reason (:fluid-adjacent ...)."
-  [r res waits]
-  (case r
-    :continue :continue
-    :declined (if (#{:not-allowed :hazard} (:reason waits)) :refused :unreachable)
-    (case (:reason res)
-      :dug :dug
-      :already-clear :missing
-      (:cannot :fluid) :cannot
-      (:not-allowed :hazard) :refused
-      (:unreachable :no-tool :inventory-full :not-loaded) :unreachable
-      (or (some-> (:primitive res) keyword) (:reason res) :failed))))
+  "What one round of a jobs.blocks.dig child (:continue, or its ending e) means for the cell: :dug, :missing (nothing
+  there), :continue (the child waits on the world), :refused (a zone, claim, plan or hazard), :unreachable, :cannot, or
+  the failed dig's primitive status (a keyword) or reason (:fluid-adjacent ...)."
+  [e]
+  (if (= :continue e)
+    :continue
+    (let [k (contract/cause-key e)
+          data (:data e)]
+      (case (:kind e)
+        :done (if (= :already-clear (:reason data)) :missing :dug)
+        :condition-failed (case k
+                            (:not-allowed :hazard) :refused
+                            (:cannot :fluid) :cannot
+                            :fluid-adjacent :fluid-adjacent
+                            :unreachable)
+        (if (#{:unreachable :no-tool :inventory-full :not-loaded} k)
+          :unreachable
+          (or (some-> (:primitive data) keyword) k))))))
 
 (defn ^:async dig-cell!
   "Dig the one block at pos with a jobs.blocks.dig child in slot :dig (args merged over: no drops collected, no tool
@@ -275,12 +249,10 @@
   the lava seal's fetch (:seal-fetch, default true); the jobs digging through here do not expose :seal-fetch."
   [c pos args]
   (let [args (merge {:collect false :need-drop false :fetch false} args {:pos pos})
-        r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
-        res (ctx/child-result c :dig)
-        waits (when (= :declined r) (child-wait c :dig 'jobs.blocks.dig args))]
+        e (await (ctx/call c :dig 'jobs.blocks.dig args))]
     ;; the dig child told any wear of the tool; this job's older snapshot would tell it again
     (ctx/update-mem! c dissoc :tool-wear)
-    (dig-outcome r res waits)))
+    (dig-outcome e)))
 
 (defn chosen
   "The first of items carried, or nil."
@@ -298,29 +270,29 @@
                  neighbours)))
 
 (defn place-outcome
-  "What one round of a jobs.blocks.place child (its return r, result res, the reason its check waits with) means for the
-  cell: :placed, :already (it holds the block), :continue, :refused (a zone, claim or plan), :need (the item is not
-  carried), :no-support, :unreachable, :occupied, or the failed place's primitive status (a keyword) or :reason (:clear-failed ...)."
-  [r res waits]
-  (case r
-    :continue :continue
-    :declined (case (:reason waits)
-                (:not-allowed :own-body) :refused
-                :need :need
-                :no-support :no-support
-                :unreachable)
-    (case (:reason res)
-      :placed :placed
-      :already :already
-      :occupied :occupied
-      (or (some-> (:primitive res) keyword) (:reason res) :failed))))
+  "What one round of a jobs.blocks.place child (:continue, or its ending e) means for the cell: :placed, :already (it
+  holds the block), :continue, :refused (a zone, claim or plan), :need (the item is not carried), :no-support,
+  :occupied, :unreachable, or the failed place's primitive status (a keyword) or reason (:clear-failed ...)."
+  [e]
+  (if (= :continue e)
+    :continue
+    (let [k (contract/cause-key e)
+          data (:data e)]
+      (case (:kind e)
+        :done (if (= :already (:reason data)) :already :placed)
+        :condition-failed (case k
+                            (:not-allowed :own-body) :refused
+                            (:need :no-support :occupied) k
+                            :unreachable)
+        (or (some-> (:primitive data) keyword) (:reason data) k)))))
+
+(defn ^:async place-call!
+  "Place item at pos with a jobs.blocks.place child in slot :place (args merged over: no fetch): :continue or its ending
+  (its :data has the placed :block)."
+  [c pos item args]
+  (await (ctx/call c :place 'jobs.blocks.place (merge {:fetch false} args {:pos pos :item item}))))
 
 (defn ^:async place-cell!
-  "Place item at pos with a jobs.blocks.place child in slot :place (args merged over: no fetch) and say what came of it
-  (place-outcome)."
+  "place-call!, said as what came of it (place-outcome)."
   [c pos item args]
-  (let [args (merge {:fetch false} args {:pos pos :item item})
-        r (await (ctx/call-child c :place 'jobs.blocks.place args))
-        res (ctx/child-result c :place)
-        waits (when (= :declined r) (child-wait c :place 'jobs.blocks.place args))]
-    (place-outcome r res waits)))
+  (place-outcome (await (place-call! c pos item args))))
