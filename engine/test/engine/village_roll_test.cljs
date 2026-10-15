@@ -77,7 +77,7 @@
 (defn workstation [p] (get-in @(fake/state p) [:blocks ws-pos]))
 
 (deftest roll-bad-args-need-villager-pos-item-and-want
-  (are [args ok] (= ok (nil? (roll/bad-args {:args args})))
+  (are [args ok] (= ok (= :ok (first (roll/bad-args {:args args}))))
     {:villager "v-1" :pos [2 64 0] :item "lectern" :want "enchanted_book"} true
     {:villager nil :pos [2 64 0] :item "lectern" :want "enchanted_book"} true
     {:pos [2 64 0] :profession "librarian" :trade "enchanted_book"} true
@@ -90,11 +90,12 @@
   (let [args {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book"}
         world {:blocks {ws-key "lectern"}}
         cause (fn [p surveyed?]
-                (with-redefs [ctx/frozen-call (constantly nil) look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))]
-                  (roll/cell-unseen {:primitives p :args args})))]
-    (is (= :cell-unseen (:reason (contract/look-cause (cause (tu/blind (tu/fake world)) false)))))
-    (is (nil? (cause (tu/blind (tu/fake world)) true)) "after a look the round goes to the cell")
-    (is (nil? (cause (tu/fake world) false)))))
+                (with-redefs [look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))]
+                  (roll/cell-unseen {:primitives p :args args})))
+        kind-reason (juxt first (comp :reason last))]
+    (is (= [:look :cell-unseen] (kind-reason (cause (tu/blind (tu/fake world)) false))))
+    (is (= :ok (first (cause (tu/blind (tu/fake world)) true))) "after a look the round goes to the cell")
+    (is (= :ok (first (cause (tu/fake world) false))))))
 
 (deftest rolls-until-an-offer-gives-the-wanted-item
   (async done

@@ -1,6 +1,7 @@
 (ns jobs.animals.unleash
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
@@ -67,7 +68,9 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions "None wait: an order with nobody on a lead ends the first round." [])
+(def can-start?
+  "Nothing waits: an order with nobody on a lead ends the first round."
+  (constantly (contract/ok :no-wait "no start condition")))
 
 (defn time-limit "Seconds the call may work." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))

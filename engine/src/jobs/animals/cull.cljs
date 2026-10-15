@@ -2,7 +2,6 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]
             [jobs.lib.hunting :as hunting]
@@ -120,11 +119,11 @@
   [c]
   (let [{:keys [mob keep]} (:args c)
         in-range (count (:adults (census c)))]
-    {:reason :too-few :mob mob :keep keep :in-range in-range
-     :text (str "cull waits: " in-range " " mob " adults in the bound, keeping " keep)}))
+    (contract/later :too-few (str "cull waits: " in-range " " mob " adults in the bound, keeping " keep)
+                    :mob mob :keep keep :in-range in-range)))
 
-(defn start-fact
-  "The cause that bars the first step, or nil: :keep or fewer adults, or every adult refused by the zone rules
+(defn can-start?
+  "Later while :keep or fewer adults stand in the bound, or every adult is refused by the zone rules
   (:refused, :no-zones; a quiet look, the decline warn comes with the first round)."
   [c]
   (let [{:keys [keep color ignore-zones?]} (:args c)
@@ -133,10 +132,10 @@
     (cond
       (<= (count adults) keep) (too-few c)
       (and (seq targets) (not ignore-zones?))
-      (when-let [why (animals/refusal-of c :harvest targets)]
-        {:reason why :text (str "cull waits: every " (:mob (:args c)) " in the bound is refused by the zone rules (" (name why) ")")}))))
-
-(def conditions "Waits on a start fact (start-fact), at the call's start only." [[:fn (started/at-start start-fact)]])
+      (if-let [why (animals/refusal-of c :harvest targets)]
+        (contract/later why (str "cull waits: every " (:mob (:args c)) " in the bound is refused by the zone rules (" (name why) ")"))
+        (contract/ok :start "an adult above :keep the zone rules allow"))
+      :else (contract/ok :start "an adult above :keep"))))
 
 (defn result
   "The cull's result so far, its reason r when given."

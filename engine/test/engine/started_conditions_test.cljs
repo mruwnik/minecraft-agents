@@ -9,8 +9,6 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.world-files :as ew]
-            [jobs.animals.breed :as breed]
-            [jobs.animals.leash :as leash]
             [jobs.combat.hunt :as hunt]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.survival.fight-back :as fight-back]))
@@ -27,8 +25,6 @@
     (are [conditions c] (and (some? (fact conditions c)) (nil? (fact conditions (assoc c :quote-call {}))))
       hunt/conditions {:primitives (tu/fake hurt) :args {}}
       fight-back/conditions {:primitives (tu/fake hurt) :args {}}
-      breed/conditions {:primitives (tu/fake {}) :args {:mob "cow" :fetch false}}
-      leash/conditions {:primitives (tu/fake {}) :args {:fetch false}}
       fell-tree/conditions {:primitives (tu/fake {}) :args {}})))
 
 (defn ^:async ending-after

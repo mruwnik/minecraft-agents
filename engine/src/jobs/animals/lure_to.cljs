@@ -10,7 +10,6 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.need :as need]
             [jobs.lib.pen-gate :as pg]
-            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]))
 
@@ -71,15 +70,14 @@
 
 (def defaults {:spend {:job-time ::timeout-s}})
 
-(defn start-fact
-  "Impossible without :mob or a destination."
+(defn can-start?
+  "Never without :mob or a destination."
   [c]
   (let [{:keys [mob pos]} (:args c)]
     (cond
-      (nil? mob) (contract/impossible :no-mob)
-      (nil? pos) (contract/impossible :no-destination))))
-
-(def conditions "Starts while the order is complete (start-fact)." [[:fn (started/at-start start-fact)]])
+      (nil? mob) (contract/never :no-mob "lure-to needs a :mob")
+      (nil? pos) (contract/never :no-destination "lure-to needs a :pos")
+      :else (contract/ok :order "the order is complete"))))
 
 (defn time-limit "Seconds the lure may take." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (timeout-s)))

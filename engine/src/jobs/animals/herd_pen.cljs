@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.click :as click]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.gate :as gate]
@@ -315,17 +316,18 @@
           :continue))))
 
 (defn pen-refusal
-  "Why the pen, as the body sees and remembers it from where it stands, will not do: the verdict's refusal as
-  {:reason :text} with its :why, :cell, :leaks or :depth. nil when it will do, already holds :target (done? answers)
+  "Why the pen, as the body sees and remembers it from where it stands, will not do: later with the verdict's refusal as
+  its reason and its :why, :cell, :leaks or :depth. ok when it will do, already holds :target (done? answers)
   or cannot be read from here (the run reads it at the pen). :precheck? false skips it."
   [c]
-  (when (:precheck? (:args c))
-    (let [answer (read-pen c)]
-      (when-not (or (#{:unloaded :no-start} (:reason answer))
-                    (>= (count (in-pen-adults c answer)) (:target (:args c))))
-        (let [{:keys [refuse extra]} (verdict c answer)]
-          (when refuse
-            (assoc extra :reason refuse :text (str "herd waits: the pen will not do, " (name refuse) (detail-text extra)))))))))
+  (let [answer (when (:precheck? (:args c)) (read-pen c))
+        {:keys [refuse extra]} (when-not (or (nil? answer)
+                                             (#{:unloaded :no-start} (:reason answer))
+                                             (>= (count (in-pen-adults c answer)) (:target (:args c))))
+                                 (verdict c answer))]
+    (if refuse
+      (apply contract/later refuse (str "herd waits: the pen will not do, " (name refuse) (detail-text extra)) (mapcat identity extra))
+      (contract/ok :pen "the pen will do, or is read at the pen"))))
 
 (defn ^:async survey! [c]
   (let [centre (box-centre (:box (:args c)))]

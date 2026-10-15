@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
-            [jobs.lib.started :as started]
+            [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -75,31 +75,32 @@
 (def defaults {:spend {:job-time ::time-s}})
 
 (defn bad-args
-  "Impossible: no :target of at least 2."
+  "Never :bad-args: no :target of at least 2."
   [c]
   (let [t (:target (:args c))]
-    (when-not (and (number? t) (>= t 2))
-      (contract/impossible {:reason :bad-args :why "needs a :target of at least 2"}))))
+    (if (and (number? t) (>= t 2))
+      (contract/ok :args "a :target of at least 2")
+      (contract/never :bad-args "needs a :target of at least 2" :why "needs a :target of at least 2"))))
 
-(def no-pair
-  "At the start: the cause :no-pair while the target is not met and fewer than two adult villagers are in sight."
-  (started/at-start
-   (fn [c]
-    (let [vs (villagers (:primitives c) (:radius (:args c)))]
-      (when (and (< (:pop (sight vs)) (:target (:args c))) (< (count (filter adult? vs)) 2))
-        (cond-> {:reason :no-pair :text "fewer than two adult villagers in sight"}
-          (not (look/surveyed? c :near)) contract/look-first))))))
+(defn no-pair
+  "Look :no-pair (later once a look round found nothing) while the target is not met and fewer than two adult villagers are in sight."
+  [c]
+  (let [vs (villagers (:primitives c) (:radius (:args c)))]
+    (cond
+      (not (and (< (:pop (sight vs)) (:target (:args c))) (< (count (filter adult? vs)) 2))) (contract/ok :pair "two adult villagers in sight, or the target met")
+      (look/surveyed? c :near) (contract/later :no-pair "fewer than two adult villagers in sight")
+      :else (contract/look :no-pair "fewer than two adult villagers in sight"))))
 
-(def no-food
-  "At the start: the cause :no-food while the meal is not carried and :fetch is off."
-  (started/at-start
-   (fn [c]
-     (let [[item n] (meal c)
-           need {:reason :need :item item :count (- n (held c item))}]
-       (when (and (pos? (:count need)) (not (need/opts c job)))
-         {:reason :no-food :need need :text "no food carried and no fetch for it"})))))
+(defn no-food
+  "Later :no-food while the meal is not carried and :fetch is off."
+  [c]
+  (let [[item n] (meal c)
+        need {:reason :need :item item :count (- n (held c item))}]
+    (if (and (pos? (:count need)) (not (need/opts c job)))
+      (contract/later :no-food "no food carried and no fetch for it" :need need)
+      (contract/ok :food "the meal is carried or fetched"))))
 
-(def conditions [[:fn bad-args] [:fn no-pair] [:fn no-food]])
+(def can-start? (cond/and bad-args no-pair no-food))
 
 (defn done?
   "The villagers in sight against :target; done before the job began when it is met with no pair being fed or waited
@@ -107,7 +108,7 @@
   [c]
   (let [pop (:pop (sight (villagers (:primitives c) (:radius (:args c)))))
         m (ctx/mem c)]
-    {:done? (and (>= pop (:target (:args c))) (not (:pair m)) (not (:waiting m))) :units :villagers :done pop :left (max 0 (- (:target (:args c)) pop))}))
+    {:done? (and (number? (:target (:args c))) (>= pop (:target (:args c))) (not (:pair m)) (not (:waiting m))) :units :villagers :done pop :left (max 0 (- (:target (:args c)) pop))}))
 
 (defn quote-of [c]
   (let [left (max 0 (- (:target (:args c)) (:pop (sight (villagers (:primitives c) (:radius (:args c)))))))

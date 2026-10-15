@@ -73,13 +73,18 @@
   (let [{:keys [at box plan]} (:args c)]
     (when-not (or at box plan) {:reason :no-pen :why "needs :at, :box or :plan"})))
 
+(defn can-start?
+  "Never :no-pen without :at, :box and :plan."
+  [c]
+  (if (no-pen c)
+    (contract/never :no-pen "pen-check needs :at, :box or :plan" :why "needs :at, :box or :plan")
+    (contract/ok :pen "a pen to read")))
+
 (defn problem
   "The cause of a call with no pen to read, or nil."
   [c]
   (or (no-pen c)
       (when-let [t (:trouble (pen-box c))] {:reason :plan-trouble :why t})))
-
-(def conditions [[:fn (fn [c] (some-> (no-pen c) contract/impossible))]])
 
 (defn done?
   "Counts only (the round ends the call with its data): the cells of the pen read."

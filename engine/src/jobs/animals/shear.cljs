@@ -1,6 +1,7 @@
 (ns jobs.animals.shear
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.need :as need]
@@ -64,9 +65,9 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions
-  "None wait: no shears with :fetch off ends the first round (finish! :no-shears), so a queued order never blocks the queue."
-  [])
+(def can-start?
+  "Nothing waits: no shears with :fetch off ends the first round (finish! :no-shears), so a queued order never blocks the queue."
+  (constantly (contract/ok :no-wait "no start condition")))
 
 (defn time-limit "Seconds the call may work." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))

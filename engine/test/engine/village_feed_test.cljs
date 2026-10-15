@@ -65,7 +65,7 @@
 (defn all-taken [uuid] (fn [n] {uuid n}))
 
 (deftest bad-args-need-a-uuid-and-a-food-a-villager-takes
-  (are [args ok] (= ok (nil? (feed/bad-args {:args args})))
+  (are [args ok] (= ok (= :ok (first (feed/bad-args {:args args}))))
     {:villager nil :item "bread"} false
     {:villager "v-1" :item "diamond"} false
     {:villager "v-1" :item "bread"} true))

@@ -18,7 +18,8 @@
                       ['jobs.village.feed {:villager "v-1" :count 2}]
                       ['jobs.village.trade {:villager "v-1" :buy "bread" :count 2}]
                       ['jobs.village.roll {:villager "v-1" :pos [2 64 0] :item "lectern" :want "enchanted_book"}]]]
-    (is (some? (:conditions (job sym))) (str sym " has conditions"))
+    (is (some? (:can-start? (job sym))) (str sym " has can-start?"))
+    (is (nil? (:conditions (job sym))) (str sym " has no old conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
@@ -61,9 +62,9 @@
 
 (deftest breed-no-pair-looks-first-until-surveyed
   (let [c {:primitives (tu/fake {:entities [(villager [])]}) :args {:target 3 :radius 48}}
-        cause (fn [surveyed?] (with-redefs [ctx/frozen-call (constantly nil) look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))] (breed/no-pair c)))]
-    (is (= :no-pair (:reason (contract/look-cause (cause false)))))
-    (is (= :no-pair (:reason (cause true))))))
+        status (fn [surveyed?] (with-redefs [look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))] (breed/no-pair c)))]
+    (is (= [:look :no-pair] ((juxt first (comp :reason last)) (status false))))
+    (is (= [:later :no-pair] ((juxt first (comp :reason last)) (status true))))))
 
 (deftest trade-ends-with-a-kind-and-a-cause
   (async done

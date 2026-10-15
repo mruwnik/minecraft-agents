@@ -4,8 +4,7 @@
             [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.pace :as pace]
-            [jobs.lib.started :as started]))
+            [jobs.lib.pace :as pace]))
 
 (def doc
   "Keep one village in order. One call is one pass over its steps in a fixed order. Each is a child job, called until
@@ -102,11 +101,12 @@
           {:todo (vec todo) :report report :call call})))))
 
 (defn nothing-to-do
-  "{:reason :nothing-to-do} when no step would call a child (or flag a role without a cell), at the start only."
+  "Later :nothing-to-do when no step would call a child (or flag a role without a cell)."
   [c]
   (let [f (facts c)]
-    (when-not (some #(let [d (decide % (:args c) f)] (or (:call d) (= :no-pos (:skip d)))) (slots (:args c)))
-      {:reason :nothing-to-do})))
+    (if (some #(let [d (decide % (:args c) f)] (or (:call d) (= :no-pos (:skip d)))) (slots (:args c)))
+      (contract/ok :step "a step would run")
+      (contract/later :nothing-to-do "nothing to do at the village"))))
 
 ;; ------------------------------------------------------------------ the run
 
@@ -214,7 +214,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn (started/at-start nothing-to-do)]])
+(def can-start? nothing-to-do)
 
 (defn done?
   "Never done before the round says so: the steps left are decided from the facts at each step."

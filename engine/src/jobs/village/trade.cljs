@@ -50,13 +50,14 @@
 (def defaults {:least :all :spend {:job-time ::time-s}})
 
 (defn bad-args
-  "Impossible :bad-args when no villager uuid or no item name is given."
+  "Never :bad-args when no villager uuid or no item name is given."
   [c]
   (let [{:keys [villager buy]} (:args c)]
-    (when-not (and (string? villager) (string? buy))
-      (contract/impossible {:reason :bad-args :why "needs a villager uuid and an item name"}))))
+    (if (and (string? villager) (string? buy))
+      (contract/ok :args "a villager uuid and an item name")
+      (contract/never :bad-args "needs a villager uuid and an item name" :why "needs a villager uuid and an item name"))))
 
-(def conditions [[:fn bad-args]])
+(def can-start? bad-args)
 
 (defn bought [c] (:bought (ctx/mem c) 0))
 

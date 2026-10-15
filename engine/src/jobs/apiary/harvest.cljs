@@ -10,8 +10,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.lib.pace :as pace]
-            [jobs.lib.started :as started]))
+            [jobs.lib.pace :as pace]))
 
 (def doc
   "Take the honey of the ripe hives (honey_level 5) near a centre, nearest first, at most :max hives, all in one call
@@ -247,23 +246,24 @@
 
 (def defaults {:least 1 :spend {:job-time ::time-s}})
 
-(defn start-fact
-  "The cause that bars the first step, or nil: no hive can be worked (idle-reason), none of :with is carried or the zone
-  rules refuse every hive. Asks for a look first while the body has not looked round near here."
+(defn can-start?
+  "Later with the cause that bars the first step: no hive can be worked (idle-reason), none of :with is carried or the
+  zone rules refuse every hive. A look first while the body has not looked round near here."
   [c]
   (let [center (apiary/center-of c)
         found (found-hives c center)
         hs (hives c center true)
         seen (classify c hs)
         refusal (when (and (seq found) (empty? hs)) (:refusal (gate/look c :harvest (map :pos found) {:own-plans-ok? true})))
-        cause (cond
-                refusal {:reason refusal}
-                (empty? (:todo seen)) {:reason (idle-reason {} seen)}
-                (and (nil? (tool-for (:with (:args c)) (u/inventory (:primitives c))))
-                     (nil? (need/parse-arg (:fetch (:args c))))) {:reason :no-tool})]
-    (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first)))
-
-(def conditions "A start fact (start-fact), at the call's start only." [[:fn (started/at-start start-fact)]])
+        reason (cond
+                 refusal refusal
+                 (empty? (:todo seen)) (idle-reason {} seen)
+                 (and (nil? (tool-for (:with (:args c)) (u/inventory (:primitives c))))
+                      (nil? (need/parse-arg (:fetch (:args c))))) :no-tool)]
+    (cond
+      (nil? reason) (contract/ok :start "a hive can be worked")
+      (look/surveyed? c :near) (contract/later reason (str "harvest waits: " (name reason)))
+      :else (contract/look reason (str "harvest waits: " (name reason))))))
 
 (defn done?
   "The hives harvested, and the ripe hives still to work."

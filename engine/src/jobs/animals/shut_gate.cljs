@@ -1,6 +1,7 @@
 (ns jobs.animals.shut-gate
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.animals.herd-run :as hr]
@@ -182,14 +183,14 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(defn plan-fact
-  "The :plan-trouble wait while :plan is missing or unreadable, else nil."
+(defn can-start?
+  "Later :plan-trouble while :plan is missing or unreadable."
   [c]
-  (when-let [id (:plan (:args c))]
-    (when-let [why (second (plan-gates c id))]
-      {:reason :plan-trouble :plan id :text (str "shut-gate waits: " why)})))
-
-(def conditions "Waits while :plan is missing or unreadable (plan-fact)." [[:fn plan-fact]])
+  (let [id (:plan (:args c))
+        why (when id (second (plan-gates c id)))]
+    (if why
+      (contract/later :plan-trouble (str "shut-gate waits: " why) :plan id)
+      (contract/ok :plan "the plan is readable"))))
 
 (defn done?
   "The gates shut and the watched gates still open or unread: done once none is (before the start: no event, the

@@ -8,7 +8,6 @@
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
-            [jobs.lib.started :as started]
             [jobs.lib.walk.world :as wworld]
             [jobs.animals.escort :as escort]))
 
@@ -159,17 +158,16 @@
 
 (def defaults {:spend {:job-time ::timeout-s}})
 
-(defn start-fact
-  "Impossible without :mob or a destination; a wait :no-fence while the :fence cell is seen and no fence. A missing lead
+(defn can-start?
+  "Never without :mob or a destination; later :no-fence while the :fence cell is seen and no fence. A missing lead
   is fetched, never waited for."
   [c]
   (let [{:keys [mob pos fence]} (:args c)]
     (cond
-      (nil? mob) (contract/impossible :no-mob)
-      (not (or pos fence)) (contract/impossible :no-destination)
-      (and fence (not-fence? c)) {:reason :no-fence :text "lead-to waits: the named cell is not a fence"})))
-
-(def conditions "Starts while the order is complete and the post is no seen non-fence (start-fact)." [[:fn (started/at-start start-fact)]])
+      (nil? mob) (contract/never :no-mob "lead-to needs a :mob")
+      (not (or pos fence)) (contract/never :no-destination "lead-to needs a :pos or a :fence")
+      (and fence (not-fence? c)) (contract/later :no-fence "lead-to waits: the named cell is not a fence")
+      :else (contract/ok :order "the order is complete"))))
 
 (defn time-limit "Seconds the leading may take." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (timeout-s)))

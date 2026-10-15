@@ -1,10 +1,10 @@
 (ns jobs.animals.leash
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.need :as need]
-            [jobs.lib.started :as started]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -52,13 +52,12 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(defn no-lead
-  "The cause :no-lead before the call starts: no lead carried and :fetch off."
+(defn can-start?
+  "Later :no-lead: no lead carried and :fetch off."
   [c]
-  (when-not (or (need/parse-arg (:fetch (:args c))) (animals/lead-carried? c))
-    {:reason :no-lead}))
-
-(def conditions [[:fn (started/at-start no-lead)]])
+  (if (or (need/parse-arg (:fetch (:args c))) (animals/lead-carried? c))
+    (contract/ok :lead "a lead carried or fetched")
+    (contract/later :no-lead "no lead carried and :fetch is off")))
 
 (defn time-limit "Seconds the call may work." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))

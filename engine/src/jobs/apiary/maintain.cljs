@@ -8,7 +8,6 @@
             [jobs.lib.need :as need]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
-            [jobs.lib.started :as started]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.apiary.guard :as guard]
@@ -176,12 +175,14 @@
   (let [f (facts c)]
     (boolean (some #(:call (decide % (:args c) f)) steps))))
 
-(defn not-ready
-  "Why the job does not start: nothing would run, with a look first while part of the area was never seen."
+(defn can-start?
+  "Later :nothing-to-do when nothing would run, with a look first while part of the area was never seen."
   [c]
-  (when-not (would-run? c)
-    (cond-> {:reason :nothing-to-do}
-      (and (look/unseen? (:primitives c) (apiary/watched-cells c)) (not (look/surveyed? c :near))) contract/look-first)))
+  (cond
+    (would-run? c) (contract/ok :step "a step would run")
+    (and (look/unseen? (:primitives c) (apiary/watched-cells c)) (not (look/surveyed? c :near)))
+    (contract/look :nothing-to-do "nothing to do at the apiary yet; part of it was never seen")
+    :else (contract/later :nothing-to-do "nothing to do at the apiary")))
 
 ;; ------------------------------------------------------------------ the run
 
@@ -270,7 +271,6 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn (started/at-start not-ready)]])
 
 (defn done?
   "Never done before the round says so: the steps left are decided from the facts at each step."

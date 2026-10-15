@@ -4,9 +4,9 @@
             [engine.args :as a] [jobs.lib.need :as need]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
-            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
@@ -77,40 +77,43 @@
 (def defaults {:spend {:job-time ::time-s}})
 
 (defn bad-args
-  "Impossible :bad-args when a cell, a workstation item (or profession) and a wanted item (or trade) are not given."
+  "Never :bad-args when a cell, a workstation item (or profession) and a wanted item (or trade) are not given."
   [c]
   (let [{:keys [villager]} (:args c)
         {:keys [error]} (b/parse (:args c))]
     (cond
       (not (and (or (nil? villager) (string? villager)) (string? (item-of (:args c))) (string? (want-of (:args c)))))
-      (contract/impossible {:reason :bad-args :why "needs a workstation item (or profession) and a wanted item"})
-      error (contract/impossible {:reason :bad-args :why error}))))
+      (contract/never :bad-args "needs a workstation item (or profession) and a wanted item"
+                      :why "needs a workstation item (or profession) and a wanted item")
+      error (contract/never :bad-args error :why error)
+      :else (contract/ok :args "a cell, a workstation item and a wanted item"))))
 
 (defn start-facts
-  "At the call's start, with a named villager in view: impossible for a nitwit (never a job), the cause :baby for a baby
-  and :occupied when another block stands at :pos (not now). The rest is found out by the rounds."
+  "With a named villager in view: never :nitwit (never a job), later :baby for a baby and :occupied when another block
+  stands at :pos. The rest is found out by the rounds."
   [c]
   (let [{:keys [villager]} (:args c)
         p (:primitives c)
-        e (when (and (string? villager) (not (ctx/frozen-call c))) (trade/find-villager p villager))
+        e (when (string? villager) (trade/find-villager p villager))
         block (when e (some->> (:pos (b/parse (:args c))) (u/seen-name p)))
         item (item-of (:args c))]
     (cond
-      (nil? e) nil
-      (= "nitwit" (.-profession e)) (contract/impossible {:reason :nitwit})
-      (.-baby e) {:reason :baby}
-      (and block (not (b/air block)) (not= item block)) {:reason :occupied :block block})))
+      (nil? e) (contract/ok :villager "no villager in view to judge")
+      (= "nitwit" (.-profession e)) (contract/never :nitwit "a nitwit has no job")
+      (.-baby e) (contract/later :baby "the villager is a baby")
+      (and block (not (b/air block)) (not= item block)) (contract/later :occupied (str block " stands at the workstation cell") :block block)
+      :else (contract/ok :villager "the villager can take a job"))))
 
-(def cell-unseen
-  "At the start, the cause :cell-unseen (after a look still unseen is the round's to find out) while the workstation
-  cell is not in view or memory."
-  (started/at-start
-   (fn [c]
-     (let [pos (:pos (b/parse (:args c)))]
-       (when (and pos (nil? (u/seen-name (:primitives c) pos)) (not (look/surveyed? c :near)))
-         (contract/look-first {:reason :cell-unseen}))))))
+(defn cell-unseen
+  "Look :cell-unseen while the workstation cell is not in view or memory (after a look still unseen is the round's to
+  find out)."
+  [c]
+  (let [pos (:pos (b/parse (:args c)))]
+    (if (and pos (nil? (u/seen-name (:primitives c) pos)) (not (look/surveyed? c :near)))
+      (contract/look :cell-unseen "the workstation cell is not in view or memory")
+      (contract/ok :cell "the workstation cell is seen or looked at"))))
 
-(def conditions [[:fn bad-args] [:fn start-facts] [:fn cell-unseen]])
+(def can-start? (cond/and bad-args start-facts cell-unseen))
 
 (defn rolls [c] (:rolls (ctx/mem c) 0))
 

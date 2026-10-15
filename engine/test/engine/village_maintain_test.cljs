@@ -2,6 +2,7 @@
   "jobs.village.maintain against the fake world; its children are recording stubs, found by job name."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
@@ -23,7 +24,7 @@
   (fn [jobs]
     (reduce (fn [m j]
               (let [e (get ends j {})]
-                (assoc m j {:conditions [[:fn (fn [_] (swap! calls conj [:check j]) (when (:decline e) {:reason (:decline e)}))]]
+                (assoc m j {:can-start? (fn [_] (swap! calls conj [:check j]) (if (:decline e) (contract/later (:decline e) "declined") (contract/ok :stub "stub")))
                             :round (fn [c]
                                      (swap! calls conj [j (:args c)])
                                      (let [r (if (fn? e) (e c (count (filter #(= j (first %)) @calls))) e)]
@@ -164,7 +165,7 @@
 (deftest it-is-a-contract-job
   (is (= [:plan :roles] maintain/target))
   (is (= {:spend {:job-time ::maintain/time-s}} maintain/defaults))
-  (is (seq maintain/conditions))
+  (is (fn? maintain/can-start?))
   (is (fn? maintain/done?))
   (is (fn? maintain/quote-of)))
 

@@ -1,6 +1,7 @@
 (ns jobs.village.feed
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.cond :as cond]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -83,20 +84,24 @@
 (def defaults {:least :all :spend {:job-time ::time-s}})
 
 (defn bad-args
-  "Impossible :bad-args when no villager uuid is given or :item is not food a villager picks up."
+  "Never :bad-args when no villager uuid is given or :item is not food a villager picks up."
   [c]
   (let [{:keys [villager item]} (:args c)]
     (cond
-      (not (string? villager)) (contract/impossible {:reason :bad-args :why "needs a villager uuid"})
-      (and item (not (contains? wanted item))) (contract/impossible {:reason :bad-args :why (str "villagers do not pick up " item)}))))
+      (not (string? villager)) (contract/never :bad-args "needs a villager uuid" :why "needs a villager uuid")
+      (and item (not (contains? wanted item)))
+      (let [why (str "villagers do not pick up " item)] (contract/never :bad-args why :why why))
+      :else (contract/ok :args "a villager uuid and food they pick up"))))
 
 (defn no-food
-  "The need as the cause when none is carried and the call will not fetch it."
+  "Later :need when none is carried and the call will not fetch it."
   [c]
-  (when-let [w (problem c)]
-    (when-not (need/opts c job) (assoc w :why "no food carried and no fetch for it"))))
+  (let [w (problem c)]
+    (if (and w (not (need/opts c job)))
+      (apply contract/later :need "no food carried and no fetch for it" :why "no food carried and no fetch for it" (mapcat identity (dissoc w :reason)))
+      (contract/ok :food "food carried or fetched, or none left to give"))))
 
-(def conditions [[:fn bad-args] [:fn no-food]])
+(def can-start? (cond/and bad-args no-food))
 
 (defn done?
   "The items taken against :count. Never :done? itself: the job ends with its event and data."

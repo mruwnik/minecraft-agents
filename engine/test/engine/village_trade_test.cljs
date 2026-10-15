@@ -94,7 +94,7 @@
         cases)))
 
 (deftest trade-bad-args-need-a-villager-and-an-item
-  (are [args ok] (= ok (nil? (trade/bad-args {:args args})))
+  (are [args ok] (= ok (= :ok (first (trade/bad-args {:args args}))))
     {:villager "v-1" :buy "bread"} true
     {:villager "v-1" :buy nil} false
     {:villager nil :buy "bread"} false))

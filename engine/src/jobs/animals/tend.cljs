@@ -6,7 +6,6 @@
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.standing :as standing]
-            [jobs.lib.started :as started]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.animals.cull :as cull]
@@ -203,31 +202,31 @@
     (if plan (str plan "/" part) (pr-str box))))
 
 (defn pen-fact
-  "nil when some step would run (or the body is to look at the box first), else the :nothing-to-do wait with the census."
+  "ok when some step would run (or the body is to look at the box first), else the later :nothing-to-do with the census."
   [c]
   (let [{:keys [target] :as args} (:args c)]
-    (when-not (look-due? c)
+    (if (look-due? c)
+      (contract/ok :look-due "the box is looked at first")
       (let [f (facts c)
             decisions (into {} (map (juxt identity #(decide % args f))) steps)]
-        (when-not (some :call (vals decisions))
-          {:reason :nothing-to-do :adults (:adults f) :babies (:babies f) :target target
-           :skipped (into {} (map (fn [[step d]] [step (:skip d)])) decisions)})))))
+        (if (some :call (vals decisions))
+          (contract/ok :step "a step would run")
+          (contract/later :nothing-to-do "nothing to do at the pen"
+                          :adults (:adults f) :babies (:babies f) :target target
+                          :skipped (into {} (map (fn [[step d]] [step (:skip d)])) decisions)))))))
 
-(defn start-fact
-  "Why the pen is not tended now: impossible :no-box without a box or a plan; a wait for :plan-trouble, a resting pen
-  or nothing to do."
+(defn can-start?
+  "Never :no-box without a box or a plan; later for :plan-trouble, a resting pen or nothing to do."
   [c]
   (let [{:keys [plan box]} (:args c)
         {:keys [trouble] :as pen} (pen-of c)
         c (if pen (with-pen c pen) c)
         resting (get (standing/rested c 'jobs.animals.tend) (pen-key c))]
     (cond
-      (not (or plan box)) (contract/impossible :no-box)
-      trouble {:reason :plan-trouble :why trouble}
-      resting {:reason :nothing-to-do :backed-off [(pen-key c)] :until (:until resting)}
+      (not (or plan box)) (contract/never :no-box "tend needs a :box or a :plan")
+      trouble (contract/later :plan-trouble trouble :why trouble)
+      resting (contract/later :nothing-to-do "the pen is resting" :backed-off [(pen-key c)] :until (:until resting))
       :else (pen-fact c))))
-
-(def conditions "Starts while some step would run (start-fact)." [[:fn (started/at-start start-fact)]])
 
 (defn done?
   "The steps still to run against those of a pass. Never :done? itself: the run ends with its event and data."

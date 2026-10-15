@@ -100,7 +100,7 @@
 (defn refusal
   "The pen refusal of the run: its herd.done, else the cause of the start condition the job waits on."
   [s]
-  (or (done-event s) (:cause (last (events-of s :waiting)))))
+  (or (done-event s) (last (events-of s :waiting))))
 (defn stopped?
   "Whether the job ended stopped (any kind but done), once."
   [s]
@@ -714,8 +714,8 @@
         (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks shallow-wall} 5))
               w (last (events-of s :waiting))]
           (is (= :too-shallow (:reason w)))
-          (is (= {:cell [11 64 3] :depth 2 :need 5} (select-keys (:cause w) [:cell :depth :need])) "the first pen cell inside the gate")
-          (is (re-find #"11 64 3" (str (:text (:cause w)))))
+          (is (= {:cell [11 64 3] :depth 2 :need 5} (select-keys w [:cell :depth :need])) "the first pen cell inside the gate")
+          (is (re-find #"11 64 3" (str (:text w))))
           (is (empty? (calls-of s "moveTo")) "refused before any walk"))))))
 
 (deftest a-box-too-narrow-for-the-walk-in-is-impossible-naming-its-size

@@ -727,11 +727,9 @@
           (is (seq @pauses) "the wait is a pause child")
           (is (contains? (set @pauses) {:seconds (/ escort/wait-look-ms 1000) :why :waiting-for-animal})))))))
 
-(deftest a-started-lead-is-not-refused-for-a-post-that-stopped-being-a-fence
-  (let [f (second (first lead-to/conditions))
-        c {:primitives (tu/fake {:blocks {"5,64,0" "stone"}}) :args {:mob "cow" :fence {:x 5 :y 64 :z 0}}}]
-    (is (= :no-fence (:reason (lead-to/start-fact c))) "the fact refuses")
-    (is (nil? (f (assoc c :quote-call {}))) "started: step ends it through finish!")))
+(deftest a-post-that-is-no-fence-waits-the-start
+  (let [c {:primitives (tu/fake {:blocks {"5,64,0" "stone"}}) :args {:mob "cow" :fence {:x 5 :y 64 :z 0}}}]
+    (is (= [:later :no-fence] ((juxt first (comp :reason last)) (lead-to/can-start? c))))))
 
 (deftest a-leading-out-of-time-ends-on-the-engines-limit-and-its-cleanup-lets-the-cow-go
   (async done

@@ -257,7 +257,7 @@
   (let [{:keys [eng seen]} (h/setup {:inventory [(wheat 4)] :entities entities})]
     (core/submit! eng (list 'jobs.animals.tend args) {})
     (core/tick! eng)
-    (:cause (first (events-of {:seen seen} :waiting)))))
+    (first (events-of {:seen seen} :waiting))))
 
 (deftest nothing-to-do-says-the-census-and-why-each-step-is-skipped
   (let [w (waiting-fields {:box box :target 2} [(cow 1 2) (cow 2 3) (calf 3 4)])]
@@ -338,12 +338,7 @@
         (let [s (await (plan-scenario (list 'repeat (list 'jobs.animals.tend {:plan "pen" :part "cows"})) {"pen" pen-plan}
                                       {:inventory [(wheat 8)] :entities [(cow 1 2) (cow 2 3)]} 60))]
           (is (= 1 (count (events-of s :tend.done))) "one pass, then the pen rests")
-          (is (some #(= ["pen/cows"] (get-in % [:cause :backed-off])) (events-of s :waiting)) "the wait names the pen")
+          (is (some #(= ["pen/cows"] (:backed-off %)) (events-of s :waiting)) "the wait names the pen")
           (swap! (:clock s) + 660000)
           (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
           (is (= 2 (count (events-of s :tend.done))) "after the back-off it tries again"))))))
-
-(deftest a-started-pass-is-not-asked-its-start-condition-again
-  (let [f (second (first tend/conditions))
-        c {:primitives (tu/fake {:entities []}) :args {:box box :target 4}}]
-    (is (nil? (f (assoc c :quote-call {}))) "started: the pass runs on")))

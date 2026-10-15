@@ -5,9 +5,9 @@
             [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
             [jobs.lib.need :as need]
-            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.animals.escort :as escort]
             [jobs.lib.watch :as watch]
             [jobs.animals.herd-run :as hr :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms transient-keys]]
@@ -148,22 +148,24 @@
       :else [xs zs])))
 
 (defn bad-args
-  "Impossible without :mob or :box, or with a box no gate axis can run min-depth cells into."
+  "Never without :mob or :box, or with a box no gate axis can run min-depth cells into."
   [c]
   (let [{:keys [mob box gate]} (:args c)]
     (cond
-      (not (and mob box)) (contract/impossible :no-mob-or-box)
+      (not (and mob box)) (contract/never :no-mob-or-box "herd needs a :mob and a :box")
       (< (apply max (box-sides box gate)) min-depth)
       (let [{:keys [min max]} box]
-        (contract/impossible
-         {:reason :too-shallow :box box :need min-depth
-          :text (str "herd cannot use the box " (cell min) ".." (cell max) ": it is "
-                     (inc (- (:x max) (:x min))) "x" (inc (- (:z max) (:z min))) ", " min-depth
-                     " cells in a line needed inward from the gate, so a led animal clears the gate cell")})))))
+        (contract/never
+         :too-shallow
+         (str "herd cannot use the box " (cell min) ".." (cell max) ": it is "
+              (inc (- (:x max) (:x min))) "x" (inc (- (:z max) (:z min))) ", " min-depth
+              " cells in a line needed inward from the gate, so a led animal clears the gate cell")
+         :box box :need min-depth))
+      :else (contract/ok :args "a :mob and a box deep enough"))))
 
-(def conditions
+(def can-start?
   "Starts with a :mob and a box deep enough (bad-args), and a pen seen at the start that will do (pen-refusal)."
-  [[:fn bad-args] [:fn (started/at-start pen-refusal)]])
+  (cond/and bad-args pen-refusal))
 
 (defn done?
   "Whether the box holds :target adults before the run touched the gate (once it has, the run ends itself, outside

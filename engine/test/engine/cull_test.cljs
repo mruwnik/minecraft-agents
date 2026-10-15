@@ -198,7 +198,7 @@
             (is (= (- 4 keep) (:killed (done-event s))) (str "keep " keep))))))))
 
 (deftest conditions-and-round-are-exported
-  (is (vector? cull/conditions))
+  (is (fn? cull/can-start?))
   (is (fn? cull/round)))
 
 (deftest cull-follows-zones-and-claims

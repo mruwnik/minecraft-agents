@@ -1,10 +1,10 @@
 (ns jobs.animals.breed
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.need :as need]
-            [jobs.lib.started :as started]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -67,16 +67,15 @@
 
 (def defaults {:spend {:job-time ::time-s} :least 2})
 
-(defn no-food
-  "The cause :no-food before the call starts: a known mob, no breeding food carried and :fetch off."
+(defn can-start?
+  "Later :no-food: a known mob, no breeding food carried and :fetch off."
   [c]
   (let [{:keys [mob fetch]} (:args c)]
-    (when (and (contains? animals/breeding-food mob)
-               (not (need/parse-arg fetch))
-               (nil? (animals/food-carried (:primitives c) mob)))
-      {:reason :no-food})))
-
-(def conditions [[:fn (started/at-start no-food)]])
+    (if (and (contains? animals/breeding-food mob)
+             (not (need/parse-arg fetch))
+             (nil? (animals/food-carried (:primitives c) mob)))
+      (contract/later :no-food (str "no breeding food for " mob " carried and :fetch is off"))
+      (contract/ok :food "food carried or fetched"))))
 
 (defn time-limit "Seconds the call may work." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))

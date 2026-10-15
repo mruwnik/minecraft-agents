@@ -11,7 +11,6 @@
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
-            [jobs.lib.started :as started]
             [jobs.lib.step-off :as step-off]))
 
 (def doc
@@ -308,23 +307,24 @@
 
 (def defaults {:least 1 :spend {:job-time ::time-s}})
 
-(defn start-fact
-  "The cause that bars the first step, or nil: no fire needs work, the body carries no carpet or campfire the work
-  needs, or the zone rules refuse every fire. Asks for a look first while the body has not looked round near here."
+(defn can-start?
+  "Later with the cause that bars the first step: no fire needs work, the body carries no carpet or campfire the work
+  needs, or the zone rules refuse every fire. A look first while the body has not looked round near here."
   [c]
   (let [{:keys [box radius center]} (:args c)
         center (or center (u/self-pos c))
         fires (apiary/fires (:primitives c) {:box box :center center :radius radius})
         seen (survey c center true)
-        cause (cond
-                (seq (:todo seen)) nil
-                (and (seq (:left seen)) (nil? (need/parse-arg (:fetch (:args c))))) {:reason (first (vals (:left seen)))}
-                (seq (:left seen)) nil
-                (and (seq fires) (zero? (:fires seen))) {:reason (:refusal (gate/look c :dig (map :pos fires) {}))}
-                :else {:reason :nothing-to-guard})]
-    (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first)))
-
-(def conditions "A start fact (start-fact), at the call's start only." [[:fn (started/at-start start-fact)]])
+        reason (cond
+                 (seq (:todo seen)) nil
+                 (and (seq (:left seen)) (nil? (need/parse-arg (:fetch (:args c))))) (first (vals (:left seen)))
+                 (seq (:left seen)) nil
+                 (and (seq fires) (zero? (:fires seen))) (:refusal (gate/look c :dig (map :pos fires) {}))
+                 :else :nothing-to-guard)]
+    (cond
+      (nil? reason) (contract/ok :start "a fire needs work")
+      (look/surveyed? c :near) (contract/later reason (str "guard waits: " (name reason)))
+      :else (contract/look reason (str "guard waits: " (name reason))))))
 
 (defn done?
   "The fires worked, and the fires still to work."
