@@ -11,7 +11,7 @@
   :limit-s 90}
  :cases
  [{:name "fences-with-nothing-seen-say-pass-explore"
-   :act [[:job (jobs.items.obtain {:item "oak_fence" :count 4})]]
+   :act [[:job (jobs.items.obtain {:item "oak_fence" :count 4 :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "explore"]}} :within-s 40 :of-job true}]
    :after [[:item "oak_fence" 0]]
    :limit-s 60}

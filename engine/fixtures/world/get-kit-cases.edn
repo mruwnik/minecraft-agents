@@ -1,6 +1,7 @@
 ;; jobs.items.get-kit: cards f0118847 (items are made in order; iron is sourced only when the next missing item needs it),
 ;; 9d844aa3 (carried raw iron is smelted when the mine finds no ore), 71a675d6 (carried ingots are never crafted into nuggets),
 ;; 89e23248 (the home chest is not emptied, the hut's furnace and bed are not dug up), a094008f (the list in order, armour worn).
+;; The body carries 3 cooked beef where mining or smelting is ahead (:food false stops :needs-food under 20 food points).
 ;; Open plot, body at [16.5 0 12.5] looking south (yaw 0); the table stands at [16 0 18].
 ;; Should-succeed: stone sword and pickaxe made with no iron seen, then kit.stopped no-source for the iron; a pickaxe smelted from
 ;; carried raw iron; sword and shovel from 3 ingots without nuggets; the home chest and hut blocks untouched; helmet crafted and worn.
@@ -25,6 +26,7 @@
   {:name "iron-first-with-no-iron-seen-stops-at-once"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [20 0 22] [22 1 23] "stone"]]
+   :body {:inventory [["cooked_beef" 3]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
          [:job (jobs.items.get-kit {:items ["iron_pickaxe" "stone_sword"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :kit.stopped :data {:reason :no-source}} :within-s 60 :of-job true}
@@ -33,12 +35,12 @@
    :limit-s 80}
   {:name "carried-raw-iron-smelted-when-no-ore-is-seen"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
-   :body {:inventory [["raw_iron" 3] ["coal" 3] ["stick" 2] ["stone_pickaxe" 1]]}
+   :body {:inventory [["raw_iron" 3] ["coal" 3] ["stick" 2] ["stone_pickaxe" 1] ["cooked_beef" 3]]}
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :kit.done} :within-s 140 :of-job true}]
    :after [[:item "iron_pickaxe" 1] [:item "iron_nugget" 0]]}
   {:name "carried-ingots-make-sword-and-shovel-never-nuggets"
-   :body {:inventory [["iron_ingot" 3] ["stick" 6] ["stone_pickaxe" 1]]}
+   :body {:inventory [["iron_ingot" 3] ["stick" 6] ["stone_pickaxe" 1] ["cooked_beef" 3]]}
    :act [[:job (jobs.items.get-kit {:items ["iron_sword" "iron_shovel" "iron_axe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :kit.stopped :data {:reason :no-source}} :within-s 100 :of-job true}]
    :after [[:item "iron_sword" 1] [:item "iron_shovel" 1] [:item "iron_nugget" 0]]

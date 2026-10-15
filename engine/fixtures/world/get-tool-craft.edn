@@ -41,13 +41,13 @@
    :after [[:block [18 0 19] "air"] [:item "wooden_pickaxe" 1] [:item "cobblestone" 1]]}
   {:name "only-dirt-waits-no-source"
    :body {:inventory [["dirt" 20]]}
-   :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :act [[:job (jobs.items.get-tool {:kind "pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source :why [:contains "no seen chest"]}}}]
    :after [[:item "wooden_pickaxe" 0] [:item "dirt" 20]]}
   {:name "only-dirt-pick-by-item"
    :body {:inventory [["dirt" 5]]}
-   :act [[:job (jobs.items.get-tool {:item "wooden_pickaxe"})]]
+   :act [[:job (jobs.items.get-tool {:item "wooden_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source :why [:contains "no seen chest"]}}}]
    :after [[:item "wooden_pickaxe" 0]]}
@@ -63,7 +63,7 @@
    :plot {:height 12 :floor "dirt"}
    :blocks [[:fill [0 -2 0] [31 -2 31] "bedrock"]]
    :body {:inventory [["oak_log" 12] ["stick" 4]]}
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
    :limit-s 150
    :expect [{:event {:source :job :level :warn :kind :stopped :data {:reason :no-source}} :within-s 140 :of-job true}]
    :after [[:item "stone_pickaxe" 0]]},
@@ -88,7 +88,7 @@
   {:name "no-material-seen-waits-no-source"
    ;; card fd6e381b should-fail: no cobblestone/deepslate/blackstone seen: waits :no-source naming cobblestone
    :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["oak_planks" 8]]}
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "cobblestone"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0]]}]}
