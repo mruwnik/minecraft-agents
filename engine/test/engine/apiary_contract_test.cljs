@@ -58,7 +58,7 @@
         (is (= {:event :waiting :reason :no-campfire}
                (await (ends no-fetch-guard (-> (g/fire-world {:inventory (g/inv "stick" 1)}) (g/open-side "3,64,0")
                                       (assoc-in [:blocks "2,65,0"] "white_carpet"))))))
-        (is (= {:event :waiting :reason :nothing-to-guard} (await (ends guard safe-fire))))
+        (is (= {:event :completed} (select-keys (await (ends guard safe-fire)) [:event])) "every fire already safe: the goal holds")
         (is (= {:event :waiting :reason :nothing-to-guard} (await (ends guard {}))))
         (is (= {:event :waiting :reason :nothing-to-guard}
                (await (ends '(jobs.apiary.guard {:box {:from {:x 10 :y 60 :z -5} :to {:x 14 :y 70 :z 5}}})

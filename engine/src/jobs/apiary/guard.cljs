@@ -25,8 +25,8 @@
   skipped for the rest of the run. The body never stands in a fire's cell.
   A carpet or campfire the work needs and the body lacks is fetched (jobs.lib.need) unless :fetch is false; a
   failed fetch ends nothing-possible or condition-failed with :reason :need.
-  Start facts, found after a quiet look around, make it wait (a skipped job): :nothing-to-guard (no fire needs
-  work), :no-carpet or :no-campfire (the body carries what the work needs, :fetch false), :refused or :no-zones
+  Start facts, found after a quiet look around, make it wait (a skipped job): :nothing-to-guard (no fire in reach; fires
+  that all need nothing end done :already), :no-carpet or :no-campfire (the body carries what the work needs, :fetch false), :refused or :no-zones
   (the zone rules refuse every fire).
   Result: {:sunk n :carpeted n :reason r :left {pos reason} :skipped {pos reason} :fires n}. :reason is
   :guarded (work done, nothing left), :limit (:max reached), :safe, :no-fire, :no-carpet, :no-campfire, :need, a skip
@@ -327,11 +327,16 @@
       :else (contract/look reason (str "guard waits: " (name reason))))))
 
 (defn done?
-  "Later with the fires worked and the fires still to work: the run ends itself with the reason it stopped for."
+  "Ok before any work, after a look round, when fires stand in the area and none needs work; later with the fires
+  worked and the fires still to work: the run ends itself with the reason it stopped for."
   [c]
-  (let [seen (survey c (apiary/center-of c) true)]
-    (contract/later :guarding (str (actions (ctx/mem c)) " fires worked") :units :fires :done (actions (ctx/mem c))
-                    :left (+ (count (:todo seen)) (count (:left seen))))))
+  (let [seen (survey c (apiary/center-of c) true)
+        m (ctx/mem c)
+        left (+ (count (:todo seen)) (count (:left seen)))]
+    (if (and (zero? left) (pos? (:fires seen)) (zero? (actions m)) (empty? (:skipped m)) (look/surveyed? c :near))
+      (contract/ok :safe "every fire is guarded" :units :fires :done 0 :left 0
+                   :result {:sunk 0 :carpeted 0 :reason :safe :left {} :skipped {} :fires (:fires seen)})
+      (contract/later :guarding (str (actions m) " fires worked") :units :fires :done (actions m) :left left))))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 10 (or (:max (:args c)) 12)) ##Inf]}})
