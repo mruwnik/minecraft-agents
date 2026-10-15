@@ -185,6 +185,13 @@
   (let [r (f/resolve-tags (f/read-edn "[#at [3 7] #xyz [3 7] #at [1 2 3]]") [100 150 200])]
     (is (= [[103 207] {:x 103 :z 207} [101 152 203]] r))))
 
+(deftest a-seg-tag-is-a-plot-relative-strip-segment
+  (let [r (f/resolve-tags (f/read-edn "[#seg {:axis :x :y 0 :line 16 :from 6 :to 26} #seg {:axis :z :y -2 :line 5 :from 1 :to 9 :open-ends #{:to}}]")
+                          [100 150 200])]
+    (is (= [{:axis :x :y 150 :line 216 :from 106 :to 126 :open-ends #{} :id "x150-216:106..126"}
+            {:axis :z :y 148 :line 105 :from 201 :to 209 :open-ends #{:to} :id "z148-105:201..209"}]
+           r))))
+
 (deftest selection-by-tag-and-name
   (let [cases (f/file-cases text "hostile")]
     (is (= 3 (count (f/select-cases cases {:tag "hostile"}))))

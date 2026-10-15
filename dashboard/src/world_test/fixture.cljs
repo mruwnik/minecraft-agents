@@ -91,7 +91,12 @@
   "The #xyz tag: a plot-relative position written [x y z] (or a column [x z]), resolved to an absolute {:x :y :z} map."
   [v] {::rel (vec v) ::as :map})
 
-(def readers {'at rel 'xyz rel-map})
+(defn seg
+  "The #seg tag: a strip segment {:axis :y :line :from :to [:open-ends]} with plot-relative y, line and from/to (x or z along
+  the axis), resolved to the absolute segment map jobs.lib.strip reads, with its :id."
+  [m] {::seg m})
+
+(def readers {'at rel 'xyz rel-map 'seg seg})
 
 (defn read-edn [text]
   (reader/read-string {:readers readers} text))
@@ -351,18 +356,28 @@
 
 (defn abs-pos [[ox oy oz] [x y z]] [(+ ox x) (+ oy y) (+ oz z)])
 
+(defn abs-segment
+  "A #seg map made absolute against origin, with the :open-ends default and the id jobs.lib.strip/seg-id gives."
+  [{:keys [axis y line from to] :as m} [ox oy oz]]
+  (let [x? (= :x axis)
+        y (+ oy y) line (+ line (if x? oz ox)) from (+ from (if x? ox oz)) to (+ to (if x? ox oz))]
+    (assoc m :y y :line line :from from :to to :open-ends (or (:open-ends m) #{})
+           :id (str (name axis) y "-" line ":" from ".." to))))
+
 (defn resolve-tags
   "Every #at / #xyz value in form made absolute against origin."
   [form origin]
   (walk/postwalk (fn [v]
-                   (if (and (map? v) (contains? v ::rel))
+                   (cond
+                     (and (map? v) (contains? v ::seg)) (abs-segment (::seg v) origin)
+                     (and (map? v) (contains? v ::rel))
                      (if (= 2 (count (::rel v)))
                        (let [[x z] (::rel v)
                              [ox _ oz] origin]
                          (if (= :map (::as v)) {:x (+ ox x) :z (+ oz z)} [(+ ox x) (+ oz z)]))
                        (let [[x y z] (abs-pos origin (::rel v))]
                          (if (= :map (::as v)) {:x x :y y :z z} [x y z])))
-                     v))
+                     :else v))
                  form))
 
 (defn num-str
