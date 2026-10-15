@@ -194,3 +194,8 @@
     :continue
     (do (ctx/emit! c kind :warn {:tries (max-failures) :text text})
         :done)))
+
+(defn out-of-time?
+  "Whether the call's time line is spent: the engine counts the job's own running time across rounds and cuts."
+  [c]
+  (some-> (get-in (ctx/left c) [:spend :time]) (<= 0)))

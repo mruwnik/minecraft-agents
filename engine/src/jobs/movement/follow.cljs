@@ -46,6 +46,11 @@
   [c]
   (when-not (string? (:player (:args c))) (contract/impossible :bad-args)))
 
+(a/defargs settings
+  {::time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
+
 (def conditions [[:fn bad-args]])
 
 (defn find-player

@@ -225,7 +225,12 @@
 
 (def ways ways/ways)
 
-(def defaults {:least :all})
+(def time-s
+  "Seconds one go-to call may take before it gives up. A literal, not a settings key: a `settings` var here would
+  shadow the namespace jobs.movement.go-to.settings in compiled JavaScript."
+  1800)
+
+(def defaults {:least :all :spend {:time time-s}})
 
 (defn legacy-args
   "An old caller's args as call keys (see the doc's Ways); call keys it gives win."

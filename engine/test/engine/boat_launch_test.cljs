@@ -7,6 +7,7 @@
             [engine.library-test :as lt]
             [engine.sense-test :as st]
             [engine.test-util :as tu]
+            [jobs.lib.util :as u]
             [jobs.movement.boat-launch :as bl]))
 
 (def pond
@@ -228,6 +229,6 @@
     (is (= :no-room (:reason (contract/look-cause (bl/no-water (c {:blocks channel}))))))))
 
 (deftest recover-is-out-of-time-when-the-calls-time-line-is-spent
-  (are [left out?] (= out? (boolean (bl/out-of-time? {:left (constantly {:spend {:time left}})})))
+  (are [left out?] (= out? (boolean (u/out-of-time? {:left (constantly {:spend {:time left}})})))
     0 true
     5 false))

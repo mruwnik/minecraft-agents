@@ -45,7 +45,8 @@
 (def target [:pos :goal])
 
 (a/defargs settings
-  {::boat-speed {:default 5 :doc "Blocks a second the boat covers, for the quote." :spec (a/num-in 0 nil)}
+  {::time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+   ::boat-speed {:default 5 :doc "Blocks a second the boat covers, for the quote." :spec (a/num-in 0 nil)}
    ::launch-s {:default 24 :doc "Seconds the launch and the landing take besides the drive, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn water-between?
@@ -153,6 +154,8 @@
                   (nil? (spot-of c)) {:reason :no-far-shore :text (if (given-pos c) "the given cell is no seen shore" "no far shore in sight")}
                   (and (not (vehicle/mounted? (:primitives c))) (not (water-in-sight? c))) {:reason :not-water :text "no water in sight to launch a boat on"})]
       (cond-> cause (and cause (not (look/surveyed? c))) contract/look-first))))
+
+(def defaults {:spend {:time ::time-s}})
 
 (def conditions [[:fn bad-args] [:fn (started/at-start start-fact)]])
 

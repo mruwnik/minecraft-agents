@@ -212,11 +212,6 @@
                     (do (ctx/emit! c :boat.launched :info {:id (:id boat) :boat (:name boat) :pos cell :text (str "put " (:name boat) " on the water")})
                         (ctx/end c :done nil {:id (:id boat) :boat (:name boat) :pos cell :boarded false})))))))))))
 
-(defn out-of-time?
-  "Whether the call's time line is spent: the engine counts the job's own running time across rounds and cuts."
-  [c]
-  (some-> (get-in (ctx/left c) [:spend :time]) (<= 0)))
-
 (defn ^:async recover! [c]
   (let [p (:primitives c)
         id (:id (:args c))
@@ -229,7 +224,7 @@
         (let [boat (pick-boat c)]
           (cond
             (nil? boat) (ctx/end c :condition-failed :gone {:id id})
-            (out-of-time? c) (ctx/end c :limit-reached {:line :time :reason :not-broken} {:id (:id boat) :hits hits})
+            (u/out-of-time? c) (ctx/end c :limit-reached {:line :time :reason :not-broken} {:id (:id boat) :hits hits})
             (> (u/dist (u/self-pos c) (:pos boat)) reach)
             (let [w (await (child/call-walk* c :walk {:pos (:pos boat) :range 2 :ways #{:walk :clear-seal}}))]
               (cond

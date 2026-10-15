@@ -81,6 +81,11 @@
     (when (and v (not= wanted (:id v)))
       {:reason :aboard-other :vehicle (:name v)})))
 
+(a/defargs settings
+  {::time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
+
 (def conditions [[:fn bad-args] [:fn (started/at-start no-vehicle)] [:fn (started/at-start aboard-other)]])
 
 (defn quote-of [c]

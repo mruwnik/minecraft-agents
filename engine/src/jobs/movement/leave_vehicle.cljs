@@ -26,6 +26,11 @@
   [c]
   (when-not (vehicle/mounted? (:primitives c)) :not-mounted))
 
+(a/defargs settings
+  {::time-s {:default 30 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
+
 (def conditions [[:fn (started/at-start not-mounted)]])
 
 (defn done?

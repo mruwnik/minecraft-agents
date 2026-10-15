@@ -21,6 +21,11 @@
 
 (def target [])
 
+(a/defargs settings
+  {::time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
+
 (def conditions [])
 
 (defn quote-of

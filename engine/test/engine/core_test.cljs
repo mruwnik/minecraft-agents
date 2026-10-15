@@ -133,6 +133,7 @@
    'declined-parent {:check always :round declined-parent-round}
    'submitter {:check always :round submit-round}
    'jobs.movement.look-around (get registry/jobs 'jobs.movement.look-around)
+   'jobs.time.noop (get registry/jobs 'jobs.time.noop)
    'gated gated-job
    'any-gated {:check always :round (fn ^:async any-gated-round [c]
                                       (let [r (await (ctx/call-child c :g gated-job {}))]
@@ -1877,10 +1878,10 @@
           (.hold world "wait")
           (dotimes [_ 10]
             (core/tick! eng)
+            (await (js/Promise. (fn [resolve] (js/setTimeout resolve 5))))
             (swap! clock + 250))
-          (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
           (is (= 1 (count (look-calls world))) "the round is parked in its wait, so ticks start nothing")
-          (is (= [{:ms 2000}] (mapv #(js->clj (.-args %) :keywordize-keys true)
+          (is (= [2000] (mapv #(.. % -args -ms)
                                     (filter #(= "wait" (.-name %)) (.-calls world))))
               "it waits :every-ms, default 2000"))))))
 

@@ -47,7 +47,8 @@
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 
 (a/defargs settings
-  {::max-cell-digs {:default 8 :doc "Digs of one cell (a falling block refills it) before it stops :refills." :spec (a/int-in 0 nil)}
+  {::time-s {:default 300 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+   ::max-cell-digs {:default 8 :doc "Digs of one cell (a falling block refills it) before it stops :refills." :spec (a/int-in 0 nil)}
    ::cell-s {:default 1.5 :doc "Mean seconds one cell of the door takes (dig, pick up, pace), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-cell-digs [] (settings/get settings ::max-cell-digs))
 
@@ -69,6 +70,8 @@
     (when (and (headings heading) (pos-int? max-thick)
                (nil? (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) max-thick)))
       {:reason :no-door :why (no-door-why heading max-thick p)})))
+
+(def defaults {:spend {:time ::time-s}})
 
 (def conditions [[:fn bad-args] [:fn (started/at-start no-door)]])
 

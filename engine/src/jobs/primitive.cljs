@@ -20,11 +20,14 @@
       (when-let [missing (seq (remove #(some? (get (:args c) %)) need))]
         (contract/impossible {:reason :bad-args :missing (vec missing)})))))
 
+(a/defargs settings
+  {::time-s {:default 300 :doc "Seconds one primitive act may take before it gives up (:limit-reached); an offline act is the longest." :spec (a/num-in 0 nil)}})
+
 (def precondition-statuses
   "Statuses that say a precondition was false before the act ran (a failed condition); any other status the table
   reads as a failed condition is an act that ran and did not reach its end."
   #{:missing :occupied :gone :not-night :monsters-near :no-item :no-room :no-support :no-water :no-rod :no-food
-    :no-lapis :no-levels :not-mounted :not-a-boat :not-mountable :hand-full :full :empty :busy :refused-mounted})
+    :no-lapis :no-levels :not-mounted :not-a-boat :not-mountable :hand-full :full :empty :busy :refused-mounted :already-mounted})
 
 (defn read-ending
   "The table's ending e with the kind read by when the act failed: :unsupported impossible, a false precondition a
@@ -57,6 +60,7 @@
      :doc (str "The primitive " k " as a job: one act, which cannot be stopped midway. Takes the act's args (engine/README,"
                " Acting). Ends done when the act's status is a success, else with the ending its status maps to; the result"
                " fields are the ending's data.")
+     :defaults {:spend {:time ::time-s}} :settings settings
      :quote-of (fn [c] (quote-of (:primitives c) (:args c)))
      :round (fn ^:async primitive-round [c]
               (let [r (try (await (ctx/act c k (act-args (:args c))))

@@ -31,6 +31,14 @@
     (is (some? (:done? (job sym))) (str sym " has done?"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:time 60}}}))) (str sym))))
 
+(deftest every-movement-access-block-job-has-a-time-line-default
+  (let [syms (->> (keys registry/jobs)
+                  (filter #(re-find #"^jobs\.(movement|access|blocks|primitive)\." (str %)))
+                  (filter #(:round (job %))))]
+    (is (seq syms))
+    (doseq [sym syms]
+      (is (some? (get-in (job sym) [:defaults :spend :time])) (str sym " defaults :spend :time")))))
+
 (deftest targets-and-moves-to
   (is (= [:player] (:target (job 'jobs.movement.follow))))
   (is (= [:pos] (:target (job 'jobs.movement.linger-near))))

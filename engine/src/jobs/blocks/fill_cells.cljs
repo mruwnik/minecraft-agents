@@ -32,12 +32,13 @@
    :max-failures {:doc "failed steps in a row before the job ends nothing-possible" :spec (a/int-in 1 nil) :default 6}})
 
 (a/defargs settings
-  {::max-steps {:default 40 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 1 nil)}})
+  {::time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+   ::max-steps {:default 40 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 1 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
 (def target [:cells])
 
-(def defaults {:use {:blocks :build} :least :all})
+(def defaults {:use {:blocks :build} :least :all :spend {:time ::time-s}})
 
 (defn legacy-args
   "An old caller's :any-of names as the call's :use {:blocks}."

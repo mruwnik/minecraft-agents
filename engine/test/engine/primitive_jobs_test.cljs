@@ -85,6 +85,7 @@
       "blocked" :nothing-possible
       "out-of-reach" :nothing-possible
       "cannot" :nothing-possible
+      "already-mounted" :condition-failed
       "missing" :condition-failed
       "occupied" :condition-failed
       "gone" :condition-failed
