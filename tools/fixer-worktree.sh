@@ -13,7 +13,12 @@ set -euo pipefail
 # The main checkout (source of the shared links), whichever checkout this script runs from.
 repo=$(dirname "$(cd "$(dirname "$0")" && git rev-parse --path-format=absolute --git-common-dir)")
 root=${FIXER_WT_ROOT:-$HOME/.claude/jobs/worktrees}
-valid() { [[ "${1-}" =~ ^[0-9a-f]{8}$ ]] || { echo "Usage: $0 [--base <branch>] <card8> | --remove <card8> | --checkout <branch> <dir> (card8 = 8 hex chars)" >&2; exit 1; }; }
+usage="Usage: $0 [--base <branch>] <card8> | --remove <card8> | --checkout <branch> <dir> (card8 = 8 hex chars)"
+valid() { [[ "${1-}" =~ ^[0-9a-f]{8}$ ]] || { echo "$usage" >&2; exit 1; }; }
+case "${1-}" in
+  -h|--help) echo "$usage"; exit 0 ;;
+  -*) [[ "$1" =~ ^--(remove|checkout|base)$ ]] || { echo "$usage" >&2; exit 2; } ;;
+esac
 
 if [ "${1-}" = --remove ]; then
   valid "${2-}"

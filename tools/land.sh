@@ -12,7 +12,15 @@
 # Exit 4: the main checkout has uncommitted edits to a file the landing changes (git refused; nothing moved): wait or ask the lead.
 set -euo pipefail
 
-ok=0; [ "${1-}" != --rebased-ok ] || ok=1
+usage() { sed -n '2,/^set -/{/^#/s/^# \{0,1\}//p}' "$0"; }
+ok=0
+case "${1-}" in
+  "") ;;
+  --rebased-ok) ok=1 ;;
+  -h|--help) usage; exit 0 ;;
+  *) usage >&2; exit 2 ;;
+esac
+[ $# -le 1 ] || { usage >&2; exit 2; }
 branch=$(git symbolic-ref --short HEAD)
 [[ "$branch" == fix/* ]] || { echo "land: not on a fix/* branch ($branch)" >&2; exit 1; }
 git diff --quiet HEAD -- || { echo "land: tracked changes not committed" >&2; exit 1; }
