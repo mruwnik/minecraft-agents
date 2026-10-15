@@ -59,7 +59,7 @@
   - roofed, buried or shut in a closed room: done {:night :roofed} (the queue runs).
   - by day, a dug-in body with a known hostile near (jobs.lib.dawn/hostile-hold?) stays in (info night.dawn-hold) until it is gone or the dawn grace passes.
   - else, before any pit and while no site has failed tonight: a remembered roofed place (:roofed-places, nearest first)
-    within :walk-radius whose roof the body has seen, and whose route (the straight line, sampled every 2 blocks) is lit
+    within :walk-radius whose column is not seen open (a roof cell unseen after a look counts as roof), and whose route (the straight line, sampled every 2 blocks) is lit
     as far as the body has seen it (a seen cell with block light >= :lit-light; an unseen cell is not lit; the line approximates go-to's route): walk there (go-to :place). A walk
     that does not arrive is not tried again tonight, and the night digs in; arrived, the next pass is roofed.
   - else a safe place: jobs.survival.dig-in here, unless a site tonight failed within 8 blocks. A dig-in that does not
@@ -451,7 +451,7 @@
           (and (= :exposed sheltered) (ctx/way? c :shelter) (sites/retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
           (= :exposed sheltered) (await (hold/hold! c (str "exposed: " (sites/exposed-why (sites/failed-sites c)))))
           (not (ctx/way? c :shelter)) (await (flee-or-hold! c))
-          :else (if-let [place (and (sites/roof-walk-wanted? c) (await (sense/decide! c ::roofed-place #(sites/roofed-place c))))]
+          :else (if-let [place (and (sites/roof-walk-wanted? c) (await (sense/decide! c ::roofed-place #(sites/roofed-place c) {:verify-guesses true})))]
                   (await (roof-walk! c place))
                   (await (shelter! c))))))))
 

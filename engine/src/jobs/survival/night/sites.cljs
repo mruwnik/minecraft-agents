@@ -118,21 +118,22 @@
                   (range 0 (inc n)))))))
 
 (defn roofed-places-in
-  "The remembered places of :roofed-places within radius, roofed by blocks the body has seen (within :roof-height),
-  and with lit? also reached over a lit route, as [{:name :pos}] nearest first."
+  "The remembered places of :roofed-places within radius, roofed within :roof-height, and with lit? also reached over a
+  lit route, as [{:name :pos}] nearest first. A roof cell the body has not seen is guessed solid (u/block-name-or): from
+  the ground the cell over a home hides behind the roof's near edge; a column seen open is no roof."
   [c radius lit?]
   (let [p (:primitives c)
         {:keys [roofed-places roof-height lit-light]} (:args c)
         here (sh/feet p)
-        roofed? (fn [pos] (some #(sh/solid-at? p (update pos :y + %)) (range 1 (inc roof-height))))]
+        roofed? (fn [pos] (some #(solid/solid? (u/block-name-or p (update pos :y + %) "stone")) (range 1 (inc roof-height))))]
     (->> roofed-places
          (keep (fn [nm] (when-let [pos (mem/place (ctx/view c) nm)] {:name nm :pos pos})))
          (filter (fn [{:keys [pos]}] (and (<= (u/dist here pos) radius) (roofed? pos) (or (not lit?) (route-lit? p here pos lit-light)))))
          (sort-by #(u/dist here (:pos %))))))
 
 (defn roofed-place
-  "The nearest remembered place of :roofed-places within :walk-radius, roofed by blocks the body has seen and reached
-  over a lit route, as {:name :pos}, or nil."
+  "The nearest remembered place of :roofed-places within :walk-radius, roofed (see roofed-places-in) and reached over a
+  lit route, as {:name :pos}, or nil."
   [c]
   (first (roofed-places-in c (:walk-radius (:args c)) true)))
 

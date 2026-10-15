@@ -2,6 +2,9 @@
 ;; within :home-range (64), and night walks to a pit site within 16 blocks when dig-in refused for hollow ground
 ;; (shelter.relocated, up to its site limit: a one-thick floor looks solid), then holds exposed (shelter.exposed). Mobs are NoAI and helmeted (they never hurt, no sun burn).
 ;; Night: run with --allow-time --time-log <the shared time log>. The flee cases seed a :home 1000 blocks east (unloaded).
+;; Every flight and relocation must stay on the plot grid: a plot can sit at the grid's edge, past which there is no floor.
+;; east-west: the zombies stand 2 north of the body, so the flight goes south (into the grid), never north off it.
+;; hollow-floor: the hollow starts at x 10, so the first relocation (9 west, x 7) is solid ground inside the plot.
 {:defaults
  {:tags [:night :survival :retreat] :time :night
   :plot {:height 12}
@@ -13,8 +16,8 @@
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}]
-   :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:summon "zombie" [23.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "zombie" [10.5 0 14.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [23.5 0 14.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 25]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:no-event {:kind :failed} :for-s 20}]
@@ -32,7 +35,7 @@
    :after [[:body-far [16.5 0 16.5] 15]]
    :limit-s 50}
   {:name "hollow-floor-relocates-and-digs-in"
-   :blocks [[:fill [0 -8 0] [31 -1 31] "stone"] [:fill [6 -3 6] [26 -2 26] "air"]]
+   :blocks [[:fill [0 -8 0] [31 -1 31] "stone"] [:fill [10 -3 6] [26 -2 26] "air"]]
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :shelter.relocated} :within-s 60 :of-job true}

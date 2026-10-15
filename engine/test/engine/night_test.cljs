@@ -804,6 +804,20 @@
           (is (seq (st/calls p "place")))
           (is (< (:x (st/pos-of p)) 5)))))))
 
+(deftest a-roof-hidden-behind-its-near-edge-is-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))
+              at (.-sensedAt p)]
+          ;; from the ground far off, the roof cell over a home stays unknown however long the body looks; under it, it is seen
+          (aset p "sensedAt" (fn [pos] (if (and (= [10 66 0] [(.-x pos) (.-y pos) (.-z pos)]) (< (:x (st/pos-of p)) 8))
+                                         #js {:unknown true :pos pos}
+                                         (.call at p pos))))
+          (await (tu/run-until-empty eng 40))
+          (is (= [] (st/calls p "place")) "no pit dug: walked home")
+          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
+
 (deftest a-route-the-body-has-not-seen-is-not-lit
   (async done
     (tu/run-async done
