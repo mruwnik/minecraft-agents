@@ -219,8 +219,7 @@
                                  {:inventory h/sword :entities [(cow 1 10) (cow 2 11) (cow 3 12)]
                                   :unreachable ["10,64,0" "11,64,0" "12,64,0"]} 200))
               gave-up (events-of s :hunt.gave-up)]
-          (is (= 1 (count gave-up)))
-          (is (= :warn (:level (first gave-up))))
+          (is (empty? gave-up) "the ending carries it")
           (is (= :gave-up (:reason (done-event s))))
           (is (= 0 (:killed (done-event s))))
           (is (finished? s)))))))

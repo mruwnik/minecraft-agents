@@ -33,7 +33,7 @@
   - :too-many-hits: :max-hits hits without a kill.
   A kill counts only when the attack reports killed. A killed target or player is not attacked again in this run,
   even after respawning.
-  Ends (info attack.done, but for :cleared) with the data {:reason :killed [ids] :given-up {id reason}}; the ending is
+  Ends with the data {:reason :killed [ids] :given-up {id reason}}; the ending is
   - :done (:cleared): no target within :radius for :lost-s (waiting in 1 s steps), and every target seen was killed.
   - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
   - :nothing-possible :lost: some target was neither killed nor given up on.
@@ -251,12 +251,9 @@
     (await (swing! c target walked?))))
 
 (defn finish!
-  "Emit the outcome and end the call: done when cleared, else the ending of reason."
+  "End the call: done when cleared, else the ending of reason."
   [c reason]
-  (let [m (ctx/mem c)
-        result (fight-data c reason)]
-    (when-not (= :cleared reason)
-      (ctx/emit! c :attack.done :info (assoc result :text (str "attack done: " (name reason) ", killed " (count (:killed m))))))
+  (let [result (fight-data c reason)]
     (case reason
       :cleared (ctx/end c :done nil result)
       :absent (ctx/end c :condition-failed :absent result)

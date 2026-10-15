@@ -34,7 +34,7 @@
   A hostile kind with no weapon of the call's :use :tools carried gets a sword first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause), else with :fetch off the first round ends :condition-failed :unarmed.
   One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
   1. With a :target, the attack child fights it. It is booked killed, or skipped when attack gave up on it or lost it.
-     :max-skips skips in a row end the job :gave-up (warn hunt.gave-up).
+     :max-skips skips in a row end the job :gave-up.
   2. After a target, the collect-drops child picks up :drops (nil: the kind's entry in the drops table,
      else every item within :collect-radius).
   3. :killed reaching :count ends :count.
@@ -267,13 +267,9 @@
     (ending-of c reason killed (assoc out :text text))))
 
 (defn give-up!
-  "Warn and end after too many skipped animals in a row."
+  "End after too many skipped animals in a row."
   [c]
-  (let [{:keys [killed skipped]} (ctx/mem c)]
-    (ctx/emit! c :hunt.gave-up :warn (merge {:killed (or killed 0) :skipped (vec skipped)
-                                             :text (str "hunt gave up: " (count skipped) " animals skipped, killed " (or killed 0))}
-                                            (sh/shelter-hint c)))
-    (finish! c :gave-up)))
+  (finish! c :gave-up))
 
 (defn allowed-by
   "Which animal-spare rule let the hunt take the adult e: :pen-taken, :surplus or :starved."

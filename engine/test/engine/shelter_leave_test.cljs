@@ -146,7 +146,7 @@
               _ (mem/write! (:store eng) :shelter (shelter-entry :built) {:cap 10 :ttl st/day-ms})
               _ (core/submit! eng '(jobs.combat.hunt {:count 3 :keep 0}) {})
               _ (dotimes [_ 300] (swap! clock + 700) (await (core/tick! eng)))
-              g (first (st/emitted seen :hunt.gave-up))]
+              g (first (st/emitted seen :stopped))]
           (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter g))))))))
 
 ;; ------------------------------------------------------------------ dawn exit

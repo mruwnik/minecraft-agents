@@ -357,7 +357,7 @@
                                                            {:inventory h/sword :entities [(ent 3 "Fake" "player" 1) (zed 7 2)]} 20))]
             (is (finished? s) (str targets))
             (is (= :absent (:reason (done-event s))) (str targets))
-            (is (= 1 (count (events-of s :attack.done))) (str targets))
+            (is (empty? (events-of s :attack.done)) (str targets))
             (is (every? #(zero? (count (h/calls p %))) ["equip" "moveTo" "attack"]) (str targets))
             (is (pos? (count (h/calls p "look"))) (str targets " turned before ending absent"))
             (is (pos? (count (h/calls p "wait"))) (str targets))))))))
@@ -407,7 +407,6 @@
         (let [{:keys [eng p clock] :as s} (h/setup {:inventory h/sword} 20)]
           (core/submit! eng (spec {:targets ["zombie"] :absent :wait}) {})
           (is (nil? (core/tick! eng)))
-          (is (zero? (count (events-of s :attack.done))))
           (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :health 20 :pos [2 64 0]})
           (swap! clock + 700)
           (await (core/tick! eng))
