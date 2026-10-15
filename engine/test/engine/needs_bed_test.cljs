@@ -48,7 +48,8 @@
 
 (deftest a-carried-or-remembered-bed-or-the-night-needs-no-errand
   (is (false? (holds? {:entries slept-long-ago :inv [{:name "red_bed" :count 1}]})))
-  (is (false? (holds? {:entries (conj slept-long-ago [:bed {:pos {:x 5 :y 64 :z 0}} 2])})))
+  (is (false? (holds? {:entries (conj slept-long-ago [:bed {:pos {:x 5 :y 64 :z 0}} 2]) :blocks {"5,64,0" "red_bed"}})))
+  (is (true? (holds? {:entries (conj slept-long-ago [:bed {:pos {:x 5 :y 64 :z 0}} 2]) :blocks {"5,64,0" "air"}})) "a remembered bed seen gone is no bed")
   (is (false? (holds? {:entries slept-long-ago :night true}))))
 
 (deftest the-entry-runs-a-valid-obtain-and-the-trigger-takes-no-args
