@@ -825,6 +825,17 @@
           (is (= [0 64 0] (:back-at (:tunnel (done-event s)))))
           (is (re-find #"walked back to \[?0,64,0" (:text (done-event s)))))))))
 
+(deftest a-short-run-keeps-the-tunnel-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :level false :count 2 :direction "east" :mend false :tunnel-length 3}
+                                 (rock-world {"3,64,1" "iron_ore"}) 80))
+              text (:text (first (events-of s :stopped)))]
+          (is (re-find #"^mine got 1 of 2" text))
+          (is (re-find #"tunnel 3 blocks" text))
+          (is (re-find #"walked back to \[?0,64,0" text)))))))
+
 (deftest the-tunnel-never-digs-a-chest-in-its-way
   (async done
     (tu/run-async done

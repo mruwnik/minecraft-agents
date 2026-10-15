@@ -136,14 +136,15 @@
   [c]
   (let [used (:used (ctx/mem c) 0)
         left (count (raw-targets c))
-        data {:used used :text (str "fertilized with " used " bone meal")}]
+        data {:used used}
+        done (assoc data :text (str "fertilized with " used " bone meal"))]
     (cond
-      (and (pos? used) (common/enough? c used (min (:max (:args c)) (+ used left)))) (ctx/end c :done nil data)
+      (and (pos? used) (common/enough? c used (min (:max (:args c)) (+ used left)))) (ctx/end c :done nil done)
       (pos? used) (if (has-meal? (:primitives c))
                     (ctx/end c :condition-failed :refused data)
                     (ctx/end c :nothing-possible :need data))
       (pos? left) (ctx/end c :condition-failed :refused data)
-      :else (ctx/end c :done nil data))))
+      :else (ctx/end c :done nil done))))
 
 (defn ^:async fertilize-one!
   "Finish when nothing is left to fertilize, the budget is spent or the bone meal ran out; else walk to the nearest

@@ -138,6 +138,7 @@
           (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :before #js {:name "composter"} :after #js {:name "composter"} :consumed 0}))
           (let [result (await (child-outcome eng job {:at at} 20))]
             (is (= :gave-up (:reason result)))
+            (is (nil? (:text result)) "a failed ending carries no success text")
             (is (= 3 (count (calls p "useOn"))))
             (is (= 1 (count (kinds seen :compost.gave-up))))))))))
 

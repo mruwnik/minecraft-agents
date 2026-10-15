@@ -176,6 +176,7 @@
               {:keys [eng]} (start tidy-spec {"field" field-plan} [] (assoc registry/jobs 'jobs.blocks.dig declining))
               result (await (outcome eng {:plan "field" :give-up 1} 200))]
           (is (seq (:refused result)))
+          (is (nil? (:text result)) "a refused tidy carries no success text")
           (is (= #{:not-allowed} (set (map :reason (:refused result)))) (pr-str (:refused result))))))))
 
 (deftest what-is-dug-is-picked-up

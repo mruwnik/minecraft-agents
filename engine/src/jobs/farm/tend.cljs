@@ -410,10 +410,10 @@
         summaries (step-summaries m)
         fields (if multi? (map :field (vals (:parts out))) [(:field out)])
         sum #(reduce + (map (fn [f] (get f % 0)) fields))
-        out (cond-> out (seq results) (assoc :text (str "farm tend done: " (sum :crops) " crops, " (sum :bare) " bare, " (sum :untilled) " untilled")))]
+        done (cond-> out (seq results) (assoc :text (str "farm tend done: " (sum :crops) " crops, " (sum :bare) " bare, " (sum :untilled) " untilled")))]
     (cond
       (:limit m) (ctx/end c :limit-reached (:limit m) out)
-      (some #(apply worked? %) summaries) (ctx/end c :done nil out)
+      (some #(apply worked? %) summaries) (ctx/end c :done nil done)
       (some (fn [[_ s]] (not (:skipped s))) summaries) (ctx/end c :nothing-possible :gave-up out)
       :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
 

@@ -297,7 +297,7 @@
           (is (seq (calls p "look")))
           (let [stopped (events-of seen :stopped)]
             (is (= [:no-crop-seen] (mapv :reason stopped)) "nothing to cut: stopped, not completed")
-            (is (string? (:text (first stopped))))
+            (is (not (re-find #"done" (:text (first stopped)))) "a failed ending does not read as done")
             (is (empty? (events-of seen :completed)))))))))
 
 (def one-cell

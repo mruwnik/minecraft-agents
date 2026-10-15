@@ -92,6 +92,14 @@
                  (let [r (await (tu/child-outcome eng job {} 10))] (assoc (dissoc r :ending :text) :kind (get-in r [:ending :kind])))))
           (is (= 1 (count (calls p "useOn")))))))))
 
+(deftest fertilize-refused-text-is-not-a-success
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory meal :blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}})]
+          (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :consumed 0}))
+          (is (nil? (:text (await (tu/child-outcome eng job {} 10))))))))))
+
 (deftest fertilize-at-touches-only-that-crop
   (async done
     (tu/run-async done

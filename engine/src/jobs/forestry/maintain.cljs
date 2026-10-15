@@ -417,11 +417,11 @@
   (let [m (ctx/mem c)
         bare (vec (keep (fn [[pos [kind _]]] (when (= :bare kind) pos)) classes))
         left (vec (sort-by (juxt :x :y :z) (left-cells c)))
-        result {:felled (:felled m 0) :planted (:planted m 0) :left left :bare bare
-                :text (str "forest done: felled " (:felled m 0) ", planted " (:planted m 0)
-                           ", left " (count left) ", bare " (count bare))}]
+        result {:felled (:felled m 0) :planted (:planted m 0) :left left :bare bare}
+        done-text (str "forest done: felled " (:felled m 0) ", planted " (:planted m 0)
+                       ", left " (count left) ", bare " (count bare))]
     (cond
-      (pos? (+ (:felled result) (:planted result))) (ctx/end c :done nil result)
+      (pos? (+ (:felled result) (:planted result))) (ctx/end c :done nil (assoc result :text done-text))
       (seq left) (ctx/end c :nothing-possible :left result)
       :else (ctx/end c :condition-failed (or (blocked-reason c classes) {:reason :nothing-to-do}) result))))
 

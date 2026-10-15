@@ -114,15 +114,13 @@
   (let [m (ctx/mem c)
         taken (:taken m 0)
         fed (:fed m {})
-        data (merge {:fed fed :bone-meal taken
-                     :text (if (= :nothing-to-feed (:reason extra))
-                             "nothing left to feed the composter"
-                             (str "composted " (apply + (vals fed)) " items, took " taken " bone meal"))}
-                    extra)
+        data (merge {:fed fed :bone-meal taken} extra)
+        done (assoc data :text (str "composted " (apply + (vals fed)) " items, took " taken " bone meal"))
         reason (:reason extra)]
     (cond
-      (nil? reason) (ctx/end c :done nil data)
-      (and (pos? taken) (common/enough? c taken (:times (:args c)))) (ctx/end c :done nil data)
+      (nil? reason) (ctx/end c :done nil done)
+      (and (pos? taken) (common/enough? c taken (:times (:args c)))) (ctx/end c :done nil done)
+      (= :nothing-to-feed reason) (ctx/end c :condition-failed reason (assoc data :text "nothing left to feed the composter"))
       :else (ctx/end c (if (= :gave-up reason) :nothing-possible :condition-failed) reason data))))
 
 (defn strike!

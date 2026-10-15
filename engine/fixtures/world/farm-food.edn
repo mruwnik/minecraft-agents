@@ -26,7 +26,7 @@
    :body {:inventory [["carrot" 12]]}
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [10 0 16]} :chest #xyz [9 0 16] :composter #xyz [11 0 16]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind #{:completed :stopped}} :for-s 20}]
+            {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 20}]
    :after [[:block [10 0 16] "air"] [:item "carrot" 12]]}
   {:name "deposit-without-items-keeps-the-food-reserve"
    :blocks [[:set [9 0 16] "chest"]]

@@ -267,10 +267,10 @@
   (let [m (ctx/mem c)
         plan (:plan (:args c))
         refused (vec (:refused m))
-        result {:dug (:dug m 0) :collected (:collected m 0) :kept (:kept found) :wrong (:wrong found) :refused refused
-                :text (str "tidy of " plan " done: "
-                           (if (and (zero? (:dug m 0)) (empty? refused)) "nothing to dig" (str "dug " (:dug m 0)))
-                           (when (seq refused) (str ", refused " (count refused))))}]
+        result {:dug (:dug m 0) :collected (:collected m 0) :kept (:kept found) :wrong (:wrong found) :refused refused}
+        done-text (str "tidy of " plan " done: "
+                       (if (and (zero? (:dug m 0)) (empty? refused)) "nothing to dig" (str "dug " (:dug m 0)))
+                       (when (seq refused) (str ", refused " (count refused))))]
     (when (seq refused)
       (ctx/emit! c :tidy.refused :warn {:plan plan :refused refused
                                         :text (str "tidy of " plan " refused " (count refused) " strays: "
@@ -281,7 +281,7 @@
                                                  (str/join ", " (map #(str (pr-str (:pos %)) " " (:found %)) (:wrong found))))}))
     (if (and (zero? (:dug result)) (seq refused))
       (ctx/end c :condition-failed :refused result)
-      (ctx/end c :done nil result))))
+      (ctx/end c :done nil (assoc result :text done-text)))))
 
 (defn settle-digging!
   "A dig the last run was in when it was cut: counted as dug once its stray is gone from the world."

@@ -14,7 +14,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:wait-s 10]
          [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind :mine.hungry :level :warn} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind #{:completed :stopped}} :for-s 40 :until {:source :job :kind :mine.hungry}}]
+            {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 40 :until {:source :job :kind :mine.hungry}}]
    :after [[:item "raw_iron" 0]]}
   {:name "bread-carried-the-mine-goes-on"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8] ["bread" 4]]}

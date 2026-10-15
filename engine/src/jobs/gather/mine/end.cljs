@@ -65,6 +65,15 @@
       (facts reason) (ctx/end c :condition-failed cause data)
       :else (ctx/end c :nothing-possible cause data))))
 
+(defn tunnel-tail
+  "How the tunnel ended, for the end texts: \", ended at 1,60,2, walked back to 0,64,0\" (empty without a tunnel)."
+  [tunnel]
+  (when-let [{:keys [end back-at walked-back?]} (when (pos? (:steps tunnel 0)) tunnel)]
+    (str (when end (str ", ended at " (str/join "," end)))
+         (if walked-back?
+           (str ", walked back to " (str/join "," back-at))
+           ", did not get back to its origin"))))
+
 (defn finish!
   "End the job (end-run) with the outcome."
   [c]
@@ -81,22 +90,14 @@
               (seq (ore-pick/picked c)) (assoc :ores (ore-pick/picked c))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left))
               (seq (:lost m)) (assoc :lost (:lost m)))]
-    (end-run c (merge (cond
-                        (zero? got) {:text (str "mine got nothing: " (name reason)
-                                                (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
-                                                wet-text
-                                                (dug-text m reason))}
-                        (= :not-home reason) {:text (str "mine got " got " but did not get back to its start")}
-                        (< got (:count (:args c))) {:text (str "mine got " got " of " (:count (:args c)) ": " (name reason) wet-text (dug-text m reason))}
-                        :else {:text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0)
-                                          (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
-                                          wet-text
-                                          (dug-text m reason)
-                                          (when-let [{:keys [end back-at walked-back?]} (when (pos? (:steps tunnel 0)) tunnel)]
-                                            (str (when end (str ", ended at " (str/join "," end)))
-                                                 (if walked-back?
-                                                   (str ", walked back to " (str/join "," back-at))
-                                                   ", did not get back to its origin"))))})
+    (end-run c (merge (let [soil (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
+                            tail (str wet-text (dug-text m reason) (tunnel-tail tunnel))
+                            mended-text (when (pos? (or mended 0)) (str "; mended " mended))]
+                        (cond
+                          (zero? got) {:text (str "mine got nothing: " (name reason) soil tail mended-text)}
+                          (= :not-home reason) {:text (str "mine got " got " but did not get back to its start" mended-text (dug-text m reason) (tunnel-tail tunnel))}
+                          (< got (:count (:args c))) {:text (str "mine got " got " of " (:count (:args c)) ": " (name reason) tail mended-text)}
+                          :else {:text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0) soil tail)}))
                       {:got got :reason reason :mended (or mended 0)}
                       (:end-cause m)
                       why))))

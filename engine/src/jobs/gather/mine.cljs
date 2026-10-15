@@ -168,7 +168,7 @@
   Data {:got n :reason r} (text: mine got n of m: reason) plus
   :dig-reason, :resumes, :tunnel and :left when set, and
   :mended, the cells filled; its text (and the result's text when :got is 0) names the stair's steps and the tunnel's length,
-  heading and height (\"; stair down 48 steps; tunnel 32 blocks east at y 16\"); :descent {:steps :stop} is in the result after any descent. With reason :wet (also when a tunnel dug nothing and seen blocks were skipped for water), :wet-skipped counts the seen blocks left for water beside them. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
+  heading and height (\"; stair down 48 steps; tunnel 32 blocks east at y 16\"); :descent {:steps :stop} is in the result after any descent. With reason :wet (also when a tunnel dug nothing and seen blocks were skipped for water), :wet-skipped counts the seen blocks left for water beside them. Every ending's text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
   and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
   {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.
   :stay-level with no :heading or :direction goes on after a sealed breach or a fluid stop: it turns to a heading not yet tried from the
