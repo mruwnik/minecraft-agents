@@ -368,7 +368,7 @@
                                                (skip! c pos) :again)
       (some? pos) (let [walked (await (walk-to-dig! c pos))]
                     (cond
-                      (and (= :blocked walked) (result/unreachable-walk? (ctx/child-result c :walk))) (do (skip-unreachable! c pos) :again)
+                      (and (= :blocked walked) (result/unreachable-walk? (near/last-walk c))) (do (skip-unreachable! c pos) :again)
                       (= :blocked walked) (do (skip-failed! c pos) :again)
                       (= :partial walked) (stalled! c pos)
                       (torches/branch-torch-due? c) (await (torches/torch-step! c true))

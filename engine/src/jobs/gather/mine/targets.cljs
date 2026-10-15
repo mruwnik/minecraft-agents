@@ -6,6 +6,7 @@
             [jobs.lib.blocks :as blocks]
             [clojure.string :as str]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.near :as near]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -207,7 +208,7 @@
 (defn skip-unreachable!
   "Skip a target the walk cannot reach (result/unreachable-walk?): no failure counted, so a vein of such cells never ends the run."
   [c pos]
-  (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (:why (ctx/child-result c :walk))
+  (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (:why (near/last-walk c))
                                         :text (str "mine skips " (str/join "," (access/cell pos)) ": no way to stand beside it")})
   (skip! c pos))
 

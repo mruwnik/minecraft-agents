@@ -8,28 +8,30 @@
             [jobs.lib.near :as near]))
 
 (defn probe
-  "A job that calls go-near! toward pos each round and keeps its outcome in out."
-  [out pos range & [opts]]
+  "A job that calls go-near! toward pos each round and keeps its outcome in out and its last-walk in walk."
+  [out walk pos range & [opts]]
   {:check (constantly true)
    :round (fn ^:async probe-round [c]
             (let [w (await (near/go-near! c pos range (merge {:zone-tolls true} opts)))]
               (if (= :partial w)
                 :continue
-                (do (reset! out w) :done))))})
+                (do (reset! out w) (reset! walk (near/last-walk c)) :done))))})
 
 (defn ^:async run-probe! [world pos range & [opts]]
   (let [{:keys [eng] :as s} (e/setup world)
         out (atom :not-done)
-        eng (assoc eng :jobs (assoc (:jobs eng) 'near-probe (probe out pos range opts)))]
+        walk (atom :unset)
+        eng (assoc eng :jobs (assoc (:jobs eng) 'near-probe (probe out walk pos range opts)))]
     (core/submit! eng '(near-probe) {})
     (await (e/tick-out! eng 1000))
-    (assoc s :out out)))
+    (assoc s :out out :walk walk)))
 
 (deftest a-body-in-a-pit-reaches-its-target-by-escalating
   (async done
     ((fn ^:async t []
-       (let [{:keys [out p]} (await (run-probe! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]}) {:x 10 :y 64 :z 0} 2))]
+       (let [{:keys [out walk p]} (await (run-probe! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]}) {:x 10 :y 64 :z 0} 2))]
          (is (= :there @out))
+         (is (= :done (:status @walk)))
          (is (<= (js/Math.abs (- 10 (first (e/feet p)))) 2))
          (done))))))
 
@@ -44,8 +46,10 @@
 (deftest a-target-no-way-leads-to-is-blocked
   (async done
     ((fn ^:async t []
-       (let [{:keys [out]} (await (run-probe! (merge in-pit {:blocks stone-pit}) {:x 10 :y 64 :z 0} 2 {:escalate false}))]
+       (let [{:keys [out walk]} (await (run-probe! (merge in-pit {:blocks stone-pit}) {:x 10 :y 64 :z 0} 2 {:escalate false}))]
          (is (= :blocked @out) "escalation off: nothing leads to the target")
+         (is (= :stopped (:status @walk)) "the walk's verdict is kept for the caller")
+         (is (some? (:reason @walk)))
          (done))))))
 
 (deftest a-target-no-way-leads-to-is-reached-by-hand-without-a-pickaxe
