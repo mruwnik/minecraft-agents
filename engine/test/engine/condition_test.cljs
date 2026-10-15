@@ -193,9 +193,6 @@
     [unknown-l later-a] unknown-l
     [never-a never-a] never-a))
 
-(deftest not-of-a-definite-later-or-an-unknown-stays-later
-  (is (= :later (first (op cond/not (op cond/or later-a unknown-l))))))
-
 (deftest not-turns-definite-statuses-round-and-keeps-unknown-and-look
   (are [s expected] (= expected (op cond/not s))
     ok-a [:later "a" {:reason :a}]

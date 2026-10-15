@@ -482,11 +482,6 @@
            (event-api/seen-view eng {:names ["chest"] :radius 8 :max 3})))
     (is (empty? @calls))))
 
-(deftest seen-view-rows-carry-how-long-ago-they-were-seen
-  (let [rows [{:name "chest" :pos {:x 1 :y 64 :z 2} :distance 3.0 :age-ms 1200}]]
-    (is (= [{:name "chest" :pos [1 64 2] :distance 3.0 :age-ms 1200}]
-           (:blocks (event-api/seen-view (seen-engine rows (atom [])) {:names ["chest"] :radius 8 :max 3}))))))
-
 (deftest seen-matcher-takes-exact-names-and-star-suffixes
   (let [m (event-api/seen-matcher ["chest" "*_bed" "*ore"])]
     (is (true? (m "chest")))

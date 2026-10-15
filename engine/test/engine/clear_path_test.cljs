@@ -128,7 +128,6 @@
         q ((:quote-of def) {:primitives (tu/fake wall) :args {:heading :east :max-thick 3}})]
     (is (= [:heading] (:target def)))
     (is (some? (:can-start? def)))
-    (is (nil? (:check def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))))
 
 (deftest a-door-ends-with-a-kind-and-a-cause

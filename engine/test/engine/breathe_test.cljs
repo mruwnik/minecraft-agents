@@ -1513,7 +1513,6 @@
 
 (deftest breathe-exports-the-contract
   (let [job (get registry/jobs breathe)]
-    (is (nil? (:check job)))
     (is (vector? (:target job)))
     (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (tu/fake {}) :args {} :quote-call {}}))))))
 

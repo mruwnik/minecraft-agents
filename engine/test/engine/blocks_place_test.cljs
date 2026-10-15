@@ -69,11 +69,11 @@
             (is (= :failed (:reason result)))
             (is (re-find why (str (:why result))) (.-status r))))))))
 
-(deftest a-use-list-places-the-first-carried-and-any-of-is-its-old-spelling
+(deftest a-use-list-places-the-first-carried
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [args [{:use {:blocks ["cobblestone" "dirt"]}} {:any-of ["cobblestone" "dirt"]}]]
+        (doseq [args [{:use {:blocks ["cobblestone" "dirt"]}}]]
           (let [{:keys [eng p]} (bd/setup {:self body :inventory [{:name "dirt" :count 1}]})
                 result (await (tu/child-outcome eng job (assoc args :pos at) 5))]
             (is (= {:placed true :item "dirt"} (select-keys result [:placed :item])) (pr-str args))

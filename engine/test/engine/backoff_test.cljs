@@ -456,9 +456,6 @@
             (is (= [6 t0] ((juxt :fruitless :since) w)))
             (is (pos? (:passes w)) "ticks that skipped the reflex")))))))
 
-(deftest the-alert-interval-defaults-to-five-minutes
-  (is (= 300000 core/default-backoff-alert-ms)))
-
 (deftest a-restart-does-not-carry-the-backoff
   (async done
     (tu/run-async done

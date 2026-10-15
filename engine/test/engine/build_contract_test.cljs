@@ -29,7 +29,6 @@
             :let [job (get registry/jobs sym)]]
       (is (some? (:can-run? job)) (str sym " has can-run?"))
       (is (some? (:can-start? job)) (str sym " has can-start?"))
-      (is (nil? (:check job)) (str sym " has no old check"))
       (is (vector? (:target job)) (str sym " has a target"))
       (when (not= sym from-plan) ; its quote reads the judged plan: the ending tests run it
         (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args (get args sym)}))) (str sym))))))

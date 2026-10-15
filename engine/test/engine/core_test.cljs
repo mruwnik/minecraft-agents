@@ -243,10 +243,6 @@
           (core/tick! eng)
           (is (= [{:a 1} {:n 1}] @seen-ctx)))))))
 
-(deftest a-job-with-an-old-check-is-refused
-  (let [{:keys [eng]} (setup)]
-    (is (thrown? js/Error (core/submit! eng '(old-check) {})))))
-
 (deftest a-round-returning-anything-else-fails-the-job
   (async done
     (tu/run-async done

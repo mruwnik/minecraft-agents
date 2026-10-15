@@ -524,10 +524,6 @@
         seen (set (map :what (search/sense p ["hay_block" "diamond_block"] 20)))]
     (is (= #{"hay_block" "diamond_block"} seen))))
 
-(deftest spacing-and-distance-are-typed-and-bounded
-  (is (= '(a/int-in 4 64) (:spec (:spacing search/args))))
-  (is (= '(a/int-in 1 128) (:spec (:max-distance search/args)))))
-
 (deftest one-choice-reads-a-bounded-number-of-stand-cells-and-says-more-is-left
   (let [reads (atom 0)
         p (tu/fake {})

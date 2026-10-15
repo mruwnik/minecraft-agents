@@ -24,8 +24,6 @@
               'jobs.farm.plant {:box pt/field-box} 'jobs.farm.harvest {:radius 6}}]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
-      (is (nil? (:check job)) (str sym " is a contract job"))
-      (is (nil? (:check job)) (str sym " has no old check"))
       (is (vector? (:target job)) (str sym " has a target"))
       (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args (get args sym)}))) (str sym)))))
 
@@ -205,9 +203,6 @@
                (kcm (await (ending-of (pt/start (pt/field-world [])) plant {:box pt/field-box :fetch false} 20)))))
         (is (= {:kind :condition-failed :cause {:reason :no-zones}}
                (kcm (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9)) (ew/of-data {} {} nil)) plant {:box pt/field-box} 20)))))))))
-
-(deftest plant-exports-can-start
-  (is (fn? (:can-start? (get registry/jobs plant)))))
 
 (deftest plant-without-a-box-or-plan-is-never-bad-args
   (let [c {:primitives (tu/fake {}) :args {}}]

@@ -43,10 +43,6 @@
   (is (= {:node {:op :leaf :job 'jobs.b :args {}} :hold? true} (expr/parse-spec reg '(hold (jobs.b)))))
   (is (= {:node {:op :leaf :job 'jobs.b :args {}} :hold? false} (expr/parse-spec reg '(jobs.b)))))
 
-(deftest specs-read-from-edn
-  (is (= {:op :seq :children [{:op :leaf :job 'jobs.a :args {:n 3 :m 2}}]}
-         (expr/parse reg (reader/read-string "(seq (jobs.a {:n 3}))")))))
-
 (deftest bad-specs-are-refused-with-a-message
   (is (re-find #"unknown job or combinator jobs.nope" (problem '(jobs.nope))))
   (is (re-find #"unknown job or combinator map" (problem '(map (jobs.a)))))

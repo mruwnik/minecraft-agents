@@ -18,7 +18,6 @@
   (let [p (tu/fake {})]
     (doseq [[sym args] quote-args
             :let [job (get registry/jobs sym)]]
-      (is (nil? (:check job)) (str sym " is a contract job"))
       (is (vector? (:target job)) (str sym " has a target"))
       (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args args}))) (str sym)))))
 

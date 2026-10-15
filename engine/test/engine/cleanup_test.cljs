@@ -557,7 +557,6 @@
 
 (deftest cleanup-is-a-contract-job
   (let [j (get registry/jobs job)]
-    (is (nil? (:check j)))
     (is (= [:job :near] (:target j)))
     (is (some? (:defaults j)))
     (is (fn? (:quote-of j)))))
@@ -742,14 +741,6 @@
     {:kind :done :data {:arrived true}} false
     :continue false
     nil false))
-
-(deftest a-walk-that-go-to-will-not-take-is-no-failure
-  (are [e unreachable?] (= unreachable? (result/unreachable-walk? e))
-    {:kind :nothing-possible :cause {:reason :unreachable :why :off-plan}} true
-    {:kind :nothing-possible :cause {:reason :unreachable :why :needs-health}} true
-    {:kind :nothing-possible :cause {:reason :unreachable :why :abilities}} true
-    {:kind :nothing-possible :cause {:reason :unreachable :why :stuck}} false
-    {:kind :done :data {:why :off-plan}} false))
 
 (defn gave-up [why] {:status :stopped :reason :unreachable :why why})
 

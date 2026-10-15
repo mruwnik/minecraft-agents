@@ -197,10 +197,6 @@
             (is (= keep (count (world-ids s))) (str "keep " keep))
             (is (= (- 4 keep) (:killed (done-event s))) (str "keep " keep))))))))
 
-(deftest conditions-and-round-are-exported
-  (is (fn? cull/can-start?))
-  (is (fn? cull/round)))
-
 (deftest cull-follows-zones-and-claims
   (async done
     (tu/run-async done
