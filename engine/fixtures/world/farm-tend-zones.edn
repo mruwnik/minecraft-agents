@@ -2,7 +2,7 @@
 ;; another owner's plan footprint (a plan with no :by this body) keeps no run alive; a hoe that breaks mid-run ends jobs.farm.till
 ;; with the cells skipped :no-hoe instead of an endless :continue. Floor y -1 is the ground layer; wheat at y 0, water beside.
 ;; Should-succeed: control with an own ripe cell is harvested (cut 1) while the foreign one stays ripe; a hoe with 1 durability left
-;; tills one cell, breaks, and the rest are skipped :no-hoe (till.done).
+;; tills one cell, breaks, and the rest are skipped :no-hoe (the till ends).
 ;; Should-fail: only the foreign ripe cell: tend waits and cuts nothing (no farm-tend.done).
 ;; The till case stands at x 9.5 so cell x 10 is strictly nearest (at 10.5 cells 10 and 11 tie and the one tilled before the hoe breaks is arbitrary).
 {:defaults
@@ -31,5 +31,5 @@
    :body {:at [9.5 0 14.5] :inventory [["wooden_hoe[damage=58]" 1]]}
    :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [13 -1 16] :fetch false})]]
    :expect [{:event {:source :job :kind :till.skipped :data {:reason :no-hoe}} :within-s 70 :of-job true}
-            {:event {:source :job :kind :till.done} :within-s 80 :of-job true}]
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 80 :of-job true}]
    :after [[:item "wooden_hoe" 0] [:block [10 -1 16] "farmland"]]}]}

@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.job-common :as common]
@@ -267,7 +268,9 @@
   "Counts only (the round ends the call with its data): the cells cut this call and the ripe crops left."
   [c]
   (let [c (with-field c (planned c))]
-    {:done? false :units :cells :done (:cut (ctx/mem c) 0) :left (count (ripe-of c (:skipped (ctx/mem c))))}))
+    (let [m (ctx/mem c)]
+      (contract/later :harvesting (str "harvest: cut " (:cut m 0)) :units :cells :done (:cut m 0)
+                      :left (count (ripe-of c (:skipped m))) :result {:cut (:cut m 0) :replanted (:replanted m 0)}))))
 
 (defn quote-of [c]
   (let [c (with-field c (planned c))

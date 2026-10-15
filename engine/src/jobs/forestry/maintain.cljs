@@ -463,7 +463,8 @@
   "Counts only (a standing job): the trees felled and planted this call."
   [c]
   (let [m (ctx/mem c)]
-    {:done? false :units :trees :done (+ (:felled m 0) (:planted m 0))}))
+    (contract/later :maintaining (str "forest: felled " (:felled m 0) ", planted " (:planted m 0)) :units :trees
+                    :done (+ (:felled m 0) (:planted m 0)) :result {:felled (:felled m 0) :planted (:planted m 0)})))
 
 (defn quote-of [_c]
   {:uses {:job-time [1 60 (settings/get settings ::time-s)]}})

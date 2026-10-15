@@ -33,10 +33,10 @@
 (defn kinds [seen kind] (filterv #(= kind (:kind %)) @seen))
 
 (defn ^:async child-outcome
-  "tu/child-outcome without the ending the adapter adds, and without :status when it is :done."
+  "tu/child-outcome without the ending the adapter adds, and without :status and :text when it is :done."
   [eng job args n]
   (let [r (await (tu/child-outcome eng job args n))]
-    (if (map? r) (cond-> (dissoc r :ending) (= :done (:status r)) (dissoc :status)) r)))
+    (if (map? r) (cond-> (dissoc r :ending) (= :done (:status r)) (dissoc :status :text)) r)))
 
 (def job 'jobs.farm.till)
 (def hoe [{:name "stone_hoe" :count 1}])
@@ -75,7 +75,7 @@
           (is (= {:tilled 4 :skipped {}} result))
           (is (= ["farmland"] (distinct (map #(block-at p %) (till/cells box)))))
           (is (= 4 (count (calls p "useOn"))))
-          (is (= 1 (count (kinds seen :till.done)))))))))
+          (is (empty? (kinds seen :till.done))))))))
 
 (deftest till-is-one-call-the-whole-box
   (async done
@@ -102,7 +102,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks (zipmap (keys four) (repeat "farmland"))})
               result (await (child-outcome eng job box 6))]
-          (is (= {:already? true} result) "already farmland: done at once (done?), no round data")
+          (is (= {:already? true :tilled 0 :skipped {}} result) "already farmland: done at once (done?), its result the data")
           (is (empty? (calls p "useOn"))))))))
 
 (deftest till-skips-what-is-not-tillable
@@ -209,7 +209,7 @@
             (await running))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (run-until-empty eng 12))
-          (is (= {:tilled 4 :skipped {}} (dissoc @out :status)))
+          (is (= {:tilled 4 :skipped {}} (dissoc @out :status :text)))
           (is (= ["farmland"] (distinct (map #(block-at p %) (till/cells box))))))))))
 
 

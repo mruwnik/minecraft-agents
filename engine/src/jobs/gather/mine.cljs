@@ -256,11 +256,13 @@
 (def can-run? checks/low-health)
 
 (defn done?
-  "Progress in items: got against :count. Never :done? itself: the round ends the run after the mend and the walk home."
+  "Progress in items: got against :count. Always :later: the round ends the run after the mend and the walk home, which
+  memory does not show."
   [c]
   (let [n (:count (:args c))
         got (if-let [goal (:goal (ctx/mem c))] (max 0 (- (carried c) (- goal n))) 0)]
-    {:done? false :units :items :done got :left (max 0 (- n got))}))
+    (contract/later :mining (str "mine: " got " of " n ", the round ends the run") :units :items :done got :left (max 0 (- n got))
+                    :result {:got got})))
 
 (defn quote-of
   "Finding out: about ::item-s per item, open-ended (a tunnel may find none); yields up to :count of the item."

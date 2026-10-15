@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as b]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.found :as found]
             [jobs.lib.pace :as pace]
@@ -26,7 +27,8 @@
   the drops picked up (torches come back). The rows go up from the bottom, the centre bottom cell last, so the body
   keeps its view. A container in the section is never dug (:blocked). Zones, claims and plans are the place rules'.
 
-  Ends :done {:placed n} (0 = already shut; strip.seal.done, info). Else strip.seal.stopped (warn) with data {:placed n
+  done? is :ok when the section is shut, its drops picked up and no child under way: ends :done {:placed n} (0 =
+  already shut). Else strip.seal.stopped (warn) with data {:placed n
   :cell [x y z] :short n :why}: impossible :bad-args; condition-failed :refused (zones, claims, plans), :blocked (a container in
   the section); nothing-possible :no-blocks (:short names the cells still open), :unreachable, :wrong-side. Spends
   :time (default ::time-s).")
@@ -97,9 +99,9 @@
         text (str "seal " (name (or reason :sealed)) ": placed " (:placed result)
                   (when (:short result) (str ", " (:short result) " cells short"))
                   (when (:cell result) (str " at " (pr-str (:cell result)))))]
-    (ctx/emit! c (if (= :done kind) :strip.seal.done :strip.seal.stopped) (if (= :done kind) :info :warn)
-               (assoc result :kind kind :cause (or reason :sealed) :text text))
-    (ctx/end c kind reason result)))
+    (when-not (= :done kind)
+      (ctx/emit! c :strip.seal.stopped :warn (assoc result :kind kind :cause reason :text text)))
+    (ctx/end c kind reason (assoc result :text text))))
 
 (defn stop! [c reason detail] (finish! c (kinds reason) reason detail))
 
@@ -174,14 +176,19 @@
       :else (await (place! c cell (count todo))))))
 
 (defn done?
+  "Every cell of the section is solid, the drops are picked up and no child is under way; the cells shut and open."
   [c]
-  (if (bad-args c)
-    {:done? false :units :cells}
-    (let [n (count (open-cells c))]
-      {:done? (zero? n) :units :cells :done (- (* (:width (:args c)) (:height (:args c))) n) :left n})))
+  (let [{:keys [width height]} (:args c)
+        n (if (= :ok (first (bad-args c))) (count (open-cells c)) (* width height))
+        placed (:placed (ctx/mem c) 0)
+        data [:units :cells :done (- (* width height) n) :left n :result {:placed placed}]]
+    (cond
+      (pos? n) (apply contract/later :open (str "seal: " n " cells open") data)
+      (or (:collect (ctx/mem c)) (checks/child-under-way? c)) (apply contract/later :wrapping-up "seal: the section is shut, wrapping up" data)
+      :else (apply contract/ok :sealed (str "seal sealed: placed " placed) data))))
 
 (defn quote-of [c]
-  (let [t (* (settings/get settings ::s-per-cell) (if (bad-args c) 0 (count (open-cells c))))]
+  (let [t (* (settings/get settings ::s-per-cell) (if (= :ok (first (bad-args c))) (count (open-cells c)) 0))]
     {:uses {:job-time [0 t (max t (settings/get settings ::time-s))]}}))
 
 (defn ^:async round [c]

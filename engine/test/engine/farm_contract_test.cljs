@@ -57,7 +57,7 @@
       (fn ^:async t []
         (let [e (await (ending-of (tt/setup {:inventory tt/hoe :blocks (assoc tt/four "1,64,1" "cobblestone")}) till tt/box 30))]
           (is (= :done (:kind e)))
-          (is (= {:tilled 3 :skipped {{:x 1 :y 63 :z 1} :covered}} (:data e)) "a partial run carries its counts"))
+          (is (= {:tilled 3 :skipped {{:x 1 :y 63 :z 1} :covered}} (dissoc (:data e) :text)) "a partial run carries its counts"))
         (doseq [[world args kind reason] [[{:inventory tt/hoe :blocks {"1,63,1" "stone"}} {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}
                                            :condition-failed :not-tillable]
                                           [{:inventory tt/hoe :blocks {"5,63,0" "dirt"} :unreachable ["5,63,0"]}

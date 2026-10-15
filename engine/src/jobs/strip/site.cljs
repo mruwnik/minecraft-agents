@@ -463,8 +463,12 @@
 (defn done?
   "Never done before the round says so: the last phase restores the home and writes the result."
   [c]
-  (let [states (map :state (vals (:segments (site c))))]
-    {:done? false :units :segments :done (count (filter settled states)) :left (count (remove settled states))}))
+  (let [s (site c)
+        states (map :state (vals (:segments s)))
+        done (count (filter settled states))]
+    (contract/later :stripping (str "strip site: " done " segments settled, the round ends the call") :units :segments
+                    :done done :left (count (remove settled states))
+                    :result {:taken (:taken s {}) :hauled (:hauled s {}) :smelted (:smelted s {})})))
 
 (defn quote-of [c]
   {:uses {:job-time [1 (* 120 (max 1 (count (:segments (site c))))) (settings/get settings ::time-s)]}})

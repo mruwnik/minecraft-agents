@@ -339,11 +339,14 @@
   [m]
   (for [r (cons (:report m) (map :steps (vals (:results m)))) entry r] entry))
 
+(declare out-of)
+
 (defn done?
   "Counts only (the round ends the call with its data): the steps that changed something, the steps not yet decided."
   [c]
   (let [m (ctx/mem c)]
-    {:done? false :units :steps :done (count (filter #(apply worked? %) (step-summaries m))) :left (count (:todo m))}))
+    (contract/later :tending "farm tend: the round ends the call with its report" :units :steps
+                    :done (count (filter #(apply worked? %) (step-summaries m))) :left (count (:todo m)) :result (or (out-of c) {}))))
 
 (defn quote-of
   "A guess: a second and a half per cell of the field."
@@ -389,15 +392,21 @@
                             (assoc-in [:results (key-of part)] out)))
     :again))
 
+(defn out-of
+  "The ending's data from the parts' results so far: the one part's, or {:parts {part result}}."
+  [c]
+  (let [results (:results (ctx/mem c))]
+    (if (seq (:parts (:args c)))
+      {:parts (into (array-map) (map (fn [part] [part (get results (key-of part))])) (filter #(contains? results (key-of %)) (:parts (:args c))))}
+      (some-> results first val))))
+
 (defn finish-all!
   "Every part has had its pass: the event and the ending."
   [c]
   (let [m (ctx/mem c)
         results (:results m)
         multi? (seq (:parts (:args c)))
-        out (if multi?
-              {:parts (into (array-map) (map (fn [part] [part (get results (key-of part))])) (filter #(contains? results (key-of %)) (:parts (:args c))))}
-              (some-> results first val))
+        out (out-of c)
         summaries (step-summaries m)
         fields (if multi? (map :field (vals (:parts out))) [(:field out)])
         sum #(reduce + (map (fn [f] (get f % 0)) fields))]

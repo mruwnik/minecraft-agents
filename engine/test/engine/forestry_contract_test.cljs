@@ -134,7 +134,7 @@
       (fn ^:async t []
         (let [{:keys [end p]} (await (obsidian-end (ot/world ot/lava-lake [ot/pick {:name "water_bucket" :count 1}]) {:count 1}))]
           (is (= :done (:kind end)))
-          (is (= {:got 1} (:data end)))
+          (is (= {:got 1 :text "made 1 obsidian"} (:data end)))
           (is (= 1 (ot/carried p "obsidian"))))
         (let [{:keys [end]} (await (obsidian-end (ot/world ot/lava-lake [ot/pick]) {:count 1}))]
           (is (= {:kind :condition-failed :cause :no-bucket} (kc end))))

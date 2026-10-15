@@ -1,5 +1,6 @@
 (ns jobs.forestry.collect-drops
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
@@ -256,7 +257,9 @@
 (defn done?
   "Never done before the sweep has run its course: a drop may still be found."
   [c]
-  {:done? false :units :items :done (:collected (ctx/mem c) 0)})
+  (let [n (:collected (ctx/mem c) 0)]
+    (contract/later :collecting (str "collect-drops: " n " collected, the sweep goes on") :units :items :done n
+                    :result {:collected n})))
 
 (defn quote-of
   "What is in sight within :radius of the anchor: yields by name, time to walk to each (unbounded when a :search or a :dig may go on)."

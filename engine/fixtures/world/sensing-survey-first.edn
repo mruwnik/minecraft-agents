@@ -28,8 +28,8 @@
   {:name "get-seeds-cuts-the-cane-behind-it"
    :blocks [[:set [16 -1 20] "sand"] [:set [17 -2 20] "stone"] [:set [17 -1 20] "water"] [:fill [16 0 20] [16 2 20] "sugar_cane"]]
    :act [[:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 16})]]
-   :expect [{:event {:source :job :kind :get-seeds.done :data {:reason :count}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :get-seeds.done :data {:reason :none}} :for-s 30 :until {:source :job :kind :get-seeds.done :data {:reason :count}}}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :count}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :none}} :for-s 30 :until {:source :job :kind :completed :data {:reason :count}}}]
    :after [[:block [16 0 20] "sugar_cane"] [:item "sugar_cane" [:>= 1]]]}
   {:name "tend-harvests-the-crops-behind-it"
    :blocks [[:fill [10 -1 20] [12 -1 20] "farmland[moisture=7]"] [:fill [10 -2 21] [12 -2 21] "stone"] [:fill [10 -1 21] [12 -1 21] "water"]

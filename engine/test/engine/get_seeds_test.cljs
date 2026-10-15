@@ -41,7 +41,7 @@
     s))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn done-event [s] (first (events-of s :get-seeds.done)))
+(defn done-event "The root ending's event." [{:keys [seen]}] (first (filter #(#{:completed :stopped} (:kind %)) @seen)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn job-mem [{:keys [eng]}] (core/job-memory eng "j1"))
@@ -389,9 +389,9 @@
             (is (empty? (dug-cells s)))
             (is (zero? (count (tu/walked-to (:eng s)))) "no walk to a refused cell")
             (is (= [(assoc expected :reason :refused)] (gave-up-fields s)))
-            (is (= :refused (:reason (done-event s))))
+            (is (= :refused (:reason out)))
             (is (= :condition-failed (get-in out [:ending :kind])))
-            (is (= 0 (:got (done-event s))))
+            (is (= 0 (:got out)))
             (is (finished? s))))))))
 
 (deftest a-cut-in-a-claim-gives-up-naming-the-claim
@@ -595,8 +595,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup-with-jobs {} {'jobs.storage.withdraw (tu/job [(constantly :not-ready)] nil)})]
-          (is (= :condition-failed (get-in (await (tu/child-outcome (:eng s) 'jobs.gather.get-seeds {:count 2 :chest {:x 10 :y 64 :z 0}} 40)) [:ending :kind])))
-          (is (= :withdraw-declined (:reason (done-event s))))
+          (let [out (await (tu/child-outcome (:eng s) 'jobs.gather.get-seeds {:count 2 :chest {:x 10 :y 64 :z 0}} 40))]
+            (is (= :condition-failed (get-in out [:ending :kind])))
+            (is (= :withdraw-declined (:reason out))))
           (is (= [:withdraw-declined] (mapv :reason (events-of s :get-seeds.gave-up))))
           (is (finished? s)))))))
 

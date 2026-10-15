@@ -13,11 +13,11 @@
  [{:name "chest-with-carrots-is-withdrawn-to-the-goal"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:carrot\",count:12}]}"]]
    :act [[:job (jobs.gather.get-seeds {:item "carrot" :count 8 :chest #xyz [20 0 16]})]]
-   :expect [{:event {:source :job :kind :get-seeds.done :data {:got 8 :reason :count}} :within-s 45 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:got 8 :reason :count}} :within-s 45 :of-job true}]
    :after [[:item "carrot" 8]]}
   {:name "chest-without-carrots-ends-short-not-looping"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:12}]}"]]
    :act [[:job (jobs.gather.get-seeds {:item "carrot" :count 8 :chest #xyz [20 0 16]})]]
-   :expect [{:event {:source :job :kind :get-seeds.done :data {:got 0 :reason :short}} :within-s 45 :of-job true}
-            {:no-event {:source :job :kind :yielded} :for-s 30 :until {:source :job :kind :get-seeds.done}}]
+   :expect [{:event {:source :job :kind :stopped :data {:got 0 :reason :short}} :within-s 45 :of-job true}
+            {:no-event {:source :job :kind :yielded} :for-s 30 :until {:source :job :kind :stopped}}]
    :after [[:item "carrot" 0] [:item "bread" 0]]}]}

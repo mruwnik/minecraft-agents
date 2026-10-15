@@ -1,5 +1,6 @@
 (ns jobs.forestry.plant-sapling
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
@@ -25,7 +26,7 @@
   :ignore-zones? true skips the check.
 
   Start conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), :no-sapling (none carried and
-  :fetch false; data :species); a log on the spot (data :pos) is waited out. Nothing to plant is done at once. Ends :done with data
+  :fetch false; data :species); a log on the spot (data :pos) is waited out. A spot that holds its sapling, or no debt owed, is done at once. Ends :done with data
   {:pos} once planted (and the bone meal used up, grown or gone); condition-failed with the need cause when the fetch
   failed, :refused when the zone rule changed on the way; nothing-possible :plant-blocked (the spot cannot be reached or
   planted, data :text) or :unseen (the spot was never seen, after a look). Quote: the walk to the spot.")
@@ -101,11 +102,26 @@
 
 (def can-run? log-on-spot)
 
-(defn done?
-  "Done at once when nothing is owed (and no bone meal is being used)."
+(defn planted?
+  "Whether the call's spot holds its sapling (any when no :species is given), or with no :at whether no debt is owed."
   [c]
-  (let [owed? (boolean (or (:meal (ctx/mem c)) (current-target c)))]
-    {:done? (not owed?) :units :saplings :done (if owed? 0 1) :left (if owed? 1 0)}))
+  (let [{:keys [at species]} (:args c)]
+    (cond
+      (nil? at) (nil? (current-target c))
+      species (= (sapling-of species) (u/seen-name (:primitives c) at))
+      :else (sapling-at? (:primitives c) at))))
+
+(defn done?
+  "The spot holds its sapling (with no :at: no debt is owed), no bone meal is being used and no child is under way."
+  [c]
+  (let [at (:at (:args c))
+        meal (:meal (ctx/mem c))
+        owed? (or meal (not (planted? c)))
+        data [:units :saplings :done (if owed? 0 1) :left (if owed? 1 0) :result (if at {:pos at} {})]]
+    (cond
+      owed? (apply contract/later :owed (if meal "plant-sapling: bone meal under way" "plant-sapling: a sapling to plant") data)
+      (checks/child-under-way? c) (apply contract/later :wrapping-up "plant-sapling: planted, wrapping up" data)
+      :else (apply contract/ok :planted (if at (str "planted at " (pr-str at)) "nothing to plant") data))))
 
 (defn quote-of [c]
   (let [t (current-target c)

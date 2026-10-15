@@ -1,5 +1,6 @@
 (ns jobs.farm.compost
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.job-common :as common]
@@ -76,7 +77,8 @@
   "Counts only (the round ends the call with its data): the bone meal taken and the rest of :times."
   [c]
   (let [taken (:taken (ctx/mem c) 0)]
-    {:done? false :units :bone-meal :done taken :left (max 0 (- (:times (:args c)) taken))}))
+    (contract/later :composting (str "compost: " taken " bone meal taken") :units :bone-meal :done taken
+                    :left (max 0 (- (:times (:args c)) taken)) :result {:fed (:fed (ctx/mem c) {}) :bone-meal taken})))
 
 (defn quote-of [c]
   (let [times (:times (:args c))]

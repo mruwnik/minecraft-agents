@@ -1,5 +1,6 @@
 (ns jobs.gather.make-obsidian
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
@@ -173,10 +174,16 @@
   (cond/and (checks/refusing :bucket "a water bucket or a bucket and water" bucket-cause)
             (checks/refusing :lava "obsidian or lava seen" lava-cause)))
 
-(defn done? [c]
+(defn done?
+  ":count obsidian gained and no child under way (a mine child still picks up)."
+  [c]
   (let [n (:count (:args c))
-        got (if (:base (ctx/mem c)) (gained c) 0)]
-    {:done? (>= got n) :units :obsidian :done got :left (max 0 (- n got))}))
+        got (if (:base (ctx/mem c)) (gained c) 0)
+        data [:units :obsidian :done (min got n) :left (max 0 (- n got)) :result {:got got}]]
+    (cond
+      (< got n) (apply contract/later :short (str "make-obsidian: " got " of " n " obsidian") data)
+      (checks/child-under-way? c) (apply contract/later :wrapping-up "make-obsidian: the count is gained, wrapping up" data)
+      :else (apply contract/ok :made (str "made " got " obsidian") data))))
 
 (defn quote-of [c]
   (let [n (or (:count (:args c)) 1)]

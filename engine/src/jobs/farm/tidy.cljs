@@ -1,6 +1,7 @@
 (ns jobs.farm.tidy
   (:require [engine.args :as a]
             [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
@@ -332,11 +333,9 @@
   [c]
   (let [{:keys [answer trouble]} (planned c)
         dug (:dug (ctx/mem c) 0)]
-    (if trouble
-      {:done? false :units :strays :done dug}
-      (let [cells (work-cells (:cells answer) (:part (:args c)))]
-        {:done? false :units :strays :done dug
-         :left (count (:dig (strays cells #(tr/world-block (:primitives c) %))))}))))
+    (contract/later :tidying (str "tidy: " dug " strays dug, the round ends the call") :units :strays :done dug
+                    :left (if trouble 0 (count (:dig (strays (work-cells (:cells answer) (:part (:args c))) #(tr/world-block (:primitives c) %)))))
+                    :result {:dug dug :collected (:collected (ctx/mem c) 0)})))
 
 (defn quote-of [_c]
   {:uses {:job-time [1 30 (settings/get settings ::time-s)]}

@@ -17,5 +17,5 @@
   {:name "hoe-in-a-seen-chest-is-fetched-and-tills"
    :blocks [[:set [18 0 12] "chest{Items:[{Slot:0b,id:\"minecraft:stone_hoe\",count:1}]}"]]
    :act [[:job (jobs.farm.till {:center #xyz [16 -1 16] :radius 1 :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :till.done :data {:tilled 9}} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:tilled 9}} :within-s 80 :of-job true}]
    :after [[:block [15 -1 15] "farmland"] [:block [17 -1 17] "farmland"] [:item "stone_hoe" 1]]}]}

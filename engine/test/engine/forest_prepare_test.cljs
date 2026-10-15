@@ -29,7 +29,7 @@
   ([spec plans] (outcome spec plans {:plan "forest"}))
   ([spec plans args]
    (let [s (start spec plans)]
-     (assoc s :result (let [r (await (tu/child-outcome (:eng s) job args 300))] (cond-> r (map? r) (dissoc :status)))))))
+     (assoc s :result (let [r (await (tu/child-outcome (:eng s) job args 300))] (cond-> r (map? r) (dissoc :status :text)))))))
 
 (defn ^:async run
   "Submit the job with args in a world over plans and tick it n times: the start map."
@@ -561,7 +561,7 @@
                                                {"forest" one-cell} {:plan "forest"} 60))]
           (is (= [[4 64 0 "dirt"] [2 64 0 "dirt"] [3 64 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)))
           (is (= [[3 64 0]] (digs p)))
-          (is (= [{:dammed 3 :cleared 1 :planted 1}] (mapv #(select-keys % [:dammed :cleared :planted]) (h/events-of seen :prepare.done)))))))))
+          (is (= [{:dammed 3 :cleared 1 :planted 1}] (mapv #(select-keys % [:dammed :cleared :planted]) (h/events-of seen :completed)))))))))
 
 (deftest the-dam-goes-through-the-place-job
   (async done
@@ -582,12 +582,12 @@
           (is (= "dirt" (h/block-at p 2 64 0)))
           (await (ticks eng 4))
           (is (= before (calls-made p)) "the flow is waited out, nothing is placed in it")
-          (is (= [] (h/events-of seen :prepare.done)))
+          (is (= [] (h/events-of seen :completed)))
           (is (listed? eng))
           (drain! p "3,64,0")
           (await (ticks eng 30))
           (is (= [[2 64 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)))
-          (is (= [{:dammed 1 :planted 1}] (mapv #(select-keys % [:dammed :planted]) (h/events-of seen :prepare.done)))))))))
+          (is (= [{:dammed 1 :planted 1}] (mapv #(select-keys % [:dammed :planted]) (h/events-of seen :completed)))))))))
 
 (deftest a-stream-is-followed-to-its-source-and-only-that-is-dammed
   (async done
@@ -684,7 +684,7 @@
       (fn ^:async t []
         (let [spec (world {} (item "oak_sapling" 1))
               {:keys [eng p]} (start spec {"forest" one-cell} (tu/tmp-dir) (tu/seeing-after-look (tu/fake-on-floor spec)))
-              result (dissoc (await (tu/child-outcome eng job {:plan "forest"} 300)) :status)]
+              result (dissoc (await (tu/child-outcome eng job {:plan "forest"} 300)) :status :text)]
           (is (seq (h/calls p "look")))
           (is (= [[3 64 0 "oak_sapling"]] (places p)))
           (is (= (expect {:planted 1}) result)))))))

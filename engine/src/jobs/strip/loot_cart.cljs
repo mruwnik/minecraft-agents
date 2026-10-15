@@ -1,5 +1,6 @@
 (ns jobs.strip.loot-cart
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
@@ -78,7 +79,9 @@
 (defn done?
   "Never done before the round has run: the items counted are the gain since the first round."
   [c]
-  {:done? false :units :items :done (if (:before (ctx/mem c)) (reduce + 0 (vals (gained c))) 0)})
+  (let [{:keys [collected] :as result} (if (:before (ctx/mem c)) (items-data c nil) {:collected 0 :items {}})]
+    (contract/later :looting (str "loot-cart: " collected " items, the round ends the call") :units :items :done collected
+                    :result result)))
 
 (defn quote-of [_c]
   {:uses {:job-time [5 20 (settings/get settings ::time-s)]}})

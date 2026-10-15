@@ -35,7 +35,8 @@
   Ends with data {:tilled n :skipped {pos reason}}: done when it tilled some (the least accepted is :least, cells) or had
   nothing to till; with none tilled and cells skipped, condition-failed for :not-tillable, :covered, :not-permitted, :gone
   , :no-hoe and :refused, else nothing-possible (:unreachable, :cover-stuck), the cause the one skip reason or
-  :nothing-tilled when mixed. done? counts the cells tilled this call and the cells left.")
+  :nothing-tilled when mixed. done? is :ok when every cell is farmland and no child is under way; it counts the cells
+  tilled this call and the cells left.")
 
 (a/defargs args
   {:from {:doc "box corner (inclusive); with :to, any order" :spec ::a/pos :default nil}
@@ -182,12 +183,20 @@
 
 (def can-start? (cond/and bad-args (checks/refusing :tillable "a cell to till, a hoe and zones allow" problem)))
 
+(declare result-of)
+
 (defn done?
-  "Every cell is farmland (a skipped cell is not); the cells tilled this call and the cells left to till."
+  "Every cell is farmland (a skipped cell is not) and no child is under way; the cells tilled this call and the cells
+  left to till."
   [c]
   (let [cs (try (cells (:args c)) (catch :default _ nil))
-        open (count (remove #(= "farmland" (u/seen-name (:primitives c) %)) cs))]
-    {:done? (and (seq cs) (zero? open)) :units :cells :done (count (:tilled (ctx/mem c))) :left (if cs (count (pending c)) 0)}))
+        open (count (remove #(= "farmland" (u/seen-name (:primitives c) %)) cs))
+        {:keys [tilled] :as result} (result-of c)
+        data [:units :cells :done tilled :left (if cs (count (pending c)) 0) :result result]]
+    (cond
+      (or (empty? cs) (pos? open)) (apply contract/later :to-till (str "till: " open " cells to till") data)
+      (checks/child-under-way? c) (apply contract/later :wrapping-up "till: every cell is farmland, wrapping up" data)
+      :else (apply contract/ok :tilled (str "tilled " tilled ", every cell is farmland") data))))
 
 (defn quote-of [c]
   (let [cs (try (cells (:args c)) (catch :default _ nil))
@@ -249,10 +258,8 @@
   the skip reason(s)."
   [c]
   (let [{:keys [tilled skipped] :as result} (result-of c)]
-    (ctx/emit! c :till.done :info {:tilled tilled :skipped (count skipped)
-                                   :text (str "tilled " tilled ", skipped " (count skipped))})
     (if (or (empty? skipped) (common/enough? c tilled (+ tilled (count skipped))))
-      (ctx/end c :done nil result)
+      (ctx/end c :done nil (assoc result :text (str "tilled " tilled ", skipped " (count skipped))))
       (let [[reason text] (if (pos? tilled) [:partial (str "tilled " tilled ", skipped " (count skipped))] (nothing-tilled skipped))]
         (ctx/end c (if (condition-skips reason) :condition-failed :nothing-possible) reason (assoc result :text text))))))
 

@@ -276,7 +276,9 @@
   "Counts only: the end of the segment is the round's, which looks at its end and reports what it kept.
   The cells dug."
   [c]
-  {:done? false :units :cells :done (count (:dug (ctx/mem c)))})
+  (let [dug (count (:dug (ctx/mem c)))]
+    (contract/later :digging (str "corridor: " dug " cells dug, the round ends the segment") :units :cells :done dug
+                    :result {:taken (:taken (ctx/mem c) {})})))
 
 (defn quote-of [c]
   (let [{:keys [from to]} (seg-of (:segment (:args c)))]

@@ -1,5 +1,6 @@
 (ns jobs.farm.fertilize
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -120,7 +121,8 @@
   "Counts only (the round ends the call with its data): the uses made and the targets left within :max."
   [c]
   (let [used (:used (ctx/mem c) 0)]
-    {:done? false :units :cells :done used :left (min (count (targets c)) (max 0 (- (:max (:args c)) used)))}))
+    (contract/later :fertilizing (str "fertilize: " used " bone meal used") :units :cells :done used
+                    :left (min (count (targets c)) (max 0 (- (:max (:args c)) used))) :result {:used used})))
 
 (defn quote-of [c]
   (let [n (min (:max (:args c)) (count (raw-targets c)))]

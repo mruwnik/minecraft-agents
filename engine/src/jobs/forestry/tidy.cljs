@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.checks :as checks]
             [jobs.lib.need :as need]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -108,11 +109,16 @@
 
 (defn limit [c] (or (:max-trees (:args c)) (settings/get settings ::max-trees)))
 
+(defn result-of
+  "The trunks tidied, and the replants still owed."
+  [c]
+  (let [m (ctx/mem c)]
+    (cond-> {:tidied (:tidied m 0)} (pos? (:owed m 0)) (assoc :replant-owed (:owed m)))))
+
 (defn finish!
   "The ending when no trunk is left to take: done with the count."
   [c]
-  (let [n (:tidied (ctx/mem c) 0)]
-    (ctx/end c :done nil (cond-> {:tidied n} (pos? (:owed (ctx/mem c) 0)) (assoc :replant-owed (:owed (ctx/mem c)))))))
+  (ctx/end c :done nil (result-of c)))
 
 (defn next-tree!
   "Choose the next trunk into memory; false when none is left or the limit is reached."
@@ -183,11 +189,17 @@
 (def defaults {:spend {:job-time ::time-s}})
 
 (defn done?
-  "No trunk is chosen or in sight and the body has looked round; the trunks tidied and the ones in sight."
+  "No trunk is chosen or in sight, the body has looked round and no child is under way; the trunks tidied and the
+  ones in sight."
   [c]
   (let [m (ctx/mem c)
-        left (count (leftovers c))]
-    {:done? (and (not (:tree m)) (look/surveyed? c) (zero? left)) :units :trunks :done (:tidied m 0) :left left}))
+        left (count (leftovers c))
+        data [:units :trunks :done (:tidied m 0) :left left :result (result-of c)]]
+    (cond
+      (or (:tree m) (pos? left) (not (look/surveyed? c)))
+      (apply contract/later :tidying (str "tidy: " left " trunks in sight" (when (:tree m) ", one under way")) data)
+      (checks/child-under-way? c) (apply contract/later :wrapping-up "tidy: no trunk left, wrapping up" data)
+      :else (apply contract/ok :tidied (str "tidied " (:tidied m 0) " trunks, none left in sight") data))))
 
 (defn quote-of [c]
   (let [k (or (:max-trees (:args c)) (settings/get settings ::max-trees))]

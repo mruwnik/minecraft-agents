@@ -207,7 +207,8 @@
   [c]
   (let [got (max 0 (- (logs-carried c) (:logs-before (ctx/mem c) (logs-carried c))))
         want (:count (:args c))]
-    (cond-> {:done? false :units :logs :done got} want (assoc :left (max 0 (- want got))))))
+    (apply contract/later :harvesting (str "harvest-wood: " got " logs, the plant phase follows") :units :logs :done got
+           :result {:logs got} (when want [:left (max 0 (- want got))]))))
 
 (defn ^:async quote-of [c]
   (let [e (await (fell-tree/quote-of (assoc c :args (fell-args (:args c)))))

@@ -66,7 +66,7 @@
    :blocks [[:set [10 0 16] "poppy"] [:set [11 0 16] "short_grass"] [:set [12 0 16] "sweet_berry_bush[age=0]"]]
    :body {:inventory [["stone_hoe" 1]]}
    :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [13 -1 16] :fetch false})]]
-   :expect [{:event {:source :job :kind :till.done :data {:tilled 3}} :within-s 70 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:tilled 3}} :within-s 70 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [11 -1 16] "farmland"] [:block [13 -1 16] "farmland"] [:block [12 -1 16] "grass_block"]]}
   ;; Card f793bc9a: a plan added just before the job (the plan file is new to the body's cache) is read at once, not "no crop cells".
   {:name "plan-added-just-before-the-job-is-read-at-once"
@@ -83,5 +83,5 @@
    :blocks [[:fill [10 0 16] [14 0 16] "poppy"] [:fill [10 -1 18] [14 -1 18] "stone"]]
    :body {:inventory [["stone_hoe" 1]]}
    :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [14 -1 18] :fetch false})]]
-   :expect [{:event {:source :job :kind :till.done :data {:tilled 10}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:tilled 10}} :within-s 90 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [14 -1 17] "farmland"] [:block [12 -1 18] "stone"]]}]}

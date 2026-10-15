@@ -45,5 +45,5 @@
                                              {"forest" oak-cell})]
           (core/submit! eng '(jobs.forestry.prepare {:plan "forest"}) {})
           (await (fm/ticks eng 1))
-          (is (= 1 (count (h/events-of seen :prepare.done))) "done after one tick")
+          (is (= 1 (count (h/events-of seen :completed))) "done after one tick")
           (is (= [[3 64 0 "oak_sapling"]] (places p))))))))

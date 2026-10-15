@@ -407,7 +407,12 @@
 
 (def can-start? (cond/and sheltered no-tree))
 
-(defn done? [_c] {:done? false :units :trees :done 0 :left 1})
+(defn done?
+  "Always :later: the round ends the call once the tree is down and its drops are judged."
+  [c]
+  (let [m (ctx/mem c)]
+    (contract/later :felling (str "fell-tree: " (:dug m 0) " logs dug") :units :trees :done 0 :left 1
+                    :result {:base (:base m) :logs (:dug m 0)})))
 
 (defn ^:async quote-of
   "The walk to the tree's base as go-to quotes it, then 3 s and 1.5 s a log."

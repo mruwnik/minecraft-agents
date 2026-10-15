@@ -1,6 +1,7 @@
 (ns jobs.farm.find-spot
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.surface :as surface :refer [open?]]
             [jobs.lib.job-common :as common]
@@ -179,7 +180,12 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(defn done? "An act with no goal state: a spot search is never done before it is made." [_c] {:done? false})
+(defn done?
+  "An act with no goal state: :later, the round ends the search (and the walk) with the spots it found."
+  [c]
+  (let [spots (:spots (ctx/mem c))]
+    (contract/later :searching (str "find-spot: " (count spots) " spots found") :units :spots :done 0 :left 1
+                    :result (if spots {:spot (:pos (first spots)) :spots spots} {}))))
 
 (defn quote-of [c]
   (let [{:keys [range walk]} (merge (into {} (map (fn [[k v]] [k (:default v)])) args) (:args c))]

@@ -75,7 +75,13 @@
 
 (def can-start? bad-args)
 
-(defn done? [_c] {:done? false :units :trees :done 0 :left 1})
+(declare result)
+
+(defn done?
+  "Always :later: the round ends the call once the pillar is taken back."
+  [c]
+  (contract/later :felling (str "fell-from-pillar: " (:dug (ctx/mem c) 0) " logs dug") :units :trees :done 0 :left 1
+                  :result (result c)))
 
 (defn quote-of [c]
   (let [n (count (when (base c) (tree-logs c)))]

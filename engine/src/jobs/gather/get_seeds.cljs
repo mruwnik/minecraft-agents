@@ -45,10 +45,10 @@
   :none (the text names the radius and the nearest source seen beyond it). Two batches in a row where nothing was diggable (none dug, none skipped: all missing) end :barren
   (warn get-seeds.gave-up). A batch of only skipped blocks is not barren.
 
-  Ends :done (data {:got n :reason :count}, info get-seeds.done) when the goal is carried. Any other end is
-  condition-failed with the cause :refused or :withdraw-declined, else nothing-possible with the cause :none, :dry,
-  :barren or :short (the chest gave less), and data {:got n :reason r}; :got is how many more are carried than at the start, at least 0. The same event
-  get-seeds.done tells it.
+  done? is :ok when the goal is carried and no child is under way: ends :done (data {:got n :reason :count}). Any
+  other end is condition-failed with the cause :refused or :withdraw-declined, else nothing-possible with the cause
+  :none, :dry, :barren or :short (the chest gave less), and data {:got n :reason r :text}; :got is how many more are
+  carried than at the start, at least 0.
 
   Conditions (one warn get-seeds.declined {:reason r} per reason): :no-source (a material with no known way),
   :no-chest (chest way with no :chest and no known chest place), :plan-missing, :plan-broken, :no-chest-cell (the
@@ -189,11 +189,22 @@
             (checks/refusing :in-range "a source in range" nothing-in-range)))
 
 (defn done?
-  "The goal fixed by the first round (:count more than were carried) is carried; the seeds got and still wanted."
+  "The goal fixed by the first round (:count more than were carried) is carried and no child is under way (a collect
+  still picks up); the seeds got and still wanted."
   [c]
-  (let [goal (or (:goal (ctx/mem c)) (+ (carried c) (:count (:args c))))
-        left (max 0 (- goal (carried c)))]
-    {:done? (and (some? (:goal (ctx/mem c))) (zero? left)) :units :items :done (max 0 (- (:count (:args c)) left)) :left left}))
+  (let [{:keys [item count]} (:args c)
+        goal (:goal (ctx/mem c))
+        left (max 0 (- (or goal (+ (carried c) count)) (carried c)))
+        got (max 0 (- count left))
+        data [:units :items :done got :left left]]
+    (cond
+      (or (nil? goal) (pos? left))
+      (apply contract/later :short (str "get-seeds: " left " " item " to get") (conj data :result {:got got}))
+
+      (checks/child-under-way? c)
+      (apply contract/later :wrapping-up "get-seeds: the goal is carried, wrapping up" (conj data :result {:got got :reason :count}))
+
+      :else (apply contract/ok :carried (str "get-seeds done: count, got " got) (conj data :result {:got got :reason :count})))))
 
 (defn quote-of [c]
   (let [{:keys [item count] :as a} (:args c)
@@ -217,13 +228,12 @@
 (def condition-reasons #{:refused :withdraw-declined})
 
 (defn finish!
-  "Emit the outcome and end the job: :done for :count, condition-failed for :refused and :withdraw-declined (a zone, claim
+  "End the job: :done for :count, condition-failed for :refused and :withdraw-declined (a zone, claim
   or chest can change), else nothing-possible with the reason."
   [c reason]
   (let [{:keys [goal]} (ctx/mem c)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
-        data {:got got :reason reason}]
-    (ctx/emit! c :get-seeds.done :info (assoc data :text (str "get-seeds done: " (if (= :none reason) (none-why c) (name reason)) ", got " got)))
+        data {:got got :reason reason :text (str "get-seeds done: " (if (= :none reason) (none-why c) (name reason)) ", got " got)}]
     (if (= :count reason)
       (ctx/end c :done nil data)
       (ctx/end c (if (condition-reasons reason) :condition-failed :nothing-possible) reason data))))

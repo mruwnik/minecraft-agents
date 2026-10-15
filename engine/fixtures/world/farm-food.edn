@@ -39,7 +39,7 @@
    :body {:inventory [["stone_hoe" 1] ["carrot" 15]]}
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [10 0 16]}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :till.done} :for-s 20}]
+            {:no-event {:source :job :kind :child_ended :data {:slot :till}} :for-s 20}]
    :after [[:block [10 -1 16] "dirt"] [:block [10 0 16] "air"] [:item "carrot" 15]]}
   {:name "tend-with-30-carrots-and-bread-tills-and-sows"
    :blocks [[:set [10 -1 16] "dirt"] [:set [10 -2 17] "stone"] [:set [10 -1 17] "water"]]

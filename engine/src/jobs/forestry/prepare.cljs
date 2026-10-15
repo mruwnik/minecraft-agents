@@ -61,8 +61,9 @@
   unreadable or has no tree cells (in :part), and while no zone list is loaded. A cell held back by cells never seen
   (the cell, the ground under it, its growth space) starts the job: it looks around once, then at each unseen cell.
   Ends :done with data {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped
-  :wet :refused} (info prepare.done) when it cleared, soiled, planted or dammed a cell. With none of those, it ends
-  condition-failed :refused when cells were skipped, else with the worst blocked state.
+  :wet :refused :text} when it cleared, soiled, planted or dammed a cell, or (done?) when every cell is ready, none
+  refused, the drops collected and no child under way. Else it ends condition-failed :refused when cells were skipped,
+  else with the worst blocked state.
   Quote: time only.")
 
 (a/defargs settings
@@ -344,8 +345,8 @@
                         (field/skipped c))
                   (state-list states :unsupported (fn [{:keys [pos]}] {:pos (maintain/cell-vec pos) :reason :unsupported-species})))))
 
-(defn finish!
-  "Say what was done and be done."
+(defn result-of
+  "What was done and what is left, with a :text."
   [c states]
   (let [m (ctx/mem c)
         missing (frequencies (map :species (filter #(= :short (:state %)) (vals states))))
@@ -358,11 +359,15 @@
                 :wet (state-list states :wet (fn [{:keys [pos why source]}]
                                                (cond-> {:pos (maintain/cell-vec pos) :why why} source (assoc :source source))))
                 :refused (refused-list c states)}]
-    (ctx/emit! c :prepare.done :info
-               (assoc result :text (str "prepare done: cleared " (:cleared result) ", soiled " (:soiled result)
-                                        ", planted " (:planted result) ", short " (reduce + (vals missing))
-                                        ", left " (+ (count (:wrong result)) (count (:no-soil result)) (count (:no-tool result)) (count (:cramped result))
-                                                    (count (:wet result)) (count (:refused result))))))
+    (assoc result :text (str "prepare done: cleared " (:cleared result) ", soiled " (:soiled result)
+                             ", planted " (:planted result) ", short " (reduce + (vals missing))
+                             ", left " (+ (count (:wrong result)) (count (:no-soil result)) (count (:no-tool result)) (count (:cramped result))
+                                         (count (:wet result)) (count (:refused result)))))))
+
+(defn finish!
+  "Be done, saying what was done."
+  [c states]
+  (let [result (result-of c states)]
     (cond
       (pos? (+ (:cleared result) (:soiled result) (:planted result) (:dammed result))) (ctx/end c :done nil result)
       (seq (:refused result)) (ctx/end c :condition-failed :refused result)
@@ -401,18 +406,24 @@
 (def can-start? not-ready)
 
 (defn done?
-  "Every cell of the field is seen and in its state: nothing to work, nothing held back or receding; the cells worked
-  and the cells still to work."
+  "Every cell of the field is seen and in its state: nothing to work, nothing held back, refused or receding, the drops
+  collected and no child under way; the cells worked and the cells still to work."
   [c]
   (let [field (field/planned c)
-        worked (reduce + (map #(% (ctx/mem c) 0) [:cleared :soiled :planted :dammed]))]
+        m (ctx/mem c)
+        worked (reduce + (map #(% m 0) [:cleared :soiled :planted :dammed]))]
     (if (:trouble field)
-      {:done? false :units :cells :done worked}
+      (contract/later :plan-trouble (str "prepare: " (:trouble field)) :units :cells :done worked :left 0 :result {})
       (let [cells (maintain/field-cells field)
             states (states-of c field cells)
-            todo (field/todo c states)]
-        {:done? (and (empty? todo) (empty? (:recede (ctx/mem c))) (nil? (blocked-reason states)) (not (look/unseen? (:primitives c) cells)))
-         :units :cells :done worked :left (count todo)}))))
+            todo (field/todo c states)
+            {:keys [refused text] :as result} (result-of c states)
+            data [:units :cells :done worked :left (count todo) :result (dissoc result :text)]]
+        (cond
+          (or (seq todo) (seq (:recede m)) (blocked-reason states) (seq refused) (look/unseen? (:primitives c) cells))
+          (apply contract/later :preparing (str "prepare: " (count todo) " cells to work") data)
+          (or (:collect m) (checks/child-under-way? c)) (apply contract/later :wrapping-up "prepare: every cell is ready, wrapping up" data)
+          :else (apply contract/ok :prepared text data))))))
 
 (defn quote-of [_c]
   {:uses {:job-time [1 60 (settings/get settings ::time-s)]}
