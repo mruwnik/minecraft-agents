@@ -215,17 +215,29 @@
     (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :explicit} (column/aim p {:x 10 :y 66 :z 0} 4 64 true))
         "a goal in the open air over the ground comes down to it")))
 
-(deftest an-unseen-goal-inside-a-mound-under-unknown-ends-from-near-it
-  ;; no endless "searching" loop: the call ends, in a bounded number of plans
+(deftest an-unseen-goal-inside-a-mound-under-unknown-arrives-on-it-in-few-plans
+  ;; the cell inside the mound is looked at from a seen stand first, not toured round over the unseen land
   (async done
     (tu/run-async done
       (fn ^:async t []
         ;; the body starts at x 22, 6 short of the mound at x 28..32 (ground at feet 65), the goal cell (30,64,0) inside it
         (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))]
           (doseq [pos [[30 0] [30 64 0]]]
-            (let [{:keys [out] :as s} (await (go! {:blocks mound :light [15 0] :self {:pos {:x 22 :y 64 :z 0}}} {:pos pos :range 0 :unknown true}))]
-              (is (not= :not-done @out) (str (pr-str pos) " ended"))
-              (is (< (count (events-of s :planned)) 300) (str (pr-str pos) " searches: " (count (events-of s :planned)))))))))))
+            (let [{:keys [out p] :as s} (await (go! {:blocks mound :light [15 0] :self {:pos {:x 22 :y 64 :z 0}}} {:pos pos :range 0 :unknown true}))]
+              (is (:arrived @out) (str (pr-str pos) " " (pr-str @out)))
+              (is (= [30 65 0] (mapv #(js/Math.floor %) (at p))) (pr-str pos))
+              (is (< (count (events-of s :planned)) 30) (str (pr-str pos) " plans: " (count (events-of s :planned)))))))))))
+
+(deftest a-goal-hidden-in-seen-ground-is-looked-at-from-a-seen-stand-before-planning-to-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))
+              s (await (go! {:blocks mound :light [15 0] :self {:pos {:x 22 :y 64 :z 0}}} {:pos [30 64 0] :range 0 :unknown true}))
+              [lookout] (events-of s :go-to.lookout)]
+          (is (= {:x 30 :y 64 :z 0} (:goal lookout)) (pr-str lookout))
+          (is (<= (apply js/Math.hypot (map - [30 64 0] ((juxt :x :y :z) (:stand lookout)))) gaim/lookout-reach)
+              (pr-str lookout)))))))
 
 (deftest an-unseen-y-goal-inside-a-mound-under-unknown-is-re-aimed-once-seen
   (async done
@@ -322,6 +334,25 @@
           (with-redefs [sense/look-at! (fn [_ cell] (swap! looks conj cell) (js/Promise.resolve true))]
             (dotimes [_ gaim/max-column-looks] (await (gaim/look-at-column! c {:x 10 :y 40 :z 0}))))
           (is (= [10 40 0] (first @looks)) (pr-str @looks)))))))
+
+(defn mound-from-22
+  "A stub ctx (memory mem) of a body at x 22 before the mound x 28..32, every cell seen but those of x >= x0 in it."
+  [x0 mem]
+  (let [p (tu/fake {:self {:pos [22.5 64 0.5]} :blocks (merge flat (box 28 64 -3 32 64 3 "stone"))})
+        hidden? (fn [[x y z]] (and (<= x0 x 32) (<= y 64) (<= -3 z 3)))]
+    (aset p "sensedAt" (fn [pos] (if (hidden? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
+    (stub-ctx p (atom mem) {:pos [30 64 0] :range 0 :unknown true})))
+
+(deftest an-unseen-goal-behind-a-seen-solid-is-hidden-in-the-ground-one-behind-unseen-cells-is-not
+  (is (gaim/hidden-in-ground? (mound-from-22 29 {}) {:x 30 :y 64 :z 0}) "the mound's face x 28 seen")
+  (is (not (gaim/hidden-in-ground? (mound-from-22 28 {}) {:x 30 :y 64 :z 0})) "nothing seen in the way"))
+
+(deftest a-lookout-is-a-seen-stand-in-reach-that-sees-the-goal-until-the-lookouts-are-spent
+  (let [[x y z :as stand] (gaim/lookout (mound-from-22 29 {}) {:x 30 :y 64 :z 0})]
+    (is (<= (js/Math.hypot (- x 30) (- y 64) z) gaim/lookout-reach) (pr-str stand))
+    (is (column/stands? (column/seen-kind-at (:primitives (mound-from-22 29 {}))) x y z) (pr-str stand)))
+  (is (nil? (gaim/lookout (mound-from-22 29 {:lookouts (vec (repeat gaim/max-lookouts [0 0 0]))}) {:x 30 :y 64 :z 0})))
+  (is (nil? (gaim/lookout (mound-from-22 29 {:re-aim true}) {:x 30 :y 64 :z 0})) "re-aimed: the goal is no longer that cell"))
 
 (deftest a-torch-fetch-continue-is-kept-when-the-goal-is-seen-in-the-ground
   (async done

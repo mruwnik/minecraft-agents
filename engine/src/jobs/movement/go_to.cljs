@@ -59,7 +59,9 @@
     otherwise, and with a higher floor or a :spend :health, it gives up :why :needs-health. See jobs.movement.go-to.health.
   - :unknown true (default false) plans over what the body has seen or felt only: a cell it never saw is unknown (air to
     the body), a floor it never saw is stepped onto only after the walk stops to look at it (jobs.lib.walk.sight), and
-    only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). A map overrides the
+    only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). An unseen y goal
+    behind a seen solid, or one a found plan tours round (jobs.movement.go-to.walk/lookout-check), is first looked at
+    from the nearest seen stand within 4 of it that sees it (info go-to.lookout, at most 3 stands a call). A map overrides the
     prices of jobs.lib.cost/unknown-prices. When a dark drop was the better way it gives up :why :unseen-floor-dark; in the
     dark with a torch carried and the off hand empty it first holds the torch in the off hand (info go-to.off-hand-torch,
     once a call: it sees deeper) and plans again; it puts the torch back into the inventory before an escalation child runs and when the call ends (full: it

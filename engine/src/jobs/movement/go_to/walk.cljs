@@ -8,14 +8,16 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.sense :as sense]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
-            [jobs.movement.go-to.aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! sight-end see-cell]]
+            [jobs.movement.go-to.aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell]]
             [jobs.movement.go-to.cut :refer [approach-recorder tour tour-spent?]]
+            [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.faults :refer [note-fault! refused-hang shut-foreign]]
@@ -69,6 +71,43 @@
     (when (> (across (u/self-pos c)) (- before (waypoint-gain)))
       (ctx/update-mem! c update :waypoint-misses (fnil inc 0)))
     :again))
+
+(defn ^:async look-out!
+  "Walk to the lookout stand (aim/lookout) of the unseen goal pos and look at its cell from there, so the plan to it
+  reads the cell, not a tour of the unseen land round it (info go-to.lookout {:goal :stand :seen}): first for a goal
+  hidden in seen ground (hidden-in-ground?), else once a found plan tours round it (lookout-check, mem :lookout-due). Seen
+  in the ground it is re-aimed at once (pre-aim!). A stand not reached in max-blocked walks counts as tried. :again."
+  [c pos stand opts]
+  (let [[x y z] stand
+        to {:x x :y y :z z}
+        there? (= stand (mapv #(js/Math.floor %) ((juxt :x :y :z) (u/self-pos c))))
+        status (when-not there? (:status (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) to 0 (dissoc opts :progress)))))
+        walks (if (= "arrived" status) 0 (inc (:lookout-walks (ctx/mem c) 0)))]
+    (if (or there? (= "arrived" status))
+      (let [cell (mapv #(js/Math.floor (% pos)) [:x :y :z])]
+        (await (sense/look-at! c cell))
+        (ctx/update-mem! c #(-> % (update :lookouts (fnil conj []) stand) (dissoc :lookout-walks :lookout-due)))
+        (let [seen (not (sense/unknown? (:primitives c) cell))]
+          (ctx/emit! c :go-to.lookout :info {:goal (zipmap [:x :y :z] cell) :stand to :seen seen
+                                             :text (str "looked at the goal " cell " from " stand (if seen "" ", still unseen"))}))
+        (pre-aim! c pos pos))
+      (ctx/update-mem! c #(if (< walks max-blocked)
+                            (assoc % :lookout-walks walks)
+                            (-> % (update :lookouts (fnil conj []) stand) (dissoc :lookout-walks :lookout-due)))))
+    :again))
+
+(def lookout-detour "A found way to an unseen y goal longer than this many times its straight distance (plus 4) is a tour round it: go-to looks from a lookout first." 2)
+
+(defn lookout-check
+  "near/walk-round!'s :stair-check: check's why, else {:lookout true} for a found plan to pos longer than
+  lookout-detour times its straight distance plus 4 while a lookout stand is due (aim/lookout)."
+  [c pos check]
+  (fn [{:keys [status steps] :as plan} first?]
+    (or (when check (check plan first?))
+        (when (and (= "found" status) (seq steps)
+                   (> (detour/length steps) (+ 4 (* lookout-detour (u/dist (first steps) pos))))
+                   (lookout c pos))
+          {:lookout true}))))
 
 (defn walk-opts
   "The near/walk-round! options of a go-to walk round with doors (the :doors arg as a keyword)."
@@ -211,7 +250,8 @@
             (and floor (not (:cave-ok (ctx/mem c0)))) (assoc :cave-floor (- (+ floor (climb-dip)) (climb/cave-dip))))
         from (u/self-pos c)
         d (u/dist from pos)
-        pw (wworld/path-world (:primitives c))]
+        pw (wworld/path-world (:primitives c))
+        stand (when (and pw (not way) (or (:lookout-due (ctx/mem c)) (hidden-in-ground? c pos))) (lookout c pos))]
     (cond
       (and (here? c pos range) (not (refused-hang c pos)))
       (await (arrive! c pos))
@@ -222,10 +262,13 @@
       way
       (await (walk-own-way! c way (walk-opts c doors)))
 
+      stand
+      (await (look-out! c pos stand (walk-opts c doors)))
+
       :else
       (let [_ (forget-known-land! c)
             opts (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
-            stair-check (plan-check c pos (esc/stair-check c pos) (straight-from! c d))
+            stair-check (lookout-check c pos (plan-check c pos (esc/stair-check c pos) (straight-from! c d)))
             {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
@@ -255,6 +298,9 @@
 
           (and (= "stair" status) (= :dives (:why walked)))
           (esc/dive-refused! c pos)
+
+          (and (= "stair" status) (:lookout (:why walked)))
+          (do (ctx/update-mem! c assoc :lookout-due true) :again)
 
           (and (= "stair" status) (:detour (:why walked)))
           (end/give-up! c pos (:blocked (ctx/mem c) 0) :detour {:status :no-path :reason :detour} (dissoc (:why walked) :detour))

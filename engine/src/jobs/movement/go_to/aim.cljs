@@ -4,6 +4,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [engine.sight :as sight]
             [jobs.lib.aim :as aim]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
@@ -83,6 +84,44 @@
                       k (apply ka cell)]
                   (and (not (or (keyword-identical? :unknown k) (column/free? k)))
                        (not (seen-stand-within? ka cell (:range (:args c) 1))))))))
+
+(def lookout-reach "Blocks from a y goal hidden in seen ground (hidden-in-ground?) a stand go-to looks at it from may be." 4)
+
+(def max-lookouts "Stands a call looks at a y goal hidden in seen ground from (lookout) before it plans to it as it is." 3)
+
+(defn hidden-in-ground?
+  "Under :unknown, whether the y goal pos is a cell the body never saw behind a seen solid: the line from the eye to
+  its centre crosses one (a cell inside a mound, seen only from outside)."
+  [c pos]
+  (boolean (and (:unknown c) (:y pos)
+                (let [p (:primitives c)
+                      [x y z :as cell] (mapv #(js/Math.floor (% pos)) [:x :y :z])
+                      ka (aim/seen-kind-at p)
+                      [ex ey ez] (aim/eye-at (u/self-pos c))]
+                  (and (sense/unknown? p cell)
+                       (not (sight/line-clear ex ey ez (+ x 0.5) (+ y 0.5) (+ z 0.5) #(keyword-identical? :solid (ka %1 %2 %3)))))))))
+
+(defn lookout
+  "For an unseen y goal pos under :unknown, not re-aimed, with fewer than max-lookouts stands tried (mem :lookouts): the
+  seen stand [x y z] within lookout-reach of its cell, none tried, whose eye sees the cell over seen cells
+  (jobs.lib.aim), nearest the body; else nil."
+  [c pos]
+  (let [{:keys [re-aim column-open] :as m} (ctx/mem c)
+        tried (:lookouts m [])
+        p (:primitives c)
+        [x y z :as cell] (mapv #(js/Math.floor (% pos)) [:x :y :z])]
+    (when (and (:unknown c) (not re-aim) (nil? column-open) (< (count tried) max-lookouts) (sense/unknown? p cell))
+      (let [ka (column/seen-kind-at p)
+            sees? (aim/stand-sees-fn p cell)
+            r lookout-reach
+            from (u/self-pos c)]
+        (->> (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))
+                   :when (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* r r))]
+               [(+ x dx) (+ y dy) (+ z dz)])
+             (remove (set tried))
+             (filter #(and (apply column/stands? ka %) (apply sees? %)))
+             (sort-by (fn [[sx sy sz]] (u/dist from {:x (+ sx 0.5) :y sy :z (+ sz 0.5)})))
+             first)))))
 
 (def max-column-looks "Looks a call takes at a column goal whose ground it has not made out, one after a fruitless walk." 3)
 
