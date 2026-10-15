@@ -149,7 +149,7 @@
                                            {:tries 2}))]
           (is (= {:found false :rolls 2 :status :stopped :reason :no-match} (select-keys result [:found :rolls :status :reason])))
           (is (= "lectern" (workstation p)))
-          (is (contains? (vt/kinds seen) :roll.gave-up)))))))
+          (is (not (contains? (vt/kinds seen) :roll.gave-up))))))))
 
 (deftest a-villager-that-already-traded-is-locked
   (async done
@@ -237,7 +237,7 @@
                                             :wrap (stub-job 'jobs.blocks.place stopped)} {}))]
           (is (= {:found false :status :stopped :reason :place-failed} (select-keys result [:found :status :reason])))
           (is (= "air" (workstation p)))
-          (is (contains? (vt/kinds seen) :roll.gave-up)))))))
+          (is (not (contains? (vt/kinds seen) :roll.gave-up))))))))
 
 (deftest a-body-on-the-workstation-cell-steps-off-before-placing
   (async done
@@ -284,7 +284,7 @@
         (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")] {:busy true})]} {}))]
           (is (= {:found false :status :stopped :reason :window} (select-keys result [:found :status :reason])))
           (is (zero? (digs p)))
-          (is (contains? (vt/kinds seen) :roll.gave-up)))))))
+          (is (not (contains? (vt/kinds seen) :roll.gave-up))))))))
 
 (defn unemploys-after!
   "The villager of a world with the workstation broken loses its job lag-ms after the break (seen on the clock), then

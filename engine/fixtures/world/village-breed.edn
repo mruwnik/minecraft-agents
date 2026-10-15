@@ -35,4 +35,4 @@
          [:summon "villager" [16.5 0 18.5] "{NoAI:1b,UUID:[I;20264,7,4,2]}"]
          [:wait-s 2]
          [:job (jobs.village.breed {:target 3 :wait-s 20})]]
-   :expect [{:event {:source :job :kind :breed.gave-up :data {:reason :no-births}} :within-s 200 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-births}} :within-s 200 :of-job true}]}]}

@@ -145,7 +145,8 @@
         (let [s (await (scenario {:plan "p"} (world) {'jobs.build.from-plan {:status :stopped :reason :incomplete :missing [[1 2 3]]}}))]
           (is (some? (:stopped (step s :repair))))
           (is (= :incomplete (:reason (done-event s))))
-          (is (= [:stopped :incomplete] (ending s))))))))
+          (is (= [:stopped :incomplete] (ending s)))
+          (is (not-any? #(= :maintain.gave-up (:kind %)) @(:seen s))))))))
 
 (deftest a-pass-where-no-step-ran-is-not-done
   (async done

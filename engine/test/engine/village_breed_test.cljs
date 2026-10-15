@@ -101,7 +101,7 @@
           (is (= :no-births (:reason @out)))
           (is (= :stopped (:status @out)))
           (is (= 0 (:births @out)))
-          (is (gave? s :breed.gave-up)))))))
+          (is (not (gave? s :breed.gave-up)) "the ending carries it"))))))
 
 (deftest fewer-than-two-adults-or-no-food-never-starts
   (async done
@@ -148,10 +148,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen]} (await (breed {:entities (mapv #(villager % (+ 2 %)) (range 1 9)) :inventory [{:name "bread" :count 40}]}
+        (let [{:keys [out]} (await (breed {:entities (mapv #(villager % (+ 2 %)) (range 1 9)) :inventory [{:name "bread" :count 40}]}
                                                {:target 12 :wait-s 1} 600 #(feeding % 0)))]
-          (is (= :no-births (:reason @out)))
-          (is (some #(re-find #"three attempts" (str (:text %))) @seen)))))))
+          (is (= :no-births (:reason @out))))))))
 
 (deftest a-restart-mid-wait-keeps-the-baby-baseline
   (async done

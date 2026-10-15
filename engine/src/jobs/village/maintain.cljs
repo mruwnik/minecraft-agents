@@ -26,7 +26,7 @@
   It ends :done with {:villagers n :target :steps {step summary}} when some step ran to its end
   and none was incomplete. A summary is the child's :reason, :placed, :missing, :fed, :rolled, :born and :count (a
   child that ended other than :done carries :stopped kind). A child that ended other than :done, declined or failed,
-  or a role without :pos, ends the pass nothing-possible :incomplete (warn maintain.gave-up); a pass where no step ran
+  or a role without :pos, ends the pass nothing-possible :incomplete; a pass where no step ran
   ends condition-failed :nothing-to-do; a child that reached a limit ends the pass limit-reached with it.
   The job names of breed and roll are used, not their internals: their args are as listed above.
   :ignore-zones? is passed to the repair.")
@@ -126,7 +126,6 @@
                (str "maintain done, incomplete: "
                     (str/join ", " (map #(str (name %) (some->> (or (some-> (:reason (report %)) name) (when (= :no-pos (:skipped (report %))) "no-pos")) (str " "))) bad)))
                (str "maintain done: " (count (filter :skipped (vals report))) " steps skipped"))]
-    (when (seq bad) (ctx/emit! c :maintain.gave-up :warn {:reason :incomplete :text text}))
     (cond
       (seq bad) (ctx/end c :nothing-possible :incomplete (assoc out :text text))
       (some ran? (vals report)) (ctx/end c :done nil (assoc out :text text))

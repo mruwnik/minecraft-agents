@@ -23,7 +23,7 @@
   An offer matches when it gives :want, is not sold out and its price (the adjusted count of the first cost stack) is at
   most :max-price (nil: no limit). Offers do not name the enchantment of a book: :want is an item name only.
   Ends with the data {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: :done (info
-  done?) when an offer matches, else (warn roll.gave-up) with the cause:
+  done?) when an offer matches, else with the cause:
   - condition-failed: :gone (not seen within :radius), :baby (takes no job yet), :locked (an offer was already used:
     breaking the workstation changes nothing), :occupied (another block stands at :pos). :baby, :occupied and a named
     :villager's :gone are checked at the start and then wait (a skipped job); a nitwit takes no job ever: impossible,
@@ -140,9 +140,8 @@
   #{:gone :baby :locked :occupied :cell-unseen})
 
 (defn stop!
-  "Warn and end with reason (a keyword) as the cause: condition-failed for those in failed-conditions, else nothing-possible."
-  [c reason text]
-  (ctx/emit! c :roll.gave-up :warn {:reason reason :text text :rolls (rolls c)})
+  "End with reason (a keyword) as the cause: condition-failed for those in failed-conditions, else nothing-possible."
+  [c reason]
   (ctx/end c (cond (= :nitwit reason) :impossible (failed-conditions reason) :condition-failed :else :nothing-possible)
            reason (data-of c nil)))
 
@@ -178,19 +177,19 @@
     (cond
       (= :continue r) :continue
       (let [res (:data r)] (or (:arrived res) (:leg res))) :again
-      :else (stop! c :unreachable "cannot reach the villager"))))
+      :else (stop! c :unreachable))))
 
 (defn ^:async approach!
   "The workstation cell is not in view or memory: walk to it (go-to child, slot :cell) once; if it is still unseen
   there, end :cell-unseen. :again, :continue or the stop."
   [c pos]
   (if (:approached (ctx/mem c))
-    (stop! c :cell-unseen "the workstation cell cannot be seen")
+    (stop! c :cell-unseen)
     (let [r (await (child/call-walk* c :cell {:pos pos :range (reach) :ways #{:walk :clear-seal} :warn false}))]
       (cond
         (= :continue r) :continue
         (:arrived (:data r)) (do (ctx/update-mem! c assoc :approached true) :again)
-        :else (stop! c :unreachable "cannot reach the workstation cell")))))
+        :else (stop! c :unreachable)))))
 
 (defn ^:async read-offers!
   "In reach of the villager: read its offers and decide. :found, :locked, :miss (no match), or :again/:continue/stop."
@@ -208,9 +207,9 @@
                (some #(pos? (:uses % 0)) offers) :locked
                offer {:found offer}
                :else :miss))
-      "gone" (stop! c :gone "the villager is gone")
+      "gone" (stop! c :gone)
       "out-of-reach" :again
-      (if (= :done (u/fail! c :roll.gave-up (str "roll gave up: offers " status)))
+      (if (u/count-fail! c)
         (ctx/end c :nothing-possible :window (data-of c nil))
         :continue))))
 
@@ -226,7 +225,7 @@
     (cond
       (= :continue r) :continue
       (= :done (:kind r)) (:data r)
-      :else (stop! c failed (str (name slot) " ended " (name (:kind r)) ": " (name (contract/cause-key r)))))))
+      :else (stop! c failed))))
 
 (defn ^:async dig!
   "Break the workstation; the break is booked with its time."
@@ -253,7 +252,7 @@
     (cond
       (= :continue r) :continue
       (= :arrived r) :again
-      :else (stop! c :place-failed "the body cannot leave the workstation cell"))))
+      :else (stop! c :place-failed))))
 
 (defn ^:async place!
   "Place the workstation again; the time is booked for the claim wait."
@@ -288,26 +287,26 @@
         (and e (not= "unemployed" profession) (not (:stale (ctx/mem c)))) (do (ctx/update-mem! c assoc :stale true) :again)
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place! c)))
-      (not= item block) (stop! c :occupied (str block " stands where the workstation goes"))
-      (nil? e) (stop! c :gone "the villager is not here")
-      (.-baby e) (stop! c :baby "a baby takes no job")
-      (= "nitwit" profession) (stop! c :nitwit "a nitwit takes no job")
+      (not= item block) (stop! c :occupied)
+      (nil? e) (stop! c :gone)
+      (.-baby e) (stop! c :baby)
+      (= "nitwit" profession) (stop! c :nitwit)
       (and (:stale (ctx/mem c)) (not= "unemployed" profession))
-      (stop! c :still-employed "the villager kept its job after the break: its offers cannot change")
+      (stop! c :still-employed)
       (= "unemployed" profession)
       (do (ctx/update-mem! c dissoc :stale)
           (when-not (:placed (ctx/mem c)) (stamp! c :placed))
           (if (> (waited-s c :placed) claim-s)
-            (stop! c :no-claim "the villager took no job")
+            (stop! c :no-claim)
             :continue))
       (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (await (walk! c (u/pos-of (.-pos e))))
       :else
       (let [r (await (read-offers! c))]
         (cond
           (:found r) (found! c (:found r))
-          (= :locked r) (stop! c :locked "the villager already traded: breaking the workstation changes nothing")
+          (= :locked r) (stop! c :locked)
           (= :miss r) (if out-of-tries?
-                        (stop! c :no-match (str "no match in " (rolls c) " rolls"))
+                        (stop! c :no-match)
                         (do (ctx/update-mem! c dissoc :placed)
                             (await (dig! c))))
           :else r)))))

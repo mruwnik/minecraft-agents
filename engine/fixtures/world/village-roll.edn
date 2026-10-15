@@ -26,7 +26,7 @@
    :after [[:block [16 0 16] "lectern"]]}
   {:name "absent-villager-is-gone"
    :act [[:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000003" :pos #at [16 0 16] :item "lectern" :want "enchanted_book"})]]
-   :expect [{:event {:source :job :kind :roll.gave-up :data {:reason :gone}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :gone}} :within-s 30 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "other-block-on-the-cell-waits-occupied"
    :blocks [[:fill [16 0 16] [16 0 16] "stone"]]

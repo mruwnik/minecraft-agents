@@ -113,7 +113,7 @@
             (is (= {:fed 0 :item "bread" :status :stopped :reason :not-taken} (select-keys @out [:fed :item :status :reason])))
             (is (= 3 (count (tosses p))))
             (is (= left (inv p)) "a drop nobody took is collected back, one someone else took is gone")
-            (is (gave? s :feed.gave-up))))))))
+            (is (not (gave? s :feed.gave-up)) "the ending carries it")))))))
 
 (deftest a-partial-feeding-is-done-only-when-it-meets-least
   (async done

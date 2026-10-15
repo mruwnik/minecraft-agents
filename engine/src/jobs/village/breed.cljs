@@ -20,7 +20,7 @@
   sight; the engine looks round once first), :no-food (the food is not carried and a fetch is off or failed lately). A :target under 2 is impossible
   (:bad-args). Quote: time from :wait-s and the births still missing.
   Ends with the data {:population n :target t :births b}: done when the target is met (done? holds; an already
-  met target is done with 0 births), else with warn breed.gave-up and the cause:
+  met target is done with 0 births), else with the cause:
   - condition-failed :no-pair: no two untried adult villagers in sight and none tried (they left since the start).
   - condition-failed :no-food: a feed child ended without food.
   - nothing-possible :no-births: three attempts in a row without a birth, or no untried pair left after an attempt.
@@ -137,9 +137,8 @@
   {:population (:pop seen) :target (:target (:args c)) :births (births c seen)})
 
 (defn stop!
-  "Warn and end with kind and the cause reason."
-  [c seen kind reason text]
-  (ctx/emit! c :breed.gave-up :warn {:reason reason :text text :population (:pop seen) :births (births c seen)})
+  "End with kind and the cause reason."
+  [c seen kind reason]
   (ctx/end c kind reason (data-of c seen)))
 
 (defn choose!
@@ -152,8 +151,8 @@
                   (sort-by #(u/dist me (u/pos-of (.-pos %)))) (take 2))]
     (cond
       (< (count pair) 2) (if (seq tried)
-                           (stop! c seen :nothing-possible :no-births "no untried pair left")
-                           (stop! c seen :condition-failed :no-pair "fewer than two adult villagers in sight"))
+                           (stop! c seen :nothing-possible :no-births)
+                           (stop! c seen :condition-failed :no-pair))
       :else (do (ctx/update-mem! c #(assoc % :pair (mapv (fn [e] (.-uuid e)) pair) :fed [] :baseline (:kids seen)
                                            :tried (into (vec (:tried %)) (map (fn [e] (.-uuid e))) pair)))
                 :again))))
@@ -179,7 +178,7 @@
                                {:villager next :item item :count n :radius radius :fetch fetch}))]
         (cond
           (= :continue r) :continue
-          (= :no-food (contract/cause-key r)) (stop! c seen :condition-failed :no-food "no food to feed the villagers")
+          (= :no-food (contract/cause-key r)) (stop! c seen :condition-failed :no-food)
           (not= :done (:kind r)) (failed-pair! c)
           :else (do (ctx/update-mem! c update :fed conj next) :again))))))
 
@@ -207,7 +206,7 @@
       (>= (:pop seen) (:target (:args c)))
       (do (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at) (update :births (fnil + 0) (born c seen)))) :again)
       (:waiting m) (await (wait! c seen))
-      (>= (:fruitless m 0) (max-fruitless)) (stop! c seen :nothing-possible :no-births "three attempts without a birth")
+      (>= (:fruitless m 0) (max-fruitless)) (stop! c seen :nothing-possible :no-births)
       (:pair m) (await (feed-pair! c vs seen))
       :else (choose! c vs seen))))
 

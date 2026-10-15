@@ -20,7 +20,7 @@
   up only bread, potato, carrot, wheat, beetroot and seeds: any other :item is impossible (:bad-args).
   When none is carried it is fetched (jobs.lib.need, :fetch true; condition-failed :no-food when :fetch is off or the fetch ended).
   Ends with the data {:fed n :item name}. :done when the villager took :count (done? holds), or the call's :least
-  (default :all) when it gave up after that many. Otherwise, with warn feed.gave-up and the cause:
+  (default :all) when it gave up after that many. Otherwise with the cause:
   - condition-failed :no-food: none carried and none fetched (a listed call with :fetch off waits for food).
   - condition-failed :gone: the villager is not seen within :radius (also a non-villager under the uuid).
   - nothing-possible :unreachable: three blocked walks in a row, or eight legs without getting within reach.
@@ -134,9 +134,8 @@
       :else (ctx/end c :nothing-possible reason data))))
 
 (defn stop!
-  "Warn and end with the ending of reason (a keyword)."
-  [c reason text]
-  (ctx/emit! c :feed.gave-up :warn {:reason reason :text text :fed (fed c)})
+  "End with the ending of reason (a keyword)."
+  [c reason]
   (ending-of c reason))
 
 (defn find-villager
@@ -152,12 +151,12 @@
   (let [opts (need/opts c job)
         {:keys [item count any-of] :as w} (problem c)]
     (if-not (and opts w)
-      (stop! c :no-food "no food to give")
+      (stop! c :no-food)
       (let [e (await (if item (need/item! c item count opts) (need/blocks! c any-of count opts)))]
         (cond
           (= :continue e) :continue
           (and (= :done (:kind e)) (not (problem c))) :again
-          :else (stop! c :no-food "no food to give"))))))
+          :else (stop! c :no-food))))))
 
 (defn gap
   "Blocks between a and b along x or z, whichever is more: a drop is in a body's pickup reach while it is within about
@@ -193,7 +192,7 @@
             _ (ctx/update-mem! c #(-> % (assoc :blocked (if ok? 0 (inc (:blocked % 0)))) (update :walks (fnil inc 0))))
             m (ctx/mem c)]
         (if (or (>= (:blocked m 0) 3) (>= (:walks m 0) (max-walks)))
-          (stop! c :unreachable "cannot get within reach of the villager")
+          (stop! c :unreachable)
           :again)))))
 
 (defn lying
@@ -231,7 +230,7 @@
       (let [r (await (ctx/act c :collect (clj->js {:id (:id (first drops))})))]
         (if (= "collected" (.-status r))
           (do (u/progress! c) :again)
-          (if (= :done (u/fail! c :feed.gave-up "feed gave up: litter"))
+          (if (u/count-fail! c)
             (ending-of c :litter)
             :again))))))
 
@@ -267,7 +266,7 @@
       (if (= "tossed" status)
         (tossed! c e item (.-count r) r)
         (do (ctx/update-mem! c dissoc :tossing)
-            (if (= :done (u/fail! c :feed.gave-up (str "feed gave up: toss " status)))
+            (if (u/count-fail! c)
               (ending-of c (keyword status))
               :again))))))
 
@@ -297,8 +296,8 @@
                      (settle! c (:tossing m))
                      (await (walk! c (:at (:tossing m)) (settle-reach))))
       (:cleanup m) (await (clean-up! c (:cleanup m)))
-      (>= (:refused m 0) (max-refused)) (stop! c :not-taken "the villager does not take the food")
-      (nil? e) (stop! c :gone "the villager is not here")
+      (>= (:refused m 0) (max-refused)) (stop! c :not-taken)
+      (nil? e) (stop! c :gone)
       (nil? item) (await (fetch-food! c))
       (tossing-gap? (u/self-pos c) (u/pos-of (.-pos e))) (await (toss! c e item))
       :else (await (walk! c (stand (u/self-pos c) (u/pos-of (.-pos e)) (:blocked m 0)) 0)))))
