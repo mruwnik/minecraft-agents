@@ -340,7 +340,9 @@
   is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
   (jobs.lib.near/go-near!)."
   [c pos]
-  (let [walked (await (near/go-near! c pos (if (or (:stay-level (:args c)) (drop-in-line? c pos)) (reach) 1) (cond-> {:zone-tolls true} (underground? c) (assoc :at-night :go))))]
+  (let [in-reach? (u/within? (u/self-pos c) (cell-of pos) (reach))
+        walked (await (near/go-near! c pos (if (or (:stay-level (:args c)) (drop-in-line? c pos)) (reach) 1)
+                                     (cond-> {:zone-tolls true :escalate (not in-reach?)} (underground? c) (assoc :at-night :go))))]
     (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
       :there
       walked)))
