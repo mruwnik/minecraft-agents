@@ -1,6 +1,6 @@
 ;; go-to's quote (cards b34b1359, ee7d7b5e, 6a1a0fc3, 4b8bb3de): the dry run follows the body's fall policy like go-to.
 ;; A 5 high platform, the body on top, the goal on the floor past its edge, no other way down: feather falling IV finds the
-;; 5 block drop (0.96 hp), plain boots do not (2 hp over :max-damage 1.5; the default budget at full health would pay it): found false. The body never moves.
+;; 5 block drop (0.96 hp), plain boots do not (2 hp over :spend {:health 1.5}; the default budget at full health would pay it): found false. The body never moves.
 {:defaults
  {:tags [:movement] :time :any
   :plot {:height 14}

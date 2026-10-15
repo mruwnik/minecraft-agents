@@ -12,35 +12,35 @@
  [{:name "feather-falling-iv-takes-a-4-drop"
    :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 1.5})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 1.5}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "feather-falling-iv-takes-a-5-drop"
    :body {:at [8.5 5 16.5]}
    :blocks [[:fill [1 0 1] [15 4 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 1.5})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 1.5}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "feather-falling-iv-refuses-a-6-drop"
    :body {:at [8.5 6 16.5]}
    :blocks [[:fill [1 0 1] [15 5 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 1.5})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 1.5}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind :result}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "plain-boots-refuse-a-4-drop"
    :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 0.5})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 0.5}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind :result}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "plain-boots-walk-round-a-4-drop-by-the-ramp"
    :blocks [[:fill [1 0 1] [15 3 30] "stone"] [:fill [13 3 28] [15 3 30] "air"] [:fill [14 2 28] [15 2 30] "air"] [:fill [15 1 28] [15 1 30] "air"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 0.5})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 0.5}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 80 :until {:source :job :kind :result}}]
    :after [[:body-near [22.5 0 16.5] 2]]}
@@ -50,6 +50,6 @@
    :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"]
          [:rcon "effect give $BODY minecraft:instant_damage 1 0 true"] [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"] [:wait-s 1]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}]}

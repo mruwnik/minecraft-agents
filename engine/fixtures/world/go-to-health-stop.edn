@@ -11,11 +11,11 @@
   :limit-s 200}
  :cases
  [{:name "full-health-walk-takes-the-10-drop"
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :escalate false})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [46.5 0 16.5] 2]]}
   {:name "health-lost-on-the-way-waits-to-heal-before-the-drop"
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :escalate false})]
+   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]
          [:await {:source :action :kind :started :data {:name "steer"}} 30]
          [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]]
    :expect [{:event {:source :job :kind :go-to.waiting-health} :within-s 40 :of-job true}
