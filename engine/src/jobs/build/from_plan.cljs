@@ -72,7 +72,7 @@
   the call's :least (default :all); else with :text naming the missing count and what it left: nothing-possible
   :incomplete when cells were given up, condition-failed {:reason :no-items :needs} when items are short, condition-failed
   :refused when the rules refuse the rest, nothing-possible :shut-in. For a block placed in the wrong state, :found names the state it came out in.
-  Events: build.short, build.gave-up, build.refused and build.wrong (warns). Event texts name
+  Events: build.short, build.gave-up, build.refused, build.wrong and build.gap (a fence or wall placed over air; warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   Start facts (one build.declined warn naming the plan and the reason): no zone list read (unless :ignore-zones?) is a
   failed condition {:reason :no-zones}, also later in the call (a plan that goes bad later ends impossible :plan-trouble too); a plan that is missing, unreadable or has no cells to
@@ -196,6 +196,14 @@
               (-> m (update :given-up dissoc pos) (update :walk-given dissoc pos) (update-in [:retries pos] (fnil inc 0))))
             m open)))
 
+(defn warn-gap!
+  "A build.gap warn when item, a fence or wall just placed at pos, stands over a seen cell of air: an animal walks out under it."
+  [c pos item]
+  (let [below (u/seen-name (:primitives c) (zipmap [:x :y :z] (update pos 1 dec)))]
+    (when (and (re-find #"_(fence|wall)$" item) below (shape/air? below))
+      (ctx/emit! c :build.gap :warn {:plan (:plan (:args c)) :cells [pos]
+                                     :text (str "build of " (:plan (:args c)) ": " item " at " (pr-str pos) " stands over air, a gap under it")}))))
+
 (defn ^:async place-one!
   "Place the cell's item after asking the access rules and jobs.lib.placement once more; a refusal is booked, nothing
   is placed."
@@ -216,6 +224,7 @@
         (case outcome
           :continue :continue
           :placed (let [wrong (misplaced want item (:block (:data e)))]
+                    (warn-gap! c pos item)
                     (ctx/update-mem! c #(cond-> (update (dissoc % :placing) :placed (fnil inc 0))
                                           wrong (assoc-in [:misplaced pos] wrong))))
           :already (ctx/update-mem! c dissoc :placing)

@@ -151,6 +151,15 @@
             (is (= 8 (:placed result)))
             (is (= 1 (count (h/events-of seen :build.gave-up))))))))))
 
+(deftest a-fence-placed-over-air-warns-of-the-gap-under-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (start {:inventory kit :blocks {"4,63,3" "air"}} {"pen" (pen-plan)})
+              _ (await (child-outcome eng job {:plan "pen"} 200))
+              gaps (h/events-of seen :build.gap)]
+          (is (= [[[4 64 3]]] (mapv :cells gaps)) "only the fence over the dip, once"))))))
+
 (deftest a-cell-it-cannot-walk-to-is-given-up
   (async done
     (tu/run-async done
@@ -843,6 +852,17 @@
               result (await (child-outcome eng job {:plan "pen" :fetch false} 300))]
           (is (= {[4 64 3] :no-tool} (:given-up result)))
           (is (= "stone" (block p [4 64 3]))))))))
+
+(deftest fetch-false-gives-up-a-cobweb-and-stone-clear-with-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "row" :parts [{:id "clear" :cells [[4 64 3] [5 64 3]] :want :clear}]}
+              {:keys [eng p]} (start {:blocks {"4,64,3" "cobweb" "5,64,3" "stone"} :inventory []} {"row" plan})
+              _ (tu/seeing-all p)
+              result (await (child-outcome eng job {:plan "row" :fetch false} 300))]
+          (is (= {[4 64 3] :no-tool [5 64 3] :no-tool} (:given-up result)))
+          (is (= "cobweb" (block p [4 64 3]))))))))
 
 (deftest the-walk-to-a-stand-never-escalates-and-a-waiting-walk-counts-no-failure
   (async done
