@@ -6,7 +6,10 @@
             [engine.ctx :as ctx]
             [engine.event-api :as event-api]
             [engine.events :as events]
+            [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
+            [engine.perception :as perception]
             [jobs.lib.world-files :as world-files]
             ["fs" :as fs]
             ["path" :as path]
@@ -234,3 +237,33 @@
       {:status "none" :r #js {:reason nil}} :unseen-floor-dark
       {:status "none" :r #js {:reason nil :damageRefused true}} nil
       {:beyond {:kind :jump :at [1 2 3]}} :abilities)))
+
+(defn ^:async dark-of
+  "The quote's :dark for a walk to [10 64 1] over a floor, in a world seen through the body's perception: light is the
+  [sky block] of every cell, `lit` {[x y z] [sky block]} overrides some; seen? false skips the look passes."
+  [{:keys [time light lit seen?]}]
+  (let [raw-p (tu/fake {:blocks (floor 0 0 11 2) :time time :offlineScale 0.0001 :self {:pos {:x 0 :y 64 :z 1}}})
+        _ (swap! (fake/state raw-p) merge {:light-default light :light lit})
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000) :rand (constantly 0.5)})
+        p (perception/wrap raw-p per)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now (constantly 1000000)
+                          :events (events/make {:body "Fake" :sinks [(second (tu/legacy-capture-sink))] :now (constantly 1000000)})})]
+    (when seen?
+      (aset p "seenBlockAt" (fn [pos] #js {:name (.-name (.blockAt raw-p pos)) :pos pos :age-ms 0}))
+      (doseq [yaw [0 90 180 270]]
+        (swap! (fake/state raw-p) assoc :yaw yaw)
+        (perception/pass! per)))
+    (get-in (await (quote-reply eng {:pos [10 64 1] :range 0})) [:quote :route :dark])))
+
+(def night-ms 14000)
+
+(deftest the-quote-counts-seen-dark-cells-and-unseen-ones-only-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lit (await (dark-of {:time night-ms :light [15 4] :seen? true}))
+              dark (await (dark-of {:time night-ms :light [15 0] :seen? true}))]
+          (is (< lit 2) "seen and lit: at most the cell under the body, which its own sight does not show")
+          (is (= 11 dark) "seen dark: every cell of the 11-step route"))
+        (is (= 11 (await (dark-of {:time night-ms :light [15 4] :seen? false}))) "unseen at night reads dark")
+        (is (zero? (await (dark-of {:time 1000 :light [15 0] :seen? false}))) "unseen by day costs like a lit one")))))

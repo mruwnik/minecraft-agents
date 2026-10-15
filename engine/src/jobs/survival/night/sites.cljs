@@ -26,9 +26,9 @@
    :jobs.survival.night.sites/max-flees {:default 3 :doc "Walks to somewhere safer a night tries." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/ground-candidates {:default 16 :doc "Seen ground cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/cave-candidates {:default 16 :doc "Seen cave cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
-   :jobs.survival.night.sites/max-dark-cells {:default 0 :doc "Dark cells (seen dark, or unseen at night) go-to's planned route to a roofed place may cross for the night to walk there instead of digging in." :spec (a/int-in 0 nil)}
+   :jobs.survival.night.sites/dig-in-seconds {:default 8 :doc "What digging in costs (seconds, as go-to prices a route): a roofed place is walked to when go-to's planned route costs no more." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/cave-scan {:default 2048 :doc "Solid blocks one cave search reads: nearest first, so it reaches about 16 blocks around the body." :spec (a/int-in 0 nil)}})
-(defn max-dark-cells [] (settings/get settings :jobs.survival.night.sites/max-dark-cells))
+(defn dig-in-seconds [] (settings/get settings :jobs.survival.night.sites/dig-in-seconds))
 (defn max-sites [] (settings/get settings :jobs.survival.night.sites/max-sites))
 
 (defn relocate-reach [] (settings/get settings :jobs.survival.night.sites/relocate-reach))
@@ -115,34 +115,33 @@
          (filter (fn [{:keys [pos]}] (and (<= (u/dist here pos) radius) (roofed? pos))))
          (sort-by #(u/dist here (:pos %))))))
 
-(defn ^:async route-dark
-  "The dark cells (seen dark, or unseen at night) on the route go-to's quote plans to place, or nil with no route or
-  no perception to read the light with."
+(defn ^:async route-cost
+  "Seconds go-to's quote plans for the route to place, dark cells priced in (the planner's own cost), or nil with no route."
   [c {:keys [name]}]
   (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:place name :range 0})))]
-    (when (:found r) (:dark r))))
+    (when (:found r) (+ (:seconds r) (or (:dark-seconds r) 0)))))
 
-(defn ^:async lit-route?
-  "Whether go-to's route to place crosses at most max-dark-cells dark cells; a route too dark is quoted again after
-  one look round per body cell (cells it has not seen read dark at night)."
+(defn ^:async cheap-route?
+  "Whether go-to's planned route to place costs no more than digging in (dig-in-seconds). Cells the body has not seen read
+  dark at night, so a route dearer than that is quoted again after one look round per body cell."
   [c place]
-  (let [lit? #(some-> % (<= (max-dark-cells)))
-        d (await (route-dark c place))
+  (let [cheap? #(some-> % (<= (dig-in-seconds)))
+        cost (await (route-cost c place))
         cell (sh/feet (:primitives c))]
     (cond
-      (lit? d) true
-      (or (nil? d) (= cell (:route-looked (ctx/mem c)))) false
+      (cheap? cost) true
+      (or (nil? cost) (= cell (:route-looked (ctx/mem c)))) false
       :else (do (ctx/update-mem! c assoc :route-looked cell)
                 (await (sense/look-round! c []))
-                (boolean (lit? (await (route-dark c place))))))))
+                (boolean (cheap? (await (route-cost c place))))))))
 
 (defn ^:async roofed-place!
-  "The nearest of places (roofed-places-in, nearest first) reached over a lit route (lit-route?), as {:name :pos}, or
+  "The nearest of places (roofed-places-in, nearest first) reached over a route no dearer than digging in (cheap-route?), as {:name :pos}, or
   nil."
   [c places]
   (loop [[place & more] places]
     (when place
-      (if (await (lit-route? c place)) place (recur more)))))
+      (if (await (cheap-route? c place)) place (recur more)))))
 
 (defn near-roofed-home
   "The nearest roofed place of :roofed-places within :home-radius, lit or not, as {:name :pos}, or nil."

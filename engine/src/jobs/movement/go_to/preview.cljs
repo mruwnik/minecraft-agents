@@ -28,7 +28,7 @@
 
 (defn route
   "The report of a plan's steps and planner path: length, seconds, summary, steps, moves, doors, waypoints, :damage (hp
-  its drops and plants cost) and :drown (hp) where the plan drowns."
+  its drops and plants cost), :dark-seconds (the planner's extra seconds for dark cells) and :drown (hp) where the plan drowns."
   [steps ^js path]
   (cond-> {:length (walk/path-length steps)
    :seconds (/ (js/Math.round (* 10 (.-seconds (.-cost path)))) 10)
@@ -37,6 +37,7 @@
    :moves (dissoc (frequencies (map :move (rest steps))) :walk)
    :doors (vec (distinct (for [s steps o (:opens s)] [(:x o) (:y o) (:z o)])))
    :waypoints (waypoints steps)}
+    (pos? (or (.-darkSeconds (.-cost path)) 0)) (assoc :dark-seconds (/ (js/Math.round (* 10 (.-darkSeconds (.-cost path)))) 10))
     (some :damage steps) (assoc :damage (/ (js/Math.round (* 10 (reduce + (keep :damage steps)))) 10))
     (pos? (or (.-drown (.-cost path)) 0)) (assoc :drown (/ (js/Math.round (* 10 (.-drown (.-cost path)))) 10))))
 

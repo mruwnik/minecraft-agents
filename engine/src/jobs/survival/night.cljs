@@ -60,8 +60,8 @@
   - roofed, buried or shut in a closed room: done {:night :roofed} (the queue runs).
   - by day, a dug-in body with a known hostile near (jobs.lib.dawn/hostile-hold?) stays in (info night.dawn-hold) until it is gone or the dawn grace passes.
   - else, before any pit and while no site has failed tonight: a remembered roofed place (:roofed-places, nearest first)
-    within :walk-radius whose column is not seen open (a roof cell unseen after a look counts as roof), and whose route (go-to's quote) crosses at most
-    sites/max-dark-cells (0) dark cells (seen dark, or unseen; quoted again after a look round): walk there (go-to :place). A walk
+    within :walk-radius whose column is not seen open (a roof cell unseen after a look counts as roof), and whose route (go-to's quote, dark cells priced in) costs at most
+    sites/dig-in-seconds (8) seconds (quoted again after a look round): walk there (go-to :place). A walk
     that does not arrive is not tried again tonight, and the night digs in; arrived, the next pass is roofed.
   - else a safe place: jobs.survival.dig-in here, unless a site tonight failed within 8 blocks. A dig-in that does not
     roof the body (any other ending) writes a :night-site {:pos :reason} entry, and the body walks (go-to) to the

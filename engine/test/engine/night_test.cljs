@@ -789,25 +789,34 @@
           (is (= [] (st/calls p "place")) "no pit dug: the route was looked at, found lit, and walked")
           (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
 
-(deftest an-unlit-route-is-dug-in-where-the-body-is
+(deftest a-long-unlit-route-is-dug-in-where-the-body-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (-> lit-world (assoc :light-default [15 0])
+                                                        (update :blocks merge {"30,66,0" "stone"}))
+                                                    {:x 30 :y 64 :z 0}))]
+          (await (core/tick! eng))
+          (is (seq (st/calls p "place")) "go-to's planned cost of the dark route beats digging in: dug in")
+          (is (< (:x (st/pos-of p)) 5)))))))
+
+(deftest a-short-lit-route-with-one-dark-cell-is-walked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :light {[5 64 0] [15 0]}) {:x 10 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 40))
+          (is (= [] (st/calls p "place")) "one dark cell costs a little more, not a refusal: walked")
+          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
+
+(deftest a-short-unlit-route-costs-less-than-digging-in-and-is-walked
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :light-default [15 0]) {:x 10 :y 64 :z 0}))]
-          (await (core/tick! eng))
-          (is (seq (st/calls p "place")) "dark route: dug in")
-          (is (< (:x (st/pos-of p)) 5)))))))
-
-(deftest an-unlit-route-within-the-dark-cells-setting-is-walked
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (await (settings/with-settings {:jobs.survival.night.sites/max-dark-cells 64}
-                 (fn ^:async run []
-                   (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :light-default [15 0]) {:x 10 :y 64 :z 0}))]
-                     (await (tu/run-until-empty eng 40))
-                     (is (= [] (st/calls p "place")) "go-to's route crosses no more dark cells than allowed: walked")
-                     (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z])))))))))))
+          (await (tu/run-until-empty eng 40))
+          (is (= [] (st/calls p "place")) "10 dark blocks cost about twice a lit walk, still under the dig-in")
+          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
 
 (deftest a-home-beyond-the-walk-radius-is-not-walked-to
   (async done
