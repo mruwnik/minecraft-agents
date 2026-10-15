@@ -6,8 +6,7 @@
 # Prints the worktree path (last line). Dir: $FIXER_WT_ROOT (default ~/.claude/jobs/worktrees)/fix-<card8>.
 # Shared with the main checkout by symlink, so tools and tests there write to the same place: node_modules, worlds/ (bodies, plans, zones),
 # state/, textures/ and the frozen pathfinding fixtures. Blueprints stay per checkout (tracked files): bodies started from the worktree
-# need --worlds <main>/worlds --blueprints <main>/blueprints. No builds here: the first tools/compile or run_tests there starts the
-# worktree's own shadow-cljs server (1-2 GB, stops itself when idle); --remove stops it by pid.
+# need --worlds <main>/worlds --blueprints <main>/blueprints. No builds here; a worktree runs no shadow-cljs server (tools/compile).
 set -euo pipefail
 
 # The main checkout (source of the shared links), whichever checkout this script runs from.
@@ -23,7 +22,6 @@ esac
 if [ "${1-}" = --remove ]; then
   valid "${2-}"
   wt=$root/fix-$2
-  pid=$(cat "$wt/dashboard/.shadow-cljs/server.pid" 2>/dev/null) && kill "$pid" 2>/dev/null || true
   git -C "$repo" worktree remove --force "$wt"
   git -C "$repo" branch -D "fix/$2" >/dev/null
   exit

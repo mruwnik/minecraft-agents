@@ -4,15 +4,12 @@
 # Checks out <commit> at <dir>, then adds what a clean checkout lacks (all git-ignored): node_modules (symlinked to the main
 # checkout's), the .shadow-cljs dir, worlds/test (symlinked to the main checkout's: world.json, biomes.json and the bodies; nothing else under worlds/), textures/, engine/test/fixtures/pathfinding, engine/out/test-ns-ms.json (shard timeouts), the built agent-tools.cjs and the viewer cljs.
 # At the end it prints the body flags that point the worktree at the main checkout's worlds and blueprints (untracked blueprints are not in the checkout).
-# Any failing step fails the script. The builds there start one shadow server (under a res-slot `server` slot, ~1-2 GB);
-# remove the worktree afterwards with `tools/integration-worktree.sh --remove <dir>`: it kills that server by PID, then removes it.
+# Any failing step fails the script. Each build there is a one-shot shadow-cljs JVM under a res-slot `server` slot (tools/compile);
+# remove the worktree afterwards with `tools/integration-worktree.sh --remove <dir>`.
 set -euo pipefail
-export RES_SLOT_HEAVY=1 # its shadow server may take the reserved server slot (tools/res-slot.json)
+export RES_SLOT_HEAVY=1 # its compiles may take the reserved server slot (tools/res-slot.json)
 
 if [ "${1:-}" = --remove ] && [ $# -eq 2 ]; then
-  for d in dashboard; do
-    pid=$(cat "$2/$d/.shadow-cljs/server.pid" 2>/dev/null) && kill "$pid" 2>/dev/null || true
-  done
   git -C "$(cd "$(dirname "$0")/.." && pwd)" worktree remove --force "$2"
   exit
 fi
