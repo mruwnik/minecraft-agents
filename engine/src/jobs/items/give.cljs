@@ -278,12 +278,16 @@
       (await (before-toss! c now)))))
 
 (defn ^:async cleanup
-  "However the call ends: the drop of this call's toss that still lies is collected back. Done, or nothing-possible
-  :litter when collects change nothing."
+  "However the call ends: the drop of this call's toss that still lies is collected back, never more than was tossed.
+  Done, or nothing-possible :litter when collects change nothing."
   [c _]
   (let [{:keys [item radius]} (:args c)
-        {:keys [before toss-at tossed litter]} (ctx/mem c)
-        lying #(when (and tossed (not litter)) (remove (fn [d] (contains? before (:id d))) (look/drops (:primitives c) item radius toss-at)))]
+        {:keys [before toss-at tossed had litter]} (ctx/mem c)
+        lying #(when (and tossed (not litter))
+                 (let [back (- (storage/carried (u/inventory (:primitives c)) item) (- had tossed))
+                       owed (- tossed back)]
+                   (filter (fn [d] (and (not (contains? before (:id d))) (<= (:count d) owed)))
+                           (look/drops (:primitives c) item radius toss-at))))]
     (loop [failed 0]
       (let [l (lying)]
         (cond

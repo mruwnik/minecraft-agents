@@ -275,3 +275,20 @@
           (is @cut "the cut came with the drop lying")
           (is (= {"bread" 5} (inv p)) "the cleanup took the drop back")
           (is (zero? (item-count p))))))))
+
+(deftest a-give-cleanup-leaves-a-same-item-drop-larger-than-what-it-tossed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup (assoc bread :entities [(steve 10)]) {:player "Steve" :item "bread" :count 5})
+              cut (atom false)]
+          (await (run-ticks s 40 500 false
+                            (fn [p _]
+                              (when (and (not @cut) (seq (calls p "toss")) (pos? (item-count p)))
+                                (reset! cut true)
+                                (swap! (fake/state p) update :entities conj
+                                       (assoc (first (filter #(= "item" (:kind %)) (entities p))) :id 900 :item {:name "bread" :count 8}))
+                                (core/cancel! eng (first (:list (core/state eng))))))))
+          (is @cut)
+          (is (= {"bread" 5} (inv p)) "only the tossed count came back")
+          (is (= [900] (map :id (filter #(= "item" (:kind %)) (entities p))))))))))
