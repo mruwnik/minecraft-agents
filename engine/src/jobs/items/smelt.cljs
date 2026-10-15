@@ -38,6 +38,7 @@
   its :because. :fetch false skips all of it. Starts only with an item some furnace cooks (impossible :not-smeltable, the job leaves the queue;
   an output such as cooked_chicken names its input). Quote: the cook time of the count (a furnace; half in the other
   two), the input and fuel items, the product; open-ended when no furnace is given or seen.
+  The default :spend :time is ::time-s for the walk and fetches plus the cook of the count (10 s an item, a stack when nil).
   Ends :done with {:smelted n :wanted n}: :wanted is the count this job loaded and :smelted what came of it; input
   already in the furnace and the output already there do not count. A give-up warns (smelt.gave-up) and ends with the
   cause named and the same data (0 of N is never :done):
@@ -60,7 +61,7 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::time-s {:default 120 :doc "Seconds the call may take besides the cook of its count (the walk and the fetches); the default time spend is this plus the cook, 10 s an item." :spec (a/num-in 0 nil)}
    ::slack-ms {:default 2000 :doc "Slack added to a wait for the furnace, in ms." :spec (a/int-in 0 nil)}
    ::grace-ms {:default 6000 :doc "How long a furnace may look unlit after a load before it counts as stuck, in ms." :spec (a/int-in 0 nil)}
    ::recheck-ms {:default 6000 :doc "How often the furnace is looked at again, in ms." :spec (a/int-in 0 nil)}
@@ -427,6 +428,15 @@
 (def target [:item])
 
 (def defaults {:spend {:time ::time-s}})
+
+(defn legacy-args
+  "The call's default :spend :time: ::time-s for the walk and fetch plus the furnace's cook of the count (a stack when
+  nil) of each item; a given :spend :time stays."
+  [{:keys [item count] :as args}]
+  (let [n (* (or count 64) (if (coll? item) (clojure.core/count item) 1))
+        cook-s (/ (settings/ticks->ms (* n (sp/cook-ticks "furnace"))) 1000)]
+    (cond-> args
+      (nil? (get-in args [:spend :time])) (assoc-in [:spend :time] (+ (settings/get settings ::time-s) cook-s)))))
 
 (defn not-smeltable
   "At the call's start: impossible when the :item is one no furnace cooks, else nil."

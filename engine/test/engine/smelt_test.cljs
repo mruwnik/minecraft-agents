@@ -250,6 +250,30 @@
           (let [done-event (first (of-kind seen :smelt.done))]
             (is (= 3 (:smelted done-event)))))))))
 
+(deftest a-full-stack-smelts-within-the-default-budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:blocks {pos-key "furnace"}
+                                                 :inventory [{:name "raw_iron" :count 64} {:name "coal" :count 8}]})
+              _ (core/submit! eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 64}) {})
+              _ (await (ticks eng 1))
+              _ (advance! p 1)
+              _ (await (ticks eng 2))
+              _ (advance! p (* 64 200))
+              _ (swap! clock + 650000)
+              _ (await (ticks eng 4))]
+          (is (= 64 (get (inv-of p) "iron_ingot")) "all 64 were taken")
+          (is (= 64 (:smelted (first (of-kind seen :smelt.done)))))
+          (is (empty? (of-kind seen :job.limit-reached))))))))
+
+(deftest the-default-time-budget-covers-the-cook-of-the-count
+  (let [time-of #(get-in (smelt/legacy-args %) [:spend :time])]
+    (is (< 640 (time-of {:item "raw_iron" :count 64})))
+    (is (< 640 (time-of {:item "raw_iron"})) "no count: up to a stack")
+    (is (< (time-of {:item "raw_iron" :count 3}) (time-of {:item "raw_iron" :count 64})))
+    (is (= 5 (time-of {:count 64 :spend {:time 5}})) "a given time stays")))
+
 (deftest a-check-that-wakes-early-finds-the-cook-unfinished-and-waits-again
   (async done
     (tu/run-async done
