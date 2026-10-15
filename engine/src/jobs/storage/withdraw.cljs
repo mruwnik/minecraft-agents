@@ -16,7 +16,8 @@
   "Walk to the chest (one go-to) and take items out, every name in one call, until at least the wanted count of
   each name in :items is carried. What is short is re-derived from the inventory before each take, so a cut or
   restart loses nothing.
-  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (can-start?).
+  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (can-start? and can-run?: a chest place lost mid-job
+  waits, a reflex ends condition-failed).
   Ends done when everything is carried (also at once when it already is), or when at least the call's :least items
   toward the wanted ones are carried at any other ending (:all wants every one). The data of every other ending has :gave-up and
   :short {name n}, what is still missing; the report counts the items carried toward the wanted ones.
@@ -57,6 +58,7 @@
 (def defaults {:least :all :spend {:job-time ::time-s}})
 
 (def can-start? checks/chest-known)
+(def can-run? checks/chest-known)
 
 (defn done?
   "Everything wanted is carried; :done counts the carried items toward the wanted ones."

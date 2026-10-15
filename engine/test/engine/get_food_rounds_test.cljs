@@ -1026,3 +1026,14 @@
                      (let [{:keys [eng p]} (setup {:self {:food food} :entities [cow (assoc cow :id 8 :pos {:x 8 :y 64 :z 0})]})]
                        (await (one-round! eng {:attack-gap-ms 0 :explore false :food 6}))
                        (is (= n (boolean (seq (calls p "attack")))) (str "lift " lift " food " food)))))))))))
+
+(deftest the-hungry-reflex-cooks-raw-food-and-eats-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (assoc furnace-world :self {:food 2}) :step-ms 2000)]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :hungry}]}"))
+          (await (core/tick! eng))
+          (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
+          (is (= [] (filterv #(= :food.no-cook (:kind %)) @seen)) "no give-up on the cooking wait")
+          (is (= [] (reflex-events seen :continued))))))))

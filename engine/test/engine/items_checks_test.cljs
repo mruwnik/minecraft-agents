@@ -52,6 +52,9 @@
     'jobs.items.equip {:inventory [{:name "dirt" :count 1}]} {:item "iron_pickaxe" :hand "main" :fetch false} :no-item
     'jobs.items.wear {:inventory [{:name "dirt" :count 1}]} {:item "iron_helmet"} :no-item))
 
+(deftest a-started-withdraw-waits-when-its-chest-is-gone
+  (is (= [:later :no-chest] (kind+reason (verdict-of :can-run? 'jobs.storage.withdraw {} {:items {"bread" 1}})))))
+
 (deftest a-known-chest-passes
   (is (= :ok (first (verdict-of :can-start? 'jobs.storage.deposit {} {:chest {:x 3 :y 64 :z 0}})))))
 
