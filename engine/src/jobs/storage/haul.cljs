@@ -1,9 +1,10 @@
 (ns jobs.storage.haul
   (:require [engine.args :as a]
-            [engine.ctx :as ctx]
             [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
+            [jobs.lib.checks :as checks]
             [jobs.lib.pace :as pace]
             [jobs.lib.storage :as storage]
             [jobs.lib.least :as least]
@@ -17,7 +18,7 @@
   or no source holds anything more; else walk to the next source chest, inspect it, take one bag load (one slot is
   left free; jobs.storage.withdraw as carry-at-least targets), repeat. The targets are saved before the take, so a
   restart takes the same load again without doubling it; the chests and the bag are the rest of the state.
-  Needs (conditions): a main chest (:to, else the storage group, so a known :chest place), else :no-chest; some :from, else :no-source.
+  Needs (can-start?): a main chest (:to, else the storage group, so a known :chest place), else :no-chest; some :from, else :no-source.
   Sources that are in the storage group are not meant: withdraw may then take from the group's other chests.
   Ends done {:trips n :moved {name n}} once every source is empty (or holds only :keep), or at any other ending when at
   least the call's :least items are moved (default :all: only a clean finish); n counts the deposits. The data of
@@ -50,7 +51,7 @@
   (when-not (or (some? (:to (:args c))) (seq (storage/group (ctx/view c))))
     {:reason :no-chest}))
 
-(def conditions [[:fn no-source] [:fn no-chest]])
+(defn can-start? [c] (contract/all [(checks/later-with (no-source c)) (checks/later-with (no-chest c))]))
 
 (defn done?
   "The source chests looked at so far; ends by the round, which also needs a last deposit."

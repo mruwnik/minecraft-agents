@@ -16,7 +16,7 @@
   (let [p (tu/fake {})]
     (doseq [[sym a] args
             :let [job (get registry/jobs sym)]]
-      (is (vector? (:conditions job)) (str sym " has conditions"))
+      (is (fn? (:can-start? job)) (str sym " has can-start?"))
       (is (nil? (:check job)) (str sym " has no old check"))
       (is (map? (:defaults job)) (str sym " has defaults"))
       (is (fn? (:quote-of job)) (str sym " has quote-of"))
@@ -33,4 +33,4 @@
         (doseq [sym '[jobs.storage.kit]]
           (let [{:keys [eng]} (wt/setup {:containers {"10,64,0" []}})
                 e (await (wt/ending-of eng sym {} 6))]
-            (is (= {:kind :condition-failed :cause {:reason :no-chest}} (select-keys e [:kind :cause])) (str sym))))))))
+            (is (= {:kind :condition-failed :cause {:reason :no-chest}} (update (select-keys e [:kind :cause]) :cause dissoc :text)) (str sym))))))))

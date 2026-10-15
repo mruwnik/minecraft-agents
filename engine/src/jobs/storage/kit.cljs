@@ -11,7 +11,7 @@
             [jobs.lib.stock :as stock]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.need :as getting]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.storage :as storage]
@@ -27,7 +27,7 @@
   any name in the eat table.
   One call is the whole kit: it yields :continue only while a child waits on the world. Each step works out the needs from the inventory and the plan from the inspected chest, and hands the plan to
   jobs.storage.withdraw as carry-at-least targets.
-  Needs (condition, at the start only): a known chest unless the kit is complete, else :no-chest. Ends done with data {:gave-up false :short {}} when the kit is
+  Needs (can-start?): a known chest unless the kit is complete, else :no-chest. Ends done with data {:gave-up false :short {}} when the kit is
   complete, or at any other ending when at least the call's :least kinds are complete (:all wants every one). Every other ending has :short, what is still lacking keyed by the kind string or :food, and :gave-up:
   - condition-failed :chest-lacks {:gave-up false}: the chest could not supply it (and :missing {kind text} when the craft
     phase found no way);
@@ -146,14 +146,12 @@
      {:take {} :short {}}
      needs)))
 
-(defn no-chest
+(defn can-start?
   "A chest is known, or nothing is needed: a complete kit then ends at once without walking or inspecting."
   [c]
-  (when (and (not (storage/chest-of (ctx/view c) (:args c)))
-             (seq (needs (u/inventory (:primitives c)) (:args c))))
-    {:reason :no-chest}))
-
-(def conditions [[:fn (started/at-start no-chest)]])
+  (if (seq (needs (u/inventory (:primitives c)) (:args c)))
+    (checks/chest-known c)
+    (contract/ok :complete "the kit is complete")))
 
 (defn chest-of!
   "The chest of this call, kept in memory at the first look so a place forgotten meanwhile does not lose it."

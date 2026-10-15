@@ -2,7 +2,9 @@
   "Checks of a job's own, shared by jobs and never offered to agents: fns of the ctx giving a status (engine.contract).
   jobs.lib.cond holds the checks of the agent language."
   (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [jobs.lib.look :as look]
+            [jobs.lib.storage :as storage]
             [jobs.lib.submitted :as submitted]
             [jobs.lib.world :as known]))
 
@@ -44,3 +46,22 @@
   "The can-start? of a job with no precondition: it still makes the job a contract job."
   [_]
   (contract/ok :holds "no precondition"))
+
+(defn holds "A :ok status for a check with nothing to say." [] (always nil))
+
+(defn cause-text [m] (str (or (:why m) (:text m) (name (:reason m)))))
+
+(defn later-with
+  "The status of an optional cause map ({:reason r ...data}): :ok when nil, else :later with its :why or :text."
+  [m]
+  (if m (later-of (cause-text m) m) (holds)))
+
+(defn never-with "Like later-with, :never." [m]
+  (if m (never-of (cause-text m) m) (holds)))
+
+(defn chest-known
+  "Later :no-chest until the call's :chest or the known :chest place is there."
+  [c]
+  (if (storage/chest-of (ctx/view c) (:args c))
+    (contract/ok :chest "a chest is known")
+    (contract/later :no-chest "no chest known")))

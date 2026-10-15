@@ -1,5 +1,5 @@
 (ns jobs.items.obtain
-  (:require [jobs.lib.started :as started]
+  (:require [jobs.lib.checks :as checks]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -107,15 +107,14 @@
     {:reason :bad-args :why e}))
 
 (defn no-source
-  "Before the call starts, source-cause; a plain no-source waits for the round's look around when chests are allowed.
-  Bad args are the round's to end."
+  "Source-cause; a plain no-source waits for the round's look around when chests are allowed. Bad args are bad-args'."
   [c]
-  (when-not (or (:start (ctx/mem c)) (args-error (:args c)))
+  (when-not (args-error (:args c))
     (let [cause (source-cause c)]
       (when-not (and (= :no-source (:reason cause)) (way? c :chest) (not (look/surveyed? c)))
         cause))))
 
-(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))] [:fn (started/at-start no-source)]])
+(defn can-start? [c] (contract/all [(checks/never-with (bad-args c)) (checks/later-with (no-source c))]))
 
 (defn done?
   "The count carried, and no tree a cut left half felled (the round fells it whole first)."

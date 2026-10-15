@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.stock :as stock]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.storage.deposit :as deposit]
@@ -15,7 +16,7 @@
   "Walk to the chest (one go-to) and take items out, every name in one call, until at least the wanted count of
   each name in :items is carried. What is short is re-derived from the inventory before each take, so a cut or
   restart loses nothing.
-  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (condition).
+  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (can-start?).
   Ends done when everything is carried (also at once when it already is), or when at least the call's :least items
   toward the wanted ones are carried at any other ending (:all wants every one). The data of every other ending has :gave-up and
   :short {name n}, what is still missing; the report counts the items carried toward the wanted ones.
@@ -55,13 +56,7 @@
 (def target [:chest])
 (def defaults {:least :all :spend {:job-time ::time-s}})
 
-(defn no-chest
-  "A chest is known; else the cause {:reason :no-chest}."
-  [c]
-  (when-not (storage/chest-of (ctx/view c) (:args c))
-    {:reason :no-chest}))
-
-(def conditions [[:fn no-chest]])
+(def can-start? checks/chest-known)
 
 (defn done?
   "Everything wanted is carried; :done counts the carried items toward the wanted ones."

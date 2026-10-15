@@ -1,6 +1,7 @@
 (ns jobs.items.wear
   (:require [engine.args :as a]
             [jobs.lib.armour :as armour]
+            [jobs.lib.checks :as checks]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -34,14 +35,17 @@
     (armour/plan (armour/worn-of (.-equipment (.self p))) (map :name (u/inventory p)) (:item (:args c)))))
 
 (defn refused
-  "The cause :not-armour or :no-item when the named :item cannot be put on."
+  "The reason (:not-armour, :no-item) when the named :item cannot be put on."
   [c]
   (let [{:keys [ok reason]} (plan-of c)]
-    (cond ok nil
-          (= :not-armour reason) (contract/impossible reason)
-          :else reason)))
+    (when-not ok reason)))
 
-(def conditions [[:fn refused]])
+(defn can-start? [c]
+  (let [reason (refused c)]
+    (cond
+      (= :not-armour reason) (contract/never :not-armour (str (:item (:args c)) " is no armour piece"))
+      reason (contract/later reason (str "cannot wear " (:item (:args c)) ": " (name reason)))
+      :else (checks/holds))))
 
 (defn done?
   "Nothing to put on (a refused item is not done)."

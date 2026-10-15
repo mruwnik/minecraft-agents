@@ -129,21 +129,18 @@
             (is (= [] (:list (core/state eng))))))))))
 
 (defn chestless-problem
-  "The kit's first condition for a body with inventory and no known chest; started? makes the ctx a begun call."
-  [inventory args started?]
-  (let [problem (second (first (:conditions (get registry/jobs job))))]
-    (problem (cond-> {:args args :primitives (tu/fake {:inventory inventory}) :root "j1" :slots []
-                      :view (fn [] {:data {} :now 0})}
-               started? (assoc :quote-call {})))))
+  "The kit's can-start? status for a body with inventory and no known chest."
+  [inventory args]
+  (let [problem (:can-start? (get registry/jobs job))]
+    (problem {:args args :primitives (tu/fake {:inventory inventory}) :root "j1" :slots []
+             :view (fn [] {:data {} :now 0})})))
 
 (deftest kit-needs-a-known-chest-as-a-condition
-  (is (= {:reason :no-chest} (chestless-problem [] {} false))))
+  (is (= [:later :no-chest] ((juxt first #(:reason (nth % 2))) (chestless-problem [] {})))))
 
 (deftest a-kit-already-complete-needs-no-chest
-  (is (nil? (chestless-problem [{:name "stone_hoe" :count 2} {:name "bread" :count 12}] kit-args false))))
+  (is (= :ok (first (chestless-problem [{:name "stone_hoe" :count 2} {:name "bread" :count 12}] kit-args)))))
 
-(deftest a-begun-kit-is-not-ended-by-a-forgotten-chest
-  (is (nil? (chestless-problem [] {} true))))
 
 (deftest kit-needs-a-known-chest
   (async done

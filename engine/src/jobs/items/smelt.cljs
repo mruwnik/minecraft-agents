@@ -1,5 +1,5 @@
 (ns jobs.items.smelt
-  (:require [jobs.lib.started :as started]
+  (:require [jobs.lib.checks :as checks]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -28,7 +28,7 @@
   The job then yields (:continue) until the cook is due, so the body can do other jobs; the next round takes the output.
   Due is decided by the clock: ready-at is now plus the cook time of the items loaded (200 ticks each in a
   furnace, 100 in the other two) plus a margin. It is also due once :unlit-from has passed and the furnace block is
-  no longer lit or no longer a furnace. A yielding round reads only memory, the clock and one block. A
+  no longer lit or no longer a furnace. A cooking job waits on can-run? (:later :cooking with :loaded n), which reads only memory, the clock and one block. A
   woken round that finds the cook unfinished waits again from the furnace's own bars.
   What is owed is kept in memory before the load, so a restart or cut neither loses the output nor loads twice.
   Needs: the input, the fuel (the :fuel item, else coal or charcoal, else planks of any wood, sized by what one item of it
@@ -142,10 +142,18 @@
     :continue))
 
 (defn cooking?
-  "Whether a load is owed and its cook is not due: the round only yields."
+  "Whether a load is owed and its cook is not due: the job only waits."
   [c]
   (let [m (ctx/mem c)]
     (and (furnace/loaded? m) (some? (:ready-at m)) (not (due? c m)))))
+
+(defn can-run?
+  "Later :cooking with the count loaded while the load cooks; the parent reads it as the child's status."
+  [c]
+  (if (cooking? c)
+    (let [{:keys [count base] :or {count 0 base 0}} (:owed (ctx/mem c))]
+      (contract/later :cooking "cooking" :loaded (- count base)))
+    (checks/holds)))
 
 (def condition-reasons
   "Give-ups that name a missing or wrong fact; any other ends nothing-possible."
@@ -362,9 +370,7 @@
   once from where it stands (the four headings, level and down, a sight pass after each) and chooses again; none seen
   after that ends no-furnace-seen."
   [c]
-  (if (cooking? c)
-    :continue
-    (or (await (sf/fetch-stages! c (fetch-fuels) (fetch-wood-fuels))) (await (round-fetched c)))))
+  (or (await (sf/fetch-stages! c (fetch-fuels) (fetch-wood-fuels))) (await (round-fetched c))))
 
 (defn raw-carried
   "The raw foods and ores carried, by name."
@@ -443,14 +449,13 @@
 
 (def defaults {:spend {:job-time default-time :wall-time default-wall-time}})
 
-(defn not-smeltable
-  "At the call's start: impossible when the :item is one no furnace cooks, else nil."
+(defn can-start?
+  "Never when the :item is one no furnace cooks."
   [c]
   (let [item (:item (:args c))]
-    (when (and item (not (coll? item)) (not (sp/smeltable? (sp/input-of item (carried c)))))
-      (contract/impossible {:reason :not-smeltable :item item}))))
-
-(def conditions [[:fn (started/at-start not-smeltable)]])
+    (if (and item (not (coll? item)) (not (sp/smeltable? (sp/input-of item (carried c)))))
+      (contract/never :not-smeltable (str item " does not smelt") :item item)
+      (checks/holds))))
 
 (defn done?
   "What was smelted against what the load asked, in items. Never :done? itself: the round ends the job."

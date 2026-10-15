@@ -1,5 +1,6 @@
 (ns jobs.memory.remember
   (:require [engine.args :as a]
+            [jobs.lib.checks :as checks]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
@@ -60,12 +61,15 @@
   "The refusal cause when the call's :kind is not one a job may write."
   [c]
   (let [{:keys [reason] :as r} (resolve-args (ctx/view c) (:args c))]
-    (cond
-      (nil? reason) nil
-      (or (= :bad-kind reason) (contains? places/owned-kinds (:kind (:args c)))) (contract/impossible r)
-      :else r)))
+    (when reason r)))
 
-(def conditions [[:fn bad-args]])
+(defn can-start?
+  "Never for a kind a job may not write; later for any other refusal."
+  [c]
+  (let [cause (bad-args c)]
+    (if (or (= :bad-kind (:reason cause)) (contains? places/owned-kinds (:kind (:args c))))
+      (checks/never-with cause)
+      (checks/later-with cause))))
 
 (defn done?
   "Never done before it runs: it writes a fresh entry each call."

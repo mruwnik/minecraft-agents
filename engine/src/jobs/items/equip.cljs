@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.settings :as settings]
+            [jobs.lib.checks :as checks]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
@@ -50,7 +51,7 @@
   [c]
   (let [item (:item (:args c))]
     (when (and item (not (known-item? (:primitives c) item)))
-      (contract/impossible {:reason :unknown-item :item item}))))
+      {:reason :unknown-item :item item})))
 
 (defn lacking
   "The cause :no-item when the item is neither carried nor held and nothing fetches it."
@@ -60,13 +61,14 @@
     (when (and item (not (carried? p item)) (not= item (held-in p hand)) (not (need/parse-arg fetch)))
       {:reason :no-item :item item})))
 
-(def conditions [[:fn (fn [c] (some-> (problem c) contract/impossible))] [:fn unknown] [:fn lacking]])
+(defn can-start? [c]
+  (contract/all [(checks/never-with (problem c)) (checks/never-with (unknown c)) (checks/later-with (lacking c))]))
 
 (defn done?
   "The item is in the hand asked for."
   [c]
   (let [{:keys [item hand]} (:args c)
-        held (= item (held-in (:primitives c) hand))]
+        held (and (some? item) (= item (held-in (:primitives c) hand)))]
     {:done? held :units :items :left (if held 0 1)}))
 
 (defn quote-of [_c]

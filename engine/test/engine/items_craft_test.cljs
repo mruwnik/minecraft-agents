@@ -44,7 +44,7 @@
     [result p seen eng]))
 
 (deftest craft-wants-an-item-name
-  (are [args ok] (= ok (nil? (some (fn [[_ f]] (f {:args args})) (:conditions (get registry/jobs job)))))
+  (are [args ok] (= ok (= :ok (first ((:can-start? (get registry/jobs job)) {:args args}))))
     {:item "stick"} true
     {:item nil} false
     {:item 3} false))
@@ -610,7 +610,7 @@
   (let [def (get registry/jobs job)
         q ((:quote-of def) {:primitives (tu/fake {:inventory [{:name "oak_log" :count 2}]}) :args {:item "oak_planks" :count 4}})]
     (is (= [:item] (:target def)))
-    (is (seq (:conditions def)))
+    (is (some? (:can-start? def)))
     (is (nil? (:check def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))
     (is (= [4 4 4] (get-in q [:yields :items "oak_planks"])))

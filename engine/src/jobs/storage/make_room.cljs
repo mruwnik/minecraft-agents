@@ -10,6 +10,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.pace :as pace]
@@ -385,9 +386,10 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions
-  "None: a bag with room is already done, one with nothing to spare ends nothing-possible after looking."
-  [])
+(defn can-start?
+  "Nothing to check: a bag with room is already done, one with nothing to spare ends nothing-possible after looking."
+  [_]
+  (checks/holds))
 
 (defn slots-short
   "How many more slots must be free for :free."

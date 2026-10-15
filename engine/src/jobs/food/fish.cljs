@@ -1,5 +1,6 @@
 (ns jobs.food.fish
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.child :as child]
@@ -17,7 +18,7 @@
   Ends with the data {:got n :text}, info fish.caught per fish, and the ending:
   - :done: :count fish (cod, salmon, tropical fish, pufferfish) came in, or the call's :least (default 1, :all = :count)
     before any stop below, or when the time ends it (the engine's rule: report :limit).
-  Before the first cast it waits (conditions) on :no-rod (none carried and :fetch false) and :no-water (no seen water with a bank
+  Before the first cast it waits (can-start?) on :no-rod (none carried and :fetch false) and :no-water (no seen water with a bank
   within :radius).
   - :condition-failed :no-water (the water gone mid-run), or a failed rod fetch (the cause names the rod, :because the fetch's ending).
   - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (:max-misses casts in a row caught nothing).
@@ -90,13 +91,12 @@
     (and (not (rod-carried? c)) (nil? (need/parse-arg (:fetch (:args c))))) [:no-rod "no fishing rod is carried and :fetch is off"]
     (empty? (spots c)) [:no-water "no seen water with a bank in reach"]))
 
-(defn start-fact
-  "The cause that bars the first cast, or nil once the call has started."
+(defn can-start?
+  "Later with the cause that bars the first cast."
   [c]
-  (when-not (:started (ctx/mem c))
-    (when-let [[cause text] (start-problem c)] {:reason cause :text text})))
-
-(def conditions [[:fn start-fact]])
+  (if-let [[cause text] (start-problem c)]
+    (contract/later cause text)
+    (contract/ok :ready "a rod and water to cast at")))
 
 (defn ^:async cast! [c {:keys [water]}]
   (let [r (await (ctx/act c :fish (clj->js {:pos water :timeoutS (:cast-s (:args c))})))
@@ -139,5 +139,4 @@
 
 (defn ^:async round [c]
   (ctx/update-mem! c update :base #(or % (fish-carried c)))
-  (ctx/update-mem! c update :started #(or % (ctx/now c)))
   (await (pace/steps! c #(step c))))

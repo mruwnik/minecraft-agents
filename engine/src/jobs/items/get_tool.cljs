@@ -1,10 +1,10 @@
 (ns jobs.items.get-tool
-  (:require [jobs.lib.started :as started]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             ["minecraft-data" :as minecraft-data]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
+            [jobs.lib.checks :as checks]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -78,15 +78,15 @@
     (when (map? names) {:reason :bad-args :why (:error names)})))
 
 (defn no-source
-  "Before it starts, with no tool that will do carried: the obtain's failed condition."
+  "With no tool that will do carried: the obtain's status."
   [c]
   (let [p (:primitives c)
         names (tools-for p (:args c))]
-    (when-not (or (map? names) (empty? names) (carried-tool p names))
-      (when-let [w (ctx/child-wait c :obtain 'jobs.items.obtain (obtain-args c names))]
-        (or (:cause w) (:reason w))))))
+    (if (or (map? names) (empty? names) (carried-tool p names))
+      (contract/ok :source "a tool is carried or none is needed")
+      (ctx/child-status c :obtain 'jobs.items.obtain (obtain-args c names)))))
 
-(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))] [:fn (started/at-start no-source)]])
+(defn can-start? [c] (contract/all [(checks/never-with (bad-args c)) (no-source c)]))
 
 (defn done?
   "A tool that does the work is carried (or none is needed); a bad call is not done."

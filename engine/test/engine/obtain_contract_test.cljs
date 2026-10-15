@@ -32,7 +32,7 @@
       (fn ^:async t []
         (doseq [[sym ways] [['jobs.items.obtain [:chest :craft :smelt :gather]] ['jobs.items.get-tool [:chest :craft :gather]]]
                 :let [job (get registry/jobs sym)]]
-          (is (vector? (:conditions job)) (str sym " has conditions"))
+          (is (fn? (:can-start? job)) (str sym " has can-start?"))
           (is (nil? (:check job)) (str sym " has no old check"))
           (is (vector? (:target job)) (str sym " has a target"))
           (is (= ways (:ways job))))

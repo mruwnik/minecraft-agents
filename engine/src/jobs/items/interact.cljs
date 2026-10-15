@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -38,7 +39,7 @@
   (when-not (pos-int? (:id (:args c)))
     {:reason :bad-args :why "items.interact needs a positive entity :id"}))
 
-(def conditions [[:fn (fn [c] (some-> (problem c) contract/impossible))]])
+(defn can-start? [c] (checks/never-with (problem c)))
 
 (defn done?
   "Counts only (the round ends the call with its data): whether the click was made."

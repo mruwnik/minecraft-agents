@@ -103,7 +103,7 @@
           (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore false} 6))
           (let [w (first (filter #(= :no-source (:reason %)) (f/events-of s :waiting)))]
             (is (some? w))
-            (is (re-find #"raw_iron \(from deepslate_iron_ore/iron_ore\)" (str (get-in w [:cause :why])))))
+            (is (re-find #"raw_iron \(from deepslate_iron_ore/iron_ore\)" (str (:text w)))))
           (is (empty? (f/calls s "dig"))))))))
 
 (deftest raw-iron-unseen-with-explore-goes-to-the-mine-not-a-surface-walk

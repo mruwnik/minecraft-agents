@@ -2,6 +2,7 @@
   "jobs.strip.site over the fake world: every child is a recording stub, the corridors are the T-shaped site of
   engine.strip-test (stem z-27-0:0..20 into x-27-20:-20..0 and x-27-20:0..20)."
   (:require [cljs.reader :as reader]
+            [engine.contract :as contract]
             [cljs.test :refer [deftest is async]]
             ["fs" :as fs]
             ["path" :as path]
@@ -39,14 +40,16 @@
     (ctx/end c :nothing-possible (:reason r) (dissoc r :status :reason))
     (ctx/end c :done nil (dissoc r :status))))
 
+(def holds (constantly (contract/ok :holds "holds")))
+
 (defn stub-of [real round-fn]
-  (assoc (dissoc real :target :quote-of :done?) :conditions []
+  (assoc (dissoc real :target :quote-of :done? :can-run?) :can-start? holds
          :round (fn ^:async stub-round [c] (ending-of c (round-fn c)))))
 
 (defn ending-job
   "The real job of sym with its round replaced by one that ends with kind and cause."
   [sym kind cause]
-  (assoc (get registry/jobs sym) :conditions [] :round (fn ^:async ending-round [c] (ctx/end c kind cause nil))))
+  (assoc (dissoc (get registry/jobs sym) :can-run?) :can-start? holds :round (fn ^:async ending-round [c] (ctx/end c kind cause nil))))
 
 (defn done [result] (fn [_] result))
 
@@ -59,7 +62,9 @@
   [p calls furnaces fail]
   (let [key-of (comp pr-str :furnace :args)]
     (assoc (dissoc (get registry/jobs 'jobs.items.smelt) :target :done? :quote-of)
-           :conditions [[:fn #(when (= :cooking (:phase (get @furnaces (key-of %)))) :cooking)]]
+           :can-run? #(if (= :cooking (:phase (get @furnaces (key-of %))))
+                          (contract/later :cooking "cooking")
+                          (contract/ok :ready "ready"))
            :round (fn ^:async smelt-round [c]
                     (swap! calls conj ['jobs.items.smelt (:args c)])
                     (let [{:keys [furnace item count]} (:args c)

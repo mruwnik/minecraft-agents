@@ -1,5 +1,6 @@
 (ns jobs.items.kitchen
   (:require [clojure.string :as str]
+            [jobs.lib.checks :as checks]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -28,7 +29,7 @@
   :reserve is never used, carried or in the chest (wheat for bait and seed: the default keeps a breeding pair's).
   A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-table (none seen or carried, :fetch false), :no-chest, :stocked,
   :nothing-to-store. A step whose child stops is booked with its summary and the stop as :reason; the pass goes on.
-  Needs (conditions, a listed job waits): a run under way, or a step that would run (raw food carried above the
+  Needs (can-start?, a listed job waits): a step that would run (raw food carried above the
   reserve with a cooked shortfall, wheat for a loaf), so a body with nothing to cook is not held, and not too far from
   the chest (:away). There is no rest timer: a pass that cannot cook ends with its stop and repeat decides.
   Every pass books info kitchen.done, its text naming what was smelted, baked and stored, and data {:steps {step
@@ -174,12 +175,10 @@
     (when-not (would-run? c f)
       {:reason :nothing-to-do :skipped (into {} (map (fn [[s d]] [s (:skip d)])) (decisions c f))})))
 
-(defn unless-under-way
-  "A condition that holds only for a pass not yet started: a run under way goes on."
-  [f]
-  (fn [c] (when-not (:todo (ctx/mem c)) (f c))))
-
-(def conditions [[:fn (unless-under-way away)] [:fn (unless-under-way nothing-to-do)]])
+(defn can-start?
+  "Later while the kitchen is far from its chest or has no step to run."
+  [c]
+  (contract/all [(checks/later-with (away c)) (checks/later-with (nothing-to-do c))]))
 
 (defn quote-of
   "A smelt of each raw food carried; the rest of the pass is a guess."

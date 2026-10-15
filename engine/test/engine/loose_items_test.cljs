@@ -176,7 +176,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [text (fn ^:async text* [w args]
-                     (get-in (await (tu/child-outcome (:eng (setup w)) 'jobs.items.pick-up-loose args 6)) [:ending :cause :hint]))
+                     (get-in (await (tu/child-outcome (:eng (setup w)) 'jobs.items.pick-up-loose args 6)) [:ending :cause :text]))
               far (await (text (world log-ten-off) {:radius 8}))
               unworthy (await (text (world dirt-down) {}))
               none (await (text (world) {}))]
@@ -228,7 +228,7 @@
         (let [{:keys [eng]} (setup (world log-near dirt-down))
               entry (get (:jobs eng) 'jobs.items.pick-up-loose)
               {:keys [ok quote]} (await (event-api/quote-view eng "jobs.items.pick-up-loose" "{}"))]
-          (is (some? (:conditions entry)))
+          (is (some? (:can-start? entry)))
           (is (true? ok))
           (is (= {"oak_log" [0 1 1]} (get-in quote [:yields :items])) "the dirt is not worth the detour")
           (is (= [0 1 1] (:done quote))))))))

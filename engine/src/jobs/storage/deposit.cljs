@@ -9,6 +9,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.found :as found]
             [jobs.lib.stock :as stock]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.pace :as pace]
@@ -20,7 +21,7 @@
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
   and armour (saplings included) and the body's 3-day food reserve (jobs.lib.cost/food-reserve) in inventory order.
   :keep leaves at least that many of a name carried. :free ends the call, clean, once that many slots are free. With explicit :items the reserve is ignored.
-  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (condition).
+  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (can-start?).
   Ends done when nothing is left to put away (also at once when nothing is), or at any other ending when at least the
   call's :least items are put in (:all wants every one). The data of every other ending is
   {:gave-up true :moved n}, n the items put in; the report counts the items still to put away.
@@ -77,13 +78,7 @@
 (def target [:chest])
 (def defaults {:least :all :spend {:job-time ::time-s}})
 
-(defn no-chest
-  "A chest is known; else the cause {:reason :no-chest}."
-  [c]
-  (when-not (storage/chest-of (ctx/view c) (:args c))
-    {:reason :no-chest}))
-
-(def conditions [[:fn no-chest]])
+(def can-start? checks/chest-known)
 
 (defn spare-items
   "{name n} the call would put away now: the carried names the pick rules allow, each by its spare over the keep."

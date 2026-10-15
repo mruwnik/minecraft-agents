@@ -82,7 +82,7 @@
         (doseq [args [{} {:from []} {:to [20 64 0]}]]
           (let [{:keys [eng]} (setup {:containers {"20,64,0" []}})
                 result (await (wt/ending-of eng 'jobs.storage.haul args 10))]
-            (is (= {:kind :condition-failed :cause {:reason :no-source}} (select-keys result [:kind :cause])) (pr-str args))))))))
+            (is (= {:kind :condition-failed :cause {:reason :no-source}} (update (select-keys result [:kind :cause]) :cause dissoc :text)) (pr-str args))))))))
 
 (deftest haul-cut-at-a-transfer-resumes-without-doubling-the-load
   (async done

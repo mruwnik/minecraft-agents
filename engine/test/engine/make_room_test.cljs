@@ -840,7 +840,7 @@
 (deftest make-room-exports-the-contract-and-quotes-validly
   (let [job (get registry/jobs 'jobs.storage.make-room)
         p (tu/fake-on-floor {:inventory (same "diamond" 35 1)})]
-    (is (some? (:conditions job)))
+    (is (some? (:can-start? job)))
     (is (nil? (:check job)))
     (is (vector? (:target job)))
     (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {:free 4 :max-steps 40}}))))))

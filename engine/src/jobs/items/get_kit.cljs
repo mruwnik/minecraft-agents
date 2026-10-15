@@ -7,6 +7,7 @@
             [jobs.items.recipes :as recipes]
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.armour :as armour]
+            [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
             [jobs.lib.foods :as foods]
             [jobs.lib.util :as u]))
@@ -120,9 +121,9 @@
 
 (defn bad-args [c]
   (when-not (seq (:items (:args c)))
-    (contract/impossible {:reason :bad-args :why "needs :items, a list of item names"})))
+    {:reason :bad-args :why "needs :items, a list of item names"}))
 
-(def conditions [[:fn bad-args]])
+(defn can-start? [c] (checks/never-with (bad-args c)))
 
 (defn done?
   "Counts the items carried or worn (the round ends the call, after the armour is worn)."

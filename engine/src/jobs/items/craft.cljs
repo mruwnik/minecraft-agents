@@ -17,6 +17,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.spent :as spent]
@@ -71,7 +72,7 @@
   (when-not (string? (:item (:args c)))
     {:reason :bad-args :why "no item name"}))
 
-(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))]])
+(defn can-start? [c] (checks/never-with (bad-args c)))
 
 (defn done?
   "Progress only: the round that sees the target carried also picks up a table it put down and ends."

@@ -3,6 +3,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.need :as need]
             [jobs.lib.storage :as storage]
@@ -92,7 +93,8 @@
     (when (zero? (or (some-> (.self (:primitives c)) .-experience .-level) 0))
       {:reason :too-few-levels :need 1})))
 
-(def conditions [[:fn (fn [c] (some-> (problem c) contract/impossible))] [:fn lacking] [:fn unaffordable]])
+(defn can-start? [c]
+  (contract/all [(checks/never-with (problem c)) (checks/later-with (lacking c)) (checks/later-with (unaffordable c))]))
 
 (defn done?
   "Counts only (the round ends the call with its data)."

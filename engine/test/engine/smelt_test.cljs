@@ -751,7 +751,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[e p] (await (ending-by-call {:blocks {pos-key "furnace"} :inventory [{:name "coal" :count 2}]} {:item "diamond" :count 1}))]
-          (is (= {:kind :impossible :cause {:reason :not-smeltable :item "diamond"}} (select-keys e [:kind :cause])))
+          (is (= {:kind :impossible :cause {:reason :not-smeltable :item "diamond"}} (update (select-keys e [:kind :cause]) :cause dissoc :text)))
           (is (empty? (calls p "furnace"))))))))
 
 (deftest a-give-up-with-nothing-smelted-ends-stopped
@@ -974,8 +974,9 @@
 
 (deftest smelt-exports-the-contract
   (let [job (get registry/jobs 'jobs.items.smelt)]
-    (is (some? (:conditions job)))
-    (is (nil? (:check job)) "no old check: cooking is a :continue of the round")
+    (is (some? (:can-start? job)))
+    (is (some? (:can-run? job)))
+    (is (nil? (:check job)) "no old check: cooking is the can-run? wait")
     (is (= [:item] (:target job)))
     (is (some? (:done? job)))))
 
@@ -996,10 +997,10 @@
 
 (deftest an-item-no-furnace-cooks-is-an-impossible-start-condition
   (let [job (get registry/jobs 'jobs.items.smelt)
-        cause (fn [item] (some (fn [[_ f]] (f {:primitives (tu/fake-on-floor base-world) :args {:item item} :view (fn [] {:now 0 :data {}}) :root "j" :slots []})) (:conditions job)))]
-    (is (= {:reason :not-smeltable :item "diamond"} (contract/impossible-cause (cause "diamond"))))
-    (is (nil? (cause "raw_iron")))
-    (is (nil? (cause "iron_ingot")) "a product names its input")))
+        status (fn [item] ((:can-start? job) {:primitives (tu/fake-on-floor base-world) :args {:item item} :view (fn [] {:now 0 :data {}}) :root "j" :slots []}))]
+    (is (= [:never :not-smeltable "diamond"] ((juxt first #(:reason (nth % 2)) #(:item (nth % 2))) (status "diamond"))))
+    (is (= :ok (first (status "raw_iron"))))
+    (is (= :ok (first (status "iron_ingot"))) "a product names its input")))
 
 (deftest a-give-up-before-any-load-is-a-failed-condition-with-the-reason-as-cause
   (async done

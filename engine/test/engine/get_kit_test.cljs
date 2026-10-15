@@ -247,7 +247,7 @@
          (select-keys (kit/wear-outcome (contract/ending :condition-failed :no-item nil)) [:kind :reason]))))
 
 (deftest empty-items-are-impossible-bad-args
-  (is (= {:reason :bad-args} (select-keys (contract/impossible-cause ((second (first (:conditions (get registry/jobs job)))) {:args {:items []}})) [:reason]))))
+  (is (= [:never :bad-args] (let [[k _ d] ((:can-start? (get registry/jobs job)) {:args {:items []}})] [k (:reason d)]))))
 
 (deftest a-fed-body-with-no-food-and-an-animal-near-stocks-up-before-the-work
   (async done

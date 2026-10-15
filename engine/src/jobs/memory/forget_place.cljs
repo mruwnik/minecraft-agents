@@ -1,5 +1,6 @@
 (ns jobs.memory.forget-place
   (:require [engine.args :as a]
+            [jobs.lib.checks :as checks]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.places :as places]))
@@ -28,9 +29,15 @@
   [c]
   (let [r (places/resolve-forget (ctx/view c) (:name (:args c)))]
     (when (arg-refusals (:reason r))
-      (cond-> {:reason (:reason r) :text (:message r)} (not= :not-a-place (:reason r)) contract/impossible))))
+      {:reason (:reason r) :text (:message r)})))
 
-(def conditions [[:fn bad-args]])
+(defn can-start?
+  "Never for a name no place can have; later for a name that is no place yet."
+  [c]
+  (let [cause (bad-args c)]
+    (if (= :not-a-place (:reason cause))
+      (checks/later-with cause)
+      (checks/never-with cause))))
 
 (defn done?
   "Done when nothing is recorded under the name."

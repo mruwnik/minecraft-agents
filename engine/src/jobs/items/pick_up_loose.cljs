@@ -1,5 +1,6 @@
 (ns jobs.items.pick-up-loose
   (:require [clojure.string :as str]
+            [jobs.lib.checks :as checks]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -54,9 +55,9 @@
   [c]
   (let [p (:primitives c) view (ctx/view c) w (:world (:engine c))]
     (when (empty? (loose/candidates p view w (:args c) (:root c)))
-      {:reason :nothing-worth-it :hint (stop-text (loose/explain p view w (:args c) (:root c)))})))
+      {:reason :nothing-worth-it :text (stop-text (loose/explain p view w (:args c) (:root c)))})))
 
-(def conditions [[:fn nothing-worth-it]])
+(defn can-start? [c] (checks/later-with (nothing-worth-it c)))
 
 (defn quote-of
   [c]
