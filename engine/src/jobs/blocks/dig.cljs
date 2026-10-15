@@ -408,7 +408,7 @@
 
 (defn ^:async cleanup
   "However the call ended: a block this call dug whose lava is not yet sealed or whose drops are not yet collected gets
-  both now (the round's own seal-step! and collect!). Done once nothing is left, :continue while a child waits."
+  both now (the round's own seal-step! and collect!). Done once nothing is left, :continue while a child waits, else the failing ending (nothing-possible :lava-unsealed)."
   [c _]
   (let [{:keys [pos]} (b/parse (:args c))
         m (ctx/mem c)
@@ -420,7 +420,6 @@
           (cond
             (= :again s) (recur)
             (= :continue s) :continue
-            s (done)
-            (and (:collect (:args c)) (seq (:ids (:dug m))))
-            (let [r (await (collect! c pos))] (if (= :continue r) :continue (done)))
+            s s
+            (and (:collect (:args c)) (seq (:ids (:dug m)))) (await (collect! c pos))
             :else (done)))))))

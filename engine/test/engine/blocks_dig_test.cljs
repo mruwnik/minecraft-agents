@@ -15,6 +15,7 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.blocks.dig :as dig]
+            [jobs.lib.blocks :as b]
             [jobs.lib.world-files :as world]
             [plan.shape :as shape]))
 
@@ -949,3 +950,44 @@
         (let [[escalations result] (await (step-off-escalations [1 0 1 0]))]
           (is (= [] escalations))
           (is (= {:stepped-away false :unreachable :no-cell} (select-keys result [:stepped-away :unreachable]))))))))
+
+;; ------------------------------------------------------------------ the cleanup of a cut dig
+
+(def own-drop {:id 100 :name "item" :kind "item" :pos {:x 1 :y 64 :z 0} :item {:name "dirt" :count 1}})
+(def other-drop {:id 101 :name "item" :kind "item" :pos {:x -1 :y 64 :z 0} :item {:name "dirt" :count 1}})
+
+(defn ^:async cleanup-of-a-cut-dig
+  "dig's cleanup run (by a probe job's round, memory as a dig cut right after it dug under-feet) over a world with lava
+  under the dug cell, the dug block's own drop and another drop lying; [the cleanup's result p]."
+  [inventory]
+  (let [{:keys [eng p]} (setup {:self body :blocks {"0,63,0" "air" "0,62,0" "lava" "0,61,0" "stone"} :inventory inventory
+                                :entities [own-drop other-drop]})
+        out (atom nil)
+        probe {:round (fn ^:async probe [c]
+                        (if-not (:for (ctx/mem c))
+                          (do (ctx/update-mem! c assoc :for (:pos (b/parse (:args c))) :dug {:block "dirt" :ids [100] :want 1}) :continue)
+                          (let [r (await (dig/cleanup c nil))]
+                            (if (= :continue r) :continue (do (reset! out r) (ctx/end c :done nil))))))}]
+    (hiding p #(= [0 62 0] %))
+    (core/submit! (assoc eng :jobs (assoc (:jobs eng) 'dig-cleanup-probe probe))
+                  (list 'dig-cleanup-probe {:pos under-feet :on-lava :seal :collect true}) {})
+    (await (run-until-empty (assoc eng :jobs (assoc (:jobs eng) 'dig-cleanup-probe probe)) 30))
+    [@out p]))
+
+(deftest the-cleanup-of-a-cut-dig-seals-the-lava-and-collects-only-its-own-drop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (cleanup-of-a-cut-dig cobble))]
+          (is (= :done (:kind r)) (pr-str r))
+          (is (= "cobblestone" (block-at p lava-under)) "the lava is sealed")
+          (is (= 1 (carried p "dirt")) "its own drop is picked up")
+          (is (= [101] (mapv #(.-id %) (array-seq (.entities p #js {:kind "item"})))) "the other drop lies on"))))))
+
+(deftest the-cleanup-of-a-cut-dig-reports-a-seal-it-could-not-make
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (cleanup-of-a-cut-dig []))]
+          (is (= {:kind :nothing-possible :cause :lava-unsealed} (select-keys r [:kind :cause])) (pr-str r))
+          (is (= "lava" (block-at p lava-under))))))))
