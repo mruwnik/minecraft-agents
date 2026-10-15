@@ -31,7 +31,7 @@
   {:name "stair-water-behind-stone-stops-fluid-in-cut"
    :blocks [[:set [12 8 16] "water"]]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :fluid-in-cut}} :within-s 90 :of-job true}]}
+   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :hazard :hazards [:has {:fluid "water"}]}} :within-s 90 :of-job true}]}
   {:name "tunnel-seals-lava-over-its-target-and-reaches-the-stand"
    ;; a trench x 8..13, y 6..9 to stand in; the target (15 6 16) has lava over it, hidden behind (14 7 16)
    :blocks [[:fill [8 6 14] [13 9 18] "air"] [:set [15 6 16] "iron_ore"] [:set [15 7 16] "lava"]]
