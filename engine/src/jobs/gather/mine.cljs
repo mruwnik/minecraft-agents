@@ -225,7 +225,7 @@
 (defn no-zones
   "{:reason :no-zones} while no zone list has been read (unless :ignore-zones?), with one warn mine.declined."
   [c]
-  (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
+  (when (and (:block (:args c)) (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
     (ctx/warn-once! c [:access :no-zones] :mine.declined
                     {:reason :no-zones :text "mine declined: no zone list has been read (zones.edn missing or never valid)"})
     {:reason :no-zones}))
@@ -233,7 +233,7 @@
 (defn all-refused
   "{:reason :refused ..} when every seen target is refused by zones, claims or plans, with one warn mine.declined."
   [c]
-  (let [{:keys [targets refused]} (scan c)]
+  (let [{:keys [targets refused]} (when (:block (:args c)) (scan c))]
     (when (and (empty? targets) (seq refused))
       (let [fields (assoc (access/refusal-fields refused) :reason :refused)]
         (ctx/warn-once! c [:access :refused] :mine.declined

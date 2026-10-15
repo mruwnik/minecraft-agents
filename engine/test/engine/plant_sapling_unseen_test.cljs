@@ -2,6 +2,8 @@
   "jobs.forestry.plant-sapling looks at a planting spot it has never seen before it drops the spot."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
+            [jobs.forestry.plant-sapling :as plant-sapling]
             [engine.library-test :as lt]
             [engine.events :as events]
             [engine.registry :as registry]
@@ -58,3 +60,11 @@
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
             (await (tu/child-outcome eng 'jobs.forestry.plant-sapling {:at {:x 3 :y 64 :z 0} :species "oak"} 60))
             (is (= planted (.-name (.blockAt p spot))) author)))))))
+
+(deftest a-log-on-the-spot-is-a-later-of-can-run
+  (let [def (get registry/jobs 'jobs.forestry.plant-sapling)
+        c {:primitives (tu/seeing-all (tu/fake {:blocks {"3,64,0" "oak_log"}})) :args {}}
+        status (fn [f] (with-redefs [ctx/mem (constantly {})
+                                     plant-sapling/current-target (constantly {:pos {:x 3 :y 64 :z 0} :species "oak"})]
+                         (f c)))]
+    (is (= [:later :log-on-spot] ((juxt first (comp :reason last)) (status (:can-run? def)))))))

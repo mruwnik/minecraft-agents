@@ -3,6 +3,7 @@
   kind and a cause (0 of N is never done); the pillar is a child of the felling."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [engine.event-api :as event-api]
             [engine.core :as core]
             [engine.farm-contract-test :refer [ending-of]]
@@ -13,6 +14,8 @@
             [engine.test-util :as tu]
             [jobs.lib.access.approach :as approach]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.look :as look]
+            [jobs.forestry.fell-tree :as fell-tree]
             [engine.memory :as mem]))
 
 (def jobs '[jobs.forestry.fell-tree jobs.forestry.fell-from-pillar])
@@ -65,6 +68,12 @@
         (let [{:keys [end]} (await (fell-ending {:blocks {}} 'jobs.forestry.fell-tree {:radius 10} 40))]
           (is (= {:kind :condition-failed :cause :no-tree} (kc end)))
           (is (= 10 (get-in end [:cause :radius]))))))))
+
+(deftest no-tree-is-a-look-until-the-body-has-looked-round
+  (let [c {:primitives (tu/fake {:blocks {}}) :view (constantly {:now 0}) :args {:radius 10}}
+        status (fn [surveyed?] (with-redefs [ctx/mem (constantly {}) look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))] (fell-tree/no-tree c)))]
+    (is (= [:look :no-tree] ((juxt first (comp :reason last)) (status false))))
+    (is (= [:later :no-tree] ((juxt first (comp :reason last)) (status true))))))
 
 (deftest a-column-not-yet-seen-is-walked-to-not-looked-for
   (async done

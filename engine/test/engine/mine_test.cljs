@@ -700,6 +700,15 @@
             (is (= [(assoc expected :reason :refused)]
                    (map #(select-keys % [:reason :zones :plans]) (events-of s :mine.declined))))))))))
 
+(deftest a-call-with-no-block-and-no-zone-list-ends-no-block-with-no-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (zoned {} {:blocks {"6,64,0" "sand"}} (ew/of-data {} {} nil) 3))]
+          (is (empty? (events-of s :mine.declined)))
+          (is (= :no-block (:reason (first (events-of s :stopped)))))
+          (is (empty? (calls s "dig"))))))))
+
 (deftest no-zone-list-declines-with-one-warn-and-digs-nothing
   (async done
     (tu/run-async done

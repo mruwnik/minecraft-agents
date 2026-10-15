@@ -27,7 +27,7 @@
     (await (run-until-empty eng n))
     @out)))
 
-(defn kc [e] (cond-> (select-keys e [:kind :cause]) (map? (:cause e)) (update :cause dissoc :text :parts)))
+(defn kc [e] {:kind (:kind e) :cause (contract/cause-key e)})
 
 (def jobs '[jobs.farm.tidy jobs.forestry.prepare jobs.forestry.maintain])
 
@@ -69,7 +69,8 @@
       (fn ^:async t []
         (let [{:keys [eng]} (ft/start ft/tidy-spec {})
               e (await (ending-of eng tidy {:plan "nope"} 20 ft/run-until-empty))]
-          (is (= {:kind :condition-failed :cause {:reason :plan-trouble :why "no such plan"}} (kc e))))))))
+          (is (= {:kind :condition-failed :cause :plan-trouble} (kc e)))
+          (is (= "no such plan" (:why (:cause e)))))))))
 
 (deftest tidy-that-refuses-every-stray-is-condition-failed-not-done
   (async done
@@ -100,7 +101,8 @@
       (fn ^:async t []
         (let [{:keys [eng]} (fm/start (fp/world {}) {})
               e (await (ending-of eng prepare {:plan "nope"} 20))]
-          (is (= {:kind :condition-failed :cause {:reason :plan-trouble :why "no such plan"}} (kc e))))))))
+          (is (= {:kind :condition-failed :cause :plan-trouble} (kc e)))
+          (is (= "no such plan" (:why (:cause e)))))))))
 
 (deftest prepare-with-nothing-it-can-improve-is-condition-failed-naming-the-worst-cells
   (async done
@@ -165,7 +167,8 @@
       (fn ^:async t []
         (let [{:keys [eng]} (fm/start fm/oak-world {})
               e (await (ending-of eng maintain {:plan "nope"} 20))]
-          (is (= {:kind :condition-failed :cause {:reason :plan-trouble :why "no such plan"}} (kc e))))))))
+          (is (= {:kind :condition-failed :cause :plan-trouble} (kc e)))
+          (is (= "no such plan" (:why (:cause e)))))))))
 
 (deftest maintain-that-only-left-trees-standing-is-nothing-possible-not-done
   (async done

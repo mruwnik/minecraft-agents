@@ -24,8 +24,8 @@
   The job warns plant-sapling.declined once, with :reason :refused (or :no-zones when no zone list was read).
   :ignore-zones? true skips the check.
 
-  Conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), :no-sapling (none carried and
-  :fetch false; data :species) and :log-on-spot (data :pos). Nothing to plant is done at once. Ends :done with data
+  Start conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), :no-sapling (none carried and
+  :fetch false; data :species); a log on the spot (data :pos) is waited out. Nothing to plant is done at once. Ends :done with data
   {:pos} once planted (and the bone meal used up, grown or gone); condition-failed with the need cause when the fetch
   failed, :refused when the zone rule changed on the way; nothing-possible :plant-blocked (the spot cannot be reached or
   planted, data :text) or :unseen (the spot was never seen, after a look). Quote: the walk to the spot.")
@@ -97,7 +97,9 @@
                        (when (and t (log-name? (some-> (u/seen-block (:primitives c) (:pos t)) .-name)))
                          {:reason :log-on-spot :pos (:pos t)})))))
 
-(def can-start? (cond/and spot-refused no-sapling log-on-spot))
+(def can-start? (cond/and spot-refused no-sapling))
+
+(def can-run? log-on-spot)
 
 (defn done?
   "Done at once when nothing is owed (and no bone meal is being used)."

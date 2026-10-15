@@ -166,16 +166,18 @@
   (when (= :chest (mode (:args c)))
     (some->> (:trouble (chest-target c)) (decline! c))))
 
+(defn zones-missing? [c]
+  (and (not (#{:chest :unknown} (mode (:args c)))) (nil? (known/zones c)) (not (:ignore-zones? (:args c)))))
+
 (defn no-zones [c]
-  (when (and (not= :chest (mode (:args c))) (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
-    (decline! c :no-zones)))
+  (when (zones-missing? c) (decline! c :no-zones)))
 
 (defn nothing-in-range
   "No source in range once the body has looked around: a stand too short to cut declines :too-short; the first look is
   the round's own."
   [c]
   (let [m (mode (:args c))]
-    (when-not (or (#{:chest :unknown} m) (:goal (ctx/mem c)) (seq (source-blocks c)))
+    (when-not (or (#{:chest :unknown} m) (zones-missing? c) (:goal (ctx/mem c)) (seq (source-blocks c)))
       (cond
         (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
         (look/surveyed? c) :nothing-in-range))))

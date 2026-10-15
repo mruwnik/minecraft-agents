@@ -435,6 +435,15 @@
             (is (not (finished? s)))
             (is (= [:no-zones] (declined-reasons s)))))))))
 
+(deftest only-the-first-failing-check-warns-with-no-zone-list
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args world reason] [[{:item "coffee"} {:blocks (patch "short_grass" [3] [0])} :no-source]
+                                     [{:item "sugar_cane"} {:blocks (stand "sugar_cane" 3 0 1)} :no-zones]]]
+          (let [s (await (in-world args world (ew/of-data {} {} nil) 5))]
+            (is (= [reason] (declined-reasons s)) (pr-str args))))))))
+
 (deftest a-zone-added-between-the-choice-and-the-dig-stops-the-dig
   (async done
     (tu/run-async done
