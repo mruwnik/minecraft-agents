@@ -7,13 +7,19 @@
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
-            [jobs.items.obtain.table :refer [gather-need]]
+            [jobs.items.obtain.table :refer [animal? gather-need]]
             [jobs.lib.body :as body]))
 
 (defn declined?
   "Whether child ending e is a refusal before it ran: a failed condition with no result of its own."
   [e]
   (and (= :condition-failed (:kind e)) (empty? (:data e))))
+
+(defn spared-why
+  "The text of a hunt ending that left animals alone (its :spared-by, a count per rule: pen, keep ..), else nil."
+  [res]
+  (when-let [by (not-empty (:spared-by res))]
+    (str "left alone: " (clojure.string/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))
 
 (defn fruitless-limit
   "Fruitless runs that end the gather source: the need's :max-runs, but only for a run that happened; a child that
@@ -101,7 +107,7 @@
       (nil? need) (tried! c :gather :no-plan)
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
       (await (pickaxe-step! c names need))
-      (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (not (:sheep need)) (not (:tunnel? need))
+      (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (not (animal? need)) (not (:tunnel? need))
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]))
            (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
       (await (explore-step! c need))
@@ -137,7 +143,7 @@
                 (ctx/update-mem! c update :gather dissoc :before :item :tree)
                 (if (> (gather-carried p need) before)
                   (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :again)
-                  (do (when-let [w (:why res)] (ctx/update-mem! c assoc-in [:gather :why] w))
+                  (do (when-let [w (or (:why res) (spared-why res))] (ctx/update-mem! c assoc-in [:gather :why] w))
                       (when-let [cols (seq (:columns res))] (ctx/update-mem! c update :cut-off (fnil into #{}) (map vec) cols))
                       (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e))))))))))
 

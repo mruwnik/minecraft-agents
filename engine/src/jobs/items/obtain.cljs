@@ -36,7 +36,7 @@
     run by a jobs.items.smelt child, which fetches its own fuel and furnace; a chain with a smelt step needs :smelt, any
     other step :craft. The names are tried in
     order; the first with a plan is made, but one with no smelt step before one with. Three fruitless steps stop it (:tried :craft); a craft child that ran and made nothing stops it at once.
-  - :gather: coal comes from a plain or deepslate ore seen; dirt is dug from seen dirt or grass; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
+  - :gather: leather and feathers come from a cow or chicken within the sheep radius (a jobs.combat.hunt child, once; penned and kept animals are spared, and the end says which rule spared them); coal comes from a plain or deepslate ore seen; dirt is dug from seen dirt or grass; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
     jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood (of any species, but one only its species makes, oak_log for oak_planks, from that species' trees),
     raw fish (cod, salmon: also the input of a cooked fish's smelt step) by jobs.food.fish from water seen (its rod from a chest or a craft; string has no source, so no rod ends :no-source),

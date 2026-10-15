@@ -5,7 +5,7 @@
             [jobs.items.obtain.need :refer [explore-opts]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
-            [jobs.items.obtain.table :refer [gather-needs material-blocks]]
+            [jobs.items.obtain.table :refer [animal? gather-needs material-blocks]]
             [jobs.items.recipes :as recipes]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
@@ -25,11 +25,12 @@
   claim or plan footprint refuses them), or the general text."
   [c names n]
   (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))
-        seen (filter #(and (not (:sheep %)) (not (seen-of c %)) (seq (seen-blocks-of c % true))) needs)
+        seen (filter #(and (not (animal? %)) (not (seen-of c %)) (seq (seen-blocks-of c % true))) needs)
         unseen (remove #(or (seen-of c %) (seq (seen-blocks-of c % true))) needs)
-        label (fn [{:keys [key seen sheep] :as need}]
+        label (fn [{:keys [key seen sheep mob] :as need}]
                 (cond
                   sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)")
+                  mob (str key " (from a " mob " within " (sheep-radius) " blocks)")
                   (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")")
                   :else (str key (when-let [o (other-logs-seen c need)]
                                    (str " (only " (clojure.string/join "/" o) " seen: another species)")))))]

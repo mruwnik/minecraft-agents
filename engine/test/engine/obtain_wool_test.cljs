@@ -2,10 +2,13 @@
   "Wool as a gathered need of items.obtain: the colour the body carries most of, taken from sheep of that colour."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.registry :as registry]
             [engine.hostile-test :as h]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
+            [jobs.items.obtain.gather :as gather]
             [jobs.lib.world-files :as ew]))
 
 (defn sheep [id x color]
@@ -136,3 +139,40 @@
                 (swap! (:clock s) + 700)
                 (await (core/tick! (:eng s))))
               (is (empty? (attacked s)) "no sheep attacked"))))))))
+
+(deftest a-hunt-that-brings-no-wool-is-not-run-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [runs (atom 0)
+              hunt (assoc (get registry/jobs 'jobs.combat.hunt) :round (fn ^:async no-wool [c] (swap! runs inc) (ctx/end c :done nil {:got 0})))]
+          (await (with-redefs [registry/jobs (assoc registry/jobs 'jobs.combat.hunt hunt)]
+                   (scenario {:item "white_wool" :count 1}
+                             {:inventory h/sword :entities [(sheep 1 3 "white") (sheep 2 6 "white") (sheep 3 8 "white")]} 40)))
+          (is (= 1 @runs)))))))
+
+(defn cow [id x] {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z 0} :drops [{:name "leather" :count 1}]})
+
+(deftest leather-is-hunted-from-a-cow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "leather" :count 1}
+                                 {:inventory h/sword :entities [(cow 1 3) (cow 2 6) (cow 3 8)]} 40))]
+          (is (seq (attacked s)) "a cow was attacked"))))))
+
+(deftest a-hunt-that-spared-animals-says-which-rule-spared-them
+  (is (= "left alone: 3 pen" (gather/spared-why {:spared-by {:pen 3}})))
+  (is (nil? (gather/spared-why {:killed 0}))))
+
+(deftest leather-from-a-penned-cow-is-not-hunted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pen [{:name "linden-west-pen" :owner "Fake" :min [0 60 -3] :max [20 70 3]}]
+              s (h/setup {:inventory h/sword :entities [(cow 1 3) (cow 2 6) (cow 3 8)]} 50 (ew/of-data {} {} pen))]
+          (core/submit! (:eng s) '(jobs.items.obtain {:item "leather" :count 1}) {})
+          (dotimes [_ 40]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (empty? (attacked s)) "no cow attacked"))))))

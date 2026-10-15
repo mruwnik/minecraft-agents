@@ -46,11 +46,12 @@
       (if all? blocks (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks)))))
 
 (defn seen-of
-  "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, else nil."
+  "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, for a drop of an animal one adult in range, else nil."
   [c need]
-  (if-let [color (:sheep need)]
-    (first (filter #(= color (.-color %)) (sheep-in-range c)))
-    (first (seen-blocks-of c need false))))
+  (cond
+    (:sheep need) (first (filter #(= (:sheep need) (.-color %)) (sheep-in-range c)))
+    (:mob need) (first (remove #(true? (.-baby %)) (animals/herd (:primitives c) (:mob need) (sheep-radius))))
+    :else (first (seen-blocks-of c need false))))
 
 (defn with-block
   "The need with :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, craftable from 2 iron ingots or in a booked chest, else hunts."

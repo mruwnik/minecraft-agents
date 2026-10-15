@@ -14,11 +14,15 @@
 
 (def fish-items "Raw fish: caught with a rod (jobs.food.fish), never crafted." #{"cod" "salmon"})
 
+(def mob-drops
+  "The items a farm animal drops, and the animal: gathered by hunting it (a kept pair and penned animals are spared)."
+  {"leather" "cow" "feather" "chicken"})
+
 (defn source-opts
   "The recipes/plan options of the gather and smelt sources: ore drops count as gathered, and every furnace product
   (jobs.items.smelt.plan/made-from; charcoal from any overworld log) is also made by a smelt step."
   []
-  {:raw (conj (into ore-drops fish-items) "obsidian")
+  {:raw (conj (into ore-drops (concat fish-items (keys mob-drops))) "obsidian")
    :smelts (assoc (into {} (map (fn [[out in]] [out [in]])) smelt-plan/made-from) "charcoal" trees/log-names)})
 
 (defn leaves-of
@@ -44,6 +48,11 @@
 (def dirt-blocks
   "The seen blocks digging which by hand gives dirt (grass drops it)."
   #{"dirt" "grass_block"})
+
+(defn animal?
+  "Whether a gather need is hunted (wool from sheep, leather from cows ..), not mined or felled."
+  [need]
+  (boolean (or (:sheep need) (:mob need))))
 
 (defn wool? [name] (clojure.string/ends-with? name "_wool"))
 
@@ -78,8 +87,11 @@
           (for [[seed n] gather :when (grass-seeds seed)]
             {:key seed :count n :job 'jobs.gather.get-seeds :seen (grass-seeds seed) :max-runs 1
              :args {:item seed :count n}})
+          (for [[k n] gather :when (mob-drops k)]
+            {:key k :count n :job 'jobs.combat.hunt :mob (mob-drops k) :max-runs 1
+             :args {:mob (mob-drops k) :count n :radius (sheep-radius) :drops [k]}})
           (for [[k n] gather :when (wool? k)]
-            {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k)
+            {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k) :max-runs 1
              :args {:mob "sheep" :color (wool-color k) :count n :radius (sheep-radius)}})
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen trees/log-name? :args {:fetch #{:item}}}])
           (for [[k n] gather :when (trees/log-name? k)]

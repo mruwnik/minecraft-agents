@@ -7,7 +7,7 @@
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
             [jobs.items.obtain.seen :refer [gather-slot seen-of with-block]]
-            [jobs.items.obtain.table :refer [gather-needs]]
+            [jobs.items.obtain.table :refer [animal? gather-needs]]
             [jobs.lib.tools :as tools]
             [jobs.lib.trees :as trees]))
 
@@ -50,7 +50,7 @@
   harvests its block (an unseen ore is mined by the pickaxe for its block) can be had (tool-viable?)."
   [c names n]
   (boolean (and (explore-opts c)
-                (some #(and (not (:sheep %)) (not (seen-of c %))
+                (some #(and (not (animal? %)) (not (seen-of c %))
                             (or (not (tools-wanted c names %)) (tool-viable? c names %)))
                       (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))))))
 

@@ -132,3 +132,12 @@
     (is (= [:later {:done 2 :left 1 :result {:got 2 :tried [:craft] :item "oak_log"}}]
            [(first d) (select-keys (nth d 2) [:done :left :result])]))
     (is (= {:got 0} (:result (nth (done? (c {} [])) 2))) "before the start")))
+
+(deftest a-water-bucket-with-no-water-seen-is-no-source-that-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (f/bare [{:name "bucket" :count 1}]) [])
+              e (await (ending-of s 'jobs.items.obtain {:item "water_bucket"} 20))]
+          (is (= {:kind :condition-failed :cause :no-source} (kc e)))
+          (is (re-find #"water" (get-in e [:cause :why]))))))))

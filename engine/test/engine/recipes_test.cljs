@@ -91,3 +91,7 @@
 (deftest nuggets-are-combined-into-ingots
   (is (= [[:craft "iron_ingot" 3]] (shape (plan {"iron_nugget" 27} "iron_ingot" 3 {:table? true}))))
   (is (= [:craft "iron_ingot" 3] (last (shape (plan {"iron_nugget" 27 "oak_log" 2} "iron_ingot" 3))))))
+
+(deftest lacking-asks-for-the-torch-fuel-carried
+  (is (= "crafting torch needs 3 stick, have 2" (recipes/lacking game/default-version {"coal" 15 "stick" 2} "torch" 12)) "coal carried: not charcoal")
+  (is (= "crafting torch needs 3 stick, have 2" (recipes/lacking game/default-version {"charcoal" 15 "stick" 2} "torch" 12)) "charcoal carried: it is the fuel"))
