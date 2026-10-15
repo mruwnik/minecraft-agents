@@ -67,10 +67,10 @@
   (is (re-find #"a job spec is a list" (problem '())))
   (is (re-find #"in \(seq \(jobs.nope\)\)" (problem '(seq (jobs.nope)))) "the message names the whole spec"))
 
-(deftest a-job-without-conditions-is-refused-even-with-a-check
+(deftest an-old-check-job-is-refused-and-a-round-only-job-is-not
   (let [reg (assoc reg 'jobs.old {:check (constantly true) :round noop-round} 'jobs.bare {:round noop-round})]
-    (is (re-find #"job jobs.old needs a round and conditions" (expr/problem reg '(jobs.old))))
-    (is (re-find #"job jobs.bare needs a round and conditions" (expr/problem reg '(jobs.bare))))))
+    (is (re-find #"job jobs.old needs a round and no old check" (expr/problem reg '(jobs.old))))
+    (is (nil? (expr/problem reg '(jobs.bare))))))
 
 (deftest unknown-arg-keys-are-refused-naming-each-and-listing-the-known
   (is (re-find #"jobs.a has no arg :x, :y; its args are :m, :n" (problem '(jobs.a {:x 1 :n 2 :y 3}))))

@@ -18,7 +18,7 @@
 (deftest each-job-exports-the-contract-and-quotes-validly
   (doseq [[sym args] [['jobs.combat.attack {:targets ["zombie"]}]
                       ['jobs.explore.search {:target "diamond_block"}]]]
-    (is (some? (:conditions (job sym))) (str sym " has conditions"))
+    (is (some some? ((juxt :conditions :can-start? :can-run?) (job sym))) (str sym " has checks"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
