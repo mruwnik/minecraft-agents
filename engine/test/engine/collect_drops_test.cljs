@@ -174,6 +174,14 @@
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
+(deftest a-search-that-finds-nothing-ends-none-collected-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (bd/setup {:self body})
+              result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 80))]
+          (is (= [:stopped :none-collected 0] ((juxt :status :reason :collected) result))))))))
+
 (def night-ms 14000)
 
 (deftest a-search-underground-at-night-walks-on-in-its-own-tunnel
