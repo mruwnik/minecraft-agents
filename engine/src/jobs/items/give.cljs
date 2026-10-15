@@ -52,8 +52,7 @@
    ::unseen-ms {:default 3000 :doc "How long a target may stay unseen before it counts as gone, in ms." :spec (a/int-in 0 nil)}
    ::head-height {:default 1.6 :doc "Height of a player's head above its position, in blocks." :spec (a/num-in 0 nil)}
    ::walk-s {:default 10 :doc "Seconds the walk to the player takes (the quote)." :spec (a/num-in 0 nil)}
-   ::toss-s {:default 2 :doc "Seconds the toss and the confirmation take (the quote)." :spec (a/num-in 0 nil)}
-   ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+   ::toss-s {:default 2 :doc "Seconds the toss and the confirmation take (the quote)." :spec (a/num-in 0 nil)}})
 (defn grace-ms [] (settings/get settings ::grace-ms))
 (defn idle-ms [] (settings/get settings ::idle-ms))
 (defn walk-leg-s [] (settings/get settings ::walk-leg-s))
@@ -296,11 +295,8 @@
           :else (let [r (await (ctx/act c :collect (clj->js {:id (:id (first l))})))]
                   (recur (if (= "collected" (.-status r)) 0 (inc failed)))))))))
 
-(defn max-steps [] (settings/get settings ::max-steps))
-
 (defn ^:async round
   "One call walks, tosses and collects what lies back until the give is done or stopped; it yields while it waits
-  for the player to appear or to take the drop, and after max-steps steps."
+  for the player to appear or to take the drop."
   [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step! c) :continue)))))
+  (await (pace/steps! c #(step! c))))

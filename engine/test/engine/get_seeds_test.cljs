@@ -77,6 +77,13 @@
           (is (>= (:got (done-event s)) 2))
           (is (finished? s)))))))
 
+(deftest a-round-has-no-step-cap-of-its-own
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 2} {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops} 1))]
+          (is (finished? s)))))))
+
 (deftest every-dig-goes-through-the-dig-job
   (async done
     (tu/run-async done

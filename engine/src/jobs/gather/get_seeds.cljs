@@ -72,8 +72,7 @@
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
-   ::job-time-s {:default 600 :doc "Seconds a gathering may take: the walks, digs, drops and the chest." :spec (a/num-in 0 nil)}
-   ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+   ::job-time-s {:default 600 :doc "Seconds a gathering may take: the walks, digs, drops and the chest." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn time-s [] (settings/get settings ::job-time-s))
 
@@ -377,9 +376,6 @@
       (empty? targets) (finish! c :none)
       :else (await (dig-round! c targets)))))
 
-(defn max-steps [] (settings/get settings ::max-steps))
-
 (defn ^:async round
   [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))
+  (await (pace/steps! c #(step c))))

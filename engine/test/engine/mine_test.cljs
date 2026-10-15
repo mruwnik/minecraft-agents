@@ -122,6 +122,14 @@
           (is (every? #(= "dirt" %) (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))))
           (is (finished? s)))))))
 
+(deftest a-round-has-no-step-cap-of-its-own
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "sand" :count 6} {:blocks (merge floor sand-patch)} 2))]
+          (is (every? #(not= :continue (:kind %)) (done-events s)))
+          (is (= :count (:reason (done-event s)))))))))
+
 (deftest every-dig-goes-through-the-dig-job
   (async done
     (tu/run-async done

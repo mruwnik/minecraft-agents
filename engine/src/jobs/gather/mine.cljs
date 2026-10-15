@@ -209,8 +209,7 @@
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
 (a/defargs settings
-  {::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
    ::stay-margin {:default 8 :doc "Blocks over the higher or under the lower of body and ore that a :stay-level walk to ore may plan through (go-to :y-margin): a body a reflex took far off does not climb a hill to get back." :spec (a/num-in 0 nil)}
    ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}})
 
@@ -558,8 +557,6 @@
       (:collecting m) (await (collect! c))
       :else (await (dig-round! c)))))
 
-(defn max-steps [] (settings/get settings ::max-steps))
-
 (defn ^:async round
   [c]
   (submitted/begin! c)
@@ -569,5 +566,4 @@
                  (await (when (and (pos? (or (:torch-interval (:args c)) 0)) (nil? (:tunnel (ctx/mem c))) (or (pos? (:tunnel-length (:args c))) (descent-wanted? c)))
                           (trip/torches-ready! c))))]
     t
-    (let [n (atom 0)]
-      (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue))))))
+    (await (pace/steps! c #(step c)))))

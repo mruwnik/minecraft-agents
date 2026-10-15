@@ -11,7 +11,6 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.access.rules :as rules]))
 
-(def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
 
 (def doc
   "Block a corridor cross-section off from the base side (a mineshaft corridor, 3 wide and 3 high). One call does it
@@ -192,5 +191,4 @@
     {:uses {:job-time [0 t (max t (settings/get settings ::job-time-s))]}}))
 
 (defn ^:async round [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step! c) :continue)))))
+  (await (pace/steps! c #(step! c))))

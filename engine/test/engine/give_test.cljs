@@ -195,14 +195,15 @@
     (tu/run-async done
       (fn ^:async t []
         (let [statuses (atom (cycle ["unreachable" "unreachable" "collected"]))
-              {:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
-                                                {:player "Steve" :item "bread" :count 5} 14 false
-                                                (fn [p] (.override (.-world p) "collect"
-                                                                   (fn ^:async f [_ _ _]
-                                                                     (let [st (first @statuses)]
-                                                                       (swap! statuses rest)
-                                                                       #js {:status st :gained #js []}))))))]
-          (is (= :not-done @out) "two fails, a collect, two fails do not end it")
+              {:keys [p out]} (await (give (assoc bread :entities [(steve 10)])
+                                           {:player "Steve" :item "bread" :count 5} 14 false
+                                           (fn [p] (.override (.-world p) "collect"
+                                                              (fn ^:async f [_ _ _]
+                                                                (let [st (first @statuses)]
+                                                                  (swap! statuses rest)
+                                                                  (when (> (count (calls p "collect")) 8) (take-drops! p))
+                                                                  #js {:status st :gained #js []}))))))]
+          (is (not= :litter (:reason @out)) "two fails, a collect, two fails do not end it as litter")
           (is (> (count (calls p "collect")) 4)))))))
 
 (deftest a-drop-that-spawns-late-is-not-reported-as-taken
