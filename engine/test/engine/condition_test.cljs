@@ -188,7 +188,12 @@
     [later-a ok-a ok-b] ok-a
     [later-a look-a] look-a
     [never-a later-b] later-b
+    [later-a unknown-l] unknown-l
+    [unknown-l later-a] unknown-l
     [never-a never-a] never-a))
+
+(deftest not-of-a-definite-later-or-an-unknown-stays-later
+  (is (= :later (first (op cond/not (op cond/or later-a unknown-l))))))
 
 (deftest not-turns-definite-statuses-round-and-keeps-unknown-and-look
   (are [s expected] (= expected (op cond/not s))

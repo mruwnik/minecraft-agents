@@ -198,13 +198,18 @@
   [& checks]
   (fn [c] (let [ss (ask-all c checks)] (with-parts (contract/all ss) ss))))
 
+(defn or-later [ss]
+  (let [laters (filter #(cljs.core/= :later (first %)) ss)]
+    (cljs.core/or (first (filter #(:unknown (nth % 2)) laters)) (first laters))))
+
 (defn or
-  "Every check asked: the first :ok, else the first :look (a look may still make it hold), else the first :later,
-  else :never; :parts holds each."
+  "Every check asked: the first :ok, else the first :look (a look may still make it hold), else the first :later (an
+  unknown one before a definite one, so not of it stays :later), else :never; :parts holds each."
   [& checks]
   (fn [c]
-    (let [ss (ask-all c checks)]
-      (with-parts (some (fn [k] (some #(when (cljs.core/= k (first %)) %) ss)) [:ok :look :later :never]) ss))))
+    (let [ss (ask-all c checks)
+          later (or-later ss)]
+      (with-parts (some (fn [k] (if (cljs.core/= k :later) later (some #(when (cljs.core/= k (first %)) %) ss))) [:ok :look :later :never]) ss))))
 
 (defn not
   "An :ok becomes :later and a definite :later or :never :ok, each with the check's text and data; an unknown :later

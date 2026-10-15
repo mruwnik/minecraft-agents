@@ -113,7 +113,13 @@
     {:reason :night-sheltered :shelter shelter :pos bed
      :text (str "the bed is " (js/Math.round (u/dist (u/self-pos c) bed)) " blocks away; the body stays in its shelter until day")}))
 
-(def can-start? (cond/and (cond/because :not-night "not night" (cond/not (cond/daytime))) bed-status))
+(def night (cond/because :not-night "not night" (cond/not (cond/daytime))))
+
+(defn can-start?
+  "The night, and by night a bed; by day the bed (a room flood fill) is not looked for."
+  [c]
+  (let [n (contract/asked c night)]
+    (if (= :ok (first n)) (contract/all [n (contract/asked c bed-status)]) n)))
 
 (def target [])
 

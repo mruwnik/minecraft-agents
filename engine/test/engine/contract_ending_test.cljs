@@ -714,4 +714,4 @@
     (is (re-find #"migrated has no arg :bogus" (expr/problem reg '(migrated {:bogus 1}))))))
 
 (deftest registering-a-job-with-a-condition-that-is-no-fn-is-refused-naming-it
-  (is (thrown-with-msg? js/Error #"held-for" (ending/wrap {:conditions [[:holds '(held-for 5 (daytime)) :why]]}))))
+  (is (thrown-with-msg? js/Error #"a condition is \[:fn f\]" (ending/wrap {:conditions ['(daytime)]}))))
