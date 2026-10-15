@@ -1,7 +1,7 @@
 ;; Wedged reflex + jobs.survival.unwedge (card ab70e479). The body stands in a full block (sand) at its feet cell [16 0 16].
 ;; S: steps to a free side cell, else digs the feet block (shovel carried; water beside is allowed). N: slab, farmland, snow layer,
 ;; soul sand at the feet never fire :wedged. F: lava beside / above the feet cell, bedrock at the feet: no dig, no step into lava,
-;; exactly one :unwedge.blocked warning and no refire within the quiet period.
+;; the job ending :stopped :blocked and no refire within the quiet period.
 ;; Note: the runner starts the body BEFORE it clears the plot, so a body saved inside the previous case's wedge fires once before
 ;; t0 (job j1, and an :unwedge-blocked entry for that cell). F cases therefore tp the body out at the end, and the no-refire
 ;; check names jobs j2..j6 (the case's own job is j1 when the body starts clean, as it does after a previous F case).
@@ -16,14 +16,14 @@
    :act [[:summon "falling_block" [16.5 4 16.5] "{BlockState:{Name:\"minecraft:sand\"},Time:1}"]]
    :expect [{:event {:source :reflex :kind :fired} :within-s 15}
             {:event {:source :reflex :kind :ended} :within-s 30}
-            {:no-event {:source :job :kind :unwedge.blocked} :for-s 30 :until {:source :reflex :kind :ended}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :blocked}} :for-s 30 :until {:source :reflex :kind :ended}}]
    :after [[:block [16 0 16] "sand"]]}
   {:name "s1-steps-to-free-side-2"
    :blocks [[:set [17 -1 16] "stone"] [:set [15 0 16] "stone"] [:set [15 1 16] "stone"] [:set [16 0 17] "stone"] [:set [16 1 17] "stone"] [:set [16 0 15] "stone"] [:set [16 1 15] "stone"]]
    :act [[:summon "falling_block" [16.5 4 16.5] "{BlockState:{Name:\"minecraft:sand\"},Time:1}"]]
    :expect [{:event {:source :reflex :kind :fired} :within-s 15}
             {:event {:source :reflex :kind :ended} :within-s 30}
-            {:no-event {:source :job :kind :unwedge.blocked} :for-s 30 :until {:source :reflex :kind :ended}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :blocked}} :for-s 30 :until {:source :reflex :kind :ended}}]
    :after [[:block [16 0 16] "sand"]]}
   {:name "s2-digs-out-no-side-1"
    :blocks [[:fill [15 0 15] [17 1 17] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
@@ -95,20 +95,20 @@
    :limit-s 60}
   {:name "f1-lava-only-free-side-1"
    :blocks [[:fill [15 0 15] [17 1 17] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
-   :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 sand"] [:rcon "execute positioned $X $Y $Z run setblock ~17 ~ ~16 lava"] [:await {:source :job :kind :unwedge.blocked} 40] [:wait-s 15] [:rcon "tp $BODY $X $Y $Z"]]
+   :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 sand"] [:rcon "execute positioned $X $Y $Z run setblock ~17 ~ ~16 lava"] [:await {:source :job :kind :stopped :data {:reason :blocked}} 40] [:wait-s 15] [:rcon "tp $BODY $X $Y $Z"]]
    :body {:inventory [["iron_shovel" 1]] :effects [["fire_resistance" 600 0]]}
-   :expect [{:event {:source :job :kind :unwedge.blocked} :within-s 45}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :blocked}} :within-s 45}
             {:no-event {:source :reflex :kind :fired :context {:job-id #{"j2" "j3" "j4" "j5" "j6"}}} :for-s 18}]
    :after [[:block [16 0 16] "sand"] [:block [17 0 16] "lava"]]}
   {:name "f2-lava-above-1"
    :blocks [[:fill [15 0 15] [17 1 17] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
-   :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 sand"] [:rcon "execute positioned $X $Y $Z run setblock ~16 ~1 ~16 lava"] [:await {:source :job :kind :unwedge.blocked} 40] [:wait-s 15] [:rcon "tp $BODY $X $Y $Z"]]
+   :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 sand"] [:rcon "execute positioned $X $Y $Z run setblock ~16 ~1 ~16 lava"] [:await {:source :job :kind :stopped :data {:reason :blocked}} 40] [:wait-s 15] [:rcon "tp $BODY $X $Y $Z"]]
    :body {:inventory [["iron_shovel" 1]] :effects [["fire_resistance" 600 0]]}
-   :expect [{:event {:source :job :kind :unwedge.blocked} :within-s 45}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :blocked}} :within-s 45}]
    :after [[:block [16 0 16] "sand"] [:block [16 1 16] "lava"]]}
   {:name "f3-bedrock-1"
    :blocks [[:fill [15 0 15] [17 1 17] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
-   :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 bedrock"] [:await {:source :job :kind :unwedge.blocked} 40] [:wait-s 15] [:rcon "tp $BODY $X $Y $Z"]]
+   :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 bedrock"] [:await {:source :job :kind :stopped :data {:reason :blocked}} 40] [:wait-s 15] [:rcon "tp $BODY $X $Y $Z"]]
    :body {:inventory [["iron_pickaxe" 1]]}
-   :expect [{:event {:source :job :kind :unwedge.blocked} :within-s 45}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :blocked}} :within-s 45}]
    :after [[:block [16 0 16] "bedrock"]]}]}

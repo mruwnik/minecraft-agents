@@ -15,13 +15,13 @@
  :cases
  [{:name "slit-in-the-wall-is-filled"
    :act [[:job (jobs.survival.block-arrow-gap {})]]
-   :expect [{:event {:source :job :kind :block-arrow-gap.closed} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :block_arrow_gap_failed} :for-s 30 :until {:source :job :kind :block-arrow-gap.closed}}]
+   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 30 :until {:source :job :kind :completed}}]
    :after [[:block [19 1 16] "cobblestone"]]}
   {:name "no-blocks-stops-places-nothing"
    :body {:inventory []}
    :act [[:job (jobs.survival.block-arrow-gap {:fetch false})]]
-   :expect [{:event {:source :job :kind :block_arrow_gap_failed :data {:reason :no-blocks}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-blocks}} :within-s 30 :of-job true}]
    :after [[:block [19 1 16] "air"]]}
   {:name "wall-without-a-slit-declines"
    :blocks [[:set [19 1 16] "stone"]]

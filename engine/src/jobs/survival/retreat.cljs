@@ -108,8 +108,8 @@
   hostile within its follow range (jobs.lib.threats; ranged ones at least :ranged-radius) would have a walkable way to
   the refuge if its own blocks were gone, and for :quiet-s more after the last such danger (a silent mob is forgotten
   after a few seconds); then the flight ends :hidden. After :hide-s in the refuge with no real danger on the body as it
-  stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays
-  (info retreat.hide-ended): the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup).
+  stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays;
+  the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup).
   A chase is bounded by the call's time spend (default ::job-time-s): past it the flight ends limit-reached :job-time where it
   stands (refuge included) and the hostile trigger fires again while the danger stays. With no new best gap to the
   nearest chaser in :no-gain-steps steps it takes the cornered options instead of walking on; it ends nothing-possible

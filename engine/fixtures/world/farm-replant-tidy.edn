@@ -1,5 +1,5 @@
 ;; Card 8a148153: crops the body cut and replanted in another's field (harvest with :ignore-zones?) are cells its own replant already
-;; restored: restore-broken lists them in tidy.restored and warns no tidy.not-restored ("N broken blocks not restored, 0 restored").
+;; restored: restore-broken lists them in its :cells and ends without :not-restored.
 ;; Two ripe carrot cells in a field of another's zone and plan; the body carries 5 carrots.
 ;; Should-succeed: harvest cuts and replants 2, restore-broken then restores both. Should-fail: no tidy.not-restored.
 ;; Unsure (60%): that harvest books its zone digs in the tidy ledger the way the unit test fakes it.
@@ -20,6 +20,6 @@
          [:await {:source :job :kind #{:completed :stopped} :data {:cut 2 :replanted 2}} 80]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 2 :replanted 2}} :within-s 80}
-            {:event {:source :job :kind :tidy.restored} :within-s 130}
-            {:no-event {:source :job :kind :tidy.not-restored} :for-s 120 :until {:source :job :kind :tidy.restored}}]
+            {:event {:source :job :kind :completed :data {:cells [:any]}} :within-s 130}
+            {:no-event {:source :job :kind :stopped :data {:not-restored [:any]}} :for-s 120 :until {:source :job :kind :completed :data {:cells [:any]}}}]
    :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]]}]}

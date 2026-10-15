@@ -81,7 +81,7 @@
       (recur (inc i)))))
 
 (defn block-at [p [x y z]] (.-name (.blockAt p #js {:x x :y y :z z})))
-(defn failed [seen] (some #(when (= :dig_niche_failed (:kind %)) %) @seen))
+(defn failed [seen] (some #(when (= :stopped (:kind %)) %) @seen))
 (defn kinds-seen [seen] (set (map :kind @seen)))
 
 (def hill-zone {:name "keep" :owner "Miles" :min [3 60 -3] :max [9 70 3]})
@@ -93,10 +93,9 @@
         (let [{:keys [p seen] :as s} (setup [])]
           (await (run! s {}))
           (is (nil? (failed seen)))
-          (is (contains? (kinds-seen seen) :dig-niche.sealed))
-          (let [e (some #(when (= :dig-niche.sealed (:kind %)) %) @seen)]
-            (is (= {"cobblestone" 2} (:spent e)))
-            (is (re-find #"used 2 cobblestone \(niche plug at \[4 64 0\]" (:text e))))
+          (is (not-any? #{:dig-niche.sealed :dig_niche_failed} (kinds-seen seen)) "the ending carries it")
+          (let [e (some #(when (= :completed (:kind %)) %) @seen)]
+            (is (= {"cobblestone" 2} (:spent e))))
           (is (= ["air" "air"] (mapv #(block-at p %) [[5 64 0] [5 65 0]])) "inner cells dug")
           (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]])) "opening plugged with the dropped blocks"))))))
 
@@ -174,7 +173,7 @@
           (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed"}))
           (await (run! s {}))
           (is (= :place-failed (:reason (failed seen))))
-          (is (not (contains? (kinds-seen seen) :dig-niche.sealed))))))))
+          (is (not (contains? (kinds-seen seen) :completed))))))))
 
 (defn mob-in-door-until
   "A place override refusing with a zombie in the cell while the fake clock is before until-ms."
@@ -202,7 +201,7 @@
           (.override (.-world p) "place" (mob-in-door-until clock (+ @clock 3000)))
           (await (run-timed! s {}))
           (is (nil? (failed seen)))
-          (is (contains? (kinds-seen seen) :dig-niche.sealed))
+          (is (contains? (kinds-seen seen) :completed))
           (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]]))))))))
 
 (deftest a-mob-that-stays-past-the-limit-fails-place-failed-with-the-mob-named

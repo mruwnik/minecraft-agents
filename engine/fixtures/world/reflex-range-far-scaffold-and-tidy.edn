@@ -39,6 +39,6 @@
    :memory [{:kind :tidy :data {:cell #at [6 0 8] :action :dig :was "cobblestone" :now "air" :tries 0}}]
    :body {:at [40.5 0 8.5] :inventory [["cobblestone" 4]] :effects [["resistance" 600 4]]}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :within-s 30}
-            {:event {:source :job :kind :tidy.restored :data {:cells [[:any]]}} :within-s 80}]
+            {:event {:source :job :kind :completed :data {:cells [[:any]]}} :within-s 80}]
    :after [[:block [6 0 8] "cobblestone"]]
    :limit-s 100}]}

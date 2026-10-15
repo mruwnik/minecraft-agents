@@ -37,8 +37,7 @@
   Does not fight, flee or walk: respond-to-hostile and retreat own that.
   What it placed is what place-all! reports placed (the body trusts its own place, not a view that may lag).
   Filling a doorway can shut the body in: the blocks are the building blocks dig-in shelters with, and a shut-in body
-  gets out as from its own shelter (go-to escalation digs a door, dig-in leave).
-  Events: block-arrow-gap.closed (info), block_arrow_gap_failed (warning).")
+  gets out as from its own shelter (go-to escalation digs a door, dig-in leave).")
 
 (a/defargs args
   {:radius {:doc "ranged mobs within this many blocks count" :spec (a/num-in 0 nil) :default 16}
@@ -116,7 +115,6 @@
 (def failure-kinds {:no-blocks :condition-failed :refused :condition-failed})
 
 (defn fail! [c reason text]
-  (ctx/emit! c :block_arrow_gap_failed :warn {:reason reason :text text})
   (ctx/end c (get failure-kinds reason :nothing-possible) reason {:placed (vec (:placed (ctx/mem c))) :text text}))
 
 (defn ^:async fetch-blocks!
@@ -138,8 +136,7 @@
         blocks (blocks c)
         dangers (ranged-dangers c)]
     (if (empty? dangers)
-      (do (ctx/emit! c :block-arrow-gap.closed :info {:placed (vec (:placed (ctx/mem c))) :text "no arrow line to the body"})
-          (ctx/end c :done nil {:placed (vec (:placed (ctx/mem c)))}))
+      (ctx/end c :done nil {:placed (vec (:placed (ctx/mem c)))})
       (let [kind-at (seen-kind p)
             in (access/rules-input c)
             skip (:skip (ctx/mem c) #{})

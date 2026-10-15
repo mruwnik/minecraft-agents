@@ -81,7 +81,8 @@
         (let [{:keys [eng p seen]} (setup {:blocks (merge boxed {"0,64,0" "bedrock"})})]
           (core/submit! eng (list unwedge) {})
           (await (core/tick! eng))
-          (is (= 1 (count (filter #(= :unwedge.blocked (:kind %)) @seen))) "in one run")
+          (is (= [:blocked] (map :reason (filter #(= :stopped (:kind %)) @seen))) "in one run")
+          (is (not-any? #(= :unwedge.blocked (:kind %)) @seen) "the ending carries it")
           (is (= [] (:list (core/state eng))))
           (is (false? (holds? p (mem/view (:store eng)))) "no refire while the entry lasts")
           (is (true? (holds? p nil)) "without the entry it would"))))))
@@ -157,7 +158,7 @@
           (await (core/tick! eng))
           (is (= "sand" (.-name (.blockAt p (tu/pos 0 64 0)))) "no dig")
           (is (not (some #{"dig"} (call-names p))))
-          (is (= 1 (count (filter #(= :unwedge.blocked (:kind %)) @seen))) "final after three refusals"))))))
+          (is (= [:blocked] (map :reason (filter #(= :stopped (:kind %)) @seen))) "final after three refusals"))))))
 
 (defn stopped-reason [seen] (:reason (first (filter #(= :stopped (:kind %)) @seen))))
 
@@ -185,8 +186,7 @@
                        #js {:status "timeout"}))
           (core/submit! eng (list unwedge) {})
           (await (core/tick! eng))
-          (is (= 1 (count (filter #{"dig"} (call-names p)))) "no try after the cut")
-          (is (empty? (filter #(= :unwedge.blocked (:kind %)) @seen)) "a cut is not a failed dig"))))))
+          (is (= 1 (count (filter #{"dig"} (call-names p)))) "no try after the cut"))))))
 
 (deftest a-cut-unwedge-round-yields-without-acting
   (async done

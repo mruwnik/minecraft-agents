@@ -18,12 +18,12 @@
    :blocks [[:fill [7 0 3] [9 2 5] "glass" :hollow]]
    :act [[:summon "zombie" [8.5 0 4.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :within-s 30}
-            {:event {:source :job :kind :tidy.restored :data {:cells [[:any]]}} :within-s 70}]
+            {:event {:source :job :kind :completed :data {:cells [[:any]]}} :within-s 70}]
    :after [[:block [10 0 6] "cobblestone"] [:entities "type=zombie,tag=wt" [[7 0 3] [9 2 5]] 1]]
    :limit-s 80}
   {:name "skeleton-with-line-of-fire-holds-tidy-off"
    :act [[:summon "skeleton" [10.5 0 3.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :for-s 30}
-            {:no-event {:source :job :kind :tidy.restored} :for-s 30}]
+            {:no-event {:source :job :kind :completed :data {:cells [:any]}} :for-s 30}]
    :after [[:block [10 0 6] "air"] [:entities "type=skeleton,tag=wt" [[9 0 2] [12 2 5]] 1]]
    :limit-s 40}]}

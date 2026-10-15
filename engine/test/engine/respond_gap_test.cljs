@@ -62,7 +62,10 @@
   [{:keys [seen]}]
   (mapv :slot (filter #(and (= :child_started (:kind %)) (= 2 (count (:chain %)))) @seen)))
 
-(defn placed? [{:keys [seen]}] (contains? (g/kinds-seen seen) :block-arrow-gap.closed))
+(defn placed?
+  "Whether the block-arrow-gap child ended done."
+  [{:keys [seen]}]
+  (some #(and (= :child_ended (:kind %)) (= :gap (:slot %)) (= :done (get-in % [:ending :kind]))) @seen))
 
 (deftest cover-blocks-and-a-pickaxe-stop-the-arrows-by-placing-not-walking
   (async done
@@ -135,4 +138,4 @@
         (let [{:keys [seen]} (await (no-gap-run {:inventory [cobble8 pickaxe]
                                                  :zones [{:name "keep" :owner "Miles" :min [-4 60 -4] :max [4 70 4]}]}
                                                 [:gap :flee] true))]
-          (is (= :refused (:reason (g/failed seen))) "the gap job ran and placed nothing"))))))
+          (is (some #(and (= :child_ended (:kind %)) (= :gap (:slot %)) (= :refused (:reason %))) @seen) "the gap job ran and placed nothing"))))))

@@ -25,10 +25,10 @@
   max-candidates-checked cells whose put-back cuts the body's way to no other it reaches now; a walk is one go-to call and
   a failed try is repeated until the cell gave up. A cell not restored for now (unsafe, item not carried) keeps its
   entry. The others are forgotten.
-  Done at once with no :tidy entry pending. Ends with one info tidy.restored (the cells put
-  back, none if none were), :done {:restored n} when every cell was settled, else (also when max-passes ran out with cells
-  unvisited) nothing-possible :not-restored {:restored n :failed n}. A cut run is :continue and goes on from the entries
-  left. If cells are left it also emits one warning tidy.not-restored {:cells [{:cell :was :why}]}. Spends :time
+  Done at once with no :tidy entry pending. Ends :done {:restored n :cells [cells put back] :not-restored [{:cell :was :why}]}
+  (the lists only when not empty) when every cell was settled, else (also when max-passes ran out with cells
+  unvisited) nothing-possible :not-restored with the same data and :failed n. A cut run is :continue and goes on from the entries
+  left. Spends :time
   (default ::job-time-s).
   Memory: reads :tidy. Writes :tidy-reported, the cells still waiting, which the :tidy-pending trigger reads
   to warn once per set of cells.")
@@ -167,7 +167,7 @@
   [c]
   (let [left (count (tidy/entries c))]
     (checks/goal (zero? left) [:restored "every broken cell is back"] [:owed (str left " cells to put back")]
-                 {:units :cells :done (count (:restored (ctx/mem c))) :left left})))
+                 {:units :cells :done (count (:restored (ctx/mem c))) :cells (vec (:restored (ctx/mem c))) :left left})))
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-cell) (count (tidy/entries c)))]
@@ -225,24 +225,23 @@
               (skip! c e :gave-up)))))))
 
 (defn report!
-  "Forget the cells that are settled (changed, given up), emit the two events, end: :done, or stopped
-  :not-restored while a cell was not put back (its entry kept unless it changed or was given up)."
+  "Forget the cells that are settled (changed, given up), end: :done, or stopped :not-restored while a cell was not put
+  back (its entry kept unless it changed or was given up). The data names the :cells restored and the :not-restored ones."
   [c]
   (let [{:keys [restored failed seen]} (ctx/mem c)
         left (remove #(contains? (or seen #{}) (:cell %)) (tidy/entries c))
         unvisited (count left)
-        not-restored (into (vec failed) (map (fn [{:keys [cell was]}] {:cell cell :was was :why :unvisited})) left)]
+        not-restored (into (vec failed) (map (fn [{:keys [cell was]}] {:cell cell :was was :why :unvisited})) left)
+        data (cond-> {:restored (count restored)}
+               (seq restored) (assoc :cells (vec restored))
+               (seq not-restored) (assoc :not-restored not-restored))]
     (doseq [{:keys [cell why]} failed :when (#{:changed :gave-up} why)] (tidy/forget-cell! c cell))
-    (when (seq restored)
-      (ctx/emit! c :tidy.restored :info {:cells (vec restored) :text (str "restored " (count restored) " broken blocks")}))
-    (when (seq not-restored)
-      (ctx/emit! c :tidy.not-restored :warn {:cells not-restored :text (str (count not-restored) " broken blocks not restored")}))
     (ctx/remember! c :tidy-reported {:cells (mapv :cell (tidy/entries c))} tidy/reported-policy)
     (if (or (pos? unvisited) (seq (remove #(= :changed (:why %)) failed)))
       (let [n (+ unvisited (count (remove #(= :changed (:why %)) failed)))]
-        (ctx/end c :nothing-possible :not-restored {:restored (count restored) :failed n
-                                                    :text (str n " broken blocks not restored, " (count restored) " restored")}))
-      (ctx/end c :done nil {:restored (count restored)}))))
+        (ctx/end c :nothing-possible :not-restored (assoc data :failed n
+                                                          :text (str n " broken blocks not restored, " (count restored) " restored"))))
+      (ctx/end c :done nil data))))
 
 (defn skip! [c {:keys [cell was]} why]
   (ctx/update-mem! c update :failed (fnil conj []) {:cell cell :was was :why why})

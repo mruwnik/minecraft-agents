@@ -1,6 +1,6 @@
 ;; Torches light the plot (a hostile within 8 blocks makes restore-broken skip every cell as :unsafe). Day cases: run with --allow-time --time-log <the shared time log>.
 ;; jobs.survival.restore-broken never shuts the body itself in (card 3e85c26b, fix 354d4f3b): a dug doorway cell of a hut the
-;; body stands in stays pending (warn tidy.not-restored :why :seals) until the body is out, then is put back; a dug cell on
+;; body stands in stays pending (the ending lists :why :seals) until the body is out, then is put back; a dug cell on
 ;; open ground, or a window in a hut that still has a doorway, is restored at once. The tidy entries come from real digs
 ;; (jobs.blocks.dig :ignore-zones? true on cells another plan's footprint claims). The plot has a second level (platform
 ;; at y 2 up a two-step ramp) so the open ground holds more than reach/room-cells (1024) standable cells.
@@ -21,8 +21,8 @@
          [:job (jobs.survival.restore-broken {})] [:wait-s 15]
          [:job (jobs.movement.go-to {:pos #xyz [15 0 10] :range 1})] [:wait-s 15]
          [:job (jobs.survival.restore-broken {})]]
-   :expect [{:event {:source :job :kind :tidy.not-restored :data {:cells [{:why :seals} {:why :seals}]}} :within-s 60}
-            {:event {:source :job :kind :tidy.restored :data {:cells [[:any] [:any]]}} :within-s 85}]
+   :expect [{:event {:source :job :kind :stopped :data {:not-restored [{:why :seals} {:why :seals}]}} :within-s 60}
+            {:event {:source :job :kind :completed :data {:cells [[:any] [:any]]}} :within-s 85}]
    :after [[:block [12 0 10] "cobblestone"] [:block [12 1 10] "cobblestone"]]}
   {:name "hut-south-doorway-kept-then-restored"
    :plans [{:id "other" :parts [{:id "door" :cells [#at [10 0 12] #at [10 1 12]] :want [:any "cobblestone"]}]}]
@@ -31,8 +31,8 @@
          [:job (jobs.survival.restore-broken {})] [:wait-s 15]
          [:job (jobs.movement.go-to {:pos #xyz [10 0 15] :range 1})] [:wait-s 15]
          [:job (jobs.survival.restore-broken {})]]
-   :expect [{:event {:source :job :kind :tidy.not-restored :data {:cells [{:why :seals} {:why :seals}]}} :within-s 60}
-            {:event {:source :job :kind :tidy.restored :data {:cells [[:any] [:any]]}} :within-s 85}]
+   :expect [{:event {:source :job :kind :stopped :data {:not-restored [{:why :seals} {:why :seals}]}} :within-s 60}
+            {:event {:source :job :kind :completed :data {:cells [[:any] [:any]]}} :within-s 85}]
    :after [[:block [10 0 12] "cobblestone"] [:block [10 1 12] "cobblestone"]]}
   {:name "open-ground-wall-cells-restored"
    :blocks [[:fill [24 0 5] [24 1 5] "cobblestone"]]
@@ -41,14 +41,14 @@
    :act [[:job (jobs.blocks.dig {:pos #at [24 0 5] :ignore-zones? true})] [:wait-s 10]
          [:job (jobs.blocks.dig {:pos #at [24 1 5] :ignore-zones? true})] [:wait-s 10]
          [:job (jobs.survival.restore-broken {})]]
-   :expect [{:event {:source :job :kind :tidy.restored :data {:cells [[:any] [:any]]}} :within-s 80}
-            {:no-event {:source :job :kind :tidy.not-restored} :for-s 80 :until {:source :job :kind :tidy.restored :data {:cells [[:any] [:any]]}}}]
+   :expect [{:event {:source :job :kind :completed :data {:cells [[:any] [:any]]}} :within-s 80}
+            {:no-event {:source :job :kind :stopped :data {:not-restored [:any]}} :for-s 80 :until {:source :job :kind :completed :data {:cells [[:any] [:any]]}}}]
    :after [[:block [24 0 5] "cobblestone"] [:block [24 1 5] "cobblestone"]]}
   {:name "window-in-hut-with-doorway-restored"
    :blocks [[:set [12 0 10] "air"] [:set [12 1 10] "air"]]
    :plans [{:id "other" :parts [{:id "window" :cells [#at [8 1 10]] :want [:any "cobblestone"]}]}]
    :act [[:job (jobs.blocks.dig {:pos #at [8 1 10] :ignore-zones? true})] [:wait-s 10]
          [:job (jobs.survival.restore-broken {})]]
-   :expect [{:event {:source :job :kind :tidy.restored :data {:cells [[:any]]}} :within-s 70}
-            {:no-event {:source :job :kind :tidy.not-restored} :for-s 70 :until {:source :job :kind :tidy.restored :data {:cells [[:any]]}}}]
+   :expect [{:event {:source :job :kind :completed :data {:cells [[:any]]}} :within-s 70}
+            {:no-event {:source :job :kind :stopped :data {:not-restored [:any]}} :for-s 70 :until {:source :job :kind :completed :data {:cells [[:any]]}}}]
    :after [[:block [8 1 10] "cobblestone"]]}]}

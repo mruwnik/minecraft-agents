@@ -17,7 +17,7 @@
   - Else dig the feet block with the best carried tool (a last resort, tidied up like breathe's digs).
     A block the dig reports :cannot (bedrock) is final; other failed digs (or a dig refused because lava touches
     the cell) count, three in a row are final.
-  A final failure warns :unwedge.blocked once, writes an :unwedge-blocked entry (cell, 10 min; the trigger holds
+  A final failure writes an :unwedge-blocked entry (cell, 10 min; the trigger holds
   its fire for that cell meanwhile) and ends nothing-possible {:reason :blocked :why} with data {:cell}: the body
   holds still, nothing refires.
   A body not wedged is done at once. Ways :step and :dig (both by default);
@@ -41,7 +41,6 @@
 (defn ^:async block!
   "Give up on cell: warn once, remember it so the trigger stays quiet there. Resolves the nothing-possible ending."
   [c cell why]
-  (ctx/emit! c :unwedge.blocked :warn {:cell cell :why why :text (str "wedged in a block I cannot dig out of: " (name why))})
   (ctx/remember! c :unwedge-blocked {:cell cell :why why} breath/blocked-policy)
   (ctx/end c :nothing-possible {:reason :blocked :why why} {:cell cell}))
 

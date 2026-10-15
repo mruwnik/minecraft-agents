@@ -39,7 +39,6 @@
   :unreachable, :dig-failed, :place-failed (a mob in the door cell is waited out first, :dig-in-cells/mob-wait-ticks), :no-progress
   (over max-steps rounds); the data is {:text}. Rock the body has not looked into reads stone
   (dig-in-cells/rock-name); after each dig it looks at the cells laid open and waits a lava flow delay.
-  Events: dig-niche.sealed (info).
   Quote: time by the walk and six cells (four dug, two plugged); done 1 shelter.")
 
 (a/defargs args
@@ -203,9 +202,7 @@
   #{:no-site :no-tool :refused :no-blocks :fluid :open-shell})
 
 (defn fail! [c reason text]
-  (let [site (:site (ctx/mem c))]
-    (ctx/update-mem! c dissoc :site :plug-since)
-    (ctx/emit! c :dig_niche_failed :warn {:reason reason :site site :text text}))
+  (ctx/update-mem! c dissoc :site :plug-since)
   (ctx/end c (if (fact-stops reason) :condition-failed :nothing-possible) reason {:text text}))
 
 (defn ^:async go!
@@ -247,10 +244,6 @@
         door (door-cells stand dir)
         placed (spent/log c)]
     (ctx/remember! c :shelter {:pos feet :state :built :door door} sh/shelter-policy)
-    (ctx/emit! c :dig-niche.sealed :info (merge {:pos feet :door door
-                                                 :text (str "shut in a niche in the hillside for the night"
-                                                            (some->> (spent/text placed "niche plug") (str ": ")))}
-                                                (spent/summary placed)))
     (ctx/update-mem! c assoc :ended true)
     (ctx/end c :done nil (merge {:pos feet :door door} (spent/summary placed)))))
 

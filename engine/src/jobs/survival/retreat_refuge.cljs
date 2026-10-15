@@ -95,16 +95,6 @@
                          (reach/walkable-way? p (danger-q/mob-pos p %) anchor #{} open))
                    known))))
 
-(defn kept-off-text
-  "The hostiles the refuge still keeps off, as \"zombie at [x y z]\", for the hand-back message."
-  [c {:keys [anchor cells]}]
-  (let [p (:primitives c)
-        known (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (:ranged-radius (:args c)))]
-    (->> known
-         (filter #(reach/walkable-way? p (danger-q/mob-pos p %) anchor #{} (set cells)))
-         (map #(str (.-name %) " at " (pr-str (mapv (fn [k] (js/Math.floor (k (danger-q/mob-pos p %)))) [:x :y :z]))))
-         (str/join ", "))))
-
 (defn waiting-at-foot?
   "Whether a known melee hostile stands within foot-reach of the body."
   [c]
@@ -131,7 +121,7 @@
   "Sealed in, up the pillar or down the pit: hold (a :wait, why hiding) while the refuge keeps a danger off
   (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden. Past :hide-s (while a melee hostile waits at the foot, ::hide-max-s) in the refuge with no real
   danger on the body as it stands (danger-q/danger-near?, the hostile-near trigger's test) it ends :hidden at once,
-  saying which hostile it still keeps off (info retreat.hide-ended): the trigger fires again should one reach it.
+  the trigger fires again should one reach it.
   A body hurt while hidden (a mob reaching it round a corner of the seal) leaves the refuge as failed (abandon-refuge!),
   a pillar raised once first (retreat-pillar/raise!)."
   [c]
@@ -164,14 +154,8 @@
                   (await (abandon-refuge! c)))
         quiet? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
                    (flight/end-flight! c :hidden))
-        spent? (let [held (js/Math.round (/ (- (ctx/now c) hidden-since) 1000))
-                     kept (kept-off-text c refuge)]
-                 (ctx/emit! c :retreat.hide-ended :info
-                            {:ended :hidden :held-s held :pos (sh/feet (:primitives c))
-                             :text (str "hid " held " s; no hostile can reach or shoot the body here"
-                                        (when (seq kept) (str ", the refuge still keeps off " kept)) ": handing back")})
-                 (ctx/update-mem! c dissoc :quiet-from :hidden-since)
-                 (flight/end-flight! c :hidden))
+        spent? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
+                   (flight/end-flight! c :hidden))
         :else (do (await (child/pause! c (/ (flight/wait-ms) 1000) "hiding"))
                   (await (pace/pace!))
                   (recur))))))

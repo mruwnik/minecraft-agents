@@ -27,6 +27,13 @@
   [world zones]
   (zs/setup (assoc world :bodyHitbox true) zones))
 
+(defn ended-runs
+  "The :completed or :stopped events of the tidy runs that carry key k."
+  [seen k]
+  (filterv #(and (#{:completed :stopped} (:kind %)) (seq (get % k))) @seen))
+(defn restored-runs [seen] (ended-runs seen :cells))
+(defn not-restored-runs [seen] (mapv #(assoc % :cells (:not-restored %)) (ended-runs seen :not-restored)))
+
 (defn tidy-entries [eng] (mapv :data (mem/entries (mem/view (:store eng)) :tidy)))
 
 (defn seed! [eng entries]
@@ -79,8 +86,8 @@
           (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))))
           (is (= [] (zs/calls p "dig")) "digs nothing")
           (is (= [] (tidy-entries eng)))
-          (is (= [[[0 65 0]]] (mapv :cells (zs/trespass seen :tidy.restored))))
-          (is (= [] (zs/trespass seen :tidy.not-restored)) "nothing left, no warn"))))))
+          (is (= [[[0 65 0]]] (mapv :cells (restored-runs seen))))
+          (is (= [] (not-restored-runs seen)) "nothing left, no warn"))))))
 
 (deftest restore-ends-done-with-the-count-or-at-once-with-nothing-pending
   (async done
@@ -89,11 +96,11 @@
         (let [{:keys [eng]} (setup (merge aside {:inventory [{:name "stone" :count 2}]}) [(zs/whole-zone "Miles")])]
           (seed! eng [dug])
           (let [r (await (tu/child-outcome eng 'jobs.survival.restore-broken {} 20))]
-            (is (= {:status :done :restored 1} r))))
+            (is (= {:status :done :restored 1 :cells [[0 65 0]]} r))))
         (let [{:keys [eng p seen]} (restore! aside [(zs/whole-zone "Miles")] [])]
           (await (zs/run-until-empty eng 6))
           (is (= [] (:list (core/state eng))) "nothing pending: done at once")
-          (is (= [] (zs/trespass seen :tidy.restored)) "no report")
+          (is (= [] (restored-runs seen)) "no report")
           (is (= [] (zs/calls p "place"))))))))
 
 (deftest a-crop-dug-in-another-zone-is-put-back-as-its-seed
@@ -118,7 +125,7 @@
           (await (zs/run-until-empty eng 6))
           (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "dig"))))
           (is (= [] (zs/calls p "place")))
-          (is (= [[[0 65 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
+          (is (= [[[0 65 0]]] (mapv :cells (restored-runs seen)))))))))
 
 (deftest restore-digging-a-placed-block-with-a-pickaxe-that-breaks-says-tool-broke-then-tool-none
   (async done
@@ -149,8 +156,8 @@
             (is (= [] (zs/calls p "place")) (pr-str why))
             (is (= [] (zs/calls p "dig")) (pr-str why))
             (is (= kept (count (tidy-entries eng))) (pr-str why))
-            (is (= [[{:cell [0 65 0] :was "stone" :why why}]] (mapv :cells (zs/trespass seen :tidy.not-restored))) (pr-str why))
-            (is (= [] (zs/trespass seen :tidy.restored)) (pr-str why))))))))
+            (is (= [[{:cell [0 65 0] :was "stone" :why why}]] (mapv :cells (not-restored-runs seen))) (pr-str why))
+            (is (= [] (restored-runs seen)) (pr-str why))))))))
 
 (deftest a-cell-replanted-by-its-harvester-counts-as-restored-and-the-message-counts-only-real-failures
   (async done
@@ -163,8 +170,8 @@
               id (first (:list (core/state eng)))]
           (await (zs/run-until-empty eng 6))
           (is (= [] (zs/calls p "place")))
-          (is (= [[{:cell [9 65 0] :was "carrots" :why :not-carried}]] (mapv :cells (zs/trespass seen :tidy.not-restored))))
-          (is (= [[1 65 0] [2 65 0]] (:cells (first (zs/trespass seen :tidy.restored)))) "the replanted cells are restored")
+          (is (= [[{:cell [9 65 0] :was "carrots" :why :not-carried}]] (mapv :cells (not-restored-runs seen))))
+          (is (= [[1 65 0] [2 65 0]] (:cells (first (restored-runs seen)))) "the replanted cells are restored")
           (is (= "1 broken blocks not restored, 2 restored" (:text (first (zs/trespass seen :stopped)))))
           (is (= 1 (count (tidy-entries eng)))))))))
 
@@ -178,7 +185,7 @@
           (await (zs/run-until-empty eng 20))
           (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))))
           (is (= [] (tidy-entries eng)))
-          (is (= [[[0 65 0]]] (mapv :cells (zs/trespass seen :tidy.restored))))
+          (is (= [[[0 65 0]]] (mapv :cells (restored-runs seen))))
           (is (not= [0 0] [(js/Math.floor (.-x (.-pos (.self p)))) (js/Math.floor (.-z (.-pos (.self p))))]) "the body left the cell"))))))
 
 (deftest restore-keeps-a-cell-the-body-cannot-leave
@@ -189,7 +196,7 @@
           (await (zs/run-until-empty eng 20))
           (is (= [] (zs/calls p "place")) "never walls the body in")
           (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
-          (is (= [[{:cell [0 65 0] :was "stone" :why :occupied}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
+          (is (= [[{:cell [0 65 0] :was "stone" :why :occupied}]] (mapv :cells (not-restored-runs seen)))))))))
 
 (def with-hitbox {:bodyHitbox true :floor [-8 -8 8 8] :inventory [{:name "stone" :count 12}]})
 
@@ -203,7 +210,7 @@
           (await (zs/run-until-empty eng 20))
           (is (= [{:x 1 :y 64 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "one place, after the step: the server refuses an overlapping one")
           (is (= [] (tidy-entries eng)))
-          (is (= [[[1 64 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
+          (is (= [[[1 64 0]]] (mapv :cells (restored-runs seen)))))))))
 
 (deftest restore-puts-back-a-dug-box-the-body-stands-in
   (async done
@@ -215,7 +222,7 @@
           (is (= (set box) (set (map (comp (juxt :x :y :z) zs/arg-pos) (zs/calls p "place")))))
           (is (= 9 (count (zs/calls p "place"))) "each cell placed once, none refused")
           (is (= [] (tidy-entries eng)))
-          (is (= [[]] (mapv #(vec (remove (set box) (:cells %))) (zs/trespass seen :tidy.restored)))))))))
+          (is (= [[]] (mapv #(vec (remove (set box) (:cells %))) (restored-runs seen)))))))))
 
 (deftest restore-keeps-a-cell-the-hitbox-overlaps-and-the-body-cannot-leave
   (async done
@@ -227,7 +234,7 @@
           (await (zs/run-until-empty eng 20))
           (is (= [] (zs/calls p "place")))
           (is (= 1 (count (tidy-entries eng))))
-          (is (= [[{:cell [0 65 0] :was "stone" :why :occupied}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
+          (is (= [[{:cell [0 65 0] :was "stone" :why :occupied}]] (mapv :cells (not-restored-runs seen)))))))))
 
 (defn cell-key [[x y z]] (str x "," y "," z))
 
@@ -247,7 +254,7 @@
           (is (nil? (restore-broken/clear-cell {:primitives p} (dug-cell [0 64 0]) [])) "no clear cell the body can walk to")
           (is (= [] (zs/calls p "place")))
           (is (= 1 (count (tidy-entries eng))))
-          (is (= [[{:cell [0 64 0] :was "stone" :why :occupied}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
+          (is (= [[{:cell [0 64 0] :was "stone" :why :occupied}]] (mapv :cells (not-restored-runs seen)))))))))
 
 (def dead-end
   "A one-wide tunnel x 2..4 at z 0 (feet y 64, roof y 66) with the body at its closed end x 4."
@@ -266,13 +273,13 @@
           (await (zs/run-until-empty eng 40))
           (is (= [{:x 2 :y 64 :z 0} {:x 3 :y 64 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "the far cell first, then the one next to the body")
           (is (= [] (tidy-entries eng)))
-          (is (= [[[2 64 0] [3 64 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
+          (is (= [[[2 64 0] [3 64 0]]] (mapv :cells (restored-runs seen)))))))))
 
 (deftest a-breathe-trespass-is-restored-after-the-body-moves-clear
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup (assoc enclosed-body :floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}])
+        (let [{:keys [eng p]} (setup (assoc enclosed-body :floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}])
                                              [(zs/whole-zone "Miles")])]
           (core/register-reflex! eng {:trigger :tidy-pending})
           (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
@@ -282,8 +289,7 @@
           (fake/swap-self! p assoc :pos [4 64 0])
           (await (ticks! eng 40))
           (is (= #{{:x 0 :y 65 :z 0} {:x 0 :y 66 :z 0}} (set (map zs/arg-pos (zs/calls p "place")))))
-          (is (= [] (tidy-entries eng)))
-          (is (= [[[0 66 0]] [[0 65 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
+          (is (= [] (tidy-entries eng))))))))
 
 (deftest a-walk-that-fails-is-a-try-and-the-cell-is-given-up-in-one-run
   (async done
@@ -294,7 +300,7 @@
                                       [(zs/whole-zone "Miles")] [(dug-cell [50 64 0])])]
           (.override (.-world p) "steer" (fn ^:async f [_ _ _] #js {:status "failed" :reason "no controls"}))
           (await (core/tick! eng))
-          (is (= [[{:cell [50 64 0] :was "stone" :why :gave-up}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))
+          (is (= [[{:cell [50 64 0] :was "stone" :why :gave-up}]] (mapv :cells (not-restored-runs seen)))
               "each failed walk is a try; after max-tries the cell is given up, all in one run")
           (is (= [] (tidy-entries eng))))))))
 
@@ -402,8 +408,7 @@
           (await (ticks! eng 12))
           (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))))
           (is (= [] (tidy-entries eng)))
-          (is (= [[[0 65 0]]] (mapv :cells (zs/trespass seen :tidy.restored))))
-          (is (= [] (zs/trespass seen :tidy.not-restored))))))))
+          (is (= [] (not-restored-runs seen))))))))
 
 (deftest unrestorable-entries-warn-once-and-do-not-loop
   (async done
@@ -414,8 +419,8 @@
           (core/register-reflex! eng {:trigger :tidy-pending})
           (await (ticks! eng 40))
           (is (= [] (zs/calls p "place")))
-          (is (= 1 (count (zs/trespass seen :tidy.not-restored))))
-          (is (= [] (zs/trespass seen :tidy.restored)) "nothing restored, no info")
+          (is (= 1 (count (not-restored-runs seen))))
+          (is (= [] (restored-runs seen)) "nothing restored, no info")
           (is (= 1 (count (tidy-entries eng))) "the entry is kept for later"))))))
 
 (deftest a-reported-entry-is-restored-once-the-item-is-carried
@@ -426,7 +431,7 @@
           (seed! eng [dug])
           (core/register-reflex! eng {:trigger :tidy-pending})
           (await (ticks! eng 20))
-          (is (= 1 (count (zs/trespass seen :tidy.not-restored))))
+          (is (= 1 (count (not-restored-runs seen))))
           (fake/add-item! p "stone" 2)
           (await (ticks! eng 20))
           (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))))
@@ -490,7 +495,7 @@
           (await (ticks-over! eng clock 60 1000))
           (is (= [] (filterv #(= 0 (:x %)) (mapv zs/arg-pos (zs/calls p "place")))) "no stone carried")
           (is (= [#{{:cell [1 65 0] :was "wheat_seeds" :why :gave-up}} #{{:cell [0 65 0] :was "stone" :why :not-carried}}]
-                 (mapv (comp set :cells) (zs/trespass seen :tidy.not-restored)))
+                 (mapv (comp set :cells) (not-restored-runs seen)))
               "one warn per run: the seeds given up, then the stone not carried")
           (let [n (firings seen)]
             (await (ticks-over! eng clock 60 1000))
@@ -532,7 +537,7 @@
           (is (= 4 (count (zs/calls p "dig"))) "each dirt dug exactly once")
           (is (= 4 (count (zs/calls p "place"))) "restored once after the job ended")
           (is (= [] (tidy-entries eng)))
-          (is (= [] (zs/trespass seen :tidy.not-restored))))))))
+          (is (= [] (not-restored-runs seen))))))))
 
 ;; ------------------------------------------------------------------ a sealed body with entries outside
 
@@ -553,7 +558,7 @@
           (is (= [] (filterv #(= :backoff (:outcome %)) (filter #(= :ended (:kind %)) @seen))) "no run backed off")
           (is (= 1 (firings seen)) "one run, no refiring every cycle")
           (is (= [[{:cell [0 64 0] :was "stone" :why :occupied} {:cell [5 64 0] :was "stone" :why :unreachable}]]
-                 (mapv :cells (zs/trespass seen :tidy.not-restored)))
+                 (mapv :cells (not-restored-runs seen)))
               "one warn naming both")
           (is (= 2 (count (tidy-entries eng))) "both entries wait"))))))
 
@@ -568,7 +573,7 @@
           (await (zs/run-until-empty eng 30))
           (is (= [] (zs/calls p "place")) "the doorway is not filled")
           (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
-          (is (= [[{:cell [2 64 0] :was "stone" :why :seals}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
+          (is (= [[{:cell [2 64 0] :was "stone" :why :seals}]] (mapv :cells (not-restored-runs seen)))))))))
 
 (def mid-shaft
   "A one-wide shaft x 0, z 0 walled by stone at y 65 and 66, the body standing at its feet y 65 on a block at y 64; the
@@ -589,7 +594,7 @@
           (await (zs/run-until-empty eng 30))
           (is (= [] (zs/calls p "place")) "the hole is the body's way on: not filled")
           (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
-          (is (= [[{:cell [0 67 0] :was "stone" :why :shut-in}]] (mapv :cells (zs/trespass seen :tidy.not-restored))))
+          (is (= [[{:cell [0 67 0] :was "stone" :why :shut-in}]] (mapv :cells (not-restored-runs seen))))
           (fake/swap-self! p assoc :pos [2 64 1])
           (is (not (reach/enclosed? p)) "out on open ground")
           (is (nil? (tidy/why-not p escalation-hole)) "nothing holds the hole back once the body is out"))))))
@@ -609,7 +614,7 @@
         (let [{:keys [eng p seen]} (restore! with-stone [] [(assoc own-hole :cell [0 65 0])])]
           (await (zs/run-until-empty eng 6))
           (is (= [] (zs/calls p "place")) "the hole stays")
-          (is (= [] (zs/trespass seen :tidy.not-restored)) "it is no tidy work: nothing to warn about"))))))
+          (is (= [] (not-restored-runs seen)) "it is no tidy work: nothing to warn about"))))))
 
 (deftest a-sealed-body-restores-the-cell-it-can-reach
   (async done
@@ -619,8 +624,8 @@
               {:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] [(dug-cell [0 64 0]) (dug-cell [2 64 0])])]
           (await (zs/run-until-empty eng 30))
           (is (= [{:x 2 :y 64 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "the wall cell within reach is put back")
-          (is (= [[[2 64 0]]] (mapv :cells (zs/trespass seen :tidy.restored))))
-          (is (= [[{:cell [0 64 0] :was "stone" :why :occupied}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
+          (is (= [[[2 64 0]]] (mapv :cells (restored-runs seen))))
+          (is (= [[{:cell [0 64 0] :was "stone" :why :occupied}]] (mapv :cells (not-restored-runs seen)))))))))
 
 ;; ------------------------------------------------------------------ the floor rule
 
@@ -678,7 +683,7 @@
             (let [{:keys [eng seen]} (restore! open-floor-world [(zs/whole-zone "Miles")] [(dug-cell [3 64 0])])]
               (dotimes [_ 6] (await (core/tick! eng)))
               (is (= [0] (mapv :tries (tidy-entries eng))) "yielding go-to costs no try")
-              (is (= [[{:cell [3 64 0] :was "stone" :why :unvisited}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))
+              (is (= [[{:cell [3 64 0] :was "stone" :why :unvisited}]] (mapv :cells (not-restored-runs seen)))
                   "kept for the next run, never :gave-up")))))))))
 
 (deftest a-run-that-hits-the-pass-cap-with-cells-waiting-ends-stopped-not-done
@@ -692,7 +697,7 @@
             (is (= [] (:list (core/state eng))))
             (is (= :not-restored (:reason (first (zs/trespass seen :stopped)))) "not :done while a cell waits")
             (is (= 1 (count (tidy-entries eng))) "the waiting cell keeps its entry")
-            (let [warns (filterv #(= :tidy.not-restored (:kind %)) @seen)]
+            (let [warns (not-restored-runs seen)]
               (is (= 1 (count warns)))
               (is (= [(:cell (first (tidy-entries eng)))] (mapv :cell (:cells (first warns)))) "the warn lists the unvisited cell"))))))))
 

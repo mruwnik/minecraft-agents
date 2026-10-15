@@ -47,7 +47,7 @@
 (defn shot-at [p] (danger-q/dangers p 16 {:ranged-radius 16} {}))
 (defn cobble [p] (some #(when (= "cobblestone" (:name %)) (:count %)) (u/inventory p)))
 (defn block-at [p [x y z]] (.-name (.blockAt p #js {:x x :y y :z z})))
-(defn failed [seen] (some #(when (= :block_arrow_gap_failed (:kind %)) %) @seen))
+(defn failed [seen] (some #(when (= :stopped (:kind %)) %) @seen))
 (defn kinds-seen [seen] (set (map :kind @seen)))
 
 (def pit
@@ -63,7 +63,8 @@
         (let [{:keys [p seen] :as s} (setup [] {:entities [pit-skeleton] :blocks (merge ground pit shell)})]
           (await (run-job! s {}))
           (is (nil? (failed seen)))
-          (is (contains? (kinds-seen seen) :block-arrow-gap.closed))
+          (is (contains? (kinds-seen seen) :completed))
+          (is (not-any? #{:block-arrow-gap.closed :block_arrow_gap_failed} (kinds-seen seen)) "the ending carries it")
           (is (empty? (shot-at p)) "no line of fire is left")
           (is (= 7 (cobble p)) "one block ended both rays where they meet")
           (is (= ["air" "air"] (mapv #(block-at p %) [[0 64 0] [0 65 0]])) "the body's own cells are left"))))))
@@ -110,7 +111,7 @@
       (fn ^:async t []
         (let [{:keys [p seen] :as s} (setup [] {:entities [(assoc skeleton :pos {:x 8.5 :y 64 :z 0.5})]})]
           (await (run-job! s {}))
-          (is (not (contains? (kinds-seen seen) :block-arrow-gap.closed)))
+          (is (empty? (:placed (some #(when (= :completed (:kind %)) %) @seen))))
           (is (= "air" (block-at p [0 64 1]))))))))
 
 (deftest a-gap-no-cell-in-reach-can-stop-fails-no-gap
@@ -130,7 +131,7 @@
             (aset p "seenBlockAt" (fn [pos] (let [b (.call at p pos)] (if (= "cobblestone" (.-name b)) #js {:name "air" :pos pos :age-ms 0} b)))))
           (await (run-job! s {}))
           (is (nil? (failed seen)) "a successful place is not undone by a lagging view")
-          (is (= 1 (count (:placed (some #(when (= :block-arrow-gap.closed (:kind %)) %) @seen)))) "the placed cell is reported")
+          (is (= 1 (count (:placed (some #(when (= :completed (:kind %)) %) @seen)))) "the placed cell is reported")
           (is (= 7 (cobble p)) "the cell is not filled twice"))))))
 
 (deftest cells-the-body-has-not-seen-are-no-plug-candidates

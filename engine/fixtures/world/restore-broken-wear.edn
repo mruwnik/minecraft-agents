@@ -15,7 +15,7 @@
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :tool.broke} :within-s 60}
             {:event {:source :job :kind :tool.none} :within-s 60}
-            {:event {:source :job :kind :tidy.restored} :within-s 60}]
+            {:event {:source :job :kind :completed :data {:cells [:any]}} :within-s 60}]
    :after [[:block [18 0 16] "air"] [:item "iron_pickaxe" 0]]}
   {:name "second-last-durability-pick-breaks"
    :body {:at [16.5 0 10.5] :inventory [["iron_pickaxe[damage=249]" 1] ["cobblestone" 2]]}
@@ -29,6 +29,6 @@
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 2]]}
    :act [[:job (jobs.blocks.place {:pos #at [18 0 16] :item "cobblestone" :ignore-zones? true})] [:wait-s 10]
          [:job (jobs.survival.restore-broken {})]]
-   :expect [{:event {:source :job :kind :tidy.restored} :within-s 60}
-            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 60 :until {:source :job :kind :tidy.restored}}]
+   :expect [{:event {:source :job :kind :completed :data {:cells [:any]}} :within-s 60}
+            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 60 :until {:source :job :kind :completed :data {:cells [:any]}}}]
    :after [[:block [18 0 16] "air"] [:item "iron_pickaxe" 1]]}]}
