@@ -27,7 +27,7 @@
   :unreachable, :gone, :refused (the shovel failed twice), :no-shovel or :cover-stuck (two failed cover digs). A cell
   that already is a path is left alone and not counted.
   Zones and the footprints of plans are checked when a cell is chosen and again before the shovel or cover dig.
-  Refused before it starts: {:reason :bad-args :why} (impossible: the cells args are wrong), as failed conditions
+  Refused before it starts: {:reason :bad-args :why} (impossible: the cells args are wrong), as can-start? refusals
   {:reason :no-zones} (no zone list read, unless :ignore-zones?), {:reason :refused :zones ..} (every pathable cell is
   refused) and the shovel above.
   Ends with data {:pathed n :skipped {pos reason}}: done when it pathed some (the least accepted is :least, cells) or had

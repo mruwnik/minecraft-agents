@@ -496,6 +496,18 @@
           (is (empty? (attacked s)) "nothing attacked at 0.5 hp")
           (is (= [:low-health] (distinct (map :reason (events-of s :waiting))))))))))
 
+(deftest a-hunt-under-way-waits-when-hurt-and-is-not-ended-by-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 3) (cow 2 5)]} 20)]
+          (.override (.-world p) "attack" (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 0.5) r)))))
+          (core/submit! eng (spec {:count 2 :keep 0}) {})
+          (await (run-ticks s 15 700))
+          (is (= #{1} (set (attacked s))) "the first cow was attacked, the second waits for the body to heal")
+          (is (not (finished? s)) "low health does not end the hunt")
+          (is (= :low-health (:reason (last (events-of s :waiting))))))))))
+
 ;; ------------------------------------------------------------------ animals the body spares
 
 (def own-pen [{:name "linden-west-pen" :owner "Fake" :min [0 60 -3] :max [20 70 3]}])

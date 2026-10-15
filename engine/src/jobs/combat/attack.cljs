@@ -39,7 +39,7 @@
   - :limit-reached: the engine's limit (default :spend :job-time ::time-s) ends it, with the same data (done?'s :data).
   - :condition-failed :absent: no target was present after a 2 s grace for the world's entities to arrive, a look round and, for a target heard but not seen, up to four steps toward the sound (jobs.lib.vantage).
   :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
-  :absent :wait makes the call wait (condition :no-target) until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
+  :absent :wait makes the call wait (can-start? :no-target) until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
   Creepers get no special handling. The job does not guard the body's health: the survival register sits above it and cuts it.")
 
 (a/defargs args

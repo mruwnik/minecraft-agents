@@ -33,10 +33,10 @@
   Endings: done when the pen holds (info pen-build.done); nothing-possible with the :reason as cause when it does not
   (one warn pen-build.leaky naming the leaks {:pos :why} (:gap :open-gate :climb :open :unloaded; at most 12) and what
   the build left (:refused, :given-up, :short)); nothing-possible :inside when the body cannot get out of the finished
-  pen. An ending of the builder's conditions (no data: :no-items, :no-zones) is this job's; a builder that ended
+  pen. An ending of the builder's can-start? (no data: :no-items, :no-zones) is this job's; a builder that ended
   short or refused after its work (data) goes on to the check, which reports the shortage as leaks with :built. A
   shut-gate child that did not end done is named in the data as :shut.
-  Start facts, all failed conditions (one pen-build.declined warn naming the cells or the reason):
+  Start facts, all waits or refusals of can-start? (one pen-build.declined warn naming the cells or the reason):
   - {:reason :plan-trouble :why text}: the plan is missing, unreadable, has no cells (in :part) or no fence cells.
   - {:reason :uneven :why text}: its ring steps more than 1 between neighbouring fences, or a gate is more than 1 above
     the ground of an inside neighbour (animals will not step down 2), unless :uneven? true.

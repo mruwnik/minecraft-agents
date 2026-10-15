@@ -21,8 +21,8 @@
   Zones and plans: loaded cells that a zone or an active plan's footprint refuses are skipped for good (reason
   :zone or :footprint, one clear-box.refused info per round). The chosen cell is checked again before the dig.
   A dig hazard not in :accept counts a try (reason :hazard after two).
-  Refused before it starts: {:reason :bad-args :why} (impossible: a missing corner or too many cells), as failed
-  conditions {:reason :no-zones} (no zone list read, unless :ignore-zones?, also in the middle of the job) and
+  Refused before it starts: {:reason :bad-args :why} (impossible: a missing corner or too many cells), as can-start?
+  refusals {:reason :no-zones} (no zone list read, unless :ignore-zones?, also in the middle of the job) and
   {:reason :refused :zones :plans} (every pending cell is refused, before the first round).
   Ends with data {:dug n :skipped {pos reason} :kept n :fluids {name count}}: done when it dug some (the least accepted
   is :least, cells) or had nothing to dig; with none dug and cells skipped, condition-failed for :zone, :footprint and

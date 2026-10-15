@@ -162,14 +162,18 @@
   (let [f (need/parse-arg (:fetch (:args c)))]
     (when (and f (contains? (or (:what f) need/kinds) :tool)) f)))
 
+(defn fluid-hazard
+  "With :on-fluid :fail, the problem r when it is a hazard of a block beside a fluid, else nil."
+  [c r]
+  (when (and (= :fail (:on-fluid (:args c))) (= :hazard (:reason r)) (some #{:fluid-adjacent :lava-adjacent} (:hazards r)))
+    r))
+
 (defn fluid-refusal
   "With :on-fluid :fail, the hazard of a block beside a fluid, else nil."
   [c]
-  (let [r (problem c)]
-    (when (and (= :fail (:on-fluid (:args c))) (= :hazard (:reason r)) (some #{:fluid-adjacent :lava-adjacent} (:hazards r)))
-      r)))
+  (fluid-hazard c (problem c)))
 
-(def refused (checks/refusing :allowed "the cell may be dug" #(when-not (fluid-refusal %) (problem %))))
+(def refused (checks/refusing :allowed "the cell may be dug" #(let [r (problem %)] (when-not (fluid-hazard % r) r))))
 
 (def no-tool-unfetched (checks/refusing :tool "a tool is carried or fetched" #(when-not (fetch-limits %) (tool-problem %))))
 

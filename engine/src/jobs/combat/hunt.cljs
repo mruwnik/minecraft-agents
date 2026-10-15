@@ -27,7 +27,7 @@
   Babies are never targets and never counted. Animals the body spares (jobs.lib.animal-spare: kinds in :off-limits, animals in
   a zone or plan of its own or a closed enclosure unless :spare-pens is false) are never targets either; when only such animals
   are left it ends :spared (the data has :spared-by, a count per rule, and warn hunt.done names them when nothing was killed).
-  A queued hunt waits (conditions) while the body is too hurt (:low-health, jobs.lib.body/too-hurt), and at its start (one kind
+  A hunt waits (can-run?) while the body is too hurt (:low-health, jobs.lib.body/too-hurt), also once begun, and (can-start?) at its start (one kind
   only) while :no-color (a :color and none of it in range; :seen-colors) or :too-few (:keep or fewer adults within :radius; the
   cause has :in-range, :radius, :keep and :nearest, the distance of the nearest adult of the kind in sight up to ::sight-radius).
   The first round ends :condition-failed :unarmed (warn hunt.done) for a hostile kind and no weapon of the call's :use :tools carried.
@@ -203,8 +203,10 @@
          (<= (count (present c)) (keep-of c)) (too-few-cause c))))))
 
 (def can-start?
-  "Waits while too hurt or on a start fact (start-fact: not for a several-kinds call, whose kinds each check theirs)."
-  (checks/all checks/low-health start-fact))
+  "Waits on a start fact (start-fact: not for a several-kinds call, whose kinds each check theirs)."
+  start-fact)
+
+(def can-run? checks/low-health)
 
 (defn done?
   "The animals killed against the count asked, and the data so far. Never :done? itself: the hunt ends with its event and data."
