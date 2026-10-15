@@ -5,7 +5,7 @@ import net from 'node:net'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main, parseMspt, gateLoad, SWEEP_MIN_BODIES, markSweep } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -792,4 +792,38 @@ test('main: no fixture path is a clear usage error (exit 2)', async () => {
   console.error = (m) => lines.push(m)
   try { assert.equal(await main(['--bodies', '2', '--durations', 'a.edn']), 2) } finally { console.error = err }
   assert.match(lines.join('\n'), /no fixture file or directory/)
+})
+
+test('parseMspt: reads the average tick time from a `tick query` reply, null when absent', () => {
+  assert.equal(parseMspt('Target tick rate: 20.0 per second.\nAverage time per tick: 23.4ms (Target: 50.0ms)'), 23.4)
+  assert.equal(parseMspt('Unknown or incomplete command'), null)
+  assert.equal(parseMspt(''), null)
+})
+test('gateLoad: the server tick time when readable, else the load average scaled to the same limit', async () => {
+  assert.equal(await gateLoad({ mspt: async () => 31, loadavg: () => 99, cores: 16, limit: 45 }), 31)
+  assert.equal(await gateLoad({ mspt: async () => null, loadavg: () => 24, cores: 16, limit: 45 }), 45, 'load at 1.5x cores equals the limit')
+  assert.equal(await gateLoad({ mspt: async () => { throw new Error('rcon down') }, loadavg: () => 12, cores: 16, limit: 45 }), 22.5)
+})
+test('runPool: an async load source gates the same way', { timeout: 10000 }, async () => {
+  const loads = [90, 20, 20]
+  let polls = 0
+  const started = []
+  const r = await runPool({
+    units: ['a', 'b'], workers: workerSpecs(2, 19, 'P', 0),
+    runUnit: async ({ file }) => { started.push([file, polls]); await sleepy(); return ok(file) },
+    load: async () => loads[Math.min(polls++, 2)], cores: 45, sleep: async () => {},
+  })
+  assert.equal(r.code, 0)
+  assert.ok(started[1][1] >= 2)
+})
+test('markSweep: a pool of SWEEP_MIN_BODIES or more bodies writes its pid to the sweep marker and the returned fn removes it', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-mark-'))
+  const file = path.join(dir, 'sweep-active')
+  assert.equal(markSweep(dir, SWEEP_MIN_BODIES - 1), null)
+  assert.equal(fs.existsSync(file), false)
+  const clear = markSweep(dir, SWEEP_MIN_BODIES)
+  assert.equal(fs.readFileSync(file, 'utf8'), String(process.pid))
+  clear()
+  assert.equal(fs.existsSync(file), false)
+  fs.rmSync(dir, { recursive: true, force: true })
 })

@@ -33,6 +33,12 @@ export const hasHeavyMarker = (cwd) => {
 }
 export const usableSlots = (free, max, reserve, heavy) => heavy ? free : free.filter((i) => i < max - reserve)
 
+// A world sweep (tools/world-test-pool.mjs) writes its pid to <dir>/sweep-active; while that pid lives, a light run of a kind with `sweepCap` starts only while fewer than that many slots are held.
+export const capDuringSweep = (free, heldCount, cap, sweeping) => !sweeping || cap === undefined || heldCount < cap ? free : []
+const sweepActive = () => {
+  try { return pidAlive(Number(fs.readFileSync(path.join(dir(), 'sweep-active'), 'utf8'))) } catch { return false }
+}
+
 // Slot indices a run tries, in order: `want` own slots (0..want-1); a heavy run tries the reserved ones (max-reserve..max-1) first, still `want` in all.
 export const candidateSlots = (want, max, reserve, heavy) => [...(heavy ? [...Array(reserve).keys()].map((j) => max - reserve + j) : []), ...Array(want).keys()].slice(0, want)
 
@@ -156,10 +162,11 @@ const main = async () => {
     if (heavy) fs.mkdirSync(path.dirname(heavyWaitFile(kind)), { recursive: true }), fs.writeFileSync(heavyWaitFile(kind), '')
     const open = usableSlots([...Array(k.max).keys()].filter((i) => !held(kind, i)), k.max, k.reserve ?? 0, heavy)
     let free = open
-    const blockers = () => free.length ? '' : open.length ? '; free slots kept for a waiting heavy run' : `; held by ${holders(kind, k.max)}`
+    const sweeping = !heavy && sweepActive()
+    const blockers = () => free.length ? '' : sweeping && k.sweepCap !== undefined && open.length ? `; a world sweep is running: other agents' ${kind} runs are capped to ${k.sweepCap}` : open.length ? '; free slots kept for a waiting heavy run' : `; held by ${holders(kind, k.max)}`
     const gated = await withGate(() => {
       const reserved = currentReserved()
-      free = heavy ? open : freeForLight(open, heavyWaits(kind))
+      free = heavy ? open : capDuringSweep(freeForLight(open, heavyWaits(kind)), heldSlots(kind, k.max).length, k.sweepCap, sweeping)
       const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved })
       if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now() }))
       return d

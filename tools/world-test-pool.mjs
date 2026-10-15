@@ -3,7 +3,8 @@
 // A unit is one fixture file, run by an ordinary one-body world-test child (own body slot, body claim, plot block). Pool flags:
 //   --bodies N        bodies to use (at most the res-slot body max minus one)
 //   --max-parallel M  children at once (default min(N, body slot max minus one, bodies the memory above the res-slot floor holds at the body slot's needMb))
-// A new child starts only while the 1-minute load average is at most the core count (polled; the first child always starts).
+// A new child starts only while the server's average tick time (RCON `tick query`) is at most MSPT_LIMIT ms (polled; the first child always starts);
+// when the server does not answer, the 1-minute load average scaled to the same limit is used. A pool of SWEEP_MIN_BODIES or more bodies also marks a sweep, which caps other agents' tests and server slots (tools/res-slot).
 // SIGINT, SIGTERM and exit kill every child this call spawned (by pid) and delete its temp result file.
 //   --body PREFIX     body names PREFIX + A, B, ... (default ProbePool); each needs a whitelist entry
 //   --first-plot I    first plot of body A; body k starts at I + 20 k
@@ -29,12 +30,16 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import net from 'node:net'
-import { spawn, spawnSync } from 'node:child_process'
+import { spawn, spawnSync, execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { slotDir } from './res-slot.mjs'
 
 const PLOTS_PER_BODY = 20
 const LOAD_POLL_MS = 5000
-const LOAD_PER_CORE = 1.5 // a gate at 1x cores idled bodies that mostly wait on the server; the memory floor and res-slot still bound the pool
+const LOAD_PER_CORE = 1.5 // fallback gate: a gate at 1x cores idled bodies that mostly wait on the server; the memory floor and res-slot still bound the pool
+const MSPT_LIMIT = 45 // the server's 50 ms tick budget with some headroom; case timing is correct below it
+const MSPT_CACHE_MS = 3000
+export const SWEEP_MIN_BODIES = 8
 export const BOOT_EXIT = 6 // a child's results end in repeated boot failures (the body dies at start): the pool stops at once, keeping them
 export const PRECHECK_EXIT = 5 // a child's refusal that holds for every case (a stranger near the plot grid): the pool stops at once
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -373,11 +378,11 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
       if (unreachable || precheck || bootDead) return
       const job = take(worker)
       if (job) {
-        let first = busy ? load() : 0
+        let first = busy ? await load() : 0
         if (first > cores) {
           const since = now()
           let l = first
-          while (busy && l > cores) { await sleep(LOAD_POLL_MS); l = load() }
+          while (busy && l > cores) { await sleep(LOAD_POLL_MS); l = await load() }
           log(`world-test pool: ${worker.body} waited ${Math.round((now() - since) / 1000)} s for the load to drop to ${cores} or less (load ${first}, now ${l})`)
         }
         busy++
@@ -545,6 +550,34 @@ const readDurations = (files) => durationFiles(files).flatMap((f) => {
   return []
 })
 
+export const parseMspt = (text) => {
+  const m = /Average time per tick:\s*([\d.]+)\s*ms/.exec(text ?? '')
+  return m ? Number(m[1]) : null
+}
+// read-only `tick query` through the existing raw RCON tool; one reading is shared by all workers for MSPT_CACHE_MS
+export const rconMspt = (root = path.join(here, '..'), run = (cb) => execFile('node', [path.join(root, 'tools', 'rcon-raw.mjs'), 'tick', 'query'], { cwd: root, timeout: 10000 }, cb)) => {
+  let at = 0, pending = null
+  return () => {
+    if (pending && Date.now() - at < MSPT_CACHE_MS) return pending
+    at = Date.now()
+    pending = new Promise((resolve) => run((err, out) => resolve(err ? null : parseMspt(out))))
+    return pending
+  }
+}
+// The gate's reading, in ms of tick time: the server's own, else the load average scaled so that 1.5x the cores equals the limit.
+export const gateLoad = async ({ mspt, loadavg, cores, limit }) => {
+  const m = await mspt().catch(() => null)
+  return m ?? loadavg() / (cores * LOAD_PER_CORE) * limit
+}
+// <dir>/sweep-active holds this pool's pid while it runs a sweep-sized pass; tools/res-slot reads it. Returns the remover, or null for a small pool.
+export const markSweep = (dir, bodies) => {
+  if (bodies < SWEEP_MIN_BODIES) return null
+  const file = path.join(dir, 'sweep-active')
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(file, String(process.pid))
+  return () => fs.rmSync(file, { force: true })
+}
+
 // the server answers when its RCON port accepts a connection (port from server.properties next to the server, else 25575)
 const serverProps = () => {
   const props = process.env.MC_SERVER_PROPERTIES
@@ -679,7 +712,11 @@ export const main = async (args) => {
   }
   const total = listing === null ? null : countListed(listing, repeatOf(p))
   if (total !== null) emitLine({ event: 'plan', total })
-  const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores: Math.floor(cores * LOAD_PER_CORE), log: (m) => console.error(m), probe: serverProbe([rconPort(), gamePort()]), serverWaitMs: p.serverWaitS * 1000, settleMs: p.serverSettleS * 1000 })
+  const mspt = rconMspt()
+  const clearSweep = markSweep(slotDir(), workers.length)
+  if (clearSweep) process.on('exit', clearSweep)
+  const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => gateLoad({ mspt, loadavg: () => os.loadavg()[0], cores, limit: MSPT_LIMIT }), cores: MSPT_LIMIT, log: (m) => console.error(m), probe: serverProbe([rconPort(), gamePort()]), serverWaitMs: p.serverWaitS * 1000, settleMs: p.serverSettleS * 1000 })
+  clearSweep?.()
   if (r.precheck) console.error('world-test pool: a precheck refused every case (see the line above); pass stopped, no case recorded')
   if (r.bootDead) console.error('world-test pool: every body died at boot (see the child log, e.g. a heap OOM); pass stopped, the cases not run are not recorded')
   if (r.unreachable) console.error(`world-test pool: server unreachable (RCON port ${rconPort()} or game port ${gamePort()} closed for ${p.serverWaitS} s); stopped, the cases not run are not recorded${r.pending?.length ? `; ${r.pending.length} failures awaiting a retry are recorded as inconclusive` : ''}`)

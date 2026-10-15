@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { candidateSlots, decide, freeForLight, hasHeavyMarker, loadConfig, reservedMb, usableSlots } from './res-slot.mjs'
+import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, loadConfig, reservedMb, usableSlots } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -308,5 +308,38 @@ test('integration: a heavy waiter that wants another slot does not hold back a l
   delete env.RES_SLOT_HEAVY
   const r = spawnSync('node', [new URL('./res-slot.mjs', import.meta.url).pathname, 't', '--', 'echo', 'ran'], { cwd: dir, encoding: 'utf8', env })
   assert.equal(r.status, 0); assert.match(r.stdout, /ran/)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('capDuringSweep: with a sweep active a light run may start only while fewer than `cap` slots are held; no cap or no sweep leaves the free slots', () => {
+  assert.deepEqual(capDuringSweep([1, 2], 1, 1, true), [])
+  assert.deepEqual(capDuringSweep([0, 1, 2], 0, 1, true), [0, 1, 2])
+  assert.deepEqual(capDuringSweep([1, 2], 1, 1, false), [1, 2])
+  assert.deepEqual(capDuringSweep([1, 2], 1, undefined, true), [1, 2])
+})
+test('config: tests and server slots are capped to one for other agents while a sweep runs', () => {
+  const kinds = loadConfig().kinds
+  assert.equal(kinds.tests.sweepCap, 1)
+  assert.equal(kinds.server.sweepCap, 1)
+})
+test('integration: while the sweep marker names a live pid a second light run is busy, a heavy run is not', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 3, sweepCap: 1 } } }))
+  const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200' }
+  const holder = spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '30'], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ...env }, stdio: 'ignore', detached: true })
+  try {
+    await new Promise((r) => setTimeout(r, 1000))
+    const before = run(['t', '--', 'echo', 'ran'], env)
+    assert.equal(before.status, 0, 'no sweep: a second slot is free')
+    fs.writeFileSync(path.join(dir, 'sweep-active'), String(process.pid))
+    const capped = run(['t', '--', 'echo', 'ran'], env)
+    assert.equal(capped.status, 75)
+    assert.match(capped.stderr, /sweep/)
+    const heavy = run(['t', '--heavy', '--', 'echo', 'ran'], env)
+    assert.equal(heavy.status, 0)
+    fs.writeFileSync(path.join(dir, 'sweep-active'), '999999999')
+    assert.equal(run(['t', '--', 'echo', 'ran'], env).status, 0, 'a dead sweep pid caps nothing')
+  } finally { process.kill(-holder.pid, 'SIGKILL') }
   fs.rmSync(dir, { recursive: true, force: true })
 })
