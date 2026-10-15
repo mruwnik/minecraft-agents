@@ -1,0 +1,24 @@
+;; Card 384d85b3: a go-to in a 2-high tunnel whose floor has a 1-cell hole (a gap too deep to climb out of, under a ceiling too low
+;; for the gap jump) fills the hole with a carried block and walks on (go-to.escalated :fill-gap); with nothing to fill it with it
+;; stops. Stone mass x 2..30, z 14..18, y -3..3 (a floor under the hole), tunnel 1x2 along z 16 from x 4 to x 28, hole at x 16, y -1..-2.
+;; Should-succeed: dirt carried: fill-gap, arrived at the far end, the hole holds dirt. Should-fail: nothing carried: stopped, body at the near end.
+{:defaults
+ {:tags [:movement :access]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [2 -3 14] [30 3 18] "stone"] [:fill [4 0 16] [28 1 16] "air"] [:fill [16 -2 16] [16 -1 16] "air"]]
+  :body {:at [5.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "dirt-carried-fills-the-hole-and-arrives"
+   :body {:inventory [["dirt" 5]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [27 0 16] :range 0})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :fill-gap}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}]
+   :after [[:block [16 -1 16] "dirt"] [:body-near [27.5 0 16.5] 2]]}
+  {:name "nothing-to-fill-it-with-stops"
+   :act [[:job (jobs.movement.go-to {:pos #at [27 0 16] :range 0})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :fill-gap}} :for-s 90 :until {:source :job :kind :stopped}}]
+   :after [[:not-block [16 -1 16] "dirt"] [:body-far [27.5 0 16.5] 8]]
+   :limit-s 100}]}

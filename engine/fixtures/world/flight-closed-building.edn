@@ -1,5 +1,5 @@
 ;; A flight runs into a closed building (retreat-home/rooms, owner Q132), not only its own home: cards 1cac54f6 (any closed
-;; building), 58b2e704 (flee into the hut by day), a6ca17e9 (home ahead of a chaser, race), 096cba8d (no room within blast reach
+;; building), 58b2e704 (flee into the hut by day), a6ca17e9 (home ahead of a chaser, race), 31887403 (home is any cell of the room), 096cba8d (no room within blast reach
 ;; of a creeper), 659f5e6d (no run into the hut ahead of a creeper). Hut: stone walls x 12..20, z 12..20, roof y 3, interior 7x7, door gap at [16 0 20]/[16 1 20] facing south.
 ;; Mobs are NoAI and helmeted (they never hurt, no sun burn); the reflex fires on them all the same.
 {:defaults
@@ -34,6 +34,20 @@
             {:no-event {:source :job :kind :retreat.home} :for-s 30}
             {:no-event {:source :job :kind :retreat.door-shut} :for-s 30}]
    :after [[:body-far [16.5 0 16.5] 3.5]]}
+  ;; 31887403: :home in the far corner of the hut, 7 cells from the door: the door is still shut on the way in
+  {:name "own-home-in-the-far-corner-still-shuts-the-door"
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [13 0 13]})]
+         [:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.home :data {:own? true}} :within-s 25}
+            {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
+   :after [[:block [16 0 20] "oak_door[half=lower,open=false]"] [:body-near [16.5 0 16.5] 4.5]]}
+  ;; 31887403: already inside the hut, on a cell other than the :home cell: that is at home, the body does not run out again
+  {:name "inside-the-room-away-from-the-home-cell-stays-and-shuts-the-door"
+   :body {:at [14.5 0 14.5]}
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [18 0 18]})]
+         [:summon "zombie" [17.5 0 23.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.door-shut} :within-s 40}]
+   :after [[:block [16 0 20] "oak_door[half=lower,open=false]"] [:body-near [16.5 0 16.5] 4.5]]}
   {:name "creeper-beside-the-door-no-room-within-blast-reach"
    :body {:at [8.5 0 24.5]}
    :act [[:summon "creeper" [18.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]

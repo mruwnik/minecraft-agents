@@ -1,4 +1,4 @@
-;; Cornered retreat (card af4935b9, fix 540c61e5, hand-tested in the live-cornered run): a body at the closed end of a 1-wide
+;; Cornered retreat (cards af4935b9, 05fc51cf; fix 540c61e5, hand-tested in the live-cornered run): a body at the closed end of a 1-wide
 ;; tunnel with a hostile coming along it seals itself in with carried blocks, else fights with the pickaxe, else the fist;
 ;; it never places a block into the mob; on open ground it just walks away. The pickaxe case lines the tunnel with obsidian
 ;; (a stone pickaxe digs none): with stone about it the body would dig a pit or pocket and hide instead of fight. Mobs are NoAI (they never hurt), helmeted
@@ -37,6 +37,16 @@
             {:no-event {:source :job :kind :retreat_blocked} :for-s 50 :until {:source :job :kind :retreat_sealed}}]
    :after [[:body-near [5.5 0 16.5] 2.0]
            [:entities "type=zombie,tag=wt" [[2 0 10] [30 4 22]] 1]]
+   :limit-s 70}
+  ;; 05fc51cf: a pocket that lays a cave open (parallel tunnels 2 cells off both walls, one cell behind the back wall) is given up, not sealed
+  {:name "pocket-that-lays-a-cave-open-is-given-up"
+   :plot {:floor "obsidian"}
+   :blocks [[:fill [2 0 14] [30 1 14] "air"] [:fill [2 0 18] [30 1 18] "air"] [:fill [3 0 16] [3 1 16] "air"]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :job :kind :retreat_sealed} :for-s 50}
+            {:no-event {:source :job :kind :retreat_blocked} :for-s 50}]
+   :after [[:entities "type=zombie,tag=wt" [[2 0 10] [30 4 22]] 0]]
    :limit-s 70}
   {:name "fist-fight-when-empty-handed"
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]

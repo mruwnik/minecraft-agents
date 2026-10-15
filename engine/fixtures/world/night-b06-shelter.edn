@@ -1,5 +1,5 @@
 ;; Night shelter follow-ups (cards a8fe9e86 1cbf8596 ad2c7c84 1b4b51d6 5a9e8c64 29349f1b ef5a94eb 712a8df7 1fbd292f b0e3b890 33e6bf20
-;; 8c5974f7 8e4c3127 629bc2ee fadf9dd7 ba754e77 7cc76257 f6fef9d5 2383463a): materials taken back at dawn, logs kept out of the walls,
+;; 8c5974f7 8e4c3127 629bc2ee fadf9dd7 ba754e77 7cc76257 f6fef9d5 2383463a 87aee1d1): materials taken back at dawn, logs kept out of the walls,
 ;; supported wall cells, doors shut or given up, the dawn hostile hold, caves and tunnels, a walled home with a carried bed, the
 ;; dusk walk home, a far bed, the escalation out of a shaft. Needs night/time: --allow-time --time-log <the shared time log>.
 ;; Torches keep the plot lit; the plot floor is one block over void, so a dirt pad y -6..-1 lets a pit be dug.
@@ -121,16 +121,85 @@
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}
             {:no-event {:source :job :kind :dig-in.sealed} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}]
    :limit-s 70}
-  ;; 33e6bf20: a walk inside an open cave is not held as sheltered
+  ;; 33e6bf20: a walk inside an open cave is not held as sheltered, even with a dug-in entry left from an earlier night
   {:name "walk-in-an-open-cave-is-not-held"
    :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 4] [28 6 28] "air"]]
    :plot {:height 12}
+   :memory [{:kind :shelter :data {:pos #xyz [6 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:at [6.5 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #xyz [26 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :go-to.night-sheltered} :for-s 90 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
    :after [[:body-near [26.5 0 16.5] 2.5]]
    :limit-s 100}
+  ;; 33e6bf20: buried at night in a stair tunnel, a walk to a goal further down is no walk out of the shelter
+  {:name "buried-walk-down-the-tunnel-is-not-held"
+   :blocks [[:fill [6 -1 12] [26 12 20] "stone"]
+            [:fill [8 9 16] [8 10 16] "air"] [:fill [9 8 16] [9 9 16] "air"] [:fill [10 7 16] [10 8 16] "air"]
+            [:fill [11 6 16] [11 7 16] "air"] [:fill [12 5 16] [12 6 16] "air"] [:fill [13 4 16] [13 5 16] "air"]
+            [:fill [14 3 16] [14 4 16] "air"] [:fill [15 2 16] [15 3 16] "air"] [:fill [16 1 16] [16 2 16] "air"]
+            [:fill [17 0 16] [17 1 16] "air"]]
+   :plot {:height 16}
+   :body {:at [8.5 9 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #xyz [17 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :go-to.night-sheltered} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
+   :after [[:body-near [17.5 0 16.5] 2.5]]
+   :limit-s 70}
+  ;; 33e6bf20: the same buried body asked to walk up to open ground waits for day
+  {:name "buried-walk-up-to-open-ground-is-held"
+   :blocks [[:fill [6 -1 12] [26 8 20] "stone"] [:fill [14 0 16] [15 1 16] "air"]]
+   :plot {:height 14}
+   :body {:at [14.5 0 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #xyz [20 9 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.night-sheltered} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 30 :until {:source :job :kind :go-to.night-sheltered}}]
+   :after [[:body-near [14.5 0 16.5] 1.5]]
+   :limit-s 40}
+  ;; 87aee1d1: a bed in a hut with no door cannot be reached; sleep says the hut is walled in, not a bare "cannot reach"
+  {:name "sleep-to-a-walled-in-bed-says-why"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:set [11 0 12] "red_bed[facing=east,part=foot]"] [:set [12 0 12] "red_bed[facing=east,part=head]"]]
+   :body {:at [4.5 0 12.5]}
+   :act [[:job (jobs.survival.sleep {:bed #at [11 0 12]})]]
+   :expect [{:event {:source :job :kind :bed_unreachable :data {:text [:contains "cannot reach the bed: "]}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :bed_unreachable :data {:text [:contains "walled in"]}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 30}]
+   :after [[:body-far [11.5 0 12.5] 3]]
+   :limit-s 100}
+  ;; 2383463a: a far flight left a :displaced entry: the bed 100 blocks off (past :bed-radius 48) is walked back to and slept in
+  {:name "displaced-body-walks-back-to-a-bed-100-blocks-away"
+   :time :night-exclusive
+   :plot {:length 120 :width 32}
+   :blocks [[:fill [94 0 10] [106 3 22] "stone" :hollow] [:fill [95 0 11] [105 2 21] "air"]
+            [:set [95 1 11] "torch"] [:set [105 1 21] "torch"]
+            [:set [100 0 10] "oak_door[facing=north,half=lower,hinge=left,open=false]"]
+            [:set [100 1 10] "oak_door[facing=north,half=upper,hinge=left,open=false]"]
+            [:set [100 0 16] "red_bed[facing=east,part=foot]"] [:set [101 0 16] "red_bed[facing=east,part=head]"]]
+   :body {:at [4.5 0 16.5]}
+   :memory [{:kind :displaced :data {:from #xyz [100 0 16]} :policy {:cap 1 :ttl 1800000}}]
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [100 0 16]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:no-event {:source :job :kind :night.bed-too-far} :for-s 60 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 150}]
+   :limit-s 170}
+  ;; 2383463a: at night a hungry body with nothing carried to eat does not go searching in the dark; with bread it eats
+  {:name "hungry-at-night-with-nothing-carried-does-not-fire"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 30}]
+   :after [[:body-near [16.5 0 16.5] 3] [:item "bread" 0]]
+   :limit-s 45}
+  {:name "hungry-at-night-with-bread-eats"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :body {:inventory [["bread" 4]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 40}]
+   :after [[:item "bread" [:<= 3]]]
+   :limit-s 60}
   ;; 8c5974f7: by day the night reflex does not fire, however often the body stops
   {:name "midday-night-reflex-stays-quiet"
    :time :day

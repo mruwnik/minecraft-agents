@@ -1,4 +1,4 @@
-;; Card d3a6426a: dig-in site checks. Water-ish blocks beside the descent cell, or water at the body, refuse the pit
+;; Cards d3a6426a, 05fc51cf: dig-in site checks. Water-ish blocks beside the descent cell, or water at the body, refuse the pit
 ;; (dig_in_failed, ground intact); a plant beside the start is no roof support, so the pit goes 3 deep and is roofed in the
 ;; ground layer. Dirt pad y -6..-1 under the body (the plot floor is over void). Night: --allow-time --time-log <shared log>.
 {:defaults
@@ -51,6 +51,22 @@
             {:no-event {:source :job :kind :dig_in_failed} :for-s 60 :until {:source :job :kind :dig-in.sealed}}]
    :after [[:not-block [16 -2 16] "dirt"]]
    :limit-s 80}
+  ;; 05fc51cf: lava hidden in the dirt beside the first dug cell flows into the hole: sealed with a carried block and the pit goes on, or (:on-lava :stop) left and the job stops
+  {:name "lava-laid-open-by-the-dig-is-sealed-and-the-pit-goes-on"
+   :blocks [[:set [17 -1 16] "lava"]]
+   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["cobblestone" 16]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :shelter_seal_failed} :for-s 90 :until {:source :job :kind :dig-in.sealed}}]
+   :after [[:not-block [16 -1 16] "lava"]]
+   :limit-s 100}
+  {:name "lava-laid-open-by-the-dig-with-on-lava-stop-stops-the-pit"
+   :blocks [[:set [17 -1 16] "lava"]]
+   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["cobblestone" 16]]}
+   :act [[:job (jobs.survival.dig-in {:on-lava :stop})]]
+   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "lava"]} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 60 :until {:source :job :kind :dig_in_failed}}]
+   :limit-s 70}
   {:name "flat-dirt-no-plant-seals"
    :act [[:job (jobs.survival.dig-in {})]]
    :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}

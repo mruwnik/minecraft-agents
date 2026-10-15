@@ -1,4 +1,4 @@
-;; Cards e9da64ac, b0bc6582, 2fc5602d: the default :needs-bed trigger fires jobs.items.obtain with its own :any-of (it ended bad-args
+;; Cards e9da64ac, b0bc6582, 2fc5602d, fe0a38bd: the default :needs-bed trigger fires jobs.items.obtain with its own :any-of (it ended bad-args
 ;; with no args), and a register that names :needs-bed reaches the body. The respawn bed the body remembers (:spawn-bed at [8 0 16]) is
 ;; gone (no bed block there), so the trigger holds by day; wool, planks and a crafting table beside the body make the bed.
 ;; Should-succeed: the reflex fires, obtain does not stop bad-args, the body ends with a bed. Should-fail: a body that still sees its
@@ -24,4 +24,19 @@
    :body {:inventory [["white_wool" 3] ["oak_planks" 3]]}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :for-s 20}]
    :after [[:block [8 0 16] "red_bed"] [:item "white_bed" 0]]
+   :limit-s 40}
+  ;; fe0a38bd: no respawn bed at all, never slept, first memory 4 in-game days old (a day is 20 min): overdue, so by day it makes a bed
+  {:name "never-slept-for-days-fetches-a-bed"
+   :memory [{:kind :food-source :data {:pos #xyz [4 0 4]} :age-s 4800 :policy {:cap 5 :ttl :forever}}]
+   :blocks [[:set [20 0 16] "crafting_table"]]
+   :body {:inventory [["white_wool" 3] ["oak_planks" 3]]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :within-s 30}
+            {:event {:source :job :kind :completed} :within-s 80}]
+   :after [[:item "white_bed" [:>= 1]]]}
+  {:name "never-slept-but-only-minutes-old-does-not-fire"
+   :memory [{:kind :food-source :data {:pos #xyz [4 0 4]} :age-s 60 :policy {:cap 5 :ttl :forever}}]
+   :blocks [[:set [20 0 16] "crafting_table"]]
+   :body {:inventory [["white_wool" 3] ["oak_planks" 3]]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :for-s 20}]
+   :after [[:item "white_bed" 0]]
    :limit-s 40}]}

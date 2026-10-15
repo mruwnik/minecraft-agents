@@ -21,6 +21,14 @@
    :expect [{:event {:source :job :kind :smelt.done} :within-s 90}
             {:event {:source :job :kind :shelter.ate} :within-s 100}]
    :after [[:item "beef" 0]]}
+  ;; 08af40de: a furnace just outside the wall is not a furnace of the shelter: the hold does not walk out to it at night
+  {:name "hold-does-not-walk-out-to-a-furnace-beyond-the-wall"
+   :blocks [[:set [17 0 13] "furnace[facing=west]"]]
+   :body {:inventory [["beef" 2] ["coal" 2]]}
+   :expect [{:event {:source :job :kind :holding} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :smelt.done} :for-s 60}]
+   :after [[:body-near [13.5 0 13.5] 3.5]]
+   :limit-s 80}
   {:name "hold-leaves-reserved-bait-carrots-alone"
    :body {:inventory [["carrot" 6]]}
    :memory [{:kind :bait-reserve :data {:foods ["carrot" "potato" "beetroot"]} :policy {:cap 5 :ttl :forever}}]

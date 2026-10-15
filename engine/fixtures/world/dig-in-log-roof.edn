@@ -1,4 +1,4 @@
-;; Card 2d8e72f2: a pit whose dug block is not placeable (coal_ore drops coal) is roofed with a carried log; with no log
+;; Cards 2d8e72f2, aed44d73: a pit whose dug block is not placeable (coal_ore drops coal) is roofed with a carried log; with no log
 ;; it stops "nothing to roof the pit with". The zigzag pit lays a log in the roof cell (y -2) and one in the side plug. Coal pad y -6..-1 under the body (the plot floor is over void).
 ;; Night: --allow-time --time-log <shared log>.
 {:defaults
@@ -29,5 +29,6 @@
    :body {:inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.survival.dig-in {})]]
    :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "nothing to roof the pit with"]} :within-s 40 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :no-blocks}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :dig-in.sealed} :for-s 40 :until {:source :job :kind :dig_in_failed :message [:contains "nothing to roof the pit with"]}}]
    :limit-s 50}]}
