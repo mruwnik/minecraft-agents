@@ -44,11 +44,14 @@
 (def can-start? bad-args)
 
 (defn done?
-  "Seconds waited in range against :wait-s."
+  "Seconds waited in range against :wait-s; done once all are waited with the body in range and no pause under way."
   [c]
-  (let [wait-s (:wait-s (:args c))
-        done (/ (:waited (ctx/mem c) 0) 1000)]
-    (contract/later :lingering (str "waited " done " of " wait-s " s") :units :seconds :done done :left (max 0 (- wait-s done)))))
+  (let [{:keys [pos range wait-s]} (:args c)
+        done (/ (:waited (ctx/mem c) 0) 1000)
+        data [:units :seconds :done done :left (max 0 (- wait-s done)) :result {:lingered true :reason "waited"}]]
+    (if (and (>= done wait-s) (u/within? (u/self-pos c) pos range) (not (checks/child-under-way? c)))
+      (apply contract/ok :waited (str "waited " wait-s " s in range") data)
+      (apply contract/later :lingering (str "waited " done " of " wait-s " s") data))))
 
 (defn quote-of [c]
   (let [wait-s (:wait-s (:args c))]

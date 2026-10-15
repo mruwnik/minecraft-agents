@@ -67,10 +67,20 @@
                                             ["lever" {:powered true} :off :powered false]
                                             ["stone_button" {:powered false} :press :powered true]]]
           (let [{:keys [result p seen]} (await (run (world name from) {:pos at :state want}))]
-            (is (= {:status :done :block name :wanted want} (head result [:status :block :wanted])) name)
+            (is (= {:status :done :reason :changed :block name :wanted want} (head result [:status :reason :block :wanted])) name)
             (is (= value (key (props p at))) name)
             (is (= 1 (count (calls p "useOn"))) (str name ": one click"))
             (is (empty? (kinds seen :toggle.done)) name)))))))
+
+(deftest a-click-whose-state-was-undone-by-another-actor-is-already-there
+  (let [done? (:done? (get registry/jobs job))
+        ctx-of (fn [props mem]
+                 {:primitives (tu/fake (world "lever" props)) :root "j1" :slots [] :args {:pos at :state :on}
+                  :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data mem}]}}})})
+        reason (fn [props mem] (:reason (nth (done? (ctx-of props mem)) 2)))]
+    (is (= :changed (reason {:powered true} {:clicked {:was {:powered false} :now {:powered true}}})))
+    (is (= :already (reason {:powered true} {:clicked {:was {:powered true} :now {:powered false}}})) "flipped on by another actor after the click turned it off")
+    (is (= :already (reason {:powered true} {})))))
 
 (deftest a-block-already-in-the-wanted-state-is-not-clicked
   (async done

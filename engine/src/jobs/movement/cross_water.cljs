@@ -164,8 +164,8 @@
   "Done once the body stands on the far shore of the crossing under way."
   [c]
   (let [saved (crossing c)
-        d (if (and saved (not (vehicle/mounted? (:primitives c))) (on-shore? c (:land saved))) 1 0)]
-    (contract/later :crossing (if (pos? d) "on the far shore" "crossing") :units :crossings :done d :left (- 1 d))))
+        ashore (and saved (not (vehicle/mounted? (:primitives c))) (on-shore? c (:land saved)))]
+    (contract/later :crossing (if ashore "on the far shore, the landing wraps up" "crossing") :units :crossings :done 0 :left 1)))
 
 (defn quote-of [c]
   (let [land (or (given-pos c) (:land (spot-of c)))

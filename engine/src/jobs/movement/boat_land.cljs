@@ -77,11 +77,11 @@
 (def can-start? (cond/and bad-args not-aboard no-shore))
 
 (defn done?
-  "Done once the body is off the boat."
+  "Never done? itself: off the boat the landing is still to be recorded (event, recovery), by the round."
   [c]
   (let [off (not (vehicle/mounted? (:primitives c)))]
     (contract/later :landing (if off "off the boat, the landing is to be recorded" "on the boat")
-                    :units :landings :done (if off 1 0) :left (if off 0 1))))
+                    :units :landings :done 0 :left 1)))
 
 (def drive-s "Seconds a landing takes, for the quote." 20)
 

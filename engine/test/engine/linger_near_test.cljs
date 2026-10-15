@@ -55,7 +55,7 @@
       (fn ^:async t []
         (let [{:keys [p out eng]} (await (linger {} {:pos {:x 2 :y 64 :z 0} :range 3 :wait-s 3} 12 500))]
           (is (empty? (tu/walk-calls p)))
-          (is (= {:status :done :lingered true} @out))
+          (is (= {:status :done :lingered true :reason "waited"} (select-keys @out [:status :lingered :reason])))
           (is (empty? (tu/walked-to eng))))))))
 
 (deftest a-far-target-is-walked-to-first
@@ -156,7 +156,7 @@
           (await (run-ticks s 2 5000))
           (is (= :not-done @(:out s)) "one second in range of the two asked for")
           (await (run-ticks s 6 500))
-          (is (= {:status :done :lingered true} @(:out s)) "two seconds held in range ends it"))))))
+          (is (= {:status :done :lingered true :reason "waited"} (select-keys @(:out s) [:status :lingered :reason])) "two seconds held in range ends it"))))))
 
 (deftest the-wait-in-range-is-a-noop-pause-child
   (async done

@@ -203,12 +203,16 @@
   {:legs (:legs m 0) :scans (:scans m 0) :failed (:failed m []) :skipped (:skipped m 0) :farthest (:farthest m 0)})
 
 (defn done?
-  "The targets found against :count. Never :done? itself: the search ends with its event and data."
+  "The targets found against :count; done once all are found (the round's search.done event then comes only when it
+  ends first)."
   [c]
-  (let [n (count (:found (ctx/mem c)))]
-    (contract/later :searching (str "found " n " of " (:count (:args c)))
-                    :units :found :done n :left (max 0 (- (:count (:args c)) n))
-                    :result {:found (:found (ctx/mem c) []) :coverage (coverage (ctx/mem c)) :why :time})))
+  (let [n (count (:found (ctx/mem c)))
+        left (max 0 (- (:count (:args c)) n))
+        data [:units :found :done n :left left
+              :result (cond-> {:reason :found :found (:found (ctx/mem c) []) :coverage (coverage (ctx/mem c))} (pos? left) (assoc :why :time))]]
+    (if (zero? left)
+      (apply contract/ok :found (str "found " n) data)
+      (apply contract/later :searching (str "found " n " of " (:count (:args c))) data))))
 
 (defn time-limit "Seconds the call may search." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))

@@ -115,12 +115,14 @@
 (def can-run? waits)
 
 (defn done?
-  "Done once the block is in the wanted state; the click's facts (:was :now) are the result when this call made it so."
+  "Done once the block is in the wanted state; the click's facts (:was :now) are the result when this call made it so
+  and the block still shows the state that click gave it (else another actor flipped it since)."
   [c]
   (let [{:keys [pos state error]} (parse (:args c))
         b (when-not error (u/block-at (:primitives c) pos))
         reached (boolean (and b (contains? (valid-states (click/kind-of (.-name b))) state) (click/reached? state (click/props-of b))))
-        clicked (:clicked (ctx/mem c))]
+        saved (:clicked (ctx/mem c))
+        clicked (when (and b (= (:now saved) (click/props-of b))) saved)]
     (if reached
       (contract/ok (if clicked :changed :already) (str (.-name b) " at " (pr-str pos) " is " (name state))
                    :units :toggles :done 1 :left 0
@@ -153,7 +155,7 @@
                      (closer! c)
                      (give-up! c :unreachable pos state (str text " is out of reach") facts))
       :refused (give-up! c :refused pos state (str text " refused the click: " status " " reason) facts)
-      :changed (do (ctx/update-mem! c assoc :clicked (select-keys facts [:was])) :again)
+      :changed (do (ctx/update-mem! c assoc :clicked (select-keys facts [:was :now])) :again)
       :unchanged (give-up! c :unchanged pos state (str text " did not change after the click (protected, iron-like or lag)") facts)
       :wrong-way (give-up! c :wrong-way pos state (str text " moved, but not to " (name state)) facts))))
 

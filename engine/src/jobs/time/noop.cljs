@@ -31,9 +31,12 @@
     (if until (max 0 (min (total-ms c) (- until (ctx/now c)))) (total-ms c))))
 
 (defn done?
-  "Never done before it runs: a pause has no state that can hold before it."
+  "Done once the pause has waited its time (a pause of none is done at once)."
   [c]
-  (contract/later :waiting "the pause is not over" :units :ms :done (- (total-ms c) (left-ms c)) :left (left-ms c)))
+  (let [data [:units :ms :done (- (total-ms c) (left-ms c)) :left (left-ms c) :result {:waited-s (:seconds (:args c) 0)}]]
+    (if (and (zero? (left-ms c)) (or (zero? (total-ms c)) (:until (ctx/mem c))))
+      (apply contract/ok :waited "the pause is over" data)
+      (apply contract/later :waiting "the pause is not over" data))))
 
 (defn quote-of [c] (let [s (:seconds (:args c) 0)] {:uses {:job-time [s s s]}}))
 
