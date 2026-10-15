@@ -1,6 +1,7 @@
-;; Card b7fe85d4: the checks of 12 jobs decline with a named reason (job.waiting :reason ...) instead of a plain false (:not-ready).
-;; Calm day world, the job submitted with no args: it waits with its own reason and never runs a round. The last three cases
-;; provoke the condition (water, fire, a zombie) after the wait and expect the job to run (round_started).
+;; Card b7fe85d4: a job whose condition fails waits with its own reason (job.waiting :reason ...) instead of a plain false (:not-ready).
+;; Calm day world, the job submitted with no args. A job whose goal already holds ends done :already (leave-vehicle, breathe, extinguish,
+;; unwedge, respond-to-hostile, get-food, restore-broken); mine with no block is impossible. The last three cases provoke the condition (water, fire, a zombie)
+;; before the submit and expect a round.
 {:defaults
  {:tags [:jobs :survival]
   :time :day
@@ -11,32 +12,23 @@
  [  {:name "clear-box-bad-args-is-impossible"
    :act [[:job (jobs.build.clear-box {})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :stopped :data {:reason :bad-args}} :of-job true}]}
-  {:name "mine-waits-no-block"
+            {:no-event {:source :job :kind :waiting} :for-s 3 :until {:source :job :kind :stopped} :of-job true}]}
+  {:name "mine-no-block-is-impossible"
    :act [[:job (jobs.gather.mine {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-block}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-block}} :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-block}} :of-job true}]}
-  {:name "leave-vehicle-waits-not-mounted"
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-block}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :waiting} :for-s 3 :until {:source :job :kind :stopped} :of-job true}]}
+  {:name "leave-vehicle-not-mounted-is-done-already"
    :act [[:job (jobs.movement.leave-vehicle {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :not-mounted}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-mounted}} :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-mounted}} :of-job true}]}
-  {:name "breathe-waits-not-underwater"
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
+  {:name "breathe-not-underwater-is-done-already"
    :act [[:job (jobs.survival.breathe {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :not-underwater}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-underwater}} :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-underwater}} :of-job true}]}
-  {:name "extinguish-waits-not-burning"
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
+  {:name "extinguish-not-burning-is-done-already"
    :act [[:job (jobs.survival.extinguish {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :not-burning}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-burning}} :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-burning}} :of-job true}]}
-  {:name "get-food-waits-not-hungry"
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
+  {:name "get-food-not-hungry-is-done-already"
    :act [[:job (jobs.survival.get-food {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :not-hungry}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-hungry}} :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-hungry}} :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "night-waits-not-night"
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-night}} :within-s 20 :of-job true}
@@ -47,37 +39,26 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-drops}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-drops}} :of-job true}
             {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-drops}} :of-job true}]}
-  {:name "respond-to-hostile-waits-no-hostile"
+  {:name "respond-to-hostile-no-hostile-is-done-already"
    :act [[:job (jobs.survival.respond-to-hostile {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-hostile}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-hostile}} :of-job true}]}
-  {:name "restore-broken-waits-nothing-to-restore"
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
+  {:name "restore-broken-nothing-to-restore-is-done-already"
    :act [[:job (jobs.survival.restore-broken {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-restore}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :nothing-to-restore}} :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :nothing-to-restore}} :of-job true}]}
-  {:name "unwedge-waits-not-wedged"
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
+  {:name "unwedge-not-wedged-is-done-already"
    :act [[:job (jobs.survival.unwedge {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :not-wedged}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-wedged}} :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-wedged}} :of-job true}]}
-  {:name "breathe-runs-once-the-body-is-in-water"
-   :act [[:job (jobs.survival.breathe {})]
-         [:await {:source :job :kind :waiting :data {:reason :not-underwater}} 20]
-         [:rcon "execute positioned $X $Y $Z run fill ~13 ~-1 ~13 ~19 ~6 ~19 water"]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :not-underwater}} :within-s 20 :of-job true}
-            {:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}
-  {:name "extinguish-runs-once-the-body-burns"
-   :act [[:job (jobs.survival.extinguish {})]
-         [:await {:source :job :kind :waiting :data {:reason :not-burning}} 20]
-         [:rcon "execute positioned $X $Y $Z run setblock ~16 ~-1 ~16 netherrack"]
-         [:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 fire"]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :not-burning}} :within-s 20 :of-job true}
-            {:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}
-  {:name "respond-to-hostile-runs-once-a-zombie-is-near"
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
+  {:name "breathe-runs-when-the-body-is-in-water"
+   :act [[:rcon "execute positioned $X $Y $Z run fill ~13 ~-1 ~13 ~19 ~6 ~19 water"] [:wait-s 2]
+         [:job (jobs.survival.breathe {})]]
+   :expect [{:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}
+  {:name "extinguish-runs-when-the-body-burns"
+   :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~-1 ~16 netherrack"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 fire"] [:wait-s 1]
+         [:job (jobs.survival.extinguish {})]]
+   :expect [{:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}
+  {:name "respond-to-hostile-runs-when-a-zombie-is-near"
    :mobs :keep
-   :act [[:job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})]
-         [:await {:source :job :kind :waiting :data {:reason :no-hostile}} 20]
-         [:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-hostile}} :within-s 20 :of-job true}
-            {:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}]}
+   :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"] [:wait-s 2]
+         [:job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})]]
+   :expect [{:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}]}
