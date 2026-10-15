@@ -1,6 +1,6 @@
 (ns jobs.items.craft
   (:require [clojure.string :as str]
-            [jobs.storage.least :as least]
+            [jobs.lib.least :as least]
             [engine.args :as a]
             [jobs.items.shortfall :as craft]
             [jobs.items.recipes :as recipes]

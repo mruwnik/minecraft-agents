@@ -1,4 +1,4 @@
-(ns jobs.storage.least
+(ns jobs.lib.least
   "A partial outcome against the call's :least (a count of units, or :all). These jobs default to :all, so a stop short
   of everything is the stop's own ending unless the caller asks for less."
   (:require [engine.ctx :as ctx]))

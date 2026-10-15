@@ -19,7 +19,7 @@
   Quote: time by the straight distance at :speed blocks a second; done 1 visit.")
 
 (a/defargs args
-  {:limit {:doc "farthest place, in blocks, worth the walk" :spec (a/num-in 0 nil) :default 160}})
+  {:limit {:doc "farthest place, in blocks, worth the walk" :spec (a/num-in 0 nil) :default sh/home-limit}})
 
 (defn place [c] (sh/home-target (ctx/view c)))
 

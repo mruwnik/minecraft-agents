@@ -3,19 +3,15 @@
   blocks leaves for it once the day left no longer covers the walk (:slack times the straight line at :speed blocks a
   second) plus :margin-s seconds. A place beyond :limit (go-home's own) never fires it: the body digs in where night finds it. Stored args missing a key (an older entry) fall back to defaults. It does not hold at night (the night job has it), within :arrive
   blocks of the place, or underground (sh/buried?)."
-  (:require [engine.args :as a]
-            [jobs.lib.body :as body]
+  (:require [jobs.lib.body :as body]
             [jobs.lib.shelter :as sh]
-            [jobs.survival.go-home :as go-home]
             [jobs.lib.util :as u]))
 
 (def defaults {:margin-s 60 :speed 4.3 :slack 1.4 :arrive 4})
 
-(def go-home-limit (:limit (a/defaults go-home/args)))
-
 (defn dusk-home
   [p view args]
-  (let [{:keys [limit margin-s speed slack arrive]} (merge defaults {:limit go-home-limit} args)
+  (let [{:keys [limit margin-s speed slack arrive]} (merge defaults {:limit sh/home-limit} args)
         self (.self p)
         left-s (/ (- sh/dusk-tick (.-timeOfDay self)) 20)
         pos (sh/home-target view)]

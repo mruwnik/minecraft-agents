@@ -19,8 +19,8 @@
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.hold :as hold]
             [jobs.survival.night.morning :as morning]
-            [jobs.survival.night.sites :as sites]
-            [jobs.time.wait-for-day :as wait-for-day]))
+            [jobs.survival.night.sites :as sites]))
+
 
 (def doc
   "The night: one round from the trigger until the night is over and the body is out of its shelter.
@@ -134,7 +134,7 @@
 (defn quote-of
   "The time left of the night (jobs.time.wait-for-day's quote), a bed possibly ending it at once, and ::morning-s on top."
   [c]
-  (let [[_ mean most] (get-in (wait-for-day/quote-of c) [:uses :time])]
+  (let [[_ mean most] (get-in (sh/night-left-quote c) [:uses :time])]
     {:uses {:time [0 mean (+ most (settings/get settings ::morning-s))]}}))
 
 (def needs-bed-policy {:cap 1 :ttl sh/ms-per-day})

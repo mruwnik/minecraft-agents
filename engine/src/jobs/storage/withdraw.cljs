@@ -8,7 +8,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.storage.deposit :as deposit]
-            [jobs.storage.least :as least]
+            [jobs.lib.least :as least]
             [jobs.lib.storage :as storage]))
 
 (def doc

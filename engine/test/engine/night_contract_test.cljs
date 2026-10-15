@@ -11,8 +11,7 @@
             [engine.registry :as registry]
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
-            [jobs.lib.shelter :as sh]
-            [jobs.time.wait-for-day :as wfd]))
+            [jobs.lib.shelter :as sh]))
 
 (def night-job 'jobs.survival.night)
 
@@ -30,7 +29,7 @@
         [least mean most] (get-in q [:uses :time])]
     (is (nil? (contract/quote-problem q)))
     (is (= 0 least) "a bed can end it at once")
-    (is (= (wfd/ticks->s (- wfd/day-tick st/night)) mean))
+    (is (= (sh/ticks->s (- sh/day-tick st/night)) mean))
     (is (< mean most) "the morning's leaving on top")))
 
 (deftest a-call-without-the-bed-way-does-not-sleep

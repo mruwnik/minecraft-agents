@@ -14,7 +14,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
             [jobs.lib.storage :as storage]
-            [jobs.storage.least :as least]))
+            [jobs.lib.least :as least]))
 
 (def doc
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
