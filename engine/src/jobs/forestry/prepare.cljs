@@ -61,9 +61,9 @@
   unreadable or has no tree cells (in :part), and while no zone list is loaded. A cell held back by cells never seen
   (the cell, the ground under it, its growth space) starts the job: it looks around once, then at each unseen cell.
   Ends :done with data {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped
-  :wet :refused :text} when it cleared, soiled, planted or dammed a cell, or (done?) when every cell is ready, none
-  refused, the drops collected and no child under way. Else it ends condition-failed :refused when cells were skipped,
-  else with the worst blocked state.
+  :wet :refused :text} when it cleared, soiled, planted or dammed a cell and no cell is left, or (done?) when every cell
+  is ready, none refused, the drops collected and no child under way. Else it ends condition-failed (same data) :refused
+  when cells were skipped, else with the worst blocked state, also after part of the work.
   Quote: time only.")
 
 (a/defargs settings
@@ -365,13 +365,17 @@
                                          (count (:wet result)) (count (:refused result)))))))
 
 (defn finish!
-  "Be done, saying what was done."
+  "Be done, saying what was done. Work done with cells left (refused, wrong, short ...) ends condition-failed with the
+  reason of what is left, the counts in the data."
   [c states]
-  (let [result (result-of c states)]
+  (let [result (result-of c states)
+        worked? (pos? (+ (:cleared result) (:soiled result) (:planted result) (:dammed result)))
+        left (when (seq (:refused result)) :refused)
+        blocked (blocked-reason states)]
     (cond
-      (pos? (+ (:cleared result) (:soiled result) (:planted result) (:dammed result))) (ctx/end c :done nil result)
-      (seq (:refused result)) (ctx/end c :condition-failed :refused result)
-      :else (ctx/end c :condition-failed (or (blocked-reason states) {:reason :nothing-to-do}) result))))
+      (and worked? (not left) (not blocked)) (ctx/end c :done nil result)
+      left (ctx/end c :condition-failed :refused result)
+      :else (ctx/end c :condition-failed (or blocked {:reason :nothing-to-do}) result))))
 
 (defn ^:async step [c]
   (let [field (field/planned c)]

@@ -29,7 +29,7 @@
   ([spec plans] (outcome spec plans {:plan "forest"}))
   ([spec plans args]
    (let [s (start spec plans)]
-     (assoc s :result (let [r (await (tu/child-outcome (:eng s) job args 300))] (cond-> r (map? r) (dissoc :status :text)))))))
+     (assoc s :result (let [r (await (tu/child-outcome (:eng s) job args 300))] (cond-> r (map? r) (dissoc :status :text :reason :ending)))))))
 
 (defn ^:async run
   "Submit the job with args in a world over plans and tick it n times: the start map."
@@ -243,6 +243,16 @@
         (let [{:keys [p result]} (await (outcome (world {"3,64,0" "short_grass" "4,64,0" "poppy"} (item "oak_sapling" 1)) {"forest" two-cells}))]
           (is (= [[3 64 0 "oak_sapling"]] (places p)) "the nearest cell is planted first")
           (is (= (expect {:cleared 2 :planted 1 :short {"oak" 1}}) result)))))))
+
+(deftest part-of-the-field-worked-and-cells-left-ends-with-the-reason-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (are [saplings ending] (= ending (let [s (start (world {"3,64,0" "short_grass" "4,64,0" "poppy"} (item "oak_sapling" saplings)) {"forest" two-cells})
+                                               r (await (tu/child-outcome (:eng s) job {:plan "forest"} 300))]
+                                           ((juxt :status :reason) r)))
+          1 [:stopped :cells-short]
+          2 [:done nil])))))
 
 (deftest a-sapling-of-another-species-in-the-cell-is-left-and-reported
   (async done
