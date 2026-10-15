@@ -8,7 +8,7 @@
             [engine.test-util :as tu :refer [box]]
             [jobs.lib.near :as near]
             [jobs.movement.go-to :as go-to]
-            [jobs.movement.go-to.settings :as gts]
+            [jobs.movement.go-to.tuning :as gts]
             [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.walk :as gwalk]
             [jobs.movement.go-to.column :as column]

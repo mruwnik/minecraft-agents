@@ -10,7 +10,7 @@
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.settings :refer [climb-rise climb-dip max-searching]]))
+            [jobs.movement.go-to.tuning :refer [climb-rise climb-dip max-searching]]))
 
 (defn dive-floor!
   "The lowest y this call's searches may reach, or nil: the body is under ground, pos lies ::climb-rise or more above it

@@ -19,7 +19,7 @@
             [jobs.movement.go-to.holds :refer [night-wait plug-since plug-wait wait-reason]]
             [jobs.movement.go-to.preview :as preview]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.settings :refer [max-cut-resets night-wait-ms]]
+            [jobs.movement.go-to.tuning :refer [max-cut-resets night-wait-ms]]
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.walk :as walk]
             [jobs.movement.go-to.way-steps :as ways]
@@ -226,12 +226,10 @@
 
 (def ways ways/ways)
 
-(def time-s
-  "Seconds one go-to call may take before it gives up. A literal, not a settings key: a `settings` var here would
-  shadow the namespace jobs.movement.go-to.settings in compiled JavaScript."
-  1800)
+(a/defargs settings
+  {::time-s {:default 1800 :doc "Seconds one go-to call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:least :all :spend {:time time-s}})
+(def defaults {:least :all :spend {:time ::time-s}})
 
 (defn legacy-args
   "An old caller's args as call keys (see the doc's Ways); call keys it gives win."

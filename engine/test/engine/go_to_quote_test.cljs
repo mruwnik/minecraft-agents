@@ -15,7 +15,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.movement.go-to.preview :as pv]
-            [jobs.movement.go-to.settings :refer [quote-unseen-factor]]))
+            [jobs.movement.go-to.tuning :refer [quote-unseen-factor]]))
 
 (defn ^:async quote-reply
   "eng's answer to GET /quote for go-to with args (what ./bin/quote prints)."

@@ -62,10 +62,10 @@
       (fn ^:async t []
         (is (true? (:arrived @(:out (await (gt/go! (assoc buried :light [15 0]) {:pos top}))))) "sky light on the body")
         (is (true? (:arrived @(:out (await (gt/go! buried {:pos top :y-margin 96}))))))
-        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.settings/climb-dip 30}
+        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.tuning/climb-dip 30}
                                              #(gt/go! buried {:pos top}))))))
             "setting ::climb-dip")
-        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.settings/climb-rise 50}
+        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.tuning/climb-rise 50}
                                              #(gt/go! buried {:pos top}))))))
             "setting ::climb-rise")))))
 
@@ -138,7 +138,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out] :as s} (await (settings/with-settings {:jobs.movement.go-to.settings/climb-stair false}
+        (let [{:keys [out] :as s} (await (settings/with-settings {:jobs.movement.go-to.tuning/climb-stair false}
                                            #(climb! in-mine {:pos on-top})))]
           (is (= {:arrived false :why :way-dives} (select-keys @out [:arrived :why])))
           (is (empty? (gt/events-of s :go-to.escalated))))))))

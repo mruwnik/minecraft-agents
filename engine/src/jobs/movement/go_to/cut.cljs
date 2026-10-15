@@ -9,7 +9,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.aim :refer [here?]]
-            [jobs.movement.go-to.settings :refer [max-cut-restarts cut-progress send-back-margin]]))
+            [jobs.movement.go-to.tuning :refer [max-cut-restarts cut-progress send-back-margin]]))
 
 (def approaches
   "This run's record of each open go-to's walk, by job id: {:last-dist :closest :explored ...}, the body's distance to the

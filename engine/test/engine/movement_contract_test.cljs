@@ -8,6 +8,7 @@
             [engine.events :as events]
             [engine.library-test :as lt]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.world-files :as world]
             [jobs.movement.boat-drive :as boat-drive]
@@ -38,6 +39,12 @@
     (is (seq syms))
     (doseq [sym syms]
       (is (some? (get-in (job sym) [:defaults :spend :time])) (str sym " defaults :spend :time")))))
+
+(deftest go-to-s-time-line-default-is-a-setting
+  (let [{:keys [defaults] :as def} (job 'jobs.movement.go-to)
+        resolve #(contract/resolve-settings defaults (fn [k] (settings/get (:settings def) k)))]
+    (is (= 1800 (get-in (resolve) [:spend :time])))
+    (is (= 60 (settings/with-settings {:jobs.movement.go-to/time-s 60} #(get-in (resolve) [:spend :time]))))))
 
 (deftest targets-and-moves-to
   (is (= [:player] (:target (job 'jobs.movement.follow))))

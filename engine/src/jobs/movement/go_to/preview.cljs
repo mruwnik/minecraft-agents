@@ -10,7 +10,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.settings :refer [quote-most-factor quote-unseen-factor]]))
+            [jobs.movement.go-to.tuning :refer [quote-most-factor quote-unseen-factor]]))
 
 (defn waypoints
   "The cells [x y z] of steps where the heading or the move kind changes, and of the last step."

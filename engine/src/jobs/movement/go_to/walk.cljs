@@ -22,7 +22,7 @@
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.own-way :refer [dive-end dive-floor! own-way own-way-left! plan-check straight-from! walk-own-way!]]
             [jobs.movement.go-to.result :as end :refer [known-frontier-result unloaded-end]]
-            [jobs.movement.go-to.settings :refer [dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain dry-radius max-blocked max-searching]]
+            [jobs.movement.go-to.tuning :refer [dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain dry-radius max-blocked max-searching]]
             [jobs.movement.go-to.torch :as torch :refer [dark-end fetch-torches! round-unknown]]
             [jobs.movement.go-to.unstick :as unstick]
             [jobs.movement.go-to.way-steps :as ways]

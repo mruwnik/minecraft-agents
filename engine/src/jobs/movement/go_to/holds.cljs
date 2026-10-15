@@ -9,7 +9,7 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
             [jobs.movement.go-to.aim :refer [target]]
-            [jobs.movement.go-to.settings :refer [plug-wait-ms plug-wait-min-food plug-wait-min-health]]
+            [jobs.movement.go-to.tuning :refer [plug-wait-ms plug-wait-min-food plug-wait-min-health]]
             [jobs.movement.go-to.way-steps :as ways]))
 
 (defn manual-slot?

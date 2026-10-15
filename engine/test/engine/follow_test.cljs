@@ -11,7 +11,7 @@
             [engine.triggers :as triggers]
             [jobs.movement.follow :as follow]
             [jobs.movement.go-to :as go-to]
-            [jobs.movement.go-to.settings :as gts]))
+            [jobs.movement.go-to.tuning :as gts]))
 
 (def job 'jobs.movement.follow)
 

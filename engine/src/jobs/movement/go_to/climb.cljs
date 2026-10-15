@@ -9,8 +9,8 @@
             [jobs.movement.go-to.column :as column]))
 
 (a/defargs settings
-  {::cave-dip {:default 3 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (jobs.movement.go-to.settings/climb-rise) walks over cells that are no stair of its own: a plan that goes deeper is not walked while a stair up can be cut instead." :spec (a/num-in 0 nil)}
-   ::own-way {:default true :doc "Whether a go-to of a body under ground to a goal far above (jobs.movement.go-to.settings/climb-rise) first climbs the stairs the body cut itself, and cuts a blocked one again." :spec boolean?}
+  {::cave-dip {:default 3 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (jobs.movement.go-to.tuning/climb-rise) walks over cells that are no stair of its own: a plan that goes deeper is not walked while a stair up can be cut instead." :spec (a/num-in 0 nil)}
+   ::own-way {:default true :doc "Whether a go-to of a body under ground to a goal far above (jobs.movement.go-to.tuning/climb-rise) first climbs the stairs the body cut itself, and cuts a blocked one again." :spec boolean?}
    ::own-way-reach {:default 14 :doc "Blocks of its own way up (::own-way) a go-to walks in one hop." :spec (a/num-in 1 nil)}
    ::own-way-search {:default 4000 :doc "Cells a go-to looks over for a way up its own stairs (::own-way): its stairs and tunnels and the standable cells it has seen." :spec (a/int-in 1 nil)}})
 (defn cave-dip [] (settings/get settings ::cave-dip))

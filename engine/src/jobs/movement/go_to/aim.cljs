@@ -16,7 +16,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.world :as known]
             [jobs.movement.go-to.column :as column]
-            [jobs.movement.go-to.settings :refer [max-waypoint-misses waypoint-gain way-looks]]))
+            [jobs.movement.go-to.tuning :refer [max-waypoint-misses waypoint-gain way-looks]]))
 
 (defn see-cell
   "The cell [x y z] the eye must see under :see: the :pos arg's block (not the cell the walk aims at, which may stand for
