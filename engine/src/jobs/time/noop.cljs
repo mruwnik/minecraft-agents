@@ -8,7 +8,8 @@
 (def doc
   "An intentional pause: hold the body still (holding :why) for :seconds, in :wait acts of at most prim/wait-max-ms
   inside one round. A job pauses by calling it as a child (jobs.lib.child/pause!): reflexes still cut in, and the time
-  counts on the caller's report and budget. A cut pause waits only what is left (job memory :waited-ms). Needs nothing.
+  counts on the caller's report and budget. A pause writes its deadline once (job memory :until), so a cut pause waits only
+  what is left and a long one adds no events per step. Needs nothing.
   Its hold stays until the caller's round ends or clears it. Done {:waited-s s}. Quote: :seconds.")
 
 (a/defargs args
@@ -24,23 +25,27 @@
 
 (def conditions [])
 
-(defn left-ms [c] (max 0 (- (* 1000 (:seconds (:args c) 0)) (:waited-ms (ctx/mem c) 0))))
+(defn total-ms [c] (* 1000 (:seconds (:args c) 0)))
+
+(defn left-ms [c]
+  (let [until (:until (ctx/mem c))]
+    (if until (max 0 (min (total-ms c) (- until (ctx/now c)))) (total-ms c))))
 
 (defn done?
   "Never done before it runs: a pause has no state that can hold before it."
   [c]
-  {:done? false :units :ms :done (:waited-ms (ctx/mem c) 0) :left (left-ms c)})
+  {:done? false :units :ms :done (- (total-ms c) (left-ms c)) :left (left-ms c)})
 
 (defn quote-of [c] (let [s (:seconds (:args c) 0)] {:uses {:time [s s s]}}))
 
 (defn ^:async round [c]
   (let [why (:why (:args c) :pausing)]
     (ctx/hold-still! c why)
-    (loop []
-      (let [left (left-ms c)]
-        (if (pos? left)
-          (let [ms (min left (primitive/js-setting "prim/wait-max-ms" 10000))]
-            (await (ctx/act c :wait #js {:ms ms :why why}))
-            (ctx/update-mem! c update :waited-ms (fnil + 0) ms)
-            (recur))
-          (ctx/end c :done nil {:waited-s (:seconds (:args c) 0)}))))))
+    (when-not (:until (ctx/mem c))
+      (ctx/update-mem! c assoc :until (+ (ctx/now c) (total-ms c))))
+    (loop [owed (left-ms c)]
+      (if (pos? owed)
+        (let [ms (min owed (primitive/js-setting "prim/wait-max-ms" 10000))]
+          (await (ctx/act c :wait #js {:ms ms :why why}))
+          (recur (min (- owed ms) (left-ms c))))
+        (ctx/end c :done nil {:waited-s (:seconds (:args c) 0)})))))

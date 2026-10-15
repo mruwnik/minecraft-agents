@@ -27,7 +27,8 @@
 (defn ^:async act!
   "Every acting primitive call from a job: check the ownership token, save
   memory, emit action.started, call, count what it used and yielded on every frame of the chain (engine.core.tally),
-  save memory again, emit action.done. A cut rejects here (stale token) or from the primitive."
+  save memory again, emit action.done. A cut rejects here (stale token) or from the primitive. A :wait with a :why
+  (a pause; job.holding names it) writes no started or done event unless it fails."
   [eng {:keys [root slots token chain round reflex] :as base} id k args]
   (own! eng base)
   (limits/check-act! eng base k args)
@@ -38,7 +39,8 @@
         fields {:level :debug :job id :chain chain :round round :reflex reflex :name (name k)
                 :action-id action-id}
         p (:primitives eng)
-        _ (emit! eng (merge fields {:source :action :kind :started :args (js->clj args)}))
+        quiet? (and (= :wait k) (some? (some-> args .-why)))
+        _ (when-not quiet? (emit! eng (merge fields {:source :action :kind :started :args (js->clj args)})))
         from (when (= :moveTo k) (self-pos p))
         before (tally/snapshot eng)
         away-record (when (= :offline k) (log-out-record eng root id args ((:now eng))))
@@ -58,9 +60,10 @@
         (tally/count-act! eng root slots before)
         (save-memory! eng)
         (record-act! eng {:root root :reflex reflex} k r (distance from to))
-        (emit! eng (cond-> (merge fields {:source :action :kind :done :status (.-status r)})
-                     (.-reason r) (assoc :reason (.-reason r))
-                     (number? (.-distance r)) (assoc :distance (/ (js/Math.round (* 100 (.-distance r))) 100))))
+        (when-not quiet?
+          (emit! eng (cond-> (merge fields {:source :action :kind :done :status (.-status r)})
+                       (.-reason r) (assoc :reason (.-reason r))
+                       (number? (.-distance r)) (assoc :distance (/ (js/Math.round (* 100 (.-distance r))) 100)))))
         r)
       (catch :default e
         (tally/count-act! eng root slots before)
