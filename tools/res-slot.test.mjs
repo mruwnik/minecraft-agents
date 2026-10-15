@@ -258,16 +258,24 @@ test('integration: when the slot frees, a waiting heavy run goes before light wa
   const cfg = path.join(dir, 'cfg.json')
   fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
   const out = path.join(dir, 'order')
-  const env = { ...process.env, RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '20000', RES_SLOT_POLL_MS: '100' }
+  const env = { ...process.env, RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '60000', RES_SLOT_POLL_MS: '50', RES_SLOT_STATUS_MS: '1' }
   delete env.RES_SLOT_HEAVY
+  const release = path.join(dir, 'release')
   const script = new URL('./res-slot.mjs', import.meta.url).pathname
-  const start = (args, tag, nap = 0.3) => new Promise((r) => spawn('node', [script, 't', ...args, '--', 'sh', '-c', `echo ${tag} >> ${out}; sleep ${nap}`], { cwd: dir, env, stdio: 'ignore' }).on('close', r))
-  const holder = start([], 'holder', 1.5).then(() => {})
-  await new Promise((r) => setTimeout(r, 600))
+  const until = (cond) => new Promise((resolve) => { const t = setInterval(() => cond() && (clearInterval(t), resolve()), 20) })
+  const start = (args, tag, body = '') => {
+    const p = spawn('node', [script, 't', ...args, '--', 'sh', '-c', `echo ${tag} >> ${out}; ${body}`], { cwd: dir, env, stdio: ['ignore', 'ignore', 'pipe'] })
+    const waiting = new Promise((r) => p.stderr.on('data', (d) => /waiting for t/.test(d) && r()))
+    return { waiting, done: new Promise((r) => p.on('close', r)) }
+  }
+  const holder = start([], 'holder', `until [ -e ${release} ]; do sleep 0.02; done`)
+  await until(() => fs.existsSync(out))
   const lights = ['L1', 'L2', 'L3'].map((t) => start([], t))
-  await new Promise((r) => setTimeout(r, 600))
+  await Promise.all(lights.map((l) => l.waiting))
   const heavy = start(['--heavy'], 'H')
-  await Promise.all([holder, ...lights, heavy])
+  await until(() => fs.existsSync(path.join(dir, 'heavy-wait')) && fs.readdirSync(path.join(dir, 'heavy-wait')).length > 0)
+  fs.writeFileSync(release, '')
+  await Promise.all([holder, ...lights, heavy].map((x) => x.done))
   assert.deepEqual(fs.readFileSync(out, 'utf8').split('\n').slice(0, 2), ['holder', 'H'])
   fs.rmSync(dir, { recursive: true, force: true })
 })
