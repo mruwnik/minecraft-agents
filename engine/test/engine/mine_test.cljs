@@ -10,6 +10,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.look :as lk]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [engine.memory :as mem]
@@ -954,6 +955,32 @@
           (is (= [{:reason :lava :at [2 66 0] :next [2 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s)))
               "the stop names the lava")
           (is (= "lava" (block-at s 2 66 0))))))))
+
+(deftest a-fluid-the-tunnel-stops-for-is-in-seen-memory-and-named
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[fluid world pos] [["water" {"2,64,1" "water" "2,65,1" "water"} [2 65 1]]
+                                   ["lava" {"0,66,0" "air" "1,66,0" "air" "2,66,0" "lava"} [2 66 0]]]]
+          (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10 :mend false}
+                                   (rock-world world) 120))
+                found (lk/seen-blocks (:p s) {:names [fluid] :radius 8 :live? true})
+                end (first (tunnel-ends s))]
+            (is (some #(= pos (mapv (:pos %) [:x :y :z])) found) (str fluid " in seen memory: " (pr-str found)))
+            (is (= {:reason (keyword fluid) :at pos} (select-keys end [:reason :at])) (pr-str end))
+            (is (re-find (re-pattern (str fluid " at " (apply str (interpose "," pos)))) (:text end)) (:text end))))))))
+
+(deftest a-fluid-in-the-cut-is-in-seen-memory-and-named
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10 :mend false}
+                                 (rock-world {"1,64,0" "water"}) 120))
+              found (lk/seen-blocks (:p s) {:names ["water"] :radius 8 :live? true})
+              end (first (tunnel-ends s))]
+          (is (some #(= [1 64 0] (mapv (:pos %) [:x :y :z])) found) (pr-str found))
+          (is (= {:reason :fluid-in-cut :fluid :water :at [1 64 0]} (select-keys end [:reason :fluid :at])) (pr-str end))
+          (is (re-find #"\(water\) at 1,64,0" (:text end)) (:text end)))))))
 
 (deftest the-tunnel-seals-lava-a-cut-lays-open-and-goes-on
   (async done

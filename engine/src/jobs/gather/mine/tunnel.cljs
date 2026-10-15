@@ -89,6 +89,7 @@
   [c stop at & [next walk]]
   (let [{:keys [goal tunnel]} (ctx/mem c)
         {:keys [heading steps]} tunnel
+        fluid (when (and at (= :fluid-in-cut stop)) (u/seen-name (:primitives c) at))
         got (max 0 (- (carried c) (- goal (:count (:args c)))))]
     (if (and (if (:stay-level (:args c)) (leg-stops stop) (and (zero? steps) (heading-stops stop)))
              (< (+ steps (:spent (ctx/mem c) 0)) (:tunnel-length (:args c)))
@@ -99,11 +100,12 @@
     (ctx/emit! c :mine.tunnel-end :warn
                (cond-> {:reason stop :heading heading :length steps :y (:y (:origin tunnel)) :got got
                         :text (str "mine's tunnel ended after " steps " blocks " heading " at y " (:y (:origin tunnel)) ": "
-                                   (if (= :tunnel-length stop) "its length is used up" (str "stopped, " (name stop)))
+                                   (if (= :tunnel-length stop) "its length is used up" (str "stopped, " (name stop) (when fluid (str " (" fluid ")"))))
                                    (when at (str " at " (str/join "," (access/cell at))))
                                    (when walk (walk-text walk))
                                    "; got " got " of " (:count (:args c)))}
                  at (assoc :at (access/cell at))
+                 fluid (assoc :fluid (keyword fluid))
                  next (assoc :next (access/cell next))
                  (:behind (ctx/mem c)) (assoc :behind (:behind (ctx/mem c)))
                  walk (assoc :walk walk)))
