@@ -2,7 +2,7 @@
   "Targets a standing job (one kept in the queue under repeat) rests after a fruitless pass, so a stuck crop or refused
   ground never keeps its check true for ever and starves the other jobs. Body memory :standing/rested
   {:job :key :until :why}; a target rests ::rest-ms, then is tried once more. A standing job also declines far from
-  its site while a job that is not standing is listed, or deep below it (away-wait), so it does not walk the body home
+  its site while a job that is not standing is listed, or deep below it (away-cause), so it does not walk the body home
   between or after trips;
   standing jobs are the listed ones under repeat (standing-ids)."
   (:require [clojure.string :as str]

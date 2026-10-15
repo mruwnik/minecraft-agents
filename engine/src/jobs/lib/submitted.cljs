@@ -1,7 +1,7 @@
 (ns jobs.lib.submitted
   "For a job whose meaning depends on where the body stands and that takes no position of its own (stair, tunnel, mine,
   bridge, pillar). The agent tool jobs.mjs submit adds :from (the body's position at submit) to its args; the job's
-  check waits (away-wait, reason :moved-since-submit with :from :at :distance :limit) until its first round when the
+  check waits (away-cause, reason :moved-since-submit with :from :at :distance :limit) until its first round when the
   body then stands farther than ::limit blocks from it (a night walk home, a standing job's trip). :here true skips the
   check; a job with no :from (a child call, a spec written by hand) is not checked. A job declares the args :from and :here (specs a/position? and boolean?, both default nil/false) and its round calls begin! first."
   (:require [engine.args :as a]

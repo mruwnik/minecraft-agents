@@ -155,6 +155,19 @@
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is seen")
           (is (some #(= :night-sheltered (:reason %)) (f/events-of s :waiting))))))))
 
+(deftest a-pickaxe-whose-logs-wait-out-the-night-makes-the-stone-wait-night-sheltered-not-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (assoc (ore-world (merge f/tree-blocks {"0,66,0" "stone" "1,64,4" "stone"}) []) :time st/night) [f/own-zone])]
+          (doseq [pitch [-80 80 0]]
+            (swap! (fake/state (:p s)) assoc :pitch pitch)
+            (perception/pass! (aget (:p s) "perception")))
+          (is (some? (sh/night-sheltered (:p s) nil)) "sheltered at the start")
+          (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather :craft}} 8))
+          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the stone and the logs are seen")
+          (is (some #(= :night-sheltered (:reason %)) (f/events-of s :waiting))))))))
+
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done
     (tu/run-async done
