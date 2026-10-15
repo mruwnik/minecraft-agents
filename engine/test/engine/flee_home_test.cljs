@@ -307,11 +307,12 @@
           (is (not (in-room? (body p)))))))))
 
 (deftest a-room-whose-flood-reaches-ground-it-has-not-seen-is-no-refuge
-  (let [unseen-ground (fn [[x y z]] (and (= 63 y) (not (and (<= 2 x 8) (<= -3 z 3)))))
+  (let [unseen-ground (fn [[x y z]] (and (= 63 y) (or (not (and (<= 2 x 8) (<= -3 z 3)))
+                                                       (and (<= 4 x 6) (<= -1 z 1) (not= [5 0] [x z])))))
         seen-hut (fn [states extra] (seeing-all-but (tu/fake-on-floor (hut {:x 5.5 :y 64 :z 0.5} states [] extra)) unseen-ground))]
     (is (false? (retreat-home/refuge-room? (seen-hut {} {"5,64,2" "air" "5,65,2" "air"}) home))
         "a doorway with no door, open air round the hut over ground not seen past a block: no wall there, no refuge")
-    (is (true? (retreat-home/refuge-room? (seen-hut open-door {}) home)) "a door shuts it: a refuge whatever lies outside")))
+    (is (true? (retreat-home/refuge-room? (seen-hut open-door {}) home)) "a door shuts it: a refuge whatever lies outside, its own floor not seen")))
 
 (defn counting!
   "Replace the var at (getter) via (setter f) with a wrapper counting calls in counts under k; returns the restore fn."

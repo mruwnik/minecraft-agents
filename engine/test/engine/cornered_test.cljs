@@ -20,6 +20,7 @@
             [jobs.survival.retreat-walk :as retreat-walk]
             [jobs.lib.seal :as seal]
             [jobs.survival.retreat-pillar :as retreat-pillar]
+            [jobs.survival.retreat-pit :as retreat-pit]
             [jobs.survival.retreat-seal :as retreat-seal]))
 
 (defn setup
@@ -387,6 +388,26 @@
           (is (= #{[0 64 0] [0 65 0]} (set (placed-cells p))) "the dug blocks seal the way in")
           (is (= ["j1"] while-hidden) "hiding in the pocket")
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest a-pit-that-fails-gives-way-to-the-pocket
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[plan round] [retreat-pit/plan! retreat-pit/pit-round!]
+              pits (atom 0)]
+          (set! retreat-pit/plan! (fn [_] (js/Promise.resolve {:kind :pit :anchor {:x 0 :y 64 :z 0} :steps [] :cells []})))
+          (set! retreat-pit/pit-round! (fn [_ _] (swap! pits inc) (js/Promise.resolve :failed)))
+          (try
+            (let [{:keys [p while-hidden]}
+                  (await (hidden-round hiding-retreat {:blocks dead-end :inventory [{:name "stone_pickaxe" :count 1}]
+                                                       :entities [(skeleton 4 64 0)]}
+                                       120000 (fn [{:keys [eng]}] (:list (core/state eng)))))]
+              (is (= 1 @pits) "the pit was started once and failed")
+              (is (= #{[0 64 0] [0 65 0]} (set (placed-cells p))) "the pocket's way in sealed")
+              (is (= ["j1"] while-hidden) "hiding in the pocket"))
+            (finally
+              (set! retreat-pit/plan! plan)
+              (set! retreat-pit/pit-round! round))))))))
 
 (deftest a-phantom-is-hidden-from-not-outrun
   (async done
