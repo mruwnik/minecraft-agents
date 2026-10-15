@@ -197,11 +197,9 @@
 
 (defn corner-wall [height] [3 64 2 3 (+ 63 height) 2 "stone" {}])
 
-(deftest a-corner-jump-past-a-low-corner-block-arrives
-  (is (= :arrived (status-of (into [corner-floor (corner-wall 1) corner-hole corner-landing] corner-walls) [2 64 2] [3 65 3]))))
-
-(deftest a-corner-jump-past-a-high-corner-block-arrives
+(deftest a-corner-jump-past-a-corner-block-no-higher-than-the-landing-arrives
   (are [height] (= :arrived (status-of (into [corner-floor (corner-wall height) corner-hole corner-landing] corner-walls) [2 64 2] [3 65 3]))
+    1
     2
     3))
 

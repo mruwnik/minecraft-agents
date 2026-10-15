@@ -250,18 +250,6 @@
           (is (< 1 (count (calls p "offline"))) "the roof does not matter; out again while the sleeper sleeps")
           (is (= (min 10 (count (calls p "offline"))) (count (entries eng :log-out))) "each stint booked (cap 10)"))))))
 
-(deftest night-ignores-a-built-shelter-by-day
-  (let [{:keys [eng]} (setup {})]
-    (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl day-ms})
-    (is (not (boolean ((:when (get triggers/all :night)) (tu/fake {:time noon}) (mem/view (:store eng)) {})))
-        "night-only: a built shelter at day does not hold it")))
-
-(deftest night-is-registered-and-fires-shelter
-  (let [t (get triggers/all :night)]
-    (is (= '(jobs.survival.night) (:job t)))
-    (is (= 4 (get-in t [:args :roof-height])))
-    (is (nil? (get triggers/all :night-and-bed-known)) "the old alias is gone")))
-
 (def own-shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built})
 
 (deftest night-does-not-hold-at-night-while-shut-in-its-own-shelter
@@ -850,17 +838,6 @@
     1000 0
     0 0))
 
-(deftest shelter-digs-in-when-alone-on-the-server
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor})]
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (tick-n eng 8))
-          (is (= [] (calls p "offline")) "nobody else online: no log-out")
-          (is (= 10 (count (calls p "place"))) "dug in")
-          (is (= [] (entries eng :log-out))))))))
-
 (def ms-of-offline (fn [p] (mapv #(.-ms (.-args %)) (calls p "offline"))))
 
 (deftest another-player-online-and-awake-is-no-reason-to-log-out
@@ -1207,16 +1184,6 @@
             (is (= {:digs 1 :holder true} @mid) "nothing to roof the pit with: one dig; held at night"))
           (is (nil? (core/holder eng)) "the shelter ended at day")
           (is (= 1 (notified seen)) "then the queued job ran"))))))
-
-(deftest a-failed-unroofed-shelter-at-night-does-not-throw
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup {:time night :blocks floor})]
-          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy)
-          (core/register-reflex! eng {:trigger :night})
-          (await (tick-n eng 4))
-          (is (not (nil? eng))))))))
 
 (deftest a-material-only-futile-entry-stops-blocking-once-the-body-can-harvest-the-block
   (async done

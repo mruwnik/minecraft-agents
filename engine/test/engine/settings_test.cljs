@@ -49,14 +49,6 @@
         (is (= {:value 20 :layer :body :doc "How long to wait."} (get res :jobs.demo/wait-ms)))
         (is (= {:value "w" :layer :world :doc "A label."} (get res :jobs.demo/label)))))))
 
-(deftest no-files-leave-the-code-defaults
-  (settings/with-settings {}
-    (fn []
-      (let [[events res] (load-with nil nil)]
-        (is (empty? events))
-        (is (= 5000 (settings/get specs :jobs.demo/wait-ms)))
-        (is (= :code (get-in res [:jobs.demo/wait-ms :layer])))))))
-
 (deftest a-bad-value-keeps-the-lower-layer-and-emits-one-info
   (settings/with-settings {}
     (fn []

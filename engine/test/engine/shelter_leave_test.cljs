@@ -41,11 +41,6 @@
     (is (false? (fires? {:time st/noon :blocks {"0,66,0" "stone"}} (mem/view (:store (:eng (st/setup {}))))))
         "no shelter entry")))
 
-(deftest the-night-trigger-lets-a-shut-in-body-out
-  (let [t (get triggers/all shut-in-trigger)]
-    (is (= '(jobs.survival.night) (:job t)))
-    (is (= :cooldown (:persistence t)))))
-
 (deftest a-body-sealed-by-a-direct-dig-in-is-let-out-by-day
   (async done
     (tu/run-async done

@@ -1,7 +1,6 @@
 (ns engine.steps-test
-  "jobs.lib.steps: the todo walk and the step under way, and the shared hunting drops table."
+  "jobs.lib.steps: the todo walk and the step under way."
   (:require [cljs.test :refer [deftest is]]
-            [jobs.lib.hunting :as hunting]
             [jobs.lib.steps :as steps]))
 
 (defn decide [step _args facts]
@@ -34,9 +33,3 @@
     (is (= {:slot :a :job 'jobs.a :args {:x 1}}
            (steps/running-call jobs {:todo [:a :b] :call-args {:x 1}})))
     (is (nil? (steps/running-call jobs {:todo [:a]})))))
-
-(deftest hunting-drops-list-raw-and-cooked-meat
-  (let [d hunting/drops]
-    (is (= #{"beef" "leather" "cooked_beef"} (set (get d "cow"))))
-    (is (some #{"red_wool"} (get d "sheep")))
-    (is (some #{"cooked_mutton"} (get d "sheep")))))

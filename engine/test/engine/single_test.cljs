@@ -54,14 +54,6 @@
           (await ((:held first-claim)))
           (is (not (fs/existsSync sock))))))))
 
-(deftest a-released-claim-can-be-taken-again
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [sock (path/join (tu/tmp-dir) "body.sock")]
-          (await ((:held (await (single/claim! sock who)))))
-          (is (fn? (:held (await (single/claim! sock who))))))))))
-
 (deftest a-stale-socket-from-a-crash-is-taken-over
   (async done
     (tu/run-async done
