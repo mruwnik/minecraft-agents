@@ -22,7 +22,7 @@
 
   Ends with a warn leash.gave-up unless the reason is :leashed. The data {:reason :animal key
   :id entity-id :given-up {key reason}} and the ending by the reason:
-  - :done :leashed: an animal is on the lead.
+  - :done :leashed: an animal is on the lead (:already when one within :radius, not in :skip, was on it before the call).
   - :condition-failed :no-lead (no lead carried and none fetched; a listed call with :fetch false waits for one; or the server found none; after a failed fetch the job ends with the fetch's own ending, reason :need, its cause naming the lead),
     :refused (others given up, or the zone rules refused the animals) or :no-zones (no zone list was read).
   - :nothing-possible when no candidate is left: :unreachable if one was given up as unreachable, else :all-leashed
@@ -65,11 +65,25 @@
   (let [most (time-limit c)]
     {:uses {:job-time [0 (min most 10) most]}}))
 
-(defn done?
-  "Later with the animals led against the one asked: the run ends itself with its reason."
+(defn skipped
+  "The keys of the animals never to leash: :skip and those given up on."
   [c]
-  (let [n (if (:leashed (ctx/mem c)) 1 0)]
-    (contract/later :leashing (str n " animals led") :units :animals :done n :left (- 1 n))))
+  (into (set (:skip (:args c))) (keys (:given-up (ctx/mem c)))))
+
+(declare herd)
+
+(defn done?
+  "Ok when an animal in reach is on this body's lead (the one the run led, else one led before the call, not skipped);
+  else later with the animals led against the one asked."
+  [c]
+  (let [led (if-let [done (:leashed (ctx/mem c))]
+              done
+              (when-let [e (first (filterv #(and (animals/led-by-me? %) (not (contains? (skipped c) (animals/key-of %)))) (herd c)))]
+                {:animal (animals/key-of e) :id (.-id e)}))]
+    (if led
+      (contract/ok :leashed "an animal is on the lead" :units :animals :done 1 :left 0
+                   :result {:reason :leashed :animal (:animal led) :id (:id led) :given-up (:given-up (ctx/mem c) {})})
+      (contract/later :leashing "0 animals led" :units :animals :done 0 :left 1))))
 
 (def ending-of
   "The kind and cause of a finish by reason."
@@ -89,7 +103,7 @@
                 :text (str "leash done: " (name reason))}]
     (when (not= :leashed reason)
       (ctx/emit! c :leash.gave-up :warn {:reason reason :text (str "leashing stopped: " (name reason))}))
-    (when (= :leashed reason) (ctx/update-mem! c assoc :leashed true))
+    (when (= :leashed reason) (ctx/update-mem! c assoc :leashed {:animal (:animal result) :id (:id result)}))
     (if ending
       (assoc ending :data result)
       (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
@@ -109,7 +123,7 @@
 (defn candidates
   "The animals within radius not on a lead, not given up on and not in :skip, nearest first."
   [c]
-  (let [skip (into (set (:skip (:args c))) (keys (:given-up (ctx/mem c))))]
+  (let [skip (skipped c)]
     (->> (herd c)
          (filterv #(and (not (animals/leashed? %)) (not (contains? skip (animals/key-of %)))))
          (animals/allowed c :leash.declined "leash" :take))))

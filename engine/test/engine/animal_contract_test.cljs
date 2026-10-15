@@ -89,8 +89,8 @@
                (await (shearing {:fetch false} {:entities [(sheep 1 2)]}))))
         (is (= {:event :stopped :kind :nothing-possible :reason :none}
                (await (shearing {} {:inventory shears :entities []}))) "no sheep: 0 shorn is not done")
-        (is (= {:event :stopped :kind :nothing-possible :reason :all-sheared}
-               (await (shearing {} {:inventory shears :entities [(sheep 1 2 {:sheared true})]}))))
+        (is (= {:event :completed} (select-keys (await (shearing {} {:inventory shears :entities [(sheep 1 2 {:sheared true})]})) [:event]))
+            "every sheep sheared: the goal holds")
         (is (= {:event :completed} (select-keys (await (shearing {:count 3} {:inventory shears :entities [(sheep 1 2)]})) [:event]))
             "one shorn meets the default :least 1")
         (is (= {:event :stopped :kind :nothing-possible :reason :all-sheared}
@@ -179,8 +179,8 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.unleash {}) {:entities [(cow-at 1 2 {:leashed true :leashedToMe true})]})) [:event])))
-        (is (= {:event :stopped :kind :nothing-possible :reason :none}
-               (await (ending '(jobs.animals.unleash {}) {:entities [(cow-at 1 2)]}))) "nobody on a lead: 0 freed is not done")))))
+        (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.unleash {}) {:entities [(cow-at 1 2)]})) [:event]))
+            "nobody on a lead: the goal holds, no wait")))))
 
 (deftest breeding-ends-with-a-kind-and-a-cause
   (async done

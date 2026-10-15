@@ -31,10 +31,10 @@
   Ends with a warn unleash.gave-up unless the reason is :unleashed. The data {:reason :freed
   [keys] :given-up {key reason} :collected n :leads n} (:collected is the leads gained since the call began, :leads
   the leads carried at the end) and the ending by the reason:
-  - :done :unleashed: some animal was freed.
+  - :done :unleashed: some animal was freed; :already when none within :radius was on a lead at the start.
   - :condition-failed :refused (with nothing freed, others given up) or :no-zones (no zone list was read).
   - :nothing-possible with nothing freed: :unreachable if one was given up as unreachable, else :none (0 freed is
-    never done). It also ends after three fruitless animals in a row.
+    never done; a run that began with an animal on a lead). It also ends after three fruitless animals in a row.
 
   Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is left on its lead (warn
   unleash.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
@@ -116,23 +116,31 @@
       (animals/herd (:primitives c) mob radius)
       (vec (array-seq (.entities (:primitives c) #js {:radius radius :kind "passive" :max 64}))))))
 
+(defn on-a-lead
+  "The animals in radius on a lead (this body's or a knot's) that the call is about, nearest first."
+  [c]
+  (let [{:keys [animal]} (:args c)]
+    (filterv #(and (animals/leashed? %) (or (nil? animal) (= animal (animals/key-of %)))) (animals-in-radius c))))
+
 (defn candidates
   "The animals on this body's lead or tied to a knot, not freed or given up on, nearest first."
   [c]
-  (let [{:keys [animal]} (:args c)
-        {:keys [freed given-up]} (ctx/mem c)
+  (let [{:keys [freed given-up]} (ctx/mem c)
         skip (into (set freed) (keys given-up))]
-    (->> (animals-in-radius c)
-         (filterv #(and (animals/leashed? %)
-                        (or (nil? animal) (= animal (animals/key-of %)))
-                        (not (contains? skip (animals/key-of %)))))
+    (->> (on-a-lead c)
+         (filterv #(not (contains? skip (animals/key-of %))))
          (animals/allowed c :unleash.declined "unleash" :take))))
 
 (defn done?
-  "Later with the animals freed and those still on a lead: the run ends itself with its reason."
+  "Ok before any work when no animal in reach is on a lead; later with the animals freed and those still on a lead:
+  the run ends itself with its reason (a run that freed or gave up on one is not done by finding none)."
   [c]
-  (contract/later :unleashing (str (count (:freed (ctx/mem c))) " animals freed") :units :animals
-                  :done (count (:freed (ctx/mem c))) :left (count (candidates c))))
+  (let [{:keys [freed given-up phase]} (ctx/mem c)]
+    (if (and (empty? freed) (empty? given-up) (nil? phase) (empty? (on-a-lead c)))
+      (contract/ok :unleashed "no animal in reach is on a lead"
+                   :result {:reason :unleashed :freed [] :given-up {} :collected 0 :leads (leads-carried c)})
+      (contract/later :unleashing (str (count freed) " animals freed") :units :animals
+                      :done (count freed) :left (count (candidates c))))))
 
 (defn knot-of
   "The leash_knot entity the animal is tied to, or nil when it is not seen."

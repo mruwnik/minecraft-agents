@@ -78,7 +78,6 @@
       (fn ^:async t []
         (doseq [[label args world reason]
                 [["no shears" {} {:entities [(sheep 1 2)]} :need]
-                 ["all sheared" {} {:inventory shears :entities [(sheep 1 2 {:sheared true}) (sheep 2 3 {:sheared true})]} :all-sheared]
                  ["no sheep" {} {:inventory shears :entities []} :none]
                  ["only babies" {} {:inventory shears :entities [(sheep 1 2 {:baby true})]} :none]]]
           (let [s (await (scenario args world 4))]
@@ -86,6 +85,18 @@
             (is (= reason (:reason (done-event s))) label)
             (is (empty? (calls-of s "interact")) label)
             (is (empty? (calls-of s "collect")) label)))))))
+
+(deftest every-sheep-already-sheared-ends-the-call-already-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [world [{:inventory shears :entities [(sheep 1 2 {:sheared true}) (sheep 2 3 {:sheared true})]}
+                       {:entities [(sheep 1 2 {:sheared true}) (sheep 2 3 {:baby true})]}]]
+          (let [s (await (scenario {} world 4))]
+            (is (finished? s))
+            (is (= [:all-sheared :already] ((juxt :reason :cause) (done-event s))))
+            (is (empty? (calls-of s "interact")))
+            (is (empty? (events-of s :shear.gave-up)))))))))
 
 (deftest gives-up-on-unreachable-sheep
   (async done

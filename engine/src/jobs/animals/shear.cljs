@@ -24,7 +24,7 @@
 
   Ends with a warn shear.gave-up unless the reason is :shorn, the data {:reason :shorn [keys]
   :given-up {key reason} :collected n} and the ending by the reason:
-  - :done :shorn: the count was reached. Any stop after at least :least sheep were shorn (default 1; :all =
+  - :done :already (data reason :all-sheared) when adult sheep stand in radius and all are sheared at the start. :done :shorn: the count was reached. Any stop after at least :least sheep were shorn (default 1; :all =
     :count, every sheep in radius when nil) is done, with the stop as the data reason.
   - :nothing-possible :shears-broke (the shears were gone after some, fewer than :least, were shorn).
   - :condition-failed :no-shears (none carried and :fetch false), a failed fetch ends with the fetch's own ending,
@@ -133,10 +133,16 @@
          (animals/allowed c :shear.declined "shear" :harvest))))
 
 (defn done?
-  "Later with the sheep shorn and those still to shear: the run ends itself with its reason."
+  "Ok before any work when adult sheep stand in radius and all are sheared; later with the sheep shorn and those still
+  to shear: the run ends itself with its reason (a run that began shearing stays on until its wool is collected)."
   [c]
-  (contract/later :shearing (str (count (:shorn (ctx/mem c))) " sheep shorn") :units :sheep
-                  :done (count (:shorn (ctx/mem c))) :left (count (candidates c))))
+  (let [{:keys [shorn given-up phase]} (ctx/mem c)
+        adults (filterv #(not (true? (.-baby %))) (sheep-in-radius c))]
+    (if (and (empty? shorn) (empty? given-up) (nil? phase) (seq adults) (every? #(true? (.-sheared %)) adults))
+      (contract/ok :all-sheared "every sheep in reach is sheared"
+                   :result {:reason :all-sheared :shorn [] :given-up {} :collected 0})
+      (contract/later :shearing (str (count shorn) " sheep shorn") :units :sheep
+                      :done (count shorn) :left (count (candidates c))))))
 
 (defn none-reason
   "Why the job ends with no sheep left to shear."

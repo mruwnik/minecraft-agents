@@ -68,6 +68,19 @@
           (is (= :leashed (:reason (done-event s))))
           (is (= [2] (on-lead s))))))))
 
+(deftest an-animal-already-on-my-lead-ends-the-call-before-it-starts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:entities [(cow 1 2 {:leashed true :leashed-to-me true}) (cow 2 4)]}
+              s (await (scenario {} world 2))]
+          (is (finished? s))
+          (is (= [:leashed :already] ((juxt :reason :cause) (done-event s))))
+          (is (= "u1" (:animal (done-event s))))
+          (is (empty? (calls-of s "interact")) "no lead needed, no fetch"))
+        (let [s (await (scenario {:skip ["u1"]} {:inventory lead :entities [(cow 1 2 {:leashed true :leashed-to-me true}) (cow 2 4)]} 4))]
+          (is (= "u2" (:animal (done-event s))) "a skipped animal on the lead does not count"))))))
+
 (deftest skips-the-animals-it-is-told-to
   (async done
     (tu/run-async done

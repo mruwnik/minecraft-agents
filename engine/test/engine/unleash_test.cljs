@@ -118,19 +118,19 @@
           (is (= [50 1] (mapv #(.-id (.-args %)) (calls-of s "interact"))) "the knot is clicked first, then the animal it handed over")
           (is (empty? (filter #(= 50 (:id %)) (fake/entities (:p s)))) "and it is gone afterwards"))))))
 
-(deftest ends-without-freeing-anything
+(deftest nobody-on-a-lead-ends-the-call-already-done
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[label world reason]
-                [["nothing on a lead" {:entities [(animal 1 3)]} :none]
-                 ["no animals" {:entities []} :none]
-                 ["on a lead out of radius" {:entities [(led 1 30)]} :none]]]
+        (doseq [[label world]
+                [["nothing on a lead" {:entities [(animal 1 3)]}]
+                 ["no animals" {:entities []}]
+                 ["on a lead out of radius" {:entities [(led 1 30)]}]]]
           (let [s (await (scenario {} world 4))]
             (is (finished? s) label)
-            (is (= reason (:reason (done-event s))) label)
+            (is (= [:unleashed :already] ((juxt :reason :cause) (done-event s))) label)
             (is (empty? (calls-of s "interact")) label)
-            (is (= [:unleash.gave-up] (mapv :kind (events-of s :unleash.gave-up))) label)))))))
+            (is (empty? (events-of s :unleash.gave-up)) label)))))))
 
 (deftest collect-false-leaves-the-lead-on-the-ground
   (async done
