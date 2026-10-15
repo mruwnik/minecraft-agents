@@ -1,6 +1,7 @@
 (ns jobs.blocks.use-on
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
@@ -10,14 +11,14 @@
   "Right-click the block at :pos ([x y z] or {:x :y :z}) once, with :item in hand (nil: whatever is held stays in hand; none: the empty hand), on :face.
   A bucket :item (water_bucket pours, lava_bucket pours lava, bucket scoops) is used on the cell :pos itself, through the
   place act: the liquid goes there, or is taken from there; :face is ignored.
-  One call is the whole attempt: walk into reach (one jobs.movement.go-to call, range 3, no escalation), click. It has
-  no conditions. It yields :continue only when the walk waits on the world. Zones are not consulted: a click
+  One call is the whole attempt: walk into reach (one jobs.movement.go-to call, range 3, no escalation), click. Its only condition is can-start?: a bad call is
+  never. It yields :continue only when the walk waits on the world. Zones are not consulted: a click
   changes no block by itself.
 
   Ends with data {:used true|false :pos :item :face :reason}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
   status (:used, :unchanged, :no-item, :no-room, :missing, :cannot, :occupied, :unreachable, :failed); only :used is done.
   condition-failed: :no-item, :missing, :cannot, :occupied (a bucket's cell is filled), a walk that would leave a night shelter (:night-sheltered, :at-night :go walks
-  out). Impossible: a bad :pos or :face (:bad-args, with a blocks.use-on.declined warn). nothing-possible: :unreachable (a walk
+  out). Impossible: a bad :pos or :face (:bad-args, from can-start?). nothing-possible: :unreachable (a walk
   that failed twice, :why), :unchanged, :no-room, :failed.")
 
 (a/defargs args
@@ -79,24 +80,29 @@
         status (keyword (.-status r))]
     [(if (and (bucket? item) (= :placed status)) :used status) r]))
 
+(defn bad-args [c]
+  (let [{:keys [face] :or {face "up"}} (:args c)
+        error (or (:error (b/parse (:args c))) (when-not (faces face) (str "face is one of " (pr-str (sort faces)))))]
+    (if error
+      (contract/never :bad-args (str "blocks.use-on " error))
+      (contract/ok :args "a block to click"))))
+
+(def can-start? bad-args)
+
 (defn ^:async round [c]
   (let [{:keys [item face see at-night] :or {face "up"}} (:args c)
-        {:keys [pos error]} (b/parse (:args c))
-        error (or error (when-not (faces face) (str "face is one of " (pr-str (sort faces)))))]
-    (if error
-      (do (ctx/emit! c :blocks.use-on.declined :warn {:reason :bad-args :text (str "blocks.use-on " error)})
-          (ctx/end c :impossible {:reason :bad-args :text error} {:used false :reason :bad-args :text error}))
-      (loop [fails 0]
-        (let [w (when-not (b/in-reach? c pos see) (await (walk! c pos see at-night)))]
-          (cond
-            (= :continue w) :continue
-            (:held w) (finish! c :condition-failed {:used false :pos pos :item item :face face :reason (:held w)
-                                                    :text (str "held: " (name (:held w)) "; pass :at-night :go to walk out anyway")})
-            (map? w) (if (>= (inc fails) (max-walks))
-                       (finish! c :nothing-possible {:used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
-                       (recur (inc fails)))
-            :else
-            (let [[status r] (await (click! c {:pos pos :item item :face face}))]
-              (finish! c (cond (= :used status) :done (condition-reasons status) :condition-failed :else :nothing-possible)
-                       (cond-> {:used (= :used status) :pos pos :item item :face face :reason status}
-                         (.-spawnSet r) (assoc :spawn-set true))))))))))
+        {:keys [pos]} (b/parse (:args c))]
+    (loop [fails 0]
+      (let [w (when-not (b/in-reach? c pos see) (await (walk! c pos see at-night)))]
+        (cond
+          (= :continue w) :continue
+          (:held w) (finish! c :condition-failed {:used false :pos pos :item item :face face :reason (:held w)
+                                                  :text (str "held: " (name (:held w)) "; pass :at-night :go to walk out anyway")})
+          (map? w) (if (>= (inc fails) (max-walks))
+                     (finish! c :nothing-possible {:used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
+                     (recur (inc fails)))
+          :else
+          (let [[status r] (await (click! c {:pos pos :item item :face face}))]
+            (finish! c (cond (= :used status) :done (condition-reasons status) :condition-failed :else :nothing-possible)
+                     (cond-> {:used (= :used status) :pos pos :item item :face face :reason status}
+                       (.-spawnSet r) (assoc :spawn-set true)))))))))

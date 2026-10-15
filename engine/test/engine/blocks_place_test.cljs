@@ -1,7 +1,7 @@
 (ns engine.blocks-place-test
   "jobs.blocks.place against the fake world."
   (:require [engine.child-ends :as ce]
-            [cljs.test :refer [deftest is async]]
+            [cljs.test :refer [deftest is are async]]
             [engine.blocks-dig-test :as bd]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -204,13 +204,17 @@
         (is (= {:reason :no-support :pos {:x 2 :y 67 :z 0}}
                (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [2 67 0] :item "cobblestone"}) 3)))))))))
 
+(deftest bad-args-are-never-from-can-start
+  (are [args] (= [:never :bad-args] (tu/kind-reason (place/can-start? {:args args :primitives (:p (bd/setup {:self body}))})))
+    {:item "cobblestone"}
+    {:pos "x" :item "cobblestone"}))
+
 (deftest no-item-named-ends-impossible-bad-args
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (bd/setup {:self body})]
-          (is (= {:kind :impossible :cause :bad-args} (update (await (ending-of {:eng eng} {:pos at} 3)) :cause :reason)))
-          (is (= {:placed false :reason :bad-args} (select-keys (await (tu/child-outcome eng job {:pos at} 3)) [:placed :reason]))))))))
+          (is (= {:kind :impossible :cause :bad-args} (update (await (ending-of {:eng eng} {:pos at} 3)) :cause :reason))))))))
 
 (deftest a-cell-of-the-bodys-own-plan-is-placed-another-bodys-plan-refuses
   (async done

@@ -8,6 +8,7 @@
             [engine.events :as events]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
+            [jobs.blocks.use-on :as use-on-job]
             [jobs.lib.world-files :as ew]))
 
 (defn setup [world]
@@ -71,15 +72,10 @@
           (is (= :no-item (:reason result)))
           (is (= 1 (count (ce/ends seen :used)))))))))
 
-(deftest use-on-refuses-bad-args-without-a-click
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [result p seen]} (await (outcome {} use-on {:item "stick"}))]
-          (is (= :stopped (:status result)))
-          (is (= :bad-args (:reason result)))
-          (is (empty? (calls p "useOn")))
-          (is (= 1 (count (kinds seen :blocks.use-on.declined)))))))))
+(deftest use-on-bad-args-are-never-from-can-start
+  (are [args] (= [:never :bad-args] (tu/kind-reason (use-on-job/can-start? {:args args})))
+    {:item "stick"}
+    {:pos [2 63 0] :face "sideways"}))
 
 (deftest interact-uses-the-item-on-an-entity-in-reach
   (async done
