@@ -48,7 +48,7 @@
    'deep {:check (fn [_] true) :round calling-mid-round}
    'mixed {:check (fn [_] true) :round mixed-round}
    'gated {:check gated-check :round count-round}
-   'parent {:check (fn [c] (ctx/check-child c :g 'gated {})) :round count-round}})
+   'never {:check (constantly false) :round count-round}})
 
 (defn setup []
   (let [clock (atom 1000000)
@@ -105,15 +105,16 @@
           (await (ticks eng 3))
           (is (= [:not-ready] (mapv :reason (waits seen)))))))))
 
-(deftest a-parent-check-reports-its-childs-reason
+(deftest a-composite-check-reports-its-childs-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (reset! gate :no-tree)
-        (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng '(parent) {})
-          (await (ticks eng 3))
-          (is (= [:no-tree] (mapv :reason (waits seen)))))))))
+        (reset! gate {:reason :no-tree :near 3})
+        (doseq [spec ['(seq (gated)) '(any (gated)) '(repeat (gated)) '(until (never) (gated))]]
+          (let [{:keys [eng seen]} (setup)]
+            (core/submit! eng spec {})
+            (await (ticks eng 3))
+            (is (= [{:reason :no-tree :near 3}] (mapv #(select-keys % [:reason :near]) (waits seen))) (str spec))))))))
 
 (deftest wait-is-false-outside-a-scheduler-check
   (is (false? (ctx/wait {} :anything))))

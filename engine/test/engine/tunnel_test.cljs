@@ -203,7 +203,7 @@
         p (or (:p opts) (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans))))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
-        parent {:check (if (:call opts) (constantly true) (fn [c] (boolean (ctx/check-child c :kid job args))))
+        parent {:check (if (:call opts) (constantly true) (fn [c] (if-let [w (ctx/child-wait c :kid job args)] (ctx/wait c w) true)))
                 :round (fn ^:async recording-round [c]
                          (let [call (:call opts ctx/call-child)
                                r (await (call c :kid job args))]

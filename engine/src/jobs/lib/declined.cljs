@@ -1,6 +1,6 @@
 (ns jobs.lib.declined
   "For a parent whose round returns :declined when its child declined: the parent books the child that declined
-  (slot, job, args) in its memory, and its check runs that child's check (ctx/check-child). While the child would still
+  (slot, job, args) in its memory, and its check asks that child's wait (ctx/child-wait). While the child would still
   decline the parent is parked, its wait reason is the child's (told once), and no rounds run. The booking is dropped
   at the start of each round (begin!), so a round that calls no child, or whose child does not decline, leaves none."
   (:require [engine.ctx :as ctx]))
@@ -27,5 +27,5 @@
   "False, with the child's wait reason, while the booked child's check would decline; true otherwise."
   [c]
   (if-let [{:keys [slot job args]} (key* (ctx/mem c))]
-    (boolean (ctx/check-child c slot job args))
+    (if-let [w (ctx/child-wait c slot job args)] (ctx/wait c w) true)
     true))

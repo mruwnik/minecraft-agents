@@ -179,8 +179,9 @@
   it calls: its check's wait reason as a map {:reason kw ...} ({:reason :not-ready} for a plain false), or nil when the
   child would start."
   [ctx slot job args]
-  (let [a (atom nil)]
-    (when-not (check-child (assoc ctx :wait a) slot job args)
+  (let [a (atom nil)
+        [def args] (child-job ctx job args)]
+    (when-not ((:check def) (assoc ctx :wait a :slots (conj (:slots ctx) slot) :args args))
       (let [r @a]
         (cond (map? r) r
               (some? r) {:reason r}

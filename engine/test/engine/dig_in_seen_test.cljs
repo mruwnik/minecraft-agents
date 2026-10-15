@@ -28,7 +28,7 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         out (atom :not-done)
-        parent {:check (fn [c] (boolean (ctx/check-child c :kid job args)))
+        parent {:check (fn [c] (if-let [w (ctx/child-wait c :kid job args)] (ctx/wait c w) true))
                 :round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call-child c :kid job args))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))

@@ -96,7 +96,7 @@
         out (atom :not-done)
         w (world/of-data {} {} (get spec :zones []))
         parent {:check (fn [c] (if-let [t (:tunnel (ctx/mem c))]
-                                 (boolean (ctx/check-child c :kid job (assoc largs :tunnel t)))
+                                 (if-let [w (ctx/child-wait c :kid job (assoc largs :tunnel t))] (ctx/wait c w) true)
                                  true))
                 :round (fn ^:async recording-round [c]
                          (if-let [t (:tunnel (ctx/mem c))]

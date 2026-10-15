@@ -31,11 +31,18 @@
   (ctx/result! c (cond-> {:status :stopped} (:reason res) (assoc :reason (:reason res))))
   :done)
 
+(defn kid-check
+  "Whether the child in slot would start now; when it would wait, its reason is the combinator's too."
+  [c slot def args]
+  (if-let [w (ctx/child-wait c slot def args)]
+    (ctx/wait c w)
+    true))
+
 (defn passes?
   "Whether child i of kids would run now, checked against its own sub-map."
   [c kids i]
   (let [[def args] (kids i)]
-    (boolean (ctx/check-child c (slot i) def args))))
+    (kid-check c (slot i) def args)))
 
 (defn seq-def
   "Children in order, one call per round; :at in memory is the next
@@ -128,7 +135,7 @@
   check, while not resting. Declined when the child declines, so it never spins."
   [kid times]
   (let [[def args] kid]
-    {:check (fn [c] (rest-check c (ctx/check-child c (slot 0) def args)))
+    {:check (fn [c] (rest-check c (kid-check c (slot 0) def args)))
      :round (fn ^:async repeat-round [c]
               (let [r (await (ctx/call-child c (slot 0) def args))]
                 (case r
@@ -143,8 +150,8 @@
   [guard kid]
   (let [[gdef gargs] guard
         [def args] kid
-        reached? (fn [c] (boolean (ctx/check-child c (slot 0) gdef gargs)))]
-    {:check (fn [c] (or (reached? c) (rest-check c (ctx/check-child c (slot 1) def args))))
+        reached? (fn [c] (nil? (ctx/child-wait c (slot 0) gdef gargs)))]
+    {:check (fn [c] (or (reached? c) (rest-check c (kid-check c (slot 1) def args))))
      :round (fn ^:async until-round [c]
               (if (reached? c)
                 :done
