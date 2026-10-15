@@ -11,6 +11,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.result :as result]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -69,24 +70,25 @@
   "Back to the stand a pick began from: :continue while the walk waits, else nil."
   [c home]
   (when (not= home (blocks/feet-cell c))
-    (when (= :continue (await (child/call-walk c :ore-walk {:pos home :range 0 :escalate false})))
+    (when (= :continue (await (child/call-walk* c :ore-walk {:pos home :range 0 :escalate false})))
       :continue)))
 
 (defn ^:async dig!
   "The dig child over the booked :target: :continue while it waits, else nil with the pick booked or the cell skipped."
   [c {:keys [target block before]}]
   (let [p (:primitives c)
-        r (await (ctx/call-child c :ore 'jobs.blocks.dig {:pos target :fetch false :walk false :on-lava :leave :see true :ignore-zones? (boolean (:ignore-zones? (:args c))) :for-plan (:for-plan (:args c))}))]
-    (when-not (= :continue r)
-      (let [dug? (= :dug (:reason (ctx/child-result c :ore)))
+        e (await (ctx/call c :ore 'jobs.blocks.dig {:pos target :fetch false :walk false :on-lava :leave :see true :ignore-zones? (boolean (:ignore-zones? (:args c))) :for-plan (:for-plan (:args c))}))]
+    (when-not (= :continue e)
+      (let [res (result/of e)
+            dug? (= :dug (:reason res))
             item (blocks/item-name {:block block})]
         (book! c (fn [m] (-> (dissoc m :target)
                              (cond-> dug? (update :picked (fnil conj []) {:cell target :block block :got (- (count-of p item) before)})
                                      (not dug?) (update :skipped (fnil conj []) target)))))
         (ctx/emit! c (if dug? :ore-pick.dug :ore-pick.skipped) :info
-                   {:cell target :block block :reason (:reason (ctx/child-result c :ore))
+                   {:cell target :block block :reason (:reason res)
                     :text (str (if dug? "picked up " "left ") block " at " (pr-str target) " on the way")})))
-    (when (= :continue r) :continue)))
+    (when (= :continue e) :continue)))
 
 (defn ^:async pick!
   "Dig the exposed ores within reach one after another (at most ::per-call), each followed by the walk back to the stand.

@@ -11,6 +11,7 @@
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
+            [jobs.lib.result :as result]
             [jobs.lib.foods :as foods]
             [jobs.lib.near :as near]
             [jobs.lib.near :as near]
@@ -97,10 +98,10 @@
         :roomy (do (ctx/update-mem! c assoc :trip :roomy) nil)
         (:no-chest :far) (do (done! c (case (:do p) :no-chest :no-chest :far) (select-keys p [:free :cost])) nil)
         :deposit
-        (let [r (await (ctx/call-child c child 'jobs.storage.deposit {:free (want-free) :keep (keep-goods (:primitives c))}))]
-          (if (= :continue r)
+        (let [e (await (ctx/call c child 'jobs.storage.deposit {:free (want-free) :keep (keep-goods (:primitives c))}))]
+          (if (= :continue e)
             :continue
-            (do (done! c :deposited (assoc (select-keys p [:free :cost]) :result (ctx/child-result c child))) nil)))))))
+            (do (done! c :deposited (assoc (select-keys p [:free :cost]) :result (:data e))) nil)))))))
 
 (defn spare-need
   "The carried tool ({:item :uses-left :max}) that tool-ready! wants a spare for when digging block-name, or nil. With
@@ -154,13 +155,11 @@
         need (when (and block-name (not (in-spare? c)) (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need c block-name amount))
         tool-name (when need (spare-name p block-name need))]
     (when (and need (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
-      (let [r (await (ctx/call-child c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false}))]
-        (if (= :continue r)
+      (let [e (await (ctx/call c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false}))]
+        (if (= :continue e)
           :continue
-          (let [res (if (= :declined r)
-                      (b/child-wait c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false})
-                      (ctx/child-result c :spare))
-                got? (and (not= :declined r) (= :done (:status res)))]
+          (let [res (result/of e)
+                got? (= :done (:kind e))]
             (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)
             (if got?
               (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)})
@@ -209,10 +208,10 @@
           args {:item "torch" :count (if (pos? fuel) (min want (* 4 fuel)) want) :avoid (line-ahead c) :explore false}]
       (when (and fetch? (< held (torch-low)) (not (:torches-tried (ctx/mem c))) (not (food-short? c)))
         (when-not (:torches-from (ctx/mem c)) (ctx/update-mem! c assoc :torches-from (u/self-pos c)))
-        (let [r (await (ctx/call-child c :torches 'jobs.items.obtain args))]
-          (if (= :continue r)
+        (let [e (await (ctx/call c :torches 'jobs.items.obtain args))]
+          (if (= :continue e)
             :continue
-            (let [res (if (= :declined r) (b/child-wait c :torches 'jobs.items.obtain args) (ctx/child-result c :torches))
+            (let [res (result/of e)
                   now (torch/torches-held (:primitives c))]
               (ctx/update-mem! c assoc :torches-tried true)
               (when (and (pos? fuel) (<= now held)) (ctx/update-mem! c assoc :craft-failed true))

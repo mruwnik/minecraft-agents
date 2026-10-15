@@ -77,9 +77,9 @@
   "Call the collect-drops child; done collecting when it is, else waiting (what to return while it waits on the world)."
   [c waiting]
   (let [{:keys [mob collect-radius] :as a} (:args c)
-        r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
+        e (await (ctx/call c :collect 'jobs.forestry.collect-drops
                                  {:radius collect-radius :filter (or (:drops a) (get drops mob))}))]
-    (if (= :done r)
+    (if-not (= :continue e)
       (do (ctx/update-mem! c dissoc :collecting) :again)
       waiting)))
 

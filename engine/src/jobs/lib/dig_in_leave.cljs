@@ -4,6 +4,7 @@
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -146,7 +147,7 @@
       (:done tb) nil
       (not target)
       (if (and (pos? (:dug tb 0)) (not (:collected tb)))
-        (let [r (await (ctx/call-child c :take-back-collect 'jobs.forestry.collect-drops
+        (let [r (await (ctx/call c :take-back-collect 'jobs.forestry.collect-drops
                                        {:radius take-back-radius :near (:pos (:data (ctx/latest c :shelter))) :filter (vec (distinct (map :item (:take-back (:data (ctx/latest c :shelter))))))}))]
           (if (= :continue r)
             :continue
@@ -155,10 +156,10 @@
                 nil)))
         (do (update-take-back! c assoc :done true) nil))
       (> (u/dist (sh/feet p) cell) take-back-reach)
-      (let [r (await (child/call-walk c :take-back-walk {:pos cell :range 3 :escalate false :warn false :retry false}))]
+      (let [r (await (child/call-walk* c :take-back-walk {:pos cell :range 3 :escalate false :warn false :retry false}))]
         (cond
           (= :continue r) :continue
-          (= :done r) :continue
+          (= :done (:kind r)) :continue
           :else (do (skip-cell! c cell :unreachable) :continue)))
       (take-back-skip c cell)
       (do (skip-cell! c cell (take-back-skip c cell)) :continue)
@@ -173,8 +174,8 @@
 (defn ^:async climb!
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
   :start one step at a time until nothing solid is within sh/default-roof-height above, at most max-climb steps. A
-  stopped stair books its reason and the next heading is tried; so does a declined one (it lacks a tool or a slot:
-  booked :declined) instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped."
+  stopped stair books its reason and the next heading is tried; so does one that cannot start (it lacks a tool or a slot),
+  instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped."
   [c {:keys [start]} toward]
   (let [{:keys [i order tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
         order (or order (heading-order (sh/feet (:primitives c)) toward))
@@ -188,16 +189,12 @@
       :else
       (let [slot (keyword (str "dig-out-" i))
             _ (update-leave! c assoc :heading (:heading attempt))
-            r (await (ctx/call-child c slot 'jobs.access.stair
+            e (await (ctx/call c slot 'jobs.access.stair
                                      (merge {:dir :up :heading (:heading attempt) :fetch false :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c)))}
                                             (if start {:y (:y start)} {:steps 1}))))
-            res (when (= :done r) (ctx/child-result c slot))]
+            res (when-not (= :continue e) (result/of e))]
         (when (and res (:ignore-zones? attempt)) (note-trespass! c (:dug res)))
         (cond
-          (= :declined r) (do (update-leave! c #(-> % (assoc :i (inc i))
-                                                    (update :tries (fnil conj [])
-                                                            {:reason :declined :heading (:heading attempt)})))
-                              :continue)
           (nil? res) :continue
           (= :done (:status res)) (do (update-leave! c update :climbed (fnil + 0) (:steps res 0)) :continue)
           :else (do (update-leave! c #(-> % (assoc :i (inc i))
