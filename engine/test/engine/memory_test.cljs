@@ -1,6 +1,5 @@
 (ns engine.memory-test
-  (:require [jobs.lib.fetch :as fetch]
-            [jobs.lib.stock :as stock]
+  (:require [jobs.lib.stock :as stock]
             [cljs.test :refer [deftest is]]
             [cljs.reader :as reader]
             [engine.memory :as mem]

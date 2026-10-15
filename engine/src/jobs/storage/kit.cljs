@@ -8,7 +8,6 @@
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.stock :as stock]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.need :as getting]

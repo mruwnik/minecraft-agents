@@ -7,7 +7,6 @@
             [jobs.lib.access.zones :as zones]
             [jobs.lib.child :as child]
             [jobs.lib.crops :as crops]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.stock :as stock]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]

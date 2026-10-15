@@ -4,7 +4,6 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.stock :as stock]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]

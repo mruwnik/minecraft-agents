@@ -8,7 +8,6 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.cost :as cost]
             [jobs.lib.found :as found]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.stock :as stock]
             [jobs.lib.util :as u]
             [engine.memory :as mem]

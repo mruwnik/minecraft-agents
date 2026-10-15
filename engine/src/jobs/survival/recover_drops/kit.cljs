@@ -6,7 +6,6 @@
             [jobs.lib.armour :as armour]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.stock :as stock]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.estimate :as est]))
