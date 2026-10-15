@@ -136,3 +136,14 @@
     {:before {} :looted true} [:ok :looted]
     {:before {} :broken true} [:later :looting]
     {} [:later :looting]))
+
+(defn site-done [phase]
+  (let [c (ctx-of 'jobs.strip.site {} {:site "s" :base "b" :at [0 64 0]} {})]
+    ((:done? (get registry/jobs 'jobs.strip.site))
+     (assoc c :view (fn [] {:now 1000 :data {:entries {:strip/sites [{:t 1000 :data {"s" {:phase phase :segments {"a" {:state :stripped}}}}}]}}})))))
+
+(deftest strip-site-is-done-once-the-home-is-restored
+  (are [phase reason] (= reason (tu/kind-reason (site-done phase)))
+    :done [:ok :stripped]
+    :restore [:later :stripping]
+    :strip [:later :stripping]))

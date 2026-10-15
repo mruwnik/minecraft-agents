@@ -395,22 +395,22 @@
 
 (def passed-kinds "Child ending kinds a :child-failed stop ends with as its own." #{:condition-failed :limit-reached :impossible})
 
-(defn finish!
-  "End the call: done, or stopped with fields, whose :reason is the cause."
-  [c status fields]
-  (let [s (site c)
-        {:keys [reason child-kind] :as fields} fields
-        data (merge {:segments (counts s) :taken (:taken s {}) :hauled (:hauled s {}) :smelted (:smelted s {}) :smelt-failed (:smelt-failed s [])}
-                    (dissoc fields :reason :child-kind))
-        text (str "strip site " (:site (:args c)) " " (name status) " " (pr-str (counts s)))]
-    (when-not (= :done status)
-      (ctx/emit! c :strip.site.stopped :warn (assoc (merge data (select-keys fields [:reason])) :text text)))
-    (if (= :done status)
-      (ctx/end c :done nil (assoc data :text text))
-      (ctx/end c (cond (and (= :child-failed reason) (passed-kinds child-kind)) child-kind
-                       (condition-reasons reason) :condition-failed
-                       :else :nothing-possible)
-            reason data))))
+(defn result-of
+  "What the call reports: the segments by state, what was taken, hauled and smelted."
+  [s]
+  {:segments (counts s) :taken (:taken s {}) :hauled (:hauled s {}) :smelted (:smelted s {}) :smelt-failed (:smelt-failed s [])})
+
+(defn stop-with!
+  "End the call stopped, with fields whose :reason is the cause."
+  [c fields]
+  (let [{:keys [reason child-kind] :as fields} fields
+        data (merge (result-of (site c)) (dissoc fields :reason :child-kind))]
+    (ctx/emit! c :strip.site.stopped :warn (assoc (merge data (select-keys fields [:reason]))
+                                                  :text (str "strip site " (:site (:args c)) " stopped " (pr-str (:segments data)))))
+    (ctx/end c (cond (and (= :child-failed reason) (passed-kinds child-kind)) child-kind
+                     (condition-reasons reason) :condition-failed
+                     :else :nothing-possible)
+          reason data)))
 
 (defn ^:async restore! [c s]
   (let [f (when (:was s) (await (run-all! c (restore-steps (:was s)))))]
@@ -423,7 +423,7 @@
         f (when (and (:was s) (not= :restore (:phase why))) (await (run-all! c (restore-steps (:was s)))))]
     (if (= :continue f)
       :continue
-      (finish! c :stopped (assoc why :restore-failed (some-> f :reason))))))
+      (stop-with! c (assoc why :restore-failed (some-> f :reason))))))
 
 (defn ^:async step! [c]
   (let [s (site c)]
@@ -435,7 +435,7 @@
         :strip (await (strip-step! c s))
         :haul (await (haul! c s))
         :restore (await (restore! c s))
-        :done (finish! c :done {})))))
+        :done (or (ctx/done c) :continue)))))
 
 (defn ^:async round [c]
   (when-not (site c)
@@ -461,14 +461,14 @@
   (cond/and bad-args (checks/refusing :no-danger "no danger to wait for" (fn [c] (when (danger-wait? c) :danger)))))
 
 (defn done?
-  "Never done before the round says so: the last phase restores the home and writes the result."
+  "The strip is over and the home and respawn are restored (phase :done); the segments settled so far are the progress."
   [c]
   (let [s (site c)
         states (map :state (vals (:segments s)))
-        done (count (filter settled states))]
-    (contract/later :stripping (str "strip site: " done " segments settled, the round ends the call") :units :segments
-                    :done done :left (count (remove settled states))
-                    :result {:taken (:taken s {}) :hauled (:hauled s {}) :smelted (:smelted s {})})))
+        data [:units :segments :done (count (filter settled states)) :left (count (remove settled states)) :result (result-of s)]]
+    (if (= :done (:phase s))
+      (apply contract/ok :stripped (str "strip site " (:site (:args c)) " done " (pr-str (:segments (result-of s)))) data)
+      (apply contract/later :stripping "strip site: segments left to strip, the base to restore" data))))
 
 (defn quote-of [c]
   {:uses {:job-time [1 (* 120 (max 1 (count (:segments (site c))))) (settings/get settings ::job-time-s)]}})
