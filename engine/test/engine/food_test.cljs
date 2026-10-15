@@ -13,17 +13,21 @@
             [engine.triggers :as triggers]
             [jobs.survival.eat :as eat]
             [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]
             [engine.game :as game]
             [engine.hostile-test :as h]))
 
-(defn setup [world & [zones]]
+(defn setup-in [world & [files]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))
         eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
-                          zones (assoc :world (ew/of-data {} {} zones))))]
+                          files (assoc :world files)))]
     {:eng eng :p p :seen seen :clock clock}))
+
+(defn setup [world & [zones]]
+  (setup-in world (when zones (ew/of-data {} {} zones))))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
@@ -561,6 +565,17 @@
           (await (run-until-empty eng 40))
           (is (= [7] (distinct (call-args p "attack" "id"))) "one cow, the two others kept for breeding")
           (is (= [:own-pen] (mapv :rule (killed-events seen)))))))))
+
+(deftest get-food-spares-the-pen-of-another-bodys-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (shape/with-author {:id "pen" :parts [{:id "p" :box [[4 64 -1] [10 64 1]] :want "dirt"}]} "Miles")
+              {:keys [eng p seen]} (setup-in {:self {:food 4} :entities three-cows} (ew/of-data {"pen" plan} {} []))]
+          (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0 :explore false}) {})
+          (await (run-until-empty eng 40))
+          (is (= [] (calls p "attack")))
+          (is (some #(= :food.none (:kind %)) @seen)))))))
 
 (deftest get-food-hunts-wild-animals-before-its-own-pen
   (async done

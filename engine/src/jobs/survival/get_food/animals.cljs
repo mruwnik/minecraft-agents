@@ -11,7 +11,7 @@
 
 (defn in-sight
   "The food animals the entity scan lists within radius, nearest first, as {:entity e :why r :adults n :rule k}: r is nil for one
-  to hunt, else :tried (attacked this job), :baby, :refused (another's zone or claim), or what jobs.lib.animal-spare/why
+  to hunt, else :tried (attacked this job), :baby, :refused (another's zone, claim or plan), or what jobs.lib.animal-spare/why
   says (:off-limits, :pen: a zone or plan of its own or a closed enclosure, :kept: the last :keep-adults of a kind are lifted only at
   lift food or less with no food carried); n counts the adults of its kind in sight and k is the spare rule that allowed the hunt.
   own? (the :pen way): an animal in a zone or plan of its own is no pen, and its rule is :own-pen."
@@ -31,7 +31,7 @@
                                     (spare/penned? c pens e))
                        why (cond (skipped (.-id e)) :tried
                                  (true? (.-baby e)) :baby
-                                 (access/container-refusal c :take (u/pos-of (.-pos e))) :refused
+                                 (access/trespass-refusal c :take (u/pos-of (.-pos e))) :refused
                                  :else (spare/why (:args c) (.-name e) n penned? starved?))]
                    {:entity e :why why :adults n
                     :rule (when-not why (if mine? :own-pen (spare/allowed-by (:args c) n penned?)))}))))))
