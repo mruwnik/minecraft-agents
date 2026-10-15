@@ -145,7 +145,6 @@
 (def end-reasons
   "Cheap stubs for the reasons a lure can end with: [reason args hook], the hook given the fake primitives and a steer counter."
   [[:no-hold {} (fn [p _] (.override (.-world p) "equip" (fn [_ _ _] (js/Promise.resolve #js {:status "equipped"}))))]
-   [:timeout {:spend {:time 0}} (fn [_ _] nil)]
    [:lost {} (fn [p steers]
                (.override (.-world p) "steer"
                           (fn [token a impl]
@@ -164,6 +163,17 @@
             (is (finished? s) (name reason))
             (is (= reason (:reason (done-event s))) (name reason))
             (is (= 1 (count (stopped s))) (name reason))))))))
+
+(deftest a-lure-near-its-budget-puts-the-food-away-and-ends-timeout
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)]
+          (.override (.-world p) "steer" (fn [token a impl] (swap! clock + 25000) (impl token a)))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :spend {:time 30}}) {})
+          (dotimes [_ 14] (swap! clock + 700) (await (core/tick! eng)))
+          (is (finished? s))
+          (is (= :timeout (:reason (done-event s)))))))))
 
 (deftest an-animal-near-the-body-takes-over-when-the-led-one-is-gone
   (async done

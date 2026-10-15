@@ -22,7 +22,7 @@
   within :radius).
   - :condition-failed :no-water (the water gone mid-run), or a failed rod fetch (the cause names the rod, :because the fetch's ending).
   - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (:max-misses casts in a row caught nothing).
-  - :limit-reached: the call's :spend :time (default ::time-s) is used up.
+  - :limit-reached: the call's :spend :time (default ::time-s) is used up; the engine ends it, with {:got}.
   Resumes from the carried fish: the goal is the count carried at the first round plus :count.")
 
 (a/defargs args
@@ -71,7 +71,7 @@
 
 (defn done? [c]
   (let [n (got c) want (:count (:args c))]
-    {:done? (>= n want) :units :fish :done n :left (max 0 (- want n))}))
+    {:done? (>= n want) :units :fish :done n :left (max 0 (- want n)) :data {:got n}}))
 
 (defn time-limit "Seconds the call may fish." [c]
   (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
@@ -136,7 +136,6 @@
         {:keys [count max-misses]} (:args c)]
     (cond
       (>= (got c) count) (let [n (got c)] (ctx/end c :done nil {:got n :text (str "caught " n " fish")}))
-      (> (- (ctx/now c) (:started m)) (* 1000 (time-limit c))) (stop! c :limit-reached {:line :time :reason :timeout} "fishing took too long")
       (>= (:misses m 0) max-misses) (stop! c :nothing-possible :no-bite (str max-misses " casts in a row caught nothing"))
       (not (rod-carried? c)) (await (get-rod! c))
       :else

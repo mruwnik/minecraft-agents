@@ -399,11 +399,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (with-redefs [child/call-walk-reason* (fn [_ _ _] (js/Promise.resolve [:continue nil]))]
-                  (await (search! {:target "diamond_block" :max-distance 20 :timeout-s 60} {} 400)))
-              e (event-of s :search.not-found)]
-          (is (= :time (:why e)))
-          (is (re-find #":spend :time" (:text e))))))))
+        (let [clock (atom nil)
+              s (with-redefs [child/call-walk-reason* (fn [_ _ _] (swap! @clock + 5000) (js/Promise.resolve [:continue nil]))]
+                  (await (search! {:target "diamond_block" :max-distance 20 :timeout-s 60} {} 400 #(reset! clock (:clock %)))))
+              e (event-of s :limit_reached)]
+          (is (finished? s))
+          (is (= :time (:line (:cause e)))))))))
 
 (deftest three-failed-legs-in-a-row-end-it-stuck
   (async done

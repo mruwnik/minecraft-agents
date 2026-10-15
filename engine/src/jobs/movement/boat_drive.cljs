@@ -80,7 +80,7 @@
   [c]
   (let [left (left-of c)
         near? (and left (<= left (:range (:args c))))]
-    {:done? (boolean near?) :units :cells :done (if near? 1 0) :left (if near? 0 1)}))
+    {:done? (boolean near?) :units :cells :done (if near? 1 0) :left (if near? 0 1) :data {:left left}}))
 
 (defn quote-of [c]
   (let [cell (cell-of-call c)
@@ -145,7 +145,6 @@
                   (do (ctx/emit! c :boat.driven :info {:pos pos :strokes strokes :text (str "steered the boat to " (:x cell) " " (:y cell) " " (:z cell))})
                       (ctx/end c :done nil {:pos pos :strokes strokes}))
                   (>= strokes max-strokes) (stop! :nothing-possible :strokes {:pos pos :left left})
-                  (u/out-of-time? c) (stop! :limit-reached {:line :time :reason :timeout} {:pos pos :left left})
                   :else
                   (let [s (stroke-for pos yaw goal range turn-deg speed)
                         out (await (paddle! c s))

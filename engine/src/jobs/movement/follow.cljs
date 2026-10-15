@@ -16,7 +16,7 @@
   - \"out-of-range\" (warn follow.out-of-range): three walks in a row that arrived or got closer but left the body out of range.
   - \"absent\" (info follow.absent): the player was never seen within 2 s of the first round
     (the grace lets the world's entities arrive).
-  - \"timeout\": :timeout-s passed. With :timeout-s nil it follows until cancelled.
+  - The engine ends it :limit-reached when :spend :time is used up, with {:met} (the player was seen). Nothing to undo then.
   Idling is look and wait, neutral for backoff. A cut leaves nothing to undo. The last-seen position stays in job memory.")
 
 (a/defargs args
@@ -85,7 +85,8 @@
 (defn done?
   "Never done: a follow ends with a cause. Counts the player as met once seen."
   [c]
-  {:done? false :units :players :done (if (:seen-t (ctx/mem c)) 1 0) :left (if (:seen-t (ctx/mem c)) 0 1)})
+  (let [met (some? (:seen-t (ctx/mem c)))]
+    {:done? false :units :players :done (if met 1 0) :left (if met 0 1) :data {:met met}}))
 
 (defn quote-of [c]
   (let [most (or (time-limit c) ##Inf)
@@ -161,18 +162,14 @@
       (await (walk! c last-seen 1)))))
 
 (defn ^:async round
-  "One bounded step: end on timeout, else follow the player seen or the trail."
+  "One bounded step: follow the player seen or the trail."
   [c]
   (let [now (ctx/now c)
         _ (when-not (contains? (ctx/mem c) :started)
             (ctx/update-mem! c assoc :started now))
         {:keys [player radius]} (:args c)
-        timeout-s (time-limit c)
         pos (find-player (:primitives c) player radius)]
     (cond
-      (and timeout-s (>= (- now (:started (ctx/mem c))) (* 1000 timeout-s)))
-      (finish! c :limit-reached {:line :time :reason :timeout})
-
       pos
       (do (ctx/update-mem! c assoc :last-seen pos :seen-t now)
           (await (follow-seen! c pos)))

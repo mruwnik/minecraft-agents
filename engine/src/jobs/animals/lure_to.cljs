@@ -40,7 +40,7 @@
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
   Every result gives :distance: the animal's, or its last sighting's when it is unseen.
   - :no-animal (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
-    :unreachable (a walk gave up), :timeout (:timeout-s from the first round, not the food fetch).
+    :unreachable (a walk gave up), :timeout (less than ::wrap-up-s of the call's :spend :time left: the food is put away first).
   Endings: :arrived is done; :no-food is condition-failed (the fetch's kind when it gave one); :timeout is limit-reached (the call's :spend :time, default
   ::timeout-s); the rest are nothing-possible with the reason as the cause. Every reason but :arrived carries a :text.
 
@@ -59,7 +59,8 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
-  {::timeout-s {:default 180 :doc "Seconds from the first round (not the food fetch) before the lure gives up." :spec (a/num-in 0 nil)}})
+  {::timeout-s {:default 180 :doc "Seconds from the first round (not the food fetch) before the lure gives up." :spec (a/num-in 0 nil)}
+   ::wrap-up-s {:default 6 :doc "A lure with less time left than this (at most a quarter of its time) puts the food away and ends :timeout." :spec (a/num-in 0 nil)}})
 (defn timeout-s [] (settings/get settings ::timeout-s))
 
 (def near-spot "An animal this close (flat) to :pos counts as :near." 6)
@@ -84,6 +85,12 @@
 (defn time-limit "Seconds the lure may take." [c]
   (or (get-in (ctx/frozen-call c) [:spend :time]) (timeout-s)))
 
+(defn time-up?
+  "Whether the call has less time left (ctx/left) than its wrap-up margin."
+  [c]
+  (some-> (get-in (ctx/left c) [:spend :time])
+          (< (min (settings/get settings ::wrap-up-s) (/ (time-limit c) 4)))))
+
 (defn quote-of [c]
   (let [most (time-limit c)]
     {:uses {:time [0 (min most 60) most]}}))
@@ -92,7 +99,7 @@
   "Whether the animal arrived."
   [c]
   (let [arrived? (= :arrived (:ending (ctx/mem c)))]
-    {:done? false :units :animals :done (if arrived? 1 0) :left (if arrived? 0 1)}))
+    {:done? false :units :animals :done (if arrived? 1 0) :left (if arrived? 0 1) :data {:animal (:animal (ctx/mem c))}}))
 
 (defn skipped-text
   "What kept the animals seen within radius from being lured: babies, those on a lead, the zone rules."
@@ -277,10 +284,10 @@
                 (await (escort/wait-for-animal! c))))))
 
 (defn ^:async walk-legs! [c]
-  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) escort/safe-gap))]
+  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) escort/safe-gap time-up?))]
     (cond
       (= :waiting r) :yield
-      (= :searching r) :again
+      (#{:searching :stopped} r) :again
       (= :catching-up r) (await (escort/wait-for-animal! c))
       (= :arrived r) (await (arrive! c))
       (= :failed r) (finish! c :unreachable)
@@ -307,14 +314,13 @@
 
 (defn ^:async step [c]
   (hold-gates! c)
-  (let [now (ctx/now c)]
-    (ctx/update-mem! c update :started #(or % now))
-    (let [{:keys [phase started]} (ctx/mem c)
+  (do
+    (let [{:keys [phase]} (ctx/mem c)
           a (when (:animal (ctx/mem c)) (escort/animal-now c))]
       (when a (ctx/update-mem! c #(-> % (dissoc :unseen-since) (assoc :last-seen (u/pos-of (.-pos a))))))
       (cond
         (:ending (ctx/mem c)) (await (escort/close-up! c conclude!))
-        (>= (- now started) (* 1000 (time-limit c))) (finish! c :timeout)
+        (time-up? c) (finish! c :timeout)
         (nil? phase) (do (ctx/update-mem! c assoc :method :lure :origin (u/self-pos c) :phase :start) :again)
         (= :start phase) (await (u/untimed! c #(start! c)))
         (nil? a) (if-let [next-one (successor c)]

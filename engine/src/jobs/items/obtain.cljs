@@ -58,7 +58,7 @@
   own check declines (night in a shelter), that cause stands instead.
   Ends :done {:got n :item name} only with the count carried. Nothing-possible {:reason :no-source :why} or
   :table-unreachable when every allowed way was tried, data {:got n :tried {way why} :why}. Limit-reached {:line :time
-  :reason :timeout} after :spend :time seconds (default ::time-s) without a change in what is carried. A nested call
+  :reason :timeout} after :spend :time seconds (default ::time-s) without a change in what is carried; it keeps its own stall check (a long chain goes on while it makes progress) and an engine end by the total budget takes the data of done? ({:got :tried}). A nested call
   for the same item is the engine's :duplicate-call.
   Quote: the plan's figures; yields the count, time a guess per step, no most for a gather.")
 
@@ -124,8 +124,9 @@
         have (carried-of (u/inventory (:primitives c)) (names-of (:args c)))
         n (:count (:args c))]
     (if start
-      {:done? (and (>= have (:target start)) (not (get-in m [:gather :tree]))) :units :items :done (max 0 (- have (:have start))) :left (max 0 (- (:target start) have))}
-      {:done? false :units :items :done 0 :left n})))
+      {:done? (and (>= have (:target start)) (not (get-in m [:gather :tree]))) :units :items :done (max 0 (- have (:have start))) :left (max 0 (- (:target start) have))
+       :data (merge {:got (max 0 (- have (:have start))) :tried (:tried m)} (wanted-fields (:args c)))}
+      {:done? false :units :items :done 0 :left n :data {:got 0}})))
 
 (def step-s "A guess of the seconds one craft step takes, walks included." 5)
 (def smelt-s "A guess of the seconds one smelt step takes per item, the furnace's 10 s and its fetches." 15)

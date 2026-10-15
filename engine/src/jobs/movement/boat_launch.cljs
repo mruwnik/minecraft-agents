@@ -29,7 +29,7 @@
   Condition at the start: :no-boat (none in sight). Ends done (data {:id :item name :collected n}), info boat.recovered, or
   condition-failed :gone (the boat is no longer in sight), or
   nothing-possible: :leave-failed, :unreachable (the walk failed twice), :not-collected (the item was not picked up), or
-  limit-reached :time (still there when the call's :spend :time ran out).
+  limit-reached :time (the engine ends it when the call's :spend :time ran out; data {:id :hits} of a recovery, {:placed} of a launch).
 
   Never :continue except when a child waits on the world.")
 
@@ -156,8 +156,10 @@
 (defn done?
   "A launch is done once its boat is down; a recovery's end is its event."
   [c]
-  (let [placed (and (launching? c) (some? (:placed (ctx/mem c))))]
-    {:done? false :units :boats :done (if placed 1 0) :left (if placed 0 1)}))
+  (let [{:keys [placed hits]} (ctx/mem c)
+        placed (and (launching? c) (some? placed))]
+    {:done? false :units :boats :done (if placed 1 0) :left (if placed 0 1)
+     :data (if (launching? c) {:placed placed} {:id (:id (:args c)) :hits (or hits 0)})}))
 
 (defn quote-of [c]
   (let [most (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))
@@ -224,7 +226,6 @@
         (let [boat (pick-boat c)]
           (cond
             (nil? boat) (ctx/end c :condition-failed :gone {:id id})
-            (u/out-of-time? c) (ctx/end c :limit-reached {:line :time :reason :not-broken} {:id (:id boat) :hits hits})
             (> (u/dist (u/self-pos c) (:pos boat)) reach)
             (let [w (await (child/call-walk* c :walk {:pos (:pos boat) :range 2 :ways #{:walk :clear-seal}}))]
               (cond
@@ -244,7 +245,8 @@
                     (zero? n) (ctx/end c :nothing-possible :not-collected {:id (:id boat) :item item})
                     :else (do (ctx/emit! c :boat.recovered :info {:id (:id boat) :item item :collected n :text (str "took back " item)})
                               (ctx/end c :done nil {:id (:id boat) :item item :collected n}))))
-                (recur (inc hits) failed)))))))))
+                (do (ctx/update-mem! c assoc :hits (inc hits))
+                    (recur (inc hits) failed))))))))))
 
 (defn ^:async round [c]
   (if (launching? c)

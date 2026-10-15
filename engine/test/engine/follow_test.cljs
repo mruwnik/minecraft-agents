@@ -173,8 +173,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (follow {:entities [(steve 2)]} {:player "Steve" :timeout-s 3} 20 1000))]
-          (is (= {:reason :timeout} (ended @out))))))))
+        (let [{:keys [p clock out] :as s} (setup {:entities [(steve 2)]} {:player "Steve" :timeout-s 3})
+              _ (.override (.-world p) "look" (fn [token a impl] (swap! clock + 2000) (impl token a)))
+              _ (await (run-ticks s 20 1000))]
+          (is (has-event? s :limit_reached))
+          (is (= {:met true} (select-keys @out [:met]))))))))
 
 (deftest the-wait-beside-the-player-is-a-noop-pause-child
   (async done

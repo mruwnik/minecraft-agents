@@ -47,10 +47,10 @@
   :failed [{:pos :reason}] :skipped :farthest} :why}) and the ending:
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :legs (:max-legs walked) or :stuck (three failed walks in a row).
-  - :limit-reached :time (the call's :spend :time, default ::time-s, since the first round, not counting go-to's wait for day in a shelter).
+  - :limit-reached :time (the call's :spend :time, default ::time-s; the engine ends it, round time only, so go-to's wait for day in a shelter does not count), with the data of done? ({:found}).
   - :condition-failed :not-loaded (leg columns never loaded). A call with no :target waits (condition :no-target).
 
-  Memory: :origin :started :paused-ms :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
+  Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
   a walk is under way, so a cut or restart resumes it.")
 
@@ -208,7 +208,7 @@
   "The targets found against :count. Never :done? itself: the search ends with its event and data."
   [c]
   (let [n (count (:found (ctx/mem c)))]
-    {:done? false :units :found :done n :left (max 0 (- (:count (:args c)) n))}))
+    {:done? false :units :found :done n :left (max 0 (- (:count (:args c)) n)) :data {:found (:found (ctx/mem c) []) :why :time}}))
 
 (defn time-limit "Seconds the call may search." [c]
   (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
@@ -243,11 +243,10 @@
       (ctx/emit! c :search.done :info (assoc result :text (str "found " (count (:found result)) " " what " at "
                                                                            (str/join ", " (map #(str/join "," (:pos %)) (:found result))))))
       (ctx/emit! c :search.not-found :warn
-                 (assoc result :text (str "no " what " found (" (name why) (when (= :time why) (str ", :spend :time " (time-limit c))) ") after " (:legs m 0) " legs, "
+                 (assoc result :text (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
                                           (:scans m 0) " looks, " (:farthest m 0) " blocks out"))))
     (case why
       nil (ctx/end c :done nil result)
-      :time (ctx/end c :limit-reached {:line :time :reason :time} result)
       :not-loaded (ctx/end c :condition-failed :not-loaded result)
       (ctx/end c :nothing-possible why result))))
 
@@ -359,10 +358,9 @@
   (or the ending when the failed legs in a row end the search)."
   [c]
   (let [[x y z] (:leg (ctx/mem c))
-        [r waiting] (await (child/call-walk-reason* c :leg {:pos {:x x :y y :z z} :range 2
+        [r] (await (child/call-walk-reason* c :leg {:pos {:x x :y y :z z} :range 2
                                                            :escalate (>= (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row)))
                                                            :goal-danger :end}))]
-    (ctx/update-mem! c assoc :holding (boolean waiting))
     (if (= :continue r)
       :continue
       (let [{:keys [in-water why] :as data} (:data r)
@@ -420,15 +418,10 @@
 (defn ^:async search-step!
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
   [c]
-  (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (here c) :started (ctx/now c)))))
-  (let [now (ctx/now c)]
-    (ctx/update-mem! c (fn [m] (cond-> (assoc m :last-step now)
-                                 (:holding m) (update :paused-ms (fnil + 0) (- now (:last-step m now)))))))
-  (let [{:keys [leg started paused-ms]} (ctx/mem c)]
-    (cond
-      (>= (- (ctx/now c) started (or paused-ms 0)) (* 1000 (time-limit c))) (finish! c :not-found :time)
-      leg (await (walk! c))
-      :else (await (step! c)))))
+  (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (here c)))))
+  (if (:leg (ctx/mem c))
+    (await (walk! c))
+    (await (step! c))))
 
 (defn ^:async round [c]
   (await (pace/steps! c #(search-step! c))))

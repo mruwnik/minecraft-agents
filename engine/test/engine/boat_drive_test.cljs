@@ -113,4 +113,4 @@
         (let [{:keys [eng p clock]} (lt/setup {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}})
               _ (.override (.-world p) "paddle" (fn [token a impl] (swap! clock + 40000) (impl token a)))
               res (await (tu/child-outcome eng 'jobs.movement.boat-drive {:pos [18 63 18] :spend {:time 100}} 60))]
-          (is (= {:status :stopped :reason :timeout} (select-keys res [:status :reason])) (pr-str res)))))))
+          (is (= {:status :stopped :reason :time} (select-keys res [:status :reason])) (pr-str res)))))))

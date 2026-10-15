@@ -60,3 +60,14 @@
     (is (= {:kind :done :cause nil} (ending 2)))
     (is (= {:kind :nothing-possible :cause :no-bite} (ending 3)))
     (is (= {:kind :nothing-possible :cause :no-bite} (ending :all)))))
+
+(deftest the-budget-ends-fishing-with-the-fish-got
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (lt/setup (world [rod] {:catch ["cod"] :misses 1}))
+              _ (.override (.-world p) "fish" (fn [token a impl] (swap! clock + 15000) (impl token a)))
+              res (await (tu/child-outcome eng 'jobs.food.fish {:count 50 :max-misses 1000 :spend {:time 40}} 120))]
+          (is (= :stopped (:status res)) (pr-str res))
+          (is (= :time (:reason res)) (pr-str res))
+          (is (contains? res :got) (pr-str res)))))))
