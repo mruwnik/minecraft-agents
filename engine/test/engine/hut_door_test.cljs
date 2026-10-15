@@ -51,6 +51,18 @@
           (is (empty? (ct/calls p "place")))
           (is (= {} (hs/room-blocks p))))))))
 
+(deftest a-lone-zombie-outside-gets-the-door-shut-not-a-refuge-built
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} (tu/box 3 63 -2 7 63 2 "cobblestone"))
+                           :states open-door-states :inventory [{:name "cobblestone" :count 20}]
+                           :entities [{:id 9 :name "zombie" :kind "hostile" :pos {:x 5.5 :y 64 :z 8.5} :health 20 :visible true}])
+              {:keys [p]} (await (ct/first-round ct/retreat world))]
+          (is (false? (hs/door-open? p)) "the door is shut on the zombie")
+          (is (empty? (ct/calls p "place")) "no seal")
+          (is (empty? (ct/calls p "jumpPlace")) "no pillar"))))))
+
 (deftest a-flight-shuts-a-door-only-once
   (async done
     (tu/run-async done

@@ -173,6 +173,31 @@
             (is (= [{:name "skeleton" :pos [4 64 0]}] (:hostiles e)) "and carries them"))
           (is (= [] (:list (core/state eng))) "done once the skeleton is gone"))))))
 
+(defn unseen-ceiling!
+  "p senses no cell at height y until a look aims within a block of it (a look shows the cell and its neighbours)."
+  [p y]
+  (let [looked? (fn [pos] (some #(and (= "look" (.-name %))
+                                       (let [a (.. % -args -pos)]
+                                         (<= (+ (js/Math.abs (- (js/Math.floor (.-x a)) (.-x pos)))
+                                                (js/Math.abs (- (js/Math.floor (.-y a)) (.-y pos)))
+                                                (js/Math.abs (- (js/Math.floor (.-z a)) (.-z pos))))
+                                             1)))
+                                (.-calls (.-world p))))]
+    (aset p "sensedAt" (fn [pos] (if (and (= y (.-y pos)) (not (looked? pos))) #js {:unknown true} (.blockAt p pos))))))
+
+(deftest a-seal-looks-at-the-unseen-ceiling-before-it-fills-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen while-hidden]}
+              (await (hidden-round hiding-retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+                                                   :entities [(skeleton 4 64 0)]}
+                                   1000 (fn [{:keys [eng]}] {:list (:list (core/state eng))})
+                                   [] #(unseen-ceiling! % 66)))]
+          (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the stone over the head is looked at, not built into")
+          (is (= {:list ["j1"]} while-hidden) "sealed in and hiding")
+          (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen)))))))))
+
 ;; low on health in a skeleton's line of fire with no covered way to walk: it hides (seals itself in) instead of fleeing
 ;; through the arrows; at full health it flees
 (deftest a-body-low-on-health-in-a-skeletons-line-of-fire-seals-in-instead-of-running

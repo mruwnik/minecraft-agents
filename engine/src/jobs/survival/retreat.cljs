@@ -272,7 +272,7 @@
         threat (first threats)
         hit? (cornered/hit-on-the-run! c)
         door (when threat (retreat-doors/door-to-shut c (danger-q/mob-pos p threat)))
-        early (when (and threat (not hit?)) (await (early-refuge! c)))
+        early (when (and threat (not hit?) (not door)) (await (early-refuge! c)))
         covered? (cover/cover-fn p threats)
         blast (filterv #(flight/blaster? p %) threats)
         survey (when (and threat (not hit?) (empty? blast))

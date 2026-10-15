@@ -60,8 +60,27 @@
   (let [k (cell-key pos)]
     (boolean (some #(= k (:cell (:data %))) (mem/entries (ctx/view c) :refuge-open)))))
 
+(defn edge-of-sight?
+  "Whether room's flood stopped at the edge of what the body has sensed: beside a room cell, a column seen open at feet
+  or head height over a floor not sensed. The flood stands nowhere without a floor, yet that is no wall."
+  [p {:keys [cells]}]
+  (let [open? (fn [cell] (let [b (u/seen-block p cell)] (and b (not (reach/openable? (.-name b))) (= :open (reach/kind-of b)))))]
+    (boolean (some (fn [[x y z]]
+                     (some (fn [[dx dz]]
+                             (let [nx (+ x dx) nz (+ z dz)]
+                               (and (not (contains? cells [nx y nz]))
+                                    (or (open? {:x nx :y y :z nz}) (open? {:x nx :y (inc y) :z nz}))
+                                    (nil? (u/seen-block p {:x nx :y (dec y) :z nz})))))
+                           [[1 0] [-1 0] [0 1] [0 -1]]))
+                   cells))))
+
+(defn refuge-room?
+  "Whether cell pos holds a closed room (jobs.lib.reach/room) whose flood did not stop at the edge of sight."
+  [p pos]
+  (boolean (some->> (reach/room p pos) (edge-of-sight? p) not)))
+
 (defn closed?
-  "Whether cell pos holds a closed room (jobs.lib.reach/closed-room?), kept in mem :refuge-rooms for the job; an open
+  "Whether cell pos holds a closed room (refuge-room?), kept in mem :refuge-rooms for the job; an open
   verdict also in body memory (known-open?) for a while."
   [c pos]
   (let [k (cell-key pos)
@@ -69,7 +88,7 @@
     (cond
       (some? known) known
       (known-open? c pos) false
-      :else (let [v (reach/closed-room? (:primitives c) pos)]
+      :else (let [v (refuge-room? (:primitives c) pos)]
               (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
               (when-not v (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
               v))))

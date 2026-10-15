@@ -306,6 +306,13 @@
           (is (not (ran-home? seen)) "no run to a building it never saw")
           (is (not (in-room? (body p)))))))))
 
+(deftest a-room-whose-flood-reaches-ground-it-has-not-seen-is-no-refuge
+  (let [unseen-ground (fn [[x y z]] (and (= 63 y) (not (and (<= 2 x 8) (<= -3 z 3)))))
+        seen-hut (fn [states extra] (seeing-all-but (tu/fake-on-floor (hut {:x 5.5 :y 64 :z 0.5} states [] extra)) unseen-ground))]
+    (is (false? (retreat-home/refuge-room? (seen-hut {} {"5,64,2" "air" "5,65,2" "air"}) home))
+        "a doorway with no door, open air round the hut over ground not seen past a block: no wall there, no refuge")
+    (is (true? (retreat-home/refuge-room? (seen-hut open-door {}) home)) "a door shuts it: a refuge whatever lies outside")))
+
 (defn counting!
   "Replace the var at (getter) via (setter f) with a wrapper counting calls in counts under k; returns the restore fn."
   [counts k getter setter]
@@ -327,7 +334,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [counts (atom {})
-              restores [(counting! counts :closed-room #(identity reach/closed-room?) #(set! reach/closed-room? %))
+              restores [(counting! counts :closed-room #(identity retreat-home/refuge-room?) #(set! retreat-home/refuge-room? %))
                         (counting! counts :room #(identity reach/room) #(set! reach/room %))
                         (counting! counts :walk-steps #(identity reach/walk-steps) #(set! reach/walk-steps %))
                         (counting! counts :steps #(identity retreat/flight-step!) #(set! retreat/flight-step! %))]

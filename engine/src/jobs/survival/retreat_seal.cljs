@@ -5,6 +5,7 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.seal :as seal]
@@ -105,8 +106,10 @@
   placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
   in a side cell, which the seal leaves alone; the option then counts as failed this flight, so a cornered body moves
   on to the next one instead of placing there step after step).
-  A door standing open in a side cell is no wall (dig-cells/sealed?): it is shut."
+  A door standing open in a side cell is no wall (dig-cells/sealed?): it is shut. Cells it has not sensed (a ceiling
+  out of view) are looked at first: an unseen cell is not taken for an open one."
   [c]
+  (await (look/look-unknown! c (map lb/cell (dig-cells/open-cells (:primitives c) (sh/feet (:primitives c))))))
   (let [{:keys [radius max-places]} (:args c)
         blocks (flight/blocks c)
         p (:primitives c)
