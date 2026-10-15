@@ -8,10 +8,13 @@
             [jobs.animals.escort :as escort]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
+            [jobs.lib.look :as look]
+            [jobs.lib.near :as near]
             [jobs.lib.need :as need]
             [jobs.lib.pen-gate :as pg]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
+            [jobs.lib.vantage :as vantage]
             [jobs.lib.watch :as watch]))
 
 (def doc
@@ -28,7 +31,9 @@
   12 blocks) and then ends :lost (an allowed adult within 10 blocks takes its place at once); seen more than 7 behind and not
   coming nearer for 10 s (jobs.animals.escort/::stall-s), :animal-stalled. An animal that keeps closing in is waited for
   however far it fell behind. The plan of each leg is searched before the body walks: a search still running never sends
-  the body the whole way in one go. Each round
+  the body the whole way in one go. With no animal in sight at the start it walks to where the chosen one was last seen
+  (up to ::sighting-age-s old), looks round once and steps toward a heard animal of the kind (jobs.lib.vantage) before
+  ending :no-animal; a sound is a direction, never a place. Each round
   the food is checked in hand and held again if not (a cut, another job's equip); none left ends :no-food.
 
   Ends with a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
@@ -59,8 +64,10 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
-  {::timeout-s {:default 180 :doc "Seconds from the first round (not the food fetch) before the lure gives up." :spec (a/num-in 0 nil)}})
+  {::timeout-s {:default 180 :doc "The call's :spend :job-time when it gives none: seconds before the lure gives up." :spec (a/num-in 0 nil)}
+   ::sighting-age-s {:default 30 :doc "Seconds a chosen animal's last sighting stays worth walking back to while the animal is out of sight." :spec (a/num-in 0 nil)}})
 (defn timeout-s [] (settings/get settings ::timeout-s))
+(defn sighting-age-ms [] (* 1000 (settings/get settings ::sighting-age-s)))
 
 (def near-spot "An animal this close (flat) to :pos counts as :near." 6)
 (def arrive-slack "Without :box the animal arrives when it is within :range plus this many blocks (flat) of :pos: it follows the food a few blocks behind." 3)
@@ -257,6 +264,29 @@
         :else (do (ctx/update-mem! c assoc :food-ending e)
                   (finish! c :no-food))))))
 
+(defn ^:async look-for!
+  "No animal to lure in sight: walk to where the chosen one was seen when that is fresh (::sighting-age-s), else look round
+  once, then step toward a sound of the kind (jobs.lib.vantage; a heard animal gives a direction, never a place).
+  :again or :yield after trying; nil when nothing is left to try."
+  [c]
+  (let [{:keys [mob radius uuid]} (:args c)
+        {:keys [sighting looked]} (ctx/mem c)
+        found? #(seq (candidates c))
+        heard (when-not uuid (vantage/heard c [mob] radius))]
+    (cond
+      (and sighting (< (- (ctx/now c) (:at sighting)) (sighting-age-ms)))
+      (let [r (await (near/go-near! c (:pos sighting) 2 {:doors :shut}))]
+        (if (= :partial r)
+          :yield
+          (do (ctx/update-mem! c dissoc :sighting)
+              (await (look/look-around-until! c found? (look/search-effort)))
+              :again)))
+      (not looked) (do (ctx/update-mem! c assoc :looked true)
+                       (await (look/look-around-until! c found? (look/search-effort)))
+                       :again)
+      (and (seq heard) (not (vantage/done? c))) (if (= :partial (await (vantage/step! c heard found?))) :yield :again)
+      :else nil)))
+
 (defn ^:async start!
   "Hold the food, walk up to the nearest animal and send the walk on its way."
   [c]
@@ -266,9 +296,10 @@
         cands (candidates c)
         target (first cands)
         tries (:equip-tries (ctx/mem c) 0)]
+    (when target (ctx/update-mem! c assoc :sighting {:pos (u/pos-of (.-pos target)) :at (ctx/now c)}))
     (cond
       (nil? food) (await (get-food! c))
-      (empty? cands) (finish! c :no-animal)
+      (empty? cands) (or (await (look-for! c)) (finish! c :no-animal))
       (not= food (.-held (.self p))) (if (>= tries max-equips)
                                        (finish! c :no-hold)
                                        (do (ctx/update-mem! c assoc :equip-tries (inc tries))
@@ -277,7 +308,7 @@
       :else (let [k (animals/key-of target)
                   walked (await (animals/walk! c k target lure-reach {:doors :shut}))]
               (if (= :there walked)
-                (do (ctx/update-mem! c assoc :animal k :phase :walk) :again)
+                (do (ctx/update-mem! c #(-> % (assoc :animal k :phase :walk :last-seen (u/pos-of (.-pos target))) (dissoc :sighting))) :again)
                 :again)))))
 
 (defn ^:async rehold!

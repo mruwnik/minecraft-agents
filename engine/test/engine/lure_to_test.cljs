@@ -5,7 +5,9 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
+            [engine.hunt-test :as hunt-test]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.animals.escort :as escort]
             [jobs.animals.lure-to :as lure-to]
@@ -578,3 +580,46 @@
   (let [c (fn [y] {:primitives (tu/fake {:floor tu/walk-floor}) :args {:mob "cow" :pos {:x 7 :y y :z 0}}})]
     (is (re-find #"no standable cell at y70.*ground at y64" (lure-to/stop-text (c 70) :unreachable)))
     (is (not (re-find #"standable" (lure-to/stop-text (c 64) :unreachable))) "a standable spot is not blamed")))
+
+(deftest a-cow-only-heard-is-stepped-toward-and-then-lured
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 10)]} 50)]
+          (hunt-test/hear-passives-until! p (fn [{:keys [x]}] (<= 3 x)))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :radius 24}) {})
+          (await (run-until-done s 150))
+          (is (= :arrived (:reason (done-event s)))))))))
+
+(defn hide-until-seen-from!
+  "The cow (x 12) is out of sight once the food is in hand, and in sight again once the body has looked from x or beyond."
+  [p x]
+  (let [looked? #(some (fn [call] (= "look" (.-name call))) (.-calls (.-world p)))
+        cow-es (:entities @(fake/state p))
+        hidden (atom false)
+        sync! #(swap! (fake/state p) assoc :entities
+                      (if (and @hidden (not (and (looked?) (<= x (self-x p))))) [] cow-es))]
+    (.override (.-world p) "equip" (fn [token a impl] (.then (impl token a) (fn [r] (reset! hidden true) (sync!) r))))
+    (.override (.-world p) "look" (fn [token a impl] (.then (impl token a) (fn [r] (sync!) r))))))
+
+(deftest a-cow-lost-from-sight-on-the-way-in-is-looked-for-where-it-was-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 12)]} 50)]
+          (hide-until-seen-from! p 8)
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :radius 20}) {})
+          (await (run-until-done s 150))
+          (is (not= :no-animal (:reason (done-event s)))))))))
+
+(deftest a-sighting-older-than-the-age-limit-is-not-walked-back-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (settings/with-settings {::lure-to/sighting-age-s 0}
+          (fn ^:async f []
+            (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 12)]} 50)]
+                  (hide-until-seen-from! p 8)
+              (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :radius 20}) {})
+              (await (run-until-done s 150))
+              (is (= :no-animal (:reason (done-event s)))))))))))
