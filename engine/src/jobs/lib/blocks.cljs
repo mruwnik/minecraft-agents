@@ -239,9 +239,13 @@
                             (:cannot :fluid) :cannot
                             :fluid-adjacent :fluid-adjacent
                             :unreachable)
-        (if (#{:unreachable :no-tool :inventory-full :not-loaded} k)
-          :unreachable
-          (or (some-> (:primitive data) keyword) k))))))
+        :impossible :unreachable
+        (:cut-off :limit-reached) :failed
+        (case k
+          (:cannot :fluid) :cannot
+          (:not-allowed :hazard) :refused
+          (:unreachable :no-tool :inventory-full :not-loaded) :unreachable
+          (or (some-> (:primitive data) keyword) (when (not= k (:kind e)) k) :failed))))))
 
 (defn ^:async dig-cell!
   "Dig the one block at pos with a jobs.blocks.dig child in slot :dig (args merged over: no drops collected, no tool
@@ -284,7 +288,9 @@
                             (:not-allowed :own-body) :refused
                             (:need :no-support :occupied) k
                             :unreachable)
-        (or (some-> (:primitive data) keyword) (:reason data) k)))))
+        :impossible :unreachable
+        (:cut-off :limit-reached) :failed
+        (or (some-> (:primitive data) keyword) (:reason data) (when (not= k (:kind e)) k) :failed)))))
 
 (defn ^:async place-call!
   "Place item at pos with a jobs.blocks.place child in slot :place (args merged over: no fetch): :continue or its ending
