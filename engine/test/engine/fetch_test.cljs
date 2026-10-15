@@ -18,6 +18,7 @@
             [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
@@ -500,7 +501,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at []}) [own-zone])
-              chests #(mapv fetch/cell-of (fetch/seen-chests {:primitives (:p s)}))]
+              chests #(mapv stock/cell-of (stock/seen-chests {:primitives (:p s)}))]
           (is (= [[-2 64 3]] (chests)))
           (fake/remove-block! (:p s) [-2 64 3])
           (is (empty? (chests)) "in view just now: the live block says it is gone"))))))
@@ -510,7 +511,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at []}) [own-zone])
-              chests #(mapv fetch/cell-of (fetch/seen-chests {:primitives (:p s)}))]
+              chests #(mapv stock/cell-of (stock/seen-chests {:primitives (:p s)}))]
           (is (= [[-2 64 3]] (chests)))
           (swap! (:clock s) + 60000)
           (fake/remove-block! (:p s) [-2 64 3])
@@ -598,7 +599,7 @@
         (let [s (start (world {chest-at [{:name "dirt" :count 5}]}) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.storage.withdraw {:chest [-2 64 3] :items {"dirt" 2}}) {})
           (await (run-ticks s 20))
-          (is (= {"dirt" 3} (get (fetch/stock-of (mem/view (:store (:eng s)))) [-2 64 3]))))))))
+          (is (= {"dirt" 3} (get (stock/stock-of (mem/view (:store (:eng s)))) [-2 64 3]))))))))
 
 ;; ------------------------------------------------------------------ the craft source
 

@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.storage.deposit :as deposit]
@@ -30,7 +31,7 @@
   Storage group: with no :chest, or a :chest of the group (jobs.lib.storage/group), a chest that lacks what is short
   is followed by the next one; :chest-lacks is reported only once the last has been looked into.
   Stock: what the chest holds is booked in body memory :fetch/stock when inspected and after each take
-  (jobs.lib.fetch), for jobs.items.obtain.")
+  (jobs.lib.stock), for jobs.items.obtain.")
 
 (a/defargs args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :spec ::a/pos :default nil}
@@ -113,7 +114,7 @@
 (defn held-items
   "{name n} the inspected container items hold, summed per name."
   [stacks]
-  (fetch/stacks->items stacks))
+  (stock/stacks->items stacks))
 
 (defn lacks-text
   "\"no shears in this chest (holds bread 5, dirt 2)\": the wanted names the chest lacks, and what it does hold. After
@@ -142,7 +143,7 @@
       (if (deposit/retracted? c chest (.-status seen))
         (status-stop! c (.-status seen) short)
         (give-up! c (.-status seen) short))
-      (let [_ (fetch/note-stock! c chest (.-items seen))
+      (let [_ (stock/note-stock! c chest (.-items seen))
             pick (some (fn [[name n]] (let [held (held-in (.-items seen) name)]
                                         (when (pos? held) [name (min n held)])))
                        short)]
@@ -167,7 +168,7 @@
               (or (zero? (.-moved r))
                   (<= (storage/carried (u/inventory (:primitives c)) name) (storage/carried before name)))
               (give-up! c "nothing-moved" short)
-              :else (do (fetch/note-moved! c chest name (- (.-moved r)))
+              :else (do (stock/note-moved! c chest name (- (.-moved r)))
                         (ctx/update-mem! c update-in [:taken name] (fnil + 0) (.-moved r))
                         (u/progress! c)
                         :again))))))))

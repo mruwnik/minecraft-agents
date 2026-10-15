@@ -1,5 +1,6 @@
 (ns engine.memory-test
   (:require [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [cljs.test :refer [deftest is]]
             [cljs.reader :as reader]
             [engine.memory :as mem]
@@ -92,7 +93,7 @@
 
 (deftest chest-stock-survives-a-restart-two-hours-later
   (let [[s clock dir] (store)]
-    (mem/write! s :fetch/stock {:pos [-548 64 323] :items {"bread" 12}} fetch/stock-policy)
+    (mem/write! s :fetch/stock {:pos [-548 64 323] :items {"bread" 12}} stock/stock-policy)
     (mem/save! s)
     (let [again (mem/open dir {:now #(+ @clock (* 2 hour))})]
       (is (= [{:pos [-548 64 323] :items {"bread" 12}}] (mapv :data (mem/entries (mem/view again) :fetch/stock)))))))

@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.crafting-table :as crafting-table]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
             [jobs.lib.storage :as storage]
@@ -67,7 +67,7 @@
 (defn chest-stock-of
   "{name n} the chest is booked to hold, or nil when unknown."
   [c]
-  (some->> (storage/chest-of (ctx/view c) (:args c)) storage/cell-of (get (fetch/stock-of (ctx/view c)))))
+  (some->> (storage/chest-of (ctx/view c) (:args c)) storage/cell-of (get (stock/stock-of (ctx/view c)))))
 
 (defn done? [c] (reached (:args c) (chest-stock-of c)))
 

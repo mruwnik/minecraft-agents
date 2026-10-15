@@ -7,13 +7,14 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.estimate :as est]))
 
 (defn stock-names
   "The item names the known chests hold (:fetch/stock)."
   [c]
-  (into #{} (mapcat keys) (vals (fetch/stock-of (ctx/view c)))))
+  (into #{} (mapcat keys) (vals (stock/stock-of (ctx/view c)))))
 
 (defn piece-points
   "Armour points of one piece (jobs.lib.cost/armour-stats), 0 for nil."

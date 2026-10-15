@@ -4,7 +4,7 @@
             [jobs.items.obtain.base :refer [sheep-radius seen-radius]]
             [jobs.lib.access :as access]
             [jobs.lib.animals :as animals]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
             [jobs.lib.trees :as trees]
@@ -22,7 +22,7 @@
   booked chest), else nil."
   [c]
   (let [inv (u/inventory (:primitives c))
-        in-chest (fn [item n] (some #(>= (get % item 0) n) (vals (fetch/stock-of (ctx/view c)))))]
+        in-chest (fn [item n] (some #(>= (get % item 0) n) (vals (stock/stock-of (ctx/view c)))))]
     (cond
       (pos? (storage/carried inv "shears")) :carried
       (>= (storage/carried inv "iron_ingot") 2) :craft

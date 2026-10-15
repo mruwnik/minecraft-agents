@@ -4,7 +4,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
             [jobs.lib.danger :as danger]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.started :as started]
@@ -50,7 +50,7 @@
 (defn gained
   "{name n} the bag holds more of than at the start of the job."
   [c]
-  (let [now (fetch/stacks->items (u/inventory (:primitives c)))]
+  (let [now (stock/stacks->items (u/inventory (:primitives c)))]
     (into {} (keep (fn [[k n]] (let [d (- n (get (:before (ctx/mem c)) k 0))] (when (pos? d) [k d])))) now)))
 
 (def kinds "The kind of ending each stop reason is." {:gone :condition-failed :refused :condition-failed :unreachable :nothing-possible :cannot-break :nothing-possible})
@@ -87,7 +87,7 @@
   (let [seen (await (ctx/act c :inspectContainer (clj->js {:entity id})))]
     (cond
       (not= "ok" (.-status seen)) (.-status seen)
-      :else (loop [stacks (vec (fetch/stacks->items (.-items seen)))]
+      :else (loop [stacks (vec (stock/stacks->items (.-items seen)))]
               (if-let [[name n] (first stacks)]
                 (let [r (await (ctx/act c :transfer (clj->js {:entity id :direction "withdraw" :item name :count n})))]
                   (if (and (= "ok" (.-status r)) (pos? (.-moved r)))
@@ -115,7 +115,7 @@
   looked for again on a restart, and one already broken goes straight to the collect."
   [c]
   (when-not (:before (ctx/mem c))
-    (ctx/update-mem! c assoc :before (fetch/stacks->items (u/inventory (:primitives c)))))
+    (ctx/update-mem! c assoc :before (stock/stacks->items (u/inventory (:primitives c)))))
   (let [mem (ctx/mem c)
         cart (first (carts c))
         pos (or (:pos mem) (:pos cart))]

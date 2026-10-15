@@ -9,6 +9,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.found :as found]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.pace :as pace]
@@ -41,7 +42,7 @@
   :no-chest-item, no free cell beside nothing-possible :no-chest-spot, :make-chests? false nothing-possible :all-chests-full. Any other :chest is used alone.
   Found goods (jobs.lib.found: bulk or containers picked up with no job reason) stay carried, even when named in :items; one
   goods.found notice (:attention :notice) names item, count and the pick-up place.
-  Stock: what the chest holds after each transfer is booked in body memory :fetch/stock (jobs.lib.fetch), so observe chests shows it.")
+  Stock: what the chest holds after each transfer is booked in body memory :fetch/stock (jobs.lib.stock), so observe chests shows it.")
 
 (a/defargs args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :spec ::a/pos :default nil}
@@ -288,7 +289,7 @@
           (refuse! c v)
           (let [r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
                                                          :item (:name (:stack pick)) :count (:count pick)})))
-                _ (when (.-items r) (fetch/note-stock! c chest (.-items r)))]
+                _ (when (.-items r) (stock/note-stock! c chest (.-items r)))]
             (if (= "ok" (.-status r))
               (if (and (pos? (or (.-moved r) 0))
                        (< (storage/carried (u/inventory (:primitives c)) (:name (:stack pick))) (storage/carried inventory (:name (:stack pick)))))

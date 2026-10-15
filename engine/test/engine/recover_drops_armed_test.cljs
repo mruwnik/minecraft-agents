@@ -7,7 +7,7 @@
             [engine.recover-drops-danger-test :refer [decided-text]]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.contract :as contract]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [jobs.lib.need :as need]
             [engine.memory :as mem]))
 
@@ -29,7 +29,7 @@
           world (cond-> {:floor tu/walk-floor :entities (vec (pile-drops pile))}
                   items (assoc :blocks {"-2,64,3" "chest"} :containers {"-2,64,3" items}))
           {:keys [eng seen p]} (setup world)]
-      (when known? (mem/write! (:store eng) fetch/stock-kind {:pos chest-cell :items (fetch/stacks->items items)} fetch/stock-policy))
+      (when known? (mem/write! (:store eng) stock/stock-kind {:pos chest-cell :items (stock/stacks->items items)} stock/stock-policy))
       (die! eng {:pos dt/death-pos :inventory pile :cause cause})
       (core/submit! eng job {})
       (await (run-until-empty eng 60))
@@ -76,7 +76,7 @@
                  :blocks {"-2,64,3" "chest"} :containers {"-2,64,3" kit-in-chest}}
           {:keys [eng seen p]} (setup world)
           real (aget need/blocks! arity4)]
-      (mem/write! (:store eng) fetch/stock-kind {:pos chest-cell :items (fetch/stacks->items kit-in-chest)} fetch/stock-policy)
+      (mem/write! (:store eng) stock/stock-kind {:pos chest-cell :items (stock/stacks->items kit-in-chest)} stock/stock-policy)
       (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
       (core/submit! eng job {})
       (aset need/blocks! arity4 (or fetch-stub real))

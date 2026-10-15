@@ -12,7 +12,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.storage :as storage]
             [jobs.lib.world-files :as world]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [engine.withdraw-test :as wt]
             [engine.test-util :as tu]))
 
@@ -418,7 +418,7 @@
         (let [{:keys [eng]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" [{:name "stone" :count 3}]}})
               result (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 8))]
           (is (= {:kind :done} result))
-          (is (= {[10 64 0] {"stone" 3 "dirt" 5}} (fetch/stock-of (mem/view (:store eng))))))))))
+          (is (= {[10 64 0] {"stone" 3 "dirt" 5}} (stock/stock-of (mem/view (:store eng))))))))))
 
 (deftest deposit-uses-its-own-chest-and-the-kept-notice-says-it-is-about-recording
   (async done

@@ -5,7 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.cost.value :as value]
             [jobs.lib.dig-look :as dig-look]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.pass :as pass]
@@ -23,7 +23,7 @@
     pass/shut-wait-ms 500
     u/max-failures 3
     tidy/max-tries 3
-    fetch/chest-radius 32
+    stock/chest-radius 32
     watch/alert-radius 24
     threats/sensed-radius 24
     toll-cells/max-cells 8000

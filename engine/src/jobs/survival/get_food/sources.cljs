@@ -8,6 +8,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.crops :as crops]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.stock :as stock]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
@@ -49,7 +50,7 @@
   entries {:t :data {:pos {:x :y :z} :kind :chest}}: its own stores count as sources though nothing wrote a :food-source."
   [c]
   (let [here (u/self-pos c)]
-    (->> (ctx/entries c fetch/stock-kind)
+    (->> (ctx/entries c stock/stock-kind)
          (reduce (fn [m e] (assoc m (:pos (:data e)) e)) {})
          vals
          (filter (fn [{:keys [data]}] (and (some foods/edible? (keys (:items data))) (<= (u/dist here (zipmap [:x :y :z] (:pos data))) (settings/get settings ::stock-radius)))))
