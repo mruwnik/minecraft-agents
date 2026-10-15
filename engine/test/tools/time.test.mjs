@@ -10,6 +10,22 @@ import { clock, options, execute } from '../../tools/time.mjs'
 import { readEDN } from './edn.mjs'
 
 const cli = fileURLToPath(new URL('../../tools/time.mjs', import.meta.url))
+// Runs the promise on a virtual Date: every read moves it 10 ms, and each {at, run} fires once when it has moved at least `at` ms,
+// so the order of events and polls does not depend on how busy the machine is.
+function withFakeClock(t, promise, events) {
+  const start = Date.now()
+  let virtual = start, firing = false
+  t.mock.method(Date, 'now', () => {
+    if (firing) return virtual
+    virtual += 10
+    firing = true
+    for (const e of events.filter(e => !e.fired && e.at <= virtual - start)) { e.fired = true; e.run() }
+    firing = false
+    return virtual
+  })
+  return promise
+}
+
 function fixture(t) {
   const state = fs.mkdtempSync(path.join(os.tmpdir(), 'world-time-'))
   t.after(() => fs.rmSync(state, { recursive: true, force: true }))
@@ -63,9 +79,7 @@ test('missing, malformed, stale, future, wrong-dimension and disconnected report
 test('dawn waits for an observed transition and never predicts server time', async t => {
   const {pose, args} = fixture(t)
   pose('Observer', {timeOfDay: 18000})
-  const timer = setTimeout(() => pose('Observer'), 35)
-  t.after(() => clearTimeout(timer))
-  const result = await execute(options([...args, 'dawn', '--timeout', '1', '--poll-ms', '10']))
+  const result = await withFakeClock(t, execute(options([...args, 'dawn', '--timeout', '1', '--poll-ms', '10'])), [{at: 35, run: () => pose('Observer', {timeOfDay: 1000})}])
   assert.equal(result.ok, true)
   assert.equal(result.wake.key, 'day')
   assert.equal(result.by, 'Observer')
@@ -78,9 +92,7 @@ test('dawn stops at timeout or observer loss', async t => {
   const timed = await execute(options([...args, 'dawn', '--timeout', '0']))
   assert.equal(timed.ok, false)
   assert.equal(timed.reason.key, 'timeout')
-  const timer = setTimeout(() => pose('Observer', {status: 'offline'}), 20)
-  t.after(() => clearTimeout(timer))
-  const lost = await execute(options([...args, 'dawn', '--timeout', '1', '--poll-ms', '10']))
+  const lost = await withFakeClock(t, execute(options([...args, 'dawn', '--timeout', '1', '--poll-ms', '10'])), [{at: 20, run: () => pose('Observer', {status: 'offline'})}])
   assert.equal(lost.ok, false)
   assert.equal(lost.reason.key, 'time-unknown')
 })
