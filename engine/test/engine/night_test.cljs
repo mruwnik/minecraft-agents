@@ -261,7 +261,7 @@
                         _ (seed! eng)
                         id (core/submit! eng '(jobs.survival.night) {})]
                     (core/tick! eng)
-                    (:spawn (:cause (:waiting (job-api/summary eng id))))))
+                    (:spawn (:waiting (job-api/summary eng id)))))
         bed {:pos {:x 6 :y 64 :z 0}}]
     (is (nil? (waiting {:time noon} (constantly nil))))
     (is (= {:bed {:x 6 :y 64 :z 0}} (waiting {:time noon :blocks {"6,64,0" "red_bed"}} #(write! % :spawn-bed bed))))
@@ -430,15 +430,14 @@
           (is (= "ok" (:how stint))))))))
 
 (deftest a-log-out-needs-night-and-says-so
-  (let [conditions (:conditions (get registry/jobs 'jobs.survival.log-out))
-        cause (fn [world args]
-                (let [p (tu/fake world)]
-                  (ctx/check-wait {:primitives p :args args :slots [:x]
-                                   :view (fn [] {:data mem/empty-data :now 0})}
-                                  {:conditions conditions})))]
-    (is (= :not-night (:reason (cause {:time noon} {}))))
-    (is (= (contract/impossible :offline-forbidden) (cause {:time night} {:offline-allowed false})))
-    (is (nil? (cause {:time night} {})))))
+  (let [can-start? (:can-start? (get registry/jobs 'jobs.survival.log-out))
+        status (fn [world args]
+                 (let [[kind _ {:keys [reason]}] (can-start? {:primitives (tu/fake world) :args args :slots [:x]
+                                                              :view (fn [] {:data mem/empty-data :now 0})})]
+                   [kind reason]))]
+    (is (= [:later :not-night] (status {:time noon} {})))
+    (is (= [:never :offline-forbidden] (status {:time night} {:offline-allowed false})))
+    (is (= :ok (first (status {:time night} {}))))))
 
 (deftest a-log-out-quotes-the-stint-in-time
   (async done

@@ -5,6 +5,7 @@
             [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dl]
             [jobs.lib.access.rules :as rules]
@@ -47,12 +48,7 @@
    :fetch {:doc "get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-tool" :spec need/option? :default true}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :spec (a/int-in 1 32) :default sh/default-roof-height}})
 
-(defn start-fact
-  "The fact that bars starting, or nil: :day."
-  [c]
-  (when (and (not (ctx/frozen-call c)) (not (sh/night? (:primitives c)))) :day))
-
-(def conditions [[:fn start-fact]])
+(def can-start? (checks/night :day))
 
 (def target [])
 

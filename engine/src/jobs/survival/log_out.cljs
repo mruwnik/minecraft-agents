@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
             [jobs.lib.shelter :as sh]))
@@ -37,10 +38,17 @@
       (when (and queued out (> (:t out) queued) (#{"ok" "cut"} (:status (:data out))))
         out))))
 
-(def conditions
-  [[:fn #(when (= false (:offline-allowed (:args %))) (contract/impossible :offline-forbidden))]
-   [:fn (cond/because :not-night "not night" (cond/not (cond/daytime)))]
-   [:fn #(when (sh/log-out-unsupported? (ctx/view %)) (contract/impossible :log-out-unsupported))]])
+(defn allowed [c]
+  (if (= false (:offline-allowed (:args c)))
+    (contract/never :offline-forbidden ":offline-allowed false forbids logging out")
+    (contract/ok :offline-allowed "logging out allowed")))
+
+(defn supported [c]
+  (if (sh/log-out-unsupported? (ctx/view c))
+    (contract/never :log-out-unsupported "a log-out was unsupported")
+    (contract/ok :log-out-supported "log-out not known unsupported")))
+
+(def can-start? (cond/and allowed (checks/night :not-night) supported))
 
 (a/defargs settings
   {::time-s {:default 900 :doc "Seconds a log-out stint and the wait for the sleep count may take (a stint lasts at most until morning)." :spec (a/num-in 0 nil)}})

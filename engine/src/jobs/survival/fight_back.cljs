@@ -1,10 +1,10 @@
 (ns jobs.survival.fight-back
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]))
@@ -92,12 +92,10 @@
   [c]
   (->> (in-range c) (filter danger-q/seen-only?) (filter #(in-leash? c %)) (remove #(given-up? c %))))
 
-(defn start-problem
-  "Why the fight cannot start: {:reason :no-target}; nil when it can."
+(defn can-start?
+  "A hostile to fight, else :no-target."
   [c]
-  (when (empty? (targets c)) {:reason :no-target}))
-
-(def conditions [[:fn (started/at-start start-problem)]])
+  (if (seq (targets c)) (contract/ok :target "a hostile to fight") (contract/later :no-target "no hostile to fight in range")))
 
 (defn done?
   "The hostiles killed against those in range."

@@ -12,7 +12,6 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.spent :as spent]
-            [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -119,16 +118,15 @@
     (when-not (sh/night-holds? p (ctx/view c) (assoc (:args c) :ways (:ways (ctx/frozen-call c))) (bed-down/bed-permit c))
       {:shelter (sh/night-sheltered p (:data (ctx/latest c :shelter)))})))
 
-(defn not-night
-  "The cause :not-night (with :spawn when the respawn bed is known or lost) while the trigger's condition fails and
-  the body is in no shelter."
+(defn can-start?
+  ":later :not-night (with :spawn when the respawn bed is known or lost) while the trigger's condition fails and the
+  body is in no shelter."
   [c]
-  (when-let [q (quiet-night c)]
-    (when-not (:shelter q)
+  (let [q (quiet-night c)]
+    (if (and q (not (:shelter q)))
       (let [spawn (sh/spawn-state (:primitives c) (ctx/view c))]
-        (cond-> {:reason :not-night} spawn (assoc :spawn spawn))))))
-
-(def conditions [[:fn (started/at-start not-night)]])
+        (contract/status :later :not-night "not night" (if spawn {:spawn spawn} {})))
+      (contract/ok :night "night, or in a shelter"))))
 
 (defn done?
   "Already sheltered with nothing for the night to do (asked before the start only; the round ends the night)."

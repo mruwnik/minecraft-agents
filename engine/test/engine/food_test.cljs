@@ -253,14 +253,13 @@
           (is (= [:impossible :bad-food] [(:kind bad) (contract/cause-key bad)]))
           (is (= [:impossible :not-food] [(:kind rock) (contract/cause-key rock)])))))))
 
-(deftest eat-needs-food-only-while-hungry
-  (let [conditions (:conditions (get registry/jobs 'jobs.survival.eat))
-        cause (fn [world] (some (fn [[_ f]] (f {:primitives (tu/fake world) :view (fn [] {:data mem/empty-data :now 0})
-                                                :args {:until 18 :allow-bad false :item nil}}))
-                                conditions))]
-    (is (nil? (cause {:self {:food 19} :inventory []})) "fed: done?, not a condition")
-    (is (= :no-food (cause {:self {:food 4} :inventory [{:name "cobblestone" :count 2}]})))
-    (is (nil? (cause {:self {:food 4} :inventory [{:name "bread" :count 2}]})))))
+(deftest eat-starts-with-food-carried
+  (let [can-start? (:can-start? (get registry/jobs 'jobs.survival.eat))
+        status (fn [world] (let [[kind _ {:keys [reason]}] (can-start? {:primitives (tu/fake world) :view (fn [] {:data mem/empty-data :now 0})
+                                                                         :args {:until 18 :allow-bad false :item nil}})]
+                             [kind reason]))]
+    (is (= [:later :no-food] (status {:self {:food 4} :inventory [{:name "cobblestone" :count 2}]})))
+    (is (= :ok (first (status {:self {:food 4} :inventory [{:name "bread" :count 2}]}))))))
 
 (deftest eat-ends-done-with-the-bites-eaten-and-quotes-them
   (async done

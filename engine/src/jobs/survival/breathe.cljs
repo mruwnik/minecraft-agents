@@ -1,5 +1,6 @@
 (ns jobs.survival.breathe
   (:require [engine.args :as a]
+            [jobs.lib.checks :as checks]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -121,7 +122,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [])
+(def can-run? checks/always)
 
 (defn done?
   "Air at the head and, after a swim, solid ground under the feet."

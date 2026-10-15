@@ -2,6 +2,7 @@
   (:require [jobs.lib.choose :as choose]
             [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.checks :as checks]
             [engine.game :as game]
             [jobs.lib.blocks :as lb]
             [engine.contract :as contract]
@@ -160,7 +161,7 @@
                     (do (ctx/update-mem! c update :skip (fnil conj #{}) cell)
                         :again))))))))
 
-(def conditions [])
+(def can-run? checks/always)
 
 (defn done?
   "No ranged mob has a line of fire to the body; the cells placed so far."

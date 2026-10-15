@@ -3,6 +3,8 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.foods :as foods]
             [jobs.lib.util :as u]))
 
@@ -76,18 +78,18 @@
 
 (defn food-of [c] (.-food (.self (:primitives c))))
 
-(defn bad-item [c] (some-> (refusal c) contract/impossible))
+(defn bad-item
+  "Never when the :item is refused (not food, or harmful without :allow-bad); done? never holds then, so it ends impossible."
+  [c]
+  (if-let [r (refusal c)] (checks/cause-status :never r) (contract/ok :item "food to eat")))
 
 (defn done? [c]
   (let [left (max 0 (- (:until (:args c)) (food-of c)))]
     {:done? (and (nil? (refusal c)) (zero? left)) :units :food :left left}))
 
-(defn no-food
-  "Nil while fed, so a fed body is done whether the engine asks done? or the conditions first."
-  [c]
-  (when-not (or (refusal c) (:done? (done? c)) (carried-best c)) :no-food))
+(defn no-food [c] (if (carried-best c) (contract/ok :food "food carried") (contract/later :no-food "no edible food carried")))
 
-(def conditions [[:fn bad-item] [:fn no-food]])
+(def can-start? (cond/and bad-item no-food))
 
 (defn ^:async quote-of
   "The bites still needed (the best food's points, the carried count and :max-bites limiting) at ::bite-s each."

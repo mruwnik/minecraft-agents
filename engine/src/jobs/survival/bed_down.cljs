@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -70,19 +71,18 @@
     (when-not (or (bed-to-use c) (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)))
       {:reason :need :any-of bed-names :count 1})))
 
-(defn start-fact
-  "The fact that bars starting, or nil: night, and a bed to use or a bed item to put down."
+(defn bed-status
+  "A bed to use, a bed item to put down or a bed to fetch, else :no-bed (:look until the body looked round)."
   [c]
-  (when-not (ctx/frozen-call c)
-    (let [p (:primitives c)]
-      (cond
-        (not (sh/night? p)) :not-night
-        :else (when-let [w (problem c)]
-                (when-not (some->> (need/opts c job) (need/plan-for w))
-                  (cond-> {:reason :no-bed :text "no bed to use and none carried to put down"}
-                    (not (look/surveyed? c)) contract/look-first)))))))
+  (if (when-let [w (problem c)] (not (some->> (need/opts c job) (need/plan-for w))))
+    (contract/status (if (look/surveyed? c) :later :look) :no-bed "no bed to use and none carried to put down" {})
+    (contract/ok :bed "a bed to use, put down or fetch")))
 
-(def conditions [[:fn start-fact]])
+(defn can-start?
+  "Night, and by night a bed (a room flood fill) to use, put down or fetch."
+  [c]
+  (let [n (contract/asked c (checks/night :not-night))]
+    (if (= :ok (first n)) (contract/all [n (contract/asked c bed-status)]) n)))
 
 (defn done? [c]
   (let [d (sh/sleeping? (:primitives c))]

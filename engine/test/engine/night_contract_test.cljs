@@ -17,7 +17,7 @@
 
 (deftest night-exports-the-contract
   (let [job (get registry/jobs night-job)]
-    (is (vector? (:conditions job)))
+    (is (fn? (:can-start? job)))
     (is (nil? (:check job)) "no old check")
     (is (= [] (:target job)))
     (is (= [:bed :shelter :flee] (:ways job)))

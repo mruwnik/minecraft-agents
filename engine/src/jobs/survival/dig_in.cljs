@@ -5,7 +5,10 @@
             [jobs.lib.pen-gate :as pen-gate]
             [jobs.lib.reach :as reach]
             [jobs.lib.blocks :as lb]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.choose :as choose]
             [jobs.lib.pace :as pace]
             [jobs.lib.shelter :as sh]
@@ -138,21 +141,18 @@
     (boolean (or (dig-cells/sealed-in? p :walls roof-height)
                  (and (not (:enclose (:args c))) (sh/roofed? p roof-height) (reach/closed-room? p (sh/feet p)))))))
 
-(defn start-fact
-  "The fact that bars starting, or nil: :day, :roofed-not-enclosed or :futile (with the failed site's :pos and :why).
-  Only before the call starts; a shut-in body is done, not barred."
+(defn site-status
+  "Not :roofed-not-enclosed (a roof over open sides, without :enclose), nor :futile (a site that failed here, with its
+  :pos and :why)."
   [c]
-  (when-not (ctx/frozen-call c)
-    (let [p (:primitives c)]
-      (cond
-        (not (sh/night? p)) :day
-        (sheltered? c) nil
-        (and (not (:enclose (:args c))) (dig-cells/sealed-in? p :open (:roof-height (:args c))))
-        {:reason :roofed-not-enclosed :pos (sh/feet p)}
-        :else (when-let [site (futile-site c)]
-                (merge {:reason :futile} (select-keys site [:pos]) (when (:reason site) {:why (:reason site)})))))))
+  (let [p (:primitives c)]
+    (if (and (not (:enclose (:args c))) (dig-cells/sealed-in? p :open (:roof-height (:args c))))
+      (contract/later :roofed-not-enclosed "roofed but open at the sides" :pos (sh/feet p))
+      (if-let [site (futile-site c)]
+        (contract/status :later :futile "a dig-in failed here" (merge (select-keys site [:pos]) (when (:reason site) {:why (:reason site)})))
+        (contract/ok :site "a site to dig in")))))
 
-(def conditions [[:fn start-fact]])
+(def can-start? (cond/and (checks/night :day) site-status))
 
 (def target [])
 

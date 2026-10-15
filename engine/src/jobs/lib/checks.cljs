@@ -4,6 +4,8 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.job-common :as common]
+            [jobs.lib.body :as body]
+            [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
             [jobs.lib.submitted :as submitted]
@@ -89,3 +91,14 @@
   "zones-read, with one warn of kind from job-name (jobs.lib.job-common/no-zones)."
   [kind job-name]
   (refusing :zones-read "zone list read" #(common/no-zones % kind job-name)))
+
+(defn night "Night, else :later with reason." [reason] (cond/because reason "not night" (cond/not (cond/daytime))))
+
+(defn day "Day, else :later with reason." [reason] (cond/because reason "night" (cond/daytime)))
+
+(defn low-health
+  "Health at jobs.lib.body/risky-min-health or above, else :later :low-health {:health :min-health}."
+  [c]
+  (if-let [hurt (body/too-hurt (:primitives c))]
+    (cause-status :later hurt)
+    (contract/ok :healthy "health enough")))

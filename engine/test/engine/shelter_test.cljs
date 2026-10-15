@@ -609,15 +609,15 @@
       (fn ^:async t []
         (doseq [[world futile reason]
                 [[{:time noon :blocks floor} [] {:reason :day}]
-                 [{:time night :blocks (assoc floor "0,66,0" "stone")} [] {:reason :roofed-not-enclosed :cause {:reason :roofed-not-enclosed :pos {:x 0 :y 64 :z 0}}}]
+                 [{:time night :blocks (assoc floor "0,66,0" "stone")} [] {:reason :roofed-not-enclosed :pos {:x 0 :y 64 :z 0}}]
                  [{:time night :blocks floor} [{:pos {:x 0 :y 64 :z 0} :reason :no-floor}]
-                  {:reason :futile :cause {:reason :futile :pos {:x 0 :y 64 :z 0} :why :no-floor}}]
-                 [{:time night :blocks floor} [{:pos {:x 0 :y 63 :z 0}}] {:reason :futile :cause {:reason :futile :pos {:x 0 :y 63 :z 0}}}]]]
+                  {:reason :futile :pos {:x 0 :y 64 :z 0} :why :no-floor}]
+                 [{:time night :blocks floor} [{:pos {:x 0 :y 63 :z 0}}] {:reason :futile :pos {:x 0 :y 63 :z 0}}]]]
           (let [{:keys [eng seen]} (setup world)]
             (doseq [f futile] (mem/write! (:store eng) :dig-in-futile f {:cap 5 :ttl 600000}))
             (core/submit! eng '(jobs.survival.dig-in) {})
             (await (tick-n eng 2))
-            (is (= [reason] (mapv #(select-keys % [:reason :cause]) (emitted seen :waiting))) (pr-str world futile))))))))
+            (is (= [reason] (mapv #(select-keys % [:reason :pos :why]) (emitted seen :waiting))) (pr-str world futile))))))))
 
 (deftest a-submitted-dig-in-in-a-shut-room-is-done-and-places-nothing
   (async done

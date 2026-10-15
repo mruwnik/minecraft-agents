@@ -7,6 +7,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.body :as body]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
@@ -85,13 +86,12 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(defn nothing-to-do
-  "The wait reason while no death is open to serve: the danger remembered for one, else the decision already taken."
+(defn can-run?
+  "A death open to serve, else :later with the danger remembered for one, else the decision already taken."
   [c]
-  (when-not (seq (dth/open-deaths c))
-    (or (dth/danger-wait (ctx/view c)) (est/decided-wait (ctx/view c)))))
-
-(def conditions [[:fn nothing-to-do]])
+  (if (seq (dth/open-deaths c))
+    (contract/ok :open-death "a death to serve")
+    (checks/cause-status :later (or (dth/danger-wait (ctx/view c)) (est/decided-wait (ctx/view c))))))
 
 (defn done?
   "How much of the latest pile is back since the decision. Never done at once: the :recovered entry is the trip's to write."

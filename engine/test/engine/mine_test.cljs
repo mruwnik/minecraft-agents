@@ -2485,23 +2485,28 @@
           (await (run-ticks s 60))
           (is (>= (get (inv s) "sand") 6) "healed, it mines"))))))
 
-(deftest a-started-mine-at-low-health-holds-still-till-it-heals
+(deftest a-mine-hurt-between-two-digs-waits-to-heal-before-the-next
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; one call is the whole run, so a small step budget makes the round yield while the run is under way
-        (settings/with-settings {:jobs.gather.mine/max-steps 4}
-          (fn ^:async inner []
-            (let [s (await (scenario {:block "sand" :count 30} {:blocks (merge wide-floor (cells "sand" (range 4 10) [64 65] (range -2 3)))} 0))
-                  world (.-world (:p s))
-                  _ (loop [n 0] (when (and (< n 40) (zero? (dig-count s))) (await (run-ticks s 1)) (recur (inc n))))
-                  dug (dig-count s)]
-              (is (< 0 dug 30) "the job is under way")
-              (swap! (.. world -state) assoc-in [:self :health] 2)
-              (await (run-ticks s 10))
-              (is (= dug (dig-count s)) "no dig after the body got hurt")
-              (is (= [:low-health] (distinct (map :reason (events-of s :holding)))))
-              (is (not (finished? s)) "the run waits, it does not end"))))))))
+        (let [p (tu/fake-on-floor {:floor-block floor-block :inventory [{:name "torch" :count 10}]
+                                   :blocks (merge wide-floor (cells "sand" (range 4 10) [64 65] (range -2 3)))})
+              world (.-world p)
+              _ (.override world "dig"
+                           (fn ^:async f [token a impl]
+                             (let [r (await (impl token a))]
+                               (when (= 2 (count (filterv #(= "dig" (.-name %)) (.-calls world))))
+                                 (swap! (.. world -state) assoc-in [:self :health] 2))
+                               r)))
+              s (start {:p p})]
+          (core/submit! (:eng s) (spec {:block "sand" :count 30}) {})
+          (await (run-ticks s 20))
+          (is (= 2 (dig-count s)) "no dig after the body got hurt, though the round had steps left")
+          (is (= [:low-health] (distinct (map :reason (events-of s :waiting)))))
+          (is (not (finished? s)) "the run waits, it does not end")
+          (swap! (.. world -state) assoc-in [:self :health] 20)
+          (await (run-ticks s 20))
+          (is (< 2 (dig-count s)) "healed, it digs on"))))))
 
 (deftest a-body-with-its-head-in-water-digs-nothing-and-says-flooded
   (async done

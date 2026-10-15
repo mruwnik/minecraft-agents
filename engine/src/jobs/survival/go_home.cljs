@@ -3,7 +3,9 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [engine.contract :as contract]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.places :as places]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]))
@@ -29,25 +31,19 @@
 
 (def arrive-range "How near the place counts as home." 2)
 
-(defn start-fact
-  "The fact that bars starting, or nil."
+(defn home-status
+  "A home within :limit blocks: else :no-home, or :too-far {:pos :distance} with a text telling the agent to dig in or
+  turn back."
   [c]
-  (when-not (ctx/frozen-call c)
-    (cond
-      (not (.-isDay (.self (:primitives c)))) :night
-      (nil? (place c)) :no-home)))
-
-(defn too-far
-  "The cause :too-far while home is beyond :limit blocks; its text tells the agent to dig in or turn back. Pure: a check
-  cannot emit or remember."
-  [c]
-  (when-let [pos (place c)]
+  (if-let [pos (place c)]
     (let [d (js/Math.round (u/dist (u/self-pos c) pos))]
-      (when (> d (:limit (:args c)))
-        (let [text (str "home at " (pr-str pos) " is " d " blocks away, beyond " (:limit (:args c)) ": night finds the body here; dig in or head back now")]
-          {:reason :too-far :pos pos :distance d :text text})))))
+      (if (> d (:limit (:args c)))
+        (contract/later :too-far (str "home at " (pr-str pos) " is " d " blocks away, beyond " (:limit (:args c)) ": night finds the body here; dig in or head back now")
+                        :pos pos :distance d)
+        (contract/ok :home "home within reach" :pos pos)))
+    (contract/later :no-home "no home or bed remembered")))
 
-(def conditions [[:fn start-fact] [:fn too-far]])
+(def can-start? (cond/and (checks/day :night) home-status))
 
 (def target [])
 

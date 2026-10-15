@@ -3,6 +3,8 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.places :as places]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]))
@@ -42,15 +44,9 @@
   {::time-s {:default 60 :doc "Seconds the walk to the bed and the click may take." :spec (a/num-in 0 nil)}
    ::click-s {:default 10 :doc "Seconds the walk to the bed and the click take, for the quote." :spec (a/num-in 0 nil)}})
 
-(defn start-fact
-  "The fact that bars starting, or nil: :night, or :no-bed."
-  [c]
-  (when-not (ctx/frozen-call c)
-    (cond
-      (sh/night? (:primitives c)) :night
-      (nil? (bed-of c)) :no-bed)))
+(defn has-bed [c] (if (bed-of c) (contract/ok :bed "a bed") (contract/later :no-bed "no bed given, remembered or seen")))
 
-(def conditions [[:fn start-fact]])
+(def can-start? (cond/and (checks/day :night) has-bed))
 
 (def target [])
 

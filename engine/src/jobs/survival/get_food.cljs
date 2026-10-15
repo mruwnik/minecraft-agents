@@ -3,7 +3,9 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
@@ -242,28 +244,30 @@
              (foods/eat-now? self (:args c) (foods/reserved (ctx/view c)))))))
 
 (defn no-food-found
-  "The cause :no-food-found when hungry with nothing to try, unless a look round from here finds something."
+  "Something to try while hungry, else :no-food-found (:look until a look round from here found nothing)."
   [c]
-  (when-not (ctx/frozen-call c)
-    (when (and (hungry-now? c) (nothing-to-try? c))
-      (cond-> (no-food-cause c) (not (look/surveyed? c :near)) contract/look-first))))
+  (if (and (hungry-now? c) (nothing-to-try? c))
+    (checks/cause-status (if (look/surveyed? c :near) :later :look) (no-food-cause c))
+    (contract/ok :food-to-try "not hungry, or food to try")))
 
 (def danger-policy {:cap 1 :ttl (* 60 60 1000)})
 
 (defn too-dangerous
-  "The cause :too-dangerous while a call ended so within ::danger-rest-s and the body is still fragile, not at food 0, with nothing
+  ":later :too-dangerous while a call ended so within ::danger-rest-s and the body is still fragile, not at food 0, with nothing
   carried to eat: the call ends before it acts, so a hungry reflex's backoff counts it."
   [c]
-  (when-let [{:keys [t data]} (ctx/latest c :food-too-dangerous)]
-    (when (and (< (- (ctx/now c) t) (* 1000 (settings/get settings ::danger-rest-s)))
-               (foods/fragile? (.self (:primitives c)))
-               (pos? (.-food (.self (:primitives c))))
-               (not-any? #(tryable-food? c %) (u/inventory (:primitives c))))
-      {:reason :too-dangerous :why (:why data)})))
+  (let [{:keys [t data]} (ctx/latest c :food-too-dangerous)]
+    (if (and t
+             (< (- (ctx/now c) t) (* 1000 (settings/get settings ::danger-rest-s)))
+             (foods/fragile? (.self (:primitives c)))
+             (pos? (.-food (.self (:primitives c))))
+             (not-any? #(tryable-food? c %) (u/inventory (:primitives c))))
+      (contract/later :too-dangerous "food was too dangerous to get a moment ago" :why (:why data))
+      (contract/ok :safe-enough "not resting from a danger"))))
 
 (def target [])
 
-(def conditions [[:fn no-food-found] [:fn too-dangerous]])
+(def can-start? (cond/and no-food-found too-dangerous))
 
 (defn done?
   "Fed (fed?); the food points still wanted."

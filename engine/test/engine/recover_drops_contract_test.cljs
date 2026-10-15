@@ -30,7 +30,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [def (get registry/jobs 'jobs.survival.recover-drops)]
-          (is (some? (:conditions def)))
+          (is (some? (:can-run? def)))
           (is (nil? (:check def)))
           (is (some? (:done? def)))
           (is (nil? (contract/quote-problem

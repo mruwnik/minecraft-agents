@@ -179,7 +179,7 @@
 
 (deftest bed-down-exports-the-contract-and-quotes-validly
   (let [job (get registry/jobs 'jobs.survival.bed-down)]
-    (is (some? (:conditions job)))
+    (is (fn? (:can-start? job)))
     (is (nil? (:check job)))
     (is (some? (:done? job)))
     (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (spawn-world {}) :view (constantly {:data {} :now 0}) :args {} :quote-call {:spend {:job-time 60}}}))))))

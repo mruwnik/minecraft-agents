@@ -15,7 +15,6 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
@@ -46,7 +45,7 @@
   tunnels.
 
   Impossible: :no-block. Conditions: :moved-since-submit, :no-zones (no zone list and not :ignore-zones?: one warn mine.declined; also
-  mid-run, which ends the run), :low-health (jobs.lib.body/too-hurt; a started run holds still :low-health until it heals)
+  mid-run, which ends the run), :low-health (can-run?, asked between digs too: the run waits :low-health until it heals)
   and :refused (every seen target refused by zones, claims or plans: one warn mine.declined {:reason :refused :zones :plans}).
 
   Ends early:
@@ -252,8 +251,9 @@
   (cond/and (checks/refusing :here "where it was submitted" away)
             block-given
             (checks/refusing :zones-read "zone list read" no-zones)
-            (checks/refusing :healthy "health enough" (fn [c] (body/too-hurt (:primitives c))))
             (checks/refusing :target "a target no zone refuses" all-refused)))
+
+(def can-run? checks/low-health)
 
 (defn done?
   "Progress in items: got against :count. Never :done? itself: the round ends the run after the mend and the walk home."
@@ -538,11 +538,7 @@
   (submitted/begin! c)
   (when (and (nil? (:phase (ctx/mem c))) (nil? (:pre-start (ctx/mem c))))
     (ctx/update-mem! c assoc :pre-start (cell-of (u/self-pos c))))
-  (if-let [t (or (when-let [hurt (body/too-hurt (:primitives c))]
-                   ;; a started run waits to heal where it is, as the queued one waits on its condition
-                   (ctx/hold-still! c (:reason hurt))
-                   :continue)
-                 (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c))))
+  (if-let [t (or (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c))))
                  (await (when (and (pos? (or (:torch-interval (:args c)) 0)) (nil? (:tunnel (ctx/mem c))) (or (pos? (:tunnel-length (:args c))) (descent-wanted? c)))
                           (trip/torches-ready! c))))]
     t

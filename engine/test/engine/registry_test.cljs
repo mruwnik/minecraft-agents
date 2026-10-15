@@ -59,6 +59,10 @@
     (is (fn? (:round job)) (str sym))
     (is (string? (:doc job)) (str sym))))
 
+(deftest survival-jobs-export-can-start-or-can-run-not-old-conditions
+  (doseq [[sym job] registry/jobs :when (str/starts-with? (str sym) "jobs.survival.")]
+    (is (nil? (:conditions job)) (str sym))))
+
 (deftest args-carry-docs-and-defaults
   (let [args (get-in registry/jobs ['jobs.forestry.fell-tree :args])]
     (is (= 16 (get-in args [:radius :default])))

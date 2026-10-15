@@ -33,7 +33,7 @@
 
 (deftest get-food-exports-the-contract
   (let [job (get registry/jobs food)]
-    (is (vector? (:conditions job)))
+    (is (fn? (:can-start? job)))
     (is (nil? (:check job)) "no old check")
     (is (= [] (:target job)))
     (is (= [:bake :cook :source :collect :hunt :crops :fish :pen] (:ways job)))

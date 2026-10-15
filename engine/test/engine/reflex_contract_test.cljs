@@ -22,14 +22,14 @@
 
 (deftest each-job-exports-the-contract-and-quotes-validly
   (doseq [sym ['jobs.survival.fight-back 'jobs.survival.block-arrow-gap 'jobs.survival.extinguish 'jobs.survival.respond-to-hostile]]
-    (is (some? (:conditions (job sym))) (str sym " has conditions"))
+    (is (some? (or (:can-start? (job sym)) (:can-run? (job sym)))) (str sym " has checks"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args {} :quote-call {}}))) (str sym))))
 
 (deftest every-survival-combat-and-food-contract-job-exports-a-target-and-a-time-spend
   (doseq [[sym def] registry/jobs
-          :when (and (:conditions def) (re-find #"^jobs\.(survival|combat|food)\." (str sym)))]
+          :when (and (some some? ((juxt :conditions :can-start? :can-run?) def)) (re-find #"^jobs\.(survival|combat|food)\." (str sym)))]
     (is (vector? (:target def)) (str sym " has a target"))
     (is (some? (get-in def [:defaults :spend :job-time])) (str sym " has a default :spend :job-time"))))
 

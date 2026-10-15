@@ -1,6 +1,7 @@
 (ns jobs.survival.retreat
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [jobs.lib.checks :as checks]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -156,7 +157,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [])
+(def can-run? checks/always)
 
 (defn done?
   "The hostiles fled against those still chasing: a flight is never done before it has run."

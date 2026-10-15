@@ -1513,15 +1513,14 @@
   (let [job (get registry/jobs breathe)]
     (is (nil? (:check job)))
     (is (vector? (:target job)))
-    (is (some? (:conditions job)))
+    (is (some? (or (:can-start? job) (:can-run? job))))
     (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (tu/fake {}) :args {} :quote-call {}}))))))
 
 (defn ^:async ending [world args]
   (await (sc/ending-of #(tu/seeing-all (tu/fake world)) (list breathe args))))
 
 (deftest a-body-with-air-is-done-already
-  (is (true? (:done? (b/done? {:primitives (tu/fake {}) :args defaults}))))
-  (is (= [] b/conditions)))
+  (is (true? (:done? (b/done? {:primitives (tu/fake {}) :args defaults})))))
 
 (deftest a-body-that-found-air-ends-done
   (async done
