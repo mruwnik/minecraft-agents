@@ -231,6 +231,13 @@
 
 ;; ------------------------------------------------------------------ cull
 
+(deftest a-pen-check-without-a-pen-is-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :stopped :kind :impossible :reason :no-pen}
+               (await (ending '(jobs.animals.pen-check {}) {}))))))))
+
 (deftest a-cull-ends-with-a-kind-and-a-cause
   (async done
     (tu/run-async done
