@@ -891,6 +891,24 @@
   (is (holds? {:blocks (cells-of "stone" (for [x [3 4] z (range -10 11)] [x 62 z])) :entities [(visible-zombie 8 0)]} danger-args)
       "across a trench one deep: it climbs out"))
 
+(defn crop-box
+  "The hostile-line-of-fire fixture's box: hollow stone x 4-8, y floor-y to 66, z -2-2, its west wall open at z -1-1
+  with plant on farmland in the gap."
+  [floor-y plant]
+  (merge (cells-of "stone" (for [x (range 4 9) y (range floor-y 67) z (range -2 3)
+                                 :when (or (#{4 8} x) (#{floor-y 66} y) (#{-2 2} z))]
+                             [x y z]))
+         (cells-of "air" (for [y [64 65] z [-1 0 1]] [4 y z]))
+         (cells-of "farmland" (for [z [-1 0 1]] [4 63 z]))
+         (cells-of plant (for [z [-1 0 1]] [4 64 z]))))
+
+(deftest hostile-near-takes-a-crop-gap-as-a-way-out-of-a-box
+  (doseq [plant ["wheat" "carrots" "poppy"]]
+    (is (holds? {:blocks (crop-box 63 plant) :entities [(visible-zombie 6.5 0.5)]} danger-args)
+        (str plant ": a 2-high room, the zombie on its floor"))
+    (is (not (holds? {:blocks (crop-box 64 plant) :entities [(visible-zombie 6.5 0.5)]} danger-args))
+        (str plant ": a 1-high room, the zombie sunk in its floor cannot walk"))))
+
 (deftest hostile-near-needs-a-line-of-fire-for-a-skeleton
   (is (not (holds? {:blocks dividing-wall :entities [(skeleton 1 8 0)]} danger-args)) "behind a wall with no opening")
   (is (holds? {:blocks (dissoc dividing-wall "3,65,0") :entities [(skeleton 1 8 0)]} danger-args)
