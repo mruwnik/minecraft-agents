@@ -16,8 +16,8 @@
   Done? means fed (food at :until): a fed body ends done without eating. Hungry, it needs an edible food carried, else
   condition-failed :no-food (a listed job waits). A named item that is not food, or is harmful without :allow-bad, is
   impossible :not-food or :bad-food (the cause's :text says why).
-  Ends :done with {:ate bites} when food reached :until, :max-bites were eaten or the food ran out after a bite; a
-  failed bite ends nothing-possible :eat-failed with {:ate bites}.
+  Ends :done with {:ate bites} when food reached :until or :max-bites were eaten; nothing-possible :out-of-food when the
+  food ran out after a bite short of :until; a failed bite ends nothing-possible :eat-failed with {:ate bites}.
   Quote: time per bite, the bites still needed, the best food as the items used.
   Memory: writes :fed {:item :food} for each meal.")
 
@@ -114,7 +114,7 @@
         (cond
           (not (ctx/alive? c)) :continue
           (or (>= (food-of c) until) (and max-bites (>= bites max-bites))) (ctx/end c :done nil {:ate bites})
-          (nil? best) (if (pos? bites) (ctx/end c :done nil {:ate bites}) (ctx/end c :condition-failed :no-food {:ate 0}))
+          (nil? best) (if (pos? bites) (ctx/end c :nothing-possible :out-of-food {:ate bites}) (ctx/end c :condition-failed :no-food {:ate 0}))
           :else
           (let [_ (await (ctx/act c :equip #js {:item best}))
                 r (await (ctx/act c :eat #js {:item best}))]

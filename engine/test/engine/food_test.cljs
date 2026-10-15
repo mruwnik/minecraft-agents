@@ -228,6 +228,19 @@
           (is (= {:ate 0 :reason :eat-failed} (select-keys @out [:ate :reason])))
           (is (= :nothing-possible (:kind (:ending @out))) "a failed bite is no done"))))))
 
+(deftest eat-that-runs-out-of-food-short-of-until-ends-nothing-possible-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 4} :inventory [{:name "bread" :count 1}]})
+              out (atom nil)
+              parent (tu/recording-parent 'jobs.survival.eat {} out)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'eat-parent parent))]
+          (core/submit! eng '(eat-parent) {})
+          (await (core/tick! eng))
+          (is (= 9 (food p)))
+          (is (= [:nothing-possible :out-of-food 1] [(:kind (:ending @out)) (:reason @out) (:ate @out)])))))))
+
 (defn ^:async ending-of-eat
   "The ending of a child eat call with args from a recording parent."
   [world args]
