@@ -1,0 +1,44 @@
+;; jobs.items.craft / obtain crafting cases: cards ea1311d1 (white_bed from wool + planks at a table not handed, not the re-dye
+;; recipe), e45ef991 (bread with a table made from planks), 48c93752 (a table placed in a 1-wide tunnel with no pickaxe),
+;; f16fb3bc (a seen table out of reach is walked to before the craft acts).
+;; Open plot, body at [16.5 0 16.5] looking east (yaw 270).
+;; Should-succeed: bed crafted at a table 8 off, bread, a stone pickaxe in the tunnel, a wooden pickaxe at a table 12 off with :radius 4.
+;; Should-fail: one plank and no table leaves the bed uncrafted.
+{:defaults
+ {:tags [:items :craft :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "white-bed-from-wool-and-planks-at-a-table-8-off"
+   :blocks [[:set [24 0 16] "crafting_table"]]
+   :body {:inventory [["white_wool" 3] ["oak_planks" 3]]}
+   :act [[:job (jobs.items.craft {:item "white_bed"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "white_bed" 1]]}
+  {:name "white-bed-short-of-planks-and-no-table-is-not-crafted"
+   :body {:inventory [["white_wool" 3] ["oak_planks" 1]]}
+   :act [[:job (jobs.items.craft {:item "white_bed" :fetch false})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15 :until {:source :job :kind :stopped}}]
+   :after [[:item "white_bed" 0]]
+   :limit-s 60}
+  {:name "bread-with-a-table-made-from-planks"
+   :body {:inventory [["wheat" 3] ["oak_planks" 8]]}
+   :act [[:job (jobs.items.obtain {:item "bread" :count 1})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "bread" 1]]}
+  {:name "stone-pickaxe-in-a-one-wide-tunnel-places-the-table"
+   :blocks [[:fill [8 -1 8] [24 5 24] "stone"] [:fill [16 0 16] [22 1 16] "air"]]
+   :body {:at [18.5 0 16.5] :inventory [["birch_log" 6] ["cobblestone" 20]]}
+   :act [[:job (jobs.items.craft {:item "stone_pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-table-spot}} :for-s 70 :until {:source :job :kind :completed}}]
+   :after [[:item "stone_pickaxe" 1]]}
+  {:name "seen-table-12-off-is-walked-to-before-crafting"
+   :blocks [[:set [28 0 16] "crafting_table"]]
+   :body {:inventory [["oak_planks" 3] ["stick" 2]]}
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :radius 4})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1]]}]}

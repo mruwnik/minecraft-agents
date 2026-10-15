@@ -1,0 +1,41 @@
+;; jobs.items.obtain no-source wording and refusals: cards 45f23f14 (no :explore: the text says to pass it), c9a3ebea (a tree
+;; barred by another body's zone is named "seen but not taken", a free tree is felled instead), 6120e61d (wool with no sheep waits
+;; no-source and the check does not throw).
+;; Open plot, body at [16.5 0 12.5] looking south (yaw 0); a zone tree at x 9 z 22 inside the yard [6..13 19..25], a free tree at x 22.
+;; Should-succeed: the free tree is felled while the zone tree stands. Should-fail: only the zone tree seen, nothing in sight for fences / wool.
+{:defaults
+ {:tags [:items :obtain :zones :jobs]
+  :time :day
+  :plot {:height 12 :floor "grass_block"}
+  :body {:at [16.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "fences-with-nothing-seen-say-pass-explore"
+   :act [[:job (jobs.items.obtain {:item "oak_fence" :count 4})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "explore"]}} :within-s 40 :of-job true}]
+   :after [[:item "oak_fence" 0]]
+   :limit-s 60}
+  {:name "only-a-zone-tree-seen-is-named-not-taken"
+   :zones [{:name "yard" :min [6 -1 19] :max [13 6 25] :owner "Other" :allow #{}}]
+   :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]]
+   :body {:inventory [["iron_axe" 1]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+         [:job (jobs.items.obtain {:item "oak_log" :count 2 :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "seen but not taken"]}} :within-s 40 :of-job true}]
+   :after [[:block [9 0 22] "oak_log"] [:item "oak_log" 0]]
+   :limit-s 60}
+  {:name "free-tree-felled-while-the-zone-tree-stands"
+   :zones [{:name "yard" :min [6 -1 19] :max [13 6 25] :owner "Other" :allow #{}}]
+   :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
+            [:fill [21 4 21] [23 5 23] "oak_leaves[persistent=true]"] [:fill [22 0 22] [22 4 22] "oak_log"]]
+   :body {:inventory [["iron_axe" 1]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+         [:job (jobs.items.obtain {:item "oak_log" :count 2 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 85 :of-job true}]
+   :after [[:item "oak_log" [:>= 2]] [:block [9 0 22] "oak_log"]]}
+  {:name "wool-with-no-sheep-waits-no-source-without-a-system-error"
+   :act [[:job (jobs.items.obtain {:item "white_wool" :count 3 :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 40 :of-job true}
+            {:no-event {:source :system :kind :error} :for-s 30}]
+   :after [[:item "white_wool" 0]]
+   :limit-s 60}]}

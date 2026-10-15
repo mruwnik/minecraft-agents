@@ -1,0 +1,75 @@
+;; jobs.items.obtain chains: cards 89eafb63 (carried logs make the stone pickaxe), a9274a73 (surface dirt at low food), 63c42506
+;; (:how [:craft] as a vector combines nuggets), bac45dec (coal seen 28 blocks off is used), 80d4991c (iron_pickaxe with no ore seen
+;; explores by default), a5d11d58 + 992b220d + 198dcd8b (ore seen -> mine -> smelt -> craft in one call), 06703dfa (raw_iron mined
+;; from seen ore is collected), 490ee54b (a pickaxe with 2 uses left is not dug to breakage).
+;; Open plot, body at [16.5 0 16.5] looking east (yaw 270); the table [16 0 20], furnace [20 0 14] where a case sets them.
+;; Should-fail: {:explore false} with no ore in sight waits no-source naming raw_iron; a nearly broken pick ends mine :no-tool.
+{:defaults
+ {:tags [:items :obtain :jobs]
+  :time :day
+  :plot {:height 12 :floor "grass_block"}
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "carried-birch-logs-make-the-stone-pickaxe"
+   :blocks [[:set [16 0 20] "crafting_table"] [:fill [20 0 14] [22 1 15] "stone"]]
+   :body {:inventory [["birch_log" 5]]}
+   :act [[:job (jobs.items.obtain {:item "stone_pickaxe" :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 170 :of-job true}]
+   :after [[:item "stone_pickaxe" 1]]
+   :limit-s 180}
+  {:name "surface-dirt-at-low-food-is-dug"
+   :act [[:rcon "effect give $BODY minecraft:hunger 6 255 true"] [:wait-s 10]
+         [:job (jobs.items.obtain {:item "dirt" :count 8})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :mine.done :data {:reason :hungry}} :for-s 60 :until {:source :job :kind :completed}}]
+   :after [[:item "dirt" [:>= 8]]]}
+  {:name "how-craft-vector-combines-nuggets-into-an-ingot"
+   :blocks [[:set [16 0 20] "crafting_table"]]
+   :body {:inventory [["iron_nugget" 27] ["oak_log" 2]]}
+   :act [[:job (jobs.items.obtain {:item "iron_ingot" :how [:craft]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "iron_ingot" 1]]}
+  {:name "coal-ore-seen-28-blocks-off-is-mined"
+   :blocks [[:fill [4 0 4] [4 1 5] "stone"] [:set [4 0 4] "coal_ore"] [:set [4 1 4] "coal_ore"] [:set [4 0 5] "coal_ore"]]
+   :body {:at [30.5 0 28.5] :yaw 135 :inventory [["stone_pickaxe" 1]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 135 5"] [:wait-s 2]
+         [:job (jobs.items.obtain {:item "coal" :count 2})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 130 :of-job true}]
+   :after [[:item "coal" [:>= 2]]]
+   :limit-s 150}
+  {:name "iron-pickaxe-no-ore-seen-explores-by-default"
+   :body {:inventory [["stone_pickaxe" 1] ["stick" 2] ["cobblestone" 8]]}
+   :act [[:job (jobs.items.obtain {:item "iron_pickaxe"})]]
+   :expect [{:event {:source :job :kind :obtain.exploring} :within-s 60 :of-job true}]
+   :after [[:item "iron_pickaxe" 0]]
+   :limit-s 90}
+  {:name "iron-pickaxe-explore-false-waits-no-source-naming-raw-iron"
+   :body {:inventory [["stone_pickaxe" 1] ["stick" 2] ["cobblestone" 8]]}
+   :act [[:job (jobs.items.obtain {:item "iron_pickaxe" :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "raw_iron"]}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :obtain.exploring} :for-s 20 :until {:source :job :kind :stopped}}]
+   :after [[:item "iron_pickaxe" 0]]
+   :limit-s 60}
+  {:name "iron-pickaxe-from-seen-ore-mines-smelts-crafts"
+   :blocks [[:set [16 0 20] "crafting_table"] [:set [20 0 14] "furnace[facing=west]"]
+            [:fill [24 0 15] [28 2 19] "stone"] [:set [24 0 17] "iron_ore"] [:set [24 1 17] "iron_ore"] [:set [24 0 16] "iron_ore"]]
+   :body {:inventory [["stone_pickaxe" 1] ["stick" 2] ["coal" 3]]}
+   :act [[:job (jobs.items.obtain {:item "iron_pickaxe" :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :timeout}} :for-s 270 :until {:source :job :kind :completed}}]
+   :after [[:item "iron_pickaxe" 1]]
+   :limit-s 300}
+  {:name "raw-iron-from-seen-ore-is-collected"
+   :blocks [[:fill [22 0 12] [28 3 20] "stone"] [:set [22 1 16] "iron_ore"] [:set [22 1 17] "iron_ore"]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 2 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 130 :of-job true}]
+   :after [[:item "raw_iron" [:>= 2]]]
+   :limit-s 150}
+  {:name "pickaxe-with-two-uses-left-is-not-dug-to-breakage"
+   :blocks [[:fill [20 0 14] [26 2 18] "iron_ore"]]
+   :body {:inventory [["stone_pickaxe[minecraft:damage=129]" 1] ["cobblestone" 64]]}
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :no-tool}} :within-s 100 :of-job true}]
+   :after [[:block [20 0 16] "iron_ore"] [:item "stone_pickaxe" 1]]}]}

@@ -1,0 +1,58 @@
+;; jobs.items.smelt fetches what it lacks and names unsmeltable items: cards 653b6e00 (furnace crafted and placed from a carried
+;; table + cobblestone when none is seen), 95dd208b (a product name loads its input, a furnace 10 blocks off is found), 0067c85b
+;; (a carried furnace is placed), 456e1e50 (a furnace still cooking an abandoned load is waited for, the output taken, then loaded).
+;; Open plot, body at [16.5 0 16.5] looking east (yaw 270).
+;; Should-succeed: ingots from a crafted furnace, cooked chicken by product name, ingots from a placed carried furnace, iron after the copper.
+;; Should-fail: :fetch false with no furnace seen gives up no-furnace-seen; a diamond is no input (not-smeltable).
+{:defaults
+ {:tags [:items :smelt :fetch :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "no-furnace-seen-crafts-and-places-one"
+   :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 140 :of-job true}]
+   :after [[:item "iron_ingot" 2]]}
+  {:name "fetch-false-no-furnace-seen-gives-up"
+   :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2 :fetch false})]]
+   :expect [{:event {:source :job :kind :smelt.gave-up :data {:reason "no-furnace-seen"}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :smelt.done} :for-s 15 :until {:source :job :kind :smelt.gave-up}}]
+   :after [[:item "iron_ingot" 0] [:item "raw_iron" 2]]
+   :limit-s 50}
+  {:name "product-name-cooks-its-input-in-a-furnace-ten-off"
+   :blocks [[:set [26 0 16] "furnace[facing=west]"]]
+   :body {:inventory [["chicken" 2] ["coal" 2]]}
+   :act [[:job (jobs.items.smelt {:item "cooked_chicken" :count 2})]]
+   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :smelt.gave-up :data {:reason "no-furnace-seen"}} :for-s 15 :until {:source :job :kind :smelt.done}}]
+   :after [[:item "cooked_chicken" 2]]}
+  {:name "iron-ingot-name-loads-raw-iron"
+   :blocks [[:set [26 0 16] "furnace[facing=west]"]]
+   :body {:inventory [["raw_iron" 2] ["coal" 2]]}
+   :act [[:job (jobs.items.smelt {:item "iron_ingot" :count 2})]]
+   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 100 :of-job true}]
+   :after [[:item "iron_ingot" 2]]}
+  {:name "diamond-is-no-input"
+   :blocks [[:set [26 0 16] "furnace[facing=west]"]]
+   :body {:inventory [["diamond" 2] ["coal" 2]]}
+   :act [[:job (jobs.items.smelt {:item "diamond"})]]
+   :expect [{:event {:source :job :kind :smelt.gave-up :data {:reason "not-smeltable"}} :within-s 30 :of-job true}]
+   :after [[:item "diamond" 2]]
+   :limit-s 50}
+  {:name "carried-furnace-is-placed-and-used"
+   :body {:inventory [["furnace" 1] ["raw_iron" 2] ["coal" 2]]}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :smelt.gave-up :data {:reason "no-furnace-seen"}} :for-s 15 :until {:source :job :kind :smelt.done}}]
+   :after [[:item "iron_ingot" 2]]}
+  {:name "furnace-still-cooking-copper-is-waited-for-then-iron-loaded"
+   :blocks [[:set [20 0 14] "furnace[facing=west,lit=true]{BurnTime:1600s,CookTime:0s,CookTimeTotal:200s,Items:[{Slot:0b,id:\"minecraft:raw_copper\",count:3},{Slot:1b,id:\"minecraft:coal\",count:2}]}"]]
+   :body {:inventory [["raw_iron" 2] ["coal" 2]]}
+   :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 2})]]
+   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :smelt.gave-up :data {:reason "furnace-busy"}} :for-s 20 :until {:source :job :kind :smelt.done}}]
+   :after [[:item "iron_ingot" 2] [:item "copper_ingot" 3]]}]}
