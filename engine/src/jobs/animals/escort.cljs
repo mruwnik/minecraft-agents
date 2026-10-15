@@ -141,7 +141,7 @@
 
 (def back-limit-ms "Time from the first miss after which the walk back gives up and the animal is :lost." 15000)
 
-(def closing-blocks "Blocks nearer the body an animal must come to count as making progress." 0.5)
+(def closing-blocks "Blocks nearer the body an animal must come to count as making progress (a cow swimming in covers a block in 20-30 s)." 0.2)
 
 (defn waiting-detail [c a me]
   (let [pos (some-> a .-pos u/pos-of)]

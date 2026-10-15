@@ -433,6 +433,22 @@
           (is (some? @cow-x) "the cow fell behind")
           (is (= :arrived (:reason (done-event s)))))))))
 
+(deftest a-cow-swimming-in-slowly-is-not-given-up-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
+              cow-x (atom nil)]
+          (after-acts! p (fn [p act]
+                           (when (and (nil? @cow-x) (<= 8 (self-x p))) (reset! cow-x (- (self-x p) 12)))
+                           (when @cow-x
+                             (when (= "wait" act) (swap! cow-x + 0.0015))
+                             (set-cow-x! p @cow-x))))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (run-until-done s 150))
+          (is (some? @cow-x) "the cow fell behind")
+          (is (not= :animal-stalled (:reason (done-event s))) "a third of a block in 10 s is still closing in"))))))
+
 (deftest a-cow-out-of-sight-is-walked-back-toward-where-it-was-last-seen
   (async done
     (tu/run-async done
@@ -557,3 +573,8 @@
           (is (false? (gate-open? s)) "the cleanup shut it after the cancel")
           (is (true? (other-gate)) "another job's open gate is left")
           (is (nil? (.-held (.self p))) "the food is put away"))))))
+
+(deftest unreachable-names-a-spot-with-no-standable-cell-and-the-ground-of-its-column
+  (let [c (fn [y] {:primitives (tu/fake {:floor tu/walk-floor}) :args {:mob "cow" :pos {:x 7 :y y :z 0}}})]
+    (is (re-find #"no standable cell at y70.*ground at y64" (lure-to/stop-text (c 70) :unreachable)))
+    (is (not (re-find #"standable" (lure-to/stop-text (c 64) :unreachable))) "a standable spot is not blamed")))

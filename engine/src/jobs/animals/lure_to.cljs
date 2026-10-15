@@ -10,6 +10,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.need :as need]
             [jobs.lib.pen-gate :as pg]
+            [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]))
 
@@ -132,6 +133,17 @@
         animal (or (some-> (escort/animal-now c) .-pos u/pos-of) (:last-seen (ctx/mem c)))]
     {:animal animal :body me :distance (u/flat-dist animal me)}))
 
+(def ground-search "Blocks above and below :pos looked over for the ground of its column." 16)
+
+(defn ground-note
+  "Names a :pos with no standable cell in its column cell (and the ground nearest it), else nil."
+  [c]
+  (let [{:keys [x y z]} (:pos (:args c))
+        stand? #(reach/standable-cell? (:primitives c) {:x x :y % :z z})]
+    (when-not (stand? y)
+      (let [ground (some #(when (stand? %) %) (interleave (range (dec y) (- y ground-search) -1) (range (inc y) (+ y ground-search))))]
+        (str " (no standable cell at y" y (if ground (str "; ground at y" ground) " within 16 blocks") ")")))))
+
 (defn stop-text [c reason]
   (let [{:keys [mob radius]} (:args c)]
     (case reason
@@ -147,7 +159,7 @@
                              (js/Math.round distance) " blocks from the body at " (pr-str (select-keys body [:x :z]))))
       :unreachable (if (spare/enclosed? c (atom #{}) #js {:pos (clj->js (:pos (:args c)))})
                      "the spot is inside a closed pen; no way in found"
-                     "luring stopped: unreachable")
+                     (str "luring stopped: unreachable" (ground-note c)))
       (str "luring stopped: " (name reason)))))
 
 (defn lost-detail
