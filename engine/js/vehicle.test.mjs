@@ -185,6 +185,14 @@ test('mountVehicle mounts once the server lists the body, emptying the hand firs
   assert.deepEqual(bot.calls, ['unequip', 'lookAt', 'mount'])
 })
 
+test('mountVehicle uses the vehicle again while the server has not seated the body', async () => {
+  let uses = 0
+  const bot = makeBot({ entities: [entity(9, 'oak_boat')], onMount: (b, target) => { if (++uses === 3) seat(b, target) } })
+  trackVehicles(bot)
+  assert.equal((await mountVehicle(bot, ctx(), { id: 9 }, { timeScale: 0.2 })).status, 'mounted')
+  assert.equal(uses, 3)
+})
+
 test('mountVehicle times out when the server never seats the body', async () => {
   const bot = makeBot({ entities: [entity(9, 'pig')] })
   trackVehicles(bot)

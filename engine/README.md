@@ -154,7 +154,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `look` / `wait` | `{pos}` or `{yaw, pitch}` / `{ms}` (max 10000) | `ok` |
 | `swim` | `{ms=3000, toward?}` | `surfaced`, `landed`, `timeout` |
 | `paddle` | `{ticks, turn?: 'left'/'right', forward?}` | one stroke of the boat the body is in (the boat is simulated client side, sent as `vehicle_move`; `ticks` at most 40): `ok`, `blocked` (the next forward tick leaves the water), `not-mounted`, `not-a-boat`; result `{pos, yaw, ticks, turnDeg, speed}` (the model: degrees and blocks a tick); ticks 0 reads the pose |
-| `mount` / `dismount` | `{id}` / `{yaw?, pitch?}` | `mounted`, `already-mounted`, `gone`, `not-mountable`, `occupied`, `out-of-reach`, `hand-full`, `timeout` / `dismounted`, `not-mounted`, `timeout` |
+| `mount` / `dismount` | `{id}` / `{yaw?, pitch?}` | `mounted` (uses the vehicle again every 400 ms for up to 3 s), `already-mounted`, `gone`, `not-mountable`, `occupied`, `out-of-reach`, `hand-full`, `timeout` / `dismounted`, `not-mounted`, `timeout` |
 | `useOn` | `{pos, item?, face='up'}` | `used`, `unchanged`, `missing`, `no-item`, `no-room`, `unreachable` (`too-far`, or `no-line`: no point of the block is in view past other blocks' shapes; its own other half never blocks), `cannot` (respawn anchors, beds outside the overworld, containers, hazards); a bed used by day answers `spawnSet: true` ("respawn point set") and is `used` |
 | `offline` | `{ms=300000}` (max 600000) | `ok`, `cut`, `closed`, `unsupported`, `offline` |
 

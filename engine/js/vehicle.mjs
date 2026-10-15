@@ -102,17 +102,20 @@ const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
 const middle = e => vec3(e.position.x, e.position.y + (e.height ?? 1) / 2, e.position.z)
 const eyeOf = bot => vec3(bot.entity.position.x, bot.entity.position.y + (bot.entity.height ?? constants.eyeHeight), bot.entity.position.z)
 
-const waitFor = async (ctx, done, ms) => {
+const waitFor = async (ctx, done, ms, { every = Infinity, again = () => {} } = {}) => {
   const deadline = Date.now() + ms
+  let next = Date.now() + every
   while (!done() && Date.now() < deadline) {
     await sleepMs(setting('vehicle/poll-ms'))
     ctx.alive()
+    if (!done() && Date.now() >= next) { again(); next = Date.now() + every }
   }
   return done()
 }
 
 // Gets the body on entity a.id: refused before any use when it cannot work, then a use, with an empty hand for a mob (a held
-// lead or food would leash or feed instead), then a wall-time wait for the server to list the body as a passenger.
+// lead or food would leash or feed instead), then a wall-time wait for the server to list the body as a passenger, using the
+// vehicle again every mount-retry-ms (a boat still settling in the water refuses one use and takes the next).
 export async function mountVehicle (bot, ctx, a, { timeScale = 1, reach = setting('vehicle/mount-reach') } = {}) {
   if (bot.vehicle) return { status: 'already-mounted', vehicle: describe(bot.vehicle) }
   const target = bot.entities[a.id]
@@ -127,7 +130,8 @@ export async function mountVehicle (bot, ctx, a, { timeScale = 1, reach = settin
   await bot.lookAt(middle(target), true)
   ctx.alive()
   bot.mount(target)
-  const seated = await waitFor(ctx, () => bot.vehicle?.id === a.id, setting('vehicle/mount-wait-ms') * timeScale)
+  const seated = await waitFor(ctx, () => bot.vehicle?.id === a.id, setting('vehicle/mount-wait-ms') * timeScale,
+    { every: setting('vehicle/mount-retry-ms') * timeScale, again: () => bot.mount(target) })
   return seated ? { status: 'mounted', vehicle: describe(bot.vehicle) } : { status: 'timeout' }
 }
 
