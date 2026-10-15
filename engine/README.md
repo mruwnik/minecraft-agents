@@ -323,9 +323,8 @@ has left: a crossing (cause with `:act`) refuses the act, inside `ctx/atomic` to
 Unwinding frames act unchecked (cleanup); frames further out are still checked. moveTo's health most is the drops a path
 along the straight line could hold (`maxDropDown` 3: none hurts).
 
-**Old and contract jobs together (engine.core.legacy).** An old job through `ctx/call` ends with the ending its
-check, round and result map to; any decline is condition-failed (a pause is a `jobs.time.noop` child, never a decline); a stop reads as the kind `reason-kinds` gives it. A contract job through `call-child` answers `:declined` or `:done` with its ending in
-the child-result. A `legacy-args` export maps an old caller's options to call keys.
+**Old callers of contract jobs (engine.core.legacy).** A contract job through `call-child` answers `:declined` or `:done` with its ending in
+the child-result.
 
 **call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
 it returns `:continue` or `:declined`; on `:done` the sub-map is cleared so the next call starts fresh. A cut anywhere ends

@@ -118,7 +118,6 @@
                                 (= :done (:kind r)) (done c)
                                 :else (ctx/end c (:kind r) (:cause r))))))
    'give-up (tu/job (fn [c] (ctx/end c :nothing-possible :no-way)))
-   'old-check {:check (constantly true) :round count-round}
    'eat-parent (tu/job (fn ^:async eat-parent-round [c]
                          (let [r (await (ctx/call c :e (tu/job eat-round) {}))]
                            (if (= :continue r) r (done c)))))})

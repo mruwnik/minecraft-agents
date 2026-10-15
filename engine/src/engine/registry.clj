@@ -156,7 +156,7 @@
 
 (defmacro job-registry
   "{ns-symbol {:check :round :doc :args :idle-ok}} for every job namespace under jobs/; a contract job's entry also
-  holds :can-start? :can-run? :target :ways :defaults :done? :quote-of :cleanup :cleanup-defaults :legacy-args and its namespace's
+  holds :can-start? :can-run? :target :ways :defaults :done? :quote-of :cleanup :cleanup-defaults  and its namespace's
   :settings. Each
   primitive of the engine/primitive.cljs table is a job too, as jobs.primitive.<kebab-case> (jobs.primitive/job)."
   []
@@ -170,8 +170,7 @@
                                              :target (ref 'target) :ways (ref 'ways)
                                              :defaults (ref 'defaults) :done? (ref 'done?) :quote-of (ref 'quote-of)
                                              :cleanup (ref 'cleanup) :cleanup-defaults (ref 'cleanup-defaults)
-                                             :settings (ref 'settings)
-                                             :legacy-args (ref 'legacy-args)}))])))
+                                             :settings (ref 'settings)}))])))
         (job-namespaces)))
 
 ;; ------------------------------------------------------------------ triggers and hooks

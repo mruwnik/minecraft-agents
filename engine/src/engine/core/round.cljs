@@ -195,7 +195,7 @@
   ending as its cleanup left it. An old :done waits as its ending, so a call resumed after a cut still hands it over."
   [eng def c res result below]
   (if (#{:ended :done} (:status res))
-    (let [e (await (cleanup/close-now eng def c (or (:ending res) (legacy/ending-of :done result nil)) below))]
+    (let [e (await (cleanup/close-now eng def c (or (:ending res) (legacy/ending-of result)) below))]
       (if (:ending res) (normalize-result e) res))
     res))
 
@@ -279,28 +279,9 @@
             call (first (ending/call-of c def))]
         (assoc c :quote-call call :left (constantly (contract/left {:call call} (now eng) 0)) :job-ways (:ways def))))))
 
-(defn ^:async old-round
-  "One round of old job def as the ctx/call child c (its id child-id) under parent base: :continue or its ending
-  (engine.core.legacy). Its check runs every round, as under call-child; a decline of check or round ends it
-  condition-failed (a pause is a jobs.time.noop child, never a decline)."
-  [base c child-id def]
-  (let [wait (atom nil)
-        child-wait (:child-wait base)
-        results (:results base)]
-    (swap! results dissoc child-id)
-    (reset! child-wait nil)
-    (if-not ((:check def) (assoc c :wait wait))
-      (legacy/ending-of :declined nil (wait-reason @wait))
-      (let [{:keys [status error]} (normalize-result (await ((:round def) c)))]
-        (when (= status :error) (throw error))
-        (let [e (legacy/ending-of status (get @results child-id) @child-wait)]
-          (swap! results dissoc child-id)
-          (reset! child-wait nil)
-          e)))))
-
 (defn ^:async call
-  "One round of job def as the child in slot under parent base (ctx/call): :continue, or its ending with the :report
-  (an old job's from engine.core.legacy); the child's memory goes with any ending, and an ending other than :done is
+  "One round of job def as the child in slot under parent base (ctx/call): :continue, or its ending with the :report;
+  the child's memory goes with any ending, and an ending other than :done is
   kept in child-ending, the parent round's. Shares the parent's token, like call-child; each call emits
   job.child_started and job.child_ended (with :ending)."
   [eng base child-ending slot def args]
@@ -330,7 +311,7 @@
                    (await (cleanup/step eng def c below))
                    (let [r (try (limits/check! eng c)
                                 (or (own-limit nil)
-                                    (let [r (await (if (ending/contract-job? def) ((:round def) c) (old-round base c child-id def)))]
+                                    (let [r (await ((:round def) c))]
                                       (if (= :done (:kind r)) r (or (own-limit nil) r))))
                                 (catch :default e
                                   (or (own-limit e)

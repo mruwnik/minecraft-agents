@@ -14,8 +14,7 @@
   {:op :repeat :child node :times n?}, {:op :until :children [guard child]}. They are plain EDN, so they persist."
   (:require [clojure.string :as str]
             [engine.args :as a]
-            [engine.contract :as contract]
-            [engine.core.legacy :as legacy]))
+            [engine.contract :as contract]))
 
 (def combinators #{'seq 'any 'repeat 'until 'hold})
 
@@ -28,8 +27,7 @@
   Throws when sym is not in the registry, is no contract job (a round and can-start? or can-run?, or no old check) or a value does not fit."
   [registry sym args]
   (let [entry (get registry sym)
-        data (:args entry)
-        args (legacy/given-args entry args)]
+        data (:args entry)]
     (cond
       (nil? entry) (throw (ex-info (str "unknown job " sym) {:job sym}))
       (not (and (or (some some? ((juxt :can-start? :can-run?) entry)) (nil? (:check entry)) (:engine.core.ending/wrapped entry)) (fn? (:round entry))))
@@ -45,7 +43,7 @@
   entry without the key is not checked."
   [sym entry args]
   (when (contains? entry :args)
-    (when-let [[[path known] :as all] (seq (a/unknown (:args entry) (apply dissoc (legacy/given-args entry args)
+    (when-let [[[path known] :as all] (seq (a/unknown (:args entry) (apply dissoc args
                                                                              (keys contract/call-keys))))]
       (let [level (vec (butlast path))
             ks (sort-by str (keep (fn [[p _]] (when (= level (vec (butlast p))) (last p))) all))
