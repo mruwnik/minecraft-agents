@@ -78,7 +78,7 @@
         (cond
           (nil? e) (finish! c id item :gone)
           (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (reach))
-          (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :escalate false}))]
+          (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :clear-seal}}))]
             (cond
               (= :continue r) :continue
               (and (= :done (:kind r)) (:arrived (:data r))) (recur fails)

@@ -188,7 +188,7 @@
 
 (defn ^:async pillar-walk!
   [c {:keys [plan]}]
-  (let [e (await (child/call-walk* c :pwalk {:pos (u/cell-pos (or (:base plan) (:stand plan))) :range 0 :escalate false :zone-tolls true
+  (let [e (await (child/call-walk* c :pwalk {:pos (u/cell-pos (or (:base plan) (:stand plan))) :range 0 :ways #{:walk :clear-seal} :zone-tolls true
                                              :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue e) :continue

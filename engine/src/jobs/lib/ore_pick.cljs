@@ -70,7 +70,7 @@
   "Back to the stand a pick began from: :continue while the walk waits, else nil."
   [c home]
   (when (not= home (blocks/feet-cell c))
-    (when (= :continue (await (child/call-walk* c :ore-walk {:pos home :range 0 :escalate false})))
+    (when (= :continue (await (child/call-walk* c :ore-walk {:pos home :range 0 :ways #{:walk :clear-seal}})))
       :continue)))
 
 (defn ^:async dig!

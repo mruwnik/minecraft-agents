@@ -163,7 +163,7 @@
   "Walk within a block of item, more than a block lower than the feet: one go-to call (child/run!*, slot :walk).
   :arrived, :continue (go-to waits on the world) or :unreachable."
   [c item]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to (walk-args c {:pos (item-cell item) :range 1 :escalate false})))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to (walk-args c {:pos (item-cell item) :range 1 :ways #{:walk :clear-seal}})))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
@@ -246,7 +246,7 @@
   (let [queue (or (:search-queue (ctx/mem c))
                   (let [q (vec (search-cells c anchor))] (ctx/update-mem! c assoc :search-queue q) q))]
     (when-let [cell (first queue)]
-      (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range 0 :escalate false})))]
+      (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range 0 :ways #{:walk :clear-seal}})))]
         (if (= :continue r)
           (if (>= (:search-waited (ctx/mem c) 0) (search-waits))
             :waited

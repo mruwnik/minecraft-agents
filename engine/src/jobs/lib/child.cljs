@@ -75,17 +75,17 @@
 
 (defn ^:async call-walk-leg
   "One leg of a walk: resolves to [:danger d] when (danger) answers d (the walk is not made, the caller yields so the
-  reflex can act), else [r] of call-walk in slot with args and :leg-s leg-s. The leg ends {:arrived false :leg true} in the go-to
+  reflex can act), else [r] of call-walk in slot with args and :spend {:time leg-s}. The leg ends {:arrived false :leg true} in the go-to
   result while the goal is still ahead; the caller weighs danger again by calling it again."
   [c slot args leg-s danger]
   (if-let [d (danger)]
     [:danger d]
-    [(await (call-walk c slot (assoc args :leg-s leg-s)))]))
+    [(await (call-walk c slot (assoc-in args [:spend :time] leg-s)))]))
 
 (def entry-depth "Blocks below both ends a walk to or from a line's entry may plan." 16)
 
 (defn walk-into-args [slot cell]
-  (cond-> {:pos cell :range 0 :escalate false}
+  (cond-> {:pos cell :range 0 :ways #{:walk :clear-seal}}
     (#{:walk :back} slot) (assoc :at-night :go)
     (#{:in :out} slot) (assoc :y-margin entry-depth)))
 

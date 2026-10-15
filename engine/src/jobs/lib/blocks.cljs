@@ -191,7 +191,7 @@
   [c pos see? at-night]
   (let [pens (when-not (:enter-pens (:args c)) (pen-entry/pens c))
         keep-out (vec (mapcat :gates pens))]
-    [pens (cond-> {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+    [pens (cond-> {:pos pos :range 3 :see (boolean see?) :ways #{:walk :clear-seal} :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
             at-night (assoc :at-night at-night)
             (seq keep-out) (assoc :keep-out keep-out))]))
 

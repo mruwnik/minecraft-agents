@@ -95,7 +95,7 @@
               (do (clear!)
                   (if (seq away-tried) {:unreachable :all-walks-failed :walk away-why} {:unreachable :no-cell}))
               (let [_ (ctx/update-mem! c assoc :away-to to :away-escalate escalate)
-                    e (await (child/call-walk* c :step-off {:pos to :range 0 :escalate escalate}))
+                    e (await (child/call-walk* c :step-off (cond-> {:pos to :range 0} (not escalate) (assoc :ways #{:walk :clear-seal}))))
                     res (:data e)]
                 (cond
                   (= :continue e) :continue

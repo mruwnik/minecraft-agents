@@ -35,7 +35,7 @@
   (let [cell (stock/cell-of pos)
         mark! #(ctx/update-mem! c (fn [m] (-> m (update :done-chests (fnil conj #{}) cell) (update :inspected (fnil inc 0)))))
         w (when-not (u/within? (u/self-pos c) pos 3)
-            (await (child/call-walk* c :walk {:pos pos :range 3 :escalate false :warn false :retry false :zone-tolls true})))]
+            (await (child/call-walk* c :walk {:pos pos :range 3 :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true})))]
     (cond
       (= :continue w) :continue
       (and w (not (:arrived (:data w)))) (do (mark!) :again)

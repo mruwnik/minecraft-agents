@@ -156,7 +156,7 @@
                 nil)))
         (do (update-take-back! c assoc :done true) nil))
       (> (u/dist (sh/feet p) cell) take-back-reach)
-      (let [r (await (child/call-walk* c :take-back-walk {:pos cell :range 3 :escalate false :warn false :retry false}))]
+      (let [r (await (child/call-walk* c :take-back-walk {:pos cell :range 3 :ways #{:walk :clear-seal} :warn false :retry false}))]
         (cond
           (= :continue r) :continue
           (= :done (:kind r)) :continue

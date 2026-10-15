@@ -54,7 +54,7 @@
        (nil? cell) :blocked
        (u/within? (u/self-pos c) cell range) :there
        :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut :dangers true :zone-tolls zone-tolls
-                                                       :escalate true :look-round true :one-way :closed :see false
+                                                       :look-round true :one-way :closed :see false
                                                        :warn false :retry false
                                                        :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
                (cond

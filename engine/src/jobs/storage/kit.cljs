@@ -374,7 +374,7 @@
   [c chest still]
   (if (u/within? (u/self-pos c) chest 3)
     nil
-    (let [r (await (child/call-walk* c :walk {:pos chest :range 3 :escalate false :warn false :retry false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (let [r (await (child/call-walk* c :walk {:pos chest :range 3 :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (cond
         (= :continue r) :continue
         (:arrived (:data r)) nil

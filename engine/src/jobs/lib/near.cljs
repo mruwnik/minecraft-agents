@@ -227,7 +227,7 @@
   "Walk until the body's cell is within range cells of pos's cell (u/within?), as a jobs.movement.go-to child in slot :walk,
   so a body shut in escalates (pillar, stair, dig a way out and put back). Resolves to :there, :partial (the child waits on the world: yield and call
   again; also a :leg-s leg that got nearer) or :blocked (it gave up or declined). opts: :doors (jobs.lib.pass policy, default :shut; a job that works gates itself passes :never), :dangers (false: plan
-  straight past known dangers), :tolls (cells the plan prices), :zone-tolls (true adds other bodies' zone cells), :escalate (default true), :leg-s (a leg of at most that many s, :partial when it got nearer, for a
+  straight past known dangers), :tolls (cells the plan prices), :zone-tolls (true adds other bodies' zone cells), :escalate (default true; false is go-to's :ways #{:walk :clear-seal}), :leg-s (a leg of at most that many s, :partial when it got nearer, for a
   caller chasing something that moves; default one 60 s steer), :look-round (default true; false for a caller that keeps moving),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always :retry false (the job counts its own
@@ -241,8 +241,10 @@
        (and (u/within? (u/self-pos c) cell range) (or (not see) (aim/body-sees? c [(:x cell) (:y cell) (:z cell)]))) :there
        :else (let [e (await (child/call-walk* c :walk
                                               (cond-> {:pos cell :range range :doors doors :dangers dangers :tolls tolls :zone-tolls (boolean zone-tolls)
-                                                       :escalate escalate :leg-s leg-s :look-round look-round :one-way one-way :see (boolean see) :warn false :retry false :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                                                at-night (assoc :at-night at-night))))]
+                                                       :look-round look-round :one-way one-way :see (boolean see) :warn false :retry false :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                                                at-night (assoc :at-night at-night)
+                                                (not escalate) (assoc :ways #{:walk :clear-seal})
+                                                leg-s (assoc :spend {:time leg-s}))))]
                (if (= :continue e)
                  :partial
                  (do (ctx/update-mem! c assoc :near-walk e)

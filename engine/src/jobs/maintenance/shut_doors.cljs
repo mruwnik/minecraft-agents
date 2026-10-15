@@ -69,7 +69,7 @@
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
   [c {:keys [cell]}]
-  (let [r (await (child/call-walk* c :walk {:pos cell :range (:reach (:args c)) :doors :never :escalate false}))]
+  (let [r (await (child/call-walk* c :walk {:pos cell :range (:reach (:args c)) :doors :never :ways #{:walk :clear-seal}}))]
     (cond
       (= :continue r) :walk-interrupted
       (and (= :done (:kind r)) (:arrived (:data r))) nil

@@ -139,8 +139,8 @@
   :again, :continue (go-to waits) or :done."
   [c pos]
   (let [reach (:reach (:args c))
-        r (await (child/call-walk* c :walk {:pos pos :range reach :doors :shut :leg-s (walk-leg-s)
-                                                               :escalate false :warn false :retry false :zone-tolls true}))
+        r (await (child/call-walk* c :walk {:pos pos :range reach :doors :shut :spend {:time (walk-leg-s)}
+                                                               :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true}))
         res (when-not (= :continue r) (:data r))]
     (if (= :continue r)
       :continue

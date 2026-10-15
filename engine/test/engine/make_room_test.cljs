@@ -673,6 +673,7 @@
         (let [{:keys [eng]} (setup {:inventory (many "junk" 35)})
               walks (atom 0)
               go-to {:check (constantly true)
+                     :ways [:walk :clear-seal]
                      :round (fn ^:async go-to-round [_c] (if (= 1 (swap! walks inc)) :continue :done))}
               returns (atom [])
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
@@ -752,6 +753,7 @@
         (let [{:keys [eng]} (setup {:inventory (same "diamond" 35 1)})
               walks (atom 0)
               go-to {:check (constantly true)
+                     :ways [:walk :clear-seal]
                      :round (fn ^:async go-to-round [_c] (swap! walks inc) :done)}
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
@@ -768,6 +770,7 @@
         (let [{:keys [eng]} (setup {:inventory (same "diamond" 35 1)})
               walks (atom 0)
               go-to {:check (constantly true)
+                     :ways [:walk :clear-seal]
                      :round (fn ^:async go-to-round [_c] (swap! walks inc) :done)}
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
@@ -784,6 +787,7 @@
         (let [{:keys [eng p]} (setup {:inventory (same "diamond" 35 1) :blocks {"-2,64,0" "stone" "-2,65,0" "stone"}})
               goals (atom [])
               go-to {:check (constantly true)
+                     :ways [:walk :clear-seal]
                      :round (fn ^:async go-to-round [c] (swap! goals conj (:pos (:args c))) :done)}
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
           (tu/seeing-all p)

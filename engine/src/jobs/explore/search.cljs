@@ -354,9 +354,8 @@
   (or the ending when the failed legs in a row end the search)."
   [c]
   (let [[x y z] (:leg (ctx/mem c))
-        [r] (await (child/call-walk-reason* c :leg {:pos {:x x :y y :z z} :range 2
-                                                           :escalate (>= (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row)))
-                                                           :goal-danger :end}))]
+        [r] (await (child/call-walk-reason* c :leg (cond-> {:pos {:x x :y y :z z} :range 2 :goal-danger :end}
+                                                           (< (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row))) (assoc :ways #{:walk :clear-seal}))))]
     (if (= :continue r)
       :continue
       (let [{:keys [in-water why] :as data} (:data r)

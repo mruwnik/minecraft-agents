@@ -312,7 +312,7 @@
         goal (zones/exit-goal (cell-of (u/self-pos c)) zn m)
         from (:pre-start (ctx/mem c))
         r (await (child/call-walk* c :leave
-                                 {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :y-slack 8 :escalate true :zone-tolls true}))
+                                 {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :y-slack 8 :zone-tolls true}))
         here (cell-of (u/self-pos c))]
     (cond
       (= :continue r) :continue
@@ -454,7 +454,7 @@
   [c]
   (let [{:keys [x y z] :as cell} (:pre-start (ctx/mem c))
         r (await (child/call-walk* c :back
-                                 {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0 :escalate true :zone-tolls true
+                                 {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0 :zone-tolls true
                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue r) :continue

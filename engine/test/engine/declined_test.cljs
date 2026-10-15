@@ -104,14 +104,17 @@
 
 (def old-walker
   {:check (fn [_] true)
+   :ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/result! c {:arrived true}) :done)})
 
 (def old-stranded
   {:check (fn [_] true)
+   :ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/result! c {:status :stopped :reason :unreachable :why :no-route}) :done)})
 
 (def contract-gave-up
   {:conditions []
+   :ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/end c :nothing-possible :tree-unreachable {:tried 2}))})
 
 (def walks-twice
@@ -180,6 +183,7 @@
 
 (def night-walker
   {:check (constantly true)
+   :ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/update-mem! c assoc :hold :night-sheltered) :continue)})
 
 (deftest a-walk-that-waits-on-the-world-holds-still-with-its-reason
@@ -214,4 +218,4 @@
           (let [args (atom nil)
                 go-to (assoc old-walker :round (fn ^:async w [c] (reset! args (:args c)) (ctx/result! c {:arrived true}) :done))]
             (await (in-parent go-to (fn ^:async g [c] (await (child/walk-into!* c slot [1 65 0])))))
-            (is (= (merge {:pos [1 65 0] :range 0 :escalate false} expect) (select-keys @args [:pos :range :escalate :at-night :y-margin])) (str slot))))))))
+            (is (= (merge {:pos [1 65 0] :range 0 :ways #{:walk :clear-seal}} expect) (select-keys @args [:pos :range :ways :at-night :y-margin])) (str slot))))))))
