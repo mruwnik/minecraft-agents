@@ -7,7 +7,6 @@
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dl]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -45,7 +44,7 @@
 (a/defargs args
   {:reach {:doc "how far from the body to look for a face, 1 to 32" :spec (a/int-in 1 32) :default 16}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :spec fetch/option? :default true}
+   :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :spec need/option? :default true}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :spec (a/int-in 1 32) :default sh/default-roof-height}})
 
 (defn start-fact
@@ -263,7 +262,7 @@
   "Get the tool for the block of w (jobs.lib.need) when :fetch allows a tool: :continue while it works, :again once
   it got one, nil when it did not or may not."
   [c w]
-  (let [o (fetch/opts c 'jobs.survival.dig-niche)]
+  (let [o (need/opts c 'jobs.survival.dig-niche)]
     (when (and o (contains? (:what o) :tool))
       (let [e (await (need/tool! c {:block (:block w)} (select-keys o [:how :depth :explore])))]
         (cond (= :continue e) :continue

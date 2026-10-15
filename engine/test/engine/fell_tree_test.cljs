@@ -15,6 +15,7 @@
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.table :as table]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.trees :refer [axe-fetch-limits]]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]))
@@ -400,11 +401,11 @@
           (is (= 1 (chest-axes s))))))))
 
 (deftest a-wait-limits-only-tighten-the-callers
-  (is (= {:how #{:chest :craft} :minutes 0.2} (select-keys (fetch/tighten {:how #{:chest :craft} :minutes 0.2} {:how #{:chest :craft} :minutes 1}) [:how :minutes])) "shorter minutes win")
-  (is (= {:how #{:chest} :minutes 1} (select-keys (fetch/tighten {:how #{:chest} :minutes 10} {:how #{:chest :craft} :minutes 1}) [:how :minutes])) "the caller's sources stay a subset")
-  (is (= #{:chest} (:how (fetch/tighten {:how #{:chest :craft :gather}} {:how #{:chest}}))) "the wait's sources cut the caller's")
-  (is (= #{:chest} (:how (fetch/tighten {:how #{:chest}} {:how #{:chest :craft}}))) "a wait never adds a source")
-  (is (= 3 (:minutes (fetch/tighten {:minutes 3} {:how #{:chest}}))) "keys the wait lacks are the caller's"))
+  (is (= {:how #{:chest :craft} :minutes 0.2} (select-keys (need/tighten {:how #{:chest :craft} :minutes 0.2} {:how #{:chest :craft} :minutes 1}) [:how :minutes])) "shorter minutes win")
+  (is (= {:how #{:chest} :minutes 1} (select-keys (need/tighten {:how #{:chest} :minutes 10} {:how #{:chest :craft} :minutes 1}) [:how :minutes])) "the caller's sources stay a subset")
+  (is (= #{:chest} (:how (need/tighten {:how #{:chest :craft :gather}} {:how #{:chest}}))) "the wait's sources cut the caller's")
+  (is (= #{:chest} (:how (need/tighten {:how #{:chest}} {:how #{:chest :craft}}))) "a wait never adds a source")
+  (is (= 3 (:minutes (need/tighten {:minutes 3} {:how #{:chest}}))) "keys the wait lacks are the caller's"))
 
 (deftest a-gathered-log-need-fetches-no-axe
   (let [need (first (table/gather-needs {"oak_log" 3}))]
@@ -412,7 +413,7 @@
     (is (= #{:item} (:fetch (:args need))) "an axe fetch inside a gather would gather logs again")))
 
 (deftest the-axe-wait-plans-a-chest-or-craft-get-tool-and-no-gather
-  (let [lim (fetch/tighten (merge fetch/built-in {}) (axe-fetch-limits))
+  (let [lim (need/tighten (merge need/built-in {}) (axe-fetch-limits))
         pl (fetch/plan-for {:reason :no-tool :kind "axe"} lim)]
     (is (= 'jobs.items.get-tool (:job pl)))
     (is (= "axe" (:kind (:args pl))))

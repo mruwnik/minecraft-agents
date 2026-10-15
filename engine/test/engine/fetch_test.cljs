@@ -18,6 +18,7 @@
             [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.stock :as stock]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -102,28 +103,28 @@
 ;; ------------------------------------------------------------------ the option
 
 (deftest fetch-arg-shapes-parse
-  (is (nil? (fetch/parse-arg nil)))
-  (is (nil? (fetch/parse-arg false)))
-  (is (= {} (fetch/parse-arg true)))
-  (is (= {:what #{:tool}} (fetch/parse-arg #{:tool})))
-  (is (= {:how #{:chest} :depth 2} (fetch/parse-arg {:how #{:chest} :depth 2})))
-  (is (:error (fetch/parse-arg "yes")))
-  (is (:error (fetch/parse-arg {:depth -1})))
-  (is (:error (fetch/parse-arg {:what #{:tools}}))))
+  (is (nil? (need/parse-arg nil)))
+  (is (nil? (need/parse-arg false)))
+  (is (= {} (need/parse-arg true)))
+  (is (= {:what #{:tool}} (need/parse-arg #{:tool})))
+  (is (= {:how #{:chest} :depth 2} (need/parse-arg {:how #{:chest} :depth 2})))
+  (is (:error (need/parse-arg "yes")))
+  (is (:error (need/parse-arg {:depth -1})))
+  (is (:error (need/parse-arg {:what #{:tools}}))))
 
 (deftest limits-precedence-call-over-job-default-over-built-in
-  (is (= 7 (:depth (fetch/merge-limits nil nil))))
-  (is (= 10 (:minutes (fetch/merge-limits nil nil))))
-  (is (= 6 (:depth (fetch/merge-limits {:depth 6} nil))) "job code default over the built-in")
-  (is (= 1 (:depth (fetch/merge-limits {:depth 6} {:depth 1}))) "the call wins"))
+  (is (= 7 (:depth (need/merge-limits nil nil))))
+  (is (= 10 (:minutes (need/merge-limits nil nil))))
+  (is (= 6 (:depth (need/merge-limits {:depth 6} nil))) "job code default over the built-in")
+  (is (= 1 (:depth (need/merge-limits {:depth 6} {:depth 1}))) "the call wins"))
 
 (deftest a-need-above-64-is-fetched-whole
-  (let [o (fetch/merge-limits nil nil)]
+  (let [o (need/merge-limits nil nil)]
     (is (= {:item "cobblestone" :count 100 :explore false} (:args (fetch/plan-for {:reason :need :item "cobblestone" :count 100} o))) "no 64 cap on one fetch")
     (is (= {:any-of ["dirt"] :count 100 :explore false} (:args (fetch/plan-for {:reason :need :any-of ["dirt"] :count 100} o))))))
 
 (deftest a-wait-maps-to-a-fetch-only-for-wanted-kinds
-  (let [o (fetch/merge-limits nil nil)]
+  (let [o (need/merge-limits nil nil)]
     (is (= 'jobs.items.get-tool (:job (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
     (is (= {:block "stone" :explore false} (:args (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
     (is (= {:item "oak_planks" :count 1 :explore false} (:args (fetch/plan-for {:reason :need :item "oak_planks" :pos {}} o))))
@@ -1321,13 +1322,13 @@
           (is (= 1 (get (inv s) "stone_pickaxe")) (pr-str (inv s) (last (events-of s :stopped)))))))))
 
 (deftest explore-is-a-fetch-limit-passed-to-the-fetch-jobs
-  (let [o (assoc (fetch/merge-limits nil {:explore true}) :explore true)]
-    (is (true? (:explore (fetch/merge-limits nil {:explore true}))))
-    (is (false? (:explore (fetch/merge-limits {:explore true} {:explore false}))) "the call wins")
+  (let [o (assoc (need/merge-limits nil {:explore true}) :explore true)]
+    (is (true? (:explore (need/merge-limits nil {:explore true}))))
+    (is (false? (:explore (need/merge-limits {:explore true} {:explore false}))) "the call wins")
     (is (= {:item "oak_log" :count 2 :explore true} (:args (fetch/plan-for {:reason :need :item "oak_log" :count 2} o))))
     (is (= {:block "stone" :explore true} (:args (fetch/plan-for {:reason :no-tool :block "stone"} o))))
-    (is (nil? (fetch/limit-error {:explore {:max-distance 10}})))
-    (is (some? (fetch/limit-error {:explore "yes"})))))
+    (is (nil? (need/limit-error {:explore {:max-distance 10}})))
+    (is (some? (need/limit-error {:explore "yes"})))))
 
 (deftest obtain-craft-keeps-the-short-detail-of-a-need-stop
   (is (= {:short {"stick" 2} :alternatives {"oak_log" ["birch_log"]}}
@@ -1336,6 +1337,6 @@
   (is (= :no-table (obtain-craft/stop-why {:kind :condition-failed :cause {:reason :no-table}}))))
 
 (deftest fetch-limits-become-the-childs-call-keys
-  (is (= {:ways #{:craft :smelt :gather} :spend {:time 120}} (fetch/child-limits 'jobs.items.obtain {:how #{:craft :gather} :minutes 2 :depth 3})))
-  (is (= {:ways #{:chest :gather}} (fetch/child-limits 'jobs.items.get-tool {:how #{:chest :gather}})))
-  (is (= {} (fetch/child-limits 'jobs.items.get-tool {:depth 3}))))
+  (is (= {:ways #{:craft :smelt :gather} :spend {:time 120}} (need/child-limits 'jobs.items.obtain {:how #{:craft :gather} :minutes 2 :depth 3})))
+  (is (= {:ways #{:chest :gather}} (need/child-limits 'jobs.items.get-tool {:how #{:chest :gather}})))
+  (is (= {} (need/child-limits 'jobs.items.get-tool {:depth 3}))))

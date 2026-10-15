@@ -7,7 +7,6 @@
             [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -70,7 +69,7 @@
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :spare-own-builds {:doc "a log in a plan this body made is not felled; false: it may be" :spec boolean? :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
-   :fetch {:doc "get an axe when none is carried, and the dirt or cobblestone a pillar needs (jobs.lib.need): true, a set of kinds or a map of limits; false chops by hand and ends a tree needing a pillar :need" :spec fetch/option? :default true}
+   :fetch {:doc "get an axe when none is carried, and the dirt or cobblestone a pillar needs (jobs.lib.need): true, a set of kinds or a map of limits; false chops by hand and ends a tree needing a pillar :need" :spec need/option? :default true}
    :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
    :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
@@ -246,9 +245,9 @@
 (defn axe-fetch-opts
   "The limits {:how :depth :explore} for getting an axe, nil when :fetch does not allow tools."
   [c]
-  (when-let [o (fetch/opts c job)]
+  (when-let [o (need/opts c job)]
     (when (contains? (:what o) :tool)
-      (select-keys (fetch/tighten o (axe-fetch-limits)) [:how :depth :explore]))))
+      (select-keys (need/tighten o (axe-fetch-limits)) [:how :depth :explore]))))
 
 (defn ^:async axe!
   "Get an axe before the first log of a tree it pays for: nil to go on (one came, or none could be had: the failure is
@@ -269,7 +268,7 @@
   [c]
   (cond
     (axe-carried? c) :carried
-    (not (contains? (:what (fetch/opts c job)) :tool)) :skipped-fetch-off
+    (not (contains? (:what (need/opts c job)) :tool)) :skipped-fetch-off
     (not (axe-worth-fetching? (:first-logs (ctx/mem c) 0))) :skipped-small-tree
     :else :none-found))
 

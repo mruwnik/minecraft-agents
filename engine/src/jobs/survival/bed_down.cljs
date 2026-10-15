@@ -29,7 +29,7 @@
    :roof-height {:doc "a solid block within this many blocks above counts as a roof (where a carried bed is put down)" :spec (a/int-in 0 nil) :default sh/default-roof-height}
    :bed-radius {:doc "a remembered bed farther than this is not used" :spec (a/num-in 0 nil) :default sh/default-bed-radius}
    :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :spec (a/num-in 0 nil) :default sh/urgent-bed-radius}
-   :fetch {:doc "get a bed when none is to use or carried (jobs.lib.need): true, a set of kinds or a map of limits; false makes :no-bed a start condition" :spec fetch/option? :default true}
+   :fetch {:doc "get a bed when none is to use or carried (jobs.lib.need): true, a set of kinds or a map of limits; false makes :no-bed a start condition" :spec need/option? :default true}
    :max-days-awake {:doc "in-game days without sleep before a bed in the open is slept in and the urgent radius applies" :spec (a/num-in 0 nil) :default sh/max-days-awake}})
 
 (a/defargs settings
@@ -77,7 +77,7 @@
       (cond
         (not (sh/night? p)) :not-night
         :else (when-let [w (problem c)]
-                (when-not (some->> (fetch/opts c job) (fetch/plan-for w))
+                (when-not (some->> (need/opts c job) (fetch/plan-for w))
                   (cond-> {:reason :no-bed :text "no bed to use and none carried to put down"}
                     (not (look/surveyed? c)) contract/look-first)))))))
 
@@ -217,7 +217,7 @@
     (cond
       bed (await (sleep! c bed (overdue? c)))
       (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep! c))
-      :else (let [o (fetch/opts c job)
+      :else (let [o (need/opts c job)
                   e (when (and (contains? (:what o) :item) (problem c)) (await (need/blocks! c bed-names 1 (select-keys o [:how :explore]))))]
               (cond
                 (or (= :continue e) (nil? (problem c))) :continue

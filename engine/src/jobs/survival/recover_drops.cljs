@@ -70,7 +70,7 @@
    :value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :spec (a/num-in 0 nil) :default 8}
-   :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.fetch limits); false: no kit fetch" :spec fetch/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
+   :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.fetch limits); false: no kit fetch" :spec need/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
    :leg-s {:doc "the walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again" :spec (a/num-in 0.1 120) :default 6}
    :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}
    :accept-night-risk {:doc "walk out of a shelter at night for the pile even while it would last until day (by default only a pile that despawns before dawn is fetched then, weighed by its route danger)" :spec boolean? :default false}
@@ -337,7 +337,7 @@
   :fetching-kit) until it ends, a danger or the despawn window. nil when done, dropped (a fetch that failed: warn) or
   nothing to do; else the ending of a danger, or :continue for a cut."
   [c entry]
-  (let [limits (fetch/opts c 'jobs.survival.recover-drops)]
+  (let [limits (need/opts c 'jobs.survival.recover-drops)]
     (if (or (:kit-done (ctx/mem c)) (not limits) (nil? (kt/kit-problem c)) (not (kt/kit-called-for? c entry)))
       (do (ctx/update-mem! c assoc :kit-done true) nil)
       (loop []

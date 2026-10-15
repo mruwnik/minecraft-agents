@@ -5,7 +5,6 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.cost :as cost]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.torch :as ltorch]
@@ -75,7 +74,7 @@
 (defn fetch-opts
   "The need options of the torch fetch under the :fetch arg: nil when :fetch is off."
   [c]
-  (some-> (fetch/opts c 'jobs.movement.go-to) (select-keys [:how :depth :explore]) (assoc :slot :need-torch)))
+  (some-> (need/opts c 'jobs.movement.go-to) (select-keys [:how :depth :explore]) (assoc :slot :need-torch)))
 
 (defn torch-fetching? [c] (boolean (:torch-fetching (ctx/mem c))))
 

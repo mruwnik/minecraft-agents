@@ -4,7 +4,6 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
@@ -43,7 +42,7 @@
    :max-level-cost {:doc "highest level cost of an offer to take; nil for no limit" :spec (a/int-in 0 nil) :default nil}
    :slot {:doc "take exactly offer 1, 2 or 3; nil to choose by :choice" :spec #{1 2 3} :default nil}
    :choice {:doc "\"best\" (dearest affordable offer) or \"cheapest\" (lowest level cost affordable)" :spec #{"best" "cheapest"} :default "best"}
-   :fetch {:doc "get a missing item or lapis (jobs.lib.need): true, a set of kinds or a map of limits; false stops with :no-item / :no-lapis" :spec fetch/option? :default true}})
+   :fetch {:doc "get a missing item or lapis (jobs.lib.need): true, a set of kinds or a map of limits; false stops with :no-item / :no-lapis" :spec need/option? :default true}})
 
 (a/defargs settings
   {::time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
@@ -81,7 +80,7 @@
   "The cause :no-item or :no-lapis for what is not carried when nothing fetches it."
   [c]
   (let [{:keys [item fetch]} (:args c)]
-    (when-not (or (under-way? c) (fetch/parse-arg fetch) (not (string? item)))
+    (when-not (or (under-way? c) (need/parse-arg fetch) (not (string? item)))
       (cond
         (zero? (carries c item)) {:reason :no-item :item item}
         (zero? (carries c lapis)) {:reason :no-lapis}))))
@@ -261,7 +260,7 @@
   fetch waits, else the fetch's ending."
   [c]
   (let [{:keys [item]} (:args c)
-        opts (fetch/opts c 'jobs.items.enchant)
+        opts (need/opts c 'jobs.items.enchant)
         lacks (when-not (under-way? c)
                 (cond (zero? (carries c item)) [item 1]
                       (zero? (carries c lapis)) [lapis (lapis-wanted c)]))

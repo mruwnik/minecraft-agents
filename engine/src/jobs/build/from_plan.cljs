@@ -21,7 +21,6 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [plan.shape :as shape]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.check-cache :as check-cache]
             [jobs.build.from-plan.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted world-block judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
             [jobs.build.from-plan.text :refer [summary announce! stopped-text assoc-fetch-failed]]))
@@ -92,7 +91,7 @@
    :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
    :give-up {:doc "refused places or failed walks after which a cell is given up" :spec (a/int-in 1 nil) :default 3}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
-   :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.need): true, a set of kinds or a map of limits; false builds with what is carried" :spec fetch/option? :default {:explore true}}
+   :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.need): true, a set of kinds or a map of limits; false builds with what is carried" :spec need/option? :default {:explore true}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :surface {:doc "put each column of the plan on the ground the body has seen there: the column's lowest cell stands on the ground's top, the rest keep their height above it (an unseen column stays as planned); for a pen on a slope" :spec boolean? :default false}
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :spec boolean? :default false}})
@@ -466,7 +465,7 @@
   once it ended (a failed one is booked, a limit ends the build), nil when nothing is due."
   [c]
   (when-let [w (plan/problem c)]
-    (let [o (select-keys (fetch/opts c plan/fetch-job) [:how :explore])
+    (let [o (select-keys (need/opts c plan/fetch-job) [:how :explore])
           key (plan/fetch-key w)
           what (or (:item w) (str "a tool for " (:block w)))
           _ (when-not (= key (:fetching (ctx/mem c)))

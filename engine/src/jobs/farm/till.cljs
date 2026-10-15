@@ -8,7 +8,6 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as b]
             [jobs.lib.job-common :as common]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]
@@ -42,7 +41,7 @@
    :center {:doc "centre of a square of cells at its y; with :radius" :spec ::a/pos :default nil}
    :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :spec (a/int-in 0 7) :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :fetch {:doc "get a hoe when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :no-tool" :spec fetch/option? :default true}
+   :fetch {:doc "get a hoe when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :no-tool" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -104,7 +103,7 @@
 (defn fetch-opts
   "The limits {:how :depth :explore} for fetching a hoe, nil when :fetch does not allow tools."
   [c]
-  (when-let [o (fetch/opts c 'jobs.farm.till)]
+  (when-let [o (need/opts c 'jobs.farm.till)]
     (when (contains? (:what o) :tool) (select-keys o [:how :depth :explore]))))
 
 (defn hoe-wanted

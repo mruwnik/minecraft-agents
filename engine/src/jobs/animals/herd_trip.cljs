@@ -6,7 +6,6 @@
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
@@ -103,7 +102,7 @@
   [c]
   (let [p (:primitives c)
         mob (:mob (:args c))
-        limits (fetch/parse-arg (:fetch (:args c)))]
+        limits (need/parse-arg (:fetch (:args c)))]
     (when-not (animals/food-carried p mob)
       (let [e (when limits (await (need/blocks! c (get animals/breeding-food mob) 1 (select-keys limits [:how :explore]))))]
         (cond

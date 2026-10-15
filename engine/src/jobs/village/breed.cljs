@@ -1,6 +1,6 @@
 (ns jobs.village.breed
   (:require [engine.settings :as settings]
-            [engine.args :as a] [jobs.lib.fetch :as fetch]
+            [engine.args :as a] [jobs.lib.need :as need]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
@@ -34,7 +34,7 @@
   {:target {:doc "villagers wanted in sight (adults and babies)" :spec (a/int-in 2 64) :default nil}
    :radius {:doc "how far to look for villagers" :spec (a/int-in 1 96) :default 48}
    :wait-s {:doc "seconds to stay near a fed pair for a birth" :spec (a/int-in 1 600) :default default-wait-s}
-   :fetch {:doc "get food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}})
+   :fetch {:doc "get food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}})
 
 (a/defargs settings
   {::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}
@@ -96,7 +96,7 @@
    (fn [c]
      (let [[item n] (meal c)
            need {:reason :need :item item :count (- n (held c item))}]
-       (when (and (pos? (:count need)) (not (fetch/opts c job)))
+       (when (and (pos? (:count need)) (not (need/opts c job)))
          {:reason :no-food :need need :text "no food carried and no fetch for it"})))))
 
 (def conditions [[:fn bad-args] [:fn no-pair] [:fn no-food]])

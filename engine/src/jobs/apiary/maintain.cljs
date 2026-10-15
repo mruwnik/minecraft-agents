@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.started :as started]
@@ -47,7 +47,7 @@
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
    :keep {:doc "{item-name count}: how many of honeycomb or honey_bottle deposit leaves carried" :spec (a/map-of a/item? (a/int-in 0 nil)) :default {}}
    :ignore-zones? {:doc "act regardless of zones and claims (passed to guard and harvest); the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get a carpet, campfire or harvest tool that is not carried (passed to guard and harvest, jobs.lib.need): true, a set of kinds or a map of limits; false skips the step" :spec fetch/option? :default true}})
+   :fetch {:doc "get a carpet, campfire or harvest tool that is not carried (passed to guard and harvest, jobs.lib.need): true, a set of kinds or a map of limits; false skips the step" :spec need/option? :default true}})
 
 (def steps [:guard :harvest :breed :deposit])
 
@@ -115,7 +115,7 @@
 
 ;; ------------------------------------------------------------------ what is decided
 
-(defn fetching? [{:keys [fetch]}] (some? (fetch/parse-arg fetch)))
+(defn fetching? [{:keys [fetch]}] (some? (need/parse-arg fetch)))
 
 (defn decide-guard
   [args {{:keys [fires todo left]} :fires}]

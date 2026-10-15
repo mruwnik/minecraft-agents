@@ -7,7 +7,6 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.choose :as choose]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.placement :as placement]
             [jobs.lib.tidy :as tidy]
@@ -52,7 +51,7 @@
    :enter-pens {:doc "true: the walk to the cell may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
    :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}
    :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :spec map? :default nil}
-   :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
+   :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec need/option? :default true}})
 
 (def target [:pos])
 (def defaults {:use {:blocks :build} :spend {:time ::time-s}})
@@ -93,7 +92,7 @@
 (defn fetching?
   "Whether a missing item is fetched (the :fetch arg allows items)."
   [c]
-  (some-> (fetch/opts c 'jobs.blocks.place) :what (contains? :item)))
+  (some-> (need/opts c 'jobs.blocks.place) :what (contains? :item)))
 
 (defn clear-args
   "The jobs.blocks.dig args for clearing the plant at pos."
@@ -231,7 +230,7 @@
 (defn ^:async fetch!
   "Get one of the missing items with the fetch limits of the call: :continue, :done (got it) or the ending."
   [c items]
-  (let [o (select-keys (fetch/opts c 'jobs.blocks.place) [:how :depth :explore])
+  (let [o (select-keys (need/opts c 'jobs.blocks.place) [:how :depth :explore])
         e (await (if (= 1 (count items)) (need/item! c (first items) 1 o) (need/blocks! c items 1 o)))]
     (cond (= :continue e) :continue
           (= :done (:kind e)) :done

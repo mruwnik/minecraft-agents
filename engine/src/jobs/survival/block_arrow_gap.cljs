@@ -8,7 +8,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -44,7 +43,7 @@
   {:radius {:doc "ranged mobs within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :reach {:doc "open cells within this many blocks of the body's feet may be filled" :spec (a/num-in 0 nil) :default 3}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get a missing block (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-blocks" :spec fetch/option? :default true}})
+   :fetch {:doc "get a missing block (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-blocks" :spec need/option? :default true}})
 
 (a/defargs settings
   {::time-s {:default 120 :doc "Seconds stopping the arrows may take, a block fetch included." :spec (a/num-in 0 nil)}
@@ -129,7 +128,7 @@
   "None of blocks carried: get one through jobs.lib.need when :fetch allows (:again once got, :continue while it
   waits), else end :no-blocks, a failed fetch's ending as :because."
   [c blocks]
-  (let [o (fetch/opts c 'jobs.survival.block-arrow-gap)
+  (let [o (need/opts c 'jobs.survival.block-arrow-gap)
         e (when (contains? (:what o) :item) (await (need/blocks! c blocks 1 (select-keys o [:how :explore]))))]
     (cond
       (= :continue e) :continue

@@ -1,7 +1,7 @@
 (ns jobs.village.roll
   (:require [engine.contract :as contract]
             [engine.settings :as settings]
-            [engine.args :as a] [jobs.lib.fetch :as fetch]
+            [engine.args :as a] [jobs.lib.need :as need]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.blocks :as b]
@@ -49,7 +49,7 @@
    :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}
    :tries {:doc "rolls (breaks) before giving up" :spec (a/int-in 1 200) :default 20}
    :claim-s {:doc "seconds to wait for the villager to take the placed workstation" :spec (a/int-in 1 600) :default 60}
-   :fetch {:doc "get the workstation item or a tool when missing (jobs.lib.fetch)" :spec fetch/option? :default true}})
+   :fetch {:doc "get the workstation item or a tool when missing (jobs.lib.fetch)" :spec need/option? :default true}})
 
 (def workstations
   {"librarian" "lectern" "farmer" "composter" "cleric" "brewing_stand" "armorer" "blast_furnace" "butcher" "smoker"

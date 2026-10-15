@@ -3,7 +3,6 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.started :as started]
             [jobs.lib.util :as u]))
@@ -38,7 +37,7 @@
    :center {:doc "where :radius is measured from; the body's own spot when nil" :spec ::a/pos :default nil}
    :skip {:doc "keys (uuids, else ids) of animals never to leash" :spec (a/coll-of (a/or-of string? number?)) :default []}
    :walk-timeout-s {:doc "bound of one walk towards the animal" :spec (a/num-in 0 nil) :default 5}
-   :fetch {:doc "get a lead when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-lead" :spec fetch/option? :default true}
+   :fetch {:doc "get a lead when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-lead" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
@@ -56,7 +55,7 @@
 (defn no-lead
   "The cause :no-lead before the call starts: no lead carried and :fetch off."
   [c]
-  (when-not (or (fetch/parse-arg (:fetch (:args c))) (animals/lead-carried? c))
+  (when-not (or (need/parse-arg (:fetch (:args c))) (animals/lead-carried? c))
     {:reason :no-lead}))
 
 (def conditions [[:fn (started/at-start no-lead)]])
@@ -171,7 +170,7 @@
 (defn fetchable?
   "Whether a lead is to be fetched now: none carried, an animal waits and :fetch allows it."
   [c]
-  (and (fetch/parse-arg (:fetch (:args c))) (not (animals/lead-carried? c)) (seq (candidates c))))
+  (and (need/parse-arg (:fetch (:args c))) (not (animals/lead-carried? c)) (seq (candidates c))))
 
 (defn ^:async no-lead!
   "No lead carried: fetch one when :fetch allows and an animal waits, else end :no-lead. Resolves to :again once it
@@ -179,7 +178,7 @@
   [c]
   (if-not (fetchable? c)
     (finish! c :no-lead nil)
-    (let [limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :depth :explore])
+    (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :depth :explore])
           e (await (need/item! c "lead" 1 limits))]
       (cond
         (= :continue e) :continue

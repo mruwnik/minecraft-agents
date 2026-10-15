@@ -9,7 +9,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
             [jobs.lib.torch :as torch]
             [plan.shape :as shape]
@@ -64,7 +63,7 @@
    :spare {:doc "items filled with only when nothing else is carried (a caller's own haul)" :spec (a/coll-of a/item?) :default []}
    :reach {:doc "mouth cells whose centre is this close to the eye are filled from the entry, in blocks" :spec (a/num-in 0 nil) :default u/bucket-reach}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get a missing pickaxe for the escape with jobs.items.get-tool instead of ending :no-tool: a set of kinds or a map of limits counts as true; false ends :no-tool" :spec fetch/option? :default true}})
+   :fetch {:doc "get a missing pickaxe for the escape with jobs.items.get-tool instead of ending :no-tool: a set of kinds or a map of limits counts as true; false ends :no-tool" :spec need/option? :default true}})
 
 (a/defargs settings
   {::time-s {:default 900 :doc "Seconds a way out may take: the torches, the escape, the seal." :spec (a/num-in 0 nil)}})

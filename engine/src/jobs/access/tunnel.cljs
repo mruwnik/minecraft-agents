@@ -14,7 +14,6 @@
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
             [jobs.lib.dig-look :as look]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
@@ -122,7 +121,7 @@
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :spec boolean? :default false}
    :max-steps {:doc "give the round back with :continue after this many steps (a stair segment, a run cell), for a caller that looks around between them; nil: the stair's ::max-steps" :spec (a/int-in 1 nil) :default nil}
-   :fetch {:doc "get a missing pickaxe instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-tool" :spec fetch/option? :default true}
+   :fetch {:doc "get a missing pickaxe instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-tool" :spec need/option? :default true}
    :spent-ok {:doc "dig on with tools down to 3 uses instead of stopping :tool-spent (see jobs.access.stair)" :spec boolean? :default false}
    :spare-own-builds {:doc "a cell of a plan this body made is never dug; false: it may be (see jobs.access.stair)" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
@@ -287,8 +286,8 @@
   "The :fetch the stair child gets from the tunnel's: its items (a seal block), not tools (the tunnel fetches those),
   nil when that is off."
   [fetch]
-  (let [limits (fetch/parse-arg fetch)]
-    (when (and limits (contains? (or (:what limits) fetch/kinds) :item))
+  (let [limits (need/parse-arg fetch)]
+    (when (and limits (contains? (or (:what limits) need/kinds) :item))
       (assoc limits :what #{:item}))))
 
 (defn ^:async stair-part!
@@ -401,7 +400,7 @@
 (defn fetch-limits
   "The limits map of :fetch when it allows a tool, else nil."
   [c]
-  (let [o (fetch/opts c 'jobs.access.tunnel)]
+  (let [o (need/opts c 'jobs.access.tunnel)]
     (when (and o (contains? (:what o) :tool)) o)))
 
 (defn fetch-for-stop!

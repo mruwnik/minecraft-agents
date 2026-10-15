@@ -9,7 +9,6 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -50,7 +49,7 @@
    :reach {:doc "cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :spec a/name? :default nil}
    :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
-   :fetch {:doc "get a missing seed (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :need" :spec fetch/option? :default true}
+   :fetch {:doc "get a missing seed (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :need" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -171,7 +170,7 @@
 (defn fetch-opts
   "The limits {:how :depth :explore} for fetching seeds, nil when :fetch does not allow items."
   [c]
-  (when-let [o (fetch/opts c job-sym)]
+  (when-let [o (need/opts c job-sym)]
     (when (contains? (:what o) :item) (select-keys o [:how :depth :explore]))))
 
 (defn plan-problem [c]

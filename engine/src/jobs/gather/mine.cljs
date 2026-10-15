@@ -19,7 +19,6 @@
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look :refer [cell-of heading-name facing look-around!]]
             [jobs.lib.near :as near]
@@ -185,7 +184,7 @@
    :radius {:doc "seen blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
    :wet {:doc "dig blocks that touch water, and tunnel beside water" :spec boolean? :default false}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach of where it stands; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
-   :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool through jobs.lib.need): true, a set of kinds or a map of which only :how and :explore apply; false ends :no-tool" :spec fetch/option? :default true}
+   :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool through jobs.lib.need): true, a set of kinds or a map of which only :how and :explore apply; false ends :no-tool" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default true}
    :spare-own-builds {:doc "a cell of a plan this body made is never a target; false: it may be dug" :spec boolean? :default true}
@@ -410,7 +409,7 @@
 (defn fetch-limits
   "The limits map of :fetch when it allows a tool, else nil."
   [c]
-  (let [o (fetch/opts c 'jobs.gather.mine)]
+  (let [o (need/opts c 'jobs.gather.mine)]
     (when (and o (contains? (:what o) :tool)) o)))
 
 (defn ^:async fetch-pickaxe!

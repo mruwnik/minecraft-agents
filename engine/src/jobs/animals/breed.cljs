@@ -3,7 +3,6 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.started :as started]
             [jobs.lib.util :as u]))
@@ -53,7 +52,7 @@
    :count {:doc "animals to feed" :spec (a/int-in 1 nil) :default 2}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :walk-timeout-s {:doc "bound of one walk towards an animal" :spec (a/num-in 0 nil) :default 5}
-   :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
+   :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
@@ -73,7 +72,7 @@
   [c]
   (let [{:keys [mob fetch]} (:args c)]
     (when (and (contains? animals/breeding-food mob)
-               (not (fetch/parse-arg fetch))
+               (not (need/parse-arg fetch))
                (nil? (animals/food-carried (:primitives c) mob)))
       {:reason :no-food})))
 
@@ -268,7 +267,7 @@
         fed (count (:fed (ctx/mem c)))
         p (:primitives c)]
     (boolean
-     (and (fetch/parse-arg (:fetch (:args c)))
+     (and (need/parse-arg (:fetch (:args c)))
           (contains? animals/breeding-food mob)
           (< fed n)
           (nil? (animals/food-carried p mob))
@@ -283,7 +282,7 @@
   (if-not (fetchable? c)
     (await (no-food! c))
     (let [{:keys [mob] n :count} (:args c)
-          limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :depth :explore])
+          limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :depth :explore])
           e (await (need/blocks! c (get animals/breeding-food mob) (- n (count (:fed (ctx/mem c)))) limits))]
       (cond
         (= :continue e) :continue

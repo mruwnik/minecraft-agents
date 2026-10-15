@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as cost-health]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.watch :as wwatch]
@@ -164,7 +164,7 @@
    :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :spec boolean? :default true}
    :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth overrides their prices and depths (jobs.lib.cost/unknown-prices), :light-cost the seconds of a torch :place-torches places; false: plan over the world as it is" :spec (a/valid-by "true, false or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth :light-cost to numbers >= 0" wworld/unknown-problem) :default false}
    :place-torches {:doc "with :unknown: light a dark floor it cannot see with a torch from the inventory, placed at the takeoff (priced by jobs.lib.cost/light-cost, or :unknown's :light-cost), fetching torches when none is carried (:fetch); false: never place one" :spec boolean? :default false}
-   :fetch {:doc "get torches for :place-torches when none is carried (a jobs.lib.need child): true, a set of kinds or a map of limits; false: give up instead" :spec fetch/option? :default true}
+   :fetch {:doc "get torches for :place-torches when none is carried (a jobs.lib.need child): true, a set of kinds or a map of limits; false: give up instead" :spec need/option? :default true}
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :spec boolean? :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
    :food {:doc "the food level (0-20) the walk counts on for its damage budget, its sprinting and whether it can heal by waiting (18 or more regenerates); default the body's own" :spec (a/num-in 0 20) :default nil}

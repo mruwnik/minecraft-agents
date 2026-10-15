@@ -8,7 +8,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.started :as started]
             [jobs.lib.child :as child]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
@@ -62,7 +61,7 @@
 (a/defargs args
   {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
    :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
-   :fetch {:doc "get the blocks with jobs.items.obtain when none is carried at the start, and walk back (false: end :too-few-blocks); a set of kinds or a map of limits counts as true" :spec fetch/option? :default true}
+   :fetch {:doc "get the blocks with jobs.items.obtain when none is carried at the start, and walk back (false: end :too-few-blocks); a set of kinds or a map of limits counts as true" :spec need/option? :default true}
    :height {:doc "blocks to rise, 1 to 64" :spec (a/int-in 1 64) :default 1}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :mob-wait-ms {:doc "how long to wait for a mob to leave the cell; nil: ::mob-wait-ms (an escape from danger passes 0)" :spec (a/int-in 0 nil) :default nil}})

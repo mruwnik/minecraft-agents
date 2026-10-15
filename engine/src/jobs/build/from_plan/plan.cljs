@@ -16,7 +16,7 @@
             [plan.shape :as shape]
             [jobs.build.wood :as wood]
             [jobs.lib.trees :as trees]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.surface :as spot]
             [jobs.lib.world :as known]))
 
@@ -409,7 +409,7 @@
 (defn due
   "w (a :need or :no-tool wait) when the :fetch arg allows its kind and no fetch for it failed in this call, else nil."
   [c w]
-  (let [o (fetch/opts c fetch-job)]
+  (let [o (need/opts c fetch-job)]
     (when (and w o (contains? (:what o) (if (= :no-tool (:reason w)) :tool :item))
                (not (contains? (:fetch-failed (ctx/mem c)) (fetch-key w))))
       w)))

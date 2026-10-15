@@ -8,7 +8,6 @@
             [jobs.lib.access.approach :as approach]
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.loose :as loose]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -44,7 +43,7 @@
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :spare-own-builds {:doc "a log in a plan this body made is not felled; false: it may be" :spec boolean? :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
-   :fetch {:doc "get the pillar's blocks with jobs.lib.need: true, a set of kinds or a map of limits; false ends :need" :spec fetch/option? :default true}
+   :fetch {:doc "get the pillar's blocks with jobs.lib.need: true, a set of kinds or a map of limits; false ends :need" :spec need/option? :default true}
    :pillar? {:doc "dig a log out of reach of the ground from the pillar; false: the pillar is not built" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
@@ -133,7 +132,7 @@
 (defn fetch-opts
   "The limits {:how :depth :explore} for getting the pillar's blocks, nil when :fetch does not allow items."
   [c]
-  (when-let [o (fetch/opts c 'jobs.forestry.fell-tree)]
+  (when-let [o (need/opts c 'jobs.forestry.fell-tree)]
     (when (contains? (:what o) :item) (select-keys o [:how :depth :explore]))))
 
 (defn ^:async blocks!

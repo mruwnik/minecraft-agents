@@ -3,7 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -37,7 +37,7 @@
    :radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
    :max-trees {:doc "trunks to fell at most; the settings' tidy max-trees when nil" :spec (a/int-in 1 nil) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get a missing axe, pillar blocks or sapling (passed to fell-tree and plant-sapling; see their :fetch)" :spec fetch/option? :default true}})
+   :fetch {:doc "get a missing axe, pillar blocks or sapling (passed to fell-tree and plant-sapling; see their :fetch)" :spec need/option? :default true}})
 
 (def air #{"air" "cave_air" "void_air"})
 

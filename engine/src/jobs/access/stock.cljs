@@ -4,7 +4,6 @@
   (:require [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]))
@@ -12,7 +11,7 @@
 (defn fetch-allows?
   "Whether the call's :fetch lets it get a thing of kind (:item or :tool)."
   [c kind]
-  (let [f (fetch/parse-arg (:fetch (:args c)))]
+  (let [f (need/parse-arg (:fetch (:args c)))]
     (boolean (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) kind))))))
 
 (defn cause-why

@@ -9,7 +9,6 @@
             [jobs.lib.pillar :as pl]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
@@ -57,7 +56,7 @@
    :length {:doc "blocks in the row, 1 to 64" :spec (a/int-in 1 64) :default 1}
    :item {:doc "the block to bridge with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get missing blocks with jobs.items.obtain instead of ending :too-few-blocks (false: end); a set of kinds or a map of limits counts as true" :spec fetch/option? :default true}})
+   :fetch {:doc "get missing blocks with jobs.items.obtain instead of ending :too-few-blocks (false: end); a set of kinds or a map of limits counts as true" :spec need/option? :default true}})
 
 (a/defargs settings
   {::time-s {:default 600 :doc "Seconds a bridge may take." :spec (a/num-in 0 nil)}

@@ -4,7 +4,6 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -38,7 +37,7 @@
    :item {:doc "food to give; nil: the first carried of bread, carrot, potato, beetroot" :spec a/item? :default nil}
    :count {:doc "how many items the villager is to take" :spec (a/int-in 1 64) :default 1}
    :radius {:doc "how far to look for the villager" :spec (a/int-in 1 96) :default 48}
-   :fetch {:doc "get food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}})
+   :fetch {:doc "get food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}})
 
 (def foods ["bread" "carrot" "potato" "beetroot"])
 (def wanted (into (set foods) ["wheat" "wheat_seeds" "beetroot_seeds" "torchflower_seeds" "pitcher_pod"]))
@@ -95,7 +94,7 @@
   "The need as the cause when none is carried and the call will not fetch it."
   [c]
   (when-let [w (problem c)]
-    (when-not (fetch/opts c job) (assoc w :why "no food carried and no fetch for it"))))
+    (when-not (need/opts c job) (assoc w :why "no food carried and no fetch for it"))))
 
 (def conditions [[:fn bad-args] [:fn no-food]])
 
@@ -142,7 +141,7 @@
 (defn ^:async fetch-food!
   "No food carried: fetch it when :fetch allows, else end no-food. :again once it arrived, :continue, or the stop."
   [c]
-  (let [opts (fetch/opts c job)
+  (let [opts (need/opts c job)
         {:keys [item count any-of] :as w} (problem c)]
     (if-not (and opts w)
       (stop! c :no-food "no food to give")

@@ -5,7 +5,6 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.settings :as settings]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
@@ -19,7 +18,7 @@
 (a/defargs args
   {:item {:doc "the item to hold" :spec a/item? :default nil}
    :hand {:doc "\"main\" or \"off\"" :spec #{"main" "off"} :default "main"}
-   :fetch {:doc "get a missing item (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-item instead" :spec fetch/option? :default true}})
+   :fetch {:doc "get a missing item (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-item instead" :spec need/option? :default true}})
 
 (a/defargs settings
   {::time-s {:default 10 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
@@ -58,7 +57,7 @@
   [c]
   (let [p (:primitives c)
         {:keys [item hand fetch]} (:args c)]
-    (when (and item (not (carried? p item)) (not= item (held-in p hand)) (not (fetch/parse-arg fetch)))
+    (when (and item (not (carried? p item)) (not= item (held-in p hand)) (not (need/parse-arg fetch)))
       {:reason :no-item :item item})))
 
 (def conditions [[:fn (fn [c] (some-> (problem c) contract/impossible))] [:fn unknown] [:fn lacking]])
@@ -74,7 +73,7 @@
   (let [t (settings/get settings ::equip-s)]
     {:uses {:time [0 t t]}}))
 
-(defn fetch-opts [c] (fetch/opts c 'jobs.items.equip))
+(defn fetch-opts [c] (need/opts c 'jobs.items.equip))
 
 (defn refuse!
   [c kind reason text data]

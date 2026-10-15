@@ -3,7 +3,6 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.child :as child]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -31,7 +30,7 @@
    :radius {:doc "how far from the body to look for a bank" :spec (a/num-in 1 nil) :default 24}
    :cast-s {:doc "seconds one cast waits for a bite" :spec (a/num-in 1 nil) :default 45}
    :max-misses {:doc "casts in a row without a catch before the job gives up :no-bite" :spec (a/int-in 1 nil) :default 8}
-   :fetch {:doc "get a rod when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-rod" :spec fetch/option? :default true}})
+   :fetch {:doc "get a rod when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-rod" :spec need/option? :default true}})
 
 (a/defargs settings
   {::time-s {:default 600 :doc "Seconds from the first round before fishing gives up." :spec (a/num-in 1 nil)}})
@@ -94,7 +93,7 @@
   "At the call's start, why it cannot fish: [cause text], or nil."
   [c]
   (cond
-    (and (not (rod-carried? c)) (nil? (fetch/parse-arg (:fetch (:args c))))) [:no-rod "no fishing rod is carried and :fetch is off"]
+    (and (not (rod-carried? c)) (nil? (need/parse-arg (:fetch (:args c))))) [:no-rod "no fishing rod is carried and :fetch is off"]
     (empty? (spots c)) [:no-water "no seen water with a bank in reach"]))
 
 (defn start-fact
@@ -117,7 +116,7 @@
 (defn ^:async get-rod!
   "A rod through jobs.lib.need (its time is not fishing time): :again once it is done, :continue while it waits, else the ending."
   [c]
-  (let [limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :depth :explore])
+  (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :depth :explore])
         e (await (u/untimed! c #(need/item! c "fishing_rod" 1 limits)))]
     (cond
       (= :continue e) :continue

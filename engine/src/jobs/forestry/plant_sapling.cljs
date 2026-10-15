@@ -3,7 +3,6 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.child :as child]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
             [jobs.lib.trees :refer [debts target-of sapling-for sapling-of log-name? replant-kind species]
@@ -36,7 +35,7 @@
    :species {:doc "sapling species; any when nil" :spec a/name? :default nil}
    :bone-meal {:doc "bone meal uses after planting, 0 for none" :spec (a/int-in 0 nil) :default 0}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :fetch {:doc "get a missing sapling with jobs.lib.need: true, a set of kinds or a map of limits; false ends :no-sapling" :spec fetch/option? :default true}
+   :fetch {:doc "get a missing sapling with jobs.lib.need: true, a set of kinds or a map of limits; false ends :no-sapling" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings

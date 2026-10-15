@@ -4,7 +4,6 @@
             [engine.ctx :as ctx]
             [jobs.items.craft :as craft]
             [jobs.items.smelt.plan :as sp]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.places :as places]
             [jobs.lib.storage :as storage]
@@ -15,7 +14,7 @@
 (defn fetch-opts
   "The options of a need call for stage (a slot name) under the :fetch arg: nil when :fetch is off or leaves out items."
   [c stage]
-  (let [o (fetch/parse-arg (:fetch (:args c)))]
+  (let [o (need/parse-arg (:fetch (:args c)))]
     (when (and o (or (nil? (:what o)) (contains? (:what o) :item)))
       (-> (select-keys o [:how :depth :explore])
           (assoc :slot (keyword (str "need-" (name stage))))))))

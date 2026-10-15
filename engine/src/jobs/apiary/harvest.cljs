@@ -5,7 +5,6 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -50,7 +49,7 @@
    :radius {:doc "hives within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 12}
    :max {:doc "hives to harvest in one run, at most" :spec (a/int-in 1 nil) :default 8}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get a tool that is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits with :no-tool" :spec fetch/option? :default true}})
+   :fetch {:doc "get a tool that is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits with :no-tool" :spec need/option? :default true}})
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
@@ -261,7 +260,7 @@
                 refusal {:reason refusal}
                 (empty? (:todo seen)) {:reason (idle-reason {} seen)}
                 (and (nil? (tool-for (:with (:args c)) (u/inventory (:primitives c))))
-                     (nil? (fetch/parse-arg (:fetch (:args c))))) {:reason :no-tool})]
+                     (nil? (need/parse-arg (:fetch (:args c))))) {:reason :no-tool})]
     (cond-> cause (and cause (not (look/surveyed? c :near))) contract/look-first)))
 
 (def conditions "A start fact (start-fact), at the call's start only." [[:fn (started/at-start start-fact)]])
@@ -279,7 +278,7 @@
   "Fetch the tool when :fetch allows: :again once it is carried, :continue while the fetch waits, else the ending of
   the run (reason :need, the fetch's ending as its cause); nil when :fetch is off."
   [c seen]
-  (when-let [opts (fetch/opts c 'jobs.apiary.harvest)]
+  (when-let [opts (need/opts c 'jobs.apiary.harvest)]
     (let [e (await (need/item! c (wanted-tool (:with (:args c))) 1 opts))]
       (cond
         (= :continue e) :continue

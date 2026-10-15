@@ -5,7 +5,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -48,7 +47,7 @@
    :radius {:doc "fires within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 16}
    :max {:doc "actions (sinks and carpets) in one run, at most" :spec (a/int-in 1 nil) :default 12}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get a carpet or campfire that is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits with :no-carpet / :no-campfire" :spec fetch/option? :default true}})
+   :fetch {:doc "get a carpet or campfire that is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits with :no-carpet / :no-campfire" :spec need/option? :default true}})
 
 (defn permitted?
   "Whether the job may do action (:dig or :place) at pos (one warn per job when refused)."
@@ -319,7 +318,7 @@
         seen (survey c center true)
         cause (cond
                 (seq (:todo seen)) nil
-                (and (seq (:left seen)) (nil? (fetch/parse-arg (:fetch (:args c))))) {:reason (first (vals (:left seen)))}
+                (and (seq (:left seen)) (nil? (need/parse-arg (:fetch (:args c))))) {:reason (first (vals (:left seen)))}
                 (seq (:left seen)) nil
                 (and (seq fires) (zero? (:fires seen))) {:reason (:refusal (gate/look c :dig (map :pos fires) {}))}
                 :else {:reason :nothing-to-guard})]
@@ -342,7 +341,7 @@
   "Fetch what the fires left lack when :fetch allows: :again once fetched, :continue while the fetch waits, else the
   ending of the run (reason :need, the fetch's ending as its cause); nil when nothing is lacking or :fetch is off."
   [c seen]
-  (let [opts (fetch/opts c 'jobs.apiary.guard)
+  (let [opts (need/opts c 'jobs.apiary.guard)
         lacks (some lacked-item (vals (:left seen)))]
     (when (and opts lacks)
       (let [e (await (need/item! c lacks 1 opts))]

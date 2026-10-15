@@ -9,7 +9,6 @@
             [jobs.items.smelt.plan :as sp]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.need :as need]
@@ -57,7 +56,7 @@
    :item {:doc "what to smelt, or a list of them (an input; a product such as cooked_chicken or iron_ingot means its input, charcoal the carried log there is most of; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil, or every raw food and ore carried when there are several" :spec (a/or-of a/item? (a/coll-of a/item?)) :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
-   :fetch {:doc "get a missing input, fuel or furnace (jobs.lib.need): true, a set of kinds or a map of limits; false ends with the reason" :spec fetch/option? :default true}
+   :fetch {:doc "get a missing input, fuel or furnace (jobs.lib.need): true, a set of kinds or a map of limits; false ends with the reason" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings

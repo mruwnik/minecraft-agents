@@ -9,7 +9,7 @@
             [jobs.lib.choose :as choose]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.weapon :as weapon]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.foods :as foods]
@@ -152,7 +152,7 @@
   ([c block-name] (tool-ready! c block-name nil))
   ([c block-name amount]
   (let [p (:primitives c)
-        need (when (and block-name (not (in-spare? c)) (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need c block-name amount))
+        need (when (and block-name (not (in-spare? c)) (let [f (need/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need c block-name amount))
         tool-name (when need (spare-name p block-name need))]
     (when (and need (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
       (let [e (await (ctx/call c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false}))]
@@ -201,7 +201,7 @@
   [c]
   (or (await (back-from-stocking! c))
       (let [held (torch/torches-held (:primitives c))
-          limits (fetch/parse-arg (:fetch (:args c)))
+          limits (need/parse-arg (:fetch (:args c)))
           fetch? (and (map? limits) (not (:error limits)) (or (nil? (:what limits)) (contains? (:what limits) :item)))
           fuel (torch/fuel-held (:primitives c))
           want (- (torch-stock) held)

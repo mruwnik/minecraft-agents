@@ -8,7 +8,6 @@
             [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.lava :as lava]
             [jobs.lib.need :as need]
             [jobs.lib.step-off :as step-off]
@@ -65,8 +64,8 @@
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :enter-pens {:doc "true: the walk to the cell may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
-   :seal-fetch {:doc "get a building block to seal lava with when none is carried, whatever :fetch says: true, a set of kinds or a map of limits, false to seal only with a carried block" :spec fetch/option? :default true}
-   :fetch {:doc "get a missing tool instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
+   :seal-fetch {:doc "get a building block to seal lava with when none is carried, whatever :fetch says: true, a set of kinds or a map of limits, false to seal only with a carried block" :spec need/option? :default true}
+   :fetch {:doc "get a missing tool instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default true}})
 
 (a/defargs settings
   {::collect-radius {:default 8 :doc "Blocks within which dropped items are collected after a dig." :spec (a/int-in 0 nil)}
@@ -155,8 +154,8 @@
 (defn fetch-limits
   "The limits map of :fetch when it allows a tool, else nil."
   [c]
-  (let [f (fetch/parse-arg (:fetch (:args c)))]
-    (when (and f (contains? (or (:what f) fetch/kinds) :tool)) f)))
+  (let [f (need/parse-arg (:fetch (:args c)))]
+    (when (and f (contains? (or (:what f) need/kinds) :tool)) f)))
 
 (defn fluid-refusal
   "With :on-fluid :fail, the hazard of a block beside a fluid, else nil."

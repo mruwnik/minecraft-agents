@@ -3,7 +3,6 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
@@ -42,7 +41,7 @@
    :walk-timeout-s {:doc "bound of one walk towards a sheep" :spec (a/num-in 0 nil) :default 5}
    :color {:doc "shear only sheep of this wool colour (e.g. \"white\"); nil: any" :spec a/name? :default nil}
    :collect {:doc "pick up the wool afterwards" :spec boolean? :default true}
-   :fetch {:doc "get shears when none are carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-shears" :spec fetch/option? :default true}
+   :fetch {:doc "get shears when none are carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-shears" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
@@ -197,7 +196,7 @@
 (defn fetchable?
   "Whether shears are to be fetched now: none carried, an unsheared sheep waits and :fetch allows it."
   [c]
-  (and (fetch/parse-arg (:fetch (:args c))) (not (shears-carried? c)) (not= :collect (:phase (ctx/mem c))) (seq (candidates c))))
+  (and (need/parse-arg (:fetch (:args c))) (not (shears-carried? c)) (not= :collect (:phase (ctx/mem c))) (seq (candidates c))))
 
 (defn ^:async no-shears!
   "No shears carried: fetch them when :fetch allows and a sheep waits, else end (collecting what was shorn). Resolves
@@ -206,7 +205,7 @@
   (let [end! #(if (seq (:shorn (ctx/mem c))) (go-collect! c :shears-broke) (finish! c :no-shears))]
     (if-not (fetchable? c)
       (end!)
-      (let [limits (select-keys (fetch/parse-arg (:fetch (:args c))) [:how :depth :explore])
+      (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :depth :explore])
             e (await (need/item! c "shears" 1 limits))]
         (cond
           (= :continue e) :continue

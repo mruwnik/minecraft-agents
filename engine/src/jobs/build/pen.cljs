@@ -1,5 +1,5 @@
 (ns jobs.build.pen
-  (:require [engine.args :as a] [jobs.lib.fetch :as fetch]
+  (:require [engine.args :as a] [jobs.lib.need :as need]
             [engine.contract :as contract]
             [clojure.string :as str]
             [engine.ctx :as ctx]
@@ -51,7 +51,7 @@
    :give-up {:doc "as jobs.build.from-plan" :spec (a/int-in 1 nil) :default 3}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :max-cells {:doc "most cells the pen check visits before it gives up with :unbounded" :spec (a/int-in 1 nil) :default pen/default-max-cells}
-   :fetch {:doc "as jobs.build.from-plan: get the blocks the plan lacks; false builds with what is carried" :spec fetch/option? :default {:explore true}}
+   :fetch {:doc "as jobs.build.from-plan: get the blocks the plan lacks; false builds with what is carried" :spec need/option? :default {:explore true}}
    :surface {:doc "as jobs.build.from-plan: each column of the pen on the seen ground (a pen on a slope)" :spec boolean? :default true}
    :uneven? {:doc "build although the ring steps more than 1 between neighbouring fences or the inside drops more than 1 at the gate" :spec boolean? :default false}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it (passed to jobs.build.from-plan)" :spec boolean? :default false}})

@@ -4,7 +4,7 @@
             [engine.contract :as contract]
             [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
-            [jobs.lib.fetch :as fetch]
+            [jobs.lib.need :as need]
             [jobs.lib.started :as started]
             [jobs.lib.util :as u]
             [jobs.lib.child :as child]
@@ -109,7 +109,7 @@
    :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :spec ::a/pos :default nil}
    :radius {:doc "animals within this many blocks of where the body started the run are fetched" :spec (a/num-in 0 nil) :default 24}
    :method {:doc "how animals are brought: :lead (each on a lead), :lure (following the food in hand), :auto (a lead when one is carried or can be crafted from a carried slime ball, else the food)" :spec #{:auto :lead :lure} :default :auto}
-   :fetch {:doc "get the food when none is carried and the run lures (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
+   :fetch {:doc "get the food when none is carried and the run lures (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
    :precheck? {:doc "judge the pen from what the body sees and remembers before the start (leak, no gate, too shallow); false judges it at the pen only" :default true :spec boolean?}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
