@@ -34,7 +34,7 @@
   A pit that would cut into the footprint of a plan the body made (a pen) is not dug (:spared, a
   dig_in_failed warning naming the cell and the plan): the shelter looks elsewhere. Walls and plug are not affected.
   - plug: the body is in a closed room with a door and a hole in the roof over it. One carried block mends the hole.
-  - walls: enough :blocks are carried for every open cell. Places the four sides at feet height, the four at head height,
+  - walls: enough of the call's :use :blocks (default the shelter fillers) are carried for every open cell. Places the four sides at feet height, the four at head height,
     a support beside the roof cell, then the roof cell, at most :max-places per step.
     Every step it recomputes the open cells from the current feet cell. If the blocks run out, it chooses again.
   - :enclose: walls mode only, for a body under an overhang or in a cave: the walls it needs, else :no-blocks.
@@ -77,7 +77,6 @@
 
 (a/defargs args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
-   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default (choose/fillers :shelter)}
    :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) walls the body in only when no pit can be dug" :spec (a/num-in 0 nil) :default 3}
    :take-back-value {:doc "a placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day" :spec (a/num-in 0 nil) :default 0.5}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
@@ -122,7 +121,7 @@
   harvests it; unsafe or inaccessible sites (a :reason) cannot."
   [c]
   (let [here (u/self-pos c)
-        have-blocks (seq (lb/carried c (:blocks (:args c))))
+        have-blocks (seq (lb/carried c (mode/blocks c)))
         retry? (fn [{:keys [reason needs]}]
                  (and (not reason)
                       (or have-blocks (and needs (tools/can-harvest? (:primitives c) needs)))))]
@@ -159,6 +158,14 @@
 (def target [])
 
 (def defaults {:spend {:time ::time-s}})
+
+(defn legacy-args
+  "An old caller's :blocks as the call's :use {:blocks [...]}."
+  [{:keys [blocks] :as args}]
+  (cond-> args
+    (sequential? blocks) (dissoc :blocks)
+    (and (sequential? blocks) (nil? (get-in args [:use :blocks]))) (assoc-in [:use :blocks] (vec blocks))))
+
 
 (defn done?
   "Shut in already, before this call placed anything, or once it ended (a call that placed blocks reports its own end)."

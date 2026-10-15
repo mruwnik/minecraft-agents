@@ -28,7 +28,8 @@
   It picks the nearest standing cell within :reach whose face has solid blocks all round the niche (floor, ceiling,
   both sides, the back) that the carried tools harvest, with no fluid or falling block (sand, gravel) in or round it,
   walks there (go-to), digs the four cells (opening first, head before feet), steps to the far cell and places one block
-  at each opening cell (feet, then head) from the blocks the dig dropped or carried ones.
+  at each opening cell (feet, then head) from the blocks the dig dropped or carried ones (the call's :use :blocks,
+  default the shelter fillers).
   Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.need) runs jobs.items.get-tool
   for it, else, or when that fails, it ends :no-tool.
   Conditions (at the start only): night, else condition-failed :day. A body already shut in a closed room under a roof (any roof within :roof-height, a canopy too) is done. Done {:pos :door [feet head cells plugged]}
@@ -43,7 +44,6 @@
 
 (a/defargs args
   {:reach {:doc "how far from the body to look for a face, 1 to 32" :spec (a/int-in 1 32) :default 16}
-   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default (choose/fillers :shelter)}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :spec fetch/option? :default true}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :spec (a/int-in 1 32) :default sh/default-roof-height}})
@@ -68,6 +68,20 @@
 (defn time-s [] (settings/get settings ::time-s))
 
 (def defaults {:spend {:time ::time-s}})
+
+(defn legacy-args
+  "An old caller's :blocks as the call's :use {:blocks [...]}."
+  [{:keys [blocks] :as args}]
+  (cond-> args
+    (sequential? blocks) (dissoc :blocks)
+    (and (sequential? blocks) (nil? (get-in args [:use :blocks]))) (assoc-in [:use :blocks] (vec blocks))))
+
+(defn blocks
+  "The blocks it may place: the call's :use :blocks, else the shelter fillers (not a list frozen at the start: a pit
+  places the dirt it dug)."
+  [c]
+  (let [used (ctx/use c :blocks)]
+    (if (seq used) used (choose/fillers :shelter))))
 
 (defn done?
   "Shut in a closed room under a roof before this call cut anything, or once the niche is plugged."
@@ -227,12 +241,12 @@
       (do (ctx/update-mem! c assoc :dug-at (ctx/now c))
           (await (dl/see-round! c [(:x cell) (:y cell) (:z cell)]))
           (await (dl/wait-settled! c [[(:x cell) (:y cell) (:z cell)]]))
-          (await (dig-cells/collect-drops! c (:blocks (:args c)) (.-drops r)))
+          (await (dig-cells/collect-drops! c (blocks c) (.-drops r)))
           :again)
       (fail! c :dig-failed (str "cannot dig the niche: " (.-status r))))))
 
 (defn ^:async plug-step! [c cell]
-  (let [item (lb/pick c (:blocks (:args c)))]
+  (let [item (lb/pick c (blocks c))]
     (if (nil? item)
       (fail! c :no-blocks "nothing to plug the niche with")
       (let [r (await (tidy/place! c cell item))]

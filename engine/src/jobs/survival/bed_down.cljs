@@ -6,6 +6,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.access :as access]
             [jobs.lib.places :as places]
             [jobs.lib.sense :as sense]
@@ -16,7 +17,7 @@
 
 (def doc
   "Go to bed: sleep in a bed to use, else put a carried bed down beside the body and sleep in it. One step per call, run to its end by the caller (jobs.survival.night).
-  Conditions at the start (a listed call waits on them): night (:not-night), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with :fetch on, which is the default, a bed is fetched instead: jobs.items.obtain of any colour, then put down).
+  Conditions at the start (a listed call waits on them): night (:not-night), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with :fetch on, which is the default, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
   The bed: the :bed argument, else sh/bed-to-use (seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep, never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
   A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open (shelter.bed_open info) and ends condition-failed :bed-open.
   A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes, shelter.sleep_failed warn) and ends nothing-possible :sleep-failed.
@@ -28,11 +29,12 @@
    :roof-height {:doc "a solid block within this many blocks above counts as a roof (where a carried bed is put down)" :spec (a/int-in 0 nil) :default sh/default-roof-height}
    :bed-radius {:doc "a remembered bed farther than this is not used" :spec (a/num-in 0 nil) :default sh/default-bed-radius}
    :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :spec (a/num-in 0 nil) :default sh/urgent-bed-radius}
-   :fetch {:doc "get a bed when none is to use or carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false makes :no-bed a start condition" :spec fetch/option? :default true}
+   :fetch {:doc "get a bed when none is to use or carried (jobs.lib.need): true, a set of kinds or a map of limits; false makes :no-bed a start condition" :spec fetch/option? :default true}
    :max-days-awake {:doc "in-game days without sleep before a bed in the open is slept in and the urgent radius applies" :spec (a/num-in 0 nil) :default sh/max-days-awake}})
 
 (a/defargs settings
-  {::walk-speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
+  {::time-s {:default 300 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched, the sleep." :spec (a/num-in 0 nil)}
+   ::walk-speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn bed-permit
   "Whether the body may use a bed (sh/bed-permit over the job's world)."
@@ -50,6 +52,8 @@
   [c]
   (or (some-> (:bed (:args c)) places/parse-pos :pos)
       (sh/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c))))
+
+(def defaults {:spend {:time ::time-s}})
 
 (def target [])
 
@@ -73,7 +77,7 @@
       (cond
         (not (sh/night? p)) :not-night
         :else (when-let [w (problem c)]
-                (when-not (fetch/check c job w)
+                (when-not (some->> (fetch/opts c job) (fetch/plan-for w))
                   (cond-> {:reason :no-bed :text "no bed to use and none carried to put down"}
                     (not (look/surveyed? c)) contract/look-first)))))))
 
@@ -213,8 +217,9 @@
     (cond
       bed (await (sleep! c bed (overdue? c)))
       (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep! c))
-      :else (let [r (when (fetch/opts c job) (await (fetch/fetch-untimed! c job problem)))]
+      :else (let [o (fetch/opts c job)
+                  e (when (and (contains? (:what o) :item) (problem c)) (await (need/blocks! c bed-names 1 (select-keys o [:how :explore]))))]
               (cond
-                r r
-                (nil? (problem c)) :continue
+                (or (= :continue e) (nil? (problem c))) :continue
+                (and e (not= :done (:kind e))) (assoc e :data {:slept false})
                 :else (ctx/end c :condition-failed :no-bed {:slept false}))))))

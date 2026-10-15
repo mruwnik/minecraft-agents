@@ -9,6 +9,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.dig-in.mode :as mode]
             [jobs.survival.dig-in.site :as site]))
 
 (defn ^:async look-below!
@@ -30,7 +31,7 @@
         _ (when (look/unknown? p under-cell) (await (look/look-at! c under-cell)))
         lavas (when (= :seal (:on-lava (:args c))) (seq (dig-cells/lava-around p hole dig-cells/beside-deltas)))
         _ (when lavas
-            (await (dig-cells/seal-lava! c (:blocks (:args c)) lavas))
+            (await (dig-cells/seal-lava! c (mode/blocks c) lavas))
             (await (look/look-at! c [x (dec y) z])))
         under (u/block-name-or p {:x x :y (- y 2) :z z} "stone")]
     (cond
@@ -49,7 +50,7 @@
   and step into the hole (hole-round). Gives up (dig_in_failed warn, done) rather than dig when the block below is a
   hazard or the cell under it is seen not to be solid (a thin floor over water, lava or air)."
   [c]
-  (let [{:keys [blocks]} (:args c)
+  (let [blocks (mode/blocks c)
         p (:primitives c)
         {:keys [x y z]} (sh/feet p)
         below {:x x :y (dec y) :z z}
@@ -114,7 +115,8 @@
   fails or fluid shows in or beside the cell."
   [c cell]
   (let [p (:primitives c)
-        {:keys [blocks on-lava]} (:args c)
+        blocks (mode/blocks c)
+        {:keys [on-lava]} (:args c)
         v [(:x cell) (:y cell) (:z cell)]
         name (dig-cells/rock-name p cell)]
     (if (and (nil? (lb/pick c blocks)) (not (tools/can-harvest? p name)))
@@ -191,7 +193,7 @@
 (defn ^:async roof-round
   "In the pit: place one block at each plug cell (a zigzag pit's side cell beside the head), then at the roof cell."
   [c]
-  (let [{:keys [blocks]} (:args c)
+  (let [blocks (mode/blocks c)
         p (:primitives c)
         {:keys [roof shape]} (ctx/mem c)
         cell (or (first (remove #(dig-cells/sealed? p %) (:plugs shape))) roof)

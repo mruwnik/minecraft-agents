@@ -65,6 +65,10 @@
               e (await (call! p 'jobs.survival.dig-niche {:blocks ["dirt"]} (constantly nil)))]
           (is (= [:condition-failed :no-blocks] (ending-of e))))))))
 
+(deftest the-shelter-blocks-are-the-calls-use
+  (is (= {:use {:blocks ["dirt"]}} ((:legacy-args (get registry/jobs 'jobs.survival.dig-niche)) {:blocks ["dirt"]})))
+  (is (= {:use {:blocks ["dirt"]} :enclose true} ((:legacy-args (get registry/jobs 'jobs.survival.dig-in)) {:blocks ["dirt"] :enclose true}))))
+
 (deftest a-click-that-does-not-set-the-spawn-is-a-failed-try
   (async done
     (tu/run-async done
@@ -196,12 +200,14 @@
         (await (call! (spawn-world {}) 'jobs.survival.bed-down {:fetch false} (constantly nil)))
         (is (empty? (filterv #(= :fetch.started (:kind %)) @@seen-events)))))))
 
-(deftest bed-down-with-no-bed-fetches-one-by-default
+(deftest bed-down-with-no-bed-fetches-one-through-a-need-child
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [e (await (call! (spawn-world {}) 'jobs.survival.bed-down {} (constantly nil)))]
-          (is (= 1 (count (filterv #(= :fetch.started (:kind %)) @@seen-events)))))))))
+          (is (= 1 (count (filterv #(and (= :child_started (:kind %)) (= :need (:slot %))) @@seen-events))))
+          (is (= :need (contract/cause-key e)) "no bed to be had in an empty world")
+          (is (some? (:because e)) "the fetch's own ending says why"))))))
 
 (deftest bed-down-beside-an-open-bed-is-condition-failed-bed-open
   (async done

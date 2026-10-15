@@ -154,6 +154,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (one-tick! (setup [] {:inventory [] :entities [pit-skeleton] :blocks (merge ground pit shell)}) {}))]
-          (is (contains? (kinds-seen seen) :fetch.started) "a block is fetched when none is carried"))
+          (is (some #(and (= :child_started (:kind %)) (= :need (:slot %))) @seen) "a block is fetched through a need child"))
         (let [{:keys [seen]} (await (one-tick! (setup [] {:inventory [] :entities [pit-skeleton] :blocks (merge ground pit shell)}) {:fetch false}))]
           (is (= :no-blocks (:reason (failed seen)))))))))

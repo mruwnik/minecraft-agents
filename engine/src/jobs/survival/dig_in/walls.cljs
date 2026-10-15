@@ -6,6 +6,7 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.tidy :as tidy]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.dig-in.mode :as mode]
             [jobs.survival.dig-in.site :as site]))
 
 (defn cells-to-try
@@ -26,7 +27,8 @@
   "One round of walls mode. Out of blocks (the carried ones were used up or lost, or the body moved to a cell with more
   open cells than blocks) it forgets the mode so the next round chooses again: a pit dug with what it can harvest."
   [c]
-  (let [{:keys [blocks max-places roof-height]} (:args c)
+  (let [{:keys [max-places roof-height]} (:args c)
+        blocks (mode/blocks c)
         p (:primitives c)
         open (dig-cells/open-cells p (sh/feet p))
         cells (cells-to-try c open)
@@ -44,7 +46,7 @@
 (defn ^:async plug-round
   "In a closed room: place one block in the hole of the roof over the body (:plug)."
   [c]
-  (let [{:keys [blocks]} (:args c)
+  (let [blocks (mode/blocks c)
         item (lb/pick c blocks)
         plug (:plug (ctx/mem c))]
     (if (nil? item)

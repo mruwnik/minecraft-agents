@@ -4,17 +4,18 @@
             [engine.args :as a]
             [engine.game :as game]
             [jobs.lib.blocks :as lb]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.seal :as seal]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.started :as started]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]))
@@ -26,9 +27,9 @@
   the body first, one that ends the line alone before one that blocks half of it. A mob that was only heard is
   taken at the rough spot its direction and band give (jobs.lib.danger/mob-pos). A door, gate or trapdoor standing
   open in the way is shut, not walled over (jobs.survival.dig-in-cells/place-all!).
-  Not started (condition :no-ranged-danger) when no ranged mob within :radius has a line of fire.
+  Done at once when no ranged mob within :radius has a line of fire.
   The blocks are the call's :use :blocks (default the carried shelter fillers, jobs.lib.choose/fillers; the old :blocks arg maps in legacy-args).
-  With none of them carried it fetches one (:fetch, default true; jobs.lib.fetch, jobs.items.obtain) before it ends :condition-failed :no-blocks.
+  With none of them carried it fetches one (:fetch, default true; jobs.lib.need, jobs.items.obtain) before it ends :condition-failed :no-blocks.
   Ends :done with the data {:placed [cells]} once none has a line of fire (also when the mob moved away meanwhile), else
   :condition-failed :no-blocks (none carried, nothing fetched) or :refused (every cell that would help is another's zone,
   claim or plan; :ignore-zones? lifts it), or :nothing-possible :no-gap (a line of fire stays and no open cell within
@@ -43,15 +44,16 @@
   {:radius {:doc "ranged mobs within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :reach {:doc "open cells within this many blocks of the body's feet may be filled" :spec (a/num-in 0 nil) :default 3}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :fetch {:doc "get a missing block (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-blocks" :spec fetch/option? :default true}})
+   :fetch {:doc "get a missing block (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-blocks" :spec fetch/option? :default true}})
 
 (a/defargs settings
-  {::max-steps {:default 12 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}})
+  {::time-s {:default 60 :doc "Seconds stopping the arrows may take." :spec (a/num-in 0 nil)}
+   ::max-steps {:default 12 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
 (def target [])
 
-(def defaults {:use {:blocks :shelter}})
+(def defaults {:spend {:time ::time-s} :use {:blocks :shelter}})
 
 (defn legacy-args
   "An old caller's :blocks as the call's :use {:blocks [...]}."
@@ -123,6 +125,17 @@
   (ctx/emit! c :block_arrow_gap_failed :warn {:reason reason :text text})
   (ctx/end c (get failure-kinds reason :nothing-possible) reason {:placed (vec (:placed (ctx/mem c))) :text text}))
 
+(defn ^:async fetch-blocks!
+  "None of blocks carried: get one through jobs.lib.need when :fetch allows (:again once got, :continue while it
+  waits), else end :no-blocks, a failed fetch's ending as :because."
+  [c blocks]
+  (let [o (fetch/opts c 'jobs.survival.block-arrow-gap)
+        e (when (contains? (:what o) :item) (await (need/blocks! c blocks 1 (select-keys o [:how :explore]))))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) :again
+      :else (contract/with-because (fail! c :no-blocks "no block to stop the arrows with") e))))
+
 (defn ^:async step
   "One cell: :done, :again, or :continue while it fetches a block."
   [c]
@@ -144,29 +157,22 @@
             cells (candidates (sh/feet p) within)
             cell (plug-cell kind-at cells mob body #(and (allowed? %) (permitted? %)))]
         (cond
-          (nil? (lb/pick c blocks)) (or (await (fetch/step! c 'jobs.survival.block-arrow-gap {:reason :need :any-of (vec blocks)}))
-                                            (fail! c :no-blocks "no block to stop the arrows with"))
+          (nil? (lb/pick c blocks)) (await (fetch-blocks! c blocks))
           (nil? cell) (if (plug-cell kind-at cells mob body allowed?)
                         (fail! c :refused "every cell that would stop the arrows is another's (zone, claim or plan)")
                         (fail! c :no-gap "no open cell within reach would stop the arrows"))
-          :else (let [_ (fetch/settle! c)
-                      status (await (dig-cells/place-all! c blocks [cell]))]
+          :else (let [status (await (dig-cells/place-all! c blocks [cell]))]
                   (if (not= :ok status)
                     (fail! c :place-failed (str "cannot place at the gap: " status))
                     (do (ctx/update-mem! c update :skip (fnil conj #{}) cell)
                         :again))))))))
 
-(defn no-ranged-danger
-  "At the call's start: the cause :no-ranged-danger unless a ranged mob has a line of fire to the body."
-  [c]
-  (when (empty? (ranged-dangers c)) :no-ranged-danger))
-
-(def conditions [[:fn (started/at-start no-ranged-danger)]])
+(def conditions [])
 
 (defn done?
-  "The cells placed; never :done? itself: the job ends when no line of fire is left."
+  "No ranged mob has a line of fire to the body; the cells placed so far."
   [c]
-  {:done? false :units :cells :done (count (:placed (ctx/mem c))) :left (count (ranged-dangers c))})
+  {:done? (empty? (ranged-dangers c)) :units :cells :done (count (:placed (ctx/mem c)))})
 
 (defn quote-of [_c] {:uses {:time [0 3 30]}})
 

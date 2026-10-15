@@ -18,6 +18,13 @@
 (a/defargs settings
   {::side-mob-radius {:default 8 :doc "Blocks out to which a hostile in a side column rules it out." :spec (a/int-in 0 nil)}})
 
+(defn blocks
+  "The blocks it may place: the call's :use :blocks, else the shelter fillers (not a list frozen at the start: a pit
+  places the dirt it dug)."
+  [c]
+  (let [used (ctx/use c :blocks)]
+    (if (seq used) used (choose/fillers :shelter))))
+
 (defn mode-choice
   "[mode refusal] for the shelter from start: the first of :plug (only with a room-plug cell), :walls (only when
   walls-ok?) and :dig whose cells are all permitted, else the first of them with its refusal (nil when permitted).
@@ -86,8 +93,8 @@
     (when moved (ctx/update-mem! c dissoc :mode :roof :target-y :shape :cols :pit-drops))
     (when (or moved (not mode))
       (let [cells (dig-cells/open-cells p start)
-            have (reduce + (map :count (lb/carried c (:blocks (:args c)))))
-            cheap (reduce + (map :count (lb/carried c (choose/cheap-blocks (:blocks (:args c)) (:wall-value (:args c))))))
+            have (reduce + (map :count (lb/carried c (blocks c))))
+            cheap (reduce + (map :count (lb/carried c (choose/cheap-blocks (blocks c) (:wall-value (:args c))))))
             enclose (:enclose (:args c))
             plan (when-not enclose (await (sense/decide! c ::dig-plan #(dig-cells/dig-plan p start))))
             shape (when plan (await (find-shape! c start plan)))
