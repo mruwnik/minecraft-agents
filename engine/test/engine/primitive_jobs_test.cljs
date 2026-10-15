@@ -44,10 +44,11 @@
   (let [p (tu/fake {})
         hp #(get-in (quote-of :moveTo p %) [:uses :health])]
     (fake/swap-self! p assoc :pos [0 70 0])
-    (is (= [0 0 2] (hp {:pos {:x 0 :y 64 :z 6}})) "6 down over 6: at most two 4-block drops, 1 hp each")
-    (is (= [0 0 1] (hp {:pos {:x 0 :y 70 :z 5}})) "level 5 away: a drop and the climb back")
-    (is (= [0 0 0] (hp {:pos {:x 0 :y 70 :z 4}})) "too near to drop 4 and climb back")
-    (is (= [0 0 0] (hp {:pos {:x 0 :y 64 :z 6} :maxDropDown 3})) "a drop of 3 hurts nothing")
+    (is (= [0 0 0] (hp {:pos {:x 0 :y 64 :z 6}})) "an uncapped walk drops at most 3 blocks, which hurts nothing")
+    (is (= (hp {:pos {:x 0 :y 64 :z 6} :maxDropDown 3}) (hp {:pos {:x 0 :y 64 :z 6}})) "the default cap is 3 blocks fallen")
+    (is (= [0 0 2] (hp {:pos {:x 0 :y 64 :z 6} :maxDropDown 4})) "6 down over 6: at most two 4-block drops, 1 hp each")
+    (is (= [0 0 1] (hp {:pos {:x 0 :y 70 :z 5} :maxDropDown 4})) "level 5 away: a drop and the climb back")
+    (is (= [0 0 0] (hp {:pos {:x 0 :y 70 :z 4} :maxDropDown 4})) "too near to drop 4 and climb back")
     (is (= [0 0 3] (hp {:pos {:x 0 :y 64 :z 6} :maxDropDown 6})) "one 6-block drop, 3 hp")
     (is (= [0 1 20] (get-in (quote-of :moveTo p {:pos {:x 0 :y 64 :z 0} :timeoutS 20}) [:uses :time])))))
 
@@ -94,7 +95,7 @@
 (defn drops-to [y]
   {:conditions [] :defaults {:floor {:health 15}}
    :round (fn ^:async drop-round [c]
-            (swap! world assoc :moved (.-status (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y y :z 9}}))))
+            (swap! world assoc :moved (.-status (await (ctx/act c :moveTo #js {:pos #js {:x 0 :y y :z 9} :maxDropDown 4}))))
             :continue)})
 
 (defn high-up [p]

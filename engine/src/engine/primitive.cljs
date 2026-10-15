@@ -26,7 +26,7 @@
 (defn carried [p item]
   (reduce + 0 (keep #(when (= item (.-name %)) (.-count %)) (.-inventory (.self p)))))
 
-(def own-max-drop "The pathfinder's own maxDropDown, the drop cap of a walk that sets none." 4)
+(def own-max-drop "The pathfinder's own drop cap in blocks fallen, the cap of a walk that sets none." 3)
 
 (defn fall
   "The health the drops of a walk from where the body stands to pos could cost, each drop at most max-drop blocks and
