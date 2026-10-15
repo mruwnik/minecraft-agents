@@ -3,7 +3,6 @@
   blocks that can be stood on and is no hazard, never the column of the cell itself."
   (:require [engine.args :as a]
             [engine.settings :as settings]
-            [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
@@ -53,12 +52,12 @@
   [c cell {:keys [reach] :or {reach (reach-blocks)}  :as opts}]
   (await (dig-look/look-unknown! c (floors cell reach)))
   (if-let [to (first (candidates (:primitives c) cell opts))]
-    (let [r (await (child/call-walk c :step-off {:pos to :range 0 :escalate false}))
-          res (ctx/child-result c :step-off)]
+    (let [e (await (child/call-walk* c :step-off {:pos to :range 0 :escalate false}))
+          res (:data e)]
       (cond
-        (= :continue r) :continue
-        (and (= :done r) (:arrived res)) :arrived
-        :else {:unreachable (if (= :done r) (:why res :unreachable) :declined)}))
+        (= :continue e) :continue
+        (and (= :done (:kind e)) (:arrived res)) :arrived
+        :else {:unreachable (if (= :done (:kind e)) (:why res :unreachable) :declined)}))
     {:unreachable :no-cell}))
 
 (defn ^:async step-off-zoned!

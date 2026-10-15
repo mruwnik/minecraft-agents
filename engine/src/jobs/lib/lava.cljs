@@ -4,6 +4,7 @@
   Cells are [x y z]."
   (:require [jobs.lib.choose :as choose]
             [jobs.lib.child :as child]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access :as access]
@@ -94,12 +95,12 @@
               (do (clear!)
                   (if (seq away-tried) {:unreachable :all-walks-failed :walk away-why} {:unreachable :no-cell}))
               (let [_ (ctx/update-mem! c assoc :away-to to :away-escalate escalate)
-                    r (await (child/call-walk c :step-off {:pos to :range 0 :escalate escalate}))
-                    res (ctx/child-result c :step-off)]
+                    e (await (child/call-walk* c :step-off {:pos to :range 0 :escalate escalate}))
+                    res (:data e)]
                 (cond
-                  (= :continue r) :continue
-                  (and (= :done r) (:arrived res)) (do (clear!) :arrived)
+                  (= :continue e) :continue
+                  (and (= :done (:kind e)) (:arrived res)) (do (clear!) :arrived)
                   :else (do (ctx/update-mem! c #(-> % (dissoc :away-to :away-escalate)
-                                                    (assoc :away-why (or (:why res) r))
+                                                    (assoc :away-why (or (:why res) (contract/cause-key e)))
                                                     (update :away-tried (fnil conj #{}) ((juxt :x :y :z) to))))
                             (recur)))))))))))
