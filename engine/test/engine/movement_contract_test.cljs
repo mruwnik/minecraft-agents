@@ -84,12 +84,12 @@
 (def steve {:id 5 :name "Steve" :kind "player" :pos {:x 1 :y 64 :z 0}})
 (def boat {:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 1.5 :y 64 :z 0.5}})
 
-(deftest follow-ends-on-its-time-and-when-the-player-never-came
+(deftest follow-is-done-at-its-time-once-the-player-was-seen-and-fails-when-absent
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :stopped :kind :limit-reached :reason :timeout}
-               (await (ending-of {:entities [steve]} '(jobs.movement.follow {:player "Steve" :timeout-s 2})))))
+        (is (= {:event :completed}
+               (select-keys (await (ending-of {:entities [steve]} '(jobs.movement.follow {:player "Steve" :timeout-s 2}))) [:event])))
         (is (= {:event :stopped :kind :condition-failed :reason :absent}
                (await (ending-of {} '(jobs.movement.follow {:player "Steve"}))))))))) 
 
