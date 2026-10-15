@@ -434,12 +434,12 @@
   (let [conditions (:conditions (get registry/jobs 'jobs.survival.log-out))
         cause (fn [world args]
                 (let [p (tu/fake world)]
-                  (contract/verdict {:primitives p :args args :slots [:x]
-                                     :view (fn [] {:data mem/empty-data :now 0})
-                                     :holds (fn [form a] (condition/job-cause {:world p :memory {:data mem/empty-data :now 0}} a form))}
-                                    conditions)))]
-    (is (= :not-night (get-in (cause {:time noon} {}) [1 :reason])))
-    (is (= [:impossible :offline-forbidden] (cause {:time night} {:offline-allowed false})))
+                  (ctx/check-wait {:primitives p :args args :slots [:x]
+                                   :view (fn [] {:data mem/empty-data :now 0})
+                                   :holds (fn [form a] (condition/job-cause {:world p :memory {:data mem/empty-data :now 0}} a form))}
+                                  {:conditions conditions})))]
+    (is (= :not-night (:reason (cause {:time noon} {}))))
+    (is (= (contract/impossible :offline-forbidden) (cause {:time night} {:offline-allowed false})))
     (is (nil? (cause {:time night} {})))))
 
 (deftest a-log-out-quotes-the-stint-in-time

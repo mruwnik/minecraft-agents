@@ -125,15 +125,35 @@
 
 (defn progress "The report fields of a done? answer." [d] (select-keys d [:units :done :left :left-items]))
 
-;; ------------------------------------------------------------------ conditions
+;; ------------------------------------------------------------------ statuses
+
+(declare passes-through?)
+
+(def status-kinds
+  "A check's status [kind text data]: :ok holds, :later not now, :never can never hold, :look fails unless a look round
+  finds otherwise."
+  #{:ok :later :never :look})
+
+(defn status?
+  "Whether x is a status [kind text data], data a map with a keyword :reason."
+  [x]
+  (and (vector? x) (= 3 (count x)) (contains? status-kinds (first x)) (string? (second x))
+       (map? (nth x 2)) (keyword? (:reason (nth x 2)))))
+
+(defn status [kind reason text data] [kind text (assoc data :reason reason)])
+
+(defn ok "[:ok text {:reason reason ...data}]" [reason text & {:as data}] (status :ok reason text data))
+(defn later "[:later text {:reason reason ...data}]" [reason text & {:as data}] (status :later reason text data))
+(defn never "[:never text {:reason reason ...data}]" [reason text & {:as data}] (status :never reason text data))
+(defn look "[:look text {:reason reason ...data}]" [reason text & {:as data}] (status :look reason text data))
 
 (defn impossible
-  "A condition's answer when the job can never start (smelting diamond): the job ends :impossible with cause."
+  "An old condition's answer when the job can never start (smelting diamond): the job ends :impossible with cause."
   [cause]
   {::impossible cause})
 
 (defn look-first
-  "A condition's answer when it fails with cause unless a look round from here finds otherwise: the engine looks
+  "An old condition's answer when it fails with cause unless a look round from here finds otherwise: the engine looks
   once, then asks again."
   [cause]
   {::look-first cause})
@@ -142,6 +162,89 @@
 
 (defn look-cause [r] (when (map? r) (::look-first r)))
 
+(defn cause-wait
+  "An old condition's cause as a check's wait reason: {:reason (cause key)}, with :cause when it is a map and its
+  :text (the wait text) when it has one."
+  [cause]
+  (cond-> {:reason (cause-key {:kind :condition-failed :cause cause})}
+    (map? cause) (assoc :cause cause)
+    (and (map? cause) (:text cause)) (assoc :text (:text cause))))
+
+(defn from-old
+  "The status of kind for an old answer: w its wait map ({:reason ..}), cause what an ending carries. Both are kept
+  (::wait, ::cause), so old readers get today's values back."
+  [kind w cause]
+  (let [r (:reason w)
+        reason (if (keyword? r) r :not-ready)]
+    [kind (or (:text w) (name reason)) {:reason reason ::wait w ::cause cause}]))
+
+(defn read-old
+  "An old condition's answer r as a status: nil :ok, (impossible cause) :never, (look-first cause) :look, any other
+  cause :later; a status as it is."
+  [r]
+  (let [old #(from-old %1 (if (:reason (when (map? %2) %2)) %2 (cause-wait %2)) %2)]
+    (cond
+      (status? r) r
+      (nil? r) (ok :holds "holds")
+      (impossible-cause r) (old :never (impossible-cause r))
+      (look-cause r) (old :look (look-cause r))
+      :else (old :later r))))
+
+(defn status-cause
+  "The cause an ending of status s carries: (assoc data :text text); an old answer's own cause."
+  [[_ text data]]
+  (if (contains? data ::cause) (::cause data) (assoc (dissoc data ::wait) :text text)))
+
+(defn wait-reason
+  "Status s as a check's wait reason (job.waiting, observe): (assoc data :text text); an old answer's cause-wait."
+  [[_ text data :as s]]
+  (if (contains? data ::cause) (cause-wait (::cause data)) (assoc (dissoc data ::wait) :text text)))
+
+(defn with-slot "Status s with :slot in its data." [s slot] (assoc-in s [2 :slot] slot))
+
+(defn all
+  "Statuses ss as one: any :never, else the first :later, else the first :look, else :ok (texts joined by \"; \")."
+  [ss]
+  (let [first-of (fn [k] (some #(when (= k (first %)) %) ss))]
+    (or (first-of :never) (first-of :later) (first-of :look)
+        (if (seq ss)
+          [:ok (str/join "; " (map second ss)) (nth (first ss) 2)]
+          (ok :holds "holds")))))
+
+(defn fn-name [f] (or (some-> (.-name f) not-empty demunge) "an anonymous fn"))
+
+(defn run-condition
+  "(f c); a throw is rethrown naming the condition fn."
+  [c f]
+  (try (f c)
+       (catch :default e
+         (if (passes-through? e)
+           (throw e)
+           (throw (js/Error. (str "condition " (fn-name f) ": " (or (.-message e) e))))))))
+
+(defn asked
+  "The status check f (can-start?, can-run?) gives for c; any other return is an error naming f."
+  [c f]
+  (let [s (run-condition c f)]
+    (when-not (status? s)
+      (throw (js/Error. (str "check " (fn-name f) " returned " (pr-str s) ", not a status [kind text {:reason ..}]"))))
+    s))
+
+(defn entry-result
+  "What one old condition says now: [:fn f] is (f c); [:holds form] or [:holds form reason] (a fact form, engine.condition)
+  is nil while the form holds, else a cause {:reason (reason, else the fact's name) :fact :form :text}."
+  [c [kind x reason]]
+  (case kind
+    :fn (run-condition c x)
+    :holds (let [holds (or (:holds c) (throw (js/Error. "a fact condition needs a ctx made by the engine (:holds)")))]
+             (when-let [cause (holds x (:args c))] (assoc cause :reason (or reason (:fact cause)))))))
+
+(defn verdict
+  "What def's checks say now, as one status (all): its old conditions (read-old), can-start? and can-run?, each that it
+  has."
+  [c {:keys [conditions can-start? can-run?]}]
+  (all (concat (map #(read-old (entry-result c %)) conditions)
+               (map #(asked c %) (keep identity [can-start? can-run?])))))
 
 ;; ------------------------------------------------------------------ the call
 
@@ -334,42 +437,6 @@
   "Whether error e must pass a job's catch-all on up: a cut or a limit."
   [e]
   (and (instance? js/Error e) (contains? #{"cut" "limit"} (.-code e))))
-
-(defn run-condition
-  "(f c); a throw is rethrown naming the condition fn."
-  [c f]
-  (try (f c)
-       (catch :default e
-         (if (passes-through? e)
-           (throw e)
-           (throw (js/Error. (str "condition " (.-name f) ": " (or (.-message e) e))))))))
-
-(defn entry-result
-  "What one condition says now: [:fn f] is (f c); [:holds form] or [:holds form reason] (a fact form, engine.condition)
-  is nil while the form holds, else a cause {:reason (reason, else the fact's name) :fact :form :text}."
-  [c [kind x reason]]
-  (case kind
-    :fn (run-condition c x)
-    :holds (let [holds (or (:holds c) (throw (js/Error. "a fact condition needs a ctx made by the engine (:holds)")))]
-             (when-let [cause (holds x (:args c))] (assoc cause :reason (or reason (:fact cause)))))))
-
-(defn verdict
-  "What conditions ([:fn f] or [:holds form reason], see entry-result) say now: nil to start, [:impossible cause]
-  when one is impossible, else [:skip cause] for the first that fails, else [:look cause] for the first that asks for a
-  look."
-  [c conditions]
-  (let [rs (filter identity (map #(entry-result c %) conditions))]
-    (or (some #(some->> (impossible-cause %) (vector :impossible)) rs)
-        (some #(when-not (look-cause %) [:skip %]) rs)
-        (some #(some->> (look-cause %) (vector :look)) rs))))
-
-(defn wait-reason
-  "A failing condition's cause as a check's wait reason: {:reason (cause key)}, with :cause when it is a map and its
-  :text (the wait text) when it has one."
-  [cause]
-  (cond-> {:reason (cause-key {:kind :condition-failed :cause cause})}
-    (map? cause) (assoc :cause cause)
-    (and (map? cause) (:text cause)) (assoc :text (:text cause))))
 
 ;; ------------------------------------------------------------------ quotes
 

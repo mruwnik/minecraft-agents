@@ -26,46 +26,50 @@
   [c e]
   (contract/with-because (ctx/end c (:kind e) (:cause e) (:data e)) (dissoc e :report)))
 
-(defn kid-wait
-  "Why child i of kids would wait now (ctx/child-wait, against its own sub-map), or nil."
+(defn kid-status
+  "The status child i of kids would start with now (ctx/child-status, against its own sub-map), with its :slot."
   [c kids i]
   (let [[def args] (kids i)]
-    (ctx/child-wait c (slot i) def args)))
+    (contract/with-slot (ctx/child-status c (slot i) def args) (slot i))))
+
+(defn ok? [s] (= :ok (first s)))
+
+(def ready (contract/ok :ready "ready"))
 
 (defn held
-  "What a round returns when it cannot call a child that would wait with w: a reflex job runs one round, so it ends
-  condition-failed with the wait as cause; a listed one yields (its condition waits). A child that can never start
-  (contract/impossible) ends it impossible."
-  [c w]
+  "What a round returns when it cannot call a child whose status s is not :ok: :never ends it impossible; a reflex job
+  runs one round, so it ends condition-failed with the status as cause; a listed one yields (its can-run? waits)."
+  [c s]
   (cond
-    (contract/impossible-cause w) (ctx/end c :impossible (contract/impossible-cause w))
-    (:reflex c) (ctx/end c :condition-failed (if (= [:reason] (keys w)) (:reason w) w))
+    (= :never (first s)) (ctx/end c :impossible (contract/status-cause s))
+    (:reflex c) (let [w (ctx/old-wait s)] (ctx/end c :condition-failed (if (= [:reason] (keys w)) (:reason w) w)))
     :else :continue))
 
 (defn ^:async call
-  "One ctx/call round of child i of kids, or held when it would wait."
+  "One ctx/call round of child i of kids, or held when it would not start."
   [c kids i]
-  (if-let [w (kid-wait c kids i)]
-    (held c w)
-    (let [[def args] (kids i)]
-      (await (ctx/call c (slot i) def args)))))
+  (let [s (kid-status c kids i)]
+    (if-not (ok? s)
+      (held c s)
+      (let [[def args] (kids i)]
+        (await (ctx/call c (slot i) def args))))))
 
 (defn contract-def
-  "A combinator as a contract job: one condition, waits, giving its children's wait reasons (a map), which the
-  scheduler asks of a listed one (ctx/check-wait) and a parent combinator of a child one."
-  [waits round]
-  {:conditions [[:fn waits]] :round round})
+  "A combinator as a contract job: its can-run? passes on a child's status, which the scheduler asks of a listed one
+  (ctx/check-status) and a parent combinator of a child one."
+  [status round]
+  {:can-run? status :round round})
 
 (defn seq-def
   "Children in order, one call per round; :at in memory is the next
-  unfinished child. Waits: as that child. Done when the last is done
+  unfinished child. Status: that child's. Done when the last is done
   (:already when every child's goal held before it started); a child that
   ends otherwise ends it the same way (held: see held)."
   [kids]
   (let [at (fn [c] (:at (ctx/mem c) 0))
         last-i (dec (count kids))]
     (contract-def
-     (fn seq-waits [c] (kid-wait c kids (at c)))
+     (fn seq-status [c] (kid-status c kids (at c)))
      (fn ^:async seq-round [c]
        (let [i (at c)
              e (await (call c kids i))]
@@ -78,20 +82,20 @@
 
 (defn any-def
   "Each round, the first child that would not wait gets one call; one that ends
-  other than :done is skipped from then on (:refused in memory; the latest ending in :last-refusal). Waits: as the
-  first child, while every child would wait and none refused. Done as the child that ran is done; once every passing child refused, ends as the last
+  other than :done is skipped from then on (:refused in memory; the latest ending in :last-refusal). Status: :ok
+  while a child would start or one refused, else the first child's. Done as the child that ran is done; once every passing child refused, ends as the last
   refusal. No child passing and none refused: held."
   [kids]
   (let [refused (fn [c] (:refused (ctx/mem c) {}))
-        first-passing (fn [c] (first (filter #(and (not (contains? (refused c) (slot %))) (nil? (kid-wait c kids %))) (range (count kids)))))]
+        first-passing (fn [c] (first (filter #(and (not (contains? (refused c) (slot %))) (ok? (kid-status c kids %))) (range (count kids)))))]
     (contract-def
-     (fn any-waits [c] (when-not (or (some? (first-passing c)) (seq (refused c))) (kid-wait c kids 0)))
+     (fn any-status [c] (if (or (some? (first-passing c)) (seq (refused c))) ready (kid-status c kids 0)))
      (fn ^:async any-round [c]
        (let [i (first-passing c)]
          (if (nil? i)
            (if-let [e (:last-refusal (ctx/mem c))]
              (stop c e)
-             (held c (or (kid-wait c kids 0) {:reason :not-ready})))
+             (held c (kid-status c kids 0)))
            (let [e (await (call c kids i))]
              (cond
                (not (ending? e)) :continue
@@ -105,11 +109,14 @@
   (let [r (:rest (ctx/mem c))]
     (when (and r (< (ctx/now c) (:until r))) r)))
 
-(defn rest-wait
-  "A repeating combinator's wait: the child's, else :resting while the rest lasts."
+(defn rest-status
+  "A repeating combinator's status: the child's when not :ok, else :later :resting while the rest lasts."
   [c kids i]
-  (or (kid-wait c kids i)
-      (some-> (resting c) (assoc :reason :resting))))
+  (let [s (kid-status c kids i)
+        r (resting c)]
+    (if (and (ok? s) r)
+      (contract/status :later :resting (str "resting after " (name (:after r))) r)
+      s)))
 
 (defn ran!
   "After the child's ending e: ends as e when it was impossible or cut off (any refusal, in a reflex job, which runs
@@ -133,12 +140,12 @@
 
 (defn repeat-def
   "The child in slot :c0; any ending drops its memory, so the next call starts it fresh, and :runs counts the runs.
-  Never done, or done after times runs. Each ending: see ran!. Waits: rest-wait. Held when the child would wait, so
+  Never done, or done after times runs. Each ending: see ran!. Status: rest-status. Held when the child would wait, so
   it never spins."
   [kid times]
   (let [kids [kid]]
     (contract-def
-     (fn repeat-waits [c] (rest-wait c kids 0))
+     (fn repeat-status [c] (rest-status c kids 0))
      (fn ^:async repeat-round [c]
        (let [e (await (call c kids 0))]
          (if (ending? e) (ran! c e times) :continue))))))
@@ -146,12 +153,12 @@
 (defn until-def
   "Guard in slot :c0, child in :c1, which repeats like repeat's (rests too). Done at the
   top of a round once the guard would not wait (the guard itself never runs).
-  Waits: rest-wait, until the guard would not. Held when the child would wait."
+  Status: :ok once the guard's is, else rest-status. Held when the child would wait."
   [guard kid]
   (let [kids [guard kid]
-        reached? (fn [c] (nil? (kid-wait c kids 0)))]
+        reached? (fn [c] (ok? (kid-status c kids 0)))]
     (contract-def
-     (fn until-waits [c] (when-not (reached? c) (rest-wait c kids 1)))
+     (fn until-status [c] (if (reached? c) ready (rest-status c kids 1)))
      (fn ^:async until-round [c]
        (if (reached? c)
          (ctx/end c :done nil)

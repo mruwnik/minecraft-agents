@@ -12,12 +12,14 @@
             [engine.memory :as mem]))
 
 (defn stopped-text
-  "The words of a :stopped event: the result's own :text (clipped to 200 chars), else \"stopped: <reason>\"."
-  [{:keys [text reason cell]}]
-  (cond
-    (and (string? text) (> (count text) 200)) (str (subs text 0 199) "…")
-    (and (string? text) (seq text)) text
-    :else (str "stopped: " (some-> reason name) (some->> cell pr-str (str " at ")))))
+  "The words of a :stopped event: the result's own :text, else its cause's (a status's text; clipped to 200 chars),
+  else \"stopped: <reason>\"."
+  [{:keys [reason cell cause] :as data}]
+  (let [text (or (:text data) (when (map? cause) (:text cause)))]
+    (cond
+      (and (string? text) (> (count text) 200)) (str (subs text 0 199) "…")
+      (and (string? text) (seq text)) text
+      :else (str "stopped: " (some-> reason name) (some->> cell pr-str (str " at "))))))
 
 (defn note-child-wait!
   "A listed job's round returned :declined because its child's check waits (reason, or nil when the child gave none):

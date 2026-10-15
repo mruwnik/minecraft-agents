@@ -172,28 +172,44 @@
   (some-> (:wait ctx) (reset! reason))
   false)
 
-(defn check-wait
-  "Why def would wait now under ctx, as a map {:reason kw ...}, or nil when it would start: its check's wait reason
-  ({:reason :not-ready} for a plain false), or, for a def with conditions and no check (a combinator), the engine's
-  reading of them (contract/verdict): the first failing cause as a wait reason (a map with :reason, as a combinator gives its child's, as it is), an impossible or look-first one as it
-  is (contract/impossible, contract/look-first), which a parent passes on."
+(defn check-status
+  "The status def would start with now under ctx: its check's (:ok, or :later with its wait reason), or, for a def with
+  no check (a combinator), contract/verdict of its checks, which a parent passes on."
   [ctx def]
   (if-let [check (:check def)]
     (let [a (atom nil)]
-      (when-not (check (assoc ctx :wait a))
-        (let [w @a] (cond (map? w) w (some? w) {:reason w} :else {:reason :not-ready}))))
-    (when-let [[k cause] (contract/verdict ctx (:conditions def))]
-      (case k
-        :impossible (contract/impossible cause)
-        :look (contract/look-first cause)
-        (if (:reason (when (map? cause) cause)) cause (contract/wait-reason cause))))))
+      (if (check (assoc ctx :wait a))
+        (contract/ok :ready "ready")
+        (let [w @a
+              w (cond (map? w) w (some? w) {:reason w} :else {:reason :not-ready})]
+          (contract/from-old :later w w))))
+    (contract/verdict ctx def)))
 
-(defn child-wait
-  "Why the child job (a registry symbol, or a definition) in slot with args would wait now, for a parent that asks before
-  it calls (check-wait), or nil when the child would start."
+(defn child-status
+  "check-status of the child job (a registry symbol, or a definition) in slot with args, for a parent that asks before
+  it calls."
   [ctx slot job args]
   (let [[def args] (child-job ctx job args)]
-    (check-wait (assoc ctx :slots (conj (:slots ctx) slot) :args args) def)))
+    (check-status (assoc ctx :slots (conj (:slots ctx) slot) :args args) def)))
+
+(defn old-wait
+  "Status s as an old wait: nil for :ok, (contract/impossible cause) for :never, (contract/look-first cause) for :look,
+  else its wait map."
+  [[kind _ data :as s]]
+  (case kind
+    :ok nil
+    :never (contract/impossible (contract/status-cause s))
+    :look (contract/look-first (contract/status-cause s))
+    (or (::contract/wait data) (contract/wait-reason s))))
+
+(defn check-wait "check-status as an old wait (old-wait)." [ctx def] (old-wait (check-status ctx def)))
+
+(defn child-wait "child-status as an old wait (old-wait)." [ctx slot job args] (old-wait (child-status ctx slot job args)))
+
+(defn can-run
+  "This job's can-run? status now, asked between steps (jobs.lib.pace/steps!); :ok when it has none."
+  [ctx]
+  (if-let [f (:can-run ctx)] (f) (contract/ok :holds "holds")))
 
 (defn submit!
   "Put a job spec (an expression, see engine.expr) at the end of the list;

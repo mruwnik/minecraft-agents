@@ -129,8 +129,8 @@
     (with-redefs [ctx/mem (constantly {})]
       (doseq [[label mk] [[:seq #(composite/seq-def [%])] [:repeat #(composite/repeat-def % nil)] [:until #(composite/until-def [(tu/job [(constantly :not-ready)] nil) {}] %)]
 ]]
-        (is (= [:impossible :never] (contract/verdict c (:conditions (mk never)))) (str label ": impossible child"))
-        (is (= [:look :unseen] (contract/verdict c (:conditions (mk peek)))) (str label ": look-first child"))))))
+        (is (= (contract/impossible :never) (ctx/check-wait c (mk never))) (str label ": impossible child"))
+        (is (= (contract/look-first :unseen) (ctx/check-wait c (mk peek))) (str label ": look-first child"))))))
 
 (deftest repeat-ends-impossible-when-its-child-never-can-start
   (async done

@@ -13,18 +13,25 @@
             [engine.memory :as mem]
             [engine.settings :as settings]))
 
-(defn contract-job? [def] (some? (:conditions def)))
+(defn contract-job? [def] (some some? ((juxt :conditions :can-start? :can-run?) def)))
 
 (defn started? [c] (some? (ctx/frozen-call c)))
 
-(defn ^:async looked-verdict
-  "Verdict v, or after one look round (the :look/around hook) when it asks for a look, the conditions' verdict then;
-  asking again after it skips."
-  [c conditions v]
-  (if (= :look (first v))
+(defn statuses
+  "[start run] for c: start the status of def's old conditions and, until it has started, its can-start?; run its
+  can-run?'s (contract/verdict)."
+  [def c]
+  [(contract/verdict c (cond-> (dissoc def :can-run?) (started? c) (dissoc :can-start?)))
+   (contract/verdict c (select-keys def [:can-run?]))])
+
+(defn ^:async looked
+  "Statuses [start run], or after one look round (the :look/around hook) when either asks for a look, the statuses then;
+  a second :look counts as :later."
+  [def c ss]
+  (if (some #(= :look (first %)) ss)
     (do (await ((:look/around hooks/all) c))
-        (let [[k cause :as v] (contract/verdict c conditions)] (if (= :look k) [:skip cause] v)))
-    v))
+        (mapv #(cond-> % (= :look (first %)) (assoc 0 :later)) (statuses def c)))
+    ss))
 
 (defn stays-listed?
   "Whether a skip leaves c's job queued: a listed root not yet started, not a reflex's nor the driver's slot job."
@@ -147,36 +154,51 @@
                                        ", not :continue or an ending (ctx/end)"))))))))
 
 (defn ^:async run
-  "One round of contract job def: an ending, or :continue (a listed job not started whose condition skips). An
-  impossible condition ends it; else, before it starts, a goal that holds ends it done :already, whatever the other
-  conditions say (a done? that throws is told with job.done_failed and counts as not done)."
+  "One round of contract job def: an ending, or :continue. A :never ends it impossible; else, before it starts, a goal
+  that holds ends it done :already, whatever its checks say (a done? that throws is told with job.done_failed and
+  counts as not done). A :later from its old conditions or can-start? keeps a listed job not started queued, else ends
+  it condition-failed; one from can-run? yields (a reflex ends condition-failed: it runs one round). The round's ctx
+  asks can-run? between steps (ctx/can-run)."
   [def c]
-  (let [v (contract/verdict c (:conditions def))
+  (let [ss (statuses def c)
         fresh? (not (started? c))
-        [d err] (when (and fresh? (not= :impossible (first v))) (done-or-error def c))
+        [d err] (when (and fresh? (not= :never (first (contract/all ss)))) (done-or-error def c))
         _ (when err (ctx/emit! c :done_failed :warn {:error (str (or (.-message err) err))}))
-        [k cause] (if (:done? d) v (await (looked-verdict c (:conditions def) v)))
-        counted #(if fresh? (cond-> % d (update :report merge (contract/progress d))) (with-progress def c %))]
+        [start-s run-s] (if (:done? d) ss (await (looked def c ss)))
+        s (contract/all [start-s run-s])
+        counted #(if fresh? (cond-> % d (update :report merge (contract/progress d))) (with-progress def c %))
+        failed #(counted (contract/ending :condition-failed (contract/status-cause %) nil))]
     (cond
       (:done? d) (counted (contract/ending :done :already nil))
-      (= :impossible k) (contract/ending :impossible cause nil)
-      (and k (stays-listed? c)) :continue
-      k (counted (contract/ending :condition-failed cause nil))
+      (= :never (first s)) (contract/ending :impossible (contract/status-cause s) nil)
+      (= :later (first start-s)) (if (stays-listed? c) :continue (failed start-s))
+      (= :later (first run-s)) (if (:reflex c) (failed run-s) :continue)
       :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
               (counted (contract/ending :condition-failed floor nil))
-              (await (started-round def c d))))))
+              (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))) d))))))
+
+(defn spent?
+  "Whether a started job's spend or deadline line is crossed (a floor is not: below one it waits)."
+  [c]
+  (let [eng (:engine c)]
+    (boolean (some #(not (:floor (:cause %))) (limits/crossings eng (limits/frames eng (:root c) (:slots c)) nil)))))
 
 (defn check
-  "A contract job not started waits while a condition fails; then, started or not, while the body is below a floor of
-  its call (a started one otherwise runs on: any ending ends it). An impossible condition, one that asks for a look,
-  or a goal that holds before the start passes: the round ends the job, or looks."
+  "A contract job waits while its checks say :later (old conditions and can-start? until it starts, can-run? always),
+  then while the body is below a floor of its call. A :never, a :look or a goal that holds before the start passes: the
+  round ends the job, or looks. A started job waiting on can-run? whose spend or deadline is crossed passes too, so its
+  round ends it: waiting is bounded by the call's limits, :elapsed among them."
   [def c]
-  (let [[k cause] (when-not (started? c) (contract/verdict c (:conditions def)))]
-    (if-let [cause (when-not (= :impossible k)
-                     (or (when (= :skip k) cause)
-                         (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def))))))]
-      (or (and (not (started? c)) (boolean (:done? (first (done-or-error def c))))) (ctx/wait c (contract/wait-reason cause)))
-      true)))
+  (let [fresh? (not (started? c))
+        s (if fresh? (contract/all (statuses def c)) (contract/verdict c (select-keys def [:can-run?])))
+        later? (= :later (first s))
+        w (or (when later? (contract/wait-reason s))
+              (some-> (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def)))) contract/cause-wait))]
+    (cond
+      (or (nil? w) (= :never (first s))) true
+      fresh? (or (boolean (:done? (first (done-or-error def c)))) (ctx/wait c w))
+      (and later? (spent? c)) true
+      :else (ctx/wait c w))))
 
 (defn wrap
   "Job def with the engine's check and round when it is a contract job; any other def as it is."

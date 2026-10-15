@@ -205,7 +205,7 @@ built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to t
 
 ## Jobs
 
-A job is a namespace under `src/jobs/` exporting `conditions` and `round` (Contract jobs below), and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
+A job is a namespace under `src/jobs/` exporting `round` and `conditions`, `can-start?` or `can-run?` (Contract jobs below), and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
 `body.idle`). The namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
 
 ```clojure
@@ -226,8 +226,8 @@ A job is a namespace under `src/jobs/` exporting `conditions` and `round` (Contr
 
 There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:conditions :round :doc :args}}`,
 built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
-that defines `round` and `conditions` (others are helpers), fails the compile when such a file's `ns` does not match its
-path or a file defines `round` and `check` but no `conditions`, and the macro `engine.registry/job-registry` emits the map, with each `engine.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args). `conditions` and `round` must be top-level `def`/`defn` forms, and a job must not
+that defines `round` and one of `conditions`, `can-start?`, `can-run?` (others are helpers), fails the compile when such a file's `ns` does not match its
+path or a file defines `round` and `check` but none of those, and the macro `engine.registry/job-registry` emits the map, with each `engine.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args). `conditions` and `round` must be top-level `def`/`defn` forms, and a job must not
 require `engine.registry`.
 
 - **round**: returns `:continue` or an ending (`ctx/end`, Contract jobs below; the job leaves the list, its memory is
@@ -250,7 +250,7 @@ Wherever a job is named (scenarios, register entries, `submit!`, `do-now!`, the 
 | `(repeat e)` | when the child is done, start it fresh; never done; a child done `:already` (a `seq` whose children all were, an `any` whose child was) is not counted and rests |
 | `(repeat n e)` | the same, done after `n` runs |
 | `(until g e)` | repeat `e`; done at the top of a round once `g` would not wait (`g` never runs), e.g. `(until (jobs.time.wait-for-dusk) e)`; a daily routine is `(repeat (seq (jobs.time.wait-for-day) ... (jobs.time.wait-for-dusk)))` |
-| a refused child | combinators are contract jobs calling children with `ctx/call`; a child ending other than `:done` ends `seq` with its kind and cause (the child's ending as `:because`); `any` skips it and tries the next, ending as the last refusal; `repeat` and `until` end so only when it was impossible or cut off (or in a reflex job), else rest (`:engine.composite/rest-s` 30 s, doubled for each such run in a row up to `rest-max-s` 600 s; wait `:resting`) and run it again. A child that would wait is not called: a combinator's one condition gives that child's wait map, so a listed combinator waits with its reason, a reflex one ends `:condition-failed` |
+| a refused child | combinators are contract jobs calling children with `ctx/call`; a child ending other than `:done` ends `seq` with its kind and cause (the child's ending as `:because`); `any` skips it and tries the next, ending as the last refusal; `repeat` and `until` end so only when it was impossible or cut off (or in a reflex job), else rest (`:engine.composite/rest-s` 30 s, doubled for each such run in a row up to `rest-max-s` 600 s; wait `:resting`) and run it again. A child that would wait is not called: a combinator's `can-run?` gives that child's status with its `:slot`, so a listed combinator waits with it, a reflex one ends `:condition-failed`, a `:never` ends it `:impossible` |
 | `(hold e)` | like `e`, but the list entry holds the body; around a whole spec only, not in a register entry |
 
 An unknown symbol, a wrong arity, an undeclared arg, a bad position arg (`[x y z]` or `{:x :y :z}`) or a nested `hold`
@@ -276,8 +276,9 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/left ctx)` | what is left of the call's limits and its callers' (each line the least): `{:spend {line n} :floor {line n} :deadline ms}` |
 | `(await (ctx/quote ctx job args quote-deadline?))` | what a call would use and yield (Quotes), or the `:duplicate-call` ending |
 | `(await (ctx/next-way ctx quote-of-way thing?))` | `{:way k :dropped {way why}}`, the next way to try (Quotes) |
-| `(ctx/check-wait ctx def)` | why def would wait now as `{:reason ..}`: its check's reason, or (a combinator) the engine's reading of its conditions (`contract/verdict`): a failing cause as a reason, an impossible or look-first one as `contract/impossible`/`look-first` (a combinator ends impossible on its child's); nil when it would start |
-| `(ctx/child-wait ctx slot job args)` | `check-wait` of the child in slot |
+| `(ctx/check-status ctx def)`, `(ctx/child-status ctx slot job args)` | the status def (the child in slot) would start with now: its check's (`:ok`, or `:later` with its wait reason), or (a combinator) `contract/verdict` of its checks, which a combinator passes on with `:slot` |
+| `(ctx/check-wait ctx def)`, `(ctx/child-wait ...)` | the same as an old wait: nil, a wait map, `contract/impossible`/`look-first` |
+| `(ctx/can-run ctx)` | the job's `can-run?` status now; `jobs.lib.pace/steps!` asks it between steps (`:never` ends impossible, `:later`/`:look` yield) |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
 | `(ctx/submit! ctx spec opts)` | put a peer job at the end of the list; returns its id |
@@ -298,7 +299,13 @@ started, yields and waits included (both spend lines). Endings and a root's `com
 a finished job's goes to body memory `:job-report` (cap 256), with its ending's `:kind` and `:cause`.
 
 **Contract jobs.** Export `conditions` and `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
-`defaults` (a settings key value reads the setting; a fn value is called with the args, the catalog shows `:from-args`), `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A condition
+`defaults` (a settings key value reads the setting; a fn value is called with the args, the catalog shows `:from-args`), `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). **Statuses** (`engine.contract`): a check returns `[kind text data]`, kind `:ok :later :never :look`, data a map with
+`:reason`; constructors `(contract/ok reason text & data)`, `later`, `never`, `look`; an ending's cause is `(assoc data
+:text text)`, a wait reason too. `can-start?` (asked until the start) and `can-run?` (every round and between steps) are
+fns of the ctx giving a status (none: `:ok`; any other return is an error naming the fn): `:later` from `can-start?`
+waits (a called child ends `:condition-failed`), from `can-run?` yields (the job waits, bounded by its limits, `:elapsed`
+among them; a reflex ends `:condition-failed`); `:never` ends `:impossible`; `:look` looks once, a second counts as
+`:later`. Old conditions are read as statuses (`contract/read-old`). A condition
 `[:fn f]` gives nil (start), a cause (skip: a listed job not started stays queued and waits, else `:condition-failed`),
 `(contract/impossible cause)` (ends `:impossible`, the job leaves the queue) or `(contract/look-first cause)` (the
 engine looks round once, hook `:look/around`, then asks again). `[:holds form reason?]` is a fact form (Conditions,
