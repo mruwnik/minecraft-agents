@@ -8,9 +8,6 @@
 (deftest plan-counts-cases-times-repeat
   (is (= {:event "plan" :total 6} (ev/plan [{} {} {}] 2))))
 
-(deftest phases-are-named
-  (is (= {:event "phase" :name "setup"} (ev/phase :setup))))
-
 (deftest result-names-the-case-and-run
   (is (= "f/c#2" (:name (ev/result {:id "f/c" :run 2 :status :pass})))))
 

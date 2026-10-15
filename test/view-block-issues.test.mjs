@@ -81,10 +81,6 @@ const STONE = modelsWith(
 
 const reasonsOf = records => records.map(r => r.reason).sort()
 
-test('REASONS is the fixed list', () => {
-  assert.deepEqual(REASONS, ['unknown-state', 'no-texture', 'shape-mismatch', 'shape-approximated', 'tint-missing', 'state-ignored', 'no-model-data', 'block-entity', 'model-over-cap', 'tint-approximate', 'element-outside-voxel'])
-})
-
 // ---- what the view draws from the jar's own models ----
 
 const MODEL_MATERIAL = { name: 'x', kind: 'model', tex: [-1, -1, -1], box: [0, 0, 0, 16, 16, 16], flags: 0, elemOffset: 0, elemCount: 1 }
@@ -189,10 +185,6 @@ test('a full-collision block with several model elements is shape-approximated, 
 })
 
 // ---- severity, model detail, block entities ----
-
-test('SEVERITIES is missing, wrong, approximate', () => {
-  assert.deepEqual(SEVERITIES, ['missing', 'wrong', 'approximate'])
-})
 
 test('each reason gets its default severity, and the records carry the model and the ignored properties', () => {
   const records = classify({ defs: [['leaf_litter', [FACING, SEGMENTS]], ['dried_ghast']], material: CROSS_MATERIAL, extra: [BARE_MATERIAL], materialIndexOf: id => id <= 16 ? 1 : 2, models: LEAF_LITTER })

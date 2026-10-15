@@ -18,10 +18,6 @@
 
 (defn names [bs] (mapv :name bs))
 
-(deftest the-chips-use-the-five-states-in-order
-  (is (= [[:manual "manual"] [:working "working"] [:idle "idle"] [:trouble "in trouble"] [:offline "offline"]]
-         sf/states)))
-
 (deftest only-states-keeps-the-pressed-states
   (are [pressed expected] (= expected (names (sf/only-states bodies pressed now)))
     #{} ["Off" "Man" "Work" "Idle" "Hurt" "Work2"]

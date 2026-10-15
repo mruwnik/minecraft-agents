@@ -398,15 +398,13 @@
 (deftest usage-shows-the-submit-form-where-to-find-args-and-now
   (is (re-find #"\(jobs\.movement\.go-to \{:pos" jobs/usage))
   (is (re-find #"observe\.mjs.*catalog job" jobs/usage))
-  (is (re-find #"queues behind a running reflex" jobs/usage)))
+  (is (re-find #"queues behind a running reflex" jobs/usage))
+  (is (re-find #"manual control" jobs/usage)))
 
 (deftest submit-usage-and-argument-errors-show-the-list-form
   (is (str/includes? (jobs/usage-for "./bin/jobs") "submit '(jobs."))
   (is (not (str/includes? jobs/usage "<EDN-spec>")))
   (is (re-find #"\(jobs\.[a-z.-]+ \{" (str (jobs/request-for ["B" "--world" "w" "submit" "jobs.a.b" "{}"])))))
-
-(deftest usage-says-jobs-wait-under-manual-control
-  (is (re-find #"manual control" jobs/usage)))
 
 (deftest failure-for-keeps-the-transport-reason
   (doseq [[code reason] [["ENOENT" :no-running-body] ["ETIMEDOUT" :timeout] ["ERESPONSETOOLARGE" :response-too-large]

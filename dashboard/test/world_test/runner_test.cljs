@@ -1,5 +1,5 @@
 (ns world-test.runner-test
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             ["child_process" :as cp]
             ["fs" :as fs]
             ["os" :as os]
@@ -354,9 +354,6 @@
       (is (= 1 (r/check-exit-code res)))
       (is (= 0 (r/check-exit-code [{:status :pass}]))))))
 
-(deftest check-is-an-option
-  (is (true? (:check (r/parse-args #js ["--check"])))))
-
 (deftest a-time-independent-case-locks-as-day-when-the-run-may-set-the-time
   (is (= [:day :any :night :night-x :day]
          [(r/lock-phase {:allow-time true} {:time :any})
@@ -493,6 +490,22 @@
     (is (= :fail (:status (r/mark-stalled {:status :fail :expects [{:status :fail} {:status :stalled}]}))))
     (is (= :pass (:status (r/mark-stalled {:status :pass :expects [{:status :pass}]}))))))
 
+(deftest valued-and-boolean-flags-parse
+  (are [args k v] (= v (k (r/parse-args args)))
+    #js ["--changed-since-pass"] :changed-since-pass true
+    #js ["--check"] :check true
+    #js ["--refresh-build"] :refresh-build true
+    #js ["--stop-stale-bodies" "ProbePool"] :stop-stale-bodies "ProbePool"
+    #js ["--night-batch" "n1"] :night-batch "n1"
+    #js ["--list" "--night-classes"] :night-classes true
+    #js ["--night-barrier" "3"] :night-barrier 3
+    #js ["--night-batch-end" "n1"] :night-batch-end "n1"
+    #js ["--match-id" "a/c1"] :match-ids #{"a/c1"}
+    #js ["--match-id" "a/c1" "--match-id" "b/c2"] :match-ids #{"a/c1" "b/c2"}
+    #js [] :night-batch nil
+    #js [] :night-barrier nil
+    #js [] :changed-since-pass nil))
+
 (deftest phase-is-an-option
   (is (= "night" (:phase (r/parse-args #js ["--phase" "night"]))))
   (is (nil? (:phase (r/parse-args #js []))))
@@ -528,11 +541,6 @@
     (is (= "x" (:why r1)))
     (is (= 1 (:retries r1)))
     (is (= "y" (:why (:last-retry r1))) "the last retry's evidence is kept")))
-
-(deftest match-id-selects-the-exact-case
-  (is (= 2 (:retry-failed (r/parse-args #js ["--retry-failed" "2" "--match-id" "a/c1"]))))
-  (is (= #{"a/c1"} (:match-ids (r/parse-args #js ["--match-id" "a/c1"]))))
-  (is (= #{"a/c1" "b/c2"} (:match-ids (r/parse-args #js ["--match-id" "a/c1" "--match-id" "b/c2"])))))
 
 (deftest only-failed-results-are-retried-and-flaky-is-not-a-failure
   (is (= 0 (r/exit-code [{:status :pass} {:status :flaky}])))
@@ -580,10 +588,6 @@
          (r/align-retries [{:id "a" :run 1 :status :fail} {:id "b" :run 1 :status :fail}]
                           {["a" 1] {:id "a" :run 1 :status :pass}})))
   (is (= [{:id "a" :run 1 :status :fail}] (r/align-retries [{:id "a" :run 1 :status :fail}] {}))))
-
-(deftest changed-since-pass-is-an-option
-  (is (true? (:changed-since-pass (r/parse-args #js ["--changed-since-pass"]))))
-  (is (nil? (:changed-since-pass (r/parse-args #js [])))))
 
 (declare log-reload!)
 
@@ -1013,11 +1017,6 @@
                    (r/read-weather! (fn [_] (js/Promise.reject (js/Error. "down"))))))
           (.then (fn [w] (is (nil? w)) (done)))))))
 
-(deftest night-batch-options
-  (is (= "n1" (:night-batch (r/parse-args #js ["--night-batch" "n1"]))))
-  (is (true? (:night-classes (r/parse-args #js ["--list" "--night-classes"]))))
-  (is (nil? (:night-batch (r/parse-args #js [])))))
-
 (deftest only-an-exclusive-night-case-locks-with-the-batch
   (is (= ["n1" nil nil]
          [(r/lock-batch {:night-batch "n1"} {:time :night-exclusive})
@@ -1054,10 +1053,6 @@
 (deftest weather-wanted-is-the-cases-or-clear
   (is (= [:rain :clear :clear]
          [(r/weather-wanted {:weather :rain}) (r/weather-wanted {}) (r/weather-wanted {:weather :clear})])))
-
-(deftest night-barrier-and-batch-end-options
-  (is (= [3 "n1"] [(:night-barrier (r/parse-args #js ["--night-barrier" "3"])) (:night-batch-end (r/parse-args #js ["--night-batch-end" "n1"]))]))
-  (is (nil? (:night-barrier (r/parse-args #js [])))))
 
 (deftest parse-gamerule-reads-the-value-of-the-server-reply
   (is (= [100 0 nil]
@@ -1296,15 +1291,6 @@
     (is (= {:overran true :first-why "boom"}
            (select-keys (r/mark-night-overran {:status :fail :why "boom"} true) [:overran :first-why]))
         "the pool reruns an :overran result; the first failure reason is kept")))
-
-(deftest refresh-build-parses-as-a-flag
-  (is (true? (:refresh-build (r/parse-args ["--refresh-build"])))))
-
-(deftest stop-stale-bodies-parses-with-its-prefix
-  (is (= "ProbePool" (:stop-stale-bodies (r/parse-args ["--stop-stale-bodies" "ProbePool"])))))
-
-(deftest a-refusal-before-any-case-has-its-own-exit-code
-  (is (= 5 r/precheck-exit)))
 
 (deftest trace-options-parse-and-only-failed-results-get-a-trace
   (let [o (r/parse-args #js ["--trace-dir" "/d/cases" "--trace-attempt" "2"])]

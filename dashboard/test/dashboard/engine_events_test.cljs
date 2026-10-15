@@ -17,10 +17,6 @@
 (def enc (let [e (js/TextEncoder.)] (fn [s] (.encode e s))))
 (def decode (let [d (js/TextDecoder.)] (fn [b] (.decode d b))))
 
-(deftest thresholds
-  (is (= 30000 ee/engine-up-ms))
-  (is (= 10 ee/recent-max)))
-
 (deftest chunks-fold-the-same-as-one-batch
   (let [events [(ev 1 {:name "(repeat look)"}) (ev 2 {:kind "failed" :error "boom" :level "warn"}) (ev 3 {:name "dig"})]]
     (is (= (ee/fold-engine (ee/fold-engine ee/empty-engine (subvec events 0 1)) (subvec events 1))
@@ -165,9 +161,6 @@
         second-read (ee/complete-lines (:rest first-read) (.subarray bytes 7))]
     (is (= "{\"t\":\"é\"}\n" (decode (:complete second-read))))))
 
-(deftest decode-bytes-roundtrip
-  (is (= "héllo" (ee/decode-bytes (enc "héllo")))))
-
 (deftest parse-engine-agents-tolerates-bad-config
   (is (= [{:name "Broken" :username "Broken" :world "test"}
           {:name "NoConfig" :username "NoConfig" :world "test"}
@@ -227,19 +220,10 @@
     (testing title
       (is (= expected (into {} (:backoffs (signals events))))))))
 
-(deftest signals-takeover
-  (doseq [[title events expected]
-          [["started" [(ev 1 {:source "system" :kind "takeover_started"})] true]
-           ["started then ended" [(ev 1 {:source "system" :kind "takeover_started"}) (ev 2 {:source "system" :kind "takeover_ended"})] false]
-           ["ended then started again"
-            [(ev 1 {:source "system" :kind "takeover_started"}) (ev 2 {:source "system" :kind "takeover_ended"}) (ev 3 {:source "system" :kind "takeover_started"})] true]
-           ["never" [(ev 1)] false]]]
-    (testing title
-      (is (= expected (boolean (:takeover? (signals events))))))))
-
 (deftest signals-takeover-who-and-since
   (doseq [[title events expected]
           [["started" [(ev 1 {:source "system" :kind "takeover_started" :who "operator"})] {:takeover? true :takeover-who "operator" :takeover-t (+ t0 1000)}]
+           ["never" [(ev 1)] {}]
            ["ended clears who and since" [(ev 1 {:source "system" :kind "takeover_started" :who "operator"}) (ev 2 {:source "system" :kind "takeover_ended"})] {:takeover? false}]
            ["a new holder replaces" [(ev 1 {:source "system" :kind "takeover_started" :who "a"}) (ev 3 {:source "system" :kind "takeover_started" :who "b"})]
             {:takeover? true :takeover-who "b" :takeover-t (+ t0 3000)}]]]

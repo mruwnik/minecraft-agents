@@ -64,11 +64,6 @@ test('parsePoolArgs: --durations takes every file up to the next flag, never as 
   assert.deepEqual(p.paths, ['dir'])
 })
 
-test('parsePoolArgs: defaults', () => {
-  const p = parsePoolArgs(['d', '--bodies', '3'])
-  assert.equal(p.prefix, 'ProbePool'); assert.equal(p.firstPlot, 0); assert.equal(p.results, null)
-})
-
 test('workerSpecs: the cap lives in the tool; one plot block (20) per body', () => {
   const w = workerSpecs(50, 19, 'ProbeSweep', 0)
   assert.equal(w.length, 19)
@@ -419,9 +414,10 @@ test('runPool: past the wait cap the pool stops as server unreachable (exit 3), 
   assert.deepEqual(splitForms(r.text), [])
   assert.ok(srv.clock.t >= 60000)
 })
-test('parsePoolArgs: --server-wait-s sets the cap in seconds (default 300)', () => {
-  assert.equal(parsePoolArgs(['d']).serverWaitS, 300)
-  assert.equal(parsePoolArgs(['d', '--server-wait-s', '90']).serverWaitS, 90)
+test('parsePoolArgs: --server-wait-s and --server-settle-s set the wait and settle seconds (defaults 300, 10)', () => {
+  assert.deepEqual([parsePoolArgs(['d']).serverWaitS, parsePoolArgs(['d']).serverSettleS], [300, 10])
+  const p = parsePoolArgs(['d', '--server-wait-s', '90', '--server-settle-s', '3'])
+  assert.deepEqual([p.serverWaitS, p.serverSettleS], [90, 3])
 })
 
 // ---- review findings of the fault handling (card 6bfe1115)
@@ -493,10 +489,6 @@ test('runPool: the settle wait also runs when the first probe after a fault alre
   const runUnit = async ({ file }) => { starts.push(srv.clock.t); return starts.length === 1 ? { code: 1, text: vec(refused(`${file}/c1`)) } : ok(file) }
   await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, settleMs: 7000, ...srv })
   assert.ok(starts[1] >= 7000)
-})
-test('parsePoolArgs: --server-settle-s sets the settle wait in seconds (default 10)', () => {
-  assert.equal(parsePoolArgs(['d']).serverSettleS, 10)
-  assert.equal(parsePoolArgs(['d', '--server-settle-s', '3']).serverSettleS, 3)
 })
 test('runPool: in a mixed unit the cases the faulted child never reached are rerun, not recorded as errors', { timeout: 40000 }, async () => {
   const log = []

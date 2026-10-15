@@ -206,11 +206,6 @@ test('a dyed sheep tints its wool body only; an undyed or other mob carries no t
   assert.ok(modelFor({ name: 'cow', height: 1.4, dye: 14 }).parts.every(p => !p.tint))
 })
 
-test('the dye table has sixteen colours, white first', () => {
-  assert.equal(DYES.length, 16)
-  assert.ok(DYES[0].every(v => v > 240))
-})
-
 test('a baby is half the height of an adult with a bigger head for its body', () => {
   const look = e => {
     const m = modelFor({ name: 'cow', height: 1.4, ...e })

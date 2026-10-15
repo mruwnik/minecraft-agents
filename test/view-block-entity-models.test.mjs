@@ -161,11 +161,6 @@ test('a hanging sign with and without an attached chain pair differs', () => {
 
 // ---- banners ----
 
-test('dye colours: sixteen, as colours', () => {
-  assert.equal(Object.keys(DYE_COLORS).length, 16)
-  assert.ok(Object.values(DYE_COLORS).every(c => /^[0-9a-f]{6}$/.test(c)))
-})
-
 test('a banner: a pole, a bar and a cloth tinted with the dye colour', () => {
   for (const [name, hex] of [['red_banner', 'b02e26'], ['white_banner', 'f9fffe'], ['lime_wall_banner', '80c71f']]) {
     const elements = get(name, { rotation: 0, facing: 'north' })

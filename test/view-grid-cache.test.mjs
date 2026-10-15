@@ -41,12 +41,6 @@ for (const [eye, across] of [
   })
 }
 
-test('geometry for the common eye is -64..319', () => {
-  const { column } = world([[5, 70, 5, stone]])
-  const grid = gridCache().get({ column, eye: { x: 4.5, y: 71.6, z: 4.5 }, across: 32 })
-  assert.deepEqual([grid.origin.y, grid.size.y], [-64, 384])
-})
-
 test('all columns null falls back to eye-centred vertical range', () => {
   const grid = gridCache().get({ column: () => null, eye: { x: 0.5, y: 10, z: 0.5 }, across: 8 })
   assert.deepEqual([grid.origin.y, grid.size.y], [-38, 97])

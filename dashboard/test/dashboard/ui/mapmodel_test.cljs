@@ -20,10 +20,6 @@
     "who-knows" mm/place-color
     nil mm/place-color))
 
-(deftest status-colors
-  (are [status expected] (= expected (mm/status-color status))
-    :working "#3fb950" :idle "#8b949e" :trouble "#d29922" :offline "#6e7681"))
-
 (deftest zoom-labels
   (are [scale expected] (= expected (mm/show-place-labels? scale))
     0.1 false

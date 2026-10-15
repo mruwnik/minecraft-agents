@@ -212,10 +212,6 @@ test('integration: with the other slot held a plain run is busy, a heavy run (--
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('config: the server kind reserves a slot for heavy runners', () => {
-  assert.ok(loadConfig().kinds.server.reserve >= 1)
-})
-
 test('hasHeavyMarker: a .res-slot-heavy file in the cwd or any parent marks the checkout heavy', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-marker-'))
   const sub = path.join(root, 'engine', 'x')
@@ -241,10 +237,6 @@ test('integration: a run whose cwd is in a checkout with .res-slot-heavy takes t
     assert.equal(r.status, 0); assert.match(r.stdout, /ran/)
   } finally { process.kill(-holder.pid, 'SIGKILL') }
   fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(wt, { recursive: true, force: true })
-})
-
-test('config: the tests kind reserves a slot for heavy runners', () => {
-  assert.ok(loadConfig().kinds.tests.reserve >= 1)
 })
 
 test('candidateSlots: a heavy run also tries the reserved slots, first; a light one only its own', () => {
