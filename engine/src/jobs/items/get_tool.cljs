@@ -83,9 +83,8 @@
   (let [p (:primitives c)
         names (tools-for p (:args c))]
     (when-not (or (map? names) (empty? names) (carried-tool p names))
-      (let [w (atom nil)]
-        (when-not (ctx/check-child (assoc c :wait w) :obtain 'jobs.items.obtain (obtain-args c names))
-          (or (:cause @w) (:reason @w) :no-source))))))
+      (when-let [w (ctx/child-wait c :obtain 'jobs.items.obtain (obtain-args c names))]
+        (or (:cause w) (:reason w))))))
 
 (def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))] [:fn (started/at-start no-source)]])
 

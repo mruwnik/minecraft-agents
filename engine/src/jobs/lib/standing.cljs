@@ -45,8 +45,8 @@
   [c]
   (into #{} (comp (filter (comp #{:repeat} :op :spec val)) (map key)) (:instances @(:state (:engine c)))))
 
-(defn away-wait
-  "For a check: nil, or the declined wait (false, reason :away) when site (a position, or nil) is farther than
+(defn away-cause
+  "nil, or the cause {:reason :away ..} when site (a position, or nil) is farther than
   ::away-limit from the body and a listed job other than this one and the standing jobs is listed, or when the body is
   more than ::away-depth below it."
   [c site]
@@ -56,4 +56,4 @@
                (or (> (- (:y site) (:y (u/self-pos c))) (away-depth))
                    (and (> (u/dist (u/self-pos c) site) (away-limit))
                         (seq (remove standing (loose/live-ids view nil))))))
-      (ctx/wait c {:reason :away :site site :limit (away-limit)}))))
+      {:reason :away :site site :limit (away-limit)})))

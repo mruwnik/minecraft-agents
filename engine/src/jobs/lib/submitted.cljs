@@ -18,8 +18,8 @@
   [c]
   (ctx/update-mem! c assoc ::begun true))
 
-(defn away-wait
-  "For a check: nil, or the declined wait (false) when the job has not begun, has a :from and the body stands more than
+(defn away-cause
+  "nil, or the cause {:reason :moved-since-submit ..} when the job has not begun, has a :from and the body stands more than
   ::limit from it."
   [c]
   (let [{:keys [from here]} (:args c)
@@ -27,4 +27,4 @@
         at (when from (u/self-pos c))
         distance (when from (u/dist at from))]
     (when (and from (not here) (not (::begun (ctx/mem c))) (> distance (limit)))
-      (ctx/wait c {:reason :moved-since-submit :from from :at (into {} (map (fn [[k v]] [k (js/Math.floor v)])) (select-keys at [:x :y :z])) :distance (js/Math.round distance) :limit (limit)}))))
+      {:reason :moved-since-submit :from from :at (into {} (map (fn [[k v]] [k (js/Math.floor v)])) (select-keys at [:x :y :z])) :distance (js/Math.round distance) :limit (limit)})))

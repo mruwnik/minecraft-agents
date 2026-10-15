@@ -244,12 +244,7 @@
   "Why the child job (a registry symbol) in slot with args would wait now: its check's ctx/wait reason as a map
   {:reason kw ...} ({:reason :not-ready} for a plain false), or nil when its check passes."
   [c slot job args]
-  (let [a (atom nil)]
-    (when-not (ctx/check-child (assoc c :wait a) slot job args)
-      (let [r @a]
-        (cond (map? r) r
-              (some? r) {:reason r}
-              :else {:reason :not-ready})))))
+  (ctx/child-wait c slot job args))
 
 (defn child-wait*
   "child-wait as an ending: condition-failed with the wait map ({:reason ..}) as its cause, or nil when the child's check

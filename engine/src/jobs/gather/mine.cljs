@@ -219,10 +219,9 @@
 ;; ------------------------------------------------------------------ the contract
 
 (defn away
-  "The cause of a call submitted with a :from the body has since left (jobs.lib.submitted/away-wait), or nil."
+  "The cause of a call submitted with a :from the body has since left (jobs.lib.submitted/away-cause), or nil."
   [c]
-  (let [w (atom nil)]
-    (when (false? (submitted/away-wait (assoc c :wait w))) @w)))
+  (submitted/away-cause c))
 
 (defn no-zones
   "{:reason :no-zones} while no zone list has been read (unless :ignore-zones?), with one warn mine.declined."

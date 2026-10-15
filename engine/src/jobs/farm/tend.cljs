@@ -299,8 +299,7 @@
   is listed, else the cause of the last part not resting (the first to ask for a look), nil when some part has work."
   [c]
   (let [{:keys [plan box]} (:args c)
-        w (atom nil)
-        away (when (false? (standing/away-wait (assoc c :wait w) (site c))) @w)]
+        away (standing/away-cause c (site c))]
     (cond
       (and (not plan) (not (usable-box? box))) (contract/impossible {:reason :no-box})
       away away

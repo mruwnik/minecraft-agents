@@ -234,10 +234,9 @@
                        :carried (pl/carried p) :item nil :items (blocks-of c) :ledger (ledger/cells l)}))))
 
 (defn away
-  "The cause of a call submitted with a :from the body has since left (jobs.lib.submitted/away-wait), or nil."
+  "The cause of a call submitted with a :from the body has since left (jobs.lib.submitted/away-cause), or nil."
   [c]
-  (let [w (atom nil)]
-    (when (false? (submitted/away-wait (assoc c :wait w))) @w)))
+  (submitted/away-cause c))
 
 (defn blocks-short
   "How many blocks a pillar of height lacks when none of items is carried, else nil. Asked of the carried list alone: the

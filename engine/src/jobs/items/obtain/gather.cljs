@@ -107,7 +107,7 @@
       (await (explore-step! c need))
       (and (not (get-in (ctx/mem c) [:gather :before]))
            (not (if (explore-opts c)
-                  (and (or (:tunnel? need) (seen-of c need)) (ctx/check-child c (gather-slot need) (:job need) (:args need)))
+                  (and (or (:tunnel? need) (seen-of c need)) (nil? (ctx/child-wait c (gather-slot need) (:job need) (:args need))))
                   (gather-viable? c names (- target have)))))
       (tried! c :gather :none-seen)
       :else

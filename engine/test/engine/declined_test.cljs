@@ -169,6 +169,25 @@
           (reset! need false)
           (is (nil? (await (wait))) "a passing check waits on nothing"))))))
 
+(deftest ctx-child-wait-reads-the-childs-wait-without-running-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [need (atom true)
+              wait (fn [] (in-parent (old-kid need) (fn ^:async f [c] (ctx/child-wait c :kid 'jobs.movement.go-to {}))))]
+          (is (= {:reason :need :what "thing"} (await (wait))))
+          (reset! need false)
+          (is (nil? (await (wait))) "a passing check waits on nothing"))
+        (let [need (atom true)
+              wait (fn [] (in-parent (contract-kid need) (fn ^:async f [c] (ctx/child-wait c :kid 'jobs.movement.go-to {}))))]
+          (is (= {:reason :need :cause {:reason :need :what "thing"}} (await (wait))) "a contract child's failing condition")
+          (reset! need false)
+          (is (nil? (await (wait)))))
+        (is (= {:reason :not-ready}
+               (await (in-parent {:check (constantly false) :round (fn [_] :done)}
+                                 (fn ^:async f [c] (ctx/child-wait c :kid 'jobs.movement.go-to {})))))
+            "a plain false is not ready")))))
+
 (def night-walker
   {:check (constantly true)
    :round (fn ^:async w [c] (ctx/update-mem! c assoc :hold :night-sheltered) :continue)})

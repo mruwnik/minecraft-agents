@@ -31,7 +31,7 @@
          (let [need (with-block c (first needs))]
            (boolean (if (tools-wanted c names need)
                       (tool-viable? c names need)
-                      (ctx/check-child c (gather-slot need) (:job need) (:args need))))))))
+                      (nil? (ctx/child-wait c (gather-slot need) (:job need) (:args need)))))))))
 
 (defn explore-opts
   "The search options of :explore, or nil when it is off."
@@ -69,10 +69,12 @@
 (defn pickaxe-first? [c names need] (boolean (tools-wanted c names need)))
 
 (defn gather-held
-  "When every raw need of the chain is seen and the first one's child declined with a wait reason of its own (night in
-  a shelter ..; gather-viable? left it in c's :wait atom): that reason as a cause, the source there, only not now; else nil."
+  "When every raw need of the chain is seen and the first one's child would wait for a reason of its own (night in
+  a shelter ..): that reason as a cause, the source there, only not now; else nil."
   [c names n]
   (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) seq)
-        w (some-> (:wait c) deref)]
-    (when (and needs (every? #(seen-of c %) needs) w)
+        need (when (and needs (every? #(seen-of c %) needs)) (with-block c (first needs)))
+        w (when (and need (not (tools-wanted c names need)))
+            (ctx/child-wait c (gather-slot need) (:job need) (:args need)))]
+    (when w
       (if (= [:reason] (keys w)) (:reason w) w))))

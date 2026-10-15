@@ -91,8 +91,7 @@
   carried, a gather of seen raw needs, or a search for unseen ones. Else the cause: the gather child's own decline,
   :low-health for a search the body is too hurt for, or {:reason :no-source :why ..}."
   [c]
-  (let [c (assoc c :wait (atom nil))
-        a (:args c)
+  (let [a (:args c)
         names (names-of a)
         n (:count a)]
     (cond

@@ -177,9 +177,7 @@
 (defn away
   "The wait cause of a body that stands too far from where the job was submitted, or nil."
   [c]
-  (let [w (atom nil)]
-    (submitted/away-wait (assoc c :wait w))
-    @w))
+  (submitted/away-cause c))
 
 (def start-facts
   "Give-up reasons known from the args and the map under the feet, before any look: the call's own mistakes and what permission refuses."

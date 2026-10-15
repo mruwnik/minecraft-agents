@@ -174,6 +174,18 @@
         slots (conj (:slots ctx) slot)]
     ((:check def) (assoc ctx :slots slots :args args))))
 
+(defn child-wait
+  "Why the child job (a registry symbol, or a definition) in slot with args would wait now, for a parent that asks before
+  it calls: its check's wait reason as a map {:reason kw ...} ({:reason :not-ready} for a plain false), or nil when the
+  child would start."
+  [ctx slot job args]
+  (let [a (atom nil)]
+    (when-not (check-child (assoc ctx :wait a) slot job args)
+      (let [r @a]
+        (cond (map? r) r
+              (some? r) {:reason r}
+              :else {:reason :not-ready})))))
+
 (defn submit!
   "Put a job spec (an expression, see engine.expr) at the end of the list;
   returns its instance id."

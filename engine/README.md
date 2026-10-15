@@ -279,6 +279,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(await (ctx/quote ctx job args quote-deadline?))` | what a call would use and yield (Quotes), or the `:duplicate-call` ending |
 | `(await (ctx/next-way ctx quote-of-way thing?))` | `{:way k :dropped {way why}}`, the next way to try (Quotes) |
 | `(ctx/check-child ctx slot job args)` | the child's check, for a parent's check |
+| `(ctx/child-wait ctx slot job args)` | why the child would wait now: its check's reason as `{:reason ..}`, nil when it would start |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
 | `(ctx/submit! ctx spec opts)` | put a peer job at the end of the list; returns its id |

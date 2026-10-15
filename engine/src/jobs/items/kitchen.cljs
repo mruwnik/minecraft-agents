@@ -128,11 +128,9 @@
       (when r {:reason :nothing-to-do :backed-off [rest-key]}))))
 
 (defn away
-  "The cause of a kitchen far from its chest while another job is listed (jobs.lib.standing/away-wait), or nil."
+  "The cause of a kitchen far from its chest while another job is listed (jobs.lib.standing/away-cause), or nil."
   [c]
-  (let [w (atom nil)]
-    (standing/away-wait (assoc c :wait w) (storage/chest-of (ctx/view c) (:args c)))
-    @w))
+  (standing/away-cause c (storage/chest-of (ctx/view c) (:args c))))
 
 (defn nothing-to-do
   "The cause of a kitchen with no step to run: each step's skip."
