@@ -5,7 +5,7 @@
   "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. :at inspects one exact
   block as last seen, with properties (a cell never seen is :unknown). Nearby samples are nearest first and bounded;
   :more-blocks?/:more-entities? report extra matches. Nothing is sensed through walls (players are always listed).
-  This is sight evidence, not a terrain map. A refused argument ends :condition-failed with cause {:reason :bad-args :text why}. On success ends :done with the observation as its data.")
+  This is sight evidence, not a terrain map. A refused argument ends :impossible with cause {:reason :bad-args :text why} (from can-start?). On success ends :done with the observation as its data.")
 (a/defargs args
   {:radius {:doc "nearby sample radius, 1..32 blocks" :spec (a/num-in 1 32) :default 16}
    :block-names {:doc "nil, one block name or a vector/set of up to 16 names" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
@@ -32,7 +32,6 @@
   (boolean (or (useful-names n) (re-find #"(?:_bed|_ore)$" n))))
 (defn names [v]
   (cond (nil? v) nil (string? v) [v] (or (vector? v) (set? v)) (vec v) :else ::bad))
-(defn count-bound? [v hi] (and (integer? v) (<= 0 v hi)))
 (defn valid-names? [v]
   (or (nil? v) (and (vector? v) (<= 1 (count v) 16)
                     (every? #(and (string? %) (re-matches #"[a-z0-9_]{1,80}" %)) v))))
@@ -42,23 +41,17 @@
   (let [by-name (.-blocksByName (minecraft-data (game/version-of p)))]
     (fn [n] (.hasOwnProperty by-name n))))
 (defn options
-  "The validated args, or {:error text}. known-block? (optional) refuses block names minecraft-data does not list."
+  "The args with names listed and :at parsed, or {:error text} for what the arg specs do not say (name lists, :useful? with
+  :block-names, a cell). known-block? (optional) refuses block names minecraft-data does not list."
   ([a] (options a nil))
   ([a known-block?]
-  (let [unknown-keys (remove (set (keys args)) (keys a))
-        a (merge (into {} (map (fn [[k v]] [k (:default v)]) args)) a)
+  (let [a (merge (into {} (map (fn [[k v]] [k (:default v)]) args)) a)
         blocks (names (:block-names a)) entities (names (:entity-names a))
         at (when (:at a) (places/parse-pos (:at a)))]
     (cond
-      (seq unknown-keys) {:error (str "unknown args: " (pr-str (vec (sort unknown-keys))))}
-      (not (and (number? (:radius a)) (js/isFinite (:radius a)) (<= 1 (:radius a) 32))) {:error "radius must be 1..32"}
-      (not (count-bound? (:max-blocks a) 16)) {:error "max-blocks must be an integer 0..16"}
-      (not (count-bound? (:max-entities a) 8)) {:error "max-entities must be an integer 0..8"}
       (not (and (valid-names? blocks) (valid-names? entities))) {:error "names must be nil, a name, or up to 16 block/entity names"}
       (and known-block? (seq (remove known-block? blocks))) {:error (str "unknown block names: " (pr-str (vec (remove known-block? blocks))))}
       (and (:useful? a) blocks) {:error ":useful? and :block-names are exclusive"}
-      (not (boolean? (:useful? a))) {:error "useful? must be true or false"}
-      (not (boolean? (:properties? a))) {:error "properties? must be true or false"}
       (:reason at) {:error (:message at)}
       :else (assoc a :block-names blocks :entity-names entities :at (:pos at))))))
 (defn pos [p]
@@ -114,7 +107,4 @@
     (contract/ok :args "args fit")))
 (def can-start? bad-args)
 (defn round [c]
-  (let [a (options (:args c) (block-name-checker (:primitives c)))]
-    (if-let [error (:error a)]
-      (ctx/end c :condition-failed {:reason :bad-args :text error} {:observed false})
-      (ctx/end c :done nil (observe (:primitives c) a)))))
+  (ctx/end c :done nil (observe (:primitives c) (options (:args c)))))
