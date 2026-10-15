@@ -14,6 +14,7 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.expr :as expr]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -2488,16 +2489,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "sand" :count 30} {:blocks (merge wide-floor (cells "sand" (range 4 10) [64 65] (range -2 3)))} 0))
-              world (.-world (:p s))
-              _ (loop [n 0] (when (and (< n 40) (zero? (dig-count s))) (await (run-ticks s 1)) (recur (inc n))))
-              dug (dig-count s)]
-          (is (< 0 dug 30) "the job is under way")
-          (swap! (.. world -state) assoc-in [:self :health] 2)
-          (await (run-ticks s 10))
-          (is (= dug (dig-count s)) "no dig after the body got hurt")
-          (is (= [:low-health] (distinct (map :reason (events-of s :holding)))))
-          (is (not (finished? s)) "the run waits, it does not end"))))))
+        ;; one call is the whole run, so a small step budget makes the round yield while the run is under way
+        (settings/with-settings {:jobs.gather.mine/max-steps 4}
+          (fn ^:async inner []
+            (let [s (await (scenario {:block "sand" :count 30} {:blocks (merge wide-floor (cells "sand" (range 4 10) [64 65] (range -2 3)))} 0))
+                  world (.-world (:p s))
+                  _ (loop [n 0] (when (and (< n 40) (zero? (dig-count s))) (await (run-ticks s 1)) (recur (inc n))))
+                  dug (dig-count s)]
+              (is (< 0 dug 30) "the job is under way")
+              (swap! (.. world -state) assoc-in [:self :health] 2)
+              (await (run-ticks s 10))
+              (is (= dug (dig-count s)) "no dig after the body got hurt")
+              (is (= [:low-health] (distinct (map :reason (events-of s :holding)))))
+              (is (not (finished? s)) "the run waits, it does not end"))))))))
 
 (deftest a-body-with-its-head-in-water-digs-nothing-and-says-flooded
   (async done
