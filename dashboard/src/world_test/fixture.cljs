@@ -84,11 +84,11 @@
 ;; ------------------------------------------------------------------ reading
 
 (defn rel
-  "The #at tag: a plot-relative position written [x y z], resolved to an absolute vector."
+  "The #at tag: a plot-relative position written [x y z] (or a column [x z]), resolved to an absolute vector."
   [v] {::rel (vec v) ::as :vec})
 
 (defn rel-map
-  "The #xyz tag: a plot-relative position written [x y z], resolved to an absolute {:x :y :z} map."
+  "The #xyz tag: a plot-relative position written [x y z] (or a column [x z]), resolved to an absolute {:x :y :z} map."
   [v] {::rel (vec v) ::as :map})
 
 (def readers {'at rel 'xyz rel-map})
@@ -356,8 +356,12 @@
   [form origin]
   (walk/postwalk (fn [v]
                    (if (and (map? v) (contains? v ::rel))
-                     (let [[x y z] (abs-pos origin (::rel v))]
-                       (if (= :map (::as v)) {:x x :y y :z z} [x y z]))
+                     (if (= 2 (count (::rel v)))
+                       (let [[x z] (::rel v)
+                             [ox _ oz] origin]
+                         (if (= :map (::as v)) {:x (+ ox x) :z (+ oz z)} [(+ ox x) (+ oz z)]))
+                       (let [[x y z] (abs-pos origin (::rel v))]
+                         (if (= :map (::as v)) {:x x :y y :z z} [x y z])))
                      v))
                  form))
 

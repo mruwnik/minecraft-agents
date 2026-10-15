@@ -1,0 +1,78 @@
+;; jobs.movement.go-to when the way is shut: sealed by a hand-diggable block, a soft seal over an own stair mouth, a 1-wide dirt tunnel,
+;; a goal walled in while the body is free, bare hands. Bedrock is never dug and ends with a reason. Escalation is the default.
+;; Should-succeed: moss room + pickaxe; dirt-sealed stair; open and plugged 1-wide dirt tunnel; stone room with bare hands; free body, goal in a stone room + pickaxe.
+;; Should-fail: bedrock room (with and without a pickaxe), goal in a bedrock room: :arrived false, nothing dug.
+{:defaults
+ {:tags [:movement :access :go-to]
+  :time :any
+  :plot {:height 14}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "moss-block-room-with-pickaxe-is-dug-out"
+   :blocks [[:fill [14 -1 14] [18 2 18] "moss_block" :hollow]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :result :data {:escalation {:why :no-dig}}} :for-s 140 :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [24.5 0 16.5] 2]]}
+  {:name "stone-room-with-bare-hands-is-dug-out"
+   :blocks [[:fill [14 -1 14] [18 2 18] "stone" :hollow]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :result :data {:escalation {:why :no-tool}}} :for-s 140 :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [24.5 0 16.5] 2]]}
+  {:name "own-stair-sealed-by-dirt-is-dug-by-hand"
+   ;; stone mass x 8..22, y 0..5 (top feet y 6); a stair up the mass (feet y = x - 12, 2 above the head); the mouth cells (17,5..7) are dirt
+   :blocks [[:fill [8 0 8] [22 5 24] "stone"]
+            [:fill [12 0 16] [12 2 16] "air"] [:fill [13 1 16] [13 3 16] "air"] [:fill [14 2 16] [14 4 16] "air"]
+            [:fill [15 3 16] [15 5 16] "air"] [:fill [16 4 16] [16 6 16] "air"] [:fill [17 5 16] [17 7 16] "dirt"]
+            [:fill [18 6 16] [18 8 16] "air"]]
+   :body {:at [16.5 4 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 6 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :result :data {:why :ladder-gap}} :for-s 140 :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [20.5 6 16.5] 2]]}
+  {:name "one-wide-dirt-tunnel-open-end-walks-out"
+   :blocks [[:fill [2 0 15] [27 2 17] "dirt"] [:fill [3 0 16] [27 1 16] "air"]]
+   :body {:at [5.5 0 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [30 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 90 :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [30.5 0 16.5] 2]]}
+  {:name "one-wide-dirt-tunnel-plugged-digs-out"
+   :blocks [[:fill [2 0 15] [27 2 17] "dirt"] [:fill [3 0 16] [25 1 16] "air"]]
+   :body {:at [5.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [30 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:body-near [30.5 0 16.5] 2]]}
+  {:name "free-body-goal-walled-in-with-pickaxe-digs-in"
+   :blocks [[:fill [22 -1 14] [26 2 18] "stone" :hollow]]
+   :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:body-near [24.5 0 16.5] 2]]}
+  {:name "bedrock-room-with-pickaxe-gives-up-and-digs-nothing"
+   :blocks [[:fill [14 -1 14] [18 2 18] "bedrock" :hollow]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false}}}]
+   :after [[:block [18 1 16] "bedrock"] [:body-near [16.5 0 16.5] 1.5]]}
+  {:name "bedrock-room-bare-handed-gives-up-and-digs-nothing"
+   :blocks [[:fill [14 -1 14] [18 2 18] "bedrock" :hollow]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false}}}]
+   :after [[:block [18 1 16] "bedrock"] [:body-near [16.5 0 16.5] 1.5]]}
+  {:name "goal-in-a-bedrock-room-gives-up-for-a-free-body"
+   :blocks [[:fill [22 -1 14] [26 2 18] "bedrock" :hollow]]
+   :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 120 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 120 :until {:source :job :kind :result :data {:arrived false}}}]
+   :after [[:block [22 1 16] "bedrock"]]}]}

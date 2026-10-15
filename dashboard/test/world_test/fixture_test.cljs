@@ -181,6 +181,10 @@
     (is (= '(jobs.blocks.dig {:pos [101 150 202] :box {:min {:x 100 :y 150 :z 200}}}) spec))
     (is (= "(jobs.blocks.dig {:pos [101 150 202], :box {:min {:x 100, :y 150, :z 200}}})" (pr-str spec)))))
 
+(deftest a-two-element-tag-is-a-column-goal
+  (let [r (f/resolve-tags (f/read-edn "[#at [3 7] #xyz [3 7] #at [1 2 3]]") [100 150 200])]
+    (is (= [[103 207] {:x 103 :z 207} [101 152 203]] r))))
+
 (deftest selection-by-tag-and-name
   (let [cases (f/file-cases text "hostile")]
     (is (= 3 (count (f/select-cases cases {:tag "hostile"}))))

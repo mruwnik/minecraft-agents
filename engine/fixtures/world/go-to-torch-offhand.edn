@@ -1,0 +1,46 @@
+;; jobs.movement.go-to :unknown in the dark with torches CARRIED (no shield, so the off hand is free): the dark-floor aid holds a torch in
+;; the off hand to see deeper; the stack must come back to the inventory when the call ends (the fixture's :item check counts the
+;; inventory, not the off hand), :place-torches must still see the torches it carries, and a torch left by a cut call is returned
+;; at the next call. Same sealed ledge as go-to-torch-fetch.edn: corridor (x 11..13, feet y 3) over a low corridor (x 14..24, feet y 0).
+;; Should-succeed: carried torches light the drop (one placed, 3 in the inventory, nothing fetched); without :place-torches the off-hand
+;; torch is back (4 in the inventory); a cancelled call's off-hand torch is back after the next call.
+;; Should-fail: a zone over the takeoff cells refuses the torch (none placed).
+{:defaults
+ {:tags [:movement :go-to :torch]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [10 0 14] [26 8 18] "stone"]
+           [:fill [11 3 16] [13 4 16] "air"]
+           [:fill [14 0 16] [24 4 16] "air"]]
+  :body {:at [11.5 3 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]] :inventory [["torch" 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "carried-torch-lights-the-drop-without-fetching-and-off-hand-comes-back"
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :place-torches true :ignore-zones? true})]]
+   :expect [{:event {:kind :walk.torch-placed} :within-s 100 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 110 :of-job true}
+            {:no-event {:source :job :kind :result :data {:torches :none}} :for-s 110 :until {:source :job :kind :result}}
+            {:no-event {:source :job :kind :go-to.off-hand-kept} :for-s 110 :until {:source :job :kind :result}}]
+   :after [[:item "torch" 3] [:body-near [24.5 0 16.5] 3]]}
+  {:name "unknown-without-place-torches-returns-the-off-hand-torch"
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :go-to.off-hand-torch} :within-s 100 :of-job true}
+            {:event {:source :job :kind :result} :within-s 110 :of-job true}
+            {:no-event {:kind :walk.torch-placed} :for-s 110 :until {:source :job :kind :result}}]
+   :after [[:item "torch" 4]]}
+  {:name "torch-left-by-a-cancelled-call-is-returned-at-the-next-call"
+   ;; the first call is cancelled once the torch is in the off hand (if the call ended first, the torch is back anyway)
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :ignore-zones? true})]
+         [:await {:source :job :kind :go-to.off-hand-torch} 100]
+         [:http :cancel "$event-job" {:ok true}]
+         [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [12 3 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:item "torch" 4]]}
+  {:name "zone-over-the-takeoff-refuses-the-torch"
+   ;; the feet and head cells of the corridor's end belong to another owner: no torch goes there
+   :zones [{:name "takeoff" :min [12 3 16] :max [13 4 16] :owner "Other" :allow #{}}]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :place-torches true})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 100 :of-job true}
+            {:no-event {:kind :walk.torch-placed} :for-s 100 :until {:source :job :kind :result}}]
+   :after [[:not-block [13 4 16] "wall_torch"] [:not-block [12 4 16] "wall_torch"] [:item "torch" 4]]}]}
