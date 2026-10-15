@@ -3,9 +3,12 @@
   caller dug only from a seen solid safe floor."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.core :as core]
+            [engine.memory :as mem]
             [engine.event-api :as event-api]
             [engine.fake :as fake]
             [engine.test-util :as tu]
+            [jobs.lib.loose :as loose]
             [jobs.lib.shelter :as sh]))
 
 (def job 'jobs.forestry.collect-drops)
@@ -318,3 +321,17 @@
             (is (= {"porkchop" [0 2 2]} (get-in quote [:yields :items])) "only what is in the radius")
             (is (= [0 2 2] (:done quote)))
             (is (and (zero? least) (pos? mean) (<= mean most)))))))))
+
+(deftest a-collect-cut-while-it-waits-on-a-settling-drop-releases-its-hold-in-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks {"0,62,0" "stone"}})
+              held #(mem/entries (mem/view (:store eng)) loose/hold-kind)]
+          (drop! p [0 63 0] "dirt")
+          (core/submit! eng '(jobs.forestry.collect-drops {:radius 6 :holes [[0 63 0]]}) {})
+          (await (core/tick! eng))
+          (is (seq (held)) "held while it waits")
+          (core/cancel! eng (first (:list (core/state eng))))
+          (await (tu/run-until-empty eng 20))
+          (is (empty? (held)) "the cleanup released it"))))))

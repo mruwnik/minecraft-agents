@@ -285,6 +285,12 @@
      :yields {:items (update-vals names (fn [k] [0 k k]))}
      :done [0 n n]}))
 
+(defn cleanup
+  "However the job ends: the :collecting hold on its area is released."
+  [c _]
+  (loose/release! c)
+  (ctx/end c :done nil))
+
 (defn ^:async round
   "One whole attempt: collects the nearest matching dropped item again and again until none is left in radius.
   Each item is tried once (picked up, gone, unreachable or not): its id is remembered in job memory and skipped,
@@ -296,7 +302,7 @@
                      (ctx/update-mem! c assoc :anchor a)
                      (loose/hold! c a (:radius (:args c)))
                      a))
-        done! (fn [kind cause data] (loose/release! c) (ctx/end c kind cause data))
+        done! (fn [kind cause data] (ctx/end c kind cause data))
         data (fn [] (cond-> {:collected (:collected (ctx/mem c) 0)}
                       (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))))
         swept! (fn []
