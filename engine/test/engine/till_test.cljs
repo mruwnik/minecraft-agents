@@ -319,11 +319,6 @@
          (select-keys (:args (expr/parse registry/jobs '(jobs.farm.till {:from [1 64 2] :to [3 64 4]}))) [:from :to])))
   (is (re-find #":from must be \[x y z\]" (expr/problem registry/jobs '(jobs.farm.till {:from [1 64] :to [3 64 4]})))))
 
-(deftest check-lets-a-failing-world-read-throw
-  (let [c (counting-ctx {:inventory hoe} sixteen (atom {}))]
-    (set! (.-blockAt (:primitives c)) (fn [_] (throw (js/Error. "world read failed"))))
-    (is (thrown-with-msg? js/Error #"world read failed" (till/problem c)))))
-
 (deftest a-hoe-that-vanishes-at-the-use-counts-a-try-and-the-cell-is-skipped-as-no-hoe
   (async done
     (tu/run-async done

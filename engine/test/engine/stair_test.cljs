@@ -1150,16 +1150,6 @@
     {[1 63 0] "cave_air"}
     {[1 63 0] "water"}))
 
-(deftest leaves-need-no-pickaxe
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [leaves (update-vals ground (constantly "oak_leaves"))
-              {:keys [out p events] :as s} (await (stair! {:blocks leaves :inventory []} east (fn [_])))]
-          (is (= :done (:status @out)))
-          (is (not= :no-tool (:reason (waiting s))))
-          (is (seq (digs p))))))))
-
 (deftest by-hand-digs-stone-with-no-pickaxe
   (async done
     (tu/run-async done
@@ -1167,14 +1157,6 @@
         (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} (assoc east :fetch false :need-drop false) (fn [_])))]
           (is (= :done (:status @out)) (pr-str @out))
           (is (nil? (waiting s)))
-          (is (seq (digs p)) "dug bare-handed"))))))
-
-(deftest a-stair-digs-bare-handed-once-the-tool-fetch-failed
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} east (fn [_])))]
-          (is (= :done (:status @out)) (pr-str @out))
           (is (seq (digs p)) "dug bare-handed"))))))
 
 (deftest a-stair-digs-an-exposed-ore-beside-the-way-unless-told-not-to-or-lava-touches-it

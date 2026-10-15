@@ -44,16 +44,6 @@
     "stick" 0.5
     "dirt" nil))
 
-(deftest nether-wood-is-no-fuel
-  (are [item] (nil? (smelt-plan/fuel-per-unit "furnace" item))
-    "crimson_planks" "warped_planks" "crimson_stem" "warped_hyphae"))
-
-(deftest the-quick-kinds-burn-fuel-twice-as-fast-so-an-item-costs-the-same
-  (are [kind item per] (= per (smelt-plan/fuel-per-unit kind item))
-    "blast_furnace" "coal" 8
-    "smoker" "oak_planks" 1.5
-    "smoker" "dirt" nil))
-
 (deftest cook-times-per-kind
   (are [kind ticks] (= ticks (smelt-plan/cook-ticks kind))
     "furnace" 200

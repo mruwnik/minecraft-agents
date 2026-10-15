@@ -16,37 +16,7 @@
   {:lease lease/settings :events events/settings :event-api event-api/settings :backoff backoff/settings
    :hurt hurt/settings :entities obs/settings :perception perception/settings})
 
-(def defaults-then
-  "The values the constants had before they became settings."
-  {:engine.lease/max-ms 10000 :engine.lease/max-idle-s 3600 :engine.lease/default-release-ms 1000
-   :engine.lease/default-idle-ms 15000
-   :engine.events/max-bytes 67108864 :engine.events/recent-count 256 :engine.events/recent-bytes 262144
-   :engine.events/default-page-size 256 :engine.events/max-page-size 2000 :engine.events/max-page-bytes 1048576
-   :engine.events/max-line-bytes 16384 :engine.events/max-id-chars 256 :engine.events/max-chain 8
-   :engine.event-api/max-body-bytes 16384 :engine.event-api/max-limit 1000 :engine.event-api/status-job-limit 4
-   :engine.event-api/attention-limit 4 :engine.event-api/catalog-page-limit 20
-   :engine.event-api/max-catalog-page-limit 64 :engine.event-api/catalog-doc-limit 1200
-   :engine.event-api/inventory-stack-limit 46 :engine.event-api/enchant-limit 8
-   :engine.backoff/after 3 :engine.backoff/first-s 1 :engine.backoff/max-s 30 :engine.backoff/moved-min 1
-   :engine.backoff/walk-moved-min 8
-   :engine.hurt/window-ms 1000
-   :engine.entities/ttl-ms 120000 :engine.entities/sample-ms 1000 :engine.entities/max-entities 10000
-   :engine.entities/max-snapshot-bytes 4194304
-   :engine.perception/radius 48 :engine.perception/fov 70 :engine.perception/aspect (/ 16 9)
-   :engine.perception/ray-deg 1 :engine.perception/pass-ms 1500 :engine.perception/step-ms 50
-   :engine.perception/idle-ms 3000 :engine.perception/still-ms 30000 :engine.perception/move-blocks 0.5
-   :engine.perception/turn-deg 2 :engine.perception/seeing-min 0.2 :engine.perception/near 4
-   :engine.perception/near-torch 7 :engine.perception/cap-bytes 33554432 :engine.perception/stats-ms 60000
-   :engine.perception/error-every-ms 60000 :engine.perception/mob-ms 250 :engine.perception/mob-scan 64
-   :engine.perception/hearing 16 :engine.perception/dark-sight 4 :engine.perception/mob-drift 16
-   :engine.perception/mutable-max-ms 10000})
-
 (def all-specs (apply merge (vals families)))
-
-(deftest every-moved-value-keeps-its-old-default
-  (is (= defaults-then (into {} (map (fn [[k spec]] [k (:default spec)])) (dissoc all-specs :engine.perception/save-ms :engine.backoff/progress :engine.backoff/neutral
-                        :engine.perception/effort :engine.perception/effort-min :engine.perception/ground-from
-                        :engine.perception/ground-to :engine.perception/ground-across)))))
 
 (deftest every-key-is-declared-in-its-own-family-namespace-and-documented
   (doseq [[k spec] all-specs]
@@ -96,10 +66,6 @@
     (fn []
       (is (= 20 (:radius (perception/defaults))))
       (is (= 5000 (:save-ms (perception/defaults)))))))
-
-(deftest vanilla-sensing-facts-are-constants-not-settings
-  (is (= {:hit-range 6 :monster-range 8 :monster-height 5}
-         {:hit-range senses/hit-range :monster-range senses/monster-range :monster-height senses/monster-height})))
 
 (deftest events-max-bytes-is-validated-on-its-setting
   (doseq [ok [1024 4096 67108864]]

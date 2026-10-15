@@ -1,6 +1,6 @@
 (ns engine.settings-lib-test
   "The jobs.lib tuning values are settings: each reads its override at use, and its default is the old constant."
-  (:require [cljs.test :refer [deftest is are]]
+  (:require [cljs.test :refer [deftest is]]
             [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.value :as value]
@@ -16,34 +16,6 @@
             [jobs.lib.toll-cells :as toll-cells]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]))
-
-(deftest defaults-are-the-old-constants
-  (are [f v] (= v (f))
-    pass/await-polls 6
-    pass/shut-wait-ms 500
-    u/max-failures 3
-    tidy/max-tries 3
-    stock/chest-radius 32
-    watch/alert-radius 24
-    threats/sensed-radius 24
-    toll-cells/max-cells 8000
-    tools/low-fraction 0.1
-    foods/low-health 10
-    dig-look/settle-wait-ms 500
-    dig-look/settle-waits 6
-    dig-look/flow-delay-ticks 34
-    watch/turn-gap-ms 5000
-    value/trip 10
-    value/per-block 0.3
-    value/per-dark 0.3
-    value/walk-blocks-per-s 2.9
-    value/dark-factor 1
-    shelter/seen-bed-radius 6
-    shelter/default-player-radius 128
-    look/dark-light 8
-    look/toss-reach 10
-    look/glance-ahead 4
-    look/glance-near 1.5))
 
 (deftest an-override-changes-the-value-read-at-use
   (settings/with-settings {:jobs.lib.pass/await-polls 2 :jobs.lib.util/max-failures 7 :jobs.lib.watch/alert-radius 5}

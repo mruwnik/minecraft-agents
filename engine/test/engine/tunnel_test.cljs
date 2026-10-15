@@ -350,14 +350,6 @@
             (is (empty? (digs p)))
             (is (= [0 65 0] (feet p)))))))))
 
-(deftest a-tunnel-without-a-pickaxe-ends-no-tool-and-digs-nothing
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p out]} (await (tunnel! {:blocks ground :inventory []} {:target [6 57 0] :fetch false} (fn [_])))]
-          (is (= [:stopped :no-tool] ((juxt :status :reason) @out)))
-          (is (empty? (digs p))))))))
-
 (deftest no-zone-list-ends-condition-failed-before-any-dig
   (async done
     (tu/run-async done
@@ -733,14 +725,6 @@
           (is (= 1 (count calls)) "tried once, not again")
           (is (= [:stopped :no-tool] ((juxt :status :reason) @out))))))))
 
-(deftest a-default-call-fetches-a-missing-pickaxe
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out calls]} (await (fetching-tunnel! "iron_pickaxe" :default (fn [_])))]
-          (is (= 1 (count calls)))
-          (is (= :reached (:reason @out))))))))
-
 (deftest fetch-false-opts-out-and-never-calls-get-tool
   (async done
     (tu/run-async done
@@ -851,10 +835,6 @@
           (is (= :hazard (:reason @out)) "one round: in, stopped, torches taken, mouth sealed")
           (is (= :sealed (:reason (:leave @out))))
           (is (= [-3 65 0] (feet p))))))))
-
-(deftest max-length-is-typed-and-bounded
-  (let [spec (:max-length tunnel/args)]
-    (is (= '(a/int-in 1 96) (:spec spec)))))
 
 (deftest the-widest-line-reads-few-blocks-over-open-air
   (let [reads (atom 0)

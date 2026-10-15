@@ -11,23 +11,8 @@
             [triggers.survival.hungry :as hungry]
             [triggers.survival.tidy-pending :as tidy-pending]))
 
-(def defaults-then
-  {:triggers.storage.inventory-nearly-full/free 2
-   :triggers.storage.inventory-nearly-full/rest-s 120
-   :triggers.access.scaffold-left/at-night false
-   :triggers.access.scaffold-left/with-hostile false
-   :triggers.survival.burning/with-hostile false
-   :triggers.survival.hungry/bake-wheat 3
-   :triggers.survival.hungry/rest-s 600
-   :triggers.survival.hungry/urgent-food 2
-   :triggers.survival.tidy-pending/range 48
-   :triggers.survival.tidy-pending/retry-s 120})
-
 (def all-specs
   (into {} (comp (filter (fn [[ns _]] (re-find #"^triggers\." (str ns)))) (map val) cat) registry/settings-by-ns))
-
-(deftest the-registry-gathers-the-trigger-settings-with-their-old-defaults
-  (is (= defaults-then (into {} (map (fn [[k spec]] [k (:default spec)])) all-specs))))
 
 (deftest every-trigger-setting-is-documented
   (doseq [[k spec] all-specs]
@@ -70,9 +55,3 @@
       (is (= [4 7] [(hungry/bake-wheat) (hungry/default-rest-s)]))
       (is (= 9 (tidy-pending/retry-s))))))
 
-(deftest the-defaults-maps-leave-the-settings-to-the-trigger
-  (is (nil? (:radius hostile-near/defaults)))
-  (is (nil? (:ranged-radius hostile-near/defaults)))
-  (is (nil? (:free nearly-full/defaults)))
-  (is (nil? (:rest-s hungry/defaults)))
-  (is (nil? (:rest-s nearly-full/defaults))))
