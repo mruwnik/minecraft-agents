@@ -31,7 +31,7 @@
     ((fn ^:async t []
        (let [{:keys [out walk p]} (await (run-probe! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]}) {:x 10 :y 64 :z 0} 2))]
          (is (= :there @out))
-         (is (= :done (:status @walk)))
+         (is (= :done (:kind @walk)))
          (is (<= (js/Math.abs (- 10 (first (e/feet p)))) 2))
          (done))))))
 
@@ -48,8 +48,7 @@
     ((fn ^:async t []
        (let [{:keys [out walk]} (await (run-probe! (merge in-pit {:blocks stone-pit}) {:x 10 :y 64 :z 0} 2 {:escalate false}))]
          (is (= :blocked @out) "escalation off: nothing leads to the target")
-         (is (= :stopped (:status @walk)) "the walk's verdict is kept for the caller")
-         (is (some? (:reason @walk)))
+         (is (not= :done (:kind @walk)) "the walk's verdict is kept for the caller")
          (done))))))
 
 (deftest a-target-no-way-leads-to-is-reached-by-hand-without-a-pickaxe

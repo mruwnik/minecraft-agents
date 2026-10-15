@@ -15,8 +15,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.items.smelt :as smelt]
-            [jobs.items.smelt.plan :as smelt-plan]
-            [jobs.lib.result :as r]))
+            [jobs.items.smelt.plan :as smelt-plan]))
 
 ;; ------------------------------------------------------------------ tables
 
@@ -841,8 +840,8 @@
 
 (def refusing-place
   "A jobs.blocks.place that always refuses, naming the footprint of another plan."
-  {:check (constantly true)
-   :round (fn ^:async refuse [c] (r/stop! c :footprint "the cell is inside another plan's footprint"))})
+  {:conditions []
+   :round (fn ^:async refuse [c] (ctx/end c :nothing-possible {:reason :footprint :text "the cell is inside another plan's footprint"}))})
 
 (deftest a-carried-furnace-that-cannot-be-put-down-names-the-refusal
   (async done

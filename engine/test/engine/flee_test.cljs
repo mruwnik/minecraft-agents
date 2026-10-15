@@ -13,7 +13,6 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.result :as r]
             [jobs.movement.go-to.result :as end]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -590,8 +589,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
-              cornered {:check (constantly true)
-                        :round (fn ^:async no-escape [c] (r/stop! c :cannot_escape "every way failed"))}
+              cornered {:conditions []
+                        :round (fn ^:async no-escape [c] (ctx/end c :nothing-possible :cannot_escape))}
               s (assoc-in s [:eng :jobs 'jobs.survival.retreat] cornered)
               {:keys [out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= {:status :stopped :reason :cannot_escape} (select-keys out [:status :reason])))
@@ -617,11 +616,11 @@
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
               clock (:clock s)
               p (:p s)
-              hiding {:check (constantly true)
+              hiding {:conditions []
                       :round (fn ^:async long-hide [c]
                                (swap! clock + 400000)
                                (swap! (fake/state p) assoc :entities [])
-                               (r/finish! c {:fled [7] :ended :hidden}))}
+                               (ctx/end c :done nil {:fled [7] :ended :hidden}))}
               s (assoc-in s [:eng :jobs 'jobs.survival.retreat] hiding)
               {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= [:done] calls))

@@ -712,20 +712,30 @@
           (is (= #{[0 64 0]} (ledger/held-cells (mem/view (:store eng))))))))))
 
 (deftest only-a-permanent-walk-verdict-holds-a-cell-unreachable
-  (are [result permanent?] (= permanent? (result/permanent-walk? result))
-    {:status :stopped :reason :unreachable :why :abilities} true
-    {:status :stopped :reason :unreachable :why :goal-enclosed} true
-    {:status :stopped :reason :unreachable :why :goal-cut-off} true
-    {:status :stopped :reason :unreachable :why :one-way} true
-    {:status :stopped :reason :unreachable :why :exhausted} true
-    {:status :stopped :reason :bad-pos} true
-    {:status :stopped :reason :unsupported} true
-    {:status :stopped :reason :unreachable :why :door-stuck} false
-    {:status :stopped :reason :unreachable :why :moved-while-searching} false
-    {:status :stopped :reason :unreachable :why :stuck} false
-    {:status :stopped :reason :unreachable :why :no-progress} false
-    {:status :stopped :reason :unreachable} false
-    {:arrived true} false))
+  (are [e permanent?] (= permanent? (result/permanent-walk? e))
+    {:kind :nothing-possible :cause {:reason :unreachable :why :abilities}} true
+    {:kind :nothing-possible :cause {:reason :unreachable :why :goal-enclosed}} true
+    {:kind :nothing-possible :cause {:reason :unreachable :why :goal-cut-off}} true
+    {:kind :nothing-possible :cause {:reason :unreachable :why :one-way}} true
+    {:kind :nothing-possible :cause {:reason :unreachable :why :exhausted}} true
+    {:kind :nothing-possible :cause :bad-pos} true
+    {:kind :nothing-possible :cause :unsupported} true
+    {:kind :nothing-possible :cause {:reason :unreachable :why :door-stuck}} false
+    {:kind :nothing-possible :cause {:reason :unreachable :why :moved-while-searching}} false
+    {:kind :nothing-possible :cause {:reason :unreachable :why :stuck}} false
+    {:kind :nothing-possible :cause {:reason :unreachable :why :no-progress}} false
+    {:kind :nothing-possible :cause :unreachable} false
+    {:kind :done :data {:arrived true}} false
+    :continue false
+    nil false))
+
+(deftest a-walk-that-go-to-will-not-take-is-no-failure
+  (are [e unreachable?] (= unreachable? (result/unreachable-walk? e))
+    {:kind :nothing-possible :cause {:reason :unreachable :why :off-plan}} true
+    {:kind :nothing-possible :cause {:reason :unreachable :why :needs-health}} true
+    {:kind :nothing-possible :cause {:reason :unreachable :why :abilities}} true
+    {:kind :nothing-possible :cause {:reason :unreachable :why :stuck}} false
+    {:kind :done :data {:why :off-plan}} false))
 
 (defn stub-go-to
   "A go-to that records its args and the call's :ways in calls and ends with result."

@@ -112,7 +112,7 @@
       (let [pos (zipmap [:x :y :z] dug-at)
             go! #(near/go-near! c pos 1 {:zone-tolls true :escalate false})
             w (await (go!))
-            cut (when (and (= :blocked w) (not (:stay-level (:args c))) (let [res (near/last-walk c)] (or (result/unreachable-walk? res) (= :detour (:why res)))))
+            cut (when (and (= :blocked w) (not (:stay-level (:args c))) (let [res (near/last-walk c)] (or (result/unreachable-walk? res) (= :detour (result/why res)))))
                   (await (cut-to-drop! c dug-at)))
             w (case cut :cut (await (go!)) :partial :partial w)]
         (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))

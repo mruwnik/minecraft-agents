@@ -259,13 +259,6 @@
           (if (= :continue outcome) :continue :again))))))
 
 
-(defn walk-result
-  "go-to's ending e (or :continue) as the {:status :reason :why} map result/permanent-walk? reads."
-  [e]
-  (let [cause (:cause e)]
-    (merge (:data e) (when (map? cause) (select-keys cause [:why]))
-           {:status (if (= :done (:kind e)) :done :stopped) :reason (contract/cause-key e)})))
-
 (defn ^:async walk!
   "Walk one leg toward within 3 of cell, or hold it :danger (no walk is made: the reflex acts). A permanent verdict
   holds it :unreachable, an end out of reach or a go-to that gave up for a passing reason counts a failure; a leg that
@@ -276,11 +269,10 @@
     (let [e (await (child/call-walk* c :walk {:pos cell :range (walk-range) :ways #{:walk} :zone-tolls true
                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))
                                               :spend {:time (:leg-s (:args c))}}))
-          result (walk-result e)
-          status (:status result)]
+          status (if (= :done (:kind e)) :done :stopped)]
       (cond
-        (:leg result) nil
-        (result/permanent-walk? result)
+        (:leg (:data e)) nil
+        (result/permanent-walk? e)
         (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
         (or (= :continue e) (= :stopped status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
         (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))

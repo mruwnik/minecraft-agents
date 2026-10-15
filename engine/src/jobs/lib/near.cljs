@@ -5,7 +5,6 @@
   Its own namespace because jobs.lib.walk and jobs.lib.pass require jobs.lib.util."
   (:require [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
-            [engine.contract :as contract]
             [jobs.lib.aim :as aim]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
@@ -219,15 +218,8 @@
   [pos]
   (:pos (places/parse-pos pos)))
 
-(defn walk-result
-  "go-to's ending e as the {:status :reason :why} map jobs.lib.result/permanent-walk? reads."
-  [e]
-  (let [cause (:cause e)]
-    (merge (:data e) (when (map? cause) (select-keys cause [:why]))
-           {:status (if (= :done (:kind e)) :done :stopped) :reason (contract/cause-key e)})))
-
 (defn last-walk
-  "The walk-result of the last go-near! walk that ended (:blocked reads its verdict), nil before any."
+  "go-to's ending of the last go-near! walk that ended (:blocked reads its verdict), nil before any."
   [c]
   (:near-walk (ctx/mem c)))
 
@@ -253,7 +245,7 @@
                                                 at-night (assoc :at-night at-night))))]
                (if (= :continue e)
                  :partial
-                 (do (ctx/update-mem! c assoc :near-walk (walk-result e))
+                 (do (ctx/update-mem! c assoc :near-walk e)
                      (cond (:arrived (:data e)) :there
                            (:leg (:data e)) :partial
                            :else :blocked))))))))
