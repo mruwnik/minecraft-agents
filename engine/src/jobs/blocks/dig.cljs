@@ -180,8 +180,8 @@
 (def can-start? (checks/all bad-args not-loaded refused no-tool-unfetched))
 
 (defn done? [c]
-  (let [{:keys [pos]} (b/parse (:args c))
-        air? (boolean (some-> (b/target-name (:primitives c) pos b/hidden-guess) b/air))]
+  (let [{:keys [pos error]} (b/parse (:args c))
+        air? (boolean (and (not error) (some-> (b/target-name (:primitives c) pos b/hidden-guess) b/air)))]
     {:done? air? :units :blocks :done (if air? 1 0) :left (if air? 0 1)}))
 
 (defn quote-of [c]
