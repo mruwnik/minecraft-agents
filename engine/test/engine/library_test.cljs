@@ -562,7 +562,7 @@
         (let [{:keys [eng p]} (setup chest-world)
               result (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0} :keep {"oak_log" 5 "bread" 9}} 4))]
           (is (zero? (count (calls p "transfer"))))
-          (is (= :done (:status result))))))))
+          (is (= {:status :done} (select-keys result [:status :reason :cause]))))))))
 
 (deftest deposit-reports-that-it-gave-nothing-up-when-it-ends-empty
   (async done

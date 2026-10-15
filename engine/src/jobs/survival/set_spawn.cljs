@@ -76,7 +76,6 @@
       (do (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
           (places/offer! c :home bed)
           (ctx/emit! c :spawn_unchanged :info {:pos bed :text "the respawn point is already at this bed"})
-          (ctx/update-mem! c assoc :ended true)
           (ctx/end c :done nil {:spawn bed :why :unchanged}))
       :else
       (let [e (await (ctx/call c :use 'jobs.blocks.use-on {:pos bed :see true}))]
@@ -84,8 +83,7 @@
           (= :continue e) :continue
           (= :done (:kind e)) (do (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
                                   (places/offer! c :home bed)
-                                  (ctx/update-mem! c assoc :ended true)
-                                  (ctx/end c :done nil {:spawn bed}))
+                                                          (ctx/end c :done nil {:spawn bed}))
           :else (let [why (get-in e [:data :reason] (contract/cause-key e))]
                   (ctx/emit! c :spawn_not_set :warn {:pos bed :text (str "clicking the bed did not set the respawn point: " (name (or why :unknown)))})
                   (ctx/end c :nothing-possible :not-set {:why why :pos bed})))))))

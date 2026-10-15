@@ -100,14 +100,6 @@
           (recur (rest todo) (assoc report (first todo) {:skipped skip}))
           {:todo (vec todo) :report report :call call})))))
 
-(defn nothing-to-do
-  "Later :nothing-to-do when no step would call a child (or flag a role without a cell)."
-  [c]
-  (let [f (facts c)]
-    (if (some #(let [d (decide % (:args c) f)] (or (:call d) (= :no-pos (:skip d)))) (slots (:args c)))
-      (contract/ok :step "a step would run")
-      (contract/later :nothing-to-do "nothing to do at the village"))))
-
 ;; ------------------------------------------------------------------ the run
 
 (defn summary
@@ -212,8 +204,6 @@
 (def target [:plan :roles])
 
 (def defaults {:spend {:job-time ::job-time-s}})
-
-(def can-start? nothing-to-do)
 
 (defn done?
   "Done once no step is left to run (decided from the facts, as each step is), none is incomplete and no child is under

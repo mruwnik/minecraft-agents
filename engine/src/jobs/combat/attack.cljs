@@ -255,7 +255,8 @@
   [c reason]
   (let [m (ctx/mem c)
         result (fight-data c reason)]
-    (ctx/emit! c :attack.done :info (assoc result :text (str "attack done: " (name reason) ", killed " (count (:killed m)))))
+    (when-not (= :cleared reason)
+      (ctx/emit! c :attack.done :info (assoc result :text (str "attack done: " (name reason) ", killed " (count (:killed m))))))
     (case reason
       :cleared (ctx/end c :done nil result)
       :absent (ctx/end c :condition-failed :absent result)
