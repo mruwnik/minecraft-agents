@@ -101,30 +101,34 @@ export const eventForwarder = (write, shardNs) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // Runs cmd under the first free slot; polls until one is free. A heavy run (integration) also tries the reserved slot first and, while it waits, keeps light res-slot runs off those slots.
+// slotsNow() is re-read every round, so a waiting shard widens its slot list as memory frees up.
 let waitSeq = 0
-const runInSlot = async (slots, cmd, opts, onOut = () => {}, onWait = () => {}) => {
-  const t0 = Date.now()
-  const heavy = isHeavy(), order = candidateSlots(slots, RES.kinds.tests.max, RES.kinds.tests.reserve ?? 0, heavy)
+export const runInSlot = async (slotsNow, cmd, opts, onOut = () => {}, onWait = () => {}) => {
+  const t0 = Date.now(), heavy = isHeavy()
+  const orderNow = () => candidateSlots(slotsNow(), RES.kinds.tests.max, RES.kinds.tests.reserve ?? 0, heavy)
   const wait = heavyWaitFile('tests', process.pid, waitSeq++)
-  if (heavy) fs.mkdirSync(path.dirname(wait), { recursive: true }), fs.writeFileSync(wait, JSON.stringify(order))
-  try { return await tryInSlots(order, slots, cmd, opts, onOut, onWait, t0) } finally { fs.rmSync(wait, { force: true }) }
-}
-const tryInSlots = async (order, slots, cmd, opts, onOut, onWait, t0) => {
-  for (let first = true; ; first = false) for (const [n, i] of order.entries()) {
-    const t1 = Date.now()
-    const r = await new Promise((res) => {
-      let out = ''
-      const p = spawn('flock', slotArgs('tests', i, cmd, 99), { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
-      p.stdout.on('data', (d) => { out += d; onOut(String(d)) }); p.stderr.on('data', (d) => { out += d })
-      p.on('close', (code) => res({ code, out }))
-    })
-    if (r.code !== 99) {
-      logRun({ kind: 'tests', needMb: SHARD_MB, waitedS: Math.round((t1 - t0) / 1000), ranS: Math.round((Date.now() - t1) / 1000), code: r.code, cmd: cmd.join(' ') })
-      return r
+  if (heavy) fs.mkdirSync(path.dirname(wait), { recursive: true })
+  try {
+    for (let first = true; ; first = false) {
+      const order = orderNow()
+      if (heavy) fs.writeFileSync(wait, JSON.stringify(order))
+      for (const [n, i] of order.entries()) {
+        const t1 = Date.now()
+        const r = await new Promise((res) => {
+          let out = ''
+          const p = spawn('flock', slotArgs('tests', i, cmd, 99), { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
+          p.stdout.on('data', (d) => { out += d; onOut(String(d)) }); p.stderr.on('data', (d) => { out += d })
+          p.on('close', (code) => res({ code, out }))
+        })
+        if (r.code !== 99) {
+          logRun({ kind: 'tests', needMb: SHARD_MB, waitedS: Math.round((t1 - t0) / 1000), ranS: Math.round((Date.now() - t1) / 1000), code: r.code, cmd: cmd.join(' ') })
+          return r
+        }
+        if (first && n === order.length - 1) onWait()
+      }
+      await sleep(1000 + Math.random() * 500)
     }
-    if (first && n === order.length - 1) onWait()
-    await sleep(1000 + Math.random() * 500)
-  }
+  } finally { fs.rmSync(wait, { force: true }) }
 }
 
 // A missing, empty or half-written file (another part writing it right now) is no prior timings.
@@ -140,7 +144,8 @@ export const writeAtomic = (file, text) => {
 const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' }) } = {}) => {
   const argv = process.argv.slice(2)
   const opt = (name, d) => { const i = argv.indexOf(name); return i < 0 ? d : Number(argv[i + 1]) }
-  const shards = opt('--shards', 4), slots = opt('--slots', memSlots(availableMb())), top = opt('--slowest', 15)
+  const shards = opt('--shards', 4), fixedSlots = opt('--slots', null), top = opt('--slowest', 15)
+  const slotsNow = () => fixedSlots ?? memSlots(availableMb())
   fs.mkdirSync(slotDir(), { recursive: true })
   const nsFile = path.join(engine, 'out/test-ns-ms.json'), timingFile = path.join(engine, 'out/test-timings.jsonl')
   const prior = readPrior(nsFile)
@@ -157,12 +162,12 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   cleanupOnExit(process, cleanup, (sig) => killTree(process.pid, sig, false))
   const t0 = Date.now()
   if (events) { console.log('@@test {"event":"phase","name":"testing"}'); events.start() }
-  console.log(`test-shards: ${split.length} shards, at most ${slots} at once machine-wide`)
+  console.log(`test-shards: ${split.length} shards, at most ${slotsNow()} at once (now) machine-wide`)
   const results = await Promise.all(split.map(async (nss, i) => {
     const file = `${timingFile}.${process.pid}.${i}`
     fs.writeFileSync(file, '')
     const limit = Number(process.env.MC_TEST_TIMEOUT_S) || runTimeoutS(expectedMs(nss, prior))
-    const r = await runInSlot(slots, ['timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined)
+    const r = await runInSlot(slotsNow, ['timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined)
     events?.end(i)
     if (r.code === 124 || r.code === 137) r.out += `\ntest-shards: TIMEOUT, shard ${i} killed after ${limit} s; last finished test: ${lastFinished(fs.readFileSync(file, 'utf8').split('\n')) ?? 'none'}\n`
     return { i, nss, file, ...r }
