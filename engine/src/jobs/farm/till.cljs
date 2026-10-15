@@ -17,7 +17,7 @@
             [jobs.lib.toll-cells :as tc]))
 
 (def doc
-  "Hoe dirt, grass_block or dirt_path into farmland over a set of ground cells, given as the box :from/:to or
+  "Hoe dirt, grass_block, dirt_path, coarse_dirt or rooted_dirt (two uses: dirt first) into farmland over a set of ground cells, given as the box :from/:to or
   the square :center/:radius (at most 256 cells). Water nearby is not its concern.
   Needs a hoe: the call's :use {:tools [..]} names the ones it may use (default every carried hoe); with none carried it
   fetches one (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as the :because, tilled and skipped
@@ -49,7 +49,10 @@
   {::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
-(def tillable #{"dirt" "grass_block" "dirt_path"})
+(def loosened
+  "Grounds a hoe first turns into dirt (a second use makes farmland)."
+  #{"coarse_dirt" "rooted_dirt"})
+(def tillable (into #{"dirt" "grass_block" "dirt_path"} loosened))
 (def ground-cover
   "What lies on a cell and is dug first: the plants, small flowers and snow layer a placement clears (b/clearable) and the tall flowers."
   (into b/clearable #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "sunflower" "lilac" "rose_bush" "peony"}))
@@ -301,6 +304,9 @@
                   (cond
                     (and (= "used" status) (= "farmland" (some-> (.-after r) .-name)))
                     (ctx/update-mem! c #(-> % (update :tilled (fnil conj #{}) target) (update :cell-tries dissoc target)))
+
+                    (and (= "used" status) (loosened (some-> (.-before r) .-name)) (= "dirt" (some-> (.-after r) .-name)))
+                    nil
 
                     (= "missing" status) (skip! c [target] :gone)
                     (= "no-item" status) (bump! c target :no-hoe)

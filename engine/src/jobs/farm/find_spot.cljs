@@ -66,7 +66,7 @@
 
 (def farmable-ground
   "The grounds a hoe makes farmland of (coarse and rooted dirt in two passes)."
-  (into #{"coarse_dirt" "rooted_dirt"} till/tillable))
+  till/tillable)
 
 (defn hydrated?
   "True when a water cell of water-set (a set of [x y z]) lies within 4 in x and

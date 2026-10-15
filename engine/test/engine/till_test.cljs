@@ -423,3 +423,25 @@
                 {:keys [eng p]} (setup {:inventory hoe :blocks four} (ew/of-data {"hut" plan} {} []))]
             (await (child-outcome eng job box 4))
             (is (empty? (calls p "useOn")) author)))))))
+
+(defn two-use-hoe
+  "Models the game: a hoe on coarse or rooted dirt makes dirt, on dirt farmland."
+  [p]
+  (.override (.-world p) "useOn"
+             (fn ^:async f [_ a _]
+               (let [pos (js->clj (.-pos a) :keywordize-keys true)
+                     before (block-at p pos)
+                     after (if (#{"coarse_dirt" "rooted_dirt"} before) "dirt" "farmland")]
+                 (fake/set-block! p [(:x pos) (:y pos) (:z pos)] after)
+                 #js {:status "used" :before #js {:name before} :after #js {:name after} :consumed 0}))))
+
+(deftest till-tills-coarse-and-rooted-dirt-with-two-hoe-uses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory hoe :blocks (assoc four "1,63,1" "coarse_dirt" "2,63,1" "rooted_dirt")})
+              _ (two-use-hoe p)
+              result (await (child-outcome eng job box 20))]
+          (is (= {:tilled 4 :skipped {}} result))
+          (is (= 6 (count (calls p "useOn"))))
+          (is (= ["farmland"] (distinct (map #(block-at p %) (till/cells box))))))))))
