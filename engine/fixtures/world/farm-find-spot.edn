@@ -18,4 +18,8 @@
    :blocks [[:fill [0 -2 0] [127 -2 63] "stone"] [:fill [63 -1 31] [65 -1 33] "stone"]]
    :act [[:job (jobs.farm.find-spot {:range 12 :depth 7})]]
    :expect [{:event {:source :job :kind :find-spot.none} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :find-spot.found} :for-s 30 :until {:source :job :kind :find-spot.none}}]}]}
+            {:no-event {:source :job :kind :find-spot.found} :for-s 30 :until {:source :job :kind :find-spot.none}}]}
+  ;; Card e3e88fbd: the found event lists every spot with its score and level, not only the best.
+  {:name "found-event-lists-every-spot-with-score-and-level"
+   :act [[:job (jobs.farm.find-spot {:range 20 :depth 7 :limit 3})]]
+   :expect [{:event {:source :job :kind :find-spot.found :data {:spots [:>= 2] :text [:contains "(level"]}} :within-s 60 :of-job true}]}]}

@@ -1,0 +1,64 @@
+;; Cards 420899d8 (jobs.strip.loot-cart empties a chest minecart and takes the cart), a0e33253 (dig picks shears for a cobweb, falls
+;; back to a sword's string, an axe for a fence), e2971db2 (blueprints/field-base.edn built by from-plan).
+;; Cart cases: a chest_minecart with 3 iron ingots and 2 bread at [19.5 0 16.5], the body at [16.5 0 16.5] facing east (yaw 270).
+;; Unverified live (card notes): openContainer on a chest_minecart, and that the broken cart vanishes from sight.
+;; Should-succeed: the loot and the cart item are in the bag, the cart is gone; shears cut a cobweb to a cobweb item; a sword gets
+;; string; the field base is built. Should-fail: an unknown cart id stops; a cart under another's plan stops :refused and keeps its loot.
+{:defaults
+ {:tags [:strip :loot-cart :tools :build] :time :any
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "chest-minecart-emptied-and-taken"
+   :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3},{Slot:1b,id:\"minecraft:bread\",count:2}]}"]
+         [:wait-s 2]
+         [:job (jobs.strip.loot-cart {})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "iron_ingot" 3] [:item "bread" 2] [:item "chest_minecart" [:>= 1]]
+           [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 0]]}
+  {:name "unknown-cart-id-stops"
+   :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
+         [:wait-s 2]
+         [:job (jobs.strip.loot-cart {:id 99999999})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20}]
+   :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]}
+  {:name "cart-in-another-plans-footprint-is-refused"
+   :plans [{:id "other" :metadata {:by "SomeoneElse"} :parts [{:id "p" :box [#at [18 0 15] #at [20 0 17]] :want [:any "rail"]}]}]
+   :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
+         [:wait-s 2]
+         [:job (jobs.strip.loot-cart {})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20}]
+   :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]}
+  {:name "shears-cut-a-cobweb-to-a-cobweb-item"
+   :blocks [[:set [18 0 16] "cobweb"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #xyz [18 0 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:not-block [18 0 16] "cobweb"] [:item "cobweb" 1] [:item "string" 0]]}
+  {:name "sword-only-cuts-a-cobweb-to-string"
+   :blocks [[:set [18 0 16] "cobweb"]]
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #xyz [18 0 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:not-block [18 0 16] "cobweb"] [:item "string" [:>= 1]] [:item "cobweb" 0]]}
+  {:name "field-base-blueprint-built-by-from-plan"
+   :blocks [[:fill [8 -1 8] [14 -1 12] "grass_block"]]
+   :plans [{:id "base" :metadata {:by "$body"} :parts [{:id "base" :blueprint "field-base" :at #at [8 -1 8]}]}]
+   :body {:at [11.5 0 16.5] :yaw 180 :inventory [["cobblestone" 64] ["oak_planks" 96] ["chest" 4] ["furnace" 2] ["crafting_table" 1]
+                                                 ["white_bed" 1] ["oak_door" 1] ["torch" 2]]}
+   :act [[:job (jobs.build.from-plan {:plan "$plan:base"})]]
+   :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 280 :of-job true}]
+   :after [[:block [9 0 9] "chest"] [:block [13 0 10] "furnace[facing=west]"] [:block [9 0 11] "crafting_table"] [:block [11 0 12] "oak_door"]]
+   :limit-s 300}
+  {:name "field-base-short-materials-gives-up-without-building-it-all"
+   :blocks [[:fill [8 -1 8] [14 -1 12] "grass_block"]]
+   :plans [{:id "base" :metadata {:by "$body"} :parts [{:id "base" :blueprint "field-base" :at #at [8 -1 8]}]}]
+   :body {:at [11.5 0 16.5] :yaw 180 :inventory [["cobblestone" 4]]}
+   :act [[:job (jobs.build.from-plan {:plan "$plan:base" :fetch false})]]
+   :expect [{:event {:source :job :kind #{:build.gave-up :waiting :stopped}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :build.done :data {:missing 0}} :for-s 60}]
+   :after [[:not-block [9 0 9] "chest"]]
+   :limit-s 150}]}

@@ -1,0 +1,39 @@
+;; Cards 7db8bde1 (jobs.strip.seal closes a corridor cross-section from the base side: loose rail and cobweb dug first, a container
+;; never touched, no blocks stops :no-blocks), e96a1e33 (jobs.storage.haul empties source chests into the main chest in bag loads).
+;; Seal: stone mass x 2..30, y 0..4, z 10..22 with a 3x3 corridor along x 6..26 (y 0..2, z 15..17); the body stands in it at x 12.5
+;; (the :from side). The section is x 16: a rail at [16 0 16] and a cobweb at [16 1 15] are in it.
+;; Haul: two source chests (iron ingots, coal) and an empty main chest (:to), no storage group needed.
+;; Should-succeed: the 9 cells are cobblestone, rail and cobweb gone; both source chests are emptied into the bag-free main chest.
+;; Should-fail: no blocks carried stops with a :short count and leaves the rail; a chest in the section stops :blocked, chest kept.
+{:defaults
+ {:tags [:strip :seal :haul :storage] :time :any
+  :plot {:height 8 :floor "stone"}
+  :body {:at [12.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]] :inventory [["cobblestone" 20]]}
+  :limit-s 120}
+ :cases
+ [{:name "section-sealed-loose-things-dug-first"
+   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [6 0 15] [26 2 17] "air"] [:set [16 0 16] "rail"] [:set [16 1 15] "cobweb"]]
+   :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from})]]
+   :expect [{:event {:source :job :kind :strip.seal.done :data {:placed [:>= 7]}} :within-s 100 :of-job true}]
+   :after [[:block [16 0 16] "cobblestone"] [:block [16 1 15] "cobblestone"] [:block [16 2 17] "cobblestone"] [:block [16 1 16] "cobblestone"]]}
+  {:name "no-blocks-stops-short-and-leaves-the-rail"
+   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [6 0 15] [26 2 17] "air"] [:set [16 0 16] "rail"]]
+   :body {:inventory []}
+   :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from})]]
+   :expect [{:event {:source :job :kind :strip.seal.stopped :data {:short [:>= 1]}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :strip.seal.done} :for-s 20}]}
+  {:name "container-in-the-section-is-never-dug"
+   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [6 0 15] [26 2 17] "air"] [:set [16 1 17] "chest"]]
+   :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from})]]
+   :expect [{:event {:source :job :kind :strip.seal.stopped} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :strip.seal.done} :for-s 20}]
+   :after [[:block [16 1 17] "chest"]]}
+  {:name "haul-empties-two-source-chests-into-the-main-chest"
+   :plot {:floor "grass_block"}
+   :blocks [[:set [12 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:5}]}"]
+            [:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:coal\",count:3}]}"]
+            [:set [20 0 12] "chest"]]
+   :body {:at [16.5 0 16.5] :yaw 0 :inventory []}
+   :act [[:job (jobs.storage.haul {:from [#at [12 0 20] #at [14 0 20]] :to #at [20 0 12]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:item "iron_ingot" 0] [:item "coal" 0]]}]}

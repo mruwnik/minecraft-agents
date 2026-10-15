@@ -1,0 +1,69 @@
+;; Cards 2b670ae6 (fell-tree pillars on the logs it just cut: no dirt or cobblestone, no fetch), f37e64e6 (the body ends on the
+;; ground, not on the canopy), b3241e1c (a canopy leaf beside the trunk is no stand), d7409d96 (the sapling goes on the ground,
+;; not on a log), f89b18a5 (the logs that came in count: no :nothing-collected), b5d6f4aa (an axe is fetched from a seen chest),
+;; 9a44c786 (a tree of the body's own plan is skipped silently), 7b23de3a (tidy fells a part-cut trunk, leaves a log wall).
+;; Tree: 10 logs at x 16, z 16 (y 0..9), persistent oak leaves round the top and two leaves beside the trunk at y 6 and 7.
+;; The body carries no blocks unless a case says; the top logs are out of reach from the ground, so every felling pillars.
+;; Should-succeed: whole tree felled with nothing carried but an axe; harvest-wood replants on the ground; the axe comes from a chest;
+;; the own plan's birch is spared and the oak felled; tidy fells a part-cut trunk. Should-fail: tidy leaves a leafless log wall.
+{:defaults
+ {:tags [:forestry :fell-tree :harvest-wood :tidy :pillar] :time :day
+  :plot {:height 24 :floor "grass_block"}
+  :blocks [[:fill [16 0 16] [16 9 16] "oak_log"]
+           [:fill [14 8 14] [18 10 18] "oak_leaves[persistent=true]"]
+           [:fill [16 8 16] [16 9 16] "oak_log"]
+           [:set [17 7 16] "oak_leaves[persistent=true]"] [:set [15 6 16] "oak_leaves[persistent=true]"]]
+  :body {:at [16.5 0 22.5] :yaw 180 :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 160}
+ :cases
+ [{:name "tall-tree-felled-on-its-own-logs-with-no-blocks-carried"
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind #{:tree_blocked :fell-tree.declined :fetch.started :fetch.failed}} :for-s 150 :until {:source :job :kind :completed}}]
+   :after [[:not-block [16 9 16] "oak_log"] [:not-block [16 0 16] "oak_log"] [:item "oak_log" [:>= 9]] [:body-far [16.5 9 16.5] 5]]}
+  {:name "harvest-wood-replants-the-sapling-on-the-ground"
+   :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind #{:stopped :tree_blocked}} :for-s 150 :until {:source :job :kind :completed}}]
+   :after [[:block [16 0 16] "oak_sapling"] [:item "oak_log" [:>= 9]] [:item "oak_sapling" 0]]}
+  {:name "no-axe-carried-one-is-fetched-from-a-seen-chest"
+   :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]]
+   :body {:inventory []}
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 40 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 80 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 150 :of-job true}]
+   :after [[:not-block [16 9 16] "oak_log"] [:item "iron_axe" [:>= 1]]]}
+  {:name "fetch-false-chops-by-hand-and-fetches-no-axe"
+   :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]]
+   :body {:inventory []}
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :fetch false})]]
+   :expect [{:event {:source :job :kind #{:completed :waiting :stopped}} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 40}]
+   :after [[:item "iron_axe" 0]]
+   :limit-s 170}
+  {:name "own-plans-birch-is-spared-silently-and-the-oak-felled"
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [8 0 12] [8 3 12] "birch_log"] [:fill [7 3 11] [9 4 13] "birch_leaves[persistent=true]"] [:set [8 3 12] "birch_log"]
+            [:fill [24 0 12] [24 4 12] "oak_log"] [:fill [23 4 11] [25 5 13] "oak_leaves[persistent=true]"] [:set [24 4 12] "oak_log"]]
+   :plans [{:id "hut" :metadata {:by "$body"}
+            :parts [{:id "corner" :cells [#at [8 0 12] #at [8 1 12] #at [8 2 12] #at [8 3 12]] :want [:any "birch_log"]}]}]
+   :act [[:job (jobs.forestry.fell-tree {:radius 20})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :fell-tree.declined} :for-s 100 :until {:source :job :kind :completed}}]
+   :after [[:block [8 0 12] "birch_log"] [:not-block [24 0 12] "oak_log"] [:item "oak_log" [:>= 4]]]}
+  {:name "tidy-fells-a-part-cut-trunk-and-replants"
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
+   :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
+   :act [[:job (jobs.forestry.tidy {:radius 12})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
+   :after [[:not-block [16 1 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:block [16 0 16] "oak_sapling"] [:item "oak_log" [:>= 5]]]}
+  {:name "tidy-leaves-a-log-wall-with-no-leaves"
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [14 1 16] [18 5 16] "oak_log"]]
+   :act [[:job (jobs.forestry.tidy {:radius 12})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}]
+   :after [[:block [14 1 16] "oak_log"] [:block [18 5 16] "oak_log"] [:item "oak_log" 0]]
+   :limit-s 80}]}
