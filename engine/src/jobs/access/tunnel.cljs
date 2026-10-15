@@ -20,14 +20,14 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
-            [jobs.lib.trip :as trip]
+            [jobs.access.stock :as stock]
             [jobs.lib.walk :as walk]
             [jobs.lib.world :as known]))
 
 (def doc
   "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
   at feet height. The target itself is left. A nil zone list ends condition-failed :no-zones before anything is done.
-  Before the first step it stocks torches when under 8 are carried (jobs.lib.trip/torches-ready!: info torch.stocked, or warn torch.no-stock and it goes on dark).
+  Before the first step it stocks torches when under 8 are carried (jobs.access.stock/torches!: info torch.stocked, or warn torch.no-stock and it goes on dark).
 
   The way is one straight line along a heading through the target's column:
   1. An entry stand: on the surface (the column's top cell over a solid floor, two open cells; no entry from
@@ -470,6 +470,6 @@
   "The whole tunnel, in and (a dead end) out: step! until it ends, a pace between; :continue after (stair/max-steps) of
   them or while a child waits on the world."
   [c]
-  (or (await (trip/torches-ready! c))
+  (or (await (stock/torches! c))
       (let [n (atom 0)]
         (await (pace/steps! c #(if (< (swap! n inc) (if-let [m (:max-steps (:args c))] (inc m) (stair/max-steps))) (step! c) :continue))))))

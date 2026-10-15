@@ -13,9 +13,9 @@
             [jobs.lib.choose :as choose]
             [jobs.lib.dig-look :refer [unknown? look-at! see-round!]]
             [jobs.lib.escape :as escape]
-            [jobs.lib.fetch :as fetch]
             [jobs.lib.lava :as lava]
             [jobs.lib.tools :as tools]
+            [jobs.access.stock :as stock]
             [jobs.lib.trip :as trip]
             [jobs.lib.walk :as walk]
             [plan.shape :as shape]))
@@ -100,8 +100,7 @@
   [c block]
   (and (tools/needs-tool-to-clear? (:primitives c) block)
        (or (:by-hand (:args c))
-           (mem/tool-failed? c block)
-           (fetch/failed? c 'jobs.access.stair {:reason :no-tool :block block}))))
+           (mem/tool-failed? c block))))
 
 (defn lacks-tool?
   "A tool is needed and not carried, and the block is not dug by hand (by-hand?)."
@@ -127,7 +126,7 @@
       (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
       (lacks-tool? c block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
       (and (not (:spent-ok (:args c))) (trip/spent-tool? p block))
-      (if (= :continue (await (trip/tool-ready! c block)))
+      (if (= :continue (await (stock/spare! c block nil)))
         :yield
         (if (trip/spent-tool? p block)
           {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}
