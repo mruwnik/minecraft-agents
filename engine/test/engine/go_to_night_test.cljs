@@ -10,6 +10,7 @@
             [engine.hut-shelter-test :as hut]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
+            [engine.settings :as settings]
             [engine.shelter-test :as st]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
@@ -99,6 +100,21 @@
           (await (tu/run-until-empty eng 40))
           (is (empty? (:list (core/state eng))))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p)))))))))))
+
+(deftest the-body-setting-at-night-go-walks-out-and-an-explicit-wait-still-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings {:jobs.movement.go-to.tuning/at-night :go}
+                 (fn ^:async go-out []
+                   (let [{:keys [eng p]} (st/setup (night-hut {}))
+                         held (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0] :at-night :wait}) {})]
+                     (await (ticks eng 6))
+                     (is (= :night-sheltered (:reason (waiting-of eng held))) "the call's :at-night wins")
+                     (core/cancel! eng held)
+                     (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})
+                     (await (tu/run-until-empty eng 40))
+                     (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "no arg: the setting walks it out")))))))))
 
 (deftest a-manual-go-to-walks-out-of-the-hut-at-night
   (async done

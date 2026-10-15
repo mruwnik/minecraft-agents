@@ -9,7 +9,7 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
             [jobs.movement.go-to.aim :refer [target]]
-            [jobs.movement.go-to.tuning :refer [plug-wait-ms plug-wait-min-food plug-wait-min-health]]
+            [jobs.movement.go-to.tuning :refer [at-night plug-wait-ms plug-wait-min-food plug-wait-min-health]]
             [jobs.movement.go-to.way-steps :as ways]))
 
 (defn manual-slot?
@@ -20,10 +20,11 @@
 
 (defn night-wait
   "The wait {:reason :night-sheltered :shelter :goal} while the walk would take the body out of its shelter at night
-  (sh/walk-leaves-shelter?), else nil. Never under a reflex job, the manual driver's own go-to or with :at-night :go."
+  (sh/walk-leaves-shelter?), else nil. Never under a reflex job, the manual driver's own go-to or with :at-night :go
+  (the call's, else the setting's)."
   [c]
   (let [p (:primitives c)]
-    (when (and (not (:reflex c)) (not (manual-slot? c)) (not= :go (some-> (:at-night (:args c)) keyword)) (sh/night? p))
+    (when (and (not (:reflex c)) (not (manual-slot? c)) (not= :go (keyword (or (:at-night (:args c)) (at-night)))) (sh/night? p))
       (let [{goal :pos :as t} (target c)
             kind (when (and goal (not (:reason t)))
                    (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal (:range (:args c) 1)))]

@@ -73,7 +73,7 @@
     with none and no fetch it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
-  - :at-night :wait (default): at night a walk that would take the body out of the shelter it stands in
+  - :at-night :wait (default: the setting ::tuning/at-night): at night a walk that would take the body out of the shelter it stands in
     (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground; a walk down to open air leaves a roofed hut) waits for day: go-to waits 1 s and yields :continue (cause carries :shelter; info
     go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
   - A walk with no escalating way from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not beyond the near band, 8 blocks, nor while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min, in all across the go-to children of one root job) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
@@ -199,7 +199,7 @@
    :air-looks {:doc "under water with no air known: rounds of looking again for air (goal head, open water ahead), the aim shifted a little each round, before giving up :air" :spec (a/int-in 0 nil) :default air/default-air-looks}
    :air-look-min {:doc "seconds of air left below which it looks again for air no more (:air-looks), the fallback (swim up, breathe) needs them" :spec (a/num-in 0 nil) :default air/default-air-look-min}
    :leave-water {:doc "false: an arrival within range in water stays there (a swim target, a boat), no walk on to a dry stand" :spec boolean? :default true}
-   :at-night {:doc ":wait: at night a walk out of the shelter the body stands in waits for day; :go: walk anyway (a reflex job's go-to always walks)" :spec #{:wait :go "wait" "go"} :default :wait}
+   :at-night {:doc ":wait: at night a walk out of the shelter the body stands in waits for day; :go: walk anyway (a reflex job's go-to always walks); nil: the setting jobs.movement.go-to.tuning/at-night (:wait)" :spec #{:wait :go "wait" "go"} :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims in the escalation (pillar, stair, clear-path); the rules of the game allow it" :spec boolean? :default false}
    :spare-own-builds {:doc "the escalation never digs a cell of a plan this body made (stops :own-build); false: it may, and warns of each cell dug" :spec boolean? :default true}})
 
