@@ -52,6 +52,13 @@
           (is (= :done (:status (result-of o))))
           (is (true? (:already (result-of o)))))))))
 
+(deftest aboard-already-ends-before-the-start-only-once-the-root-holds-the-vehicle
+  (let [p (tu/fake {:self {:vehicle 9} :entities [boat]})
+        held (fn [job] (assoc (bare-ctx p {:id 9}) :view (fn [] {:data {:entries {:vehicle-hold [{:t 0 :data {:job job}}]}} :now 0})))]
+    (is (= [:later :holding] (tu/kind-reason (mount/done? (bare-ctx p {:id 9})))) "no hold yet: the round holds it first")
+    (is (= [:ok :aboard] (tu/kind-reason (mount/done? (held "j1")))))
+    (is (= [:later :holding] (tu/kind-reason (mount/done? (held "other")))) "another job's hold is not this root's")))
+
 (deftest refusals-stop-with-the-reason
   (async done
     (tu/run-async done

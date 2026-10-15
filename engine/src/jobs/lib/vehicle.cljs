@@ -29,12 +29,16 @@
   [view]
   (boolean (some #(live-job? view (:job (:data %))) (mem/entries view hold-kind))))
 
+(defn held-by-root?
+  "True when this ctx's root job holds the vehicle."
+  [c]
+  (boolean (some #(= (:root c) (:job (:data %))) (ctx/entries c hold-kind))))
+
 (defn hold!
   "Mark the vehicle as this ctx's root job's to ride; once per job."
   [c]
-  (let [root (:root c)]
-    (when-not (some #(= root (:job (:data %))) (ctx/entries c hold-kind))
-      (ctx/remember! c hold-kind {:job root} hold-policy))))
+  (when-not (held-by-root? c)
+    (ctx/remember! c hold-kind {:job (:root c)} hold-policy)))
 
 (defn release!
   "Drop this ctx's root job's hold."

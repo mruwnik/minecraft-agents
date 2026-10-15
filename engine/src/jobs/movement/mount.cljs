@@ -16,7 +16,7 @@
   By :name it prefers a vehicle with no rider.
   Impossible: :bad-args. Conditions: at the start :no-vehicle while none is in sight and :aboard-other while on another vehicle (a listed call waits). The round yields :continue only when the walk waits on the world.
 
-  Ends done (data {:id :vehicle name}, plus :already true when aboard it already), info vehicle.mounted, or
+  Ends done (data {:id :vehicle name}, plus :already true when aboard it already and the root job did not yet hold it; cause :already when it did), info vehicle.mounted, or
   condition-failed: :gone (no such entity in sight), :not-mountable, :occupied, :hand-full
   (a mob, with an item in hand that cannot be put away), :aboard-other (got on another vehicle on the way), or
   nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed twice),
@@ -59,14 +59,17 @@
 
 
 (defn done?
-  "Done when aboard the wanted vehicle: :id its entity id, :name its entity name."
+  "Done when aboard the wanted vehicle (:id its entity id, :name its entity name) and the root job holds it; aboard
+  without the hold stays later, so the round takes the hold before it ends."
   [c]
   (let [{:keys [id] wanted :name} (:args c)
         ride (vehicle/vehicle-of (.self (:primitives c)))
         aboard (and ride (if id (= id (:id ride)) (or (nil? wanted) (= wanted (:name ride)))))]
-    (if aboard
+    (if (and aboard (vehicle/held-by-root? c))
       (contract/ok :aboard "aboard the vehicle" :units :vehicles :done 1 :left 0 :result {:id (:id ride) :vehicle (:name ride)})
-      (contract/later :ashore "not aboard the vehicle" :units :vehicles :done 0 :left 1))))
+      (if aboard
+        (contract/later :holding "aboard, the vehicle is not yet held" :units :vehicles :done 1 :left 0)
+        (contract/later :ashore "not aboard the vehicle" :units :vehicles :done 0 :left 1)))))
 
 (defn nearest-named
   "The id of the nearest sensed entity named name, a free one before an occupied one, or nil."
