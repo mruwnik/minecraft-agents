@@ -240,10 +240,16 @@
             (ctx/end c :nothing-possible (merge {:reason :no-source :why why} (wanted-fields a))
                      (assoc data :tried (:tried m) :why why))))))))
 
+(defn reflex-step
+  "What a step gives the loop: a reflex job runs one round and may not :continue, so a child's yield is another step
+  (the stall limit and a cut end it)."
+  [c r]
+  (if (and (:reflex c) (= :continue r)) :again r))
+
 (defn ^:async round
-  "The whole attempt in one call: step! again until the count is carried or it ends; :continue only while a child waits on the world."
+  "The whole attempt in one call: step! again until the count is carried or it ends; :continue only while a child waits on the world (a reflex's obtain steps on instead)."
   [c]
   (await (pace/steps! c (fn ^:async obtain-step []
                           (let [r (await (step! c))]
                             (when (:progress (ctx/mem c)) (ctx/update-mem! c assoc-in [:progress :at] (ctx/now c)))
-                            r)))))
+                            (reflex-step c r))))))

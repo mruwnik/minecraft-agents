@@ -1,7 +1,7 @@
 (ns engine.obtain-contract-test
   "jobs.items.obtain and jobs.items.get-tool as contract jobs: the exports, done only with the item carried, facts
   condition-failed, failed tries nothing-possible, old callers' :how/:minutes/:chain/:depth as call keys."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [are deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -9,6 +9,7 @@
             [engine.fetch-test :as f]
             [engine.obtain-iron-test :as oi]
             [engine.registry :as registry]
+            [jobs.items.obtain :as obtain]
             [engine.test-util :as tu]))
 
 (defn export [sym k] (get-in registry/jobs [sym k] (constantly nil)))
@@ -141,3 +142,10 @@
               e (await (ending-of s 'jobs.items.obtain {:item "water_bucket"} 20))]
           (is (= {:kind :condition-failed :cause :no-source} (kc e)))
           (is (re-find #"water" (get-in e [:cause :why]))))))))
+
+(deftest a-reflex-obtain-steps-on-where-a-listed-one-yields
+  (are [c r expected] (= expected (obtain/reflex-step c r))
+    {:reflex :needs-weapon} :continue :again
+    {} :continue :continue
+    {:reflex :needs-weapon} :again :again
+    {:reflex :needs-weapon} [:done] [:done]))
