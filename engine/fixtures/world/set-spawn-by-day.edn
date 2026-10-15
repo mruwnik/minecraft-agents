@@ -1,0 +1,51 @@
+;; jobs.survival.set-spawn (cards 46a1e373, a4290bcf, c4bd3ebe, f4796f97, 783f34c2): by day the bed is clicked and the respawn point
+;; set; a point already known at the bed ends at once with spawn_unchanged; a newer :spawn-reset makes the body click again; a bed
+;; in a closed hut is clicked through the door; at night the job refuses (the sleep job sets it). Bed at [20 0 16] (head [21 0 16]).
+;; The night case needs night: --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:survival :sleep]
+  :time :day
+  :blocks [[:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]
+  :body {:at [8.5 0 16.5] :spawnpoint [2 0 2] :effects [["resistance" 600 4]] :settle-s 2}}
+ :cases
+ [{:name "click-sets-the-respawn-point-and-remembers-the-bed"
+   :act [[:job (jobs.survival.set-spawn {:bed #at [20 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :spawn_not_set} :for-s 40 :until {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}}}]
+   :after [[:body-near [20.5 0 16.5] 4] [:memory {:entries {:spawn-bed [{:data {:pos [:any]}}]}}]]
+   :limit-s 50}
+  {:name "known-spawn-far-from-the-bed-completes-unchanged-without-a-walk"
+   :body {:at [4.5 0 4.5] :spawnpoint [21 0 16]}
+   :memory [{:kind :spawn-bed :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.survival.set-spawn {:bed #at [20 0 16]})]]
+   :expect [{:event {:source :job :kind :spawn_unchanged} :within-s 30 :of-job true}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}} :within-s 30 :of-job true}]
+   :after [[:body-near [4.5 0 4.5] 3]]
+   :limit-s 40}
+  {:name "newer-spawn-reset-walks-to-the-bed-and-clicks"
+   :memory [{:kind :spawn-bed :data {:pos #xyz [20 0 16]} :age-s 7200 :policy {:cap 1 :ttl :forever}}
+            {:kind :spawn-reset :data {:pos #xyz [20 0 16]} :age-s 600}]
+   :act [[:job (jobs.survival.set-spawn {:bed #at [20 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :spawn_unchanged} :for-s 40 :until {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}}}]
+   :after [[:body-near [20.5 0 16.5] 4]]
+   :limit-s 50}
+  {:name "bed-in-a-closed-hut-is-clicked-through-the-door"
+   :blocks [[:set [20 0 16] "air"] [:set [21 0 16] "air"]
+            [:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:set [12 0 8] "oak_door[facing=north,half=lower,hinge=left,open=false]"]
+            [:set [12 1 8] "oak_door[facing=north,half=upper,hinge=left,open=false]"]
+            [:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
+   :body {:at [12.5 0 4.5]}
+   :act [[:job (jobs.survival.set-spawn {:bed #at [10 0 12]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :spawn_not_set} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}}}]
+   :after [[:memory {:entries {:spawn-bed [{:data {:pos [:any]}}]}}]]
+   :limit-s 70}
+  {:name "night-refuses-to-set-spawn"
+   :time :night
+   :act [[:job (jobs.survival.set-spawn {:bed #at [20 0 16]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :night}} :within-s 20 :of-job true}]
+   :after [[:body-near [8.5 0 16.5] 2]]
+   :limit-s 30}]}

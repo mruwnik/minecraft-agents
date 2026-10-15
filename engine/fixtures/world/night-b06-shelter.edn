@@ -1,0 +1,228 @@
+;; Night shelter follow-ups (cards a8fe9e86 1cbf8596 ad2c7c84 1b4b51d6 5a9e8c64 29349f1b ef5a94eb 712a8df7 1fbd292f b0e3b890 33e6bf20
+;; 8c5974f7 8e4c3127 629bc2ee fadf9dd7 ba754e77 7cc76257 f6fef9d5 2383463a): materials taken back at dawn, logs kept out of the walls,
+;; supported wall cells, doors shut or given up, the dawn hostile hold, caves and tunnels, a walled home with a carried bed, the
+;; dusk walk home, a far bed, the escalation out of a shaft. Needs night/time: --allow-time --time-log <the shared time log>.
+;; Torches keep the plot lit; the plot floor is one block over void, so a dirt pad y -6..-1 lets a pit be dug.
+{:defaults
+ {:tags [:night :survival :dig-in]
+  :time :night
+  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
+ :cases
+ [;; a8fe9e86: every shelter block dearer than dirt is dug back by day, not just the valuable ones
+  {:name "cobblestone-walls-are-taken-back-at-dawn"
+   :time :night-exclusive
+   :sleep-skip true
+   :body {:inventory [["cobblestone" 16]]}
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind :dig-in.sealed} 60]
+         [:wait-s 5]
+         [:time-set 1000]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
+            {:event {:source :job :kind :dig-in.took-back} :within-s 150}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
+   :after [[:item "cobblestone" [:>= 8]]]
+   :limit-s 230}
+  ;; 1cbf8596, ad2c7c84: logs only, no tool, stone floor: the only wall material is the logs, named in the sealed text, and dug back at dawn
+  {:name "log-walls-are-named-and-taken-back-at-dawn"
+   :time :night-exclusive
+   :sleep-skip true
+   :body {:inventory [["oak_log" 12]]}
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind :dig-in.sealed} 60]
+         [:wait-s 5]
+         [:time-set 1000]]
+   :expect [{:event {:source :job :kind :dig-in.sealed :message [:contains "oak_log"]} :within-s 60}
+            {:event {:source :job :kind :dig-in.took-back} :within-s 150}]
+   :after [[:item "oak_log" [:>= 8]]]
+   :limit-s 230}
+  ;; 1b4b51d6, ad2c7c84: logs only, no tool, diggable dirt: a pit by hand, at most one log placed
+  {:name "logs-and-no-tool-on-dirt-digs-a-pit-and-keeps-the-logs"
+   :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]]
+   :body {:inventory [["oak_log" 12]]}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :dig_in_failed} :for-s 90 :until {:source :job :kind :dig-in.sealed}}]
+   :after [[:item "oak_log" [:>= 11]]]
+   :limit-s 100}
+  ;; 5a9e8c64: wall cells beside a one-block pillar have nothing to place against until a block goes under them
+  {:name "pillar-top-walls-get-support-first"
+   :blocks [[:set [16 -1 16] "stone"] [:set [16 0 16] "stone"] [:set [16 1 16] "stone"]]
+   :body {:at [16.5 2 16.5] :inventory [["dirt" 24]]}
+   :plot {:height 12}
+   :act [[:job (jobs.survival.dig-in {})]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :dig_in_failed} :for-s 90 :until {:source :job :kind :dig-in.sealed}}]
+   :limit-s 100}
+  ;; 29349f1b: a hut with an open door: the night job shuts it instead of bunkering inside with it open
+  {:name "open-door-of-the-hut-is-shut"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:set [12 0 8] "oak_door[facing=north,half=lower,hinge=left,open=true]"]
+            [:set [12 1 8] "oak_door[facing=north,half=upper,hinge=left,open=true]"]]
+   :body {:at [13.5 0 13.5] :inventory [["cobblestone" 16]]}
+   :act [[:job (jobs.survival.night)]
+         [:wait-s 25]]
+   :expect [{:no-event {:source :job :kind :shelter.door-failed} :for-s 25}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 25}]
+   :after [[:block [12 0 8] "oak_door[open=false]"]]
+   :limit-s 40}
+  ;; ef5a94eb: an iron door cannot be shut by hand: one door-failed warning, then the body digs in on its spot, never ends roofed
+  {:name "door-that-will-not-shut-digs-in"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:set [12 0 8] "iron_door[facing=north,half=lower,hinge=left,open=true]"]
+            [:set [12 1 8] "iron_door[facing=north,half=upper,hinge=left,open=true]"]]
+   :body {:at [13.5 0 13.5] :inventory [["cobblestone" 16]]}
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :shelter.door-failed} :within-s 90}
+            {:event {:source :job :kind :dig-in.sealed} :within-s 150}
+            {:count-event {:source :job :kind :shelter.door-failed} :for-s 150 :at-most 1}]
+   :limit-s 160}
+  ;; 712a8df7: first light with a hostile known near the shelter: the body stays in, and leaves once the mob is gone
+  {:name "dawn-with-a-known-hostile-stays-in-until-it-is-gone"
+   :time :night-exclusive
+   :sleep-skip true
+   :body {:inventory [["cobblestone" 16]]}
+   :act [[:summon "zombie" [28.5 0 16.5] "{UUID:[I;2006101,1,1,1],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.survival.night)]
+         [:await {:source :job :kind :dig-in.sealed} 60]
+         [:wait-s 5]
+         [:time-set 1000]
+         [:await {:source :job :kind :night.dawn-hold} 60]
+         [:wait-s 5]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   :expect [{:event {:source :job :kind :night.dawn-hold} :within-s 120}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 240 :of-job true}]
+   :limit-s 260}
+  ;; f6fef9d5: the hold names the failed sites' reasons
+  {:name "exposed-hold-names-the-failed-sites"
+   :blocks [[:fill [12 -1 12] [20 -1 20] "stone"]]
+   :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :flee-radius 0})]]
+   :expect [{:event {:source :job :kind :shelter.exposed :data {:text [:not [:contains "no site tried"]]}} :within-s 90}]
+   :limit-s 100}
+  ;; 1fbd292f: a wide dark natural cave is no shelter: the body digs in where it stands
+  {:name "open-cave-digs-in-where-it-stands"
+   :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 4] [28 6 28] "air"]]
+   :plot {:height 12}
+   :register [{:trigger :night}]
+   :body {:at [16.5 0 16.5] :inventory [["cobblestone" 16]]}
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90}]
+   :limit-s 100}
+  ;; 1fbd292f, b0e3b890: in its own 1-wide tunnel the body keeps working; the night reflex does not fire
+  {:name "own-tunnel-keeps-working-at-night"
+   :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 16] [28 1 16] "air"]]
+   :plot {:height 12}
+   :register [{:trigger :night}]
+   :body {:at [20.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [29 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.blocks.dig"}} :within-s 60 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}]
+   :limit-s 70}
+  ;; 33e6bf20: a walk inside an open cave is not held as sheltered
+  {:name "walk-in-an-open-cave-is-not-held"
+   :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 4] [28 6 28] "air"]]
+   :plot {:height 12}
+   :body {:at [6.5 0 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #xyz [26 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.night-sheltered} :for-s 90 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
+   :after [[:body-near [26.5 0 16.5] 2.5]]
+   :limit-s 100}
+  ;; 8c5974f7: by day the night reflex does not fire, however often the body stops
+  {:name "midday-night-reflex-stays-quiet"
+   :time :day
+   :register [{:trigger :night}]
+   :act [[:job (jobs.movement.go-to {:pos #xyz [24 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 40 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 40}]
+   :limit-s 50}
+  ;; 8e4c3127: a one-cell home walled in stone, a carried bed: go-to digs in, the bed goes down by the doorway and is slept in, no walk loop
+  {:name "walled-in-home-with-a-carried-bed-sleeps"
+   :time :night-exclusive
+   :blocks [[:fill [10 0 10] [14 3 14] "stone"] [:fill [12 0 12] [12 1 12] "air"]]
+   :body {:at [4.5 0 12.5] :inventory [["stone_pickaxe" 1] ["red_bed" 1]]}
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [12 0 12]})]
+         [:job (jobs.survival.night)]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 180]]
+   :expect [{:event {:source :job :kind :night.bed-placed} :within-s 180}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 180}]
+   :limit-s 200}
+  ;; 2383463a: a bed 150 blocks off is too far to walk to tonight (no flight): it digs in here
+  {:name "bed-150-blocks-away-is-too-far"
+   :plot {:length 200 :width 32}
+   :blocks [[:set [150 0 16] "red_bed[facing=east,part=foot]"] [:set [151 0 16] "red_bed[facing=east,part=head]"]]
+   :body {:at [4.5 0 16.5] :inventory [["cobblestone" 16]]}
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [150 0 16]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :night.bed-too-far} :within-s 60}
+            {:event {:source :job :kind :dig-in.sealed} :within-s 100}]
+   :after [[:body-far [150.5 0 16.5] 100]]
+   :limit-s 110}
+  ;; fadf9dd7: dug in with the bed far away, sleep waits for day instead of saying "no walkable way"
+  {:name "sleep-dug-in-with-a-far-bed-waits"
+   :plot {:length 200 :width 32}
+   :blocks [[:set [170 0 16] "red_bed[facing=east,part=foot]"] [:set [171 0 16] "red_bed[facing=east,part=head]"]]
+   :body {:at [4.5 0 16.5] :inventory [["cobblestone" 16]]}
+   :act [[:job (jobs.survival.dig-in {})]
+         [:await {:source :job :kind :dig-in.sealed} 60]
+         [:job (jobs.survival.sleep {:bed #at [170 0 16]})]]
+   :expect [{:event {:source :job :kind #{:waiting :holding} :data {:reason :night-sheltered}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 30 :until {:source :job :kind #{:waiting :holding} :data {:reason :night-sheltered}}}]
+   :limit-s 80}
+  ;; ba754e77: a body shut in at the bottom of a 1x1 shaft cuts its own stair up to a goal on the surface
+  {:name "shaft-bottom-escalates-up-to-the-surface-goal"
+   :time :day
+   :blocks [[:fill [8 0 8] [24 16 24] "stone"] [:set [16 1 16] "air"] [:set [16 0 16] "air"]]
+   :plot {:height 22}
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #xyz [16 17 20] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90}
+            {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 240 :of-job true}]
+   :after [[:body-near [16.5 17 20.5] 3]]
+   :limit-s 250}
+  {:name "shaft-walled-in-bedrock-gives-up-at-once"
+   :time :day
+   :blocks [[:fill [8 0 8] [24 16 24] "bedrock"] [:set [16 1 16] "air"] [:set [16 0 16] "air"]]
+   :plot {:height 22}
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #xyz [16 17 20] :range 1})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 60 :until {:source :job :kind :stopped}}]
+   :after [[:body-near [16.5 0 16.5] 1.5]]
+   :limit-s 70}
+  ;; 629bc2ee: dusk, a home 66 blocks off: the dusk-home reflex fires and the body walks there
+  {:name "dusk-walks-home"
+   :time :day
+   :plot {:length 100 :width 32}
+   :register [{:trigger :dusk-home}]
+   :blocks [[:set [70 0 16] "torch"]]
+   :body {:at [4.5 0 16.5]}
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [70 0 16]}) [:now]]
+         [:time-set 12000]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :dusk-home}} :within-s 60}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.go-home"}} :within-s 120}]
+   :after [[:body-near [70.5 0 16.5] 5]]
+   :limit-s 130}
+  ;; 7cc76257: a roofed body held by the night reflex still runs an inventory-only job
+  {:name "sheltered-body-runs-an-inventory-only-craft"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+   :register [{:trigger :night}]
+   :body {:at [13.5 0 13.5] :inventory [["oak_planks" 4]] :settle-s 2}
+   :act [[:await {:source :job :kind :holding :data {:reason #{:sheltered :roofed}}} 60]
+         [:job (jobs.items.craft {:item "stick"})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.craft"}} :within-s 60 :of-job true}]
+   :after [[:item "stick" [:>= 4]]]
+   :limit-s 80}
+  ;; fe853845: at night in a sealed shelter the night job holds sheltered; it is never "waiting :not-night"
+  {:name "night-job-in-a-sealed-hut-holds-and-is-not-waiting-not-night"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+   :body {:at [13.5 0 13.5]}
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :holding :data {:reason #{:sheltered :roofed}}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :not-night}} :for-s 30}]
+   :limit-s 40}]}
