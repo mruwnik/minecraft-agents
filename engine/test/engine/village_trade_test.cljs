@@ -60,7 +60,7 @@
 (defn plain
   "A child result as the data it ended with: no :status of a done one, no :ending of a stopped one."
   [r]
-  (if (= :done (:status r)) (dissoc r :status) (dissoc r :ending)))
+  (if (= :done (:status r)) (dissoc r :status :text) (dissoc r :ending)))
 
 (defn ^:async trade
   "Run the job on a world of entities and inventory, after (prepare p); [result p seen]."
@@ -107,7 +107,7 @@
                                             {:count 3}))]
           (is (= {:bought 3 :paid {"emerald" 3} :item "bread"} result))
           (is (= {"emerald" 7 "bread" 3} (inv p)))
-          (is (contains? (kinds seen) :trade.done)))))))
+          (is (contains? (kinds seen) :completed)))))))
 
 (deftest an-offer-with-two-cost-stacks-pays-both
   (async done
@@ -179,7 +179,7 @@
                   :world {:entities [(villager [(bread {:cost [{:item "emerald" :count 3}]})])]
                           :inventory [{:name "emerald" :count 10}]}
                   :args {:max-price 3} :want {:bought 1 :paid {"emerald" 3} :item "bread"}
-                  :have {"emerald" 7 "bread" 1} :kind :trade.done}]))))))
+                  :have {"emerald" 7 "bread" 1} :kind :completed}]))))))
 
 (deftest gives-up-when-the-villager-offers-nothing-to-buy
   (async done

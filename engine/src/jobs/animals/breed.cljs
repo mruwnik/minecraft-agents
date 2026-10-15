@@ -25,7 +25,7 @@
   - Given up: :unreachable (walk blocked, or two feedings out of reach), :gone, :cannot, :failed, or :baby
     (the food was eaten without love; a baby the sensing missed, warn breed.baby).
 
-  Ends with info breed.done and a warn breed.gave-up unless the reason is :fed. The data {:reason :fed [keys]
+  Ends with a warn breed.gave-up unless the reason is :fed. The data {:reason :fed [keys]
   :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand} and the ending by the reason:
   - :done :fed: :count animals were fed. Any stop after at least :least animals were fed (default 2: a pair) is
     done, with the stop as the data reason (warn breed.gave-up); :least :all is :count.
@@ -85,10 +85,10 @@
     {:uses {:job-time [0 (min most (* 15 (:count (:args c) 2))) most]}}))
 
 (defn done?
-  "The animals fed against :count. Never :done? itself: feeding has no goal state that holds before it runs."
+  "Later with the animals fed against :count: the hand is put back by the run's own ending, so the goal never holds before it."
   [c]
   (let [fed (count (:fed (ctx/mem c)))]
-    {:done? false :units :animals :done fed :left (max 0 (- (:count (:args c) 2) fed))}))
+    (contract/later :feeding (str fed " animals fed") :units :animals :done fed :left (max 0 (- (:count (:args c) 2) fed)))))
 
 (defn least-fed
   "Animals that must be fed for the run to be done: the call's :least (:all = :count), at most :count."
@@ -156,9 +156,9 @@
                 :food (or (animals/food-carried p mob) (:food m))
                 :adults (count (animals/adults p mob radius))
                 :babies (count (animals/babies p mob radius))})
-        seen (str "adults " (:adults result) ", babies " (:babies result))]
+        seen (str "adults " (:adults result) ", babies " (:babies result))
+        result (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", " seen))]
     (mark-bred! c)
-    (ctx/emit! c :breed.done :info (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", " seen)))
     (when (not= :fed reason)
       (ctx/emit! c :breed.gave-up :warn {:reason reason :text (str "breeding stopped: " (name reason) " (" seen ")")}))
     (if ending

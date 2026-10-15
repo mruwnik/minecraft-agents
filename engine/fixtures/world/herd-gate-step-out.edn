@@ -17,8 +17,8 @@
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2] [:rcon "kill @e[type=zombie,$BOX]"] [:rcon "kill @e[type=skeleton,$BOX]"] [:rcon "kill @e[type=spider,$BOX]"] [:rcon "kill @e[type=creeper,$BOX]"]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason [:not :ready]}} :for-s 240 :until {:source :job :kind :herd.done :data {:reason :brought}}}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason [:not :ready]}} :for-s 240 :until {:source :job :kind :completed :data {:reason :brought}}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
   {:name "two-cows-no-park"
@@ -26,7 +26,7 @@
          [:summon "cow" [10.5 0 14.5]]
          [:wait-s 2] [:rcon "kill @e[type=zombie,$BOX]"] [:rcon "kill @e[type=skeleton,$BOX]"] [:rcon "kill @e[type=spider,$BOX]"] [:rcon "kill @e[type=creeper,$BOX]"]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 2})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 280 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason [:not :ready]}} :for-s 280 :until {:source :job :kind :herd.done :data {:reason :brought}}}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason [:not :ready]}} :for-s 280 :until {:source :job :kind :completed :data {:reason :brought}}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}]}

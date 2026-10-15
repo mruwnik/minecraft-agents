@@ -79,7 +79,7 @@
           (is (= {:fed 2 :item "bread"} (select-keys @out [:fed :item])))
           (is (= {"bread" 3} (inv p)))
           (is (= 1 (count (tosses p))))
-          (is (gave? s :feed.done)))))))
+          (is (gave? s :completed)))))))
 
 (deftest it-tosses-from-out-of-its-own-pickup-reach
   ;; Live, a toss from 1.5 away was collected back by the body itself when the pickup delay ran out.
@@ -186,7 +186,7 @@
               (await (core/tick! eng))
               (recur (inc i))))
           (is (empty? (:list (core/state eng))))
-          (is (gave? s :feed.done))
+          (is (gave? s :completed))
           (is (= 8 (some #(when (= "bread" (:name %)) (:count %)) (get-in @(fake/state p) [:containers [-2 64 3]])))))))))
 
 (deftest clean-up-leaves-a-drop-that-was-lying-before-the-toss

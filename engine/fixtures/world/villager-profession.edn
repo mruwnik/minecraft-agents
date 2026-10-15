@@ -14,29 +14,29 @@
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:farmer\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
          [:job (jobs.village.maintain {:roles [{:profession "farmer"} {:profession "librarian"}]})]]
-   :expect [{:event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :filled}}}} :within-s 100 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:steps {:roll-0 {:skipped :filled}}}} :within-s 100 :of-job true}]}
   {:name "librarian-fills-the-librarian-role-not-the-farmer-one"
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
          [:job (jobs.village.maintain {:roles [{:profession "farmer"} {:profession "librarian"}]})]]
-   :expect [{:event {:source :job :kind :maintain.done :data {:steps {:roll-1 {:skipped :filled}}}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 100
-             :until {:source :job :kind :maintain.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:steps {:roll-1 {:skipped :filled}}}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 100
+             :until {:source :job :kind :completed}}]}
   {:name "unemployed-villager-fills-no-role"
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b}"]
          [:wait-s 2]
          [:job (jobs.village.maintain {:roles [{:profession "farmer"} {:profession "librarian"}]})]]
-   :expect [{:event {:source :job :kind :maintain.done} :within-s 95 :of-job true}
-            {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 90
-             :until {:source :job :kind :maintain.done}}
-            {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-1 {:skipped :filled}}}} :for-s 90
-             :until {:source :job :kind :maintain.done}}]
+   :expect [{:event {:source :job :kind :completed} :within-s 95 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 90
+             :until {:source :job :kind :completed}}
+            {:no-event {:source :job :kind :completed :data {:steps {:roll-1 {:skipped :filled}}}} :for-s 90
+             :until {:source :job :kind :completed}}]
    :limit-s 100}
   {:name "nitwit-fills-no-role"
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
          [:job (jobs.village.maintain {:roles [{:profession "farmer"} {:profession "librarian"}]})]]
-   :expect [{:event {:source :job :kind :maintain.done} :within-s 95 :of-job true}
-            {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 90
-             :until {:source :job :kind :maintain.done}}]
+   :expect [{:event {:source :job :kind :completed} :within-s 95 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 90
+             :until {:source :job :kind :completed}}]
    :limit-s 100}]}

@@ -41,73 +41,73 @@
    :act [[:summon "sheep" [18.5 0 18.5]] [:summon "sheep" [19.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.shear {:count 1})]]
    :expect [{:event {:source :job :kind :shear.declined :data {:reason :refused}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :shear.done :data {:reason :shorn}} :for-s 40 :until {:source :job :kind :shear.declined}}]
+            {:no-event {:source :job :kind :completed :data {:reason :shorn}} :for-s 40 :until {:source :job :kind :shear.declined}}]
    :after [[:entities "type=sheep,tag=wt" [[14 0 12] [24 2 22]] 2]]}
   {:name "shear-ignore-zones-acts"
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [14 0 12] #at [24 1 22]] :want "dirt"}]}]
    :act [[:summon "sheep" [18.5 0 18.5]] [:summon "sheep" [19.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.shear {:count 1 :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :shear.done :data {:reason :shorn}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :shear.declined} :for-s 20 :until {:source :job :kind :shear.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :shear.declined} :for-s 20 :until {:source :job :kind :completed}}]}
   {:name "shear-own-zone-acts"
    :plans [{:id "z" :metadata {:by "$body"} :parts [{:id "z" :box [#at [14 0 12] #at [24 1 22]] :want "dirt"}]}]
    :act [[:summon "sheep" [18.5 0 18.5]] [:summon "sheep" [19.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.shear {:count 1})]]
-   :expect [{:event {:source :job :kind :shear.done :data {:reason :shorn}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :shear.declined} :for-s 20 :until {:source :job :kind :shear.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :shear.declined} :for-s 20 :until {:source :job :kind :completed}}]}
   {:name "shear-no-zone-acts"
    :act [[:summon "sheep" [18.5 0 18.5]] [:summon "sheep" [19.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.shear {:count 1})]]
-   :expect [{:event {:source :job :kind :shear.done :data {:reason :shorn}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :shear.declined} :for-s 20 :until {:source :job :kind :shear.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :shear.declined} :for-s 20 :until {:source :job :kind :completed}}]}
   {:name "breed-foreign-zone-refused"
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [14 0 12] #at [24 1 22]] :want "dirt"}]}]
    :act [[:summon "cow" [18.5 0 18.5]] [:summon "cow" [19.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.breed {:mob "cow" :count 2})]]
    :expect [{:event {:source :job :kind :breed.declined :data {:reason :refused}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :breed.done :data {:reason :fed}} :for-s 40 :until {:source :job :kind :breed.declined}}]
+            {:no-event {:source :job :kind :completed :data {:reason :fed}} :for-s 40 :until {:source :job :kind :breed.declined}}]
    :after [[:entities "type=cow,tag=wt" [[14 0 12] [24 2 22]] 2]]}
   {:name "breed-ignore-zones-acts"
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [14 0 12] #at [24 1 22]] :want "dirt"}]}]
    :act [[:summon "cow" [18.5 0 18.5]] [:summon "cow" [19.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.breed {:mob "cow" :count 2 :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :breed.done :data {:reason :fed}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :breed.declined} :for-s 20 :until {:source :job :kind :breed.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:reason :fed}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :breed.declined} :for-s 20 :until {:source :job :kind :completed}}]}
   {:name "breed-own-zone-acts"
    :plans [{:id "z" :metadata {:by "$body"} :parts [{:id "z" :box [#at [14 0 12] #at [24 1 22]] :want "dirt"}]}]
    :act [[:summon "cow" [18.5 0 18.5]] [:summon "cow" [19.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.breed {:mob "cow" :count 2})]]
-   :expect [{:event {:source :job :kind :breed.done :data {:reason :fed}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :breed.declined} :for-s 20 :until {:source :job :kind :breed.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:reason :fed}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :breed.declined} :for-s 20 :until {:source :job :kind :completed}}]}
   {:name "breed-no-zone-acts"
    :act [[:summon "cow" [18.5 0 18.5]] [:summon "cow" [19.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.breed {:mob "cow" :count 2})]]
-   :expect [{:event {:source :job :kind :breed.done :data {:reason :fed}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :breed.declined} :for-s 20 :until {:source :job :kind :breed.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:reason :fed}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :breed.declined} :for-s 20 :until {:source :job :kind :completed}}]}
   {:name "leash-foreign-zone-refused"
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [14 0 12] #at [24 1 22]] :want "dirt"}]}]
    :act [[:summon "cow" [18.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.leash {:mob "cow"})]]
    :expect [{:event {:source :job :kind :leash.declined :data {:reason :refused}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :leash.done :data {:reason :leashed}} :for-s 40 :until {:source :job :kind :leash.declined}}]
+            {:no-event {:source :job :kind :completed :data {:reason :leashed}} :for-s 40 :until {:source :job :kind :leash.declined}}]
    :after [[:entities "type=cow,tag=wt" [[14 0 12] [24 2 22]] 1]]}
   {:name "leash-ignore-zones-acts"
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [14 0 12] #at [24 1 22]] :want "dirt"}]}]
    :act [[:summon "cow" [18.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.leash {:mob "cow" :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :leash.done :data {:reason :leashed}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :leash.declined} :for-s 20 :until {:source :job :kind :leash.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:reason :leashed}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :leash.declined} :for-s 20 :until {:source :job :kind :completed}}]}
   {:name "leash-own-zone-acts"
    :plans [{:id "z" :metadata {:by "$body"} :parts [{:id "z" :box [#at [14 0 12] #at [24 1 22]] :want "dirt"}]}]
    :act [[:summon "cow" [18.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.leash {:mob "cow"})]]
-   :expect [{:event {:source :job :kind :leash.done :data {:reason :leashed}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :leash.declined} :for-s 20 :until {:source :job :kind :leash.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:reason :leashed}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :leash.declined} :for-s 20 :until {:source :job :kind :completed}}]}
   {:name "leash-no-zone-acts"
    :act [[:summon "cow" [18.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.leash {:mob "cow"})]]
-   :expect [{:event {:source :job :kind :leash.done :data {:reason :leashed}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :leash.declined} :for-s 20 :until {:source :job :kind :leash.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:reason :leashed}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :leash.declined} :for-s 20 :until {:source :job :kind :completed}}]}
   {:name "herd-gate-in-foreign-zone-refused"
    :tags [:herd :animals :jobs :access :zones]
    :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"] [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
@@ -118,7 +118,7 @@
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :herd.declined :data {:reason :refused}} :within-s 60 :of-job true}
             {:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :leash.done} :for-s 30}]
+            {:no-event {:source :job :kind :completed} :for-s 30}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0] [:item "lead" 4]]}
   {:name "herd-gate-foreign-zone-ignore-zones-brought"
    :tags [:herd :animals :jobs :access :zones]
@@ -128,7 +128,7 @@
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1 :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]
    :limit-s 300}
   {:name "herd-gate-in-own-zone-brought"
@@ -139,7 +139,7 @@
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]
    :limit-s 300}
   {:name "unleash-foreign-zone-refused"
@@ -148,11 +148,11 @@
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [20 0 10] #at [32 1 22]] :want "dirt"}]}]
    :act [[:summon "cow" [17.5 0 16.5]] [:wait-s 2]
          [:job (jobs.animals.leash {:mob "cow"})]
-         [:await {:source :job :kind :leash.done} 40]
+         [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~9 ~ ~"] [:wait-s 6]
          [:job (jobs.animals.unleash {:mob "cow"})]]
    :expect [{:event {:source :job :kind :unleash.declined :data {:reason :refused}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :unleash.done :data {:reason :unleashed}} :for-s 30 :until {:source :job :kind :unleash.declined}}]
+            {:no-event {:source :job :kind :completed :data {:reason :unleashed}} :for-s 30 :until {:source :job :kind :unleash.declined}}]
    :limit-s 150}
   {:name "unleash-ignore-zones-frees"
    :tags [:animals :jobs :access :zones]
@@ -160,8 +160,8 @@
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [20 0 10] #at [32 1 22]] :want "dirt"}]}]
    :act [[:summon "cow" [17.5 0 16.5]] [:wait-s 2]
          [:job (jobs.animals.leash {:mob "cow"})]
-         [:await {:source :job :kind :leash.done} 40]
+         [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~9 ~ ~"] [:wait-s 6]
          [:job (jobs.animals.unleash {:mob "cow" :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :unleash.done :data {:reason :unleashed}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :unleashed}} :within-s 60 :of-job true}]
    :limit-s 150}]}

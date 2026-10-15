@@ -18,11 +18,11 @@
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :ignore-zones? true :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}
   {:name "foreign-footprint-refuses-unleash"
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :unleash.declined :data {:reason :refused}} :within-s 240 :of-job true}
-            {:no-event {:source :job :kind :herd.done :data {:reason :brought}} :for-s 240 :until {:source :job :kind :herd.done}}]}]}
+            {:no-event {:source :job :kind :completed :data {:reason :brought}} :for-s 240 :until {:source :job :kind :completed}}]}]}

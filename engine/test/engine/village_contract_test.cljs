@@ -1,11 +1,14 @@
 (ns engine.village-contract-test
   "village.feed, village.trade and village.roll as contract jobs: they export the contract, quote validly, and end with a
   kind and a cause (a partial run is never done)."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.village.breed :as breed]
+            [jobs.village.feed :as feed]
+            [jobs.village.roll :as roll]
+            [jobs.village.trade :as trade]
             [engine.registry :as registry]
             [engine.seek-contract-test :as seek]
             [engine.test-util :as tu]
@@ -25,6 +28,16 @@
     (is (some? (:done? (job sym))) (str sym " has done?"))
     (is (some? (get-in (job sym) [:defaults :spend :job-time])) (str sym " has a time default"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:job-time 60}}}))) (str sym))))
+
+(deftest done-holds-once-the-whole-goal-is-in
+  (are [done? args mem expected] (= expected (with-redefs [ctx/mem (constantly mem)] (tu/kind-reason (done? {:args args}))))
+    trade/done? {:buy "bread" :count 3} {:bought 3} [:ok :bought]
+    trade/done? {:buy "bread" :count 3} {:bought 1} [:later :buying]
+    feed/done? {:count 2} {:fed 2} [:ok :fed]
+    feed/done? {:count 2} {:fed 2 :cleanup {:item "bread"}} [:later :feeding]
+    feed/done? {:count 2} {:fed 1} [:later :feeding]
+    roll/done? {:item "lectern" :want "enchanted_book" :tries 3} {:offer {:index 0}} [:ok :found]
+    roll/done? {:item "lectern" :want "enchanted_book" :tries 3} {:rolls 1} [:later :rolling]))
 
 (def bread [{:name "bread" :count 5}])
 

@@ -48,7 +48,7 @@
   go (jobs.animals.unleash), then a jobs.maintenance.shut-doors child shuts the doors and gates the legs left open for
   the animal; the ending's :still-led is then false.
 
-  Ends with info lead-to.done and a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
+  Ends with a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
   {:reason :animal key :still-led bool (when the leading ended, before cleanup) :at pos :gathered bool :text}. Reasons
   and endings:
   - :tied, :unleashed: done.
@@ -123,10 +123,9 @@
                 :still-led (boolean (:still-led m))
                 :gathered (boolean (:gathered m))
                 :at (u/self-pos c)}]
-    (ctx/emit! c :lead-to.done :info (assoc result :text (str "lead-to done: " (name reason))))
     (when-not ok?
       (ctx/emit! c :lead-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
-    (end! c reason (cond-> result (not ok?) (assoc :text (stop-text c reason))))))
+    (end! c reason (assoc result :text (if ok? (str "lead-to done: " (name reason)) (stop-text c reason))))))
 
 (defn finish!
   "End the leading with reason (conclude! at the next step). Any reason but :tied and :unleashed is a stop."
@@ -177,11 +176,13 @@
     {:uses {:job-time [0 (min most 60) most]}}))
 
 (defn done?
-  "Whether the animal is tied or let go, and the data so far. Never :done? itself: the run ends with its event and data."
+  "Later with whether the animal is tied or let go, and the data so far: the run ends itself."
   [c]
-  (let [m (ctx/mem c)]
-    {:done? false :units :animals :done (if (#{:tied :unleashed} (:ending m)) 1 0) :left 1
-     :data {:animal (:animal m) :still-led (boolean (:still-led m))}}))
+  (let [m (ctx/mem c)
+        n (if (#{:tied :unleashed} (:ending m)) 1 0)]
+    (contract/later :leading (if (pos? n) "the animal is tied or let go" "the animal is on the lead")
+                    :units :animals :done n :left (- 1 n)
+                    :result {:animal (:animal m) :still-led (boolean (:still-led m))})))
 
 (defn set-phase! [c phase]
   (ctx/update-mem! c assoc :phase phase))

@@ -16,7 +16,7 @@
    :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,1],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 3]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000001" :pos #at [16 0 16] :item "lectern" :want "enchanted_book" :tries 12})]]
-   :expect [{:event {:source :job :kind :roll.done} :within-s 220 :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "nitwit-cannot-be-rolled"
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,2],VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"}}"]

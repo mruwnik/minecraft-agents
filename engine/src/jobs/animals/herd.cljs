@@ -33,7 +33,7 @@
 
   The pen checks. At the start the pen as the body sees and remembers it is judged (a start condition, :precheck? false
   skips it): a refusal waits (condition-failed under a parent) with the cause {:reason :text} and the fields below. A pen
-  it cannot read from where it stands is read at the pen, where a refusal ends the run condition-failed with herd.done.
+  it cannot read from where it stands is read at the pen, where a refusal ends the run condition-failed.
   A lure run gets its food before the walk. The reasons:
   - :no-pen: the pen cannot be read from :box (the result's :cell names the first unseen cell when there is one; a cell it has not seen is gone near and looked at once; one still unknown goes to the pen's gate to look in, once; still unknown ends here).
   - :leaky: the pen has a leak other than the chosen gate (:leaks lists them).
@@ -86,7 +86,7 @@
   steps on from the nearest axis cell, led with the body outside goes back and lines up again, nobody led
   with the body in the pen goes out, nobody led with the gate open shuts it.
 
-  Ends with info herd.done and result {:reason :inside n :target :brought [keys] :given-up {key reason}
+  Ends with result {:reason :inside n :target :brought [keys] :given-up {key reason}
   :gate pos :escaped n :animals [{:kind :id :pos}] (the livestock on the pen cells)}. :inside is counted on the pen's cells at the end. Every reason but :brought and
   :full also gives one warn herd.gave-up. An animal is booked brought once, however often it is led. Reasons:
   :brought (pen holds :target), :short (fewer than :target in the pen: some came, or none came and no other
@@ -168,14 +168,17 @@
   (cond/and bad-args pen-refusal))
 
 (defn done?
-  "Whether the box holds :target adults before the run touched the gate (once it has, the run ends itself, outside
+  "Ok when the box holds :target adults before the run touched the gate (once it has, the run ends itself, outside
   with the gate shut); the animals brought, and those still missing."
   [c]
   (let [{:keys [box target]} (:args c)
         m (ctx/mem c)
-        inside (count (filter #(animals/in-box? box (u/pos-of (.-pos %))) (adults c)))]
-    {:done? (and (nil? (:gate m)) (>= inside target))
-     :units :animals :done (count (:brought m)) :left (max 0 (- target inside))}))
+        inside (count (filter #(animals/in-box? box (u/pos-of (.-pos %))) (adults c)))
+        data [:units :animals :done (count (:brought m)) :left (max 0 (- target inside))
+              :result {:reason :brought :inside inside :target target}]]
+    (if (and (nil? (:gate m)) (empty? (:led m)) (>= inside target))
+      (apply contract/ok :brought (str "herd done: " inside " of " target " in the pen") data)
+      (apply contract/later :herding (str inside " of " target " in the pen") data))))
 
 (defn quote-of
   "Find-out: a minute an animal as the guess, no most."

@@ -23,10 +23,10 @@
   A step whose child declines is booked {:skipped :declined :reason why} (the child's wait reason), one that
   throws {:skipped :failed :error text}; the pass goes on either way.
   The job does not start (condition-failed :nothing-to-do) unless some step would run. A started run always continues.
-  It ends :done with {:villagers n :target :steps {step summary}} (info maintain.done) when some step ran to its end
+  It ends :done with {:villagers n :target :steps {step summary}} when some step ran to its end
   and none was incomplete. A summary is the child's :reason, :placed, :missing, :fed, :rolled, :born and :count (a
   child that ended other than :done carries :stopped kind). A child that ended other than :done, declined or failed,
-  or a role without :pos, ends the pass nothing-possible :incomplete (warn maintain.done); a pass where no step ran
+  or a role without :pos, ends the pass nothing-possible :incomplete (warn maintain.gave-up); a pass where no step ran
   ends condition-failed :nothing-to-do; a child that reached a limit ends the pass limit-reached with it.
   The job names of breed and roll are used, not their internals: their args are as listed above.
   :ignore-zones? is passed to the repair.")
@@ -134,11 +134,10 @@
                (str "maintain done, incomplete: "
                     (str/join ", " (map #(str (name %) (some->> (or (some-> (:reason (report %)) name) (when (= :no-pos (:skipped (report %))) "no-pos")) (str " "))) bad)))
                (str "maintain done: " (count (filter :skipped (vals report))) " steps skipped"))]
-    (ctx/emit! c :maintain.done (if (seq bad) :warn :info)
-               (cond-> (assoc out :text text) (seq bad) (assoc :status :stopped :reason "incomplete")))
+    (when (seq bad) (ctx/emit! c :maintain.gave-up :warn {:reason :incomplete :text text}))
     (cond
-      (seq bad) (ctx/end c :nothing-possible :incomplete out)
-      (some ran? (vals report)) (ctx/end c :done nil out)
+      (seq bad) (ctx/end c :nothing-possible :incomplete (assoc out :text text))
+      (some ran? (vals report)) (ctx/end c :done nil (assoc out :text text))
       :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
 
 (defn booked
@@ -217,9 +216,11 @@
 (def can-start? nothing-to-do)
 
 (defn done?
-  "Never done before the round says so: the steps left are decided from the facts at each step."
+  "Later with the steps run and left: which steps remain is decided from the facts at each step, so the pass ends
+  itself."
   [c]
-  {:done? false :units :steps :done (count (filter ran? (vals (:report (ctx/mem c))))) :left (count (:todo (ctx/mem c)))})
+  (let [ran (count (filter ran? (vals (:report (ctx/mem c)))))]
+    (contract/later :steps (str ran " steps run") :units :steps :done ran :left (count (:todo (ctx/mem c))))))
 
 (defn quote-of [_c]
   {:uses {:job-time [1 60 (settings/get settings ::time-s)]}})

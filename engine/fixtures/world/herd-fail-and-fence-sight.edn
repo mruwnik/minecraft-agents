@@ -13,7 +13,7 @@
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason [:not :brought]}} :within-s 120 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:reason [:not :brought]}} :within-s 120 :of-job true}
             {:event {:source :job :kind :stopped} :within-s 130 :of-job true}]}
   {:name "zombie-behind-fence-quiet"
    :tags [:hostile :triggers] :mobs :keep

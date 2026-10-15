@@ -51,7 +51,7 @@
      s)))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn done-event [s] (first (events-of s :maintain.done)))
+(defn done-event [s] (first (events-of s :completed)))
 (defn step [s k] (get-in (done-event s) [:steps k]))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn calls [{:keys [p]} name] (h/calls p name))

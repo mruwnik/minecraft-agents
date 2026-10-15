@@ -21,7 +21,7 @@
   The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
 
-  Emits (info pen-check.done) and ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed, else
+  Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed, else
   condition-failed with the :reason as the cause:
   - :reason is nil when closed, else :leak, :unbounded, :unloaded (a cell, or the start's floor, was never seen) or :no-start (:at is no floor to stand on).
   - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :open :unloaded (:climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
@@ -87,9 +87,9 @@
       (when-let [t (:trouble (pen-box c))] {:reason :plan-trouble :why t})))
 
 (defn done?
-  "Counts only (the round ends the call with its data): the cells of the pen read."
+  "Later with the cells of the pen read: the round ends the call with the answer."
   [c]
-  {:done? false :units :cells :done (:cells (ctx/mem c) 0) :left 0})
+  (contract/later :reading (str (:cells (ctx/mem c) 0) " cells read") :units :cells :done (:cells (ctx/mem c) 0) :left 0))
 
 (defn quote-of [_c]
   {:uses {:job-time [1 5 30]}})
@@ -130,11 +130,10 @@
       :partial :continue
       :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)
       (let [rows (animals/in-pen-rows (:primitives c) checked animal-radius)
-            result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)})]
-        (ctx/emit! c :pen-check.done :info
-                   (assoc result :text (if (:closed? result)
+            result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)})
+            result (assoc result :text (if (:closed? result)
                                          (str "pen closed, " (:cells result) " cells" (gate-drop-text result))
-                                         (str "pen not closed: " (name (:reason result)) (leak-text result) (gate-drop-text result)))))
+                                         (str "pen not closed: " (name (:reason result)) (leak-text result) (gate-drop-text result))))]
         (ctx/update-mem! c assoc :cells (:cells result))
         (if (:closed? result)
           (ctx/end c :done nil result)

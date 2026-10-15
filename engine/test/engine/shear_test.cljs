@@ -26,7 +26,10 @@
     (await (run-ticks s n 700))
     s))
 
-(defn done-event [{:keys [seen]}] (first (filter #(= :shear.done (:kind %)) @seen)))
+(defn done-event
+  "The job's ending event (job.completed or job.stopped)."
+  [{:keys [seen]}]
+  (first (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn calls-of [{:keys [p]} name] (h/calls p name))
@@ -74,7 +77,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label args world reason]
-                [["no shears" {} {:entities [(sheep 1 2)]} :no-shears]
+                [["no shears" {} {:entities [(sheep 1 2)]} :need]
                  ["all sheared" {} {:inventory shears :entities [(sheep 1 2 {:sheared true}) (sheep 2 3 {:sheared true})]} :all-sheared]
                  ["no sheep" {} {:inventory shears :entities []} :none]
                  ["only babies" {} {:inventory shears :entities [(sheep 1 2 {:baby true})]} :none]]]
@@ -230,7 +233,7 @@
       (fn ^:async t []
         (let [s (await (seeing-scenario {} (chest-world []) 120))]
           (is (finished? s))
-          (is (= :no-shears (:reason (done-event s)))))))))
+          (is (= :need (:reason (done-event s)))))))))
 
 (deftest the-walk-to-the-sheep-is-short-legs-that-never-escalate
   (async done

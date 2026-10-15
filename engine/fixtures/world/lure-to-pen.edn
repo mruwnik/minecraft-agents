@@ -18,7 +18,7 @@
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
-   :expect [{:event {:source :job :kind :lure-to.done :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:item "wheat" [:>= 4]]]}
   {:name "penned-cow-skipped-outside-cow-led"
@@ -27,7 +27,7 @@
          [:summon "cow" [16.5 0 24.5]]
          [:wait-s 2]
          [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [22 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :radius 12})]]
-   :expect [{:event {:source :job :kind :lure-to.done :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]]}
   ;; should fail: a cow that does not move never follows; the run ends with a reason, never :arrived, and the cow stays out
   {:name "cow-that-never-follows-is-not-arrived"
@@ -35,7 +35,7 @@
          [:wait-s 2]
          [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :lure-to.gave-up :data {:reason #{:animal-stalled :animal-outside :lost :unreachable}}} :within-s 150 :of-job true}
-            {:no-event {:source :job :kind :lure-to.done :data {:reason :arrived}} :for-s 150 :until {:source :job :kind :lure-to.gave-up}}]
+            {:no-event {:source :job :kind :completed :data {:reason :arrived}} :for-s 150 :until {:source :job :kind :lure-to.gave-up}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]}
   {:name "chicken-with-no-seeds-gets-seeds-from-grass"
    :blocks [[:fill [4 0 4] [11 0 13] "short_grass"]]
@@ -43,6 +43,6 @@
    :act [[:summon "chicken" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.lure-to {:mob "chicken" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
-   :expect [{:event {:source :job :kind :lure-to.done :data {:reason :arrived}} :within-s 190 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :arrived}} :within-s 190 :of-job true}]
    :after [[:entities "type=chicken,tag=wt" [[19 0 14] [23 1 18]] 1]]
    :limit-s 220}]}

@@ -32,7 +32,7 @@
   and one that throws {:skipped :failed :error text}. The pass goes on either way.
   The job declines (does nothing) unless some step would run, after one look around per run when part of the area was never seen. A started run always
   continues.
-  It ends :done with {:target :bees :steps {step summary}} (info maintain.done), also when every step was
+  It ends :done with {:target :bees :steps {step summary}} , also when every step was
   skipped. Summaries: guard {:sunk :carpeted :reason :left}, harvest {:harvested :reason :declined}, breed {:fed
   :reason}, deposit {:gave-up :reason}.
   :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs); they run with :fetch false, a missing item skips the step.")
@@ -208,8 +208,7 @@
         out {:target target :bees (count (bees-in-area c (apiary/center-of c))) :steps report}
         entries (vals report)]
     (cond
-      (some ran? entries) (do (ctx/emit! c :maintain.done :info (assoc out :text (str "maintain done: " (count (filter :skipped entries)) " steps skipped")))
-                              (ctx/end c :done nil out))
+      (some ran? entries) (ctx/end c :done nil (assoc out :text (str "maintain done: " (count (filter :skipped entries)) " steps skipped")))
       (some #(or (:stopped %) (= :failed (:skipped %))) entries) (ctx/end c :nothing-possible :failed-steps out)
       :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
 
@@ -273,9 +272,11 @@
 
 
 (defn done?
-  "Never done before the round says so: the steps left are decided from the facts at each step."
+  "Later with the steps run and left: which steps remain is decided from the facts at each step, so the pass ends
+  itself."
   [c]
-  {:done? false :units :steps :done (count (filter ran? (vals (:report (ctx/mem c))))) :left (count (:todo (ctx/mem c)))})
+  (let [ran (count (filter ran? (vals (:report (ctx/mem c)))))]
+    (contract/later :steps (str ran " steps run") :units :steps :done ran :left (count (:todo (ctx/mem c))))))
 
 (defn quote-of [_c]
   {:uses {:job-time [1 60 (settings/get settings ::time-s)]}})

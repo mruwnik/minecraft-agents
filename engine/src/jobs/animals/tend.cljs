@@ -35,7 +35,7 @@
   waits, so the job is cheap under repeat: :nothing-to-do with the census {:adults :babies :target} and
   {:skipped {step reason}}.
 
-  Ends :done after the pass, with info tend.done and {:mob :target :adults :babies (live census in the box) :steps {step
+  Ends :done after the pass, with {:mob :target :adults :babies (live census in the box) :steps {step
   summary}}; a plan part that vanishes after the start ends condition-failed :plan-trouble. Summaries: breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
@@ -229,10 +229,11 @@
       :else (pen-fact c))))
 
 (defn done?
-  "The steps still to run against those of a pass. Never :done? itself: the run ends with its event and data."
+  "Later with the steps still to run against those of a pass: the steps left are decided from the facts at each step, so
+  the pass ends itself."
   [c]
   (let [left (count (get (ctx/mem c) :todo steps))]
-    {:done? false :units :steps :done (- (count steps) left) :left left}))
+    (contract/later :steps (str left " steps left") :units :steps :done (- (count steps) left) :left left)))
 
 (defn quote-of [_c]
   {:uses {:job-time [0 90 600]}})
@@ -255,8 +256,7 @@
         out {:mob mob :target target :adults (count adults) :babies (count babies) :steps report}]
     (when (some #(:call (decide % (:args c) f)) steps)
       (standing/rest! c 'jobs.animals.tend (pen-key c) :undone))
-    (ctx/emit! c :tend.done :info (assoc out :text (str "tend done: " (count adults) " adults, " (count babies) " babies")))
-    (ctx/end c :done nil out)))
+    (ctx/end c :done nil (assoc out :text (str "tend done: " (count adults) " adults, " (count babies) " babies")))))
 
 (defn ^:async step-steps
   "One step: finish, or one call of the next step's child. :again after it ended (a failed child is booked with its kind and cause), :yield while it waits on the world, :done at the end."

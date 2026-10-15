@@ -10,7 +10,7 @@
          :inventory [["iron_pickaxe" 1] ["campfire" 1] ["white_carpet" 1]]
          :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
   :act [[:job (jobs.apiary.guard {:radius 20})]]
-  :expect [{:event {:kind :apiary.guard-done :data {:sunk 1 :carpeted 1 :reason :guarded}} :within-s 100 :of-job true}
+  :expect [{:event {:kind :completed :data {:sunk 1 :carpeted 1 :reason :guarded}} :within-s 100 :of-job true}
            {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
   :limit-s 120}
  :cases

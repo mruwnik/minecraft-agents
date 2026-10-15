@@ -26,7 +26,10 @@
       (await (core/tick! eng)))
     s))
 
-(defn done-event [{:keys [seen]}] (first (filter #(= :lure-to.done (:kind %)) @seen)))
+(defn done-event
+  "The job's ending event (job.completed or job.stopped)."
+  [{:keys [seen]}]
+  (first (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn stopped [{:keys [seen]}] (filterv #(= :stopped (:kind %)) @seen))
 (defn cow-of [{:keys [p]} id] (first (filter #(= id (:id %)) (fake/entities p))))

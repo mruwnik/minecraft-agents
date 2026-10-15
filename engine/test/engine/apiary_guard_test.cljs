@@ -57,7 +57,7 @@
           (is (= :guarded (:reason result)))
           (is (= "white_carpet" (block-name p 2 65 0)))
           (is (not (apiary/open-fire? (apiary/block-at-fn p) {:x 2 :y 64 :z 0})))
-          (is (= 1 (count (kinds seen :apiary.guard-done))))
+          (is (= 1 (count (kinds seen :completed))))
           (is (empty? (kinds seen :apiary.guard-gave-up))))))))
 
 (deftest a-fire-behind-the-body-is-found-by-the-look-around

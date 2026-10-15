@@ -12,14 +12,14 @@
    :blocks [[:set [14 0 22] "campfire[lit=true]"] [:set [14 1 22] "white_carpet"] [:set [14 2 22] "beehive[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
    :act [[:job (jobs.apiary.harvest {:radius 20})]]
-   :expect [{:event {:kind :apiary.done :data {:harvested 1 :reason :harvested}} :within-s 100 :of-job true}]
+   :expect [{:event {:kind :completed :data {:harvested 1 :reason :harvested}} :within-s 100 :of-job true}]
    :after [[:block [14 2 22] "beehive[honey_level=0]"] [:item "honeycomb" [:>= 3]]]}
   {:name "maintain-harvests-over-a-carpeted-raised-fire"
    :blocks [[:set [14 0 22] "campfire[lit=true]"] [:set [14 1 22] "white_carpet"] [:set [14 2 22] "beehive[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
    :act [[:job (jobs.apiary.maintain {:radius 20})]]
-   :expect [{:event {:kind :maintain.done :data {:steps {:harvest {:harvested 1}}}} :within-s 100 :of-job true}
-            {:no-event {:kind :maintain.done :data {:steps {:harvest {:skipped :unsafe-fire}}}} :for-s 100 :until {:kind :maintain.done}}]
+   :expect [{:event {:kind :completed :data {:steps {:harvest {:harvested 1}}}} :within-s 100 :of-job true}
+            {:no-event {:kind :completed :data {:steps {:harvest {:skipped :unsafe-fire}}}} :for-s 100 :until {:kind :completed}}]
    :after [[:block [14 2 22] "beehive[honey_level=0]"] [:item "honeycomb" [:>= 3]]]}
   {:name "harvest-over-an-open-raised-fire-declines"
    :blocks [[:set [14 0 22] "campfire[lit=true]"] [:set [14 2 22] "beehive[honey_level=5]"]]

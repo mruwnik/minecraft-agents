@@ -26,7 +26,10 @@
     (await (run-ticks s n 700))
     s))
 
-(defn done-event [{:keys [seen]}] (first (filter #(= :leash.done (:kind %)) @seen)))
+(defn done-event
+  "The job's ending event (job.completed or job.stopped)."
+  [{:keys [seen]}]
+  (first (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn calls-of [{:keys [p]} name] (h/calls p name))
@@ -81,7 +84,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label world reason]
-                [["no lead" {:entities [(cow 1 2)]} :no-lead]
+                [["no lead" {:entities [(cow 1 2)]} :need]
                  ["no cow" {:inventory lead :entities [{:id 1 :uuid "u1" :name "pig" :kind "passive" :pos {:x 2 :y 64 :z 0}}]} :none]
                  ["cow out of radius" {:inventory lead :entities [(cow 1 30)]} :none]
                  ["all on leads" {:inventory lead :entities [(cow 1 2 {:leashed true :leashHolder 99})]} :all-leashed]]]
@@ -221,7 +224,7 @@
       (fn ^:async t []
         (let [s (await (seeing-scenario {} (chest-world []) 120))]
           (is (finished? s))
-          (is (= :no-lead (:reason (done-event s)))))))))
+          (is (= :need (:reason (done-event s)))))))))
 
 (deftest the-walk-to-the-cow-is-short-legs-that-never-escalate
   (async done

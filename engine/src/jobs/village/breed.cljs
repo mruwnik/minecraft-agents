@@ -19,7 +19,7 @@
   Conditions at the start (a listed call waits on them): :no-pair (below :target, fewer than two adult villagers in
   sight; the engine looks round once first), :no-food (the food is not carried and a fetch is off or failed lately). A :target under 2 is impossible
   (:bad-args). Quote: time from :wait-s and the births still missing.
-  Ends with the data {:population n :target t :births b}: done when the target is met (info breed.done; an already
+  Ends with the data {:population n :target t :births b}: done when the target is met (done? holds; an already
   met target is done with 0 births), else with warn breed.gave-up and the cause:
   - condition-failed :no-pair: no two untried adult villagers in sight and none tried (they left since the start).
   - condition-failed :no-food: a feed child ended without food.
@@ -102,13 +102,19 @@
 
 (def can-start? (cond/and bad-args no-pair no-food))
 
+(declare data-of)
+
 (defn done?
-  "The villagers in sight against :target; done before the job began when it is met with no pair being fed or waited
-  for (births of a pair under way are reported by the round)."
+  "Ok once the villagers in sight reach :target and no pair is being fed or waited for (step! books that pair's
+  births first), with the population, target and births as its result."
   [c]
-  (let [pop (:pop (sight (villagers (:primitives c) (:radius (:args c)))))
-        m (ctx/mem c)]
-    {:done? (and (number? (:target (:args c))) (>= pop (:target (:args c))) (not (:pair m)) (not (:waiting m))) :units :villagers :done pop :left (max 0 (- (:target (:args c)) pop))}))
+  (let [target (:target (:args c))
+        seen (sight (villagers (:primitives c) (:radius (:args c))))
+        m (ctx/mem c)
+        data [:units :villagers :done (:pop seen) :left (max 0 (- (or target 0) (:pop seen))) :result (data-of c seen)]]
+    (if (and (number? target) (>= (:pop seen) target) (not (:pair m)) (not (:waiting m)))
+      (apply contract/ok :target (str (:pop seen) " villagers in sight") data)
+      (apply contract/later :growing (str (:pop seen) " of " target " villagers in sight") data))))
 
 (defn quote-of [c]
   (let [left (max 0 (- (:target (:args c)) (:pop (sight (villagers (:primitives c) (:radius (:args c)))))))
@@ -135,12 +141,6 @@
   [c seen kind reason text]
   (ctx/emit! c :breed.gave-up :warn {:reason reason :text text :population (:pop seen) :births (births c seen)})
   (ctx/end c kind reason (data-of c seen)))
-
-(defn done!
-  "Info and end: the target is met."
-  [c seen]
-  (ctx/emit! c :breed.done :info {:population (:pop seen) :births (births c seen) :text (str (:pop seen) " villagers in sight")})
-  (ctx/end c :done nil (data-of c seen)))
 
 (defn choose!
   "Pick the two nearest untried adults and book them with the baseline count, or end without a pair. :again or an ending."
@@ -204,7 +204,8 @@
         vs (villagers (:primitives c) (:radius (:args c)))
         seen (sight vs)]
     (cond
-      (>= (:pop seen) (:target (:args c))) (done! c seen)
+      (>= (:pop seen) (:target (:args c)))
+      (do (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at) (update :births (fnil + 0) (born c seen)))) :again)
       (:waiting m) (await (wait! c seen))
       (>= (:fruitless m 0) (max-fruitless)) (stop! c seen :nothing-possible :no-births "three attempts without a birth")
       (:pair m) (await (feed-pair! c vs seen))

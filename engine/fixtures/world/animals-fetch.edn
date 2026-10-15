@@ -17,12 +17,12 @@
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.animals.breed {:mob "cow" :count 2})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 70 :of-job true}
-            {:event {:source :job :kind :breed.done :data {:reason :fed}} :within-s 110 :of-job true}]}
+            {:event {:source :job :kind :completed :data {:reason :fed}} :within-s 110 :of-job true}]}
   {:name "breed-nothing-fetchable-ends-no-food"
    :act [[:summon "cow" [20.5 0 12.5]] [:summon "cow" [21.5 0 12.5]] [:wait-s 2]
          [:job (jobs.animals.breed {:mob "cow" :count 2})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :breed.done :data {:reason :no-food}} :within-s 80 :of-job true}]}
+            {:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 80 :of-job true}]}
   {:name "breed-fetch-false-waits-no-food"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:8}]}"]]
    :act [[:summon "cow" [20.5 0 12.5]] [:summon "cow" [21.5 0 12.5]]
@@ -30,7 +30,7 @@
          [:job (jobs.animals.breed {:mob "cow" :count 2 :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-food}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 30 :until {:source :job :kind :waiting}}
-            {:no-event {:source :job :kind :breed.done} :for-s 30 :until {:source :job :kind :waiting}}]
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting}}]
    :limit-s 60}
   {:name "shear-fetches-shears"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:shears\",count:1}]}"]]
@@ -38,19 +38,19 @@
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.animals.shear {:count 1})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 70 :of-job true}
-            {:event {:source :job :kind :shear.done :data {:reason :shorn}} :within-s 110 :of-job true}]}
+            {:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 110 :of-job true}]}
   {:name "shear-nothing-fetchable-ends-no-shears"
    :act [[:summon "sheep" [20.5 0 12.5]] [:wait-s 2]
          [:job (jobs.animals.shear {:count 1})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :shear.done :data {:reason :no-shears}} :within-s 80 :of-job true}]}
+            {:event {:source :job :kind :stopped :data {:reason :no-shears}} :within-s 80 :of-job true}]}
   {:name "shear-fetch-false-ends-at-once"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:shears\",count:1}]}"]]
    :act [[:summon "sheep" [20.5 0 12.5]]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.animals.shear {:count 1 :fetch false})]]
-   :expect [{:event {:source :job :kind :shear.done :data {:reason :no-shears}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 30 :until {:source :job :kind :shear.done}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-shears}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 30 :until {:source :job :kind :completed}}]
    :limit-s 60}
   {:name "leash-fetches-a-lead"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:lead\",count:2}]}"]]
@@ -58,12 +58,12 @@
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.animals.leash {:mob "cow"})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 70 :of-job true}
-            {:event {:source :job :kind :leash.done :data {:reason :leashed}} :within-s 110 :of-job true}]}
+            {:event {:source :job :kind :completed :data {:reason :leashed}} :within-s 110 :of-job true}]}
   {:name "leash-nothing-fetchable-ends-no-lead"
    :act [[:summon "cow" [20.5 0 12.5]] [:wait-s 2]
          [:job (jobs.animals.leash {:mob "cow"})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :leash.done :data {:reason :no-lead}} :within-s 80 :of-job true}]}
+            {:event {:source :job :kind :stopped :data {:reason :no-lead}} :within-s 80 :of-job true}]}
   {:name "leash-fetch-false-waits-no-lead"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:lead\",count:2}]}"]]
    :act [[:summon "cow" [20.5 0 12.5]]
@@ -71,7 +71,7 @@
          [:job (jobs.animals.leash {:mob "cow" :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-lead}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 30 :until {:source :job :kind :waiting}}
-            {:no-event {:source :job :kind :leash.done} :for-s 30 :until {:source :job :kind :waiting}}]
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting}}]
    :limit-s 60}
   {:name "lead-to-withdraws-a-lead"
    :blocks [[:set [4 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:lead\",count:2}]}"]]
@@ -79,7 +79,7 @@
    :act [[:summon "cow" [6.5 0 18.5]]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
-   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed :gathered true}} :within-s 170 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :unleashed :gathered true}} :within-s 170 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 9] [31 2 23]] 1]]
    :limit-s 190}
   {:name "lead-to-crafts-a-lead"
@@ -88,18 +88,18 @@
    :act [[:summon "cow" [6.5 0 18.5]]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 2]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
-   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed :gathered true}} :within-s 170 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :unleashed :gathered true}} :within-s 170 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 9] [31 2 23]] 1]]
    :limit-s 190}
   {:name "lead-to-nothing-to-get-ends-no-lead"
    :body {:at [4.5 0 16.5]}
    :act [[:summon "cow" [6.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
-   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :no-lead}} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-lead}} :within-s 80 :of-job true}
             {:event {:source :job :kind :lead-to.gave-up :data {:reason :no-lead}} :within-s 80 :of-job true}]
    :limit-s 100}
   {:name "lead-to-no-mob-is-impossible"
    :act [[:job (jobs.animals.lead-to {:pos #xyz [26 0 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :no-mob}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :lead-to.done} :for-s 20}]
+            {:no-event {:source :job :kind :completed} :for-s 20}]
    :limit-s 40}]}

@@ -16,7 +16,7 @@
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [21 0 16]} :target 1})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :too-shallow}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :herd.done} :for-s 20 :until {:source :job :kind :stopped}}]}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped}}]}
   ;; should-fail: a fence across the pen 2 cells in from the gate, seen at the start: a start condition, so it waits, no walk
   {:name "seen-shallow-pen-refused-at-start"
    :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
@@ -27,12 +27,12 @@
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :too-shallow}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :leash.done} :for-s 30}]}
+            {:no-event {:source :job :kind :completed} :for-s 30}]}
   {:name "shut-gate-one-cow-brought"
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
   {:name "planned-pen-gate-left-alone"
@@ -44,8 +44,8 @@
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}
-            {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :herd.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :completed}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
   ;; the control for the case above: the same planned pen with its gate left open and no herd, so pen-gate does fire

@@ -183,7 +183,7 @@
     (into sensed (filter unseen?) (concat (:in-pen-start m) (:brought m)))))
 
 (defn end-text
-  "The herd.done text: the count and why the others did not come."
+  "The ending text of the herd run: the count and why the others did not come."
   [c reason n]
   (let [{:keys [mob target radius]} (:args c)
         given-up (:given-up (ctx/mem c))]
@@ -221,7 +221,6 @@
                        :given-up (:given-up m {}) :gate (:gate m) :escaped (:escaped-total m 0) :animals rows}
                       extra)]
     (when (:gate m) (drop-gate! c))
-    (ctx/emit! c :herd.done :info (assoc result :text text))
     (when-not (#{:brought :full} reason)
       (ctx/emit! c :herd.gave-up :warn {:reason reason :text (str "herding stopped: " (name reason))}))
     (ctx/end c kind (when-not (= :done kind) (if (seq extra) (assoc extra :reason reason) reason)) (assoc result :text text))))

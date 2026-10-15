@@ -22,7 +22,7 @@
   or three sheep in a row were fruitless (no shears are fetched while nothing is left to shear). Unless :collect is false it then runs jobs.forestry.collect-drops for
   the wool in :radius and ends.
 
-  Ends with info shear.done and a warn shear.gave-up unless the reason is :shorn, the data {:reason :shorn [keys]
+  Ends with a warn shear.gave-up unless the reason is :shorn, the data {:reason :shorn [keys]
   :given-up {key reason} :collected n} and the ending by the reason:
   - :done :shorn: the count was reached. Any stop after at least :least sheep were shorn (default 1; :all =
     :count, every sheep in radius when nil) is done, with the stop as the data reason.
@@ -98,8 +98,8 @@
         result {:reason reason
                 :shorn (vec (:shorn m))
                 :given-up (:given-up m {})
-                :collected (:collected m 0)}]
-    (ctx/emit! c :shear.done :info (assoc result :text (str "shear done: " (name reason) ", shorn " (count (:shorn m)))))
+                :collected (:collected m 0)
+                :text (str "shear done: " (name reason) ", shorn " (count (:shorn m)))}]
     (when (not= :shorn reason)
       (ctx/emit! c :shear.gave-up :warn {:reason reason :text (str "shearing stopped: " (name reason))}))
     (if ending
@@ -134,9 +134,10 @@
          (animals/allowed c :shear.declined "shear" :harvest))))
 
 (defn done?
-  "The sheep shorn against those still to shear. Never :done? itself: the run ends with its event and data."
+  "Later with the sheep shorn and those still to shear: the run ends itself with its reason."
   [c]
-  {:done? false :units :sheep :done (count (:shorn (ctx/mem c))) :left (count (candidates c))})
+  (contract/later :shearing (str (count (:shorn (ctx/mem c))) " sheep shorn") :units :sheep
+                  :done (count (:shorn (ctx/mem c))) :left (count (candidates c))))
 
 (defn none-reason
   "Why the job ends with no sheep left to shear."

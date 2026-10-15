@@ -23,7 +23,7 @@
   An offer matches when it gives :want, is not sold out and its price (the adjusted count of the first cost stack) is at
   most :max-price (nil: no limit). Offers do not name the enchantment of a book: :want is an item name only.
   Ends with the data {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: :done (info
-  roll.done) when an offer matches, else (warn roll.gave-up) with the cause:
+  done?) when an offer matches, else (warn roll.gave-up) with the cause:
   - condition-failed: :gone (not seen within :radius), :baby (takes no job yet), :locked (an offer was already used:
     breaking the workstation changes nothing), :occupied (another block stands at :pos). :baby, :occupied and a named
     :villager's :gone are checked at the start and then wait (a skipped job); a nitwit takes no job ever: impossible,
@@ -117,16 +117,24 @@
 
 (defn rolls [c] (:rolls (ctx/mem c) 0))
 
+(defn data-of
+  "The call's data: found with the offer once one matched, the rolls and the item."
+  [c extra]
+  (let [offer (:offer (ctx/mem c))]
+    (merge {:found (boolean offer) :rolls (rolls c) :item (item-of (:args c))}
+           (when offer {:offer offer})
+           extra)))
+
 (defn done?
-  "The rolls against :tries (searching an offer has no state to be done before it runs)."
+  "Ok once an offer matched (found! books it), with the offer as its result; later while the rolls go on."
   [c]
-  {:done? false :units :rolls :done (rolls c) :left (max 0 (- (:tries (:args c)) (rolls c)))})
+  (let [data [:units :rolls :done (rolls c) :left (max 0 (- (:tries (:args c)) (rolls c))) :result (data-of c nil)]]
+    (if (:offer (ctx/mem c))
+      (apply contract/ok :found (str "found " (want-of (:args c)) " after " (rolls c) " rolls") data)
+      (apply contract/later :rolling (str (rolls c) " rolls without " (want-of (:args c))) data))))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 30 (:tries (:args c) 1)) ##Inf]}})
-
-(defn data-of [c extra]
-  (merge {:found false :rolls (rolls c) :item (item-of (:args c))} extra))
 
 (def failed-conditions "Causes that end condition-failed: the villager or the cell is not right now. The rest are nothing-possible."
   #{:gone :baby :locked :occupied :cell-unseen})
@@ -139,9 +147,10 @@
            reason (data-of c nil)))
 
 (defn found!
+  "Book the matching offer; done? ends the job."
   [c offer]
-  (ctx/emit! c :roll.done :info {:rolls (rolls c) :text (str "found " (want-of (:args c)) " after " (rolls c) " rolls")})
-  (ctx/end c :done nil (data-of c {:found true :offer (select-keys offer [:index :cost :gives])})))
+  (ctx/update-mem! c assoc :offer (select-keys offer [:index :cost :gives]))
+  :again)
 
 (defn stamp! [c k] (ctx/update-mem! c assoc k (ctx/now c)))
 (defn waited-s [c k] (/ (- (ctx/now c) (get (ctx/mem c) k (ctx/now c))) 1000))

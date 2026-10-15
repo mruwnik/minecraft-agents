@@ -27,7 +27,10 @@
     (await (run-ticks s n 700))
     s))
 
-(defn done-event [{:keys [seen]}] (first (filter #(= :unleash.done (:kind %)) @seen)))
+(defn done-event
+  "The job's ending event (job.completed or job.stopped)."
+  [{:keys [seen]}]
+  (first (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn calls-of [{:keys [p]} name] (h/calls p name))

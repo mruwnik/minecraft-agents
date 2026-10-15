@@ -25,15 +25,22 @@
    :blocks (merge ground fence-ring more)
    :states (or states {})})
 
+(defn ending-event
+  "The job's ending event (job.completed or job.stopped) without its nil fields, via pick (default first)."
+  ([seen] (ending-event seen first))
+  ([seen pick]
+   (some->> seen (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %)))) not-empty pick
+            (remove (comp nil? val)) (into {}))))
+
 (defn ^:async run-job
-  "Submit the job with args in a world and run two ticks; the pen-check.done event, or nil."
+  "Submit the job with args in a world and run two ticks; the ending event, or nil."
   [args w]
   (let [s (h/setup w)]
     (core/submit! (:eng s) (list job args) {})
     (dotimes [_ 2]
       (swap! (:clock s) + 700)
       (await (core/tick! (:eng s))))
-    {:event (first (filter #(= :pen-check.done (:kind %)) @(:seen s)))
+    {:event (ending-event @(:seen s))
      :listed (:list (core/state (:eng s)))}))
 
 (deftest a-closed-pen-from-a-cell-is-reported-closed-with-its-size
@@ -78,7 +85,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [event]} (await (run-job {} (world {})))]
-          (is (nil? event)))))))
+          (is (= :no-pen (:reason event))))))))
 
 (deftest the-event-and-result-list-the-animals-seen-inside
   (async done
@@ -105,7 +112,7 @@
     (dotimes [_ (or ticks 6)]
       (swap! (:clock s) + 700)
       (await (core/tick! (:eng s))))
-    (first (filter #(= :pen-check.done (:kind %)) @(:seen s)))))
+    (ending-event @(:seen s))))
 
 (deftest a-pen-the-body-never-looked-at-is-looked-at-before-the-answer
   (async done
@@ -160,7 +167,7 @@
               (dotimes [_ 6]
                 (swap! (:clock s) + 700)
                 (await (core/tick! (:eng s))))
-              (last (filter #(= :pen-check.done (:kind %)) @(:seen s))))
+              (ending-event @(:seen s) last))
         _ (await (run))
         cell (first (filter #(and (or (<= 0 (% 0) 4) (<= 0 (% 2) 4)) (not (.-visible (.sensedAt (:p s) (clj->js {:x (% 0) :y (% 1) :z (% 2)})))))
                             (keys (fake/cells fence-ring identity))))]
@@ -243,7 +250,7 @@
     (dotimes [_ 12]
       (swap! (:clock s) + 700)
       (await (core/tick! (:eng s))))
-    {:event (first (filter #(= :pen-check.done (:kind %)) @(:seen s)))
+    {:event (ending-event @(:seen s))
      :looks (count (h/calls p "look"))
      :fills @fills}))
 

@@ -30,7 +30,7 @@
   the body the whole way in one go. Each round
   the food is checked in hand and held again if not (a cut, another job's equip); none left ends :no-food.
 
-  Ends with info lure-to.done and a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
+  Ends with a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
   :near bool (the animal is within 6 blocks of :pos) :at pos (the body) :animal-at pos (the animal, nil unseen) :in-box bool (with :box)
   :lost / :stalled detail for those reasons}. Reasons:
   - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within :range + 3 blocks of :pos) and not in the cell of a planned gate, else the
@@ -93,10 +93,11 @@
     {:uses {:job-time [0 (min most 60) most]}}))
 
 (defn done?
-  "Whether the animal arrived."
+  "Later with whether the animal arrived: the run ends itself, after it put the food away."
   [c]
   (let [arrived? (= :arrived (:ending (ctx/mem c)))]
-    {:done? false :units :animals :done (if arrived? 1 0) :left (if arrived? 0 1) :data {:animal (:animal (ctx/mem c))}}))
+    (contract/later :luring (if arrived? "the animal arrived" "the animal is on its way") :units :animals
+                    :done (if arrived? 1 0) :left (if arrived? 0 1) :result {:animal (:animal (ctx/mem c))})))
 
 (defn skipped-text
   "What kept the animals seen within radius from being lured: babies, those on a lead, the zone rules."
@@ -164,15 +165,13 @@
     (let [result (cond-> result
                    (= :lost reason) (assoc :lost (lost-detail c))
                    (= :animal-stalled reason) (assoc :stalled (stalled-detail c)))]
-      (ctx/emit! c :lure-to.done :info (assoc result :text (str "lure-to done: " (name reason))))
       (when-not ok?
         (ctx/emit! c :lure-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
       (let [[kind cause] (get ending-of reason [:nothing-possible reason])
             food (when (= :no-food reason) (:food-ending m))
             [kind cause] (if food [(:kind food) {:reason :no-food :why (get-in food [:cause :why])}] [kind cause])]
-        (ctx/end c kind cause (cond-> result
-                                        (not ok?) (assoc :text (stop-text c reason))
-                                        food (assoc :why (:why cause))))))))
+        (ctx/end c kind cause (cond-> (assoc result :text (if ok? (str "lure-to done: " (name reason)) (stop-text c reason)))
+                                food (assoc :why (:why cause))))))))
 
 (defn finish! [c reason]
   (ctx/update-mem! c assoc :ending reason)

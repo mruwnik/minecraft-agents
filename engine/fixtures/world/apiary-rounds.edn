@@ -14,7 +14,7 @@
             [:set [14 0 22] "campfire[lit=true]"]]
    :body {:inventory [["iron_pickaxe" 1] ["campfire" 2] ["white_carpet" 1]]}
    :act [[:job (jobs.apiary.guard {:radius 20})]]
-   :expect [{:event {:kind :apiary.guard-done :data {:sunk 2 :carpeted 2 :reason :guarded}} :within-s 100 :of-job true}
+   :expect [{:event {:kind :completed :data {:sunk 2 :carpeted 2 :reason :guarded}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [14 -1 10] "campfire[lit=true]"] [:block [14 -1 22] "campfire[lit=true]"]
            [:not-block [14 1 10] "red_carpet"] [:item "campfire" 0] [:item "white_carpet" 0]
@@ -24,7 +24,7 @@
             [:set [14 0 22] "campfire[lit=true]"] [:set [14 1 22] "beehive[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
    :act [[:job (jobs.apiary.harvest {:radius 20})]]
-   :expect [{:event {:kind :apiary.done :data {:harvested 2 :reason :harvested}} :within-s 100 :of-job true}]
+   :expect [{:event {:kind :completed :data {:harvested 2 :reason :harvested}} :within-s 100 :of-job true}]
    :after [[:block [14 1 10] "beehive[honey_level=0]"] [:block [14 1 22] "beehive[honey_level=0]"]
            [:item "honeycomb" [:>= 6]]]}
   {:name "maintain-nothing-ripe-does-not-act"
@@ -32,19 +32,19 @@
    :body {:inventory [["shears" 1] ["campfire" 1] ["white_carpet" 1]]}
    :act [[:job (jobs.apiary.maintain {:radius 20})]]
    :expect [{:event {:kind :waiting :data {:reason :nothing-to-do}} :within-s 30 :of-job true}
-            {:no-event {:kind :maintain.done} :for-s 20}]
+            {:no-event {:kind :completed} :for-s 20}]
    :after [[:block [14 1 10] "beehive[honey_level=0]"] [:item "honeycomb" 0] [:item "white_carpet" 1]]}
   {:name "harvest-unsmoked-hive-stops"
    :blocks [[:set [14 1 10] "beehive[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
    :act [[:job (jobs.apiary.harvest {:radius 20})]]
    :expect [{:event {:kind :waiting :data {:reason :not-smoked}} :within-s 60 :of-job true}
-            {:no-event {:kind :apiary.done} :for-s 20}]
+            {:no-event {:kind :completed} :for-s 20}]
    :after [[:block [14 1 10] "beehive[honey_level=5]"] [:item "honeycomb" 0]]}
   {:name "harvest-without-a-tool-stops"
    :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=5]"]]
    :body {:inventory [["stick" 1]]}
    :act [[:job (jobs.apiary.harvest {:radius 20 :fetch false})]]
    :expect [{:event {:kind :waiting :data {:reason :no-tool}} :within-s 60 :of-job true}
-            {:no-event {:kind :apiary.done} :for-s 20}]
+            {:no-event {:kind :completed} :for-s 20}]
    :after [[:block [14 1 10] "beehive[honey_level=5]"] [:item "honeycomb" 0]]}]}

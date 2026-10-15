@@ -212,7 +212,7 @@
         (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {} 20))]
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (empty? (:list (core/state (:eng s)))))
-          (is (= 1 (:shut (first (events-of s :shut-gate.done)))) "one gate shut, reported")
+          (is (= 1 (:shut (first (events-of s :completed)))) "one gate shut, reported")
           (is (= [[2 64 0]] (mapv :cell (events-of s :gate.shut))) "the shut is logged with its cell"))))))
 
 (deftest a-lure-holds-the-open-gate-beside-its-spot-so-the-trigger-leaves-it
@@ -268,7 +268,7 @@
           (is (zero? (clicks s)) "the grace is still on")
           (await (run-again s {:open-s 4} 5000))
           (is (not (gate-open? (:p s) 2 64 0)) "after :open-s the next run shuts it")
-          (is (= 1 (:shut (first (events-of s :shut-gate.done))))))))))
+          (is (= 1 (:shut (last (events-of s :completed))))))))))
 
 (deftest a-gate-a-player-shuts-in-the-grace-is-left-alone
   (async done
@@ -287,7 +287,7 @@
         (let [s (await (run-job (pen-world true 2 7) {"pen-a" pen-a} {} 30))]
           (is (seq (mem/entries (mem/view (:store (:eng s))) :moved)) "it walked")
           (is (not (gate-open? (:p s) 2 64 0)))
-          (is (= 1 (:shut (first (events-of s :shut-gate.done)))))
+          (is (= 1 (:shut (first (events-of s :completed)))))
           (is (empty? (events-of s :shut-gate.gave-up))))))))
 
 (deftest a-gate-already-shut-is-done-at-once-without-a-click
@@ -314,7 +314,7 @@
         (let [s (await (run-job (pen-world true 2 0) {"pen-a" pen-a} {} 20))]
           (is (gate-open? (:p s) 2 64 0))
           (is (= [{:cell [2 64 0] :reason :standing-in}] (:left (first (events-of s :shut-gate.stopped)))))
-          (is (empty? (events-of s :shut-gate.done)) "a gate left open is not done"))))))
+          (is (empty? (events-of s :completed)) "a gate left open is not done"))))))
 
 (deftest with-a-plan-every-open-gate-of-that-plan-is-shut-and-other-plans-are-not
   (async done
@@ -328,7 +328,7 @@
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (not (gate-open? (:p s) 0 64 2)))
           (is (gate-open? (:p s) 20 64 0) "the other plan's gate stays open")
-          (is (= 2 (:shut (first (events-of s :shut-gate.done))))))))))
+          (is (= 2 (:shut (first (events-of s :completed))))))))))
 
 (deftest one-run-shuts-all-gates-at-once
   (async done
@@ -341,7 +341,7 @@
           (is (empty? (:list (core/state (:eng s)))) "one tick: the job ended")
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (not (gate-open? (:p s) 0 64 2)))
-          (is (= 2 (:shut (first (events-of s :shut-gate.done))))))))))
+          (is (= 2 (:shut (first (events-of s :completed))))))))))
 
 (deftest a-gate-given-up-ends-the-run-stopped
   (async done
@@ -349,7 +349,7 @@
       (fn ^:async t []
         (let [s (await (run-job (pen-world true 2 7 {:unreachable ["2,64,0"]}) {"pen-a" pen-a} {} 1))]
           (is (empty? (:list (core/state (:eng s)))) "one tick: the job ended")
-          (is (empty? (events-of s :shut-gate.done)))
+          (is (empty? (events-of s :completed)))
           (is (= [[2 64 0]] (mapv :cell (:left (first (events-of s :shut-gate.stopped)))))))))))
 
 (deftest a-cow-that-stays-in-the-gate-is-waited-out-not-pushed-and-the-run-ends-stopped
@@ -413,7 +413,7 @@
             (swap! clock + 700)
             (await (core/tick! eng)))
           (is (some #(and (= :reflex (:source %)) (= :fired (:kind %)) (= :pen-gate (:reflex %))) @seen))
-          (is (some #(= :shut-gate.done (:kind %)) @seen))
+          (is (some #(and (= :reflex (:source %)) (= :ended (:kind %)) (= :done (:outcome %))) @seen))
           (is (empty? (:list (core/state eng))) "the reflex job left the list"))))))
 
 (deftest a-gate-held-by-a-job-does-not-fire-until-the-entry-is-old
@@ -477,7 +477,7 @@
               (await (core/tick! (:eng s)))
               (recur (inc i))))
           (is (not (gate-open? (:p s) 2 64 0)) "the open gate was shut")
-          (is (= 1 (:shut (first (events-of s :shut-gate.done))))))))))
+          (is (= 1 (:shut (first (events-of s :completed))))))))))
 
 (deftest a-planned-gate-that-never-shows-is-left-unseen-not-done
   (async done
@@ -489,7 +489,7 @@
               (swap! clock + 700)
               (await (core/tick! (:eng s)))
               (recur (inc i))))
-          (is (empty? (events-of s :shut-gate.done)) "not done: the gate was never read")
+          (is (empty? (events-of s :completed)) "not done: the gate was never read")
           (is (= [{:cell [2 64 0] :reason :unseen}] (:left (first (events-of s :shut-gate.stopped))))))))))
 
 (deftest shut-gate-ends-with-a-kind-and-a-cause

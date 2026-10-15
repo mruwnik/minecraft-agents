@@ -14,7 +14,7 @@
  [{:name "open-gate-behind-the-body-found-and-shut"
    :blocks [[:set [16 0 4] "oak_fence_gate[facing=south,open=true]"]]
    :act [[:job (jobs.animals.shut-gate {:plan "$plan:pen"})]]
-   :expect [{:event {:source :job :kind :shut-gate.done :data {:shut 1 :left []}} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 80 :of-job true}]
    :after [[:block [16 0 4] "oak_fence_gate[open=false]"]]}
   {:name "gate-behind-a-wall-is-left-unseen"
    :blocks [[:set [16 0 4] "oak_fence_gate[facing=south,open=true]"]

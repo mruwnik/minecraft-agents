@@ -10,15 +10,15 @@
    :act [[:summon "villager" [16.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,1,843]}"]
          [:wait-s 2]
          [:job (jobs.village.feed {:villager "00004f26-0000-0007-0000-00010000034b" :count 3})]]
-   :expect [{:event {:source :job :kind :feed.done} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:item "bread" 5]]}
   ;; cards 7f843e67, 127a31a1: a real villager takes the toss within the 4 s watch (feed.done), and a bread lying near beforehand is not collected
   {:name "feeds-two-bread-taken-within-4s"
    :act [[:summon "villager" [16.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,2,843]}"]
          [:wait-s 2]
          [:job (jobs.village.feed {:villager "00004f26-0000-0007-0000-00020000034b" :count 2})]]
-   :expect [{:event {:source :job :kind :feed.done :data {:fed 2}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :feed.gave-up} :for-s 40 :until {:source :job :kind :feed.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:fed 2}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :feed.gave-up} :for-s 40 :until {:source :job :kind :completed}}]
    :after [[:item "bread" 6] [:entities "type=item" [[0 -1 0] [31 4 31]] 0]]}
   ;; should stay: a stray bread of someone else lying near before the toss is never collected back
   {:name "stray-bread-stays"
@@ -26,7 +26,7 @@
          [:summon "villager" [16.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,3,843]}"]
          [:wait-s 2]
          [:job (jobs.village.feed {:villager "00004f26-0000-0007-0000-00030000034b" :count 2})]]
-   :expect [{:event {:source :job :kind :feed.done :data {:fed 2}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:fed 2}} :within-s 40 :of-job true}]
    :after [[:item "bread" 6] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 1]]}
   ;; should fail: the villager is not there
   {:name "absent-villager-is-gone"

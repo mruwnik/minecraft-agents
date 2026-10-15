@@ -19,7 +19,7 @@
   :item is the food to give (carried), nil for the first carried of bread, carrot, potato, beetroot. Villagers pick
   up only bread, potato, carrot, wheat, beetroot and seeds: any other :item is impossible (:bad-args).
   When none is carried it is fetched (jobs.lib.need, :fetch true; condition-failed :no-food when :fetch is off or the fetch ended).
-  Ends with the data {:fed n :item name}. :done when the villager took :count (info feed.done), or the call's :least
+  Ends with the data {:fed n :item name}. :done when the villager took :count (done? holds), or the call's :least
   (default :all) when it gave up after that many. Otherwise, with warn feed.gave-up and the cause:
   - condition-failed :no-food: none carried and none fetched (a listed call with :fetch off waits for food).
   - condition-failed :gone: the villager is not seen within :radius (also a non-villager under the uuid).
@@ -105,10 +105,17 @@
 
 (def can-start? (cond/and bad-args no-food))
 
+(defn result "{:fed n :item name} so far." [c]
+  {:fed (fed c) :item (or (:item (ctx/mem c)) (:item (:args c)))})
+
 (defn done?
-  "The items taken against :count. Never :done? itself: the job ends with its event and data."
+  "Ok once the villager took :count and no toss or clean-up of a drop is left; the result is the data of the ending."
   [c]
-  {:done? false :units :items :done (fed c) :left (max 0 (- (:count (:args c)) (fed c)))})
+  (let [m (ctx/mem c)
+        data [:units :items :done (fed c) :left (max 0 (- (:count (:args c)) (fed c))) :result (result c)]]
+    (if (and (>= (fed c) (:count (:args c))) (not (:tossing m)) (not (:cleanup m)))
+      (apply contract/ok :fed (str "villager took " (fed c) " " (:item (result c))) data)
+      (apply contract/later :feeding (str "villager took " (fed c) " of " (:count (:args c))) data))))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 10 (:count (:args c) 1)) ##Inf]}})
@@ -119,9 +126,9 @@
   [c reason]
   (let [least (or (:least (ctx/frozen-call c)) :all)
         need (if (= :all least) (:count (:args c)) least)
-        data {:fed (fed c) :item (or (:item (ctx/mem c)) (:item (:args c)))}]
+        data (result c)]
     (cond
-      (or (nil? reason) (>= (fed c) need)) (ctx/end c :done nil data)
+      (>= (fed c) need) (ctx/end c :done nil data)
       (= :no-food reason) (ctx/end c :condition-failed {:reason :no-food :need (problem c)} data)
       (= :gone reason) (ctx/end c :condition-failed :gone data)
       :else (ctx/end c :nothing-possible reason data))))
@@ -131,12 +138,6 @@
   [c reason text]
   (ctx/emit! c :feed.gave-up :warn {:reason reason :text text :fed (fed c)})
   (ending-of c reason))
-
-(defn done!
-  "Info and end: the villager took :count."
-  [c]
-  (ctx/emit! c :feed.done :info {:fed (fed c) :text (str "villager took " (fed c) " " (:item (ctx/mem c)))})
-  (ending-of c nil))
 
 (defn find-villager
   "The villager entity with uuid within radius, or nil."
@@ -285,18 +286,17 @@
     :again))
 
 (defn ^:async step!
-  "One piece: take back a drop, end, find the villager, fetch food, walk or toss. :again, :continue or :done."
+  "One piece: take back a drop, find the villager, fetch food, walk or toss. :again, :continue or an ending."
   [c]
   (let [m (ctx/mem c)
-        {:keys [villager count radius]} (:args c)
+        {:keys [villager radius]} (:args c)
         item (food c)
-        e (when-not (or (:tossing m) (:cleanup m) (>= (fed c) count)) (find-villager (:primitives c) villager radius))]
+        e (when-not (or (:tossing m) (:cleanup m)) (find-villager (:primitives c) villager radius))]
     (cond
       (:tossing m) (if (u/within? (u/self-pos c) (:at (:tossing m)) (settle-reach))
                      (settle! c (:tossing m))
                      (await (walk! c (:at (:tossing m)) (settle-reach))))
       (:cleanup m) (await (clean-up! c (:cleanup m)))
-      (>= (fed c) count) (done! c)
       (>= (:refused m 0) (max-refused)) (stop! c :not-taken "the villager does not take the food")
       (nil? e) (stop! c :gone "the villager is not here")
       (nil? item) (await (fetch-food! c))

@@ -20,7 +20,7 @@
   happened (:no-effect), it vanished (:gone), the server said it cannot (:cannot), the use failed (:failed) or
   the lead did not show afterwards (:unconfirmed).
 
-  Ends with info leash.done and a warn leash.gave-up unless the reason is :leashed. The data {:reason :animal key
+  Ends with a warn leash.gave-up unless the reason is :leashed. The data {:reason :animal key
   :id entity-id :given-up {key reason}} and the ending by the reason:
   - :done :leashed: an animal is on the lead.
   - :condition-failed :no-lead (no lead carried and none fetched; a listed call with :fetch false waits for one; or the server found none; after a failed fetch the cause names the lead, :because the fetch's ending),
@@ -67,10 +67,10 @@
     {:uses {:job-time [0 (min most 10) most]}}))
 
 (defn done?
-  "The animals led against the one asked. Never :done? itself: the run ends with its event and data."
+  "Later with the animals led against the one asked: the run ends itself with its reason."
   [c]
   (let [n (if (:leashed (ctx/mem c)) 1 0)]
-    {:done? false :units :animals :done n :left (- 1 n)}))
+    (contract/later :leashing (str n " animals led") :units :animals :done n :left (- 1 n))))
 
 (def ending-of
   "The kind and cause of a finish by reason."
@@ -86,8 +86,8 @@
   (let [result {:reason reason
                 :animal (some-> animal animals/key-of)
                 :id (some-> animal .-id)
-                :given-up (:given-up (ctx/mem c) {})}]
-    (ctx/emit! c :leash.done :info (assoc result :text (str "leash done: " (name reason))))
+                :given-up (:given-up (ctx/mem c) {})
+                :text (str "leash done: " (name reason))}]
     (when (not= :leashed reason)
       (ctx/emit! c :leash.gave-up :warn {:reason reason :text (str "leashing stopped: " (name reason))}))
     (when (= :leashed reason) (ctx/update-mem! c assoc :leashed true))

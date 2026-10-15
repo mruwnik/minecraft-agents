@@ -31,7 +31,7 @@
   entry, no warn. A gate that could not be reached or did not shut after :tries clicks is given up with one warn
   shut-gate.gave-up and a :gate-gave-up memory entry, which keeps the trigger away from it for 10 minutes.
 
-  Ends :done with info shut-gate.done and the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at its start ends done at once, with no event (done?); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
+  Ends :done with the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at its start ends done at once, with no event (done?); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
   A call whose :plan is missing or unreadable waits (:plan-trouble); one that goes bad after the start ends :condition-failed :plan-trouble with one warn
   shut-gate.declined and {:shut 0 :left [] :declined text}.")
 
@@ -98,8 +98,7 @@
         _ (ctx/update-mem! c assoc :shut shut)
         text (str shut " gate(s) shut" (when (seq left) (str ", " (count left) " left open")))]
     (if (empty? left)
-      (do (ctx/emit! c :shut-gate.done :info (assoc result :text text))
-          (ctx/end c :done nil result))
+      (ctx/end c :done nil (assoc result :text text))
       (do (ctx/emit! c :shut-gate.stopped :warn (assoc result :text text))
           (ctx/end c :nothing-possible :left (assoc result :text text))))))
 
@@ -193,12 +192,16 @@
       (contract/ok :plan "the plan is readable"))))
 
 (defn done?
-  "The gates shut and the watched gates still open or unread: done once none is (before the start: no event, the
-  call just ends done)."
+  "Ok once no watched gate is open or unread (the gates shut so far and none left as its result); before the start the
+  call just ends done."
   [c]
   (let [[cells trouble] (watched-cells c)
-        open (if trouble [] (into (open-now c cells []) (unread-now c cells [] #{})))]
-    {:done? (and (not trouble) (empty? open)) :units :gates :done (:shut (ctx/mem c) 0) :left (count open)}))
+        open (if trouble [] (into (open-now c cells []) (unread-now c cells [] #{})))
+        shut (:shut (ctx/mem c) 0)
+        data [:units :gates :done shut :left (count open) :result {:shut shut :left []}]]
+    (if (and (not trouble) (empty? open))
+      (apply contract/ok :shut (str shut " gate(s) shut") data)
+      (apply contract/later :gates-open (str (count open) " gate(s) open") data))))
 
 (defn quote-of [_c]
   {:uses {:job-time [0 15 120]}})

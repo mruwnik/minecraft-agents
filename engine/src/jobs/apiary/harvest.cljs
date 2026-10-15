@@ -149,7 +149,8 @@
   [c reason result]
   (let [taken (:harvested result)]
     (cond
-      (enough? c reason taken) (ctx/end c :done nil result)
+      (enough? c reason taken)
+      (ctx/end c :done nil (assoc result :text (str "apiary harvest done: " (name reason) ", " taken " hives")))
       (and (zero? taken) (failed-conditions reason)) (ctx/end c :condition-failed reason result)
       :else (ctx/end c :nothing-possible reason result))))
 
@@ -166,7 +167,6 @@
                 :declined (:declined seen {})
                 :skipped (:skipped m {})
                 :collected (:collected m 0)}]
-    (ctx/emit! c :apiary.done :info (assoc result :text (str "apiary harvest done: " (name reason) ", " (:harvested result) " hives")))
     (when-not (#{:harvested :limit} reason)
       (ctx/emit! c :apiary.gave-up :warn {:reason reason :declined (:declined result) :skipped (:skipped result)
                                          :text (str "apiary harvest stopped: " (name reason))}))
@@ -266,10 +266,11 @@
       :else (contract/look reason (str "harvest waits: " (name reason))))))
 
 (defn done?
-  "The hives harvested, and the ripe hives still to work."
+  "Later with the hives harvested and the ripe hives still to work: the run ends itself with the reason it stopped for."
   [c]
   (let [seen (classify c (hives c (apiary/center-of c) true))]
-    {:done? false :units :hives :done (:harvested (ctx/mem c) 0) :left (count (:todo seen))}))
+    (contract/later :harvesting (str (:harvested (ctx/mem c) 0) " hives harvested") :units :hives
+                    :done (:harvested (ctx/mem c) 0) :left (count (:todo seen)))))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 15 (or (:max (:args c)) 8)) ##Inf]}})

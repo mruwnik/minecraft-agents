@@ -34,7 +34,10 @@
     s))
 
 (defn interacts [{:keys [p]}] (h/calls p "interact"))
-(defn done-event [{:keys [seen]}] (first (filter #(= :breed.done (:kind %)) @seen)))
+(defn done-event
+  "The job's ending event (job.completed or job.stopped)."
+  [{:keys [seen]}]
+  (first (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn items-total [inv] (reduce + (map :count inv)))
@@ -133,7 +136,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label args world reason babies]
-                [["no wheat" {:mob "cow"} {:entities [(cow 1 2) (cow 2 3)]} :no-food 0]
+                [["no wheat" {:mob "cow"} {:entities [(cow 1 2) (cow 2 3)]} :need 0]
                  ["one adult" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2)]} :too-few 0]
                  ["only babies" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2 {:baby true}) (cow 2 3 {:baby true})]} :too-few 2]
                  ["both on cooldown" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2 {:cooldown true}) (cow 2 3 {:cooldown true})]} :refused 0]
@@ -279,7 +282,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:mob "cow"} {:self {:held "iron_axe"} :inventory axe :entities [(cow 1 2) (cow 2 3)]} 4))]
-          (is (= :no-food (:reason (done-event s))))
+          (is (= :need (:reason (done-event s))))
           (is (empty? (h/calls (:p s) "equip")))
           (is (empty? (h/calls (:p s) "unequip")))
           (is (not (contains? (done-event s) :hand)))
@@ -500,7 +503,7 @@
       (fn ^:async t []
         (let [s (await (seeing-scenario {:mob "cow"} (chest-world []) 120))]
           (is (finished? s))
-          (is (= :no-food (:reason (done-event s)))))))))
+          (is (= :need (:reason (done-event s)))))))))
 
 (deftest the-walk-to-the-animal-is-short-legs-that-never-escalate
   (async done

@@ -44,7 +44,14 @@
     s))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn done-event [s] (first (events-of s :tend.done)))
+(defn done-event
+  "The job's ending event (job.completed or job.stopped)."
+  [{:keys [seen]}]
+  (first (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)))
+(defn passes
+  "How many passes of the repeated tend ended done (job.child_ended of the first child level)."
+  [s]
+  (count (filter #(and (= 2 (count (:chain %))) (= :done (:status %))) (events-of s :child_ended))))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn interacts [{:keys [p]}] (h/calls p "interact"))
@@ -337,8 +344,8 @@
       (fn ^:async t []
         (let [s (await (plan-scenario (list 'repeat (list 'jobs.animals.tend {:plan "pen" :part "cows"})) {"pen" pen-plan}
                                       {:inventory [(wheat 8)] :entities [(cow 1 2) (cow 2 3)]} 60))]
-          (is (= 1 (count (events-of s :tend.done))) "one pass, then the pen rests")
+          (is (= 1 (passes s)) "one pass, then the pen rests")
           (is (some #(= ["pen/cows"] (:backed-off %)) (events-of s :waiting)) "the wait names the pen")
           (swap! (:clock s) + 660000)
           (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
-          (is (= 2 (count (events-of s :tend.done))) "after the back-off it tries again"))))))
+          (is (= 2 (passes s)) "after the back-off it tries again"))))))

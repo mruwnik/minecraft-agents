@@ -108,7 +108,7 @@
           (is (= "enchanted_book" (get-in result [:offer :gives :item])))
           (is (= 3 (digs p)))
           (is (= "lectern" (workstation p)) "the workstation is back")
-          (is (contains? (vt/kinds seen) :roll.done)))))))
+          (is (contains? (vt/kinds seen) :completed)))))))
 
 (deftest the-nearest-adult-is-rolled-when-no-villager-is-named
   (async done

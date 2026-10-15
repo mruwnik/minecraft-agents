@@ -16,33 +16,33 @@
  :cases
  [{:name "fence-ring-closed"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? true :cells 25 :leaks [] :gates []}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 25 :leaks [] :gates []}} :within-s 20 :of-job true}]}
   {:name "shut-gate-closed"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:set [5 0 2] "oak_fence_gate[facing=south,open=false]"]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? true :cells 25 :leaks [] :gates [{:open? false}]}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 25 :leaks [] :gates [{:open? false}]}} :within-s 20 :of-job true}]}
   {:name "stone-wall-2-high-closed"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:fill [2 0 2] [8 1 8] "stone" :hollow]
             [:fill [3 0 3] [7 1 7] "air"]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? true :cells 25}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 25}} :within-s 20 :of-job true}]}
   {:name "open-gate-leaks"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:set [5 0 2] "oak_fence_gate[facing=south,open=true]"]]
-   :expect [{:event {:source :job :kind :pen-check.done
+   :expect [{:event {:source :job :kind :stopped
                      :data {:closed? false :reason :leak :leaks [{:why :open-gate}]}} :within-s 20 :of-job true}]}
   {:name "stone-1-high-leaks"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:fill [2 0 2] [8 0 8] "stone" :hollow] [:fill [3 0 3] [7 0 7] "air"]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
   {:name "bottom-slabs-leak"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:fill [2 0 2] [8 0 8] "stone_slab[type=bottom]" :hollow] [:fill [3 0 3] [7 0 7] "air"]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
   {:name "missing-fence-leaks"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:set [8 0 5] "air"]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
   ;; card 6da4b388: a 3-high stone ring with a 2-high doorway in the north wall (the lintel stays). The body inside looks away
   ;; (the doorway unseen) or at it: either way the doorway is a leak, never read closed
   {:name "doorway-under-lintel-looking-away-leaks"
@@ -50,23 +50,23 @@
    :blocks [[:fill [2 0 2] [8 2 8] "stone" :hollow] [:fill [3 0 3] [7 2 7] "air"]
             [:set [5 0 2] "air"] [:set [5 1 2] "air"]]
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 25 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 25 :of-job true}]}
   {:name "doorway-under-lintel-facing-it-leaks"
    :body {:at [5.5 0 5.5] :yaw 180}
    :blocks [[:fill [2 0 2] [8 2 8] "stone" :hollow] [:fill [3 0 3] [7 2 7] "air"]
             [:set [5 0 2] "air"] [:set [5 1 2] "air"]]
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 25 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 25 :of-job true}]}
   {:name "bound-too-small-unbounded"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5] :max-cells 10})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :unbounded}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :unbounded}} :within-s 20 :of-job true}]}
   {:name "box-with-a-gap-names-the-crossing"
    :blocks [[:set [8 0 5] "air"]]
    :act [[:job (jobs.animals.pen-check {:box {:min #xyz [3 0 3] :max #xyz [7 0 7]}})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak :cells 25 :leaks [{:why :gap}]}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak :cells 25 :leaks [{:why :gap}]}} :within-s 20 :of-job true}]}
   {:name "start-in-the-air-is-no-start"
    :act [[:job (jobs.animals.pen-check {:at #at [5 9 5]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :no-start}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :no-start}} :within-s 20 :of-job true}]}
   ;; a 50 x 50 ring: the body sees only part of it, so the answer is :unloaded (the cells it has not seen), not a guess
   {:name "big-pen-mostly-unseen-is-unloaded"
    :plot {:length 64 :width 64}
@@ -75,7 +75,7 @@
             [:fill [2 0 2] [53 0 2] "oak_fence"] [:fill [2 0 53] [53 0 53] "oak_fence"]
             [:fill [2 0 2] [2 0 53] "oak_fence"] [:fill [53 0 2] [53 0 53] "oak_fence"]]
    :act [[:job (jobs.animals.pen-check {:at #at [16 0 18]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :unloaded}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :unloaded}} :within-s 20 :of-job true}]}
   ;; card 3148f78d: a long closed ring (88 x 11 inside) with an inner divider fence whose gate stands open. The start is beside the
   ;; divider, so the fill crosses the gate on its way to the far, unseen end. An inner chokepoint is no leak evidence: the check
   ;; looks at the unseen cells and fills again, so it reads :closed? true (never :reason :leak).
@@ -87,8 +87,8 @@
             [:fill [20 0 3] [20 0 13] "oak_fence"]
             [:set [20 0 8] "oak_fence_gate[facing=east,open=true]"]]
    :act [[:job (jobs.animals.pen-check {:at #at [12 0 8]})]]
-   :expect [{:no-event {:source :job :kind :pen-check.done :data {:reason :leak}} :for-s 90 :until {:source :job :kind :pen-check.done}}
-            {:event {:source :job :kind :pen-check.done :data {:closed? true :leaks []}} :within-s 90 :of-job true}]
+   :expect [{:no-event {:source :job :kind :stopped :data {:reason :leak}} :for-s 90 :until {:source :job :kind :completed}}
+            {:event {:source :job :kind :completed :data {:closed? true :leaks []}} :within-s 90 :of-job true}]
    :limit-s 100}
   ;; should fail: the same pen with one outer post missing at the far end reads :leak once the look has seen the gap
   {:name "long-pen-with-a-missing-outer-post-still-leaks"
@@ -100,47 +100,47 @@
             [:set [20 0 8] "oak_fence_gate[facing=east,open=true]"]
             [:set [90 0 8] "air"]]
    :act [[:job (jobs.animals.pen-check {:at #at [12 0 8]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 90 :of-job true}]
    :limit-s 100}
   ;; card 80c99ea0: a stone against a 2-high wall inside is a step onto the wall top; water 2 deep lifts an animal over it
   {:name "block-against-a-2-high-wall-leaks"
    :blocks [[:fill [2 0 2] [8 1 8] "stone" :hollow] [:fill [3 0 3] [7 1 7] "air"] [:set [3 0 5] "stone"]]
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
   {:name "water-1-deep-in-a-2-high-wall-closed"
    :blocks [[:fill [2 0 2] [8 1 8] "stone" :hollow] [:fill [3 0 3] [7 0 7] "water"] [:set [5 0 5] "stone"]]
    :body {:at [5.5 1 5.5] :yaw 0}
    :act [[:job (jobs.animals.pen-check {:at #at [5 1 5]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? true}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:closed? true}} :within-s 20 :of-job true}]}
   {:name "water-2-deep-in-a-2-high-wall-leaks"
    :blocks [[:fill [2 0 2] [8 1 8] "stone" :hollow] [:fill [3 0 3] [7 1 7] "water"] [:set [5 0 5] "stone"] [:set [5 1 5] "air"]]
    :body {:at [5.5 1 5.5] :yaw 0}
    :act [[:job (jobs.animals.pen-check {:at #at [5 1 5]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
   ;; card cbc7deea: the pen floor 2 above the ground outside the gate: animals will not step down 2, so the gate is a :gate-drops entry
   {:name "gate-with-a-two-block-drop-outside"
    :blocks [[:fill [2 0 2] [8 1 8] "stone"] [:fill [2 2 2] [8 2 8] "oak_fence" :hollow] [:fill [3 2 3] [7 2 7] "air"]
             [:set [5 2 2] "oak_fence_gate[facing=south,open=false]"]]
    :body {:at [5.5 2 5.5] :yaw 0}
    :act [[:job (jobs.animals.pen-check {:at #at [5 2 5]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:gate-drops [[:any]]}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:gate-drops [[:any]]}} :within-s 20 :of-job true}]}
   ;; cards fc15d57c, c0097f43: the pen given as a plan, leaks listed by cell, animals seen on the pen cells recorded
   {:name "plan-form-closed-lists-the-cow-inside"
    :plans [{:id "pen" :metadata {:by "$body"} :parts [{:id "fence" :outline [#at [2 0 2] #at [8 0 8]] :want [:any "oak_fence"]}]}]
    :act [[:summon "cow" [4.5 0 6.5]]
          [:wait-s 2]
          [:job (jobs.animals.pen-check {:plan "$plan:pen" :at #at [5 0 5]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? true :cells 25 :animals [[:any]]}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 25 :animals [[:any]]}} :within-s 20 :of-job true}]}
   {:name "plan-form-missing-fence-lists-the-leak"
    :plans [{:id "pen" :metadata {:by "$body"} :parts [{:id "fence" :outline [#at [2 0 2] #at [8 0 8]] :want [:any "oak_fence"]}]}]
    :blocks [[:set [5 0 8] "air"]]
    :act [[:job (jobs.animals.pen-check {:plan "$plan:pen" :at #at [5 0 5]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak :leaks [[:any]]}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak :leaks [[:any]]}} :within-s 20 :of-job true}]}
   ;; card 5748db84: a big leaky pen read from inside answers in time (the check once starved the control socket for minutes)
   {:name "big-leaky-pen-answers-in-time"
    :plot {:floor "stone"}
    :blocks [[:fill [1 0 1] [30 0 30] "oak_fence" :hollow] [:fill [2 0 2] [29 0 29] "air"] [:set [15 0 1] "air"]]
    :body {:at [15.5 0 15.5] :yaw 0}
    :act [[:job (jobs.animals.pen-check {:at #at [15 0 15]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 40 :of-job true}]
    :limit-s 60}]}

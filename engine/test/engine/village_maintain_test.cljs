@@ -48,7 +48,10 @@
      (assoc s :calls calls))))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn done-event [s] (first (events-of s :maintain.done)))
+(defn done-event
+  "The pass's ending event (job.completed or job.stopped)."
+  [{:keys [seen]}]
+  (first (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)))
 (defn step [s k] (get-in (done-event s) [:steps k]))
 (defn ending
   "[kind reason] of the root's last completed or stopped event."
@@ -133,7 +136,7 @@
           (is (= :failed (:skipped (step s :repair))))
           (is (= 1 (count (ran s 'jobs.village.breed))))
           (is (= 1 (count (ran s 'jobs.build.from-plan))) "run once, not retried")
-          (is (= "incomplete" (:reason (done-event s))))
+          (is (= :incomplete (:reason (done-event s))))
           (is (true? (finished? s))))))))
 
 (deftest a-stopped-child-makes-the-pass-stopped
@@ -142,7 +145,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:plan "p"} (world) {'jobs.build.from-plan {:status :stopped :reason :incomplete :missing [[1 2 3]]}}))]
           (is (some? (:stopped (step s :repair))))
-          (is (= "incomplete" (:reason (done-event s))))
+          (is (= :incomplete (:reason (done-event s))))
           (is (= [:stopped :incomplete] (ending s))))))))
 
 (deftest a-pass-where-no-step-ran-is-not-done
@@ -185,7 +188,7 @@
         (let [s (await (scenario {:roles [{:profession "librarian"}] :plan "p"} (apply world pair) {}))]
           (is (= {:skipped :no-pos} (step s :roll-0)))
           (is (empty? (ran s 'jobs.village.roll)))
-          (is (= "incomplete" (:reason (done-event s))))
+          (is (= :incomplete (:reason (done-event s))))
           (is (re-find #"roll-0 no-pos" (:text (done-event s)))))))))
 
 (deftest a-role-without-a-cell-alone-still-runs-the-pass
@@ -193,7 +196,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:roles [{:profession "librarian"}]} (apply world pair) {}))]
-          (is (= "incomplete" (:reason (done-event s))))
+          (is (= :incomplete (:reason (done-event s))))
           (is (true? (finished? s))))))))
 
 (deftest a-roll-goes-on-only-while-a-villager-is-near
@@ -238,7 +241,7 @@
         (let [s (await (scenario {:plan "p" :target 4} (apply world pair) {'jobs.build.from-plan {:decline :no-plan-found}}))]
           (is (= {:skipped :declined :reason :no-plan-found} (step s :repair)))
           (is (= 1 (count (ran s 'jobs.village.breed))) "the pass goes on")
-          (is (= "incomplete" (:reason (done-event s))))
+          (is (= :incomplete (:reason (done-event s))))
           (is (re-find #"repair" (:text (done-event s)))))))))
 
 (deftest a-preempted-step-is-decided-again-from-the-world

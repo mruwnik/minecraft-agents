@@ -17,7 +17,7 @@
    :act [[:summon "cow" [10.5 0 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:item "wheat" [:>= 4]]]}
@@ -28,7 +28,7 @@
          [:summon "cow" [15.5 0 21.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 2})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought :inside 2}} :within-s 240 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought :inside 2}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
   ;; the pen lies 17+ east of the start, so the body first walks toward it; the cow 4 from the start is inside :radius 5 of the start
@@ -38,14 +38,14 @@
    :act [[:summon "cow" [1.5 0 20.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1 :radius 5})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}
   {:name "cow-beyond-radius-from-the-start-is-none"
    :body {:at [3.5 0 8.5] :yaw 0 :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
    :act [[:summon "cow" [3.5 0 28.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1 :radius 8})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :none}} :within-s 120 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :none}} :within-s 120 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
    :limit-s 150}
   ;; should fail: a cow that does not move never follows the food; the lure is given up with a reason and the pen stays empty
@@ -54,7 +54,7 @@
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :herd.lure-lost :data {:reason #{:lost :lagging :animal-stalled}}} :within-s 200 :of-job true}
-            {:no-event {:source :job :kind :herd.done :data {:reason :brought}} :for-s 200 :until {:source :job :kind :herd.lure-lost}}]
+            {:no-event {:source :job :kind :completed :data {:reason :brought}} :for-s 200 :until {:source :job :kind :herd.lure-lost}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
    :limit-s 260}
   ;; the pen is planned and pen-gate is registered: the reflex must not fight the open gate, and the run must end (no toggle loop)
@@ -67,8 +67,8 @@
    :act [[:summon "cow" [3.5 0 20.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}
-            {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :herd.done}}
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :completed}}
             {:count-event {:source :job :kind :completed :data {:block "oak_fence_gate"}} :for-s 240 :at-least 1 :at-most 12}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
@@ -79,6 +79,6 @@
    :act [[:summon "cow" [10.5 1 18.5]]
          [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
-   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}
-            {:no-event {:source :job :kind :herd.gave-up :data {:reason :no-gate}} :for-s 240 :until {:source :job :kind :herd.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :herd.gave-up :data {:reason :no-gate}} :for-s 240 :until {:source :job :kind :completed}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}]}

@@ -91,7 +91,7 @@
           (is (= 2 (count (tosses p))))
           (is (= ["bread" "bread"] (map #(.-item (.-args %)) (tosses p))))
           (is (= [3 3] (map #(.-count (.-args %)) (tosses p))))
-          (is (gave? s :breed.done)))))))
+          (is (gave? s :completed)))))))
 
 (deftest nobody-breeding-ends-no-births
   (async done

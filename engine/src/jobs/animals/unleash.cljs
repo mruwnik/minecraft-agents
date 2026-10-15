@@ -28,7 +28,7 @@
   Unless :collect is false the job then waits 0.8 s for the drops and runs jobs.forestry.collect-drops for the
   leads in :radius.
 
-  Ends with info unleash.done and a warn unleash.gave-up unless the reason is :unleashed. The data {:reason :freed
+  Ends with a warn unleash.gave-up unless the reason is :unleashed. The data {:reason :freed
   [keys] :given-up {key reason} :collected n :leads n} (:collected is the leads gained since the call began, :leads
   the leads carried at the end) and the ending by the reason:
   - :done :unleashed: some animal was freed.
@@ -98,8 +98,8 @@
                 :freed (vec (:freed m))
                 :given-up (:given-up m {})
                 :collected (max 0 (- leads (:leads-at-start m leads)))
-                :leads leads}]
-    (ctx/emit! c :unleash.done :info (assoc result :text (str "unleash done: " (name reason) ", freed " (count (:freed m)))))
+                :leads leads
+                :text (str "unleash done: " (name reason) ", freed " (count (:freed m)))}]
     (when (not= :unleashed reason)
       (ctx/emit! c :unleash.gave-up :warn {:reason reason :text (str "unleashing stopped: " (name reason))}))
     (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
@@ -130,9 +130,10 @@
          (animals/allowed c :unleash.declined "unleash" :take))))
 
 (defn done?
-  "The animals freed. Never :done? itself: the run ends with its event and data."
+  "Later with the animals freed and those still on a lead: the run ends itself with its reason."
   [c]
-  {:done? false :units :animals :done (count (:freed (ctx/mem c))) :left (count (candidates c))})
+  (contract/later :unleashing (str (count (:freed (ctx/mem c))) " animals freed") :units :animals
+                  :done (count (:freed (ctx/mem c))) :left (count (candidates c))))
 
 (defn knot-of
   "The leash_knot entity the animal is tied to, or nil when it is not seen."

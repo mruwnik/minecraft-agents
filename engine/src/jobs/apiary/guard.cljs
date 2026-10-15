@@ -125,7 +125,8 @@
   (let [least (:least (ctx/frozen-call c) 1)
         need (if (= :all least) ##Inf least)]
     (cond
-      (or (#{:guarded :limit :safe} reason) (>= (actions (ctx/mem c)) need)) (ctx/end c :done nil result)
+      (or (#{:guarded :limit :safe} reason) (>= (actions (ctx/mem c)) need))
+      (ctx/end c :done nil (assoc result :text (str "apiary guard done: " (name reason) ", sunk " (:sunk result) ", carpeted " (:carpeted result))))
       (failed-conditions reason) (ctx/end c :condition-failed reason result)
       :else (ctx/end c :nothing-possible reason result))))
 
@@ -139,7 +140,6 @@
                 :left (:left seen {})
                 :skipped (:skipped m {})
                 :fires (:fires seen 0)}]
-    (ctx/emit! c :apiary.guard-done :info (assoc result :text (str "apiary guard done: " (name reason) ", sunk " (:sunk result) ", carpeted " (:carpeted result))))
     (when-not (#{:guarded :limit} reason)
       (ctx/emit! c :apiary.guard-gave-up :warn {:reason reason :left (:left result) :skipped (:skipped result)
                                                 :text (str "apiary guard stopped: " (name reason))}))
@@ -327,10 +327,11 @@
       :else (contract/look reason (str "guard waits: " (name reason))))))
 
 (defn done?
-  "The fires worked, and the fires still to work."
+  "Later with the fires worked and the fires still to work: the run ends itself with the reason it stopped for."
   [c]
   (let [seen (survey c (apiary/center-of c) true)]
-    {:done? false :units :fires :done (actions (ctx/mem c)) :left (+ (count (:todo seen)) (count (:left seen)))}))
+    (contract/later :guarding (str (actions (ctx/mem c)) " fires worked") :units :fires :done (actions (ctx/mem c))
+                    :left (+ (count (:todo seen)) (count (:left seen))))))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 10 (or (:max (:args c)) 12)) ##Inf]}})

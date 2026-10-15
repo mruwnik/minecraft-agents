@@ -91,14 +91,17 @@
     s))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn done-event [s] (first (events-of s :herd.done)))
+(defn done-event
+  "The job's ending event (job.completed or job.stopped)."
+  [{:keys [seen]}]
+  (first (filter #(and (= "jobs.animals.herd" (:name %)) (#{:completed :stopped} (:kind %))) @seen)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn failed-error
   "The error text the job was parked failed with, or nil while it is not failed."
   [{:keys [eng]}]
   (some-> (core/state eng) :failed vals first :error))
 (defn refusal
-  "The pen refusal of the run: its herd.done, else the cause of the start condition the job waits on."
+  "The pen refusal of the run: its ending, else the cause of the start condition the job waits on."
   [s]
   (or (done-event s) (last (events-of s :waiting))))
 (defn stopped?
@@ -626,14 +629,14 @@
           (submit! s {:target 1})
           (await (run-ticks s 400))
           (let [kinds (mapv :kind @(:seen s))]
-            (is (< (.indexOf kinds :job.notify) (.indexOf kinds :herd.done)))))))))
+            (is (< (.indexOf kinds :job.notify) (.indexOf kinds :completed)))))))))
 
 (deftest a-full-pen-declines-without-acting
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:target 2} {:entities [(cow 8 12 2) (cow 9 13 3) (cow 1 4 3)]} 5))]
-          (is (nil? (done-event s)))
+          (is (= [:completed :already] [(:kind (done-event s)) (:cause (done-event s))]))
           (is (empty? (calls-of s "moveTo")))
           (is (empty? (calls-of s "interact"))))))))
 
@@ -726,7 +729,7 @@
               e (first (events-of s :stopped))]
           (is (= :too-shallow (:reason e)))
           (is (re-find #"3x3, 5 cells in a line needed" (:text (:cause e))))
-          (is (nil? (done-event s)) "nothing was done: no run, no herd.done"))))))
+          (is (empty? (calls-of s "moveTo")) "nothing was done: no run"))))))
 
 (deftest a-run-that-brought-none-is-stopped-not-failed
   (async done
