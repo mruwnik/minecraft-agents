@@ -88,6 +88,8 @@
 (defn quote-of [c]
   {:uses {:job-time [2 drive-s (or (get-in (ctx/frozen-call c) [:spend :job-time]) ##Inf)]}})
 
+(def beside-range "How near the middle of the water cell beside the land the boat must be: the dismount exit is picked from the boat's own cell." 0.6)
+
 (def approach-range "A given land cell this near the boat is not driven nearer to." 3)
 
 (defn approach-cell
@@ -163,7 +165,7 @@
             (if (nil? land)
               (let [[reason shown] (drive-failure fails)]
                 (ctx/end c :nothing-possible reason {:spots (count spots) :drive (some-> shown contract/cause-key)}))
-              (let [d (await (ctx/call c :drive 'jobs.movement.boat-drive {:pos water}))]
+              (let [d (await (ctx/call c :drive 'jobs.movement.boat-drive {:pos water :range beside-range}))]
                 (cond
                   (= :continue d) :continue
                   (= :not-aboard (contract/cause-key d)) (ctx/end c :condition-failed :not-aboard)

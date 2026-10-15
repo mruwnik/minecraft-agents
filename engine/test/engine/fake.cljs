@@ -677,7 +677,8 @@
         beside (fn [[dx dz]] (-> from (update 0 + dx) (update 2 + dz)))
         dry (fn [pos] (not= "water" (block-name w (mapv #(js/Math.floor %) pos))))
         dry-side (when (:dismount-dry w) (first (filter dry (for [n [1 2 3] d [[1 0] [-1 0] [0 1] [0 -1]]] (beside (mapv #(* n %) d))))))   ; :dismountDry: the nearest dry cell on a side (up to 3), not always +x
-        pos (or (:dismount-at e) dry-side (update from 0 inc))
+        on-top (fn [[x y z :as pos]] (if (= "air" (block-name w (mapv #(js/Math.floor %) pos))) pos [x (inc (js/Math.floor y)) z]))   ; a dry cell that is a block is stood on, not in
+        pos (or (:dismount-at e) (some-> dry-side on-top) (update from 0 inc))
         here (block-name w (mapv #(js/Math.floor %) pos))
         left (fn [passengers] (not-empty (filterv #(not= fake-body-id %) passengers)))]
     (cond

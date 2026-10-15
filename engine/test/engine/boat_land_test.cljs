@@ -47,6 +47,15 @@
           (is (not (aboard? p)))
           (is (some #(= :boat.landed (:kind %)) @seen)))))))
 
+(deftest steps-off-from-the-water-cell-beside-the-shore
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res p]} (await (run (world-with 19.3 10.5 {:x 21 :y 64 :z 10}) {}))
+              boat (first (filter #(= 9 (.-id %)) (array-seq (.entities p #js {:radius 64}))))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (<= (js/Math.abs (- 20.5 (.. boat -pos -x))) 0.6) "the dismount is from the cell touching the land, not a cell short of it"))))))
+
 (deftest a-given-land-cell-is-the-shore
   (async done
     (tu/run-async done
