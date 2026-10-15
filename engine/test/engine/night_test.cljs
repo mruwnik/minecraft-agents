@@ -755,7 +755,9 @@
     (st/dawn-after! p st/default-dawn)
     (know-home! eng pos)
     (core/submit! eng (list 'jobs.survival.night args) {})
-    (js/Promise.resolve {:eng eng :p p :seen seen}))))
+    (js/Promise.resolve {:eng eng :p p :seen seen :look-round! #(doseq [yaw [0 90 180 270]]
+                                                                (swap! (fake/state raw-p) assoc :yaw yaw)
+                                                                (perception/pass! per))}))))
 
 (deftest a-lit-route-to-a-close-roofed-home-is-walked-instead-of-digging-in
   (async done
@@ -927,6 +929,15 @@
           (is (seq (st/calls p "sleep")))
           (is (= "air" (block-at p (st/arg-pos door))) "the door was taken out in the morning"))))))
 
+(deftest a-carried-bed-in-a-dug-into-home-with-no-room-for-it-stays-in-the-bag
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p log]} (await (dug-into-home (update-vals walled-home #(if (= "stone_bricks" %) "stone" %))))]
+          (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "walked into the home once, not back and forth with the bed walk")
+          (is (= [] (bed-places p)) "no bed in the open beside the home")
+          (is (= [] (st/calls p "sleep")) "and no sleep out there"))))))
+
 (def room-with-doorway
   "stone-room with a doorway in its north wall at 11,64,-1, open to the sky."
   (dissoc stone-room "11,64,-1" "11,65,-1"))
@@ -948,23 +959,62 @@
           (await (tu/run-until-empty eng 60))
           (is (= [] (filterv #(= [11 -1] ((juxt :x :z) (st/arg-pos %))) (st/calls p "place"))) "no block in the sheep's cell"))))))
 
+(defn ^:async doorway-shut-early
+  "The night shuts stone-room's dug doorway, then ends before dawn (no room for the bed) and it turns noon. {:eng :p :seen :filled}."
+  []
+  (let [{:keys [eng p] :as r} (await (night-at-home (update bed-world :blocks merge stone-room) {:x 10 :y 64 :z 0}))]
+    (await (with-child-log #(tu/run-until-empty eng 60)
+             (fn [c k _ _] (when (= :bed-down k)
+                             (ctx/remember! c :bed-place-failed {:pos (sh/feet p)} sh/bed-place-failed-policy)
+                             {:kind :nothing-possible :data {:reason :bed-place-failed}}))))
+    (is (= [] (st/calls p "sleep")) "no sleep")
+    (.setTime (.-world p) noon)
+    (assoc r :filled (set (map st/arg-pos (st/calls p "place"))))))
+
+(defn night-holds-now? [eng p] ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))
+
 (deftest a-doorway-shut-on-a-night-that-ended-before-dawn-is-opened-by-day
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge stone-room) {:x 10 :y 64 :z 0}))
-              _ (await (with-child-log #(tu/run-until-empty eng 60)
-                         (fn [c k _ _] (when (= :bed-down k)
-                                         (ctx/remember! c :bed-place-failed {:pos (sh/feet p)} sh/bed-place-failed-policy)
-                                         {:kind :nothing-possible :data {:reason :bed-place-failed}}))))
-              filled (set (map st/arg-pos (st/calls p "place")))]
+        (let [{:keys [eng p filled]} (await (doorway-shut-early))]
           (is (seq filled) "the doorway was shut")
-          (is (= [] (st/calls p "sleep")) "no sleep")
-          (.setTime (.-world p) noon)
-          (is ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}) "by day the night trigger holds for the shut doorway")
+          (is (night-holds-now? eng p) "by day the night trigger holds for the shut doorway")
           (core/submit! eng (list 'jobs.survival.night {}) {})
           (await (tu/run-until-empty eng 40))
           (is (every? #(= "air" (block-at p %)) filled) "the night job by day opened it"))))))
+
+(deftest a-doorway-that-cannot-be-opened-by-day-is-warned-and-tried-again-later
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen filled]} (await (doorway-shut-early))]
+          (core/submit! eng (list 'jobs.survival.night {}) {})
+          (await (with-child-log #(tu/run-until-empty eng 40)
+                   (fn [_ k _ _] (when (= :doorway-open k) {:kind :nothing-possible :data {}}))))
+          (is (seq filled))
+          (is (not-any? #(= "air" (block-at p %)) filled) "the walk failed, nothing dug")
+          (is (seq (st/emitted seen :night.doorway-stuck)) "the stuck doorway is warned")
+          (is (not (night-holds-now? eng p)) "not tried again at once")
+          (mem/forget! (:store eng) :doorway-open-failed)
+          (is (night-holds-now? eng p) "once the wait lapses the trigger holds for it again")
+          (core/submit! eng (list 'jobs.survival.night {}) {})
+          (await (tu/run-until-empty eng 40))
+          (is (every? #(= "air" (block-at p %)) filled) "and the next try opens it"))))))
+
+(deftest a-filled-doorway-cell-someone-else-changed-is-left-alone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p filled look-round!]} (await (doorway-shut-early))]
+          (is (seq filled))
+          (doseq [cell filled] (fake/set-block! p cell "oak_planks"))
+          (fake/swap-self! p assoc :pos [10 64 -3]) ; outside the room, so not shut in by the planks
+          (look-round!)
+          (is (not (night-holds-now? eng p)) "no doorway of its own to open")
+          (core/submit! eng (list 'jobs.survival.night {}) {})
+          (await (tu/run-until-empty eng 40))
+          (is (every? #(= "oak_planks" (block-at p %)) filled) "the planks someone put there stay"))))))
 
 ;; ------------------------------------------------------------------ flee somewhere safer
 

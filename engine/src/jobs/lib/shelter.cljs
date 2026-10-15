@@ -279,6 +279,10 @@
   "Policy of the :doorway-filled entries: a doorway cell the night filled (jobs.survival.night.doorway), opened by day."
   {:cap 4 :ttl ms-per-day})
 
+(def doorway-open-failed-policy
+  "Policy of the :doorway-open-failed entries: a filled doorway cell the day failed to open, not tried again until it lapses."
+  {:cap 4 :ttl (* 2 60 1000)})
+
 (defn carried-bed
   "The name of a bed item the body carries (any colour), or nil."
   [p]
@@ -405,14 +409,25 @@
                  (not (spawn-bed-at? view pos)))
         pos))))
 
+(defn still-filled?
+  "Whether a :doorway-filled entry's cell still holds one of its :blocks (the block the night put there)."
+  [p {:keys [cell blocks]}]
+  (some? (some #{(u/seen-name p cell)} blocks)))
+
+(defn fill-gone?
+  "Whether a :doorway-filled entry's cell is seen holding none of its :blocks: opened, or changed by someone else."
+  [p {:keys [cell blocks]}]
+  (let [n (u/seen-name p cell)]
+    (and (some? n) (not (some #{n} blocks)))))
+
 (defn doorway-to-open
-  "By day: the cells {:x :y :z} of the :doorway-filled entries that still hold a block, oldest first; nil when none."
+  "By day: the cells {:x :y :z} of the :doorway-filled entries that are still-filled?, none failed to open lately
+  (:doorway-open-failed), oldest first; nil when none."
   [p view]
   (when-not (night? p)
-    (seq (keep #(let [cell (:cell (:data %))
-                      n (u/seen-name p cell)]
-                  (when (and n (not (#{"air" "cave_air"} n))) cell))
-               (mem/entries view :doorway-filled)))))
+    (let [failed (set (map (comp :cell :data) (mem/entries view :doorway-open-failed)))]
+      (seq (keep #(let [{:keys [cell] :as d} (:data %)] (when (and (not (failed cell)) (still-filled? p d)) cell))
+                 (mem/entries view :doorway-filled))))))
 
 (defn bed
   "The remembered bed position when it is within radius of the body, else nil."

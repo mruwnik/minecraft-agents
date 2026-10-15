@@ -35,8 +35,11 @@
           :again))))
 
 (defn ^:async open-doorway!
-  "By day: dig the cells the night filled in a doorway (sh/doorway-to-open), after a walk within reach of the first, and
-  walk over the drop. One try: every :doorway-filled entry is dropped whatever happens."
+  "By day: dig the cells the night filled in a doorway (sh/doorway-to-open: still holding a block it put there), after a
+  walk within reach of the first, and walk over the drop. No zone check: it takes out only blocks this body put there.
+  Entries seen holding none of their blocks are forgotten (sh/fill-gone?); a cell it could not open (the walk or the dig
+  failed) is warned night.doorway-stuck and marked :doorway-open-failed, so the night trigger tries it again once that
+  lapses."
   [c cells]
   (let [arrived (await (walk! c :doorway-open (first cells) 3))]
     (if (= :continue arrived)
@@ -46,11 +49,17 @@
               (let [n (when cell (u/seen-name (:primitives c) cell))]
                 (cond
                   (nil? cell) (when dug (ctx/update-mem! c assoc :pickup dug))
-                  (#{"air" "cave_air"} n) (recur more dug)
+                  (not (some #{cell} (sh/doorway-to-open (:primitives c) (ctx/view c)))) (recur more dug)
                   :else (let [_ (await (tools/equip-for! c n {:fast true}))
                               r (await (tidy/dig! c cell))]
                           (recur more (or dug (when (= "dug" (.-status r)) cell))))))))
-          (ctx/forget-where! c :doorway-filled (constantly true))
+          (let [held (keep #(when (sh/still-filled? (:primitives c) (:data %)) (:cell (:data %))) (ctx/entries c :doorway-filled))
+                stuck (filterv (set held) cells)]
+            (ctx/forget-where! c :doorway-filled (partial sh/fill-gone? (:primitives c)))
+            (when (seq stuck)
+              (doseq [cell stuck] (ctx/remember! c :doorway-open-failed {:cell cell} sh/doorway-open-failed-policy))
+              (ctx/emit! c :night.doorway-stuck :warn {:cells stuck :arrived arrived
+                                                       :text (str "could not open the doorway it filled at " (pr-str stuck) "; trying again later")})))
           :again))))
 
 (defn ^:async pick-up-drop!
@@ -77,12 +86,13 @@
   (cond-> (spent-fields c) how (assoc :night how) (fled c) (assoc :fled (fled c))))
 
 (defn end-night!
-  "The night is over: forget tonight's failed sites (sites/forget-failed!) and end done {:night how}, or nothing-possible
-  :exposed {:sites} when nothing sheltered the body."
+  "The night is over: forget tonight's failed sites (sites/forget-failed!) and the filled doorway cells someone else
+  changed (sh/fill-gone?), and end done {:night how}, or nothing-possible :exposed {:sites} when nothing sheltered the body."
   [c]
   (let [how (:sheltered (ctx/mem c))
         failed (sites/failed-sites c)]
     (sites/forget-failed! c)
+    (ctx/forget-where! c :doorway-filled (partial sh/fill-gone? (:primitives c)))
     (if (= :exposed how)
       (ctx/end c :nothing-possible :exposed
                (cond-> {:sites failed

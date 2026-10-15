@@ -31,7 +31,7 @@
   Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state);
   sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night (jobs.time.wait-for-day) and ::morning-s, least 0.
   The round repeats one choice, each time from the world as it is now (the first that applies), with a 50 ms timer between:
-  - day: a doorway the night filled (:doorway-filled, still holding a block) is dug again and the drop walked over; a dug-in or exposed night leaves the shelter (dig-in-leave/leave!); :no-way-out ends it nothing-possible :no-way-out (shelter.failed warn,
+  - day: a doorway the night filled (:doorway-filled, still holding the block it put there) is dug again and the drop walked over (a cell it cannot open warns night.doorway-stuck and waits :doorway-open-failed, 2 minutes); a dug-in or exposed night leaves the shelter (dig-in-leave/leave!); :no-way-out ends it nothing-possible :no-way-out (shelter.failed warn,
     a :shelter-trapped entry, 5 minutes); then a bed it put down outside its own zones (:bed-placed) is dug up and its
     drop walked over (go-to), unless it is the respawn bed (:spawn-bed); then the job ends: done {:night :slept|:dug-in|:logged-out}, or nothing-possible :exposed {:sites} after a
     night with no shelter.
@@ -46,7 +46,7 @@
   - a bed (sh/bed-to-use: seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days without
     sleep; never an occupied one, one given up on, or, unless :max-days-awake days without sleep, one whose walk leaves an underground, dug-in or room shelter): jobs.survival.bed-down sleeps in it (jobs.survival.sleep). A sleep that ends without sleeping writes
     :sleep-failed (5 minutes, shelter.sleep_failed warn).
-  - a bed item carried and no bed to use (jobs.survival.bed-down): put down beside the body (roofed cells first, else in the open, never in the open behind a doorway shut tonight; never in a
+  - a bed item carried and no bed to use (jobs.survival.bed-down): put down beside the body (roofed cells first, else in the open, never in the open from a closed home (night.doorway/closed-home?: the room's roof ends in a doorway or nowhere); never in a
     doorway or another's zone), slept in, recorded as :bed unless a live :bed is; outside its own zones also as
     :bed-placed for the morning (info night.bed-placed {:pos :own-zone} says where). No room writes :bed-place-failed (10 minutes, or until the body is 6+ blocks away).
   - someone else asleep (sh/log-out-for-sleepers?): jobs.survival.log-out, a 30 s stint at most until morning, again
@@ -84,7 +84,7 @@
   An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed). A respawn bed
   it sees is no bed is written :spawn-lost and warned (spawn_lost) once; its waiting reasons carry :spawn ({:bed pos} or {:lost pos :why}).
   Memory: job memory :enclose (the cave cell being walled in), :sheltered (:slept, :dug-in, :logged-out, :exposed), :log-out-failed, :relocating, :digging (the
-  site of a dig-in in flight), :bed-down (a bed-down in flight), :doorway-tried, :doorway-shut, :pit-trapped and leave!'s :dig-out; :roof-walk-failed (no second walk to a roofed place tonight); body memory :night-site (failed sites, forgotten whenever the night ends, with dig-in's :dig-in-futile when it ends by day or dug in, at most a day), so a
+  site of a dig-in in flight), :bed-down (a bed-down in flight), :doorway-tried, :pit-trapped and leave!'s :dig-out; :roof-walk-failed (no second walk to a roofed place tonight); body memory :night-site (failed sites, forgotten whenever the night ends, with dig-in's :dig-in-futile when it ends by day or dug in, at most a day), so a
   firing after a cut does not dig a failed site again.
   Muting :night does not end a running night job: the agent cancels it too.")
 
@@ -173,13 +173,13 @@
 (defn ^:async bed-down-step
   "Sleep in bed, or put the carried bed down (bed nil) and sleep: jobs.survival.bed-down. Asleep it is :sheltered :slept;
   the next pass chooses again. While the child goes on (:continue) job memory :bed-down holds {:bed bed}, so the next
-  pass calls it again rather than choosing anew. Behind a doorway shut tonight the bed goes down under the roof only (:roofed-only)."
+  pass calls it again rather than choosing anew. In a closed home (night.doorway/closed-home?) the bed goes down under the roof only (:roofed-only)."
   [c bed]
   (hold/busy! c)
   (let [d (await (ctx/call c :bed-down 'jobs.survival.bed-down
                                  (cond-> (select-keys (:args c) [:roof-height :bed-radius :urgent-bed-radius :max-days-awake])
                                    bed (assoc :bed bed)
-                                   (:doorway-shut (ctx/mem c)) (assoc :roofed-only true))))]
+                                   (doorway/closed-home? (:primitives c)) (assoc :roofed-only true))))]
     (if (= :continue d)
       (ctx/update-mem! c assoc :bed-down {:bed bed})
       (ctx/update-mem! c dissoc :bed-down))
