@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { decide, hasHeavyMarker, loadConfig, reservedMb, usableSlots } from './res-slot.mjs'
+import { candidateSlots, decide, hasHeavyMarker, loadConfig, reservedMb, usableSlots } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -201,7 +201,9 @@ test('integration: with the other slot held a plain run is busy, a heavy run (--
   const holder = spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '30'], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ...env }, stdio: 'ignore', detached: true })
   try {
     await new Promise((r) => setTimeout(r, 1000))
-    assert.equal(run(['t', '--', 'echo', 'ran'], env).status, 75)
+    const { RES_SLOT_HEAVY: _, ...plainEnv } = { ...process.env, ...env }
+    const plain = spawnSync('node', [new URL('./res-slot.mjs', import.meta.url).pathname, 't', '--', 'echo', 'ran'], { cwd: dir, encoding: 'utf8', env: plainEnv })
+    assert.equal(plain.status, 75)
     const flag = run(['t', '--heavy', '--', 'echo', 'ran'], env)
     assert.equal(flag.status, 0); assert.match(flag.stdout, /ran/)
     const viaEnv = run(['t', '--', 'echo', 'ran'], { ...env, RES_SLOT_HEAVY: '1' })
@@ -239,4 +241,33 @@ test('integration: a run whose cwd is in a checkout with .res-slot-heavy takes t
     assert.equal(r.status, 0); assert.match(r.stdout, /ran/)
   } finally { process.kill(-holder.pid, 'SIGKILL') }
   fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(wt, { recursive: true, force: true })
+})
+
+test('config: the tests kind reserves a slot for heavy runners', () => {
+  assert.ok(loadConfig().kinds.tests.reserve >= 1)
+})
+
+test('candidateSlots: a heavy run also tries the reserved slots, first; a light one only its own', () => {
+  assert.deepEqual(candidateSlots(3, 5, 1, false), [0, 1, 2])
+  assert.deepEqual(candidateSlots(3, 5, 1, true), [4, 0, 1])
+  assert.deepEqual(candidateSlots(3, 5, 0, true), [0, 1, 2])
+})
+
+test('integration: when the slot frees, a waiting heavy run goes before light waiters that queued earlier', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
+  const out = path.join(dir, 'order')
+  const env = { ...process.env, RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '20000', RES_SLOT_POLL_MS: '100' }
+  delete env.RES_SLOT_HEAVY
+  const script = new URL('./res-slot.mjs', import.meta.url).pathname
+  const start = (args, tag, nap = 0.3) => new Promise((r) => spawn('node', [script, 't', ...args, '--', 'sh', '-c', `echo ${tag} >> ${out}; sleep ${nap}`], { cwd: dir, env, stdio: 'ignore' }).on('close', r))
+  const holder = start([], 'holder', 1.5).then(() => {})
+  await new Promise((r) => setTimeout(r, 600))
+  const lights = ['L1', 'L2', 'L3'].map((t) => start([], t))
+  await new Promise((r) => setTimeout(r, 600))
+  const heavy = start(['--heavy'], 'H')
+  await Promise.all([holder, ...lights, heavy])
+  assert.deepEqual(fs.readFileSync(out, 'utf8').split('\n').slice(0, 2), ['holder', 'H'])
+  fs.rmSync(dir, { recursive: true, force: true })
 })
