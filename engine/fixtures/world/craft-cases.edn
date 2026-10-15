@@ -103,6 +103,15 @@
    :blocks [[:fill [8 -1 8] [24 5 24] "stone"] [:fill [16 0 16] [22 1 16] "air"]]
    :body {:at [18.5 0 16.5] :inventory [["stick" 2] ["cobblestone" 8] ["crafting_table" 1]]}
    :act [[:job (jobs.items.craft {:item "stone_pickaxe"})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
-   :after [[:item "stone_pickaxe" 1] [:not-block [17 0 16] "crafting_table"] [:not-block [19 0 16] "crafting_table"]
-           [:not-block [17 1 16] "crafting_table"] [:not-block [19 1 16] "crafting_table"]]}]}
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:event {:source :job :kind :blocks.place.done :data {:item "crafting_table"}} :within-s 80}
+            {:no-event {:source :job :kind :blocks.place.done :data {:item "crafting_table" :pos #{[:near #xyz [16 0 16] 0.5] [:near #xyz [17 0 16] 0.5] [:near #xyz [19 0 16] 0.5] [:near #xyz [20 0 16] 0.5] [:near #xyz [21 0 16] 0.5] [:near #xyz [22 0 16] 0.5] [:near #xyz [16 1 16] 0.5] [:near #xyz [17 1 16] 0.5] [:near #xyz [19 1 16] 0.5] [:near #xyz [20 1 16] 0.5] [:near #xyz [21 1 16] 0.5] [:near #xyz [22 1 16] 0.5]}}} :for-s 80}]
+   :after [[:item "stone_pickaxe" 1]]}
+  {:name "furnace-in-a-tunnel-never-lands-in-the-line"
+   :blocks [[:fill [8 -1 8] [24 5 24] "stone"] [:fill [16 0 16] [22 1 16] "air"]]
+   :body {:at [18.5 0 16.5] :inventory [["furnace" 1] ["raw_iron" 1] ["coal" 1] ["stone_pickaxe" 1]]}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 1})]]
+   :expect [{:event {:source :job :kind :smelt.done} :within-s 80 :of-job true}
+            {:event {:source :job :kind :blocks.place.done :data {:item "furnace"}} :within-s 60}
+            {:no-event {:source :job :kind :blocks.place.done :data {:item "furnace" :pos #{[:near #xyz [16 0 16] 0.5] [:near #xyz [17 0 16] 0.5] [:near #xyz [19 0 16] 0.5] [:near #xyz [20 0 16] 0.5] [:near #xyz [21 0 16] 0.5] [:near #xyz [22 0 16] 0.5] [:near #xyz [16 1 16] 0.5] [:near #xyz [17 1 16] 0.5] [:near #xyz [19 1 16] 0.5] [:near #xyz [20 1 16] 0.5] [:near #xyz [21 1 16] 0.5] [:near #xyz [22 1 16] 0.5]}}} :for-s 80}]
+   :after [[:item "iron_ingot" 1]]}]}

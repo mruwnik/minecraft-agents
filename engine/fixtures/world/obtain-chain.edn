@@ -113,6 +113,17 @@
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:item "obsidian" [:>= 1]]]
    :limit-s 130}
+  ;; card ff7ec4e1: flowing lava only (the source under a stone wall, so no site): water on it makes cobblestone; the wall at
+  ;; x 10 keeps each pour's water to its own side, so a failed east pour leaves the west flow for a second failed pour
+  {:name "water-on-flowing-lava-twice-ends-pour-failed"
+   :blocks [[:fill [4 0 10] [16 0 22] "stone"] [:fill [7 0 16] [13 0 16] "air"] [:fill [10 1 10] [10 1 22] "stone"]
+            [:set [10 0 16] "lava"]]
+   :body {:at [14.5 1 20.5] :inventory [["diamond_pickaxe" 1] ["water_bucket" 2]]}
+   :act [[:wait-s 8] [:job (jobs.gather.make-obsidian {:count 1})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :pour-failed}} :within-s 110 :of-job true}
+            {:count-event {:source :action :kind :started :data {:name "place" :args {"item" "water_bucket"}}} :for-s 110 :at-least 2 :of-job true}]
+   :after [[:item "obsidian" 0]]
+   :limit-s 130}
   ;; card 6bbfb29c: a pick of ores on the way never walks to an ore it merely sees: the iron ore 26 blocks off stays, the body stays by its stone
   {:name "mine-stone-does-not-wander-to-a-far-exposed-ore"
    :blocks [[:fill [22 0 15] [28 2 19] "stone"] [:set [4 0 28] "iron_ore"]]

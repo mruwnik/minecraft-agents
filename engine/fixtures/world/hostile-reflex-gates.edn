@@ -2,7 +2,7 @@
 ;; burning reflex yields to hostile-near, no extinguish standing still), 4bfba733 (needs-weapon waits 1500 ticks after dawn
 ;; and while a hostile is known within 40; put after the time set, else it fires in the settle), 55a1871b (fight-back's :leash: a hostile beyond it is not chased), 57f49df1
 ;; b74a043c ebac9484 (a provoked enderman, hit by the body through /damage: water first, else a roofed 2-high gap, else a
-;; seal; never a fight). Mobs helmeted.
+;; seal; never a fight), e6ba3d48 (a phantom near: seal in, no flight; NoAI, fire resistance for daylight). Mobs helmeted.
 {:defaults
  {:tags [:hostile :survival :reflex]
   :time :any
@@ -88,4 +88,12 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
    :after [[:body-near [22.5 0 16.5] 2.5]]
-   :limit-s 40}]}
+   :limit-s 40}
+  {:name "phantom-near-unarmed-body-seals-no-flight"
+   :body {:inventory [["cobblestone" 20]] :effects [["resistance" 900 4]]}
+   :act [[:summon "phantom" [20.5 0 16.5] "{NoAI:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "phantom"}} :within-s 20}
+            {:event {:source :job :kind :retreat_sealed} :within-s 40}
+            {:no-event {:source :job :kind :retreat.target} :for-s 40 :until {:source :job :kind :retreat_sealed}}]
+   :after [[:body-near [16.5 0 16.5] 1.5]]
+   :limit-s 50}]}
