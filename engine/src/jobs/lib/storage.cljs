@@ -1,6 +1,6 @@
 (ns jobs.lib.storage
   "What the body carries and where its chest is, shared by the storage and item jobs (deposit, withdraw, kit,
-  make-room, bake, craft, give, obtain, get-seeds)."
+  make-room, craft, give, obtain, get-seeds)."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.memory :as mem]

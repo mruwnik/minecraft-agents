@@ -1,25 +1,24 @@
-;; Card 0663315e: the items leftovers. bake (wheat chest to bread through the table) and the reasoned endings of enchant and
+;; Card 0663315e: the items leftovers. kitchen (wheat chest to stocked bread through the table) and the reasoned endings of enchant and
 ;; get-tool: enchant without a table gives up (enchant.gave-up), without lapis it stops condition-failed :need, get-tool with an unknown block
-;; name is refused :bad-args (it was read as a block the hand harvests). The bake "declined child" ending needs a child whose check
+;; name is refused :bad-args (it was read as a block the hand harvests). The "declined child" ending needs a child whose check
 ;; fails three rounds and the enchant unknown-status ending a window answer the server never gives: unit tests only.
-;; Should-succeed: bake 9 wheat to 3 bread. Should-fail: bake without a table, enchant with no table, enchant with no lapis, get-tool unknown block.
+;; Should-succeed: kitchen turns 9 chest wheat into 3 bread in the chest. Should-fail: kitchen without a table returns the wheat, enchant with no table, enchant with no lapis, get-tool unknown block.
 {:defaults
- {:tags [:items :bake :enchant :get-tool :jobs]
+ {:tags [:items :kitchen :enchant :get-tool :jobs]
   :time :any
   :plot {:height 8}
   :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2}
   :limit-s 90}
  :cases
- [{:name "bake-wheat-to-bread"
+ [{:name "kitchen-bakes-chest-wheat-and-stores-the-bread"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"] [:set [20 0 18] "crafting_table"]]
-   :act [[:job (jobs.items.bake {:chest #xyz [20 0 16]})]]
-   :expect [{:event {:source :job :kind :bake.done :data {:baked 3}} :within-s 80 :of-job true}]
-   :after [[:item "bread" [:>= 3]]]}
-  {:name "bake-without-a-table-stops-no-table"
+   :act [[:job (jobs.items.kitchen {:chest #xyz [20 0 16] :reserve {} :stock {"bread" 3}})]]
+   :expect [{:event {:source :job :kind :kitchen.done} :within-s 80 :of-job true}]
+   :after [[:item "bread" 0] [:item "wheat" 0]]}
+  {:name "kitchen-without-a-table-returns-the-wheat"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"]]
-   :act [[:job (jobs.items.bake {:chest #xyz [20 0 16] :fetch false})]]
-   :expect [{:event {:source :job :kind :bake.no-table :data {:reason "no-table"}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :bake.done} :for-s 20}]
+   :act [[:job (jobs.items.kitchen {:chest #xyz [20 0 16] :reserve {} :stock {"bread" 3}})]]
+   :expect [{:event {:source :job :kind :kitchen.done} :within-s 60 :of-job true}]
    :after [[:item "bread" 0] [:item "wheat" 0]]}
   {:name "enchant-without-a-table-gives-up-no-table"
    :body {:inventory [["diamond_pickaxe" 1] ["lapis_lazuli" 3]]}

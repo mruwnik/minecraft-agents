@@ -89,14 +89,12 @@
 
 ;; ------------------------------------------------------------------ the parents propagate :refused
 
-(deftest kit-bake-and-get-seeds-pass-the-refusal-up
+(deftest kit-passes-the-refusal-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[job args pred] [['jobs.storage.kit {:chest chest :tools ["hoe"] :spare 1 :food 12 :craft false}
-                                  #(= refused (select-keys % [:gave-up :reason :zones :claims]))]
-                                 ['jobs.items.bake {:chest chest :keep 4}
-                                  #(and (= :refused (:reason %)) (= ["vault"] (:zones %)))]]]
+                                  #(= refused (select-keys % [:gave-up :reason :zones :claims]))]]]
           (let [{:keys [eng p]} (setup {:containers stock :blocks {"11,64,0" "crafting_table"}} [vault])
                 result (await (child-outcome eng job args 60))]
             (is (empty? (calls p "transfer")) (str job))

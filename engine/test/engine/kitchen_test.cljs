@@ -45,7 +45,7 @@
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn chest-items [{:keys [p]}] (into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [10 64 0]])))
 
-(def args {:furnace furnace :chest chest :keep {"bread" 1}})
+(def args {:furnace furnace :chest chest :reserve {} :stock {"bread" 1 "cooked_beef" 8 "cooked_chicken" 8}})
 (def raw-food [(item "beef" 3) (item "chicken" 2) (item "coal" 2) (item "wheat" 6)])
 
 (deftest one-pass-smelts-every-raw-food-bakes-the-wheat-and-puts-the-cooked-food-away
@@ -55,15 +55,56 @@
         (let [s (await (run (list job args) {:inventory raw-food :containers {"10,64,0" []}} 40))]
           (is (true? (finished? s)))
           (is (= {"cooked_beef" 3 "cooked_chicken" 2} (select-keys (chest-items s) ["cooked_beef" "cooked_chicken"])))
-          (is (pos? (get (chest-items s) "bread" 0)))
+          (is (= 1 (get (chest-items s) "bread" 0)) "only the one loaf the stock lacks")
+          (is (= 3 (get (inv s) "wheat")) "the wheat the shortfall did not need stays carried")
           (is (nil? (get (inv s) "beef")))
-          (is (nil? (get (inv s) "chicken")))
+          (is (nil? (get (inv s) "chicken"))))))))
+
+(deftest only-the-shortfall-is-smelted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run (list job (assoc args :stock {"cooked_beef" 2})) {:inventory [(item "beef" 5) (item "coal" 2)] :containers {"10,64,0" []}} 40))]
+          (is (= {"cooked_beef" 2} (chest-items s)))
+          (is (= 3 (get (inv s) "beef"))))))))
+
+(deftest the-reserve-keeps-the-wheat-the-agent-needs-as-bait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[reserve carried-wheat bread left] [[4 6 0 6] [3 6 1 3]]]
+          (let [s (await (run (list job (assoc args :reserve {"wheat" reserve} :stock {"bread" 16})) {:inventory [(item "wheat" carried-wheat)] :containers {"10,64,0" []}} 12))]
+            (is (= bread (get (chest-items s) "bread" 0)) (pr-str reserve))
+            (is (= left (get (inv s) "wheat" 0)) (pr-str reserve))))))))
+
+(deftest the-reserve-also-holds-back-wheat-in-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run (list job (assoc args :reserve {"wheat" 2} :stock {"bread" 16})) {:inventory [(item "coal" 1)] :containers {"10,64,0" [(item "wheat" 6)]}} 12 {"wheat" 6}))]
+          (is (= {"bread" 1 "wheat" 3} (chest-items s)))
           (is (nil? (get (inv s) "wheat"))))))))
+
+(deftest a-chest-that-holds-the-stock-needs-nothing-and-gives-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:inventory [(item "wheat" 9)] :containers {"10,64,0" [(item "bread" 20)]}}
+              s (await (run (list job (assoc args :stock {"bread" 16})) world 4 {"bread" 20}))]
+          (is (= {"bread" 20} (chest-items s)))
+          (is (= 9 (get (inv s) "wheat")) "the bread is not taken out, the wheat not baked"))))))
+
+(deftest done-reads-the-booked-chest-stock
+  (are [chest-stock stock done] (= done (:done? (kitchen/reached {:stock stock} chest-stock)))
+    {"bread" 20} {"bread" 16} true
+    {"bread" 15} {"bread" 16} false
+    nil {"bread" 16} false
+    {"bread" 20 "cooked_beef" 1} {"bread" 16 "cooked_beef" 8} false))
 
 (defn waits [s] (distinct (map (juxt :reason (comp :backed-off :cause)) (events-of s :waiting))))
 
 (defn run-with [inventory & [stock]]
-  (run (list job (dissoc args :keep)) {:inventory inventory :containers {"10,64,0" []}} 2 (or stock {})))
+  (run (list job (dissoc args :stock)) {:inventory inventory :containers {"10,64,0" []}} 2 (or stock {})))
 
 (deftest the-check-passes-for-raw-food-or-three-wheat
   (async done
@@ -82,25 +123,22 @@
             (is (empty? (events-of s :round_started)) (pr-str inventory))
             (is (= [[:nothing-to-do nil]] (waits s)) (pr-str inventory))))))))
 
-(deftest a-pass-that-leaves-raw-food-carried-rests-so-a-standing-job-does-not-starve-the-queue
+(deftest a-pass-that-leaves-work-undone-does-not-rest
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (run (list 'repeat (list job (assoc args :furnace {:x 30 :y 64 :z 0}))) {:inventory [(item "beef" 3) (item "coal" 1)]} 8))]
-          (is (= 1 (count (events-of s :kitchen.done))) "one pass, then the kitchen rests")
-          (is (some #(= ["kitchen"] (get-in % [:cause :backed-off])) (events-of s :waiting)) "the wait says it rests")
-          (swap! (:clock s) + 660000)
-          (dotimes [_ 6] (await (core/tick! (:eng s))) (swap! (:clock s) + 1000))
-          (is (= 2 (count (events-of s :kitchen.done))) "after the rest it tries again"))))))
+          (is (<= 2 (count (events-of s :kitchen.done))) "no timer: the next pass starts at once")
+          (is (empty? (filter #(get-in % [:cause :backed-off]) (events-of s :waiting)))))))))
 
 (deftest wheat-in-the-chest-is-baked-though-none-is-carried
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [stock [nil {"wheat" 6}]]
-          (let [s (await (run (list job args) {:inventory [(item "coal" 1)] :containers {"10,64,0" [(item "wheat" 6)]}} 12 stock))]
+          (let [s (await (run (list job (assoc args :stock {"bread" 16})) {:inventory [(item "coal" 1)] :containers {"10,64,0" [(item "wheat" 6)]}} 12 stock))]
             (is (true? (finished? s)) (pr-str stock))
-            (is (pos? (get (chest-items s) "bread" 0)) (pr-str stock))
+            (is (= 2 (get (chest-items s) "bread" 0)) (pr-str stock))
             (is (nil? (get (chest-items s) "wheat")) (pr-str stock))))))))
 
 (deftest a-chest-booked-without-wheat-keeps-the-kitchen-waiting
@@ -111,56 +149,45 @@
           (is (empty? (events-of s :round_started)))
           (is (= [[:nothing-to-do nil]] (waits s))))))))
 
-(deftest a-rest-after-a-missing-table-ends-when-a-table-is-seen
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock] :as s} (setup {:inventory [(item "wheat" 6)] :containers {"10,64,0" []}})]
-          (swap! (fake/state p) fake/drop-block [11 64 0])
-          (core/submit! eng (list 'repeat (list job {:chest chest})) {})
-          (dotimes [_ 8] (await (core/tick! eng)) (swap! clock + 1000))
-          (is (= 1 (count (events-of s :kitchen.done))) "the pass without a table ends and rests")
-          (swap! (fake/state p) fake/put-block [11 64 0] "crafting_table")
-          (dotimes [_ 40] (await (core/tick! eng)) (.advance (.-world p) 700) (swap! clock + 1000))
-          (is (pos? (get (inv s) "bread" 0)) "baked well inside the 10 minute rest"))))))
-
-(deftest bread-carried-within-the-keep-is-reported-as-kept
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (run-with [(item "bread" 4)]))]
-          (is (= [{:smelt :no-food :bake :no-wheat :deposit :kept-carried}]
-                 (distinct (map (comp :skipped :cause) (events-of s :waiting))))))))))
-
 (deftest the-pass-says-what-it-stored
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run (list job (assoc args :keep {"bread" 6})) {:inventory [(item "beef" 3) (item "coal" 2)] :containers {"10,64,0" []}} 40 {}))
+        (let [s (await (run (list job args) {:inventory [(item "beef" 3) (item "coal" 2)] :containers {"10,64,0" []}} 40 {}))
               e (first (events-of s :kitchen.done))]
           (is (= {"cooked_beef" 3} (chest-items s)))
           (is (= {:stored {"cooked_beef" 3}} (get-in e [:steps :deposit])))
           (is (= "kitchen done: smelted beef 3; stored cooked_beef 3" (:text e))))))))
 
-(deftest bread-withdrawn-by-hand-stays-carried
+(deftest bread-carried-by-hand-stays-carried
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run (list job (assoc args :keep {"bread" 6})) {:inventory [(item "bread" 20)] :containers {"10,64,0" []}} 4 {}))]
+        (let [s (await (run (list job args) {:inventory [(item "bread" 20)] :containers {"10,64,0" []}} 4 {}))]
           (is (= {} (chest-items s)))
           (is (= 20 (get (inv s) "bread"))))))))
 
-(deftest only-the-part-the-kitchen-made-is-stored-above-the-keep
-  (are [carried made keep expected] (= expected (kitchen/to-store carried made keep))
-    {"bread" 20} {} {"bread" 6} []
-    {"bread" 20} {"bread" 4} {"bread" 6} ["bread"]
-    {"bread" 7} {"bread" 4} {"bread" 6} ["bread"]
-    {"bread" 5} {"bread" 4} {"bread" 6} []
-    {"cooked_beef" 9} {"cooked_beef" 3} {"cooked_beef" 8} ["cooked_beef"]))
+(def base {:chest {:x 1 :y 1 :z 1} :reserve {} :stock {"bread" 16}})
 
-(deftest deposit-keeps-all-but-the-made-loaves
-  (let [call (:call (kitchen/decide :deposit {:chest {:x 1 :y 1 :z 1} :keep {"bread" 6}} {:carried {"bread" 20} :made {"bread" 4} :chest true}))]
-    (is (= 16 (get-in call [:args :keep "bread"])))))
+(deftest bake-asks-for-the-loaves-the-stock-lacks-from-the-wheat-above-the-reserve
+  (are [facts args-extra call] (= call (select-keys (:call (kitchen/decide :bake (merge base args-extra) facts)) [:args]))
+    {:carried {"wheat" 9} :chest true :chest-stock {"bread" 14}} {} {:args {:item "bread" :count 2 :fetch false}}
+    {:carried {"wheat" 9} :chest true :chest-stock {}} {:reserve {"wheat" 6}} {:args {:item "bread" :count 1 :fetch false}}))
+
+(deftest take-fetches-only-the-wheat-the-shortfall-needs-and-keeps-the-reserve
+  (are [facts extra items] (= items (get-in (kitchen/decide :take (merge base extra) facts) [:call :args :items]))
+    {:carried {"wheat" 1} :chest true :chest-stock {"wheat" 20 "bread" 13}} {} {"wheat" 9}
+    {:carried {"wheat" 2} :chest true :chest-stock {"wheat" 20}} {:reserve {"wheat" 2}} {"wheat" 20}))
+
+(deftest take-skips-when-the-chest-lacks-the-wheat
+  (is (= :no-wheat (:skip (kitchen/decide :take base {:carried {} :chest true :chest-stock {"wheat" 2}})))))
+
+(deftest kitchen-hands-its-chest-argument-to-take-and-deposit
+  (let [given [-545 64 324]
+        args {:chest given :reserve {} :stock {"bread" 16} :foods ["beef"]}
+        facts {:carried {"bread" 4 "wheat" 3} :made {"bread" 4} :wheat0 3 :chest true :chest-stock {"wheat" 9}}]
+    (are [step] (= given (get-in (kitchen/decide step args facts) [:call :args :chest]))
+      :take :deposit)))
 
 (defn ^:async run-beside
   "Submit the job wait-for-dusk (listed, check false by day), then form, over the world; tick 3 times."
@@ -217,9 +244,3 @@
           (is (contains? #{:condition-failed :nothing-possible} (:kind e)) (pr-str e))
           (is (contains? (:data e) :steps)))))))
 
-(deftest kitchen-hands-its-chest-argument-to-bake-and-deposit
-  (let [given [-545 64 324]
-        args {:chest given :keep {} :foods ["beef"]}
-        facts {:carried {"bread" 20 "wheat" 9} :made {"bread" 20} :chest true}]
-    (are [step] (= given (get-in (kitchen/decide step args facts) [:call :args :chest]))
-      :bake :deposit)))

@@ -57,10 +57,6 @@
     'jobs.build.from-plan {:plan "pen" :fetch false} {:inventory []} {"pen" (b/pen-plan)} :no-items
     'jobs.build.pen {:plan "pen" :fetch false} {:inventory []} {"pen" (pen/ring-plan)} :no-items))
 
-(deftest bad-argument-checks-say-why-they-decline
-  (are [job reason] (= reason (waiting-reason job {}))
-    'jobs.items.bake :no-chest))
-
 (deftest log-out-says-why-it-declines
   (are [args reason] (= reason (waiting-reason 'jobs.survival.log-out args))
     {} :not-night
