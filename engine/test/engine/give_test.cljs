@@ -260,3 +260,18 @@
         (let [{:keys [eng p]} (setup (assoc bread :entities [(steve 10)]) {:player "Steve" :item "bread" :count 5})]
           (await (core/tick! eng))
           (is (= 1 (count (calls p "toss")))))))))
+
+(deftest a-give-cut-while-the-drop-lies-takes-it-back-in-its-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup (assoc bread :entities [(steve 10)]) {:player "Steve" :item "bread" :count 5})
+              cut (atom false)]
+          (await (run-ticks s 40 500 false
+                            (fn [p _]
+                              (when (and (not @cut) (seq (calls p "toss")) (pos? (item-count p)))
+                                (reset! cut true)
+                                (core/cancel! eng (first (:list (core/state eng))))))))
+          (is @cut "the cut came with the drop lying")
+          (is (= {"bread" 5} (inv p)) "the cleanup took the drop back")
+          (is (zero? (item-count p))))))))

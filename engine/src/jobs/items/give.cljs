@@ -30,7 +30,8 @@
     give.returned). The same happens if the body picks it up on its own.
   A toss refused three times in a row, or three collects in a row that change nothing, end nothing-possible (warn
   give.gave-up) with the status or :litter as the cause.
-  A cut after the toss leaves the drop where it lies.
+  The cleanup export takes back a drop still lying however the call ends (a cut included), at most :max-blocked
+  collects in a row that change nothing.
   One call is the whole give; it yields :continue only while it waits for the player to appear or to take the drop.
   done? is ok once the drop is seen taken.")
 
@@ -199,7 +200,8 @@
       (do (u/progress! c) :again)
       (let [v (u/fail! c :give.gave-up "give gave up: litter")]
         (if (= :done v)
-          (finish! c :nothing-possible :litter {:given given :returned back})
+          (do (ctx/update-mem! c assoc :litter true)
+              (finish! c :nothing-possible :litter {:given given :returned back}))
           :again)))))
 
 (defn ^:async after-toss!
@@ -274,6 +276,21 @@
     (if (some? (:tossed (ctx/mem c)))
       (await (after-toss! c))
       (await (before-toss! c now)))))
+
+(defn ^:async cleanup
+  "However the call ends: the drop of this call's toss that still lies is collected back. Done, or nothing-possible
+  :litter when collects change nothing."
+  [c _]
+  (let [{:keys [item radius]} (:args c)
+        {:keys [before toss-at tossed litter]} (ctx/mem c)
+        lying #(when (and tossed (not litter)) (remove (fn [d] (contains? before (:id d))) (look/drops (:primitives c) item radius toss-at)))]
+    (loop [failed 0]
+      (let [l (lying)]
+        (cond
+          (empty? l) (ctx/end c :done nil)
+          (>= failed (max-blocked)) (ctx/end c :nothing-possible :litter nil)
+          :else (let [r (await (ctx/act c :collect (clj->js {:id (:id (first l))})))]
+                  (recur (if (= "collected" (.-status r)) 0 (inc failed)))))))))
 
 (defn max-steps [] (settings/get settings ::max-steps))
 
