@@ -91,11 +91,23 @@
 (defn top
   "The y of the highest stand of the column x z with no solid or hazard over it, else nil."
   [kind-at x z]
-  (loop [y top-y]
+  ;; one read per cell, as stands? reads them: the feet of y are the head of y - 1
+  (loop [y top-y head (kind-at x (inc y) z) feet (kind-at x y z)]
     (when (>= y places/min-y)
-      (cond (stands? kind-at x y z) y
-            (#{:solid :hazard} (kind-at x y z)) nil
-            :else (recur (dec y))))))
+      (let [floor (kind-at x (dec y) z)]
+        (cond (and (free? feet) (free? head) (or (keyword-identical? :water feet) (keyword-identical? :solid floor))) y
+              (#{:solid :hazard} feet) nil
+              :else (recur (dec y) feet floor))))))
+
+(defn cached
+  "kind-at reading each cell once: one aim reads the cells of a column over the whole build height, and again for its
+  nearest ground."
+  [kind-at]
+  (let [m (js/Map.)]
+    (fn [x y z]
+      (let [k (str x "," y "," z)
+            v (.get m k)]
+        (if (undefined? v) (let [v (kind-at x y z)] (.set m k v) v) v)))))
 
 (defn pick
   "[y why] of the stand of the column x z by the cells of kind-at: :surface, else :nearest-level to body-y; nil if none."
@@ -162,7 +174,7 @@
   only). A y goal comes here only once the planner found no cell in its range stands."
   [p {:keys [x y z] :as goal} slack body-y raw?]
   (if (nil? y)
-    (let [seen (surface-kind-at p)]
+    (let [seen (cached (surface-kind-at p))]
       (if-let [[g why] (pick seen x z body-y)]
         {:pos {:x x :y g :z z} :resolved true :why why}
         (let [e (estimate seen x z body-y)]

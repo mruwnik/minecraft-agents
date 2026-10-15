@@ -1019,7 +1019,8 @@
                   (when ids (to-array (map #(.-name (aget (.-items data) %)) ids)))))
               "blockAt"
               (fn [a]
-                (let [w @state pos (vec-pos (args-in a))
+                ;; a plain {x y z} object skips args-in's walk: reach floods and sight checks call this per cell
+                (let [w @state pos (if (object? a) [(.-x a) (.-y a) (.-z a)] (vec-pos (args-in a)))
                       block (block-name w pos)
                       props (properties-of w pos)]
                   (when-not (or (:offline w) ((:unloaded w) pos))

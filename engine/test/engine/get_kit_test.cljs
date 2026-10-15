@@ -169,7 +169,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world [{:name "bread" :count 1}] {})
+        ;; armed: an unarmed body would first explore the empty world for a sword's wood
+        (let [s (start (world [{:name "bread" :count 1} {:name "wooden_axe" :count 1}] {})
                        {:items ["iron_pickaxe"] :min-food 20 :food false})]
           (await (f/run-ticks s 20))
           (is (empty? (crafted s)))
