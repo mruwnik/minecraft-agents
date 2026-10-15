@@ -162,16 +162,18 @@
 
 (defn unseen-approach-with
   "unseen-approach over primitives that know nothing of the cells in unknown-cells, with looked-pen memory looked."
-  [unknown-cells looked]
+  ([unknown-cells looked] (unseen-approach-with unknown-cells looked :no-approach))
+  ([unknown-cells looked why]
   (let [p #js {:sensedAt (fn [pos] (if (contains? unknown-cells [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} #js {}))}]
     (with-redefs [ctx/mem (constantly {:looked-pen looked})]
-      (hp/unseen-approach {:primitives p} {:why :no-approach :cell [5 64 5]}))))
+      (hp/unseen-approach {:primitives p} {:why why :cell [5 64 5]})))))
 
 (deftest an-approach-cell-never-seen-is-looked-at-first-and-a-looked-at-one-is-not-again
   (is (= [5 63 5] (unseen-approach-with #{[5 63 5] [5 65 5]} [])) "floor first")
   (is (= [5 65 5] (unseen-approach-with #{[5 63 5] [5 65 5]} [[5 63 5]])) "looked-at floor skipped")
   (is (nil? (unseen-approach-with #{[5 63 5]} [[5 63 5]])) "all looked at: the verdict follows")
-  (is (nil? (unseen-approach-with #{} [])) "all seen: the verdict follows"))
+  (is (nil? (unseen-approach-with #{} [])) "all seen: the verdict follows")
+  (is (= [5 63 5] (unseen-approach-with #{[5 63 5]} [] :no-floor-outside)) "the cell outside the gate is looked at too"))
 
 (deftest only-a-no-approach-refusal-looks-at-an-approach-cell
   (with-redefs [ctx/mem (constantly {})]

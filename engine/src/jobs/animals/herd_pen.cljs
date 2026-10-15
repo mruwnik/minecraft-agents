@@ -286,10 +286,10 @@
       :else {:chosen chosen})))
 
 (defn unseen-approach
-  "A cell of the approach cell that refused the gate (its floor, feet or head) the body has never seen and not yet
-  looked at, or nil."
+  "A cell of the approach cell (or the cell outside the gate) that refused the gate (its floor, feet or head) the body has
+  never seen and not yet looked at, or nil."
   [c extra]
-  (when (= :no-approach (:why extra))
+  (when (#{:no-approach :no-floor-outside} (:why extra))
     (->> [-1 0 1]
          (map #(update (vec (:cell extra)) 1 + %))
          (remove (set (:looked-pen (ctx/mem c))))
