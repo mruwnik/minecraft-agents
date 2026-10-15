@@ -70,12 +70,12 @@
             [:set [20 0 16] "campfire[lit=true]"] [:set [20 1 16] "beehive[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
    :act [[:job (jobs.apiary.harvest {:radius 20})]]
-   :expect [{:event {:kind :apiary.done :data {:reason :no-hive}} :within-s 80 :of-job true}]
+   :expect [{:event {:kind :waiting :data {:reason :no-hive}} :within-s 80 :of-job true}]
    :after [[:block [20 1 16] "beehive[honey_level=5]"] [:item "honeycomb" 0]]}
   {:name "second-hive-behind-wall-untouched"
    :blocks [[:fill [10 0 0] [14 13 31] "stone"]
             [:set [24 0 8] "campfire[lit=true]"] [:set [24 1 8] "bee_nest[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
    :act [[:job (jobs.apiary.harvest {:radius 20})]]
-   :expect [{:event {:kind :apiary.done :data {:reason :no-hive}} :within-s 80 :of-job true}]
+   :expect [{:event {:kind :waiting :data {:reason :no-hive}} :within-s 80 :of-job true}]
    :after [[:block [24 1 8] "bee_nest[honey_level=5]"] [:item "honeycomb" 0]]}]}

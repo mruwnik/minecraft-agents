@@ -25,6 +25,6 @@
    :blocks [[:set [14 0 22] "campfire[lit=true]"] [:set [14 2 22] "beehive[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
    :act [[:job (jobs.apiary.harvest {:radius 20})]]
-   :expect [{:event {:kind :apiary.done :data {:reason :open-fire}} :within-s 60 :of-job true}]
+   :expect [{:event {:kind :waiting :data {:reason :open-fire}} :within-s 60 :of-job true}]
    :after [[:block [14 2 22] "beehive[honey_level=5]"] [:item "honeycomb" 0]]
    :limit-s 80}]}
