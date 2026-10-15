@@ -2,6 +2,7 @@
   (:require [jobs.lib.choose :as choose]
             [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.danger :as danger-q]
@@ -14,7 +15,7 @@
 
 (def doc
   "Put the body out when it is on fire or in lava. One run, re-reading the world before each pass, until the body is
-  neither burning nor in lava (:done). Not started (condition :not-burning) when it is not burning and no poured water is left to scoop. Each pass, in this order:
+  neither burning nor in lava (:done). Done at once when it is not burning and no poured water is left to scoop. Each pass, in this order:
   1. With a water bucket carried and the body not in lava, pours water at the feet and notes the cell in body memory
      (:extinguish-pour, ten minutes), so a run cut before the scoop leaves it for the next run.
      A cell in another's zone or claim is skipped while another way exists. As a last resort it pours there anyway,
@@ -57,7 +58,8 @@
 (def extinguish-policy {:cap 20 :ttl (* 60 60 1000)})
 (def hazard-policy {:cap 50 :ttl (* 6 60 60 1000)})
 (a/defargs settings
-  {::max-hazards-per-round {:default 16 :doc "Hazard cells costed per round, the nearest first." :spec (a/int-in 0 nil)}
+  {::time-s {:default 60 :doc "Seconds putting the body out may take." :spec (a/num-in 0 nil)}
+   ::max-hazards-per-round {:default 16 :doc "Hazard cells costed per round, the nearest first." :spec (a/int-in 0 nil)}
    ::hazard-reach {:default 4 :doc "Blocks around the body in which hazards are scanned." :spec (a/int-in 0 nil)}
    ::height-bonus {:default 2 :doc "Cost credit per block a hazard cell lies above the body." :spec (a/int-in 0 nil)}
    ::walk-cost {:default 0.5 :doc "Cost per block of the walk to a hazard cell." :spec (a/num-in 0 nil)}
@@ -100,20 +102,15 @@
 
 (def target [])
 
-(def defaults {:use {:blocks :cover}})
+(def defaults {:spend {:time ::time-s} :use {:blocks :cover}})
 
-(defn not-burning
-  "At the call's start: the cause :not-burning unless the body burns or has water left to scoop."
-  [c]
-  (when-not (or (body-burning? c) (poured c)) :not-burning))
-
-(def conditions [[:fn not-burning]])
+(def conditions [])
 
 (defn done?
   "Out: not burning and no poured water left to scoop."
   [c]
   (let [out? (not (or (body-burning? c) (poured c)))]
-    {:done? out? :units :fires :done (if out? 1 0) :left (if out? 0 1)}))
+    {:done? out? :units :fires :left (if out? 0 1)}))
 
 (defn quote-of [_c] {:uses {:time [0 5 60]}})
 
@@ -288,7 +285,7 @@
            (<= (u/dist (u/self-pos c) cell) (max-return-distance))
            (not (:returned (ctx/mem c))))
       (do (ctx/update-mem! c assoc :returned true)
-          (await (ctx/call-child c :go 'jobs.movement.go-to {:pos cell :range (max-scoop-return-range) :escalate false :at-night :go}))
+          (await (child/call-walk* c :go {:pos cell :range (max-scoop-return-range) :escalate false :at-night :go}))
           :again)
 
       (> (u/eye-dist (u/self-pos c) cell) u/bucket-reach)
@@ -367,13 +364,13 @@
   [c pos]
   (ctx/hold-still! c nil)
   (ctx/update-mem! c assoc :blocked true)
-  (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range 0 :at-night :go}))
-        res (ctx/child-result c :go)]
+  (let [e (await (child/call-walk* c :go {:pos pos :range 0 :at-night :go}))]
     (cond
       (clear? c) :done
-      (= :continue r) :again
-      (and (= :done r) (:arrived res)) (do (u/progress! c) :again)
-      :else (stuck! c (str "the way to a safe cell is blocked" (some->> (:text res) (str ": ")))))))
+      (= :continue e) :again
+      (and (= :done (:kind e)) (:arrived (:data e))) (do (u/progress! c) :again)
+      :else (stuck! c (str "the way to a safe cell is blocked: "
+                           (or (:text (:data e)) (name (contract/cause-key e))))))))
 
 (defn ^:async pass!
   "One try at putting the body out. :again for another pass, else :done (perhaps stopped)."
@@ -453,7 +450,7 @@
 (defn ^:async round [c]
   (loop [i 0]
     (cond
-      (not (ctx/alive? c)) :done
+      (not (ctx/alive? c)) :continue
       (<= (max-passes) i) (still-burning c "still burning after many tries")
       :else (let [r (await (pass! c))]
               (case r

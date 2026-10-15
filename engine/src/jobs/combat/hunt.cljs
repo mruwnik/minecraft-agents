@@ -66,11 +66,12 @@
    :max-skips {:doc "animals skipped in a row before the hunt gives up" :spec (a/int-in 1 nil) :default 3}})
 
 (a/defargs settings
-  {::sight-radius {:default 64 :doc "How far the :too-few wait looks for the nearest adult of the kind, in blocks." :spec (a/num-in 0 nil)}})
+  {::time-s {:default 600 :doc "Seconds a hunt may take." :spec (a/num-in 0 nil)}
+   ::sight-radius {:default 64 :doc "How far the :too-few wait looks for the nearest adult of the kind, in blocks." :spec (a/num-in 0 nil)}})
 
 (def target [:mob])
 
-(def defaults {:least 1 :use {:tools :attack}})
+(def defaults {:spend {:time ::time-s} :least 1 :use {:tools :attack}})
 
 (defn legacy-args
   "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}; [] means no weapons."

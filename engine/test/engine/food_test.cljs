@@ -234,30 +234,30 @@
         out (atom nil)
         parent {:check (constantly true)
                 :round (fn ^:async r [c]
-                         (let [s (await (ctx/call-child c :kid 'jobs.survival.eat args))]
-                           (reset! out (:ending (ctx/child-result c :kid)))
-                           s))}
+                         (let [e (await (ctx/call c :kid 'jobs.survival.eat args))]
+                           (reset! out e)
+                           (if (= :continue e) :continue :done)))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'eat-parent parent))]
     (core/submit! eng '(eat-parent) {})
     (await (core/tick! eng))
     @out))
 
-(deftest eat-ends-condition-failed-for-an-item-it-refuses
+(deftest eat-ends-impossible-for-an-item-it-refuses
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world {:self {:food 14} :inventory [{:name "rotten_flesh" :count 3} {:name "cobblestone" :count 3}]}
               bad (await (ending-of-eat world {:item "rotten_flesh"}))
               rock (await (ending-of-eat world {:item "cobblestone"}))]
-          (is (= {:kind :condition-failed :cause :bad-food} (select-keys bad [:kind :cause])))
-          (is (= {:kind :condition-failed :cause :not-food} (select-keys rock [:kind :cause]))))))))
+          (is (= [:impossible :bad-food] [(:kind bad) (contract/cause-key bad)]))
+          (is (= [:impossible :not-food] [(:kind rock) (contract/cause-key rock)])))))))
 
-(deftest eat-needs-hunger-and-food
+(deftest eat-needs-food-only-while-hungry
   (let [conditions (:conditions (get registry/jobs 'jobs.survival.eat))
         cause (fn [world] (some (fn [[_ f]] (f {:primitives (tu/fake world) :view (fn [] {:data mem/empty-data :now 0})
                                                 :args {:until 18 :allow-bad false :item nil}}))
                                 conditions))]
-    (is (= :not-hungry (cause {:self {:food 19} :inventory [{:name "bread" :count 2}]})))
+    (is (nil? (cause {:self {:food 19} :inventory []})) "fed: done?, not a condition")
     (is (= :no-food (cause {:self {:food 4} :inventory [{:name "cobblestone" :count 2}]})))
     (is (nil? (cause {:self {:food 4} :inventory [{:name "bread" :count 2}]})))))
 
@@ -283,6 +283,16 @@
           (is (nil? (contract/quote-problem q)))
           (is (pos? (second (get-in q [:uses :time])))))))))
 
+(deftest a-cut-eat-round-yields-without-eating
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:self {:food 4} :inventory [{:name "bread" :count 2}]})
+              c {:primitives p :view (fn [] {:data mem/empty-data :now 0}) :alive? (constantly false)
+                 :args {:until 18 :allow-bad false :item nil :max-bites nil}}]
+          (is (= :continue (await (eat/round c))))
+          (is (= [] (calls p "eat"))))))))
+
 (deftest eat-is-done-when-fed
   (let [job (get registry/jobs 'jobs.survival.eat)
         done? (fn [food] (:done? ((:done? job) {:primitives (tu/fake {:self {:food food} :inventory [{:name "bread" :count 2}]})
@@ -300,20 +310,23 @@
           (is (= [] (:list (core/state eng))))
           (is (= 7 (food p))))))))
 
-(deftest eat-declines-without-edible-food-and-is-done-when-fed
+(deftest eat-declines-without-edible-food
+  (let [{:keys [eng p]} (setup {:self {:food 4} :inventory [{:name "rotten_flesh" :count 2} {:name "spider_eye" :count 1}
+                                                            {:name "cobblestone" :count 9}]})]
+    (core/submit! eng '(jobs.survival.eat) {})
+    (is (nil? (core/tick! eng)) "the check declines")
+    (is (= [] (calls p "eat")))))
+
+(deftest eat-when-fed-is-done-without-eating
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:food 4} :inventory [{:name "rotten_flesh" :count 2} {:name "spider_eye" :count 1}
-                                                                  {:name "cobblestone" :count 9}]})]
-          (core/submit! eng '(jobs.survival.eat) {})
-          (is (nil? (core/tick! eng)) "the check declines")
-          (is (= [] (calls p "eat"))))
-        (let [{:keys [eng p]} (setup {:self {:food 18} :inventory [{:name "bread" :count 2}]})]
-          (core/submit! eng '(jobs.survival.eat) {})
-          (await (core/tick! eng))
-          (is (empty? (:list (core/state eng))) "fed: done at once")
-          (is (= [] (calls p "eat"))))))))
+        (doseq [inventory [[{:name "bread" :count 2}] []]]
+          (let [{:keys [eng p]} (setup {:self {:food 18} :inventory inventory})]
+            (core/submit! eng '(jobs.survival.eat) {})
+            (await (core/tick! eng))
+            (is (= [] (:list (core/state eng))) (pr-str inventory))
+            (is (= [] (calls p "eat")))))))))
 
 (deftest eat-takes-bad-food-only-when-allowed
   (async done
@@ -333,8 +346,8 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "the job ends at once, it does not queue")
           (is (= [] (calls p "eat")))
-          (is (= 1 (count (filter #(and (= :refused (:kind %)) (re-find #"allow-bad" (str (:text %)))) @seen)))
-              "one refused event names :allow-bad"))))))
+          (is (= 1 (count (filter #(and (= :stopped (:kind %)) (re-find #"allow-bad" (str (:cause %)))) @seen)))
+              "the stopped event names :allow-bad"))))))
 
 (deftest eat-named-harmful-item-with-allow-bad-is-eaten
   (async done
@@ -441,7 +454,7 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= [] (calls p "eat")))
-          (is (= 1 (count (filter #(and (= :refused (:kind %)) (= :not-food (:reason %))) @seen)))))))))
+          (is (= 1 (count (filter #(and (= :stopped (:kind %)) (= :not-food (:reason %))) @seen)))))))))
 
 (deftest eat-keeps-harmful-and-precious-food-last-whatever-their-points
   (is (= "dried_kelp" (eat/best-food [{:name "spider_eye"} {:name "dried_kelp"}] true nil 20 20 #{})) "harmful last")
@@ -468,10 +481,15 @@
           (is (= [] (tu/walk-calls p)))
           (is (= [] (calls p "attack"))))))))
 
-(deftest get-food-declines-when-not-hungry
-  (let [{:keys [eng]} (setup {:self {:food 12}})]
-    (core/submit! eng '(jobs.survival.get-food) {})
-    (is (nil? (core/tick! eng)))))
+(deftest get-food-when-not-hungry-is-done-without-acting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 19}})]
+          (core/submit! eng '(jobs.survival.get-food) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= [] (tu/walk-calls p))))))))
 
 (def farm
   {:blocks {"10,64,0" "carrots" "11,64,0" "carrots" "12,64,0" "carrots" "10,63,0" "farmland"}

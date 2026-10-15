@@ -490,15 +490,22 @@
           (is (= [{:ms 30000 :status "ok"}] (entries eng :log-out)))
           (is (= {:cap 10 :ttl day-ms} (mem/policy (mem/view (:store eng)) :log-out))))))))
 
-(deftest log-out-declines-by-day-when-not-allowed-or-unsupported
-  (are [world unsupported? spec]
-       (let [{:keys [eng]} (setup world)]
-         (when unsupported? (mem/write! (:store eng) :log-out {:ms 0 :status "unsupported"} {:cap 10 :ttl day-ms}))
-         (core/submit! eng spec {})
-         (nil? (core/tick! eng)))
-    {:time noon} false '(jobs.survival.log-out)
-    {:time night} true '(jobs.survival.log-out)
-    {:time night} false '(jobs.survival.log-out {:offline-allowed false})))
+(deftest log-out-declines-by-day
+  (let [{:keys [eng]} (setup {:time noon})]
+    (core/submit! eng '(jobs.survival.log-out) {})
+    (is (nil? (core/tick! eng)))))
+
+(deftest log-out-not-allowed-or-unsupported-is-impossible-without-acting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[unsupported? spec] [[true '(jobs.survival.log-out)] [false '(jobs.survival.log-out {:offline-allowed false})]]]
+          (let [{:keys [eng p]} (setup {:time night})]
+            (when unsupported? (mem/write! (:store eng) :log-out {:ms 0 :status "unsupported"} {:cap 10 :ttl day-ms}))
+            (core/submit! eng spec {})
+            (await (core/tick! eng))
+            (is (= [] (:list (core/state eng))) (pr-str spec))
+            (is (= [] (calls p "offline")) (pr-str spec))))))))
 
 (deftest a-log-out-the-server-cannot-do-is-impossible
   (async done

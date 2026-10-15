@@ -19,8 +19,8 @@
   Not started below :min-health (condition :low-health, or when no hostile is in range: :no-target).
   Ends :done when no hostile is within :range, with the data {:killed [ids]}.
   Every other ending is a decline, so the retreat takes over: :limit-reached :low-health (hurt below :min-health after a swing),
-  :limit-reached :hold-timeout, or :nothing-possible with the cause :too-far, :heard-only, :given-up or :no-target;
-  its data are {:killed :struck :memory}, the job memory a caller puts back (restore-memory!), as a decline kept it.
+  or :nothing-possible with the cause :hold-timeout (the :hold wait ran out), :too-far, :heard-only, :given-up or :no-target;
+  its data are {:killed :struck :memory}, the job memory as it ended.
   The weapons are the call's :use :tools (default the weapons carried; the old :weapons substrings map in legacy-args).
   A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts,
   unless the body lost health since the last blocked walk (the count then starts over).
@@ -39,11 +39,12 @@
    :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach (night, with more hostiles about than the body sees)" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::reach {:default 3 :doc "How near the target the body stands to hit, in blocks." :spec (a/int-in 0 nil)}
+  {::time-s {:default 120 :doc "Seconds a fight may take." :spec (a/num-in 0 nil)}
+   ::reach {:default 3 :doc "How near the target the body stands to hit, in blocks." :spec (a/int-in 0 nil)}
    ::ranged-chase {:default 6 :doc "Farthest a ranged mob may be for the body to cross open ground to it while another hostile is in range; beyond it the fight declines." :spec (a/num-in 0 nil)}})
 (def target [])
 
-(def defaults {:use {:tools :attack}})
+(def defaults {:spend {:time ::time-s} :use {:tools :attack}})
 
 (defn legacy-args
   "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}."
@@ -211,7 +212,7 @@
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
     (cond
       (and last-attack (< (.-health (.self p)) min-health)) (declined c :limit-reached {:line :health :reason :low-health})
-      (held-too-long? c) (declined c :limit-reached {:line :time :reason :hold-timeout})
+      (held-too-long? c) (declined c :nothing-possible :hold-timeout)
       (and target (too-far-to-chase? c target)) (declined c :nothing-possible :too-far)
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (first (remove danger-q/seen-only? (in-range c)))]
@@ -226,14 +227,6 @@
             (empty? (in-range c)) (ctx/end c :done nil {:killed (vec (:killed (ctx/mem c)))})
             (empty? (targets c)) (declined c :nothing-possible :given-up)
             :else :again)))))
-
-(defn restore-memory!
-  "After a call-child of fight-back in slot that ended other than :done (a decline): res is its child-result. The call
-  cleared the child's memory; its :memory is put back, as a decline kept it. True for such a decline."
-  [c slot res]
-  (when (= :stopped (:status res))
-    (ctx/update-mem! c assoc-in [:children slot] (:memory res))
-    true))
 
 (defn ^:async round
   "The whole fight: steps until no hostile is left (:done) or the retreat should take over (an ending other than :done)."

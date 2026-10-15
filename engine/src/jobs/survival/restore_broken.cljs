@@ -24,7 +24,7 @@
   max-candidates-checked cells whose put-back cuts the body's way to no other it reaches now; a walk is one go-to call and
   a failed try is repeated until the cell gave up. A cell not restored for now (unsafe, item not carried) keeps its
   entry. The others are forgotten.
-  Starts only with a :tidy entry pending (condition :nothing-to-restore). Ends with one info tidy.restored (the cells put
+  Done at once with no :tidy entry pending. Ends with one info tidy.restored (the cells put
   back, none if none were), :done {:restored n} when every cell was settled, else (also when max-passes ran out with cells
   unvisited) nothing-possible :not-restored {:restored n :failed n}. A cut run is :continue and goes on from the entries
   left. If cells are left it also emits one warning tidy.not-restored {:cells [{:cell :was :why}]}. Spends :time
@@ -160,17 +160,13 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(defn nothing-to-restore
-  "The cause :nothing-to-restore at the call's start when no :tidy entry is pending."
-  [c]
-  (when-not (or (ctx/frozen-call c) (seq (tidy/entries c))) :nothing-to-restore))
-
-(def conditions [[:fn nothing-to-restore]])
+(def conditions [])
 
 (defn done?
-  "Never done before the report: the cells put back so far against the entries waiting."
+  "No :tidy entry waits; the cells put back so far against the entries waiting."
   [c]
-  {:done? false :units :cells :done (count (:restored (ctx/mem c))) :left (count (tidy/entries c))})
+  (let [left (count (tidy/entries c))]
+    {:done? (zero? left) :units :cells :done (count (:restored (ctx/mem c))) :left left}))
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-cell) (count (tidy/entries c)))]
@@ -261,7 +257,7 @@
         target (when-not (:stepped (ctx/mem c)) (clear-cell c e waiting))]
     (if-not target
       (skip! c e :occupied)
-      (do (await (child/call-walk c :go {:pos target :range 0 :escalate false}))
+      (do (await (child/call-walk* c :go {:pos target :range 0 :escalate false}))
           (ctx/update-mem! c assoc :stepped true)))))
 
 (defn max-passes [] (settings/get settings ::max-passes))

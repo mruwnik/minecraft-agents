@@ -82,7 +82,7 @@
           (is (= [[[0 65 0]]] (mapv :cells (zs/trespass seen :tidy.restored))))
           (is (= [] (zs/trespass seen :tidy.not-restored)) "nothing left, no warn"))))))
 
-(deftest restore-ends-done-with-the-count-or-refuses-to-start-with-nothing-pending
+(deftest restore-ends-done-with-the-count-or-at-once-with-nothing-pending
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -92,7 +92,7 @@
             (is (= {:status :done :restored 1} r))))
         (let [{:keys [eng p seen]} (restore! aside [(zs/whole-zone "Miles")] [])]
           (await (zs/run-until-empty eng 6))
-          (is (= :nothing-to-restore (:reason (core/waiting eng "j1"))) "refused at the start")
+          (is (= [] (:list (core/state eng))) "nothing pending: done at once")
           (is (= [] (zs/trespass seen :tidy.restored)) "no report")
           (is (= [] (zs/calls p "place"))))))))
 

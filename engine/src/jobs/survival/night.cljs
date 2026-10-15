@@ -27,8 +27,8 @@
   Ways (the call's :ways, all by default): :bed (a bed used or put down, a sleeper's log-out), :shelter (a roofed place
   walked to, dig-in, relocation, niche, a breached room walled in, the exposed retry), :flee (a walk somewhere safer, a
   cave walled in). A door is always shut and the morning always runs.
-  Condition at the start: the night trigger's (a listed night waits :not-night, or :night-safe {:shelter}; :spawn with
-  the respawn bed's state). Quote: the time left of the night (jobs.time.wait-for-day) and ::morning-s, least 0.
+  Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state);
+  sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night (jobs.time.wait-for-day) and ::morning-s, least 0.
   The round repeats one choice, each time from the world as it is now (the first that applies), with a 50 ms timer between:
   - day: a dug-in or exposed night leaves the shelter (dig-in-leave/leave!); :no-way-out ends it nothing-possible :no-way-out (shelter.failed warn,
     a :shelter-trapped entry, 5 minutes); then a bed it put down outside its own zones (:bed-placed) is dug up and its
@@ -99,32 +99,37 @@
    :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :spec (a/num-in 0 nil) :default 64}})
 
 (a/defargs settings
-  {::morning-s {:default 60 :doc "Seconds the morning (out of the shelter, a put-down bed picked up) is reckoned to take at most, in the quote." :spec (a/num-in 0 nil)}})
+  {::time-s {:default 900 :doc "Seconds the night may take, the morning included." :spec (a/num-in 0 nil)}
+   ::morning-s {:default 60 :doc "Seconds the morning (out of the shelter, a put-down bed picked up) is reckoned to take at most, in the quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
 (def ways [:bed :shelter :flee])
 
-(def defaults {:ways (set ways)})
+(def defaults {:spend {:time ::time-s} :ways (set ways)})
 
-(defn night-safe
-  "The cause while the night trigger's condition fails: :night-safe with the shelter the body is in, else :not-night;
-  with :spawn when the respawn bed is known or lost."
+(defn quiet-night
+  "While the night trigger's condition fails: {:shelter} with the shelter the body is in (nil when none), else nil."
   [c]
   (let [p (:primitives c)]
     (when-not (sh/night-holds? p (ctx/view c) (assoc (:args c) :ways (:ways (ctx/frozen-call c))) (bed-down/bed-permit c))
-      (let [spawn (sh/spawn-state p (ctx/view c))]
-        (cond-> (if-let [shelter (sh/night-sheltered p (:data (ctx/latest c :shelter)))]
-                  {:reason :night-safe :shelter shelter}
-                  {:reason :not-night})
-          spawn (assoc :spawn spawn))))))
+      {:shelter (sh/night-sheltered p (:data (ctx/latest c :shelter)))})))
 
-(def conditions [[:fn (started/at-start night-safe)]])
+(defn not-night
+  "The cause :not-night (with :spawn when the respawn bed is known or lost) while the trigger's condition fails and
+  the body is in no shelter."
+  [c]
+  (when-let [q (quiet-night c)]
+    (when-not (:shelter q)
+      (let [spawn (sh/spawn-state (:primitives c) (ctx/view c))]
+        (cond-> {:reason :not-night} spawn (assoc :spawn spawn))))))
+
+(def conditions [[:fn (started/at-start not-night)]])
 
 (defn done?
-  "Counts only: the round ends the night."
-  [_c]
-  {:done? false :units :nights :done 0 :left 1})
+  "Before its first round: already sheltered with nothing for the night to do. Once begun, the round ends the night."
+  [c]
+  {:done? (boolean (and (not (:began (ctx/mem c))) (:shelter (quiet-night c)))) :units :nights})
 
 (defn quote-of
   "The time left of the night (jobs.time.wait-for-day's quote), a bed possibly ending it at once, and ::morning-s on top."
@@ -442,6 +447,7 @@
 (defn ^:async round
   "The whole night in one round (see doc): passes until one ends it."
   [c]
+  (when-not (:began (ctx/mem c)) (ctx/update-mem! c assoc :began true))
   (loop []
     (let [r (await (pass c))]
       (if (= :again r)

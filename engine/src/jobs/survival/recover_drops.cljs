@@ -82,6 +82,8 @@
    ::hold-at-night {:default true :doc "At night a body that stands in a shelter (a roof, a closed room, underground) does not walk out of it for the pile: the run ends condition-failed :night and the died trigger tries again, by day if the pile is still there." :spec boolean?}
    ::open-night-radius {:default 48 :doc "At night a body under the open sky does not walk farther than this for the pile: the run ends condition-failed :night so the night reflex shelters it where it stands; the trip resumes by day while the pile lasts." :spec (a/num-in 0 nil)}})
 
+(def target [])
+
 (def defaults {:spend {:time ::time-s}})
 
 (defn nothing-to-do

@@ -1,12 +1,15 @@
 (ns jobs.survival.log-out
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.child :as child]
             [jobs.lib.shelter :as sh]))
 
 (def doc
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the
-  night. Declines unless it is night, :offline-allowed is true and the last log-out was not unsupported.
+  night. Waits for night (:not-night); impossible with :offline-allowed false (:offline-forbidden) or once a log-out
+  was unsupported (:log-out-unsupported).
   Stays away :offline-ms, at most until morning. Back while it is still night, it waits :news-ms for the server's sleep
   count (sent on a join while anyone sleeps) before it ends.
   A listed job that finds another job logged the body out since it was queued is done at once without acting.
@@ -45,9 +48,14 @@
 
 (def conditions
   [[:fn note-queued]
-   [:fn #(when (= false (:offline-allowed (:args %))) :offline-forbidden)]
+   [:fn #(when (= false (:offline-allowed (:args %))) (contract/impossible :offline-forbidden))]
    [:fn #(when-not (sh/night? (:primitives %)) :not-night)]
-   [:fn #(when (sh/log-out-unsupported? (ctx/view %)) :log-out-unsupported)]])
+   [:fn #(when (sh/log-out-unsupported? (ctx/view %)) (contract/impossible :log-out-unsupported))]])
+
+(a/defargs settings
+  {::time-s {:default 120 :doc "Seconds a log-out stint and the wait for the sleep count may take." :spec (a/num-in 0 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
 
 (def target [])
 
@@ -66,7 +74,7 @@
         how (.-status r)
         out {:ms (.-ms r) :how how}]
     (when (and (= "ok" how) (sh/night? (:primitives c)))
-      (await (ctx/act c :wait #js {:ms (:news-ms (:args c))})))
+      (await (child/pause! c (/ (:news-ms (:args c)) 1000) :sleep-news)))
     (ctx/remember! c :log-out {:ms (.-ms r) :status how} log-out-policy)
     (case how
       ("ok" "cut") (ctx/end c :done nil out)

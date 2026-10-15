@@ -5,6 +5,7 @@
             [engine.block-arrow-gap-test :as gt]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.expr :as expr]
             [engine.extinguish-test :as et]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
@@ -14,7 +15,8 @@
             [jobs.survival.extinguish :as extinguish]
             [engine.settings :as settings]
             [jobs.survival.fight-back :as fight-back]
-            [jobs.survival.respond-to-hostile :as respond]))
+            [jobs.survival.respond-to-hostile :as respond]
+            [jobs.survival.sleep :as sleep]))
 
 (defn job [sym] (get registry/jobs sym))
 
@@ -25,6 +27,12 @@
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args {} :quote-call {}}))) (str sym))))
 
+(deftest every-survival-combat-and-food-contract-job-exports-a-target-and-a-time-spend
+  (doseq [[sym def] registry/jobs
+          :when (and (:conditions def) (re-find #"^jobs\.(survival|combat|food)\." (str sym)))]
+    (is (vector? (:target def)) (str sym " has a target"))
+    (is (some? (get-in def [:defaults :spend :time])) (str sym " has a default :spend :time"))))
+
 (deftest old-options-map-to-the-call
   (is (= {:range 4 :use {:tools ["_sword"]}} (fight-back/legacy-args {:range 4 :weapons ["_sword"]})))
   (is (= {:range 4 :use {:tools ["iron_sword"]}} (fight-back/legacy-args {:range 4 :use {:tools ["iron_sword"]}})))
@@ -34,13 +42,21 @@
 (deftest an-empty-weapons-list-means-no-weapons
   (is (= {:use {:tools []}} (fight-back/legacy-args {:weapons []}))))
 
-(deftest a-decline-keeps-the-given-up-counts
-  (let [m (atom {:children {:fight {:blocked {1 3}}}})
-        c {:update-mem (fn [f args] (swap! m #(apply f % args)))}
-        res {:status :stopped :memory {:blocked {7 3} :no-damage {8 3}}}]
-    (is (true? (fight-back/restore-memory! c :fight res)))
-    (is (= {:blocked {7 3} :no-damage {8 3}} (get-in @m [:children :fight])))
-    (is (nil? (fight-back/restore-memory! c :fight {:status :done})))))
+(defn hold-ctx
+  "A ctx over an empty fake whose job memory says it has held since 0, the clock past every hold cap."
+  [args mem]
+  {:primitives (tu/fake {}) :args args :root "j1" :slots [] :update-mem (fn [_ _])
+   :view (fn [] {:now 100000000 :data {:entries {:job/j1 [{:t 0 :data mem}]} :policies {:job/j1 {:cap 1 :ttl :forever}}}})})
+
+(deftest a-hold-cap-ends-nothing-possible-naming-what-it-waited-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ args] (expr/leaf registry/jobs 'jobs.survival.fight-back {:hold true})
+              e (await (fight-back/step (hold-ctx args {:held-since 0 :start {:x 0 :y 64 :z 0}})))]
+          (is (= [:nothing-possible :hold-timeout] [(:kind e) (contract/cause-key e)])))
+        (let [e (await (sleep/hold! (hold-ctx {} {:held-since 0}) {:reason :bed-occupied :pos [1 64 0]}))]
+          (is (= [:nothing-possible :bed-occupied] [(:kind e) (contract/cause-key e)])))))))
 
 (defn ^:async fight [args world]
   (await (sc/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) (list 'jobs.survival.fight-back args))))
@@ -126,14 +142,15 @@
         (is (= {:event :stopped :kind :nothing-possible :reason :stuck}
                (await (burn-end {:self {:onFire true} :blocks {"0,63,0" "stone" "1,64,0" "fire"}}))))))))
 
-(deftest a-body-that-is-not-burning-is-done-at-once
+(deftest a-body-that-is-not-burning-is-done-already
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (et/setup {:blocks (et/floor 8)})]
+        (let [{:keys [eng p]} (et/setup {:blocks (et/floor 8)})]
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (is (empty? (:list (core/state eng))) "its goal holds: done, not queued"))))))
+          (is (= [] (:list (core/state eng))) "the goal holds: done, not queued")
+          (is (= [] (vec (.-calls (.-world p))))))))))
 
 (deftest standing-beside-a-danger-is-a-failed-condition
   (async done
@@ -142,11 +159,11 @@
         (is (= {:event :stopped :kind :condition-failed :reason :hostile-near}
                (await (burn-end {:self {:onFire true} :blocks (et/floor 8) :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]}))))))))
 
-(deftest a-cut-extinguish-round-is-done-not-continue
+(deftest a-cut-extinguish-round-yields
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= :done (await (extinguish/round {:alive? (constantly false)}))))))))
+        (is (= :continue (await (extinguish/round {:alive? (constantly false)}))))))))
 
 (deftest extinguish-places-the-cover-block-the-call-names
   (async done

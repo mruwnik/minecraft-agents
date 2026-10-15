@@ -227,14 +227,21 @@
     (is (= :no-bed (reason {:time night} false)))
     (is (= :not-night (reason {:time noon :blocks {"6,64,0" "red_bed"}} true)))))
 
-(deftest night-job-says-why-it-waits-when-already-safe
-  (let [waiting (fn [world]
-                  (let [{:keys [eng]} (st/setup world)
-                        id (core/submit! eng '(jobs.survival.night) {})]
-                    (core/tick! eng)
-                    (let [w (:waiting (job-api/summary eng id))] [(:reason w) (:shelter (:cause w))])))]
-    (is (= [:not-night nil] (waiting {:time noon})))
-    (is (= [:night-safe :roofed] (waiting {:time night :blocks roof})))))
+(deftest night-job-says-why-it-waits-by-day
+  (let [{:keys [eng]} (st/setup {:time noon})
+        id (core/submit! eng '(jobs.survival.night) {})]
+    (core/tick! eng)
+    (is (= :not-night (:reason (:waiting (job-api/summary eng id)))))))
+
+(deftest a-night-job-already-safe-is-done-without-acting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks roof})]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= [] (tu/walk-calls p))))))))
 
 (deftest the-night-says-once-that-the-respawn-bed-it-sees-gone-is-lost
   (async done
@@ -432,7 +439,7 @@
                                                      :view (fn [] {:data mem/empty-data :now 0})}))
                                      conditions))]
     (is (= :not-night (cause {:time noon} {})))
-    (is (= :offline-forbidden (cause {:time night} {:offline-allowed false})))
+    (is (= :offline-forbidden (contract/impossible-cause (cause {:time night} {:offline-allowed false}))))
     (is (nil? (cause {:time night} {})))))
 
 (deftest a-log-out-quotes-the-stint-in-time

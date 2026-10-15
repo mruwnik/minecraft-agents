@@ -19,7 +19,7 @@
   A final failure warns :unwedge.blocked once, writes an :unwedge-blocked entry (cell, 10 min; the trigger holds
   its fire for that cell meanwhile) and ends nothing-possible {:reason :blocked :why} with data {:cell}: the body
   holds still, nothing refires.
-  Needs a wedged body: else condition-failed :not-wedged (a listed job waits). Ways :step and :dig (both by default);
+  A body not wedged is done at once. Ways :step and :dig (both by default);
   a way left out is not tried, and a run with no way left ends nothing-possible :no-way.
   Still wedged after max-passes tries ends nothing-possible :still-wedged. Ends :done once the feet cell is free.
   Never :continue.
@@ -30,9 +30,9 @@
 
 (def target [])
 (def ways [:step :dig])
-(def defaults {:ways #{:step :dig}})
+(def defaults {:spend {:time ::time-s} :ways #{:step :dig}})
 
-(def conditions [[:fn (fn [c] (when-not (breath/wedged-cell (:primitives c)) :not-wedged))]])
+(def conditions [])
 
 (defn done? [c]
   (let [wedged (some? (breath/wedged-cell (:primitives c)))]
@@ -74,7 +74,8 @@
           :else (await (fail! c cell status)))))))
 
 (a/defargs settings
-  {::max-passes {:default 8 :doc "Tries (a step or a dig) in one run before it stops." :spec (a/int-in 0 nil)}
+  {::time-s {:default 30 :doc "Seconds getting out of a block may take." :spec (a/num-in 0 nil)}
+   ::max-passes {:default 8 :doc "Tries (a step or a dig) in one run before it stops." :spec (a/int-in 0 nil)}
    ::pass-s {:default 1.5 :doc "Seconds one try (a step or a dig) takes, the quote's unit." :spec (a/num-in 0 nil)}})
 (defn max-passes [] (settings/get settings ::max-passes))
 
@@ -100,7 +101,7 @@
       (let [cell (breath/wedged-cell p)]
         (cond
           (nil? cell) (ctx/end c :done nil)
-          (not (ctx/alive? c)) (ctx/end c :cut-off :cut)
+          (not (ctx/alive? c)) :continue
           (<= (max-passes) i) (ctx/end c :nothing-possible :still-wedged {:tries i})
           :else (let [r (await (pass! c cell))]
                   (if (= :again r)

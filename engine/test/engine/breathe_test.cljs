@@ -234,6 +234,14 @@
           (is (= :done (:kind (await (round {:primitives p :args defaults})))))
           (is (zero? (count (.. p -world -calls)))))))))
 
+(deftest a-cut-round-yields-without-acting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:self {:oxygenLevel 0} :blocks {"0,64,0" "water" "0,65,0" "water"}})]
+          (is (= :continue (await (b/round {:primitives p :args defaults :alive? (constantly false)}))))
+          (is (zero? (count (.. p -world -calls)))))))))
+
 (deftest an-enclosed-run-remembers-why
   (async done
     (tu/run-async done
@@ -1511,8 +1519,9 @@
 (defn ^:async ending [world args]
   (await (sc/ending-of #(tu/seeing-all (tu/fake world)) (list breathe args))))
 
-(deftest a-body-with-air-fails-the-condition-not-underwater
-  (is (= :not-underwater (let [[_ f] (first b/conditions)] (f {:primitives (tu/fake {}) :args defaults})))))
+(deftest a-body-with-air-is-done-already
+  (is (true? (:done? (b/done? {:primitives (tu/fake {}) :args defaults}))))
+  (is (= [] b/conditions)))
 
 (deftest a-body-that-found-air-ends-done
   (async done

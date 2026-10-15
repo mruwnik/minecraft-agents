@@ -86,12 +86,15 @@
           (is (false? (holds? p (mem/view (:store eng)))) "no refire while the entry lasts")
           (is (true? (holds? p nil)) "without the entry it would"))))))
 
-(deftest a-free-body-declines
+(deftest a-free-body-is-done-without-acting
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (setup {})]
-          (is (= [:not-wedged] (mapv (fn [[_ f]] (f {:primitives p :args {}})) (:conditions (get registry/jobs unwedge))))))))))
+        (let [{:keys [eng p]} (setup {})]
+          (core/submit! eng (list unwedge) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (is (= [] (vec (.. p -world -calls)))))))))
 
 (deftest a-wedged-body-is-not-done-and-a-free-one-is
   (let [done? (fn [world] (:done? ((:done? (get registry/jobs unwedge)) {:primitives (tu/fake world) :args {}})))]
@@ -188,3 +191,11 @@
           (await (core/tick! eng))
           (is (= 1 (count (filter #{"dig"} (call-names p)))) "no try after the cut")
           (is (empty? (filter #(= :unwedge.blocked (:kind %)) @seen)) "a cut is not a failed dig"))))))
+
+(deftest a-cut-unwedge-round-yields-without-acting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks (merge floor {"0,64,0" "sand"})})]
+          (is (= :continue (await (uw/round {:primitives p :args {} :alive? (constantly false)}))))
+          (is (= [] (vec (.. p -world -calls)))))))))

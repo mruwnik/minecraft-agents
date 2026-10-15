@@ -15,7 +15,7 @@
   Conditions (at the start only): night, else condition-failed :not-night; a bed, else :no-bed; the bed not in :bed-unreachable
   (an unexpired entry with the same position), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open. A body already asleep is done.
-  Holds (a :pause-s pause holding still with the reason, then :continue) for at most :hold-s seconds in all, then ends condition-failed with that cause: a bed
+  Holds (a :pause-s pause holding still with the reason, then :continue) for at most :hold-s seconds in all, then ends nothing-possible with that cause: a bed
   occupied by another player (sh/bed-permit; also when it became so mid-round) :bed-occupied {:pos}; a body in a shelter with the bed more
   than 16 blocks away :night-sheltered.
   Done {:pos bed} when asleep. Day coming before it slept is condition-failed :not-night; the bed gone is :bed-missing, and a
@@ -171,13 +171,13 @@
 
 (defn ^:async hold!
   "Hold for why ({:reason ...}): a pause of :pause-s (child/pause!), then :continue, until :hold-s seconds since the
-  first hold are gone, then the condition-failed ending with that reason."
+  first hold are gone, then the nothing-possible ending naming what it waited for."
   [c why]
   (let [now (ctx/now c)
         since (or (:held-since (ctx/mem c)) now)]
     (ctx/update-mem! c assoc :held-since since)
     (if (> (- now since) (* 1000 (settings/get settings ::hold-s)))
-      (ctx/end c :condition-failed (:reason why) why)
+      (ctx/end c :nothing-possible why nil)
       (do (await (child/pause! c (settings/get settings ::pause-s) (:reason why))) :continue))))
 
 (defn ^:async round [c]

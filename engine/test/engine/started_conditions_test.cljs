@@ -13,7 +13,6 @@
             [jobs.animals.leash :as leash]
             [jobs.combat.hunt :as hunt]
             [jobs.forestry.fell-tree :as fell-tree]
-            [jobs.survival.block-arrow-gap :as arrow-gap]
             [jobs.survival.fight-back :as fight-back]))
 
 (defn fact
@@ -30,7 +29,6 @@
       fight-back/conditions {:primitives (tu/fake hurt) :args {:min-health 8}}
       breed/conditions {:primitives (tu/fake {}) :args {:mob "cow" :fetch false}}
       leash/conditions {:primitives (tu/fake {}) :args {:fetch false}}
-      arrow-gap/conditions {:primitives (tu/fake {}) :args {:radius 16}}
       fell-tree/conditions {:primitives (tu/fake {}) :args {}})))
 
 (defn ^:async ending-after

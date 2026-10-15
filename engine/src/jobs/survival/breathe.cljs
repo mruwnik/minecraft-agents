@@ -43,7 +43,7 @@
     written to the scaffold ledger (purpose :breathe-step, for jobs.access.cleanup), at most 2 per spot; the next
     pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..:leg-length blocks out, outward from the run's
     start only, inside :swim-range of it, at most :max-legs legs (a leg that moved starts afresh at its end).
-  Needs a body that is drowning, enclosed or surfaced but still in water: else condition-failed :not-underwater. A reflex
+  Done at once when the body is neither drowning, enclosed nor surfaced but still in water. A reflex
   (level danger): it exhausts its ways before it stops and never yields :continue. Ends :done when the head is clear
   and, after a swim, the body stands on solid ground out of the water. Else nothing-possible:
   :no-land-in-range (data :searched :swum :legs :headings-failed :step, one of :no-wall :no-blocks :refused :failed) when
@@ -72,7 +72,8 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::land-tries {:default 3 :doc "Go-to targets one spot tries before it swims a leg." :spec (a/int-in 0 nil)}
+  {::time-s {:default 120 :doc "Seconds getting air and out of the water may take." :spec (a/num-in 0 nil)}
+   ::land-tries {:default 3 :doc "Go-to targets one spot tries before it swims a leg." :spec (a/int-in 0 nil)}
    ::min-leg {:default 8 :doc "Blocks a swim leg must move to count as moved." :spec (a/int-in 0 nil)}
    ::max-passes {:default 120 :doc "Passes one run makes before it stops :no_way_out, a safety net against a world that never changes." :spec (a/int-in 0 nil)}
    ::afloat-near {:default 16 :doc "Blocks around a spot in which a later run takes over the start and failed headings of an earlier stop." :spec (a/int-in 0 nil)}
@@ -118,9 +119,9 @@
 
 (def target [])
 
-(def defaults {})
+(def defaults {:spend {:time ::time-s}})
 
-(def conditions [[:fn (fn [c] (when-not (needs-air? c) :not-underwater))]])
+(def conditions [])
 
 (defn done?
   "Air at the head and, after a swim, solid ground under the feet."
@@ -389,7 +390,7 @@
 (defn ^:async round [c]
   (loop [i 0]
     (cond
-      (not (ctx/alive? c)) :done
+      (not (ctx/alive? c)) :continue
       (<= (max-passes) i) (ctx/end c :nothing-possible :no-way-out {:text "still not out after many tries"})
       :else (let [r (await (pass! c))]
               (case r

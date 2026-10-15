@@ -1,13 +1,14 @@
 (ns engine.honest-checks-test
   "A check that declines says why (ctx/wait): the scheduler's job.waiting event carries the reason."
-  (:require [cljs.test :refer [deftest is are]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.expr :as expr]
             [engine.registry :as registry]
             [engine.build-from-plan-test :as b]
             [engine.harvest-test :as ht]
             [engine.hostile-test :as h]
-            [engine.pen-build-test :as pen]))
+            [engine.pen-build-test :as pen]
+            [engine.test-util :as tu]))
 
 (defn waiting-reason
   "Submit job with args in an empty world, tick once; the :reason of the job.waiting event, or nil."
@@ -57,10 +58,33 @@
     'jobs.build.from-plan {:plan "pen" :fetch false} {:inventory []} {"pen" (b/pen-plan)} :no-items
     'jobs.build.pen {:plan "pen" :fetch false} {:inventory []} {"pen" (pen/ring-plan)} :no-items))
 
+(defn ^:async ending
+  "Submit job with args in an empty world, tick once: whether it is still listed, and its root ending event's kind and
+  :reason."
+  [job args]
+  (let [{:keys [eng seen]} (h/setup {})]
+    (core/submit! eng (list job args) {})
+    (await (core/tick! eng))
+    (merge {:listed (boolean (seq (:list (core/state eng))))}
+           (some #(when (#{:completed :stopped} (:kind %)) {:event (:kind %) :reason (:reason %)}) @seen))))
+
 (deftest log-out-says-why-it-declines
-  (are [args reason] (= reason (waiting-reason 'jobs.survival.log-out args))
-    {} :not-night
-    {:offline-allowed false} :offline-forbidden))
+  (is (= :not-night (waiting-reason 'jobs.survival.log-out {}))))
+
+(deftest log-out-forbidden-by-its-args-is-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:listed false :event :stopped :reason :offline-forbidden}
+               (await (ending 'jobs.survival.log-out {:offline-allowed false}))))))))
+
+(deftest a-goal-that-already-holds-is-done-not-a-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [job ['jobs.survival.breathe 'jobs.survival.eat 'jobs.survival.extinguish 'jobs.survival.get-food
+                     'jobs.survival.block-arrow-gap 'jobs.survival.restore-broken 'jobs.survival.unwedge]]
+          (is (= {:listed false :event :completed} (select-keys (await (ending job {})) [:listed :event])) (str job)))))))
 
 (deftest access-farm-forestry-storage-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
@@ -79,10 +103,8 @@
 
 (deftest survival-and-maintenance-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
-    'jobs.survival.get-food {} :not-hungry
     'jobs.survival.night {} :not-night
-    'jobs.survival.recover-drops {} :no-drops
-    'jobs.survival.restore-broken {} :nothing-to-restore))
+    'jobs.survival.recover-drops {} :no-drops))
 
 (deftest a-goal-that-already-holds-passes-the-check
   (are [job] (nil? (waiting-reason job {}))
