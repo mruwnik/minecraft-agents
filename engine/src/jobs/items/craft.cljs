@@ -93,7 +93,7 @@
         start (:start (ctx/mem c) have)
         made (max 0 (- have start))
         data [:units :items :done made :left (max 0 (- count made)) :result {:made made}]]
-    (if (and (pos? count) (>= made count))
+    (if (>= made count)
       (apply contract/ok :crafted (str "crafted " made " " item) data)
       (apply contract/later :crafting (str "craft: " made " of " count " " item) data))))
 
@@ -461,7 +461,8 @@
 
 (defn ^:async cleanup
   "However the call ended: dig up the table this call put down, once, unless :keep-table, a zone or claim refuses the dig
-  or it stands in an area of this body's own (a home): jobs.blocks.dig child, :continue while it waits."
+  or it stands in an area of this body's own (a home): jobs.blocks.dig child, :continue while it waits. Nothing-possible
+  :table-left (data :table) when the dig did not end done."
   [c _]
   (let [spot (pickup-spot c)]
     (if-not spot
@@ -470,7 +471,9 @@
         (if (= :continue r)
           :continue
           (do (ctx/update-mem! c assoc :picked-up true)
-              (ctx/end c :done nil {})))))))
+              (if (= :done (:kind r))
+                (ctx/end c :done nil {})
+                (ctx/end c :nothing-possible :table-left {:table spot}))))))))
 
 (defn ^:async step!
   "Stop when the target is carried, else craft the rest and act on the status: :again, :continue (go-to waits) or :done.

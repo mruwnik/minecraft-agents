@@ -586,6 +586,20 @@
           (is (= 2 (count (calls p "craft"))) "cancelled by the call after the table went down")
           (is (= 1 (get (inv p) "crafting_table")) "the table is carried again"))))))
 
+(deftest craft-whose-table-pick-up-fails-reports-table-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]})
+              _ (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "unreachable" :reason "unreachable"}))
+              result (await (child-outcome eng job {:item "bread"} 12))]
+          (is (= {:kind :nothing-possible :cause :table-left} (:cleanup result)) (pr-str result))
+          (is (nil? (get (inv p) "crafting_table")) "the table still stands"))))))
+
+(deftest craft-count-zero-is-done-at-once
+  (let [c {:primitives (tu/fake {}) :args {:item "bread" :count 0} :root "j1" :slots [] :view (fn [] {:now 0 :data {}})}]
+    (is (= :ok (first ((:done? (get registry/jobs job)) c))))))
+
 (deftest craft-with-keep-table-leaves-it-standing
   (async done
     (tu/run-async done
