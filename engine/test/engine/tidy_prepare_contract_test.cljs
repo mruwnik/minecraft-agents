@@ -10,7 +10,11 @@
             [engine.forest-prepare-test :as fp]
             [engine.library-test :as lt]
             [engine.registry :as registry]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.forestry.maintain :as maintain]
+            [jobs.forestry.prepare :as prepare]
+            [jobs.forestry.prepare-field :as field]
+            [jobs.lib.look :as look]))
 
 (defn ^:async ending-of
   "Run job with args as a ctx/call child of a recording parent on eng, at most n ticks: the child's {:kind :cause :data}
@@ -178,3 +182,20 @@
               e (await (ending-of eng maintain {:plan "forest" :pillar? false} 300))]
           (is (= {:kind :nothing-possible :cause :left} (kc e)))
           (is (= [{:x 3 :y 64 :z 0}] (get-in e [:data :left]))))))))
+
+(deftest maintain-with-nothing-ripe-or-plantable-is-a-look-until-the-body-has-looked-round
+  (let [c {:primitives (tu/fake {}) :args {}}
+        status (fn [surveyed?] (with-redefs [maintain/planned (constantly {}) maintain/field-cells (constantly [])
+                                             look/unseen? (constantly true) maintain/classes-of (constantly {})
+                                             maintain/ripe-cells (constantly []) maintain/owed-cells (constantly [])
+                                             maintain/plantable (constantly []) maintain/blocked-reason (constantly nil)
+                                             look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))]
+                                 (maintain/not-ready c)))]
+    (is (= [:look :nothing-to-do] (tu/kind-reason (status false))))
+    (is (= [:later :nothing-to-do] (tu/kind-reason (status true))))))
+
+(deftest prepare-with-only-an-unseen-cell-is-ok-with-the-look-reason
+  (let [c {:primitives (tu/fake {}) :args {}}]
+    (with-redefs [field/planned (constantly {}) prepare/states-of (constantly {}) maintain/field-cells (constantly [])
+                  field/todo (constantly []) prepare/unseen-room? (constantly true)]
+      (is (= [:ok :look] (tu/kind-reason (prepare/not-ready c)))))))

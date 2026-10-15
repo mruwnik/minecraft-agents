@@ -7,6 +7,8 @@
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.gate :as gate]
@@ -191,30 +193,40 @@
         bare (bare-cells p box [])
         untilled (untilled-cells p box)]
     (cond
-      (and (empty? bare) (not (look/surveyed? c :cell))) nil ; the round looks around before it gives up
       (empty? bare) (cond-> {:reason :nothing-to-do} (seq untilled) (assoc :untilled (count untilled)))
       (held-back seed inventory) (assoc (held-back seed inventory) :reason :food-reserve)
       (not (pick-seed seed inventory)) (when (nil? (fetch-opts c)) (seed-need seed (count bare)))
       (empty? (sowable-cells c bare)) {:reason :refused})))
 
 (defn problem
-  "Why the call cannot run now (before its first round), a cause map, or nil: bad args, no zone list read (unless :ignore-zones?), a plan that
-  cannot be worked, and a field with no cell to sow or no seed to sow it with."
+  "Why the call cannot run now (before its first round), a cause map, or nil: no zone list read (unless :ignore-zones?),
+  a plan that cannot be worked, and a field with no cell to sow or no seed to sow it with. Nil without :box and :plan
+  (bad-args says so)."
   [c]
   (let [{:keys [box plan]} (:args c)]
-    (cond
-      (:started (ctx/mem c)) nil
-      (and (nil? box) (nil? plan)) (contract/impossible {:reason :bad-args :why "plant needs :box or :plan"})
-      :else (or (common/no-zones c :plant.declined "plant")
-                (if plan (plan-problem c) (box-problem c))))))
+    (when (and (or box plan) (not (:started (ctx/mem c))))
+      (or (common/no-zones c :plant.declined "plant")
+          (if plan (plan-problem c) (box-problem c))))))
 
-(def conditions [[:fn problem]])
+(def bad-args (checks/args-fit "plant needs :box or :plan" #(let [{:keys [box plan]} (:args %)] (or box plan))))
+
+(defn work
+  "Ok with something to sow, else the problem's status; a field with no bare cell is a :look until the body has looked
+  round, since cells may be unseen."
+  [c]
+  (if-let [cause (problem c)]
+    (checks/cause-status (if (and (= :nothing-to-do (:reason cause)) (not (:plan (:args c))) (not (look/surveyed? c :cell))) :look :later)
+                         cause)
+    (contract/ok :work "a field to sow")))
+
+(def can-start? (cond/and bad-args work))
 
 (defn done?
   "Counts only: no bare cell is not a planted field (cells may be unseen or untilled), and the round names which. The cells
   sown this call and the bare cells left."
   [c]
-  {:done? false :units :cells :done (:planted (ctx/mem c) 0) :left (count (unsown c))})
+  (contract/later :planting "plant sows the field"
+                  :units :cells :done (:planted (ctx/mem c) 0) :left (count (unsown c))))
 
 (defn quote-of [c]
   (let [n (count (unsown c))

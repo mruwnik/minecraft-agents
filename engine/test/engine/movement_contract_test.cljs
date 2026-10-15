@@ -27,7 +27,7 @@
                       ['jobs.movement.boat-launch {:action :recover}]
                       ['jobs.movement.boat-land {:recover true}]
                       ['jobs.movement.cross-water {:pos [7 64 0]}]]]
-    (is (some some? ((juxt :conditions :can-start? :can-run?) (job sym))) (str sym " has checks"))
+    (is (fn? (:can-start? (job sym))) (str sym " has can-start?"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:job-time 60}}}))) (str sym))))

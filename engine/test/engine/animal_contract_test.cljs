@@ -33,7 +33,7 @@
                       ['jobs.animals.lead-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]
                       ['jobs.animals.lure-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]
                       ['jobs.animals.herd {:mob "cow" :box {:min {:x 0 :y 60 :z 0} :max {:x 4 :y 70 :z 4}} :target 2}]]]
-    (is (some? (:can-start? (job sym))) (str sym " has can-start?"))
+    (is (fn? (:can-start? (job sym))) (str sym " has can-start?"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))

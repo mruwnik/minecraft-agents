@@ -12,6 +12,7 @@
             [jobs.farm.tend :as tend]
             [jobs.farm.tend-decide :as decide]
             [jobs.farm.tend-stock :as stock]
+            [jobs.lib.look :as look]
             [jobs.lib.steps :as steps]
             [jobs.lib.world-files :as world]))
 
@@ -627,3 +628,11 @@
 (deftest tend-hands-its-chest-argument-to-deposit
   (let [given [-545 64 324]]
     (is (= given (get-in (decide/decide :deposit {:chest given} {:stored ["wheat"] :keep {}}) [:call :args :chest])))))
+
+(deftest a-part-with-no-step-is-a-look-until-the-body-has-looked-round
+  (let [c {:primitives (tu/fake {}) :args {:box box}}
+        status (fn [surveyed?] (with-redefs [ctx/mem (constantly {}) tend/check-facts (constantly {}) tend/would-run? (constantly false)
+                                             tend/needs-look? (constantly true) look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))]
+                                 (tend/part-status c)))]
+    (is (= [:look :nothing-to-do] (tu/kind-reason (status false))))
+    (is (= [:later :nothing-to-do] (tu/kind-reason (status true))))))

@@ -16,7 +16,7 @@
   (let [p (tu/fake {:time 18000})]
     (doseq [sym leaves
             :let [job (get registry/jobs sym)]]
-      (is (some some? ((juxt :conditions :can-start? :can-run?) job)) (str sym " has checks"))
+      (is (fn? (:round job)) (str sym " has a round"))
       (is (nil? (:check job)) (str sym " has no old check"))
       (is (vector? (:target job)) (str sym " has a target"))
       (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {:every-ms 2000}}))) (str sym)))))
