@@ -1016,6 +1016,18 @@
           (is (= [8 64 0] (feet p)))
           (is (some #{:clear-path} (map :step (events-of seen :go-to.escalated)))))))))
 
+(deftest a-free-body-digs-down-to-a-walled-in-goal-below-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [below (apply dissoc (box -20 55 -20 20 63 20 "stone") ["3,60,0" "3,61,0"])
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks below
+                                                     :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                    {:pos [3 60 0] :range 0}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [3 60 0] (feet p)))
+          (is (= [:dig-route] (map :step (events-of seen :go-to.escalated))) "no door or stair leads down: the fewest cells are dug"))))))
+
 (deftest a-walled-in-goal-is-not-dug-to-in-another-s-zone-or-under-walk-only
   (async done
     (tu/run-async done

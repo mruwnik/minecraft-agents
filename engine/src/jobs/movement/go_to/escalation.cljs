@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.own-pen :as own-pen]
@@ -257,11 +258,24 @@
   (and (= :goal-enclosed (some-> (:reason result) keyword))
        (not (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))))
 
+(def max-route-digs "Cells a :dig-route escalation digs at most." 16)
+
+(defn dig-way
+  "{:step :dig-route :cells [{:cell :block}]}: the fewest cells to dig for a walk from feet cell from down or across
+  into goal (jobs.lib.dig-route, at most max-route-digs, falls of at most 3), in walking order, every one
+  escape/diggable?; else nil."
+  [p from goal may-dig? {:keys [own? skip]}]
+  (when-not (skip :dig-route)
+    (let [block-at (escape/block-at-of p)
+          cells (:dig (dig-route/route block-at from goal {:max-digs max-route-digs}))]
+      (when (and (seq cells) (every? #(escape/diggable? block-at may-dig? own? %) cells))
+        {:step :dig-route :cells (mapv (fn [cell] {:cell cell :block (block-at cell)}) cells)}))))
+
 (defn goal-way
   "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to
   nearest the goal (a flood of at most reach/room-cells cells) is more than a block nearer, from there, as
   {:step :approach :pos cell} first. Only a door, or a stair or pillar up to a higher goal, leads in (a walk along
-  the wall too, from where it stands); else {:step :none :why :no-dig}."
+  the wall too, from where it stands), else the fewest cells dug (dig-way); else {:step :none :why :no-dig}."
   [c feet goal may-dig? opts]
   (let [p (:primitives c)
         kind-at (reach/lookup p reach/body-kind-of)
@@ -276,10 +290,12 @@
               :clear-path true
               (:stair :pillar) (> (second goal) (second from))
               :approach here?
-              false)]
+              false)
+        e (cond in? e
+                :else (or (dig-way p from goal may-dig? opts)
+                          (if (= :none (:step e)) e {:step :none :why :no-dig})))]
     (cond
       (= :none (:step e)) e
-      (not in?) {:step :none :why :no-dig}
       here? e
       :else {:step :approach :pos near})))
 
@@ -539,9 +555,27 @@
       (succeeded? e r) (escalated! c pos e true)
       :else (escalation-failed! c pos (merge {:step step} (stop-detail r))))))
 
-(defn ^:async escalation-round!
-  "One round of the escalation: leaving the shelter, or the child's call (escalation-child-round!)."
+(defn ^:async dig-route-round!
+  "One round of digging a :dig-route escalation's cells in walking order, one jobs.blocks.dig child a cell
+  (b/dig-cell!: no tool needed, the drops left), each noted as a hole (note-holes!) once dug; a cell already open is
+  passed. A dig that fails ends it (escalation-failed!)."
   [c pos]
-  (if (= :leave-shelter (:step (:escalation (ctx/mem c))))
-    (leave-shelter-round! c pos)
+  (let [{:keys [cells] :as e} (:escalation (ctx/mem c))]
+    (loop [todo cells]
+      (if-let [{:keys [cell] :as dug} (first todo)]
+        (let [o (await (b/dig-cell! c (zipmap [:x :y :z] cell) {:ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+          (forget-dug-own! c [dug])
+          (note-holes! c [dug])
+          (cond
+            (= :continue o) :continue
+            (#{:dug :missing} o) (recur (rest todo))
+            :else (await (escalation-failed! c pos {:step :dig-route :reason o :cell cell}))))
+        (escalated! c pos e true)))))
+
+(defn ^:async escalation-round!
+  "One round of the escalation: leaving the shelter, digging a route, or the child's call (escalation-child-round!)."
+  [c pos]
+  (case (:step (:escalation (ctx/mem c)))
+    :leave-shelter (leave-shelter-round! c pos)
+    :dig-route (dig-route-round! c pos)
     (escalation-child-round! c pos)))
