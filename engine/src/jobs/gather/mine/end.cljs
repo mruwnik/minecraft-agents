@@ -74,6 +74,12 @@
            (str ", walked back to " (str/join "," back-at))
            ", did not get back to its origin"))))
 
+(defn ores-text
+  "\"; also picked 2 redstone_ore, 1 gold_ore\" for the ore blocks ore-pick dug on the way (empty for none)."
+  [picked]
+  (when (seq picked)
+    (str "; also picked " (str/join ", " (map (fn [[block n]] (str n " " block)) (frequencies (map :block picked)))))))
+
 (defn finish!
   "End the job (end-run) with the outcome."
   [c]
@@ -91,7 +97,7 @@
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left))
               (seq (:lost m)) (assoc :lost (:lost m)))]
     (end-run c (merge (let [soil (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
-                            tail (str wet-text (dug-text m reason) (tunnel-tail tunnel))
+                            tail (str wet-text (dug-text m reason) (tunnel-tail tunnel) (ores-text (ore-pick/picked c)))
                             mended-text (when (pos? (or mended 0)) (str "; mended " mended))]
                         (cond
                           (zero? got) {:text (str "mine got nothing: " (name reason) soil tail mended-text)}

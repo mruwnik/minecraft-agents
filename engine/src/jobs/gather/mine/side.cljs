@@ -20,7 +20,7 @@
   (let [here (cell-of (u/self-pos c))
         args (-> (:args c)
                  (dissoc :direction :from)
-                 (assoc :heading heading :tunnel-length steps :count 1 :ore-reach 0 :mend false :fetch false :shaft false :stay-level true))
+                 (assoc :heading heading :tunnel-length steps :count 1 :ore-reach 0 :mend false :fetch false :shaft false :stay-level true :side-cut? true))
         r (await (ctx/call c :side 'jobs.gather.mine args))]
     (if (= :continue r)
       :continue

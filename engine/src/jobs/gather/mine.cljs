@@ -26,6 +26,7 @@
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
+            [jobs.lib.shelter :as shelter]
             [jobs.lib.submitted :as submitted]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
@@ -196,6 +197,7 @@
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
    :stay-level {:doc "caution for caves: dig only at the level the body starts at (the two-high tunnel, no stair down, no :level), mine only seen ore beside the body (:ore-reach: or a short side cut out), and seal a dug cell that opens into air beyond the tunnel with a carried block (tunnel ends :breach-sealed, or :breach-open when it cannot seal)" :spec boolean? :default false}
+   :side-cut? {:doc "set by a run's own side cut (a child mine run starting inside its tunnel): skips the check that :stay-level starts under cover" :spec boolean? :default false}
    :ore-reach {:doc "with :stay-level: seen ore this many blocks into the wall beside the tunnel is taken by a short side cut (a child mine run), shut behind with a carried block; 0 or 1: only ore beside the body" :spec (a/int-in 0 nil) :default 2}
    :variants {:doc "an ore's stone and deepslate kinds both count as the block (iron_ore and deepslate_iron_ore, either named); false: only :block" :spec boolean? :default true}
    :level {:doc "the feet height the strip tunnel runs at (a whole number, or a cell [x y z] / {:x :y :z} whose y it takes): with no target seen the body first stairs down to it (jobs.access.stair) when higher; nil: the ore's level (setting mine.descent/ore-levels), none for other blocks; false: where the body stands"
@@ -247,9 +249,26 @@
     (contract/ok :args "a block given")
     (contract/never :no-block "no :block to mine")))
 
+(defn surface-cause
+  "{:reason :on-surface :text ..} for a :stay-level run whose body cells (sky-lights: the sky light of the feet and head cell, as
+  loaded) see the sky: its tunnel would breach open at the first cell. nil otherwise, and without light data."
+  [args sky-lights]
+  (when (and (:stay-level args) (some pos? sky-lights))
+    {:reason :on-surface
+     :text "mine :stay-level declined: the body stands in the open; cut a stair down first (access.stair {:dir :down :y 16}) or run it without :stay-level with a :level"}))
+
+(defn on-surface
+  "surface-cause of the body's own cells, before the run has begun (a resumed run stands where it dug)."
+  [c]
+  (let [p (:primitives c)
+        {:keys [x y z] :as f} (shelter/feet p)]
+    (when-not (or (:goal (ctx/mem c)) (:side-cut? (:args c)))
+      (surface-cause (:args c) (keep #(shelter/sky-light-at p %) [f {:x x :y (inc y) :z z}])))))
+
 (def can-start?
   (cond/and (checks/refusing :here "where it was submitted" away)
             block-given
+            (checks/refusing :underground "not in the open" on-surface)
             (checks/refusing :zones-read "zone list read" no-zones)
             (checks/refusing :target "a target no zone refuses" all-refused)))
 

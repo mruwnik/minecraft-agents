@@ -46,6 +46,10 @@
   "Fake primitives p with the body's perception over them (engine.perception/wrap), as the body runs; p as it is
   when it already has one."
   [p & [rand]]
+  (let [[x y z] (get-in @(fake/state p) [:self :pos])
+        [x y z] (mapv #(js/Math.floor %) [x y z])]
+    (when-not (:light-default @(fake/state p))
+      (swap! (fake/state p) update :light #(merge {[x y z] [0 15] [x (inc y) z] [0 15]} %))))
   (if (aget p "perception") p (perception/wrap p (perception/create (fake-raw/create p) (cond-> sight-opts rand (assoc :rand rand))))))
 
 (defn start
@@ -2711,6 +2715,19 @@
           (is (= "air" (block-at on -1 64 1)))
           (is (= [[-1 64 1]] (mapv :cell (:ores (done-event on)))))
           (is (= "coal_ore" (block-at off -1 64 1)) "opted out"))))))
+
+(deftest stay-level-declines-on-the-surface-and-says-what-to-do
+  (let [stay {:stay-level true}]
+    (is (= :on-surface (:reason (mine/surface-cause stay [15 15]))))
+    (is (re-find #"access.stair" (:text (mine/surface-cause stay [0 4]))))
+    (is (nil? (mine/surface-cause stay [0 0])) "sealed from the sky")
+    (is (nil? (mine/surface-cause stay [])) "no light data")
+    (is (nil? (mine/surface-cause {} [15 15])) "only :stay-level declines")))
+
+(deftest the-end-text-names-the-other-ores-picked
+  (is (nil? (mine-end/ores-text nil)))
+  (is (= "; also picked 2 redstone_ore, 1 gold_ore"
+         (mine-end/ores-text [{:block "redstone_ore"} {:block "gold_ore"} {:block "redstone_ore"}]))))
 
 (deftest the-end-text-names-why-a-run-with-no-tunnel-blocks-stopped
   (is (= "; stair stopped: undercuts-way; tunnel stopped: way-out"
