@@ -94,7 +94,8 @@
   "The door's cells dug against the cells planned. Never :done? itself: the round ends it by walking through."
   [c]
   (let [m (ctx/mem c)]
-    {:done? false :units :cells :done (count (:dug m)) :left (max 0 (- (count (:cells m)) (count (:dug m))))}))
+    (contract/later :digging "the door's cells are being dug"
+                    :units :cells :done (count (:dug m)) :left (max 0 (- (count (:cells m)) (count (:dug m)))))))
 
 (defn finish!
   "End the door: its event and the ending, the old result without :status and :reason as the ending's data."

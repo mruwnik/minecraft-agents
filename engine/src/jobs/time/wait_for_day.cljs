@@ -1,5 +1,6 @@
 (ns jobs.time.wait-for-day
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cond :as cond]
             [jobs.lib.shelter :as sh]))
@@ -23,7 +24,9 @@
   "Done when it is day."
   [c]
   (let [day? (boolean (.-isDay (.self (:primitives c))))]
-    {:done? day? :units :days :left (if day? 0 1)}))
+    (if day?
+      (contract/ok :day "it is day" :units :days :done 1 :left 0)
+      (contract/later :day-not-come "it is not day yet" :units :days :done 0 :left 1))))
 
 (defn quote-of [c] (sh/night-left-quote c))
 

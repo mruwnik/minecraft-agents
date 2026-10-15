@@ -165,7 +165,7 @@
   [c]
   (let [saved (crossing c)
         d (if (and saved (not (vehicle/mounted? (:primitives c))) (on-shore? c (:land saved))) 1 0)]
-    {:done? false :units :crossings :done d :left (- 1 d)}))
+    (contract/later :crossing (if (pos? d) "on the far shore" "crossing") :units :crossings :done d :left (- 1 d))))
 
 (defn quote-of [c]
   (let [land (or (given-pos c) (:land (spot-of c)))

@@ -1,5 +1,6 @@
 (ns jobs.access.cleanup
-  (:require [engine.settings :as settings]
+  (:require [engine.contract :as contract]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.game :as game]
             [engine.memory :as mem]
@@ -223,7 +224,10 @@
 (defn done?
   "Done at the start when nothing is offered; later progress only: the round that has nothing left to work on ends it."
   [c]
-  {:done? (nothing-to-do? c) :units :cells :done (count (:removed (ctx/mem c))) :left (count (picked-entries c))})
+  (let [done (count (:removed (ctx/mem c)))]
+    (if (nothing-to-do? c)
+      (contract/ok :nothing-to-do "nothing is offered to clean up" :units :cells :done done :left 0)
+      (contract/later :cleaning "cells are offered" :units :cells :done done :left (count (picked-entries c))))))
 
 (defn quote-of [c]
   (let [n (max 1 (count (picked-entries c)))]

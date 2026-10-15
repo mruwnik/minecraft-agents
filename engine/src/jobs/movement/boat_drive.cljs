@@ -69,7 +69,9 @@
   [c]
   (let [left (left-of c)
         near? (and left (<= left (:range (:args c))))]
-    {:done? (boolean near?) :units :cells :done (if near? 1 0) :left (if near? 0 1) :data {:left left}}))
+    (if near?
+      (contract/ok :near "the boat is at the cell" :units :cells :done 1 :left 0 :result {:left left})
+      (contract/later :driving "the boat is not at the cell yet" :units :cells :done 0 :left 1 :result {:left left}))))
 
 (defn quote-of [c]
   (let [cell (cell-of-call c)

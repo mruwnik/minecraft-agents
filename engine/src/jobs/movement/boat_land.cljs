@@ -80,7 +80,8 @@
   "Done once the body is off the boat."
   [c]
   (let [off (not (vehicle/mounted? (:primitives c)))]
-    {:done? false :units :landings :done (if off 1 0) :left (if off 0 1)}))
+    (contract/later :landing (if off "off the boat, the landing is to be recorded" "on the boat")
+                    :units :landings :done (if off 1 0) :left (if off 0 1))))
 
 (def drive-s "Seconds a landing takes, for the quote." 20)
 

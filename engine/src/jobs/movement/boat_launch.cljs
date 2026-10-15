@@ -162,8 +162,9 @@
   [c]
   (let [{:keys [placed hits]} (ctx/mem c)
         placed (and (launching? c) (some? placed))]
-    {:done? false :units :boats :done (if placed 1 0) :left (if placed 0 1)
-     :data (if (launching? c) {:placed placed} {:id (:id (:args c)) :hits (or hits 0)})}))
+    (contract/later (if (launching? c) :launching :recovering) (if placed "the boat is down" "no boat down yet")
+                    :units :boats :done (if placed 1 0) :left (if placed 0 1)
+                    :result (if (launching? c) {:placed placed} {:id (:id (:args c)) :hits (or hits 0)}))))
 
 (defn quote-of [c]
   (let [most (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s))

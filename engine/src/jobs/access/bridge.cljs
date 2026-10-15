@@ -48,7 +48,7 @@
   :blocked (a cell ahead at body height is not clear), :zone, :footprint, :no-zones, :not-loaded, :not-replaceable,
   :unseen or :bad-args, or nothing-possible with :off-line, :place-failed (3 failed places in a row, :detail the
   primitive's reason) or :move-failed (3 failed walks onto a placed block); the data holds :placed and :built as well,
-  and by reason :at :block :zone :short :detail. Events: bridge.done (info) and bridge.gave-up (warn).")
+  and by reason :at :block :zone :short :detail. Event: bridge.gave-up (warn).")
 
 (a/defargs args
   {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
@@ -147,23 +147,19 @@
   #{:not-on-solid :blocked :zone :footprint :no-zones :not-loaded :not-replaceable :unseen :too-few-blocks})
 
 (defn finish!
-  "End the job: the ending and its event."
+  "End the job on a give-up step: its event and ending."
   [c l step]
   (let [{:keys [heading length]} (:args c)
         cells (placed c l (:start (ctx/mem c)) heading)
-        done? (= :done (:step step))
         result (merge {:placed cells :built (count cells) :length length}
                       (dissoc step :step :reason))]
-    (if done?
-      (do (ctx/emit! c :bridge.done :info (assoc result :status :done :text (str "bridge of " (count cells) " blocks " (name heading))))
-          (ctx/end c :done nil result))
-      (do (ctx/emit! c :bridge.gave-up :warn
-                     (assoc result :status :stopped :reason (:reason step)
-                            :text (str "bridge gave up at " (count cells) " of " length ": " (name (:reason step))
-                                       (when (:short step) (str ", " (:short step) " blocks short"))
-                                       (when (:at step) (str " at " (pr-str (:at step)))))))
-          (ctx/end c (cond (= :bad-args (:reason step)) :impossible (condition-reasons (:reason step)) :condition-failed :else :nothing-possible)
-                   (:reason step) result)))))
+    (ctx/emit! c :bridge.gave-up :warn
+               (assoc result :status :stopped :reason (:reason step)
+                      :text (str "bridge gave up at " (count cells) " of " length ": " (name (:reason step))
+                                 (when (:short step) (str ", " (:short step) " blocks short"))
+                                 (when (:at step) (str " at " (pr-str (:at step)))))))
+    (ctx/end c (cond (= :bad-args (:reason step)) :impossible (condition-reasons (:reason step)) :condition-failed :else :nothing-possible)
+             (:reason step) result)))
 
 (defn inputs
   "next-step's input now, with the ledger l."
@@ -192,12 +188,17 @@
 (def can-start? (cond/and checks/not-moved start-fact))
 
 (defn done?
-  "Done when the row's blocks are all in the ledger."
+  "Done when the body stands on the row's last block: the blocks placed and the body walked onto them."
   [c]
   (let [{:keys [heading length]} (:args c)
         start (:start (ctx/mem c))
-        built (if start (count (placed c (ledger/open-entries (ctx/view c)) start heading)) 0)]
-    {:done? (boolean (and (pos? (or length 0)) (>= built length))) :units :blocks :done built :left (max 0 (- (or length 0) built))}))
+        l (ledger/open-entries (ctx/view c))
+        cells (if start (placed c l start heading) [])
+        i (when start (progress (pl/feet-cell c) start heading))
+        result {:placed cells :built (count cells) :length length}]
+    (if (and i (pos? (or length 0)) (>= i length))
+      (contract/ok :bridged (str "bridge of " (count cells) " blocks " (name heading)) :units :blocks :done (count cells) :left 0 :result result)
+      (contract/later :building "the bridge is being built" :units :blocks :done (count cells) :left (max 0 (- (or length 0) (count cells))) :result result))))
 
 (defn quote-of [c]
   (let [{:keys [length item]} (:args c)

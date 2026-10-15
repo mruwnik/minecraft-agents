@@ -1,5 +1,6 @@
 (ns jobs.time.noop
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.primitive :as primitive]))
 
@@ -32,7 +33,7 @@
 (defn done?
   "Never done before it runs: a pause has no state that can hold before it."
   [c]
-  {:done? false :units :ms :done (- (total-ms c) (left-ms c)) :left (left-ms c)})
+  (contract/later :waiting "the pause is not over" :units :ms :done (- (total-ms c) (left-ms c)) :left (left-ms c)))
 
 (defn quote-of [c] (let [s (:seconds (:args c) 0)] {:uses {:job-time [s s s]}}))
 

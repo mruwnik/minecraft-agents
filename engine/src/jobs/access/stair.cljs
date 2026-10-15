@@ -267,7 +267,7 @@
   [c]
   (let [m (ctx/mem c)
         n (or (:at-step m) 0)]
-    {:done? false :units :steps :done n :left (max 0 (- (or (:target m) n) n))}))
+    (contract/later :cutting "the stair is being cut" :units :steps :done n :left (max 0 (- (or (:target m) n) n)))))
 
 (defn quote-of [c]
   (let [{:keys [dir]} (:args c)

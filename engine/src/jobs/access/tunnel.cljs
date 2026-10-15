@@ -278,7 +278,7 @@
         feet (reach/standing-vec (:primitives c))
         n (if plan (+ (:steps plan) (:run plan)) (if-let [t (target-of c)] (steps-estimate feet t) 0))
         k (if plan (or (line-index (ln/line-cells plan) feet) 0) 0)]
-    {:done? false :units :steps :done k :left (max 0 (- n k))}))
+    (contract/later :digging "the tunnel is being dug" :units :steps :done k :left (max 0 (- n k)))))
 
 (defn segment-end
   "The line index the stair child cuts to from k: the standing cell (s+1) of the next site s >= k, else the stair's end."

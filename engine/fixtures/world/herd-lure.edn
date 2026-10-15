@@ -69,7 +69,7 @@
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :herd.done}}
-            {:count-event {:source :job :kind :toggle.done} :for-s 240 :at-least 1 :at-most 12}]
+            {:count-event {:source :job :kind :completed :data {:block "oak_fence_gate"}} :for-s 240 :at-least 1 :at-most 12}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
   ;; the ground outside the gate rises (x <= 15 is one higher than the pen floor): the approach cells step up away from the gate

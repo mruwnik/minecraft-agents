@@ -48,7 +48,7 @@
   [c]
   (let [wait-s (:wait-s (:args c))
         done (/ (:waited (ctx/mem c) 0) 1000)]
-    {:done? false :units :seconds :done done :left (max 0 (- wait-s done))}))
+    (contract/later :lingering (str "waited " done " of " wait-s " s") :units :seconds :done done :left (max 0 (- wait-s done)))))
 
 (defn quote-of [c]
   (let [wait-s (:wait-s (:args c))]

@@ -1419,7 +1419,7 @@
           (reset! blind? true)
           (let [again (make)]
             (await (run-ticks (assoc s :eng again) 200))
-            (is (< (count (events-of s :toggle.done)) 6) "a gate found shut is not shut again for ever")
+            (is (< (count (filter :wanted (events-of s :completed))) 6) "a gate found shut is not shut again for ever")
             (is (not= :shut-gate (:phase (core/job-memory again "j1"))) "the run went on")))))))
 
 (deftest an-animal-outside-the-view-cone-is-looked-for-before-the-run-ends-none

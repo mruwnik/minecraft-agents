@@ -39,7 +39,7 @@
   unloaded) or :refused (useOn said cannot or no-item), or nothing-possible with :unreachable, :unchanged (a click
   that changed nothing: iron-like block, protected area or lag, which cannot be told apart), :wrong-way (a block that
   moved but not to the wanted state) or :unseen. Each refusal is one warn toggle.declined, each give-up one warn
-  toggle.gave-up, a click that worked info toggle.done. The pen-gate trigger may shut a planned pen gate this job
+  toggle.gave-up. The pen-gate trigger may shut a planned pen gate this job
   opened once the body has been more than 2 blocks away for 4 s.")
 
 (a/defargs args
@@ -93,12 +93,6 @@
     (ctx/emit! c :toggle.gave-up :warn (assoc result :text (str "toggle: " text)))
     (ctx/end c (if (condition-failures reason) :condition-failed :nothing-possible) reason (dissoc result :status :reason))))
 
-(defn finish!
-  [c reason pos state text more]
-  (let [result (report :done reason pos state more)]
-    (ctx/emit! c :toggle.done :info (assoc result :text text))
-    (ctx/end c :done nil (dissoc result :status))))
-
 (defn waits
   "Later :not-loaded (the block is not loaded) or :standing-in (the body stands in the door or gate to be closed; it
   must step out). Bad args and every other refusal end the round, so do these for a toggle run as an old child (herd,
@@ -121,12 +115,17 @@
 (def can-run? waits)
 
 (defn done?
-  "Whether the block is in the wanted state already."
+  "Done once the block is in the wanted state; the click's facts (:was :now) are the result when this call made it so."
   [c]
   (let [{:keys [pos state error]} (parse (:args c))
         b (when-not error (u/block-at (:primitives c) pos))
-        reached (boolean (and b (contains? (valid-states (click/kind-of (.-name b))) state) (click/reached? state (click/props-of b))))]
-    {:done? reached :units :toggles :done (if reached 1 0) :left (if reached 0 1)}))
+        reached (boolean (and b (contains? (valid-states (click/kind-of (.-name b))) state) (click/reached? state (click/props-of b))))
+        clicked (:clicked (ctx/mem c))]
+    (if reached
+      (contract/ok (if clicked :changed :already) (str (.-name b) " at " (pr-str pos) " is " (name state))
+                   :units :toggles :done 1 :left 0
+                   :result (merge {:pos pos :wanted state :reason (if clicked :changed :already) :block (.-name b) :now (click/props-of b)} clicked))
+      (contract/later :not-yet "the block is not in the wanted state" :units :toggles :done 0 :left 1))))
 
 (defn quote-of [_c] {:uses {:job-time [0.1 2 (time-s)]}})
 
@@ -154,7 +153,7 @@
                      (closer! c)
                      (give-up! c :unreachable pos state (str text " is out of reach") facts))
       :refused (give-up! c :refused pos state (str text " refused the click: " status " " reason) facts)
-      :changed (finish! c :changed pos state (str text " is now " (name state)) facts)
+      :changed (do (ctx/update-mem! c assoc :clicked (select-keys facts [:was])) :again)
       :unchanged (give-up! c :unchanged pos state (str text " did not change after the click (protected, iron-like or lag)") facts)
       :wrong-way (give-up! c :wrong-way pos state (str text " moved, but not to " (name state)) facts))))
 
@@ -182,7 +181,6 @@
           (nil? kind) (decline! c :not-toggleable pos state (str text " is not a gate, door, trapdoor, lever or button") {:block block})
           (not (contains? (valid-states kind) state))
           (decline! c :bad-state pos state (str text " cannot be " (name state)) {:block block :valid (sort (valid-states kind))})
-          (click/reached? state (click/props-of b)) (finish! c :already pos state (str text " is already " (name state)) {:block block :now (click/props-of b)})
           (and (= :openable kind) (= :closed state) (click/standing-in? (u/self-pos c) pos (:half (click/props-of b))))
           (decline! c :standing-in pos state (str "the body stands in " text) {:block block})
           (and (not (:arrived (ctx/mem c)))

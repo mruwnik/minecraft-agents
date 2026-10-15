@@ -64,7 +64,9 @@
   (let [{:keys [id] wanted :name} (:args c)
         ride (vehicle/vehicle-of (.self (:primitives c)))
         aboard (and ride (if id (= id (:id ride)) (or (nil? wanted) (= wanted (:name ride)))))]
-    {:done? (boolean aboard) :units :vehicles :done (if aboard 1 0) :left (if aboard 0 1)}))
+    (if aboard
+      (contract/ok :aboard "aboard the vehicle" :units :vehicles :done 1 :left 0 :result {:id (:id ride) :vehicle (:name ride)})
+      (contract/later :ashore "not aboard the vehicle" :units :vehicles :done 0 :left 1))))
 
 (defn nearest-named
   "The id of the nearest sensed entity named name, a free one before an occupied one, or nil."

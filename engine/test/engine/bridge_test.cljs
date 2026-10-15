@@ -128,8 +128,10 @@
           (is (= (mapv (fn [c] [c :placed "dirt" "air" :bridge]) (row 5))
                  (mapv (juxt :cell :state :item :before :purpose) (the-ledger eng))))
           (is (= 59 (.-count (first (.-inventory (.self p))))))
-          (let [d (first (of-kind seen :bridge.done))]
-            (is (= (row 5) (:placed d)))))))))
+          (is (empty? (of-kind seen :bridge.done)))
+          (let [d (first (of-kind seen :completed))]
+            (is (= (row 5) (:placed d)))
+            (is (= 5 (:built d)))))))))
 
 (defn obtain-stub
   "An obtain that records the args of each round in the atom and yields."
@@ -254,7 +256,7 @@
             (is (finished? again))
             (is (= [5 64 0] (feet p)))
             (is (= (mapv (fn [c] [c :placed]) (row 5)) (mapv (juxt :cell :state) (sort-by first (the-ledger again)))))
-            (is (= (row 5) (:placed (first (of-kind seen :bridge.done)))))))))))
+            (is (= (row 5) (:placed (first (of-kind seen :completed)))))))))))
 
 (deftest a-restart-after-the-block-went-in-but-before-it-was-confirmed-counts-it-once
   (async done

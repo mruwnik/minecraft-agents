@@ -206,7 +206,9 @@
   "The targets found against :count. Never :done? itself: the search ends with its event and data."
   [c]
   (let [n (count (:found (ctx/mem c)))]
-    {:done? false :units :found :done n :left (max 0 (- (:count (:args c)) n)) :data {:found (:found (ctx/mem c) []) :coverage (coverage (ctx/mem c)) :why :time}}))
+    (contract/later :searching (str "found " n " of " (:count (:args c)))
+                    :units :found :done n :left (max 0 (- (:count (:args c)) n))
+                    :result {:found (:found (ctx/mem c) []) :coverage (coverage (ctx/mem c)) :why :time})))
 
 (defn time-limit "Seconds the call may search." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))

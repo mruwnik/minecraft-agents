@@ -83,7 +83,7 @@
 (defn done?
   "Progress only: the job is done by the round that has sealed the mouth."
   [c]
-  {:done? false :units :torches :done (count (:taken (ctx/mem c)))})
+  (contract/later :sealing "the mouth is to be sealed" :units :torches :done (count (:taken (ctx/mem c)))))
 
 (defn quote-of [c]
   (let [n (count (:torches (:tunnel (:args c))))]

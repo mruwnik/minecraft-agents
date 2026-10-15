@@ -235,9 +235,9 @@
 (deftest done-carries-the-result-so-far-for-a-limit-ending
   (let [c (fn [m args] {:primitives (tu/fake {}) :root "j1" :slots [] :args args
                         :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data m}]}}})})]
-    (is (= {:units :boats :done 1 :left 0 :data {:placed true}}
-           (select-keys (bl/done? (c {:placed {:id 7}} {})) [:units :done :left :data])))
-    (is (= {:done 0 :left 1 :data {:placed false}}
-           (select-keys (bl/done? (c {} {})) [:done :left :data])))
-    (is (= {:done 0 :data {:id 7 :hits 2}}
-           (select-keys (bl/done? (c {:hits 2} {:action :recover :id 7})) [:done :data])))))
+    (is (= {:units :boats :done 1 :left 0 :result {:placed true}}
+           (select-keys (nth (bl/done? (c {:placed {:id 7}} {})) 2) [:units :done :left :result])))
+    (is (= {:done 0 :left 1 :result {:placed false}}
+           (select-keys (nth (bl/done? (c {} {})) 2) [:done :left :result])))
+    (is (= {:done 0 :result {:id 7 :hits 2}}
+           (select-keys (nth (bl/done? (c {:hits 2} {:action :recover :id 7})) 2) [:done :result])))))

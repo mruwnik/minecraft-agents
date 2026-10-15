@@ -233,7 +233,7 @@
   whole job tree, not of this call, so a second pillar of one go-to would read as done at its start."
   [c]
   (let [n (count (built c (ledger/open-entries (ctx/view c))))]
-    {:done? false :units :blocks :done n :left (max 0 (- (:height (:args c)) n))}))
+    (contract/later :building "the pillar is being built" :units :blocks :done n :left (max 0 (- (:height (:args c)) n)))))
 
 (defn quote-of [c]
   (let [h (:height (:args c))

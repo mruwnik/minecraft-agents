@@ -1,5 +1,6 @@
 (ns jobs.movement.follow
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
@@ -79,7 +80,8 @@
   "Never done: a follow ends with a cause. Counts the player as met once seen."
   [c]
   (let [met (some? (:seen-t (ctx/mem c)))]
-    {:done? false :units :players :done (if met 1 0) :left (if met 0 1) :data {:met met}}))
+    (contract/later :following (if met "following the player" "no player met yet")
+                    :units :players :done (if met 1 0) :left (if met 0 1) :result {:met met})))
 
 (defn quote-of [c]
   (let [most (or (time-limit c) ##Inf)

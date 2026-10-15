@@ -67,10 +67,10 @@
                                             ["lever" {:powered true} :off :powered false]
                                             ["stone_button" {:powered false} :press :powered true]]]
           (let [{:keys [result p seen]} (await (run (world name from) {:pos at :state want}))]
-            (is (= {:status :done :reason :changed :block name :wanted want} (head result [:status :reason :block :wanted])) name)
+            (is (= {:status :done :block name :wanted want} (head result [:status :block :wanted])) name)
             (is (= value (key (props p at))) name)
             (is (= 1 (count (calls p "useOn"))) (str name ": one click"))
-            (is (= 1 (count (kinds seen :toggle.done))) name)))))))
+            (is (empty? (kinds seen :toggle.done)) name)))))))
 
 (deftest a-block-already-in-the-wanted-state-is-not-clicked
   (async done

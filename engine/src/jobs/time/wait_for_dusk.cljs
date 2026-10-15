@@ -1,6 +1,7 @@
 (ns jobs.time.wait-for-dusk
   (:require [engine.args :as a]
             [jobs.lib.game-facts :as facts]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cond :as cond]
             [engine.settings :as settings]))
@@ -25,7 +26,9 @@
   "Done when it is evening or later in the day's ticks."
   [c]
   (let [dusk? (>= (.-timeOfDay (.self (:primitives c))) facts/dusk-tick)]
-    {:done? dusk? :units :dusks :left (if dusk? 0 1)}))
+    (if dusk?
+      (contract/ok :dusk "it is evening" :units :dusks :done 1 :left 0)
+      (contract/later :dusk-not-come "it is not evening yet" :units :dusks :done 0 :left 1))))
 
 (defn quote-of [c]
   (let [left (max 0 (- facts/dusk-tick (.-timeOfDay (.self (:primitives c)))))

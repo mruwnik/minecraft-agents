@@ -596,7 +596,7 @@
 (deftest done-carries-the-found-and-coverage-for-a-limit-ending
   (let [c {:primitives (tu/fake {}) :root "j1" :slots [] :args {:count 2}
            :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data {:found [{:what "x" :pos [1 2 3]}] :legs 3 :scans 2 :farthest 40}}]}}})}
-        d (search/done? c)]
+        [_ _ d] (search/done? c)]
     (is (= {:done 1 :left 1} (select-keys d [:done :left])))
-    (is (= {:legs 3 :scans 2 :failed [] :skipped 0 :farthest 40} (get-in d [:data :coverage])))
-    (is (= [{:what "x" :pos [1 2 3]}] (get-in d [:data :found])))))
+    (is (= {:legs 3 :scans 2 :failed [] :skipped 0 :farthest 40} (get-in d [:result :coverage])))
+    (is (= [{:what "x" :pos [1 2 3]}] (get-in d [:result :found])))))

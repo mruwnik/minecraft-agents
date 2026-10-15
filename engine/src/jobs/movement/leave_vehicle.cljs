@@ -1,5 +1,6 @@
 (ns jobs.movement.leave-vehicle
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
@@ -36,7 +37,9 @@
   "Done once the body is off."
   [c]
   (let [aboard (boolean (vehicle/mounted? (:primitives c)))]
-    {:done? (not aboard) :units :vehicles :done (if aboard 0 1) :left (if aboard 1 0)}))
+    (if aboard
+      (contract/later :aboard "still aboard" :units :vehicles :done 0 :left 1)
+      (contract/ok :ashore "off the vehicle" :units :vehicles :done 1 :left 0))))
 
 (defn quote-of [c]
   (let [{:keys [max-tries wait-ms]} (:args c)]
