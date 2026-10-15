@@ -73,10 +73,10 @@
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
    :after [[:block [20 0 16] "poppy"]]}
-  {:name "zombie-stone-box-heard-fires"
+  {:name "zombie-stone-box-quiet"
    :blocks [[:fill [20 0 14] [24 2 18] "stone" :hollow]]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=zombie,tag=wt" [[21 0 15] [23 1 17]] 1]]}
   ;; Card 876c2ac8 (fix 5aea0a88, owner Q78): a ranged mob only heard counts as a danger in the open, not in a tunnel.
   ;; Heard only = a clear arrow line but unseen: a sealed dark stone box (light 0) puts a skeleton beyond dark-sight (4) out of
