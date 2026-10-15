@@ -223,14 +223,15 @@
            (throw (js/Error. (str "condition " (fn-name f) ": " (or (.-message e) e))))))))
 
 (defn asked
-  "The status check f (export what, :can-start? or :can-run?, of def) gives for c; any other return is an error naming
+  "The status check f (export what, :can-start? or :can-run?, of def; both nil for a library check) gives for c; any other return is an error naming
   the export and the job (its symbol or combinator label)."
-  [c def what f]
-  (let [s (run-condition c f)]
-    (when-not (status? s)
-      (throw (js/Error. (str (name what) " of " (or (:sym def) (:label def) (fn-name f)) " returned " (pr-str s)
-                             ", not a status [kind text {:reason ..}]"))))
-    s))
+  ([c f] (asked c nil nil f))
+  ([c def what f]
+   (let [s (run-condition c f)]
+     (when-not (status? s)
+       (throw (js/Error. (str (if what (name what) "check") " of " (or (:sym def) (:label def) (fn-name f)) " returned " (pr-str s)
+                              ", not a status [kind text {:reason ..}]"))))
+     s)))
 
 (defn verdict
   "What def's checks say now, as one status (all): its old conditions ([:fn f] each, read-old), can-start? and
