@@ -3,6 +3,7 @@
 ;; so, with no pillar block carried, the reflex ends stopped :no_blocks (no :afloat warning, no hold) and the body stays in the pond; it never drowns. With a ledge cut into one wall
 ;; (the ground outside is level with the water) it climbs out and the reflex ends :cleared once, also when the ledge's top is a slab, a path block or farmland.
 ;; roofed-no-step-cell-stops-no-land: a roof one block above the water leaves no cell for a pillar block (needs two air cells), so the reflex ends stopped :no_land_in_range.
+;; ledge-east-grass-lands (card 9a842ea8): a grass-covered ledge is land.
 ;; ledge-east-hostile-drops-breathe: a zombie summoned once suffocating has fired, hostile-near above suffocating, drops the breathe run; hostile-near then ends.
 ;; ledge-east-hostile-gone-fast-refire-lands (the body starts at the far west so the swim outlasts the zombie's sighting): the zombie is killed the moment hostile-near has fired, before the flight leaves the pond; breathe fires again and lands (:cleared) on whichever bank is nearer (the flight went west, and breathe digs out of the walled west side), so the body is checked out of the pond, not at the ledge.
 {:defaults
@@ -108,6 +109,13 @@
    :after [[:body-far [15.5 3.5 15.5] 6]]}
   {:name "ledge-east-farmland-lands"
    :blocks [[:fill [21 4 11] [21 5 20] "air"] [:fill [21 3 11] [21 3 20] "farmland"]]
+   :body {:at [18.5 2 15.5]}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
+            {:no-event {:source :job :kind :afloat} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
+   :after [[:body-near [22.5 4 15.5] 4]]}
+  {:name "ledge-east-grass-lands"
+   :blocks [[:fill [21 4 11] [21 5 20] "air"] [:fill [21 3 11] [21 3 20] "grass_block"] [:fill [21 4 11] [21 4 20] "short_grass"]]
    :body {:at [18.5 2 15.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}

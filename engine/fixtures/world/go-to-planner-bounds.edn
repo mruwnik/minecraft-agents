@@ -1,0 +1,22 @@
+;; Planner search bounds (cards 869745a2, 2cb09191): the plot is walled; no seen detour exists in either case.
+;; Should-succeed: item-4-below-is-a-short-drop (a goal 1.5 blocks away and 4 below, the platform walled on all sides: the 4 drop is the way, one leg);
+;; far-goal-beyond-the-search-box (a flat goal 300 blocks away, past the planner box: a bounded leg toward it, then on to arrive).
+{:defaults
+ {:tags [:movement :planner]
+  :time :any
+  :limit-s 150}
+ :cases
+ [{:name "item-4-below-is-a-short-drop"
+   :plot {:height 12}
+   :blocks [[:fill [0 0 0] [31 8 0] "stone"] [:fill [0 0 31] [31 8 31] "stone"] [:fill [0 0 0] [0 8 31] "stone"] [:fill [31 0 0] [31 8 31] "stone"]
+            [:fill [1 0 1] [15 3 30] "stone"]]
+   :body {:at [14.5 4 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 30 :of-job true}]
+   :after [[:body-near [16.5 0 16.5] 2.5]]}
+  {:name "far-goal-beyond-the-search-box"
+   :plot {:height 8 :length 320 :width 16}
+   :body {:at [2.5 0 8.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [300 0 8] :range 2 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:body-near [300.5 0 8.5] 4]]}]}

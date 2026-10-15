@@ -1,0 +1,47 @@
+;; go-to with water (cards b3779e96, 33c42823, 46a889ba, a9a464b5, 6130511f): a lake 21 x 25, 5 deep, its east bank level with the water (stand y 5, x >= 25); the deep lake is 15 deep.
+;; Should-succeed: lake-floor-start-walks-to-the-bank (from the lake floor to the bank 11 blocks off: surfaces, walks, arrives, no hurt); water-goal-leaves-the-water (a goal in the water
+;; with range 3 ends on the bank); unseen-lake-column-aims-at-the-surface (a column goal [x z] in a deep lake the body has not seen: it ends on the surface, not the seabed);
+;; dark-shaft-go-to-swims-up (the body has been under water ~6 s in a sealed, dark 1x1 shaft, the goal is the air pocket above: a blind swim up arrives, no :why :air).
+;; Live risk: the unseen-column case depends on the body not seeing the lake from the bank (it faces away); the dark shaft pocket is only dark when the roof really seals it.
+{:defaults
+ {:tags [:movement :water :air] :time :any
+  :limit-s 120}
+ :cases
+ [{:name "lake-floor-start-walks-to-the-bank"
+   :plot {:height 12 :length 48 :width 32}
+   :blocks [[:fill [0 0 0] [47 4 31] "stone"]
+            [:fill [4 0 4] [24 4 28] "water"]]
+   :body {:at [6.5 0 16.5] :settle-s 1}
+   :act [[:job (jobs.movement.go-to {:pos #at [36 5 16] :range 2 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind :result}}]
+   :after [[:body-near [36.5 5 16.5] 3]]}
+  {:name "water-goal-leaves-the-water"
+   :plot {:height 12 :length 48 :width 32}
+   :blocks [[:fill [0 0 0] [47 4 31] "stone"]
+            [:fill [4 0 4] [24 4 28] "water"]]
+   :body {:at [30.5 5 16.5] :yaw 90 :settle-s 1}
+   :act [[:job (jobs.movement.go-to {:pos #at [23 4 16] :range 3 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-near [26.5 5 16.5] 2.6]]}
+  {:name "unseen-lake-column-aims-at-the-surface"
+   :plot {:height 20 :length 48 :width 32}
+   :blocks [[:fill [0 0 0] [47 14 31] "stone"]
+            [:fill [4 0 4] [24 14 28] "water"]]
+   :body {:at [30.5 15 16.5] :yaw 270 :settle-s 1}
+   :act [[:job (jobs.movement.go-to {:pos [14 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 100 :until {:source :job :kind :result}}]
+   :after [[:body-near [14.5 15 16.5] 3]]}
+  {:name "dark-shaft-go-to-swims-up"
+   :plot {:height 16}
+   :blocks [[:fill [0 0 0] [31 13 31] "stone"]
+            [:fill [16 0 16] [16 9 16] "water"]
+            [:fill [16 10 16] [16 12 16] "air"]]
+   :body {:at [16.5 1 16.5] :settle-s 1 :effects [["resistance" 600 4]]}
+   :act [[:wait-s 6]
+         [:job (jobs.movement.go-to {:pos #at [16 11 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :result :data {:why :air}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-near [16.5 11 16.5] 3]]}]}
