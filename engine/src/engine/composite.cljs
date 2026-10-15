@@ -23,6 +23,8 @@
   (let [res (ctx/child-result c (slot i))]
     (when (= :stopped (:status res)) res)))
 
+(defn already? [c i] (boolean (:already? (ctx/child-result c (slot i)))))
+
 (defn stop!
   "Ends the combinator :done with a stopped result carrying the child's cause."
   [c res]
@@ -37,7 +39,8 @@
 
 (defn seq-def
   "Children in order, one call per round; :at in memory is the next
-  unfinished child. Check: that child's check. Done when the last is done;
+  unfinished child. Check: that child's check. Done when the last is done
+  (:already? when every child's goal held before it started);
   stopped with the cause when a child ends refused. Declined when that child declines in its round (a reflex job is then dropped)."
   [kids]
   (let [at (fn [c] (:at (ctx/mem c) 0))
@@ -51,13 +54,15 @@
                   (= :declined r) :declined
                   (not= :done r) :continue
                   (refusal c i) (stop! c (refusal c i))
-                  (= i last-i) :done
-                  :else (do (ctx/update-mem! c assoc :at (inc i)) :continue))))}))
+                  (= i last-i) (do (when (and (already? c i) (not (:worked (ctx/mem c)))) (ctx/result! c {:already? true}))
+                                   :done)
+                  :else (do (ctx/update-mem! c #(cond-> (assoc % :at (inc i)) (not (already? c i)) (assoc :worked true)))
+                            :continue))))}))
 
 (defn any-def
   "Each round, the first child whose check passes gets one call; one that ends
   refused is skipped from then on (:refused in memory). Check: any child's check,
-  or a refusal to report. Done when the child that ran is done; stopped with the
+  or a refusal to report. Done when the child that ran is done (:already? as that child's); stopped with the
   last cause once every passing child refused. Declined when no child's check
   passes, so a reflex job whose children all decline is dropped."
   [kids]
@@ -73,7 +78,7 @@
                     (cond
                       (not= :done r) :continue
                       (refusal c i) (do (ctx/update-mem! c assoc-in [:refused (slot i)] (refusal c i)) :continue)
-                      :else :done)))))}))
+                      :else (do (when (already? c i) (ctx/result! c {:already? true})) :done))))))}))
 
 (defn kind-of
   "The ending kind of a refused child's result: its contract ending's, else an old job's stop reason read as one."

@@ -61,14 +61,6 @@
                  (select-keys (done-event s) [:killed :remaining :babies :reason :skipped])))
           (is (finished? s)))))))
 
-(deftest done-holds-only-while-no-kill-waits-for-its-wrap-up
-  (are [m wrapped] (= wrapped (cull/wrapped-up? m))
-    {} true
-    {:skipped [3]} true
-    {:killed 1} false
-    {:target 4} false
-    {:collecting true} false))
-
 (deftest one-call-kills-the-surplus-and-collects
   (async done
     (tu/run-async done

@@ -138,17 +138,11 @@
 
 (def conditions "Waits on a start fact (start-fact), at the call's start only." [[:fn (started/at-start start-fact)]])
 
-(defn wrapped-up?
-  "True when no kill waits for the round's wrap-up (the drops collected, cull.done told): done? holds only then."
-  [m]
-  (not (or (:target m) (:collecting m) (pos? (:killed m 0)))))
-
 (defn done?
-  "The animals killed, and the adults above :keep that are left: done once no more than :keep stand in the bound and
-  the kills are wrapped up (the round ends the call after collecting and telling)."
+  "The animals killed, and the adults above :keep that are left: done once no more than :keep stand in the bound."
   [c]
   (let [left (max 0 (- (count (:adults (census c))) (:keep (:args c))))]
-    {:done? (and (zero? left) (wrapped-up? (ctx/mem c))) :units :animals :done (:killed (ctx/mem c) 0) :left left}))
+    {:done? (zero? left) :units :animals :done (:killed (ctx/mem c) 0) :left left}))
 
 (defn quote-of [c]
   {:uses {:time [0 (* 20 (or (:count (:args c)) 4)) ##Inf]}})

@@ -164,17 +164,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [clock (atom 1000000)
-              [seen sink] (tu/capture-sink)
-              holds {:conditions [[:fn (constantly :not-needed)]] :round (fn [_] :continue)
-                     :done? (constantly {:done? true :units :items :done 0 :left 0})}
-              eng (core/create {:primitives (tu/fake {}) :jobs {'holds holds} :triggers {} :dir (tu/tmp-dir)
-                                :now #(deref clock) :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
-              s {:eng eng :clock clock}
-              ended #(count (filter (fn [e] (= [:job :child_ended :done] [(:source e) (:kind e) (:status (:data e))])) @seen))]
-          (core/submit! eng '(repeat (holds)) {})
-          (await (run-s! s 2))
-          (is (= 1 (ended)) "ended done at once, then it rests instead of spinning")
-          (is (listed? s))
-          (await (run-s! s (+ (rest-s) 5)))
-          (is (= 2 (ended)) "asks again after its rest"))))))
+        (doseq [spec ['(repeat (holds)) '(repeat (seq (holds) (holds))) '(repeat (any (holds) (holds)))]]
+          (let [clock (atom 1000000)
+                [seen sink] (tu/capture-sink)
+                holds {:conditions [[:fn (constantly :not-needed)]] :round (fn [_] :continue)
+                       :done? (constantly {:done? true :units :items :done 0 :left 0})}
+                eng (core/create {:primitives (tu/fake {}) :jobs {'holds holds} :triggers {} :dir (tu/tmp-dir)
+                                  :now #(deref clock) :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+                s {:eng eng :clock clock}
+                ended #(count (filter (fn [e] (= [:job :child_ended :done] [(:source e) (:kind e) (:status (:data e))])) @seen))]
+            (core/submit! eng spec {})
+            (await (run-s! s 2))
+            (let [n (ended)]
+              (is (pos? n) (str spec ": ended done at once"))
+              (await (run-s! s (- (rest-s) 5)))
+              (is (= n (ended)) (str spec ": then it rests instead of spinning"))
+              (is (listed? s))
+              (await (run-s! s 10))
+              (is (< n (ended)) (str spec ": asks again after its rest")))))))))

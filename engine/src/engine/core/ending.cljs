@@ -2,8 +2,8 @@
   "Contract jobs (a job that exports conditions; engine.contract) as the engine runs them: wrap gives the job a check
   (a listed job waits while a condition fails, until it starts) and a round that checks the conditions (an impossible
   one ends the job, one that asks for a look gets a look round first), freezes the
-  call keys at the first round, asks done? (and, at the first round of a call with a :least other than 1, its quote for the least check) and adds
-  :because to the ending the job's round returns."
+  call keys at the first round, asks done? before the start (and, at the first round of a call with a :least other than 1, its quote for the
+  least check) and adds :because to the ending the job's round returns. Once started, the job's round decides when it is done."
   (:require [engine.contract :as contract]
             [engine.core.base :refer [cut-error manual-job now owner?]]
             [engine.core.limits :as limits]
@@ -118,6 +118,13 @@
   (when (:done? def)
     (contract/done? def (if (started? c) c (assoc c :quote-call (first (call-of c def)))))))
 
+(defn done-or-error
+  "[done-now's answer nil], or [nil error] when done? throws: a done? that throws counts as not done."
+  [def c]
+  (try [(done-now def c) nil]
+       (catch :default e
+         (if (contract/passes-through? e) (throw e) [nil e]))))
+
 (defn with-progress
   "Limit ending e (or nil) with done?'s count in its report; a done? that throws leaves e as it is."
   [def c e]
@@ -128,12 +135,10 @@
 (defn finish
   "The round's ending e with the last ending of a child that did not end :done as its :because, and done?'s count."
   [def c e]
-  (let [d (contract/done? def c)]
-    (cond-> (contract/with-because e @(:child-ending c))
-      d (update :report merge (contract/progress d)))))
+  (with-progress def c (contract/with-because e @(:child-ending c))))
 
 (defn ^:async started-round
-  "One round of contract job def once its goal does not hold (d, done?'s answer) and its conditions pass: freeze the
+  "One round of contract job def once its goal does not hold (d, done?'s answer before the start) and its conditions pass: freeze the
   call at the first, then the least check and the job's round."
   [def c d]
   (let [fresh? (not (started? c))
@@ -141,7 +146,7 @@
     (when fresh? (freeze! c def))
     (if-let [cause (when (and fresh? (:quote-of def) (not= 1 (:least (ctx/frozen-call c))))
                      (contract/least-cause (ctx/frozen-call c) (await ((:quote c) def (:args c) nil true)) d))]
-      (contract/ending :nothing-possible cause nil)
+      (cond-> (contract/ending :nothing-possible cause nil) d (update :report merge (contract/progress d)))
       (let [r (await ((:round def) c))]
         (cond
           (= :continue r) :continue
@@ -151,15 +156,17 @@
 
 (defn ^:async run
   "One round of contract job def: an ending, or :continue (a listed job not started whose condition skips). An
-  impossible condition ends it; else a goal that holds ends it done (:already before it starts), whatever the other
-  conditions say."
+  impossible condition ends it; else, before it starts, a goal that holds ends it done :already, whatever the other
+  conditions say (a done? that throws is told with job.done_failed and counts as not done)."
   [def c]
   (let [v (verdict c (:conditions def))
-        d (when-not (= :impossible (first v)) (done-now def c))
+        fresh? (not (started? c))
+        [d err] (when (and fresh? (not= :impossible (first v))) (done-or-error def c))
+        _ (when err (ctx/emit! c :done_failed :warn {:error (str (or (.-message err) err))}))
         [k cause] (if (:done? d) v (await (looked-verdict c (:conditions def) v)))
-        counted #(cond-> % d (update :report merge (contract/progress d)))]
+        counted #(if fresh? (cond-> % d (update :report merge (contract/progress d))) (with-progress def c %))]
     (cond
-      (:done? d) (counted (contract/ending :done (when-not (started? c) :already) nil))
+      (:done? d) (counted (contract/ending :done :already nil))
       (= :impossible k) (contract/ending :impossible cause nil)
       (and k (stays-listed? c)) :continue
       k (counted (contract/ending :condition-failed cause nil))
@@ -170,13 +177,13 @@
 (defn check
   "A contract job waits while the body is below a floor of its call (enforced limits); a started one runs on (any
   ending ends it); one not started waits while a condition fails. An impossible condition, one that asks for a
-  look, or a goal that holds passes: the round ends the job, or looks."
+  look, or a goal that holds before the start passes: the round ends the job, or looks."
   [def c]
   (let [[k cause] (when-not (started? c) (verdict c (:conditions def)))]
     (if-let [cause (when-not (= :impossible k)
                      (or (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def))))
                          (when (= :skip k) cause)))]
-      (or (boolean (:done? (done-now def c))) (ctx/wait c (wait-reason cause)))
+      (or (and (not (started? c)) (boolean (:done? (first (done-or-error def c))))) (ctx/wait c (wait-reason cause)))
       true)))
 
 (defn wrap

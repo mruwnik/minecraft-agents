@@ -30,7 +30,7 @@
   entry, no warn. A gate that could not be reached or did not shut after :tries clicks is given up with one warn
   shut-gate.gave-up and a :gate-gave-up memory entry, which keeps the trigger away from it for 10 minutes.
 
-  Ends :done with info shut-gate.done and the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at a round start ends done at once, with no event (done?); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
+  Ends :done with info shut-gate.done and the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at its start ends done at once, with no event (done?); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
   A call whose :plan is missing or unreadable waits (:plan-trouble); one that goes bad after the start ends :condition-failed :plan-trouble with one warn
   shut-gate.declined and {:shut 0 :left [] :declined text}.")
 
@@ -191,18 +191,13 @@
 
 (def conditions "Waits while :plan is missing or unreadable (plan-fact)." [[:fn plan-fact]])
 
-(defn wrapped-up?
-  "True when no shut or left gate waits for the round to report it: done? holds only then."
-  [m]
-  (not (or (pos? (:shut m 0)) (seq (:left m)))))
-
 (defn done?
-  "The gates shut and the watched gates still open or unread: done once none is and nothing awaits its report (the
-  goal held: no event, the call just ends done)."
+  "The gates shut and the watched gates still open or unread: done once none is (before the start: no event, the
+  call just ends done)."
   [c]
   (let [[cells trouble] (watched-cells c)
         open (if trouble [] (into (open-now c cells []) (unread-now c cells [] #{})))]
-    {:done? (and (not trouble) (empty? open) (wrapped-up? (ctx/mem c))) :units :gates :done (:shut (ctx/mem c) 0) :left (count open)}))
+    {:done? (and (not trouble) (empty? open)) :units :gates :done (:shut (ctx/mem c) 0) :left (count open)}))
 
 (defn quote-of [_c]
   {:uses {:time [0 15 120]}})

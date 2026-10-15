@@ -249,7 +249,7 @@ Wherever a job is named (scenarios, register entries, `submit!`, `do-now!`, the 
 | `(jobs.survival.eat {:item "bread"})` | a leaf: the job namespace with optional args |
 | `(seq e1 e2 ...)` | run children in order, one child round per round |
 | `(any e1 e2 ...)` | each round, call the first child whose check passes |
-| `(repeat e)` | when the child is done, start it fresh; never done; a child done `:already` is not counted and rests |
+| `(repeat e)` | when the child is done, start it fresh; never done; a child done `:already` (a `seq` whose children all were, an `any` whose child was) is not counted and rests |
 | `(repeat n e)` | the same, done after `n` runs |
 | `(until g e)` | repeat `e`; done at the top of a round once `g`'s check passes (`g` never runs), e.g. `(until (jobs.time.wait-for-dusk) e)`; a daily routine is `(repeat (seq (jobs.time.wait-for-day) ... (jobs.time.wait-for-dusk)))` |
 | a refused child | a child that ends :done with a `:stopped` result stops `seq` with that cause (a stopped result of their own); `any` skips it and tries the next; `repeat` and `until` stop so only when it was impossible or cut off (or in a reflex job), else rest (`:engine.composite/rest-s` 30 s, doubled for each such run in a row up to `rest-max-s` 600 s; wait `:resting`) and run it again |
@@ -301,7 +301,7 @@ a finished job's goes to body memory `:job-report` (cap 256), with its ending's 
 `defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A condition
 `[:fn f]` gives nil (start), a cause (skip: a listed job not started stays queued and waits, else `:condition-failed`),
 `(contract/impossible cause)` (ends `:impossible`, the job leaves the queue) or `(contract/look-first cause)` (the
-engine looks round once, hook `:look/around`, then asks again). Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` is asked before the conditions (an impossible one aside): a goal that holds ends `:done` (cause `:already` before the start) and never waits; done?'s units go in the `:report` of every ending but an impossible or cut-off one; endings are `{:kind :cause :because :report :data}`. A
+engine looks round once, hook `:look/around`, then asks again). Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` is asked before the start only, ahead of the conditions (an impossible one aside; a throw counts as not done, warn `job.done_failed`): a goal that holds ends `:done` `:already` and never waits; once started, the job's round decides when it is done; done?'s units go in the `:report` of every ending but an impossible, cut-off or `:duplicate-call` one; a reflex run that ends `:already` is fruitless (backoff); endings are `{:kind :cause :because :report :data}`. A
 started frame left without an ending (its root ends or is dropped, its parent clears its slot) gets `:cut-off`.
 
 **Quotes (engine.core.quote).** `{:uses {:time fig :health fig :food fig :items {name fig} :wear {tool fig}} :yields

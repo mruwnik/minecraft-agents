@@ -280,13 +280,6 @@
           (is (zero? (clicks s)) "no click on the gate the player shut")
           (is (empty? (events-of s :shut-gate.stopped))))))))
 
-(deftest done-holds-only-while-no-shut-or-left-gate-waits-for-its-report
-  (are [m wrapped] (= wrapped (shut-gate/wrapped-up? m))
-    {} true
-    {:shut 0 :left []} true
-    {:shut 1} false
-    {:left [{:cell [2 64 0] :reason :standing-in}]} false))
-
 (deftest from-the-far-side-the-job-walks-round-the-ring-and-shuts-the-gate
   (async done
     (tu/run-async done

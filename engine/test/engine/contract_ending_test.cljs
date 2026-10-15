@@ -295,6 +295,62 @@
           (await (core/tick! eng))
           (is (= [:not-needed] (mapv #(:reason (:data %)) (job-ev seen :waiting))) "a goal not held waits as before"))))))
 
+(def wraps-up
+  "Reaches its goal in its first round and yields; its second round wraps up."
+  {:conditions []
+   :round (fn [c]
+            (if (:holds @world)
+              (do (swap! world assoc :wrapped true) (ctx/end c :done nil {:placed 1}))
+              (do (swap! world assoc :holds true) :continue)))
+   :done? (fn [_] {:done? (boolean (:holds @world)) :units :blocks :done 1 :left 0})})
+
+(deftest once-started-the-jobs-own-round-decides-it-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'wraps-up wraps-up})]
+          (core/submit! eng '(wraps-up) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (:wrapped @world) "the wrap-up round ran though done? held")
+          (is (= {:kind :done :placed 1} (select-keys (:data (first (job-ev seen :completed))) [:kind :cause :placed])))
+          (is (= :blocks (:units (:report (:data (first (job-ev seen :completed)))))) "done?'s count is still reported"))))))
+
+(def done-throws
+  {:conditions [[:fn (gate :go :not-yet)]]
+   :round (fn [c] (swap! world assoc :ran true) (ctx/end c :done nil))
+   :done? (fn [_] (throw (js/Error. "no input")))})
+
+(deftest a-throwing-done-before-the-start-counts-as-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'done-throws done-throws})
+              id (core/submit! eng '(done-throws) {})]
+          (await (core/tick! eng))
+          (is (= [id] (:list (core/state eng))) "a failing condition still waits")
+          (is (= [:not-yet] (mapv #(:reason (:data %)) (job-ev seen :waiting))))
+          (swap! world assoc :go true)
+          (await (core/tick! eng))
+          (is (:ran @world) "the round runs")
+          (is (= :done (:kind (:data (first (job-ev seen :completed))))))
+          (is (seq (job-ev seen :done_failed)) "the throw is told"))))))
+
+(def held-triggers
+  {:held {:name :held :job '(holds) :persistence :retry :backoff {:after 2 :first-s 60 :max-s 600}
+          :when (fn [_ _ _] true)}})
+
+(deftest a-reflex-whose-goal-already-holds-is-a-fruitless-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'holds holds} held-triggers)
+              fired #(count (ev seen :reflex :fired))]
+          (swap! world assoc :holds true)
+          (core/register-reflex! eng {:trigger :held})
+          (dotimes [_ 5] (await (core/tick! eng)))
+          (is (= 2 (fired)) "backs off after :after runs that ended :already")
+          (is (seq (core/backoff-entries eng))))))))
+
 (deftest an-impossible-condition-wins-over-a-goal-that-holds
   (async done
     (tu/run-async done
