@@ -305,6 +305,8 @@
           (is (= [:done {:status :stopped :reason :stuck :let-go true}]
                  (update (:kid @world) 1 select-keys [:status :reason :let-go]))))))))
 
+(def quick {:conditions [] :round (fn [c] (log! :quick) (ctx/end c :done nil))})
+
 (defn ends-slot-mid-cleanup [end!]
   {:conditions []
    :round (fn [_] (log! :round) :continue)
@@ -328,6 +330,19 @@
 
 (deftest a-release-mid-cleanup-does-not-cut-the-slot-jobs-cleanup
   (async done (tu/run-async done (slot-cleanup-ends-with (fn [eng _] (takeover/release! eng {:who "driver" :reason "test"}))))))
+
+(deftest a-driver-replacing-the-slot-job-mid-cleanup-lets-the-old-cleanup-finish-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [replace! (fn [eng _] (api/mutate! eng {:op :submit :spec '(quick) :by "driver" :request-id "r2"
+                                                     :generation-id (:generation-id (core/state eng))}))
+              {:keys [eng]} (setup {'yields (ends-slot-mid-cleanup replace!) 'quick quick})]
+          (takeover/take! eng {:who "driver" :why "test"})
+          (api/mutate! eng {:op :submit :spec '(yields) :by "driver" :request-id "r1"
+                            :generation-id (:generation-id (core/state eng))})
+          (dotimes [_ 5] (await (core/tick! eng)))
+          (is (= [:round [:cleanup :cut-off] [:cleanup :cut-off] [:cleanup :cut-off] :quick] (:log @world))))))))
 
 (def paused-low
   {:conditions []
@@ -361,6 +376,26 @@
           (is (= [[:high :done] [:low :stopped]]
                  (mapv (juxt (comp :reflex-id :context) (comp :outcome :data)) (filter #(= [:reflex :ended] [(:source %) (:kind %)]) @seen)))))))))
 
+(def high-removing-low
+  {:conditions [] :round (fn [c] (log! :high) (core/remove-reflex! (:engine c) :low) (ctx/end c :done nil))})
+
+(deftest a-paused-reflex-whose-entry-left-the-register-still-resumes-its-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! world {})
+        (reset! clock 1000000)
+        (let [once (fn [k pred] (fn [_ _ _] (let [go? (and (pred) (not (k @world)))] (when go? (swap! world assoc k true)) go?)))
+              eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref clock) :jobs {'low paused-low 'high high-removing-low}
+                                :triggers {:high {:name :high :job '(high) :when (once :high-fired #(:alarm @world))}
+                                           :low {:name :low :job '(low) :when (once :low-fired (constantly true))}}
+                                :events (events/make {:body "Fake" :sinks [(second (tu/capture-sink))] :now #(deref clock)})})]
+          (core/register-reflex! eng {:trigger :high})
+          (core/register-reflex! eng {:trigger :low})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= [[:low-cleanup :nothing-possible] :high [:low-cleanup :nothing-possible] [:low-cleanup :nothing-possible]]
+                 (:log @world))))))))
+
 (deftest a-paused-reflex-whose-trigger-still-holds-resumes-instead-of-firing-again
   (async done
     (tu/run-async done
@@ -393,7 +428,6 @@
               (when (= 1 (count (:log @world))) (core/do-now! (:engine c) '(quick)))
               (if (< (count (:log @world)) 2) :continue (ctx/end c :done nil)))})
 
-(def quick {:conditions [] :round (fn [c] (log! :quick) (ctx/end c :done nil))})
 
 (deftest an-old-child-cut-mid-cleanup-under-call-child-still-hands-its-done-and-result-over
   (async done

@@ -107,10 +107,11 @@
         (:instances (state eng))))
 
 (defn paused-reflex
-  "The reflex job cut in its cleanup (cut!) whose entry comes first in the register: it gets the body before the list does."
+  "The reflex job cut in its cleanup (cut!) whose entry comes first in the register, else any (its entry may have left
+  the register): it gets the body before the list does."
   [eng order]
   (let [paused (paused-reflexes eng)]
-    (some #(paused (:id %)) order)))
+    (or (some #(paused (:id %)) order) (first (vals paused)))))
 
 (defn fire! [eng entry h]
   (let [id (new-id! eng)
@@ -174,14 +175,15 @@
     (save-memory! eng)))
 
 (defn tick-manual!
-  "One pass under manual control: no trigger, no loop. The driver's slot job gets one call (see settle/end-slot!): a
-  failing check ends it at once with the check's reason. With it gone the body idles."
+  "One pass under manual control: no trigger, no loop. A listed job still in its cleanup (an old slot job the driver
+  replaced) runs first. Then the driver's slot job gets one call (see settle/end-slot!): a failing check ends it at
+  once with the check's reason. With it gone the body idles."
   [eng]
   (housekeep! eng)
   (reset! (:deferred eng) {})
   (if (running eng)
     (check-idle! eng)
-    (when-let [id (manual-job eng)]
+    (when-let [id (or (some #(when (cleanup/closing? eng % []) %) (:list (state eng))) (manual-job eng))]
       (if (check-passes? eng id)
         (start-round! eng id)
         (do (end-slot! eng id (:reason (waiting eng id) :not-ready) (waiting eng id))
