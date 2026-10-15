@@ -44,7 +44,7 @@
   {:name "zombie-sealed-glass-quiet"
    :blocks [[:fill [20 0 14] [24 2 18] "glass" :hollow]]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=zombie,tag=wt" [[21 0 15] [23 1 17]] 1]]}
   {:name "skeleton-ai-sealed-glass-quiet"
    :blocks [[:fill [20 0 14] [24 2 18] "glass" :hollow]]
