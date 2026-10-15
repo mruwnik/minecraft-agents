@@ -80,7 +80,8 @@
 
 (deftest the-pen-job-exports-the-contract
   (let [j (get registry/jobs job)]
-    (is (vector? (:conditions j)))
+    (is (some? (:can-start? j)))
+    (is (some? (:can-run? j)))
     (is (nil? (:check j)))
     (is (= [:plan :part] (:target j)))
     (is (fn? (:quote-of j)))))

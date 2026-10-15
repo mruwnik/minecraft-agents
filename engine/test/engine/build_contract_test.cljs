@@ -27,7 +27,9 @@
         args {'jobs.build.clear-box cbt/box 'jobs.build.path pt/box 'jobs.build.from-plan {:plan "pen"}}]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
-      (is (vector? (:conditions job)) (str sym " has conditions"))
+      (is (nil? (:conditions job)) (str sym " has no old conditions"))
+      (is (some? (:can-run? job)) (str sym " has can-run?"))
+      (is (some? (:can-start? job)) (str sym " has can-start?"))
       (is (nil? (:check job)) (str sym " has no old check"))
       (is (vector? (:target job)) (str sym " has a target"))
       (when (not= sym from-plan) ; its quote reads the judged plan: the ending tests run it
@@ -56,8 +58,8 @@
         (is (= [:impossible :bad-args] (bad-args (await (ending-of (cbt/setup {}) cbt/job {:from {:x 0 :y 0 :z 0}} 5)))))
         (is (= [:impossible :bad-args]
                (bad-args (await (ending-of (cbt/setup {}) cbt/job {:from {:x 0 :y 0 :z 0} :to {:x 7 :y 7 :z 7}} 5)))) "over 400 cells")
-        (is (= {:kind :condition-failed :cause {:reason :no-zones}}
-               (kc (await (ending-of (cbt/setup {:blocks cbt/eight} (ew/of-data {} {} nil)) cbt/job cbt/box 5)))))
+        (is (= [:condition-failed :no-zones]
+               (bad-args (await (ending-of (cbt/setup {:blocks cbt/eight} (ew/of-data {} {} nil)) cbt/job cbt/box 5)))))
         (is (= :refused (get-in (await (ending-of (cbt/setup {:blocks cbt/eight} (ew/of-data {"pad" cbt/pad-plan} {} [cbt/farm-zone]))
                                                   cbt/job cbt/box 5))
                                 [:cause :reason])))))))
@@ -89,10 +91,10 @@
       (fn ^:async t []
         (is (= [:impossible :bad-args]
                (bad-args (await (ending-of (pt/setup {:inventory pt/shovel}) path {:from {:x 0 :y 63 :z 0}} 5)))))
-        (is (= {:kind :condition-failed :cause {:reason :no-tool :kind "shovel"}}
-               (kc (await (ending-of (pt/setup {:blocks pt/four}) path (assoc pt/box :fetch false) 5)))))
-        (is (= {:kind :condition-failed :cause {:reason :no-zones}}
-               (kc (await (ending-of (pt/setup {:inventory pt/shovel :blocks pt/four} (ew/of-data {} {} nil)) path pt/box 5)))))
+        (is (= [:condition-failed :no-tool]
+               (bad-args (await (ending-of (pt/setup {:blocks pt/four}) path (assoc pt/box :fetch false) 5)))))
+        (is (= [:condition-failed :no-zones]
+               (bad-args (await (ending-of (pt/setup {:inventory pt/shovel :blocks pt/four} (ew/of-data {} {} nil)) path pt/box 5)))))
         (is (= :refused (get-in (await (ending-of (pt/setup {:inventory pt/shovel :blocks pt/four}
                                                             (ew/of-data {} {} [(pt/zone [1 60 1] [2 70 2])]))
                                                   path pt/box 5))
@@ -178,8 +180,8 @@
       (fn ^:async t []
         (is (= [:impossible :plan-trouble] (bad-args (await (plan-ending {:inventory bfp/kit} {} {:plan "nope"})))))
         (is (= [:impossible :plan-trouble] (bad-args (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen" :part "nope"})))))
-        (is (= {:kind :condition-failed :cause {:reason :no-zones}}
-               (kc (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen"} nil)))))
+        (is (= [:condition-failed :no-zones]
+               (bad-args (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen"} nil)))))
         (let [e (await (plan-ending {:inventory []} {"pen" (bfp/pen-plan)} {:plan "pen" :fetch false}))]
           (is (= :condition-failed (:kind e)))
           (is (= {:reason :no-items :needs {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1}}

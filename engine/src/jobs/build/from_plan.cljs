@@ -7,7 +7,7 @@
             [engine.settings :as settings]
             [jobs.lib.job-common :as common]
             [jobs.lib.need :as need]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
@@ -110,31 +110,34 @@
   (check-cache/cached c :planned #(planned c)))
 
 (defn plan-problem
-  "No zone list read: a failed condition. A plan that is missing, unreadable or has no cells to build (in :part) is
-  impossible: the cause is {:reason :plan-trouble :why text}."
+  "Later :no-zones while no zone list is read. A plan that is missing, unreadable or has no cells to build (in :part) is
+  never: the cause is {:reason :plan-trouble :why text}."
   [c]
   (let [{:keys [trouble]} (judged-plan c)]
     (cond
-      (nil? trouble) nil
-      (= no-zones trouble) {:reason :no-zones}
-      :else (contract/impossible {:reason :plan-trouble :why trouble}))))
+      (nil? trouble) (contract/ok :plan "the plan can be built")
+      (= no-zones trouble) (contract/later :no-zones "no zone list has been read")
+      :else (contract/never :plan-trouble trouble :why trouble))))
 
-(defn no-items
-  "{:reason :no-items :plan :part :needs} when there is nothing to build, dig, fetch or look at: the cells' items are
+(def no-items
+  "Later :no-items {:plan :part :needs} when there is nothing to build, dig, fetch or look at: the cells' items are
   not carried and no fetch is due."
-  [c]
-  (let [{:keys [cells trouble]} (judged-plan c)
-        carried (storage/carried-totals (u/inventory (:primitives c)))]
-    (when-not (or trouble
-                  (empty? (owed cells))
-                  (seq (buildable cells carried {}))
-                  (seq (digging cells))
-                  (seq (unseen cells (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))))
-                  (some? (need-of c cells)))
-      {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
-       :needs (into {} (shortage (owed cells) carried))})))
+  (checks/refusing
+   :items "there is something to build"
+   (fn [c]
+     (let [{:keys [cells trouble]} (judged-plan c)
+           carried (storage/carried-totals (u/inventory (:primitives c)))]
+       (when-not (or trouble
+                     (empty? (owed cells))
+                     (seq (buildable cells carried {}))
+                     (seq (digging cells))
+                     (seq (unseen cells (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))))
+                     (some? (need-of c cells)))
+         {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
+          :needs (into {} (shortage (owed cells) carried))})))))
 
-(def conditions [[:fn plan-problem] [:fn (started/at-start no-items)]])
+(def can-start? (checks/all plan-problem no-items))
+(def can-run? plan-problem)
 
 (declare spawn-cell result-data)
 

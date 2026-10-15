@@ -1,5 +1,6 @@
 (ns jobs.debug.notify
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.checks :as checks]
+            [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
             [engine.chat :as chat]
@@ -46,7 +47,7 @@
   [_c]
   {:done? false :units :reports :done 0 :left 1})
 
-(def conditions [])
+(def can-start? checks/always)
 
 (defn quote-of
   "Time of the chat, when it will be sent (the chat act's own bound is 3 s)."

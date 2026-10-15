@@ -7,7 +7,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.look :as look]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
             [jobs.build.from-plan :as from-plan]
             [jobs.lib.pen :as pen]
             [jobs.build.from-plan.plan :as plan]
@@ -162,32 +162,34 @@
   (check-cache/cached c :planned #(planned c)))
 
 (defn plan-problem
-  "A plan that is missing, unreadable or without fence cells, or no zone list read: failed conditions (the plan may be
-  saved or fixed later)."
+  "Later for a plan that is missing, unreadable or without fence cells, or no zone list read (the plan may be saved or
+  fixed later)."
   [c]
   (let [{:keys [trouble]} (judged-plan c)]
     (cond
-      (nil? trouble) nil
-      (= plan/no-zones trouble) {:reason :no-zones}
-      :else {:reason :plan-trouble :why trouble})))
+      (nil? trouble) (contract/ok :plan "the plan can be built")
+      (= plan/no-zones trouble) (contract/later :no-zones "no zone list has been read")
+      :else (contract/later :plan-trouble trouble :why trouble))))
 
-(defn uneven-problem
-  "A ring that steps over max-step or a gate that drops too far onto the seen ground, unless :uneven? (ground the body
-  sees changes, so a failed condition at the start only)."
-  [c]
-  (let [{:keys [cells trouble]} (judged-plan c)]
-    (when-not (or trouble (:uneven? (:args c)))
-      (when-let [bad (seq (uneven cells (plan/top-fn c)))]
-        (let [why (uneven-text bad)]
-          (ctx/warn-once! c [(:plan (:args c)) why] :pen-build.declined
-                          {:plan (:plan (:args c)) :part (:part (:args c)) :reason why
-                           :text (str "pen build declines plan " (:plan (:args c)) ": " why)})
-          {:reason :uneven :why why})))))
+(def uneven-problem
+  "Later :uneven for a ring that steps over max-step or a gate that drops too far onto the seen ground, unless :uneven?
+  (ground the body sees changes, so at the start only)."
+  (checks/refusing
+   :even "the ground is even"
+   (fn [c]
+     (let [{:keys [cells trouble]} (judged-plan c)]
+       (when-not (or trouble (:uneven? (:args c)))
+         (when-let [bad (seq (uneven cells (plan/top-fn c)))]
+           (let [why (uneven-text bad)]
+             (ctx/warn-once! c [(:plan (:args c)) why] :pen-build.declined
+                             {:plan (:plan (:args c)) :part (:part (:args c)) :reason why
+                              :text (str "pen build declines plan " (:plan (:args c)) ": " why)})
+             {:reason :uneven :why why})))))))
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions
-  [[:fn plan-problem] [:fn (started/at-start uneven-problem)] [:fn (started/at-start from-plan/no-items)]])
+(def can-start? (checks/all plan-problem uneven-problem from-plan/no-items))
+(def can-run? plan-problem)
 
 (defn inside?
   "Whether the body's column is in the box (a little above or below it too)."

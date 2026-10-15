@@ -3,6 +3,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.look :as look]
@@ -120,13 +121,15 @@
         wanted (set (target-list targets))]
     (filterv #(or (wanted (:id %)) (wanted (:name %))) (vantage/heard c nil radius))))
 
-(defn no-target
-  "At the call's start with :absent :wait: the cause :no-target while no target is present."
-  [c]
-  (when (and (not (ctx/frozen-call c)) (= :wait (:absent (:args c))) (empty? (candidates c)))
-    :no-target))
+(def no-target
+  "With :absent :wait: later :no-target while no target is present."
+  (checks/refusing
+   :target "a target is present"
+   (fn [c]
+     (when (and (= :wait (:absent (:args c))) (empty? (candidates c)))
+       {:reason :no-target}))))
 
-(def conditions [[:fn no-target]])
+(def can-start? no-target)
 
 (defn fight-data
   "The fight's data so far."

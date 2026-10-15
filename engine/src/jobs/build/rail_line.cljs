@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.contract :as contract]
             [jobs.lib.check-cache :as check-cache]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.lib.placement :as placement]
@@ -185,21 +185,28 @@
     (contract/impossible (dissoc trouble :text))))
 
 (defn plan-problem
-  "The trouble of the plan as a condition (trouble-cause), or nil."
+  "The trouble of the plan: later for no zone list read, or a plan missing or unreadable (it may be saved or fixed
+  later); never for rail cells that are not one chain."
   [c]
-  (when-let [trouble (:trouble (judged-plan c))]
-    (trouble-cause trouble)))
+  (if-let [trouble (:trouble (judged-plan c))]
+    (let [later? (#{:no-zones :plan} (:reason trouble))]
+      (apply (if later? contract/later contract/never) (:reason trouble) (checks/cause-text trouble)
+             (mapcat identity (dissoc trouble :reason :text))))
+    (contract/ok :plan "the plan can be built")))
 
-(defn ready-problem
-  "Why a line not yet begun and not sound may not be begun (not-ready): a failed condition."
-  [c]
-  (let [{:keys [cells trouble]} (judged-plan c)]
-    (when-not (or trouble (sound? c cells))
-      (check-cache/cached c :ready #(not-ready c cells)))))
+(def ready-problem
+  "Later (not-ready) for a line not yet begun and not sound that may not be begun."
+  (checks/refusing
+   :ready "the line may be begun"
+   (fn [c]
+     (let [{:keys [cells trouble]} (judged-plan c)]
+       (when-not (or trouble (sound? c cells))
+         (check-cache/cached c :ready #(not-ready c cells)))))))
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn plan-problem] [:fn (started/at-start ready-problem)]])
+(def can-start? (checks/all plan-problem ready-problem))
+(def can-run? plan-problem)
 
 (defn done?
   "Done when the line is sound; else the cells placed and the cells still owed."

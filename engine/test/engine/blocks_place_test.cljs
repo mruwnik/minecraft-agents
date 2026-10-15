@@ -132,9 +132,9 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:reason :need :item "cobblestone" :pos at}
-               (:cause (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :item "cobblestone" :fetch false}) 3)))))
+               (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :item "cobblestone" :fetch false}) 3)))))
         (is (= {:reason :need :any-of ["cobblestone" "dirt"] :pos at}
-               (:cause (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :use {:blocks ["cobblestone" "dirt"]} :fetch false}) 3)))))))))
+               (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :use {:blocks ["cobblestone" "dirt"]} :fetch false}) 3)))))))))
 
 (deftest a-solid-block-in-the-cell-ends-occupied
   (async done
@@ -181,7 +181,7 @@
       (fn ^:async t []
         (let [env (bd/setup {:self body :inventory cobble :zones [bd/farm-zone]})]
           (is (= {:reason :not-allowed :pos at :by :zone :zone "farm" :owner "Miles"}
-                 (:cause (await (bd/waiting-after env (list job {:pos at :item "cobblestone"}) 3))))))
+                 (bd/wait-cause (await (bd/waiting-after env (list job {:pos at :item "cobblestone"}) 3))))))
         (let [{:keys [eng p]} (bd/setup {:self body :inventory cobble :zones [bd/farm-zone]})
               result (await (tu/child-outcome eng job {:pos at :item "cobblestone" :ignore-zones? true} 5))]
           (is (:placed result))
@@ -194,14 +194,14 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:reason :own-body :pos {:x 0 :y 64 :z 0}}
-               (:cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [0 64 0] :item "cobblestone"}) 3)))))))))
+               (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [0 64 0] :item "cobblestone"}) 3)))))))))
 
 (deftest a-cell-with-nothing-to-place-against-waits-no-support
   (async done
     (tu/run-async done
       (fn ^:async t []
         (is (= {:reason :no-support :pos {:x 2 :y 67 :z 0}}
-               (:cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [2 67 0] :item "cobblestone"}) 3)))))))))
+               (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [2 67 0] :item "cobblestone"}) 3)))))))))
 
 (deftest no-item-named-ends-impossible-bad-args
   (async done
@@ -220,7 +220,7 @@
               other (bd/setup {:self body :inventory cobble :plans {"hut" (shape/with-author plan "Miles")}})]
           (is (:placed (await (tu/child-outcome (:eng own) job {:pos at :item "cobblestone"} 5))))
           (is (= {:reason :not-allowed :by :footprint :plan "hut"}
-                 (select-keys (:cause (await (bd/waiting-after other (list job {:pos at :item "cobblestone"}) 3))) [:reason :by :plan]))))))))
+                 (select-keys (bd/wait-cause (await (bd/waiting-after other (list job {:pos at :item "cobblestone"}) 3))) [:reason :by :plan]))))))))
 
 (deftest a-far-cell-is-walked-to-and-placed-in-one-call
   (async done

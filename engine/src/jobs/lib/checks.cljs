@@ -102,3 +102,9 @@
   (if-let [hurt (body/too-hurt (:primitives c))]
     (cause-status :later hurt)
     (contract/ok :healthy "health enough")))
+
+(defn all
+  "The status of every check asked (none short-cut): any :never, else the first :later, else :ok. Unlike
+  jobs.lib.cond/and it keeps no :parts, so an ending's cause stays the failing check's."
+  [& checks]
+  (fn [c] (contract/all (mapv #(contract/asked c %) checks))))

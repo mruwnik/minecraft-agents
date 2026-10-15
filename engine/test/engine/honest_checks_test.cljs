@@ -41,7 +41,7 @@
     'jobs.build.rail-line :plan))
 
 (deftest plan-trouble-waits-carry-the-text
-  (are [job] (= "no such plan" (:why (:cause (first (waiting-event job {:plan "no-such-plan"})))))
+  (are [job] (= "no such plan" (:why (first (waiting-event job {:plan "no-such-plan"}))))
     'jobs.build.pen
     'jobs.build.rail-line))
 

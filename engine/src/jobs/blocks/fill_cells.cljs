@@ -6,7 +6,7 @@
             [jobs.lib.choose :as choose]
             [jobs.lib.look :refer [cell-of]]
             [jobs.lib.near :as near]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -91,14 +91,16 @@
     :failed))
 
 
-(defn need
-  "The start condition: cells are owed and none of the blocks is carried."
-  [c]
-  (let [names (wanted c)]
-    (when (and (seq (owed c)) (nil? (blocks/pick c names)))
-      {:reason :need :any-of names})))
+(def need
+  "Later :need while cells are owed and none of the blocks is carried."
+  (checks/refusing
+   :carried "a block is carried"
+   (fn [c]
+     (let [names (wanted c)]
+       (when (and (seq (owed c)) (nil? (blocks/pick c names)))
+         {:reason :need :any-of names})))))
 
-(def conditions [[:fn (started/at-start need)]])
+(def can-start? need)
 
 (defn done?
   [c]

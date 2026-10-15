@@ -12,7 +12,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
             [jobs.lib.toll-cells :as tc]))
 
 (def doc
@@ -129,19 +129,22 @@
   (try (cells (:args c)) (catch :default _ nil)))
 
 (defn bad-args
-  "Impossible :bad-args when the cells args are wrong."
+  "Never :bad-args when the cells args are wrong."
   [c]
   (let [cs (try (cells (:args c)) (catch :default e (ex-message e)))]
-    (when (string? cs) (contract/impossible {:reason :bad-args :why cs}))))
+    (if (string? cs)
+      (contract/never :bad-args cs :why cs)
+      (contract/ok :args "the cells fit"))))
 
-(defn no-zones
-  "The cause :no-zones when no zone list could be read (unless :ignore-zones?)."
-  [c]
-  (when (valid-cells c) (common/no-zones c :path.declined "path")))
+(def no-zones
+  "Later :no-zones when no zone list could be read (unless :ignore-zones?)."
+  (checks/refusing :zones-read "a zone list is read"
+                      #(when (valid-cells %) (common/no-zones % :path.declined "path"))))
 
 (def all-refused
-  "At the start: every pathable cell refused by a zone, claim or plan (unless :ignore-zones?), as the cause :refused."
-  (started/at-start
+  "Later :refused when every pathable cell is refused by a zone, claim or plan (unless :ignore-zones?)."
+  (checks/refusing
+   :not-refused "a cell is not refused"
    (fn [c]
      (when-let [vs (and (valid-cells c) (not (:ignore-zones? (:args c))) (refused-all c))]
        (let [fields (assoc (access/refusal-fields vs) :reason :refused)]
@@ -150,13 +153,15 @@
          fields)))))
 
 (def shovel-lacking
-  "At the start: the cause :no-tool when cells are left to path, no shovel is carried and :fetch will not get one."
-  (started/at-start
+  "Later :no-tool when cells are left to path, no shovel is carried and :fetch will not get one."
+  (checks/refusing
+   :shovel "a shovel is carried or fetched"
    (fn [c]
      (when (and (valid-cells c) (seq (pending c)) (nil? (shovel c)) (nil? (fetch-opts c)))
        no-shovel))))
 
-(def conditions [[:fn bad-args] [:fn no-zones] [:fn all-refused] [:fn shovel-lacking]])
+(def can-start? (checks/all bad-args no-zones all-refused shovel-lacking))
+(def can-run? no-zones)
 
 (defn done?
   "Done when every cell is a path; else the cells pathed this call and the cells left to path."

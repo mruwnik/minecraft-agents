@@ -34,6 +34,8 @@
   [eng job args n]
   (:cause (:ending (await (tu/child-outcome eng job args n)))))
 
+(defn wait-cause "The wait a can-start? status gives: its data without the text." [w] (dissoc w :text))
+
 (defn ^:async waiting-after
   "Submit spec top level and run n ticks: why it waits (core/waiting), nil when it does not."
   [{:keys [eng clock]} spec n]
@@ -149,7 +151,7 @@
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "stone"}})]
           (is (= {:reason :no-tool :needs "wooden_pickaxe" :block "stone"}
-                 (dissoc (:cause (await (waiting-after env (list job {:pos at :fetch false}) 3))) :hint)))
+                 (dissoc (wait-cause (await (waiting-after env (list job {:pos at :fetch false}) 3))) :hint)))
           (is (empty? (calls (:p env) "dig"))))))))
 
 (deftest the-no-tool-wait-says-need-drop-false-digs-by-hand
@@ -157,7 +159,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "stone"}})]
-          (is (re-find #":need-drop false" (:hint (:cause (await (waiting-after env (list job {:pos at :fetch false}) 3)))))))))))
+          (is (re-find #":need-drop false" (:hint (wait-cause (await (waiting-after env (list job {:pos at :fetch false}) 3)))))))))))
 
 (deftest need-drop-false-digs-without-the-tool
   (async done
@@ -176,7 +178,7 @@
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "dirt"} :zones [farm-zone]})]
           (is (= {:reason :not-allowed :pos at :by :zone :zone "farm" :owner "Miles"}
-                 (:cause (await (waiting-after env (list job {:pos at}) 3)))))
+                 (wait-cause (await (waiting-after env (list job {:pos at}) 3)))))
           (is (empty? (calls (:p env) "dig"))))))))
 
 (defn zone-on-first-step
@@ -204,7 +206,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "dirt"} :zones nil})]
-          (is (= {:reason :not-allowed :pos at :by :no-zones} (:cause (await (waiting-after env (list job {:pos at}) 3))))))))))
+          (is (= {:reason :not-allowed :pos at :by :no-zones} (wait-cause (await (waiting-after env (list job {:pos at}) 3))))))))))
 
 (deftest ignore-zones-digs-anothers-block-and-records-it-for-tidying
   (async done
@@ -224,7 +226,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "dirt"} :inventory full-inventory})]
-          (is (= {:reason :inventory-full :pos at} (:cause (await (waiting-after env (list job {:pos at}) 3))))))
+          (is (= {:reason :inventory-full :pos at} (wait-cause (await (waiting-after env (list job {:pos at}) 3))))))
         (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "dirt"} :inventory full-inventory})]
           (is (:dug (await (tu/child-outcome eng job {:pos at :collect false} 5))))
           (is (= "air" (block-at p at))))))))
@@ -247,7 +249,7 @@
       (fn ^:async t []
         (let [stone-full (conj (vec (butlast full-inventory)) {:name "stone" :count 10})
               env (setup {:self body :blocks {"2,64,0" "stone"} :inventory (into stone-full pick)})]
-          (is (= {:reason :inventory-full :pos at} (:cause (await (waiting-after env (list job {:pos at}) 3))))))))))
+          (is (= {:reason :inventory-full :pos at} (wait-cause (await (waiting-after env (list job {:pos at}) 3))))))))))
 
 (defn items-hidden-until-moved!
   "p whose entities() shows no item while the body stands where it began: a drop beyond leaves is out of sight until it walks round."
@@ -323,7 +325,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})]
-          (is (= {:reason :hazard :pos at :hazards [:fluid-adjacent]} (:cause (await (waiting-after env (list job {:pos at}) 3))))))
+          (is (= {:reason :hazard :pos at :hazards [:fluid-adjacent]} (wait-cause (await (waiting-after env (list job {:pos at}) 3))))))
         (let [{:keys [eng]} (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})]
           (is (:dug (await (tu/child-outcome eng job {:pos at :accept #{:fluid-adjacent}} 5)))))))))
 
@@ -479,7 +481,7 @@
               other (setup {:self body :blocks {"2,64,0" "dirt"} :plans {"hut" (shape/with-author hut "Miles")}})]
           (is (= {:dug true :reason :dug} (select-keys (await (tu/child-outcome (:eng own) job {:pos [2 64 0]} 10)) [:dug :reason])))
           (is (= {:reason :not-allowed :pos at :by :footprint :plan "hut"}
-                 (select-keys (:cause (await (waiting-after other (list job {:pos at}) 3))) [:reason :pos :by :plan])))
+                 (select-keys (wait-cause (await (waiting-after other (list job {:pos at}) 3))) [:reason :pos :by :plan])))
           (is (empty? (calls (:p other) "dig"))))))))
 
 ;; ------------------------------------------------------------------ the block under the feet
@@ -854,7 +856,7 @@
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "dirt" "2,64,1" "lava"}})]
           (is (= {:reason :hazard :pos at :hazards [:lava-adjacent]}
-                 (:cause (await (waiting-after env (list job {:pos [2 64 0] :accept #{:fluid-adjacent}}) 2)))))
+                 (wait-cause (await (waiting-after env (list job {:pos [2 64 0] :accept #{:fluid-adjacent}}) 2)))))
           (is (empty? (calls (:p env) "dig"))))))))
 
 (deftest seen-lava-taken-with-lava-adjacent-is-sealed-after-the-dig

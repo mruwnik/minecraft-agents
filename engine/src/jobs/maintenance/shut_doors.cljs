@@ -1,5 +1,6 @@
 (ns jobs.maintenance.shut-doors
-  (:require [engine.args :as a]
+  (:require [jobs.lib.checks :as checks]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
@@ -38,7 +39,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [])
+(def can-start? checks/always)
 
 (a/defargs args
   {:radius {:doc "how far from the body a left block is looked for, in blocks" :spec (a/num-in 0 nil) :default 16}

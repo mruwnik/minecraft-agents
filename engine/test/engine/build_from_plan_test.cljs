@@ -222,7 +222,7 @@
     (core/submit! eng (list job {:plan "pen" :fetch false}) {})
     (dotimes [_ 4] (swap! h/clock + 700) (core/tick! eng))
     (is (= [[:no-items "pen" {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1}]]
-           (distinct (map (juxt :reason (comp :plan :cause) (comp :needs :cause)) (h/events-of seen :waiting)))))))
+           (distinct (map (juxt :reason :plan :needs) (h/events-of seen :waiting)))))))
 
 (deftest the-check-judges-the-plan-once-per-window
   (let [n (atom 0)

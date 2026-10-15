@@ -56,12 +56,13 @@
     :else {:error "give :cells or a box :from/:to"}))
 
 (defn bad-args
-  "Impossible :bad-args when neither :cells nor a box within the cell limit is given."
+  "Never :bad-args when neither :cells nor a box within the cell limit is given."
   [c]
-  (when-let [error (:error (cells-of (:args c)))]
-    (contract/impossible {:reason :bad-args :why error})))
+  (if-let [error (:error (cells-of (:args c)))]
+    (contract/never :bad-args error :why error)
+    (contract/ok :args "cells to check")))
 
-(def conditions [[:fn bad-args]])
+(def can-start? bad-args)
 
 (defn done?
   "Never done before it runs: it reports."

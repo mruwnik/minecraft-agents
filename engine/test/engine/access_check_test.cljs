@@ -95,4 +95,4 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (settle {}))]
           (is (= {:kind :impossible :cause {:reason :bad-args :why "give :cells or a box :from/:to"}}
-                 (select-keys @out [:kind :cause]))))))))
+                 (update (select-keys @out [:kind :cause]) :cause dissoc :text))))))))

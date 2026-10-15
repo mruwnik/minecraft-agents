@@ -555,8 +555,8 @@
         (doseq [[world plans zones reason text]
                 [[(spec "stone" 63 (kit {})) {"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} [] :refused #"footprint"]
                  [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail"]
-                 [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :no-zones #"no-zones"]
-                 [(spec "stone" 63 (kit {:power :block})) {"line" (line-plan {:power :block})} [] :source-blocked #"source-blocked"]
+                 [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :no-zones #"zone list"]
+                 [(spec "stone" 63 (kit {:power :block})) {"line" (line-plan {:power :block})} [] :source-blocked #"redstone block"]
                  [(spec "stone" 63 (kit {})) {} [] :plan #"plan"]]]
           (let [r (await (declines world plans {:plan "line"} zones))
                 w (first (:waits r))]
@@ -569,7 +569,8 @@
 
 (deftest the-rail-line-job-exports-the-contract
   (let [j (get registry/jobs job)]
-    (is (vector? (:conditions j)))
+    (is (some? (:can-start? j)))
+    (is (some? (:can-run? j)))
     (is (nil? (:check j)))
     (is (= [:plan :part] (:target j)))
     (is (fn? (:quote-of j)))))

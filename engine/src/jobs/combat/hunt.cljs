@@ -6,14 +6,13 @@
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.animal-spare :as spare]
-            [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.hunting :as hunting]
             [jobs.lib.shelter :as sh]
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
             [jobs.lib.vantage :as vantage]))
 
@@ -141,11 +140,6 @@
     (cond-> {:reason :too-few :mob mob :keep (keep-of c) :in-range (count (present c)) :radius radius}
       nearest (assoc :nearest (js/Math.round (.-distance nearest))))))
 
-(defn low-health
-  "The cause {:reason :low-health ..} while the body is too hurt (jobs.lib.body/too-hurt)."
-  [c]
-  (body/too-hurt (:primitives c)))
-
 (def food-animals ["cow" "pig" "sheep" "chicken"])
 
 (defn kinds
@@ -197,18 +191,20 @@
   (when (and (empty? (present-any c)) (not (vantage/done? c)))
     (seq (vantage/heard c [(:mob (:args c))] (:radius (:args c))))))
 
-(defn start-fact
-  "The cause that bars a hunt's first step, or nil: nothing of the :color in range, or :keep or fewer adults.
-  Nil while the kind is heard and not in sight: the first steps look for it."
-  [c]
-  (when-not (or (:started (ctx/mem c)) (kinds c) (heard-kind c))
-    (cond
-      (and (:color (:args c)) (empty? (present c))) (no-color c)
-      (<= (count (present c)) (keep-of c)) (too-few-cause c))))
+(def start-fact
+  "Later with the cause that bars a hunt's first step: nothing of the :color in range, or :keep or fewer adults.
+  Ok while the kind is heard and not in sight: the first steps look for it."
+  (checks/refusing
+   :quarry "there is something to hunt"
+   (fn [c]
+     (when-not (or (:started (ctx/mem c)) (kinds c) (heard-kind c))
+       (cond
+         (and (:color (:args c)) (empty? (present c))) (no-color c)
+         (<= (count (present c)) (keep-of c)) (too-few-cause c))))))
 
-(def conditions
+(def can-start?
   "Waits while too hurt or on a start fact (start-fact: not for a several-kinds call, whose kinds each check theirs)."
-  [[:fn (started/at-start low-health)] [:fn start-fact]])
+  (checks/all checks/low-health start-fact))
 
 (defn done?
   "The animals killed against the count asked, and the data so far. Never :done? itself: the hunt ends with its event and data."

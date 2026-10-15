@@ -9,7 +9,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
             [jobs.lib.step-off :as step-off]))
 
 (def doc
@@ -124,19 +124,21 @@
   (split-by-rules (access/rules-input c) (:accept (:args c)) todo))
 
 (defn bad-args
-  "Impossible :bad-args for a missing corner or too big a box."
+  "Never :bad-args for a missing corner or too big a box."
   [c]
-  (when-let [text (box-error (:args c))]
-    (contract/impossible {:reason :bad-args :why text})))
+  (if-let [text (box-error (:args c))]
+    (contract/never :bad-args text :why text)
+    (contract/ok :args "the box fits")))
 
-(defn no-zones
-  "The cause :no-zones when no zone list could be read (unless :ignore-zones?), also in the middle of the job."
-  [c]
-  (when-not (box-error (:args c)) (common/no-zones c :clear-box.declined "clear-box")))
+(def no-zones
+  "Later :no-zones when no zone list could be read (unless :ignore-zones?), also in the middle of the job."
+  (checks/refusing :zones-read "a zone list is read"
+                      #(when-not (box-error (:args %)) (common/no-zones % :clear-box.declined "clear-box"))))
 
 (def all-refused
-  "At the start: every pending cell refused by a zone or plan, as the cause :refused."
-  (started/at-start
+  "Later :refused when every pending cell is refused by a zone or plan."
+  (checks/refusing
+   :not-refused "a cell is not refused"
    (fn [c]
      (when-not (box-error (:args c))
        (let [{:keys [allowed refused]} (sort-out c (pending c))]
@@ -148,7 +150,8 @@
 
 (def target [:from :to])
 (def defaults {:spend {:job-time ::time-s}})
-(def conditions [[:fn bad-args] [:fn no-zones] [:fn all-refused]])
+(def can-start? (checks/all bad-args no-zones all-refused))
+(def can-run? no-zones)
 
 (defn done?
   "Done when every cell is loaded and nothing is left to dig; else the cells dug this call and the cells left to dig."

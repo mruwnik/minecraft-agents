@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as b]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.lava :as lava]
             [jobs.lib.need :as need]
@@ -109,13 +110,17 @@
 (def no-tool-hint "no tool harvests it: pass :need-drop false to dig it by hand (slow, no drop)")
 
 (defn bad-args [c]
-  (when-let [error (:error (b/parse (:args c)))]
-    (contract/impossible {:reason :bad-args :text (str "blocks.dig " error)})))
+  (if-let [error (:error (b/parse (:args c)))]
+    (contract/never :bad-args (str "blocks.dig " error))
+    (contract/ok :args "a cell to dig")))
 
-(defn not-loaded [c]
-  (let [{:keys [pos error]} (b/parse (:args c))]
-    (when (and (not error) (nil? (b/target-name (:primitives c) pos b/hidden-guess)))
-      {:reason :not-loaded :pos pos})))
+(def not-loaded
+  (checks/refusing
+   :loaded "the cell is loaded"
+   (fn [c]
+     (let [{:keys [pos error]} (b/parse (:args c))]
+       (when (and (not error) (nil? (b/target-name (:primitives c) pos b/hidden-guess)))
+         {:reason :not-loaded :pos pos})))))
 
 (defn problem
   "Why the cell or the bag refuses the dig now: a reason map (see doc), or nil. Air, fluids and an unloaded cell pass
@@ -164,15 +169,15 @@
     (when (and (= :fail (:on-fluid (:args c))) (= :hazard (:reason r)) (some #{:fluid-adjacent :lava-adjacent} (:hazards r)))
       r)))
 
-(defn refused [c] (when-not (fluid-refusal c) (problem c)))
+(def refused (checks/refusing :allowed "the cell may be dug" #(when-not (fluid-refusal %) (problem %))))
 
-(defn no-tool-unfetched [c] (when-not (fetch-limits c) (tool-problem c)))
+(def no-tool-unfetched (checks/refusing :tool "a tool is carried or fetched" #(when-not (fetch-limits %) (tool-problem %))))
 
 (def target [:pos])
 
 (def defaults {:spend {:job-time ::time-s} :least 1 :use {:tools :dig}})
 
-(def conditions [[:fn bad-args] [:fn not-loaded] [:fn refused] [:fn no-tool-unfetched]])
+(def can-start? (checks/all bad-args not-loaded refused no-tool-unfetched))
 
 (defn done? [c]
   (let [{:keys [pos]} (b/parse (:args c))
