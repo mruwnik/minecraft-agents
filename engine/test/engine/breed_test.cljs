@@ -277,6 +277,23 @@
           (is (= 1 (count (events-of s :breed.hand-full))))
           (is (= :warn (:level (first (events-of s :breed.hand-full))))))))))
 
+(deftest a-cancel-during-the-first-feeding-puts-the-hand-back-in-its-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (h/setup {:self {:held "iron_axe"} :inventory (into (wheat 4) axe) :entities [(cow 1 2) (cow 2 3) (cow 3 4) (cow 4 5)]})
+              release (.hold (.-world p) "interact")
+              id (core/submit! eng '(jobs.animals.breed {:mob "cow" :count 4}) {})
+              round (core/tick! eng)]
+          (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
+          (core/cancel! eng id)
+          (release)
+          (await round)
+          (await (run-ticks s 4 700))
+          (is (finished? s))
+          (is (= "iron_axe" (held-at-end s)))
+          (is (= [{:item "iron_axe"}] (args-of s "equip"))))))))
+
 (deftest touches-no-hand-when-nothing-was-fed
   (async done
     (tu/run-async done

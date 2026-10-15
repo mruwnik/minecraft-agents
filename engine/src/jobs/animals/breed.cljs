@@ -36,9 +36,9 @@
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
 
   Animals follow a body holding their food, so the hand is given back. Before the first feeding the job notes
-  what the hand holds. When it ends it equips that item again if still carried, else empties the hand. :hand is
+  what the hand holds. When it ends, however (the cleanup), it equips that item again if still carried, else empties the hand. :hand is
   :restored, :emptied or :full (no free slot: the food stays in hand, warn breed.hand-full). There is no :hand
-  when nothing was fed. A cut job restores the hand when it resumes and ends. A job cancelled while cut does not.
+  when nothing was fed. A cancel or the engine's limit restores it too.
 
   A run that fed at least two animals writes one memory entry of kind :bred/<mob> (data {:fed [uuids]}, default
   one hour). A trigger can use it, e.g. (or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200)).
@@ -116,16 +116,17 @@
     (let [r (await (ctx/act c :unequip #js {}))]
       (if (= "full" (.-status r)) :full :emptied))))
 
-(defn ^:async hand-result
-  "{:hand outcome} once the hand was noted, else {}."
-  [c]
+(defn ^:async cleanup
+  "However the run ended: the hand put back as note-hand! found it; done with {:hand outcome} once the hand was noted,
+  else with no data."
+  [c _]
   (let [m (ctx/mem c)]
     (if-not (:hand-noted m)
-      {}
+      (ctx/end c :done nil {})
       (let [outcome (await (restore-hand! c (:hand-before m)))]
         (when (= :full outcome)
           (ctx/emit! c :breed.hand-full :warn {:text "no free slot: the food stays in hand"}))
-        {:hand outcome}))))
+        (ctx/end c :done nil {:hand outcome})))))
 
 (defn note-hand!
   "Remember what the hand holds, once per run."
@@ -140,21 +141,20 @@
     (when (>= (count fed) 2)
       (ctx/remember! c (keyword "bred" (:mob (:args c))) {:fed fed}))))
 
-(defn ^:async finish!
-  "Put the hand back, emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), or
-  ending when given (a failed fetch's)."
+(defn finish!
+  "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), or ending when given
+  (a failed fetch's). The hand is put back by cleanup."
   [c reason & [ending]]
-  (let [hand (await (hand-result c))
-        m (ctx/mem c)
+  (let [m (ctx/mem c)
         {:keys [mob radius]} (:args c)
         p (:primitives c)
-        result (merge hand {:reason reason
+        result {:reason reason
                 :fed (vec (:fed m))
                 :refused (vec (:refused m))
                 :given-up (:given-up m {})
                 :food (or (animals/food-carried p mob) (:food m))
                 :adults (count (animals/adults p mob radius))
-                :babies (count (animals/babies p mob radius))})
+                :babies (count (animals/babies p mob radius))}
         seen (str "adults " (:adults result) ", babies " (:babies result))
         result (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", " seen))]
     (mark-bred! c)
