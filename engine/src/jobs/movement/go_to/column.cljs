@@ -2,8 +2,8 @@
   "go-to's goal y. A column goal ([x z] or {:x :z}, no y) stands on the surface of that column: its highest seen stand with
   no seen solid over it (trees skipped), why :surface; else (the column seen only under cover) the stand nearest the body's
   feet, why :nearest-level; over the whole build height. A column with no ground seen aims provisionally at an
-  estimate (estimate: the seen ground of the nearest column around it, else the body's feet y), or, when the column is
-  seen there and does not stand, keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from
+  estimate (estimate: the seen ground of the nearest column around it within estimate-reach of the feet, else the feet
+  y), or, when the column is seen there and does not stand, keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from
   seen cells on approach; a provisional one it first walks to within approach-range of. A y with no standable cell within the
   range is re-aimed to its column's standable cell nearest it, at most :y-slack blocks off, never past a solid (leads-to?;
   seen cells, an unseen one from the world the plans read)."
@@ -89,15 +89,17 @@
          (range 0 (inc (max (- hi y) (- y lo)))))))
 
 (defn top
-  "The y of the highest stand of the column x z with no solid or hazard over it, else nil."
-  [kind-at x z]
-  ;; one read per cell, as stands? reads them: the feet of y are the head of y - 1
-  (loop [y top-y head (kind-at x (inc y) z) feet (kind-at x y z)]
-    (when (>= y places/min-y)
-      (let [floor (kind-at x (dec y) z)]
-        (cond (and (free? feet) (free? head) (or (keyword-identical? :water feet) (keyword-identical? :solid floor))) y
-              (#{:solid :hazard} feet) nil
-              :else (recur (dec y) feet floor))))))
+  "The y of the highest stand of the column x z (from lo to hi: default the build height) with no solid or hazard over it
+  up to hi, else nil."
+  ([kind-at x z] (top kind-at x z places/min-y top-y))
+  ([kind-at x z lo hi]
+   ;; one read per cell, as stands? reads them: the feet of y are the head of y - 1
+   (loop [y hi head (kind-at x (inc y) z) feet (kind-at x y z)]
+     (when (>= y lo)
+       (let [floor (kind-at x (dec y) z)]
+         (cond (and (free? feet) (free? head) (or (keyword-identical? :water feet) (keyword-identical? :solid floor))) y
+               (#{:solid :hazard} feet) nil
+               :else (recur (dec y) feet floor)))))))
 
 (defn cached
   "kind-at reading each cell once: one aim reads the cells of a column over the whole build height, and again for its
@@ -128,12 +130,12 @@
 (def estimate-reach "Blocks above and below the feet a neighbouring column's seen ground is looked for (estimate)." 32)
 
 (defn estimate
-  "The y an unseen column x z is guessed to stand at: the surface (else the seen ground nearest the feet, within
-  estimate-reach) of the nearest column around it, looked for in 8 directions out to approach-range, else body-y."
+  "The y an unseen column x z is guessed to stand at: the surface (else the seen ground nearest the feet) of the nearest
+  column around it, looked for in 8 directions out to approach-range, else body-y; within estimate-reach of the feet, as
+  64 full-height columns read per aim cost 100s of ms."
   [kind-at x z body-y]
-  (or (some (fn [[d dx dz]] (let [cx (+ x (* d dx)) cz (+ z (* d dz))]
-                              (or (top kind-at cx cz)
-                                  (ground kind-at cx cz body-y (- body-y estimate-reach) (+ body-y estimate-reach)))))
+  (or (some (fn [[d dx dz]] (let [cx (+ x (* d dx)) cz (+ z (* d dz)) lo (- body-y estimate-reach) hi (+ body-y estimate-reach)]
+                              (or (top kind-at cx cz lo hi) (ground kind-at cx cz body-y lo hi))))
             (for [d (range 1 (inc approach-range)) [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [d dx dz]))
       body-y))
 

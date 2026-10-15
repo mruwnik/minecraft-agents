@@ -289,6 +289,17 @@
   (let [p (hiding pillar (constantly true))]
     (is (= {:pos {:x 30 :y 70 :z 0} :resolved true :provisional true} (column/aim p {:x 30 :z 0} 4 70 true)))))
 
+(deftest an-unseen-column-is-estimated-only-from-ground-within-estimate-reach-of-the-feet
+  (let [plateau (box 10 40 -10 50 99 10 "stone")
+        p (hiding plateau (fn [[x _ z]] (= [30 0] [x z])))
+        ys (atom #{})
+        unseen (fn [_ y _] (swap! ys conj y) :unknown)]
+    (is (= 100 (column/estimate (column/seen-kind-at p) 30 0 70)) "the plateau's surface, 30 above the feet")
+    (is (= 64 (column/estimate (column/seen-kind-at p) 30 0 64)) "36 above the feet: out of reach, the feet")
+    (is (= 64 (column/estimate unseen 30 0 64)))
+    (is (= [(- 64 column/estimate-reach 1) (+ 64 column/estimate-reach 1)] [(apply min @ys) (apply max @ys)])
+        "an unseen neighbourhood is read only within estimate-reach of the feet")))
+
 (defn stub-ctx
   "A go-to ctx over primitives p whose job memory is the atom mem*, events dropped."
   [p mem* args]
