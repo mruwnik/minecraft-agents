@@ -52,7 +52,7 @@
 
 (defn y-of [p] (js/Math.floor (second (g/at p))))
 
-(def args {:pos [40 60 0] :escalate false :allow-over-budget true})
+(def args {:pos [40 60 0] :ways #{:walk :clear-seal} :floor {:health 1}})
 
 (deftest a-hurt-body-with-food-waits-to-heal-and-then-drops
   (async done
@@ -88,7 +88,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13}) (assoc (dissoc args :allow-over-budget) :food 10) false))]
+        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13}) (assoc (dissoc args :floor) :food 10) false))]
           (is (= 64 (y-of p)) "still on the plateau")
           (is (empty? (g/events-of r :go-to.over-budget)))
           (is (= {:arrived false :reason :unreachable :why :needs-health :hp-cost 1 :hp-budget 0} (select-keys @out [:arrived :reason :why :hp-cost :hp-budget])))
@@ -100,7 +100,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as r} (await (go-heal! {:blocks cliff11 :self {:pos g/start :health 20 :food 20}} (-> args (dissoc :allow-over-budget) (assoc :food 20 :pos [40 53 0])) false))]
+        (let [{:keys [p out] :as r} (await (go-heal! {:blocks cliff11 :self {:pos g/start :health 20 :food 20}} (-> args (dissoc :floor) (assoc :food 20 :pos [40 53 0])) false))]
           (is (= 64 (y-of p)) "still on the plateau")
           (is (= {:why :needs-health :heal :full :health 20 :hp-cost 8 :hp-budget 7}
                  (select-keys @out [:why :heal :health :hp-cost :hp-budget])))
@@ -110,7 +110,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13}) (assoc args :min-health 12 :food 10) false))]
+        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13}) (assoc-in (assoc args :food 10) [:floor :health] 12) false))]
           (is (= 64 (y-of p)) "still on the plateau")
           (is (empty? (g/events-of r :go-to.over-budget)))
           (is (= {:arrived false :reason :unreachable :why :needs-health} (select-keys @out [:arrived :reason :why]))))))))
@@ -119,7 +119,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13 :food 20}) (assoc args :max-damage 0) true))]
+        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13 :food 20}) (assoc args :spend {:health 0}) true))]
           (is (= 64 (y-of p)))
           (is (empty? (g/events-of r :go-to.waiting-health)))
           (is (empty? (g/events-of r :go-to.over-budget)))

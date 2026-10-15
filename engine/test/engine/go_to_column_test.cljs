@@ -78,7 +78,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (go! {:blocks pocket} {:pos [5 58 0] :escalate false}))]
+        (let [{:keys [out]} (await (go! {:blocks pocket} {:pos [5 58 0] :ways #{:walk :clear-seal}}))]
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])) (pr-str @out)))))))
 
 (deftest a-y-farther-off-than-the-slack-is-not-re-aimed

@@ -42,9 +42,7 @@
   - Ways (:ways, all by default): :walk, and those that change the world: :clear-seal (its own ledger blocks round a
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
     block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
-    its own shelter). Old callers' args (legacy-args): :escalate false is :ways #{:walk :clear-seal}, :clear-seal false
-    drops :clear-seal, :min-health is :floor {:health} (1 too: heal first, then over budget), :allow-over-budget
-    :floor {:health 1}, :max-damage :spend {:health}, :leg-s :spend {:time}.
+    its own shelter).
   - A listed go-to waits (its condition, before it starts) while it would wait on the night or a retreat plug (below);
     once started such a wait is a :continue yield, kept in its memory as :hold for a parent's jobs.lib.child walk.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
@@ -230,19 +228,6 @@
   {::time-s {:default 1800 :doc "Seconds one go-to call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:least :all :spend {:time ::time-s}})
-
-(defn legacy-args
-  "An old caller's args as call keys (see the doc's Ways); call keys it gives win."
-  [{:keys [escalate clear-seal min-health allow-over-budget max-damage leg-s] :as args}]
-  (let [ways (or (:ways args) (when (false? escalate) #{:walk :clear-seal}))
-        ways (cond-> ways (false? clear-seal) (-> (or (set ways/ways)) set (disj :clear-seal)))
-        floor (or min-health (when allow-over-budget 1))
-        given #(nil? (get-in args %))]
-    (cond-> (dissoc args :escalate :clear-seal :min-health :allow-over-budget :max-damage :leg-s)
-      ways (assoc :ways ways)
-      (and floor (given [:floor :health])) (assoc-in [:floor :health] floor)
-      (and (some? max-damage) (given [:spend :health])) (assoc-in [:spend :health] max-damage)
-      (and (some? leg-s) (given [:spend :time])) (assoc-in [:spend :time] leg-s))))
 
 (defn limits-refusal
   "The refusal {:reason :bad-args :message} of the call's given :floor :health or :spend :time, nil when in range."

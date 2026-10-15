@@ -314,7 +314,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]})
-                                                {:pos [10 64 0] :range 1 :escalate false}))]
+                                                {:pos [10 64 0] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= false (:arrived @out)))
           (is (= :unreachable (:reason @out)))
           (is (empty? (events-of seen :go-to.escalated)))
@@ -372,7 +372,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen]} (await (run-job! (merge in-pit {:blocks pit}) {:pos [10 64 0] :range 1 :escalate false}))]
+        (let [{:keys [out seen]} (await (run-job! (merge in-pit {:blocks pit}) {:pos [10 64 0] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= false (:arrived @out)))
           (is (true? (:shut-in @out)) "the result says the body is shut in")
           (is (re-find #"shut in" (:text @out)) "and so does the text, not 'no walkable way'")
@@ -399,7 +399,7 @@
       (fn ^:async t []
         (let [tower (merge (box -20 63 -20 20 63 20 "stone") (box 8 64 0 8 68 0 "stone"))
               {:keys [out]} (await (run-job! {:self {:pos {:x 0 :y 64 :z 0}} :blocks tower}
-                                             {:pos [8 69 0] :range 0 :escalate false}))]
+                                             {:pos [8 69 0] :range 0 :ways #{:walk :clear-seal}}))]
           (is (false? (:arrived @out)))
           (is (nil? (:shut-in @out))))))))
 
@@ -411,7 +411,7 @@
                                                                :inventory [{:name "dirt" :count 5}]})
                                                 'jobs.blocks.dig {:pos [10 64 0]}))]
           (is (= {:status :stopped :reason :unreachable} (select-keys @out [:status :reason])) "the dig cannot reach the cell")
-          (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :escalate false")
+          (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :ways #{:walk :clear-seal}")
           (is (empty? (calls p "jumpPlace"))))))))
 
 (defn run-in-shelter!
@@ -944,7 +944,7 @@
       (fn ^:async t []
         (let [world (merge {:self {:pos {:x 5 :y 64 :z 0}}} {:blocks room-and-deck})
               {:keys [out seen]} (await (run-job! world {:pos [8 71 0] :range 0}))
-              {off :out} (await (run-job! world {:pos [8 71 0] :range 0 :escalate false :max-damage 0}))]
+              {off :out} (await (run-job! world {:pos [8 71 0] :range 0 :ways #{:walk :clear-seal} :spend {:health 0}}))]
           (is (= :goal-cut-off (:why @off)) "without escalation the planner's verdict is cut-off")
           (is (seq (events-of seen :go-to.escalated)) "shut in: it escalates")
           (is (= :unreachable (:reason @out))))))))
@@ -1025,7 +1025,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (run-job! {:self {:pos {:x 5 :y 64 :z 0}} :blocks room-and-deck}
-                                             {:pos [8 71 0] :range 0 :escalate false}))]
+                                             {:pos [8 71 0] :range 0 :ways #{:walk :clear-seal}}))]
           (is (= {:why :goal-cut-off :reason :unreachable :arrived false} (select-keys @out [:why :reason :arrived]))
               "the default budget lets drops of 10 in, and still no way leads up onto the deck"))))))
 
@@ -1106,7 +1106,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world {:self {:pos {:x 0 :y 50 :z 0}} :blocks long-loop :inventory [{:name "iron_pickaxe" :count 1}]}
-              off (await (run-job! world {:pos [10 60 2] :range 1 :tolls loop-tolls :escalate false}))
+              off (await (run-job! world {:pos [10 60 2] :range 1 :tolls loop-tolls :ways #{:walk :clear-seal}}))
               near (await (run-job! world {:pos [24 52 0] :range 1 :tolls loop-tolls}))]
           (is (true? (:arrived @(:out off))))
           (is (empty? (events-of (:seen off) :go-to.escalated)))
@@ -1143,7 +1143,7 @@
       (fn ^:async t []
         (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 3.5 :y 64 :z 0.5}} :blocks cave
                                                    :inventory [{:name "iron_pickaxe" :count 1}]}
-                                                  {:pos [30 64 0] :range 1 :escalate false}))]
+                                                  {:pos [30 64 0] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= [false :exhausted] ((juxt :arrived :why) @out)) (pr-str @out))
           (is (= [[:exhausted 1] [:exhausted 2]] (mapv (juxt :reason :try) (events-of seen :go-to.retrying)))
               (pr-str (events-of seen :go-to.retrying))))))))

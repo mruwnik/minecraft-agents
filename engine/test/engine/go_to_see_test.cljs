@@ -46,12 +46,12 @@
 
 (deftest see-gives-up-on-a-block-no-stand-in-range-sees
   ;; the goal is buried in the ground under the surface: every stand within range 3 has stone between the eye and it.
-  ;; :escalate false, as jobs.lib.blocks walks (the small test ground floods as shut in)
+  ;; :ways #{:walk :clear-seal}, as jobs.lib.blocks walks (the small test ground floods as shut in)
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out ticks] :as s} (await (gt/go! (update pit-world :blocks assoc "5,62,0" "gold_block")
-                                                       {:pos [5 62 0] :range 3 :see true :escalate false}))]
+                                                       {:pos [5 62 0] :range 3 :see true :ways #{:walk :clear-seal}}))]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (= :out-of-sight (:why @out)) (pr-str @out))
           (is (< ticks 30) "ends")

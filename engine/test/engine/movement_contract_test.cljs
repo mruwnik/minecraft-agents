@@ -137,25 +137,6 @@
     (is (= [:pos :place] (:target j)) "a go-to may call go-to to another place")
     (is (= [:walk :clear-seal :clear-path :pillar :stair :dig-out] (:ways j)))))
 
-(deftest go-to-old-args-become-the-call-keys
-  (are [old call] (= (merge {:pos [1 64 1]} call) (go-to/legacy-args (merge {:pos [1 64 1]} old)))
-    {:escalate false} {:ways #{:walk :clear-seal}}
-    {:escalate true} {}
-    {:clear-seal false} {:ways #{:walk :clear-path :pillar :stair :dig-out}}
-    {:escalate false :clear-seal false} {:ways #{:walk}}
-    {:clear-seal true} {}
-    {:escalate false :ways #{:walk :stair}} {:ways #{:walk :stair}}
-    {:min-health 12} {:floor {:health 12}}
-    {:min-health 1} {:floor {:health 1}}
-    {:allow-over-budget true} {:floor {:health 1}}
-    {:allow-over-budget false} {}
-    {:allow-over-budget true :min-health 9} {:floor {:health 9}}
-    {:max-damage 3} {:spend {:health 3}}
-    {:leg-s 5} {:spend {:time 5}}
-    {:leg-s 5 :max-damage 0} {:spend {:time 5 :health 0}}
-    {:leg-s 5 :spend {:time 9}} {:spend {:time 9}}
-    {:min-health 12 :floor {:health 4}} {:floor {:health 4}}))
-
 (deftest go-to-reads-its-walk-limits-from-the-call
   (are [given frozen limits] (= limits (go-to/walk-limits given frozen 12))
     {} {} {}

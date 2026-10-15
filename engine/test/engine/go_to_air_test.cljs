@@ -21,7 +21,7 @@
   ([yaw jitter args]
    (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw yaw} :blocks tunnel :light [15 15]
                                        :jitter jitter}
-                                      (merge {:pos [12 65 8] :range 1 :escalate false} args)))]
+                                      (merge {:pos [12 65 8] :range 1 :ways #{:walk :clear-seal}} args)))]
      @out)))
 
 (deftest a-drowning-body-swims-to-a-pocket-it-has-seen-a-cell-of
@@ -45,7 +45,7 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 2 :yaw (/ js/Math.PI -2)} :blocks tunnel :light [15 15]
                                             :jitter 0}
-                                           {:pos [12 65 8] :range 1 :escalate false}))
+                                           {:pos [12 65 8] :range 1 :ways #{:walk :clear-seal}}))
               out @out]
           (is (= :air (:why out)) (str "result " out)))))))
 
@@ -69,7 +69,7 @@
       (fn ^:async t []
         (doseq [goal [[8 70 8] [18 70 8]] oxygen [6 5]]
           (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen oxygen :pitch 0} :blocks shaft :light [15 15]}
-                                               {:pos goal :range 1 :escalate false}))]
+                                               {:pos goal :range 1 :ways #{:walk :clear-seal}}))]
             (is (true? (:arrived @out)) (str "to " goal " at oxygen " oxygen ": result " @out " at " (gt/at p)))))))))
 
 ;; should fail: the only way on is a 32 cell sealed tunnel (16 s) to a shaft at x 37, the land cut by a bedrock ridge (x 11):
@@ -83,7 +83,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 6 :pitch 0} :blocks long-tunnel :light [15 15]}
-                                             {:pos [38 70 8] :range 1 :escalate false}))]
+                                             {:pos [38 70 8] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= :air (:why @out)) (str "result " @out))
           (is (<= 69 (second (gt/at p))) (str "it swam up for air: at " (gt/at p))))))))
 
@@ -94,5 +94,5 @@
       (fn ^:async t []
         (doseq [oxygen [6 5]]
           (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen oxygen :pitch 0} :blocks shaft :light [0 0]}
-                                               {:pos [8 70 8] :range 1 :escalate false}))]
+                                               {:pos [8 70 8] :range 1 :ways #{:walk :clear-seal}}))]
             (is (true? (:arrived @out)) (str "at oxygen " oxygen ": result " @out " at " (gt/at p)))))))))
