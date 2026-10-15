@@ -139,6 +139,17 @@
           (is (= {:closed? true :cells 24} (select-keys event [:closed? :cells])) "the body walks round the pillar to see the gate")
           (is (= [{:pos {:x -1 :y 64 :z 2} :open? false}] (:gates event))))))))
 
+(deftest a-pen-longer-than-three-looks-is-walked-end-to-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [long-ring (into {} (for [x (range -1 111) z (range -1 6) :when (or (#{-1 110} x) (#{-1 5} z))] [(str x ",64," z) "oak_fence"]))
+              floor (into {} (for [x (range -10 120) z (range -10 16)] [(str x ",63," z) "stone"]))
+              w (assoc (world {}) :blocks (merge floor long-ring))
+              event (await (run-seeing {:at [2 64 2]} w 90 120))]
+          (is (= {:closed? true :cells 550} (select-keys event [:closed? :cells]))
+              "each walk to an unseen cell reveals more, so the walks continue while they make progress"))))))
+
 (defn ^:async check-twice
   "Run the job in a seeing body, take a fence cell the body does not see now out of the world (blasted while it looked away),
   and run it again; [cell second-event]."

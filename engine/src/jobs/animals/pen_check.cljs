@@ -89,7 +89,7 @@
 (defn quote-of [_c]
   {:uses {:job-time [1 5 30]}})
 
-(def max-walks 3)
+(def max-walks "Walks to the same unseen cell (no progress) before the answer is given." 3)
 
 (def animal-radius 48)
 
@@ -117,12 +117,13 @@
         box (:box (pen-box c))
         checked (await (pen-read/read! c {:at at :box box :max-cells max-cells}))
         unseen (when (= :unloaded (:reason checked)) (unseen-leak checked))
-        walks (:walks (ctx/mem c) 0)
-        walk (when (and unseen (< walks max-walks))
+        {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
+        stuck (if (= unseen last-unseen) walks 0)
+        walk (when (and unseen (< stuck max-walks))
                (await (near/go-near! c unseen 1 {:doors :never :ways #{:walk :clear-seal}})))]
     (case walk
       :partial :continue
-      :there (do (ctx/update-mem! c update :walks (fnil inc 0)) :continue)
+      :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)
       (let [rows (animals/in-pen-rows (:primitives c) checked animal-radius)
             result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)})]
         (ctx/emit! c :pen-check.done :info
