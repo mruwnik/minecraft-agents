@@ -1044,7 +1044,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (bare [{:name "oak_log" :count 4}]) [own-zone])]
+        (let [s (start (assoc (bare [{:name "oak_log" :count 4}]) :floor [-30 -30 40 30]) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3 :explore true}) {})
           (await (run-ticks s 60))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (inv s)))
