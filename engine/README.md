@@ -40,7 +40,7 @@ Builds (in `dashboard/shadow-cljs.edn`, which holds the engine and dashboard bui
 (`:node-script`, `out/body.cjs`, `engine.main/main`) and `:body-release` (the same under `:simple`, `out/body-release.cjs`: what bodies run, from `npm run body` and the world-test runner; `:advanced` breaks the JS interop). The compile JVM is capped at 1 GB.
 
 **Compiling: `tools/compile <engine|dashboard> <build>... [--priority] [--release]`** (repo root). Every cljs compile goes
-through it. It queues on `/tmp/mc-compile.lock` (never wrap it in `flock`) and compiles against the checkout's one long-lived
+through it. It queues for one of 3 machine-wide compile slots (`/tmp/mc-compile.lock*`, never wrap it in `flock`; one compile per checkout) and compiles against the checkout's one long-lived
 `shadow-cljs server` (both project words use it), which it starts when missing. `--priority` is for the owner's UI rebuilds, agents never use it.
 `--release` runs `shadow-cljs release`. `MC_COMPILE_LOG=1` prints lock wait and compile time. `tools/compile engine --stop`
 stops the server.
