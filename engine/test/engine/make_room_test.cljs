@@ -489,17 +489,16 @@
           (is (= [{:x -3 :y 65.5 :z 0}] (mapv #(js->clj (arg-of "pos" %) :keywordize-keys true) (calls p "look")))
               "east is walled at eye level: west is the first free direction"))))))
 
-(deftest max-steps-gives-up-with-a-stall-warning
+(deftest tosses-that-never-make-room-end-by-the-call-time
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:inventory (many "junk" 35) :containers {"10,64,0" []}})]
-          (.override (.-world p) "toss" (fn ^:async f [_ _ _] #js {:status "tossed" :count 1}))
-          (await (run-reflex eng {:max-steps 3 :free 36} {}))
-          (is (= 3 (count (calls p "toss"))))
-          (is (= 1 (count (of-kind seen :make-room.stalled))))
+        (let [{:keys [eng p seen clock]} (setup {:inventory (many "junk" 35) :containers {"10,64,0" []}})]
+          (.override (.-world p) "toss" (fn ^:async f [_ _ _] (swap! clock + 1000) #js {:status "tossed" :count 1}))
+          (await (run-reflex eng {:free 36 :spend {:job-time 5}} {}))
+          (is (= 1 (count (of-kind seen :limit_reached))) "no step limit of its own: the engine's time limit ends it")
+          (is (= [] (of-kind seen :make-room.stalled)))
           (is (= {} (:instances (core/state eng)))))))))
-
 
 (deftest junk-blocks-are-tossed-before-coal-and-copper-and-the-result-says-so
   (async done
@@ -838,7 +837,7 @@
     (is (some? (:can-start? job)))
     (is (nil? (:check job)))
     (is (vector? (:target job)))
-    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {:free 4 :max-steps 40}}))))))
+    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {:free 4}}))))))
 
 (deftest enough-free-slots-at-the-start-end-done-at-once
   (async done

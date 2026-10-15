@@ -49,7 +49,6 @@
   Ends:
   - done {:tossed [{:item :count}] :free} once :free slots are free (info make-room.done when it acted);
   - nothing-possible :short (it acted, nothing more may go) or :nothing-to-go (it may put away or toss nothing),
-    :stalled after :max-steps steps (warn make-room.stalled)
     or :toss-failed after three failed tosses in a row (warn make-room.toss-failed); data :free, :tossed and :text,
     info make-room.stopped for the first two. The report counts the free slots.
   Also emits info make-room.tossed (with :junk) and make-room.swapped.")
@@ -63,7 +62,6 @@
    :toss-below {:doc "a stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay" :spec (a/num-in 0 nil) :default 3.2}
    :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :spec (a/num-in 0 nil) :default 8}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :spec (a/num-in 0 nil) :default 4}
-   :max-steps {:doc "safety: stop (:stalled, warn make-room.stalled) after this many deposit calls, swaps and tosses in one run" :spec (a/int-in 1 nil) :default 40}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def unusable-policy {:cap 5 :ttl 600000})
@@ -413,7 +411,7 @@
   [c]
   (let [need (slots-short c)
         step (settings/get settings ::step-s)]
-    {:uses {:job-time [0 (* need step) (* (:max-steps (:args c)) step)]}
+    {:uses {:job-time [0 (* need step) (settings/get settings ::job-time-s)]}
      :done [0 need need]}))
 
 (defn tossed-summary
@@ -427,7 +425,6 @@
 (def stop-texts
   {:short "nothing more may go"
    :nothing-to-go "nothing it may put away or toss"
-   :stalled "still short of room after its :max-steps steps"
    :toss-failed "three tosses failed"})
 
 (defn ^:async finish-end!
@@ -441,7 +438,7 @@
       (do (when (:acted m) (ctx/emit! c :make-room.done :info summary))
           (ctx/end c :done nil {:tossed tossed :free free-now}))
       (let [text (str (stop-texts reason) "; " text)]
-        (if (#{:stalled :toss-failed} reason)
+        (if (= :toss-failed reason)
           (ctx/emit! c (keyword (str "make-room." (name reason))) :warn (assoc summary :text text :status (:toss-status m)))
           (ctx/emit! c :make-room.stopped :info (assoc summary :reason reason :text text)))
         (ctx/end c :nothing-possible reason {:text text :free free-now :tossed tossed})))))
@@ -462,9 +459,9 @@
 
 (defn ^:async step!
   "One unit of work on a fresh look at the inventory: a deposit child call, a swap or a toss (:again), or the end
-  (:done, through finish-end!). run is {:steps :chest-done}."
+  (:done, through finish-end!). run is {:chest-done}."
   [c run]
-  (let [{:keys [free max-steps toss-below]} (:args c)
+  (let [{:keys [free toss-below]} (:args c)
         p (:primitives c)
         m (ctx/mem c)
         free-now (u/free-slots p)
@@ -473,11 +470,9 @@
         names (deposit-names inventory keep recency)
         swap (when (zero? free-now) (swap-target c st))
         order (toss-order inventory keep recency toss-below)]
-    (swap! run update :steps inc)
     (cond
       (>= free-now free) (await (finish-end! c nil))
       (>= (:toss-fails m 0) 3) (await (finish-end! c :toss-failed))
-      (> (:steps @run) max-steps) (await (finish-end! c :stalled))
       (and chest (seq names)) (do (await (put-away! c run chest names keep)) :again)
       swap (do (await (swap-in! c swap)) :again)
       (seq order) (do (await (toss! c (first order) (direction p nil) {})) :again)
@@ -487,7 +482,7 @@
   "One whole attempt: settle intents left by a cut, then step! until it ends."
   [c]
   (await (settle-intents! c))
-  (let [run (atom {:steps 0 :chest-done false})]
+  (let [run (atom {:chest-done false})]
     (loop []
       (let [r (await (step! c run))]
         (if (= :again r) (recur) r)))))
