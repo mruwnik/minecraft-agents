@@ -31,13 +31,14 @@
 (defn start
   "An engine over a fake world on an andesite floor, seeing through perception (one sight pass first), with zones."
   ([world zones] (start world zones sight-opts))
-  ([world zones sight]
+  ([world zones sight] (start world zones sight {}))
+  ([world zones sight plans]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor (assoc world :floor-block "andesite"))
         p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc sight :now #(deref clock))))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
-                          :now #(deref clock) :world (ew/of-data {} {} zones)
+                          :now #(deref clock) :world (ew/of-data plans {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
     {:eng eng :p p :seen seen :clock clock})))
@@ -808,6 +809,32 @@
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
           (is (= "oak_sapling" (block-at s 4 64 3))))))))
+
+(def oak-plan {"forest" {:id "forest" :parts [{:id "a" :cells [[3 64 0]] :want {:tree "oak"}}]}})
+
+(defn forest-world [] (assoc-in (world {chest-at [{:name "oak_sapling" :count 2}]}) [:blocks "3,63,0"] "dirt"))
+
+(deftest forestry-maintain-fetches-the-sapling-for-a-bare-planned-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (forest-world) [own-zone] sight-opts oak-plan)]
+          (core/submit! (:eng s) (list 'jobs.forestry.maintain {:plan "forest"}) {})
+          (await (run-ticks s 60))
+          (is (= "oak_sapling" (block-at s 3 64 0)))
+          (is (= 1 (count (filter #(= :plant (:slot %)) (events-of s :child_started))))))))))
+
+(deftest forestry-maintain-without-fetch-waits-no-sapling-and-touches-no-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (forest-world) [own-zone] sight-opts oak-plan)]
+          (core/submit! (:eng s) (list 'jobs.forestry.maintain {:plan "forest" :fetch false}) {})
+          (await (run-ticks s 10))
+          (is (= 1 (count (listed s))) "still queued")
+          (is (empty? (transfers s)))
+          (is (= "air" (block-at s 3 64 0)) "nothing planted")
+          (is (= [:no-sapling] (distinct (mapv :reason (events-of s :waiting))))))))))
 
 (deftest plant-sapling-without-fetch-waits-no-sapling-and-touches-no-chest
   (async done

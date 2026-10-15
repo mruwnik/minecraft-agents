@@ -12,6 +12,7 @@
             [jobs.lib.trees :as forestry]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
@@ -32,7 +33,8 @@
   Cells are read from the plan and the world at every step. A sapling of the wanted species is left to grow.
   Anything else on a planned cell (another species, a block) is left and reported once (forest.foreign). Trees off
   the planned cells are never touched.
-  A bare cell whose sapling is not carried is skipped, with one forest.no-sapling note. A later run plants it.
+  A bare cell whose sapling is not carried gets it from jobs.forestry.plant-sapling (a child that fetches it: a seen
+  chest, or the leaves of its tree). With :fetch off for items it is skipped, with one forest.no-sapling note.
   A tree is left standing (forest.left, once, and skipped for 30 minutes via body memory :forestry/left) when:
   - its column holds more than :max-logs logs and :pillar? is false (else it is felled from a pillar),
   - fell-tree gave up on it,
@@ -55,7 +57,13 @@
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
    :collect-radius {:doc "how far from where the body stands the drops of a felled tree are collected, in blocks" :spec (a/num-in 0 nil) :default 8}
+   :fetch {:doc "get a missing sapling (passed to plant-sapling; see its :fetch): true, a set of kinds or a map of limits; false skips a bare cell whose sapling is not carried" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+
+(defn fetching?
+  "Whether :fetch lets the job get a missing sapling."
+  [c]
+  (boolean (some-> (need/opts c 'jobs.forestry.plant-sapling) :what (contains? :item))))
 
 ;; ------------------------------------------------------------------ access
 
@@ -182,7 +190,7 @@
   "Say, once each, which planned cells hold something foreign, cannot take a sapling, or want a sapling not carried."
   [c classes]
   (let [p (:primitives c)
-        have (u/carried-names p)]
+        have (if (fetching? c) (constantly true) (u/carried-names p))]
     (doseq [[pos [kind species]] classes]
       (case kind
         :foreign (let [found (u/seen-name p pos)]
@@ -233,10 +241,12 @@
          (sort-by #(u/dist here (:pos %))))))
 
 (defn plantable
-  "The owed cells whose sapling is carried."
+  "The owed cells whose sapling is carried or can be fetched."
   [c owed]
-  (let [have (u/carried-names (:primitives c))]
-    (filterv #(have (forestry/sapling-of (:species %))) owed)))
+  (if (fetching? c)
+    (vec owed)
+    (let [have (u/carried-names (:primitives c))]
+      (filterv #(have (forestry/sapling-of (:species %))) owed))))
 
 ;; ------------------------------------------------------------------ check
 
@@ -257,7 +267,7 @@
   [c classes]
   (let [kinds (group-by (comp first val) classes)
         cells (fn [& ks] (vec (sort (map (comp cell-vec key) (mapcat kinds ks)))))
-        have (u/carried-names (:primitives c))
+        have (if (fetching? c) (constantly true) (u/carried-names (:primitives c)))
         short (filter (fn [[_ [_ species]]] (not (have (forestry/sapling-of species)))) (:bare kinds))]
     (cond
       (seq (:foreign kinds)) {:reason :cells-foreign :cells (cells :foreign)}
@@ -393,15 +403,34 @@
       (fail-plant! c pos :unreachable))
     :again))
 
+(defn ^:async fetch-plant!
+  "Plant at pos with jobs.forestry.plant-sapling, which fetches the sapling it lacks. :again, :continue while it waits."
+  [c pos species]
+  (let [e (await (ctx/call c :plant 'jobs.forestry.plant-sapling
+                           (cond-> {:at pos :species species :for-plan (:plan (:args c))
+                                    :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                             (some? (:fetch (:args c))) (assoc :fetch (:fetch (:args c))))))]
+    (cond
+      (= :continue e) :continue
+      (= (forestry/sapling-of species) (u/seen-name (:primitives c) pos))
+      (do (ctx/update-mem! c bump :planted)
+          (ctx/forget-where! c forestry/replant-kind #(= pos (:pos %)))
+          :again)
+      :else (do (fail-plant! c pos :no-sapling) :again))))
+
 (defn ^:async plant!
-  "Step 3: plant at the nearest owed cell whose sapling is carried, the cells under the body last (and walking off
-  one when it is the only one). :again, :continue while the walk waits, or nil."
+  "Step 3: plant at the nearest owed cell, those with the sapling carried first and the cells under the body last
+  (walking off one when it is the only one); a cell without its sapling is planted by a fetching child. :again,
+  :continue while the walk waits, or nil."
   [c classes]
   (let [under (body-cells c)
-        owed (sort-by #(contains? under (cell-vec (:pos %))) (plantable c (owed-cells c classes)))]
+        have (u/carried-names (:primitives c))
+        owed (sort-by #(vector (not (have (forestry/sapling-of (:species %)))) (contains? under (cell-vec (:pos %))))
+                      (plantable c (owed-cells c classes)))]
     (when-let [{:keys [pos species]} (first owed)]
       (let [item (forestry/sapling-of species)
-            w (await (near/go-near! c pos 3 {:zone-tolls true}))]
+            fetch? (not (have item))
+            w (if fetch? :near (await (near/go-near! c pos 3 {:zone-tolls true})))]
         (cond
           (= :partial w) :continue
           (= :blocked w) (do (fail-plant! c pos :unreachable) :again)
@@ -410,16 +439,18 @@
           (if-let [why (place-refusal c pos)]
             (do (leave! c pos :refused :why why)
                 :again)
-            (let [outcome (await (blocks/place-cell! c pos item {:for-plan (:plan (:args c))
-                                                                 :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-              (case outcome
-                :continue :continue
-                (:placed :already) (do (ctx/update-mem! c bump :planted)
-                                       (ctx/forget-where! c forestry/replant-kind #(= pos (:pos %)))
-                                       :again)
-                (:no-item :occupied) (do (fail-plant! c pos outcome) :again)
-                :need (do (fail-plant! c pos :no-item) :again)
-                (do (fail-plant! c pos :failed) :again)))))))))
+            (if fetch?
+              (await (fetch-plant! c pos species))
+              (let [outcome (await (blocks/place-cell! c pos item {:for-plan (:plan (:args c))
+                                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                (case outcome
+                  :continue :continue
+                  (:placed :already) (do (ctx/update-mem! c bump :planted)
+                                         (ctx/forget-where! c forestry/replant-kind #(= pos (:pos %)))
+                                         :again)
+                  (:no-item :occupied) (do (fail-plant! c pos outcome) :again)
+                  :need (do (fail-plant! c pos :no-item) :again)
+                  (do (fail-plant! c pos :failed) :again))))))))))
 
 (defn finish!
   "Step 5: say what was done and end: done when it felled or planted, else nothing-possible :left or condition-failed."

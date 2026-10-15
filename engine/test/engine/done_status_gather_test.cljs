@@ -236,7 +236,7 @@
   (are [blocks inv m reason] (= reason (tu/kind-reason (done-in 'jobs.forestry.maintain {:blocks blocks :inventory inv} {:plan "forest"} m {"forest" oak-plan})))
     {"3,63,0" "dirt" "3,64,0" "oak_sapling"} [] {:begun true} [:ok :in-order]
     {"3,63,0" "dirt" "3,64,0" "oak_sapling"} [] {:begun true :collect ["oak"]} [:later :working]
-    {"3,63,0" "dirt"} [] {:begun true} [:later :blocked]
+    {"3,63,0" "dirt"} [] {:begun true} [:later :planting]
     {"3,63,0" "dirt"} [{:name "oak_sapling" :count 1}] {:begun true} [:later :planting]))
 
 (deftest collect-drops-is-done-when-no-wanted-drop-is-in-sight
