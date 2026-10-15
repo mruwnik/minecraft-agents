@@ -71,12 +71,12 @@
     (is (= [1] (danger-ids p)))
     (is (true? (.-seen (first (.knownMobs p)))))))
 
-(deftest a-zombie-heard-through-a-wall-is-known-not-seen-and-counts
+(deftest a-zombie-heard-through-a-wall-is-known-not-seen-and-no-danger
   (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 6 -3)] :blocks wall})
         [m] (.knownMobs p)]
     (is (true? (.-heard m)))
     (is (false? (.-seen m)))
-    (is (= [1] (danger-ids p)) "a heard melee mob with a way round the wall counts (card 99f833e8)")))
+    (is (= [] (danger-ids p)) "a look toward the sound sees nothing: no danger, though a way round the wall exists")))
 
 (deftest a-creeper-seen-three-seconds-ago-round-a-corner-still-counts
   (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 2 4)] :blocks wall})]
@@ -211,13 +211,13 @@
       (is (true? (.-remembered m)))
       (is (true? (.-seen m))))))
 
-;; ---- cards 99f833e8, 271c2a45: heard melee mobs count; a fusing creeper hisses
+;; ---- a heard melee mob counts only once seen; a fusing creeper hisses
 
-(deftest a-zombie-heard-in-the-dark-with-a-way-is-a-danger
+(deftest a-zombie-heard-in-the-dark-is-no-danger
   (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 0 8)]})]
     (dark-around! p 0 8)
-    (is (= [1] (danger-ids p)))
-    (is (true? (hostile-near? p)))))
+    (is (= [] (danger-ids p)) "too dark to make out: a look sees nothing")
+    (is (false? (hostile-near? p)))))
 
 (def glass-box
   "A zombie boxed in glass at (0 64 8): seen through it, with no way to the body."
@@ -251,8 +251,9 @@
 (defn near-with-memory? [p memory] ((:when (:hostile-near triggers/all)) p memory (:args (:hostile-near triggers/all))))
 
 (deftest a-muted-heard-mob-does-not-fire-the-trigger-until-the-mute-ends
-  (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 6 -3)] :blocks wall})]
-    (is (true? (near-with-memory? p {:now 10 :data mem/empty-data})) "no mute set: a heard melee mob with a way counts")
+  (let [{:keys [p]} (rig {:entities [(mob 1 "skeleton" 0 6)]})]
+    (dark-around! p 0 6)
+    (is (true? (near-with-memory? p {:now 10 :data mem/empty-data})) "no mute set: a skeleton heard near in the open counts")
     (is (false? (near-with-memory? p (muted-memory 100 5000))))
     (is (true? (near-with-memory? p (update (muted-memory 100 5000) :data mem/add-entry :hurt {:t 50 :data {}} {:cap 8 :ttl :forever})))
         "hurt since the mute began: the unseen mob may be the one hitting")

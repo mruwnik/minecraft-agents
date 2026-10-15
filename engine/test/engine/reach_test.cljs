@@ -232,14 +232,20 @@
   "Stone round and over the cell (0 64 6): a zombie standing there cannot walk out."
   (into {"0,66,6" "stone"} (for [x [-1 0 1] z [5 6 7] :when (not= 0 x (- z 6)) y [64 65]] [(str x "," y "," z) "stone"])))
 
-(deftest a-heard-melee-mob-is-judged-at-its-rough-spot-not-its-exact-cell
-  (is (= [8] (danger-ids boxed-cell heard-zed)) "boxed in at its exact cell, but heard south and near: the open rough spot has a way")
-  (is (= [] (danger-ids boxed-cell (assoc heard-zed :seen true :heard false))) "seen: the exact cell counts"))
+(deftest a-melee-mob-heard-but-not-seen-is-no-danger
+  (is (= [] (danger-ids boxed-cell heard-zed)) "boxed in: the look toward the sound sees nothing")
+  (is (= [] (danger-ids {} heard-zed)) "heard only: perception already counts a heard mob in clear, lit sight as seen")
+  (is (= [8] (danger-ids {} (assoc heard-zed :seen true :heard false))) "seen, with a way: a danger"))
+
+(deftest a-heard-melee-mob-still-counts-where-a-way-is-not-asked
+  (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks boxed-cell :entities [heard-zed]})]
+    (is (= [8] (map #(.-id %) (danger-q/dangers p 16 {:ranged-radius 16} {:way? false}))) "a go-to still prices the groan")))
 
 (deftest a-heard-mob-is-within-a-radius-by-its-band-not-its-exact-distance
-  (let [far (assoc heard-zed :pos {:x 0.5 :y 64 :z 20.5} :distance 20)]
-    (is (= [8] (danger-ids {} far)) "heard far: 16 blocks, inside radius 16")
-    (is (= [] (danger-ids {} (assoc far :seen true :heard false))) "seen: 20 blocks, outside")))
+  (let [far (assoc heard-zed :pos {:x 0.5 :y 64 :z 20.5} :distance 20)
+        known #(map (fn [e] (.-id e)) (danger-q/known-hostiles (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :entities [%]}) 16 {}))]
+    (is (= [8] (known far)) "heard far: 16 blocks, inside radius 16")
+    (is (= [] (known (assoc far :seen true :heard false))) "seen: 20 blocks, outside")))
 
 (def glass-box
   "Glass round the cell 7 blocks east of the body (a mob inside cannot walk out)."

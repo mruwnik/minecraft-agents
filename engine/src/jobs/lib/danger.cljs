@@ -3,7 +3,7 @@
   A melee mob is one when it has a walkable way to the body, a ranged mob when it has a line of fire; a mob walled off,
   across a pit, or with the body sealed in, is not.
   Candidates are the mobs the body knows of (known-hostiles): the perception's mob memory, seen or heard. A heard one
-  is judged by its direction and band (mob-pos), never its exact place.
+  is judged by its direction and band (mob-pos), never its exact place; a heard melee mob is a danger only beside the body.
   The mobs of one query share block reads (reach/lookup) and walk proofs (reach.proofs)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
@@ -140,7 +140,8 @@
   :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own.
   :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
   :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land.
-  A melee mob heard close (heard-close?) is one when it could stand beside the body that way (beside-toward?), else by its rough spot.
+  A melee mob heard but not seen is one only when heard close (heard-close?) and it could stand beside the body that way
+  (beside-toward?): a heard mob in clear, lit sight is already seen (engine.perception), so a look would find nothing.
   A fusing creeper (hissing, seen or heard) within swell-range is always one; beyond it the usual tests apply."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
   ([p kind-at pr e {:keys [sight? arrow-at ignore-heard? way?] :or {sight? true way? true}}]
@@ -162,13 +163,14 @@
                     body (reach/cell-of from)]
                 (or (and (heard-close? p e)
                          (beside-toward? kind-at body (:direction (obs/rough-hearing from (u/pos-of (.-pos e))))))
-                    (if pr (proofs/proved-way? kind-at pr mob body) (reach/way? kind-at mob body)))))))))
+                    (and (or (seen-only? e) (not sight?))
+                         (if pr (proofs/proved-way? kind-at pr mob body) (reach/way? kind-at mob body))))))))))
 
 (defn danger?
   "Whether hostile e (JS entity) is a real danger to the body.
   A ranged mob needs a line of fire, to have been seen or (heard only) to be in the near band, and, when the body is in a tunnel (in-tunnel?), to have been seen, not only heard
   (unless :sight? is false). A melee mob needs a walkable way to the body and, unless :sight? is false, to
-  have been seen (seen-mob?)."
+  have been seen (heard only: see danger-in?)."
   ([p e] (danger? p e {}))
   ([p e opts] (danger-in? p (reach/lookup p) e opts)))
 
