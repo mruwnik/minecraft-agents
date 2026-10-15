@@ -24,7 +24,7 @@
   (fn [jobs]
     (reduce (fn [m j]
               (let [e (get ends j {})]
-                (assoc m j {:can-start? (fn [_] (swap! calls conj [:check j]) (if (:decline e) (contract/later (:decline e) "declined") (contract/ok :stub "stub")))
+                (assoc m j {:can-start? (fn [_] (swap! calls conj [:check j]) (or (some-> (:decline e) (contract/later "declined")) (contract/ok :stub "stub")))
                             :round (fn [c]
                                      (swap! calls conj [j (:args c)])
                                      (let [r (if (fn? e) (e c (count (filter #(= j (first %)) @calls))) e)]

@@ -33,7 +33,7 @@
                       ['jobs.animals.lead-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]
                       ['jobs.animals.lure-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]
                       ['jobs.animals.herd {:mob "cow" :box {:min {:x 0 :y 60 :z 0} :max {:x 4 :y 70 :z 4}} :target 2}]]]
-    (is (some some? ((juxt :conditions :can-start? :can-run?) (job sym))) (str sym " has conditions"))
+    (is (some some? ((juxt :conditions :can-start?) (job sym))) (str sym " has conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
@@ -44,6 +44,12 @@
 (def pond (into {} (for [x (range 0 9) z (range 0 9) y [62 63]] [(str x "," y "," z) "water"])))
 (def bank (into {} (for [z (range 0 9) y [62 63]] [(str "9," y "," z) "stone"])))
 (def rod [{:name "fishing_rod" :count 1}])
+
+(deftest the-ported-animal-jobs-export-can-start-only
+  (doseq [sym ['jobs.animals.shear 'jobs.animals.leash 'jobs.animals.unleash 'jobs.animals.breed 'jobs.animals.pen-check
+               'jobs.animals.cull 'jobs.animals.shut-gate 'jobs.animals.tend 'jobs.animals.lead-to 'jobs.animals.lure-to 'jobs.animals.herd]]
+    (is (some? (:can-start? (job sym))) (str sym " has can-start?"))
+    (is (nil? (:conditions (job sym))) (str sym " has no old conditions"))))
 
 (defn ^:async angle
   [args world]

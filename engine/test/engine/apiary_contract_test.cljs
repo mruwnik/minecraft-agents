@@ -67,6 +67,15 @@
         (is (= {:event :waiting :reason :refused}
                (await (ends guard (assoc (g/fire-world {:inventory carpet}) :zones [(assoc g/zone-over-fire :owner "Miles")])))))))))
 
+;; place refused on the cell over the fire, dig allowed: every fire is left out of the survey
+(deftest guard-waits-refused-when-only-the-place-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :waiting :reason :refused}
+               (await (ends guard (assoc (g/fire-world {:inventory carpet})
+                                         :zones [{:name "bees" :owner "Miles" :min [2 65 0] :max [2 65 0]}])))))))))
+
 (deftest guard-ends-with-a-kind-and-a-cause
   (async done
     (tu/run-async done

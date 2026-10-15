@@ -319,7 +319,7 @@
                  (seq (:todo seen)) nil
                  (and (seq (:left seen)) (nil? (need/parse-arg (:fetch (:args c))))) (first (vals (:left seen)))
                  (seq (:left seen)) nil
-                 (and (seq fires) (zero? (:fires seen))) (:refusal (gate/look c :dig (map :pos fires) {}))
+                 (and (seq fires) (zero? (:fires seen))) (or (:refusal (gate/look c :dig (map :pos fires) {})) :refused)
                  :else :nothing-to-guard)]
     (cond
       (nil? reason) (contract/ok :start "a fire needs work")
