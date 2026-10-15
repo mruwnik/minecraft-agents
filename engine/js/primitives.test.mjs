@@ -1109,7 +1109,7 @@ test('collect: maxDropDown caps the walk to an item, and the movements keep thei
   bot.pathfinder.movements = { maxDropDown: 4 }
   const result = await p.collect('t1', { id: 7, maxDropDown: 1 })
   assert.equal(result.status, 'collected')
-  assert.deepEqual(drops, [1])
+  assert.deepEqual(drops, [2], 'a drop of 1 block is the pathfinder\'s 2 (it counts down to the floor block)')
   assert.equal(bot.pathfinder.movements.maxDropDown, 4)
 })
 
@@ -1133,7 +1133,7 @@ test('collect: a capped walk cut and a capped collect started at once leave the 
   const cut = p.collect('t1', { id: 7, maxDropDown: 1 })
   cut.catch(() => {})
   await new Promise(resolve => setImmediate(resolve))
-  assert.equal(bot.pathfinder.movements.maxDropDown, 1)
+  assert.equal(bot.pathfinder.movements.maxDropDown, 2)
   p.setOwner('t2')
   bot.pathfinder.goto = goal => { bot.entity.position = new Vec3(goal.x + 0.5, 63, goal.z + 0.5); pickUp(bot); return Promise.resolve() }
   const again = await p.collect('t2', { id: 7, maxDropDown: 1 })
@@ -1185,7 +1185,7 @@ test('moveTo: maxDropDown caps the walk\'s drops, and the movements keep their o
   bot.pathfinder.movements = { maxDropDown: 4 }
   bot.pathfinder.goto = () => { drops.push(bot.pathfinder.movements.maxDropDown); bot.entity.position = new Vec3(29.5, 64, 0.5); return Promise.resolve() }
   assert.equal((await p.moveTo('t1', { pos: at(30, 64, 0), maxDropDown: 3 })).status, 'arrived')
-  assert.deepEqual(drops, [3])
+  assert.deepEqual(drops, [4])
   assert.equal(bot.pathfinder.movements.maxDropDown, 4)
 })
 

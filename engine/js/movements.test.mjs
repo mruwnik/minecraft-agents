@@ -6,7 +6,7 @@ import vec3 from 'vec3'
 import prismarineRegistry from 'prismarine-registry'
 import prismarineBlock from 'prismarine-block'
 import pf from 'mineflayer-pathfinder'
-import { SafeMovements } from './movements.mjs'
+import { SafeMovements, pathfinderDrop } from './movements.mjs'
 
 const require = createRequire(import.meta.url)
 const AStar = require('mineflayer-pathfinder/lib/astar')
@@ -46,8 +46,9 @@ const fakeBot = cells => {
 const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => from + i)
 const rect = (x0, x1, z0, z1, y, name) => range(x0, x1).flatMap(x => range(z0, z1).map(z => [x, y, z, name]))
 
-const plan = (cells, from, to) => {
+const plan = (cells, from, to, maxDropDown) => {
   const movements = new SafeMovements(fakeBot(cells))
+  if (maxDropDown !== undefined) movements.maxDropDown = maxDropDown
   const goal = new GoalBlock(...to)
   return new AStar(new Move(...from, 0, 0), movements, goal, Infinity, Infinity, -1).compute()
 }
@@ -168,4 +169,11 @@ test('parkour over a 1-block gap onto stone is unchanged', () => {
   const result = plan(rect(0, 8, 1, 1, 63, 'stone').filter(([x]) => x !== 4), from, [8, 64, 1])
   assert.equal(result.status, 'success')
   assert.ok(jumps(result, from))
+})
+
+// a dug ore's drop in the 1-deep pit under it: the body steps down into the pit
+test('a drop cap of 1 block lets the body step down into a 1-deep pit; 0 does not', () => {
+  const cells = [...rect(0, 1, 1, 1, 63, 'stone'), [2, 62, 1, 'stone']]
+  assert.equal(plan(cells, [0, 64, 1], [2, 63, 1], pathfinderDrop(1)).status, 'success')
+  assert.equal(plan(cells, [0, 64, 1], [2, 63, 1], pathfinderDrop(0)).status, 'noPath')
 })

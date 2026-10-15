@@ -4,6 +4,7 @@
 import vec3 from 'vec3'
 import { PLAN_REASONS, CLIMBABLE, STEP_RISE, EYE_HEIGHT, physicsStepMs, sleepMs, dist, cell, vec } from './prim-base.mjs'
 import { setting } from './settings.mjs'
+import { pathfinderDrop } from './movements.mjs'
 
 const { Vec3 } = vec3
 const DROP_CAPS = Symbol('drop caps')
@@ -101,7 +102,7 @@ export function createWalk (env) {
     if (!movements || maxDropDown === undefined) return () => {}
     const caps = (movements[DROP_CAPS] ??= { own: movements.maxDropDown, n: 0 })
     caps.n++
-    movements.maxDropDown = maxDropDown
+    movements.maxDropDown = pathfinderDrop(maxDropDown)
     let done = false
     return () => {
       if (done) return
@@ -112,7 +113,7 @@ export function createWalk (env) {
     }
   }
   // A goto is rejected by our own setGoal(null) when a step-up starts; that is not a failure, the walk re-issues it.
-  // maxDropDown caps the drops of this walk's path (the movements' own, 4 by default, comes back after it).
+  // maxDropDown caps the blocks a drop of this walk's path falls (the movements' own cap, 3-block drops, comes back after it).
   const walk = async (ctx, goal, { stall = true, maxDropDown } = {}) => {
     const walking = env.bot
     const uncap = capDrop(walking.pathfinder.movements, maxDropDown)

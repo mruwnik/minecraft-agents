@@ -34,6 +34,9 @@ const tramplesFarmland = (bot, node, move) => (
 
 const range = (from, to) => Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i)
 
+// the pathfinder's maxDropDown counts down to the floor block a drop lands on, one more than the blocks fallen
+export const pathfinderDrop = blocks => blocks + 1
+
 export class SafeMovements extends Movements {
   constructor (bot) {
     super(bot)
