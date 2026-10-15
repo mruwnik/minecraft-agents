@@ -303,7 +303,10 @@
           (do (ctx/update-mem! c assoc :lookout-due true) :again)
 
           (and (= "stair" status) (:detour (:why walked)))
-          (end/give-up! c pos (:blocked (ctx/mem c) 0) :detour {:status :no-path :reason :detour} (dissoc (:why walked) :detour))
+          (let [why (dissoc (:why walked) :detour)]
+            (if-let [e (esc/detour-way c pos)]
+              (esc/detour-escalate! c (:blocked (ctx/mem c) 0) why e)
+              (end/give-up! c pos (:blocked (ctx/mem c) 0) :detour {:status :no-path :reason :detour} why)))
 
           (= "stair" status)
           (do (ctx/update-mem! c assoc :stair-tried true :escalate-now true) :again)

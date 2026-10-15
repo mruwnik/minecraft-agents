@@ -119,7 +119,7 @@
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
   [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored walks torches waypoint-why heal hp-cost hp-budget low-passage dip rise route straight]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
-       (if (and escalation (not= :way-dives why))
+       (if (and escalation (not (#{:way-dives :detour} why)))
          (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation))
          (case why
            :abilities (str (if shut-in "the body is shut in and " "it ") (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))

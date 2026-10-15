@@ -416,6 +416,18 @@
           (is (re-find #"84 blocks.*6 blocks away.*:detour false" (str (:text @out))))
           (is (= [0.5 64 0.5] (gt/at p)) "it did not set out"))))))
 
+;; The loop with stone between its corridors (x 0..39, z 1..5): 5 blocks of rock part the body from its goal.
+(def rock-loop (merge loop-way (box 0 63 1 39 66 5 "stone") (box 0 66 0 40 66 6 "stone")))
+
+(deftest a-buried-body-digs-through-to-a-near-goal-rather-than-walk-a-long-unseen-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (climb! (assoc in-loop :blocks rock-loop :inventory [{:name "stone_pickaxe" :count 1}]) {:pos across :range 0}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated))))
+          (is (= [0 64 6] (mapv js/Math.floor (gt/at p)))))))))
+
 (deftest the-long-way-is-walked-on-request-under-the-sky-or-within-the-bound
   (async done
     (tu/run-async done

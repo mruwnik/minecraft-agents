@@ -1226,7 +1226,7 @@
               (pr-str (events-of seen :go-to.retrying))))))))
 
 (deftest an-approach-walk-may-take-back-its-own-seal
-  (is (= #{:walk :clear-seal} (:ways (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false true))))))
+  (is (= #{:walk :clear-seal} (:ways (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false true false))))))
 
 (deftest walker-faults-past-the-retries-feed-the-escalation-ladder
   (async done
@@ -1285,3 +1285,11 @@
               "a brick wall put round the goal after the route was planned is someone's build")
           (is (some #(= [:dig-route :not-diggable] ((juxt :step :reason) %)) (events-of seen :go-to.escalation-stopped))
               (pr-str (events-of seen :go-to.escalation-stopped))))))))
+
+(deftest a-free-body-with-one-pickaxe-or-none-lets-its-stair-fetch-a-tool
+  (let [flat {:blocks (box -20 63 -20 20 63 20 "stone") :self {:pos {:x 0 :y 64 :z 0}}}
+        fetch? #(esc/fetch-tool? {:primitives (tu/fake %) :args {}})
+        picks #(vec (repeat % {:name "stone_pickaxe" :count 1}))]
+    (is (= [true true false] (map #(fetch? (assoc flat :inventory (picks %))) [0 1 2])))
+    (is (false? (fetch? (merge {:blocks room :inventory (picks 1)} in-room))) "shut in: no walk to a tool")
+    (is (= [true false] (map #(:fetch (second (esc/escalation-job {:step :stair :heading :east :steps 2} nil false false true %))) [true false])))))

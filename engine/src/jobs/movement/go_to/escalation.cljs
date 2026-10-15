@@ -1,7 +1,8 @@
 (ns jobs.movement.go-to.escalation
   "go-to's way out of a shut-in body, or in to a walled-in goal: choose pillar, stair, clear-path or a walk to the wall,
   run the child, note the holes it dug, put them back once the walk is on past them."
-  (:require [engine.contract :as contract]
+  (:require [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
@@ -75,14 +76,23 @@
                 (sh/sheltered-in c)
                 (nil? (dig-leave/leave-unsafe (:primitives c))))))
 
+(defn fetch-tool?
+  "Whether the escalation may fetch a pickaxe (stair :fetch, a :dig-route dig's): the body is free (a shut-in body
+  cannot walk to one; by-hand is its fallback) and carries one pickaxe or none, so the last one breaking is no stop."
+  [c]
+  (let [p (:primitives c)]
+    (and (not (escape/enclosed? p (some-> (:doors (:args c)) keyword)))
+         (<= (count (filter #(str/ends-with? (str (:name %)) "_pickaxe") (u/inventory p))) 1))))
+
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs;
-  by-hand? digs what no carried tool clears bare-handed; spare-own? keeps the children off the body's own plans. The
-  body's own stair cut again (:own) is marked by no tag: it stays open."
-  [{:keys [step] :as e} tag ignore-zones? by-hand? spare-own?]
+  by-hand? digs what no carried tool clears bare-handed; spare-own? keeps the children off the body's own plans;
+  fetch? lets a stair fetch a pickaxe (fetch-tool?). The body's own stair cut again (:own) is marked by no tag: it
+  stays open."
+  [{:keys [step] :as e} tag ignore-zones? by-hand? spare-own? fetch?]
   (case step
     :pillar ['jobs.access.pillar (cond-> {:height (:height e) :fetch false :ignore-zones? ignore-zones?} (:item e) (assoc :use {:blocks [(:item e)]}))]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :accept #{:falling-block} :fetch false :spent-ok true :ignore-zones? ignore-zones? :by-hand by-hand? :spare-own-builds spare-own?}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :accept #{:falling-block} :fetch fetch? :spent-ok true :ignore-zones? ignore-zones? :by-hand by-hand? :spare-own-builds spare-own?}]
     :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones? :by-hand by-hand? :spare-own-builds spare-own?}]
     :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :fetch false :ignore-zones? ignore-zones?}]))
@@ -265,14 +275,14 @@
 (defn dig-way
   "{:step :dig-route :cells [{:cell :block}]}: the cheapest cells to dig for a walk from feet cell from down or across
   into goal (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most max-route-digs, falls of
-  at most 3), in walking order, every one escape/diggable?; else nil."
+  at most 3), in walking order, every one escape/diggable?, :guess on a cell not seen (read as rock); else nil."
   [p from goal may-dig? {:keys [own? skip]}]
   (when-not (skip :dig-route)
     (let [block-at (escape/block-at-of p)
           cells (:dig (dig-route/route block-at from goal {:max-digs max-route-digs :dig-s cost/dig-cost
                                                            :step-s (:cost (cost/walk-cost {:distance 1}))}))]
       (when (and (seq cells) (every? #(escape/diggable? block-at may-dig? own? %) cells))
-        {:step :dig-route :cells (mapv (fn [cell] {:cell cell :block (block-at cell)}) cells)}))))
+        {:step :dig-route :cells (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells)}))))
 
 (defn goal-way
   "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to
@@ -302,11 +312,41 @@
       here? e
       :else {:step :approach :pos near})))
 
+(defn detour-way
+  "A buried body's way to a goal its only found way reaches by a long detour (walk.cljs :detour): the cheapest cells
+  dug from the feet into goal pos (dig-way), else a stair when the goal is above; nil when the call may not escalate,
+  tried it already (memory :detour-tried) or neither is there."
+  [c pos]
+  (when (and (ways/escalating? c) (not (:detour-tried (ctx/mem c))))
+    (let [p (:primitives c)
+          feet (end/feet-cell c)
+          goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
+          opts {:own? (own-placed-fn c) :skip (skips c)}
+          may-dig? (may-dig-fn c)]
+      (or (dig-way p feet goal may-dig? opts)
+          (when (> (second goal) (second feet))
+            (let [e (escape/choose p feet goal may-dig? opts)]
+              (when (= :stair (:step e)) e)))))))
+
+(defn detour-escalate!
+  "Start escalation e (detour-way) instead of giving up :detour (why: the bound's {:route :straight :allowed}); a
+  later give-up keeps the detour as its reason. :again."
+  [c tries why e]
+  (let [feet (end/feet-cell c)]
+    (ctx/emit! c :go-to.escalated :info (merge why {:step (:step e) :why :detour :n 1 :at feet
+                                                    :text (str "the only way round is " (:route why) " blocks for a goal " (:straight why)
+                                                               " blocks off: " (name (:step e)) " instead")}))
+    (ctx/update-mem! c #(assoc % :detour-tried true :give-up {:tries tries :status :detour :result (merge {:status :no-path :reason :detour} why)}
+                               :fruitless 1 :escalations (inc (:escalations % 0)) :escalation e :escalation-from feet
+                               :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c))))
+    :again))
+
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
   with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
   with the last one that failed, if any). A climb begun because a walkable plan went down through caves (memory
-  :cave-climb) walks that plan after all instead of giving up (memory :cave-ok)."
+  :cave-climb) walks that plan after all instead of giving up (memory :cave-ok). A detour's escalation that failed
+  (detour-escalate!) gives the detour up at once."
   [c pos failed]
   (let [{:keys [tries status result]} (:give-up (ctx/mem c))
         feet (end/feet-cell c)
@@ -334,8 +374,9 @@
       (and (:cave-climb (ctx/mem c)) (or (> n max-escalations) (= :none (:step e))))
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up) (assoc :cave-ok true)))
           :again)
-      (> n max-escalations) (end/give-up! c pos tries status result {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) {:step :spent :n max-escalations}) into? (assoc :into true))})
-      (= :none (:step e)) (end/give-up! c pos tries status result {:escalation (cond-> (or failed e) into? (assoc :into true))})
+      (and failed (= :detour status)) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation failed}))
+      (> n max-escalations) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) {:step :spent :n max-escalations}) into? (assoc :into true))}))
+      (= :none (:step e)) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
                                                :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if into? "in" "out") " on foot: " (name (:step e))))})
@@ -547,7 +588,7 @@
   the way."
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
-        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (spare-own? c))
+        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (spare-own? c) (fetch-tool? c))
         _ (await (torch/return-torch! c))
         r (await (ctx/call c :escalation job args))]
     (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug (:data r))))]
@@ -562,33 +603,54 @@
   "Dig one cell of a :dig-route escalation: look first at a cell the body has not sensed, then check it again as it
   is now (escape/protected?, escape/diggable? over may-dig-fn and own-placed-fn: a block built there since the route
   was planned is someone's) and dig it (b/dig-cell!: no tool needed, the drops left), noting it as a hole once dug.
-  The dig's outcome, :open for a cell open already, or :not-diggable."
-  [c {:keys [cell] :as planned}]
+  The dig's outcome, :open for a cell open already, :replan for a guessed cell the look shows otherwise (the route
+  was planned over rock that is not there), or :not-diggable."
+  [c {:keys [cell guess block] :as planned}]
   (let [p (:primitives c)]
     (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
     (let [block-at (escape/block-at-of p)
           n (block-at cell)]
       (cond
+        (and guess (not (dig-look/unknown? p cell)) (not= n block)) :replan
         (escape/passable? n) :open
         (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c) (own-placed-fn c) cell))) :not-diggable
         :else
-        (let [o (await (b/dig-cell! c (zipmap [:x :y :z] cell) {:ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+        (let [o (await (b/dig-cell! c (zipmap [:x :y :z] cell) {:ignore-zones? (boolean (:ignore-zones? (:args c))) :fetch (fetch-tool? c)}))
               dug (assoc planned :block n)]
           (when (= :dug o)
             (forget-dug-own! c [dug])
             (note-holes! c [dug]))
           o)))))
 
+(def max-route-replans "Routes a :dig-route escalation plans again, as its looks show guessed cells otherwise, before it fails." 8)
+
+(defn replan-route!
+  "Plan the :dig-route escalation again from the feet into goal pos with what the body sees now (dig-way): :again, or
+  the escalation fails :no-route when none is left or it planned max-route-replans times."
+  [c pos cell]
+  (let [m (ctx/mem c)
+        n (inc (:route-replans m 0))
+        e (when (<= n max-route-replans)
+            (dig-way (:primitives c) (end/feet-cell c) (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c)
+                     {:own? (own-placed-fn c) :skip (skips c)}))]
+    (if e
+      (do (ctx/update-mem! c #(-> % (assoc-in [:escalation :cells] (:cells e)) (assoc :route-replans n))) :again)
+      (escalation-failed! c pos {:step :dig-route :reason :no-route :cell cell}))))
+
 (defn ^:async dig-route-round!
   "One round of digging a :dig-route escalation's cells in walking order (route-cell!); a cell already open is passed,
-  so a resumed round goes on where it stopped. A cell that may not or could not be dug ends it (escalation-failed!)."
+  so a resumed round goes on where it stopped; a guessed cell seen otherwise plans the route again (replan-route!).
+  A cell that may not or could not be dug ends it (escalation-failed!)."
   [c pos]
   (let [{:keys [cells] :as e} (:escalation (ctx/mem c))]
     (loop [todo cells]
       (if-let [{:keys [cell] :as planned} (first todo)]
         (let [o (await (route-cell! c planned))]
+          (when (= :dug o)
+            (ctx/update-mem! c update-in [:escalation :cells] (partial mapv #(cond-> % (= cell (:cell %)) (assoc :guess false)))))
           (cond
             (= :continue o) :continue
+            (= :replan o) (await (replan-route! c pos cell))
             (#{:dug :missing :open} o) (recur (rest todo))
             :else (await (escalation-failed! c pos (cond-> {:step :dig-route :reason o :cell cell}
                                                      (= :not-diggable o) (assoc :block ((escape/block-at-of (:primitives c)) cell)))))))
