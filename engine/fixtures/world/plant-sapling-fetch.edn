@@ -68,8 +68,8 @@
    :after [[:block [14 0 19] "oak_leaves"] [:block [16 1 20] "oak_leaves"] [:not-block [20 0 14] "oak_sapling"]]}
   {:name "no-source-waits-no-sapling"
    :act [[:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-sapling :species "oak"}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-sapling}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :need :item "oak_sapling"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :need}}}]
    :after [[:not-block [20 0 14] "oak_sapling"]]}
   {:name "fetch-false-waits-despite-chest"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:oak_sapling\",count:2}]}"]]

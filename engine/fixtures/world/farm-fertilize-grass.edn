@@ -18,5 +18,5 @@
   {:name "no-bone-meal-fetch-false-waits-need"
    :body {:inventory []}
    :act [[:job (jobs.farm.fertilize {:grass true :radius 6 :max 3 :fetch false})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :need :cause {:item "bone_meal"}}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind #{:completed :stopped}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :need}}}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :need :cause {:item "bone_meal"}}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :need}}}]}]}

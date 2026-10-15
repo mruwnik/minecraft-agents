@@ -18,7 +18,7 @@
   {:name "dig-without-pickaxe-waits"
    :blocks [[:set [18 0 16] "stone"]]
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-tool}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:dug [:any]}} :for-s 20}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "place-cobblestone"

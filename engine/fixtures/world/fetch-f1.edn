@@ -20,9 +20,9 @@
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch false})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-tool}}}
-            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-tool}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-tool}}}
+            {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-tool}}}]
    :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
   {:name "chest-never-seen-not-used"
    :blocks [[:fill [13 0 18] [15 2 20] "stone" :outline]
@@ -30,7 +30,7 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :no-tool}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 40 :until {:source :job :kind :stopped}}]
    :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
   {:name "chest-without-pickaxe-fails-once"
