@@ -162,23 +162,21 @@
             (is (= :info (:level (first picked))))
             (is (= 1 (:collected (first picked))))))))))
 
-(deftest the-job-alone-waits-when-nothing-is-worth-it
+(deftest a-child-with-nothing-worth-it-fails-its-condition
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (world dirt-down))
               r (await (tu/child-outcome eng 'jobs.items.pick-up-loose {} 20))]
-          (is (= :not-done r))
+          (is (= [:condition-failed :nothing-worth-it] [(:kind (:ending r)) (:reason r)]))
           (is (= 0 (carried p "dirt"))))))))
 
-(deftest the-wait-text-says-why-nothing-was-taken
+(deftest the-condition-hint-says-why-nothing-was-taken
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [text (fn ^:async text* [w args]
-                     (let [s (setup w)]
-                       (await (tu/child-outcome (:eng s) 'jobs.items.pick-up-loose args 6))
-                       (get-in (first (filterv #(= :waiting (:kind %)) @(:seen s))) [:cause :hint])))
+                     (get-in (await (tu/child-outcome (:eng (setup w)) 'jobs.items.pick-up-loose args 6)) [:ending :cause :hint]))
               far (await (text (world log-ten-off) {:radius 8}))
               unworthy (await (text (world dirt-down) {}))
               none (await (text (world) {}))]

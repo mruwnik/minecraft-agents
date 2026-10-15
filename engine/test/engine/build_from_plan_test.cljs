@@ -1111,10 +1111,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (start {:blocks (assoc wood-ground "9,64,2" "spruce_log") :inventory []}
+        (let [{:keys [eng]} (start {:blocks (assoc wood-ground "9,64,2" "spruce_log") :inventory []}
                                         {"wall" (wall-plan "planks" "wooden_stairs")})
-              _ (await (child-outcome eng job {:plan "wall" :fetch false} 100))]
-          (is (= [{"spruce_planks" 2 "spruce_stairs" 1}] (distinct (map (comp :needs :cause) (h/events-of seen :waiting))))))))))
+              r (await (child-outcome eng job {:plan "wall" :fetch false} 100))]
+          (is (= {"spruce_planks" 2 "spruce_stairs" 1} (:needs (:cause (:ending r))))))))))
 
 (deftest a-generic-want-matches-another-species-standing-there
   (async done

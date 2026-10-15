@@ -4,6 +4,7 @@
             ["fs" :as fs]
             ["os" :as os]
             ["path" :as path]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake-world]
@@ -238,15 +239,24 @@
       (do (await (core/tick! eng))
           (recur (inc i))))))
 
+(defn outcome
+  "Child ending e as the map tests read: its data with :status :done (:already? when its goal held before it started),
+  or :status :stopped, :reason (the cause key) and the :ending."
+  [e]
+  (if (= :done (:kind e))
+    (cond-> (assoc (:data e) :status :done) (= :already (:cause e)) (assoc :already? true))
+    (assoc (:data e) :status :stopped :reason (contract/cause-key e) :ending e)))
+
 (defn ^:async child-outcome
-  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's result."
+  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's outcome."
   [eng job args n]
   (let [out (atom :not-done)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+                         (let [r (await (ctx/call c :kid job args))]
+                           (if (= :continue r)
+                             :continue
+                             (do (reset! out (outcome r)) (ctx/end c :done nil)))))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
     (core/submit! eng '(recording-parent) {})
     (await (run-until-empty eng n))

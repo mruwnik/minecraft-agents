@@ -383,7 +383,7 @@
           (is (= :count (:reason (done-event s))))
           (is (finished? s) "one call"))))))
 
-(deftest too-few-animals-hold-the-job-waiting-saying-how-many-are-in-range-and-how-far-the-nearest-is
+(deftest too-few-animals-fail-the-condition-saying-how-many-are-in-range-and-how-far-the-nearest-is
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -396,10 +396,8 @@
                   {:keep 0 :in-range 0 :radius 24} "none seen at all"]
                  [{:mob "skeleton" :radius 24} [(animal 1 "skeleton" 32 {:kind "hostile"})]
                   {:keep 0 :in-range 0 :radius 24 :nearest 32} "a hostile kind keeps none, with none in range to say it is hostile"]]]
-          (let [{:keys [eng seen]} (h/setup {:inventory h/sword :entities entities})
-                _ (await (tu/child-outcome eng 'jobs.combat.hunt args 20))
-                r (last (filter #(= :waiting (:kind %)) @seen))
-                cause (or (:cause r) r)]
+          (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
+                cause (:cause (:ending (await (tu/child-outcome eng 'jobs.combat.hunt args 20))))]
             (is (= (assoc want :reason :too-few :mob (:mob args) :killed 0)
                    (select-keys cause [:reason :mob :killed :keep :in-range :radius :nearest])) note)
             (is (= (pos? (:keep want)) (str/includes? (:text cause) "keeping")) note)))))))
@@ -476,9 +474,9 @@
         (doseq [[args entities reason note]
                 [[{:mob "sheep" :color "white" :count 1 :keep 1} [(sheep 1 3 "white") (sheep 2 5 "brown") (sheep 3 6 "brown")] :too-few "one white, keep 1: too few, however many of other colours"]
                  [{:mob "sheep" :color "white" :count 1 :keep 2} [(sheep 1 3 "brown")] :no-color "none of the colour wins over too-few"]]]
-          (let [{:keys [eng seen]} (h/setup {:inventory h/sword :entities entities})
-                _ (await (tu/child-outcome eng 'jobs.combat.hunt args 20))]
-            (is (= reason (:reason (last (filter #(= :waiting (:kind %)) @seen)))) note)))))))
+          (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
+                r (await (tu/child-outcome eng 'jobs.combat.hunt args 20))]
+            (is (= reason (:reason r)) note)))))))
 
 (deftest a-colour-hunt-skips-sheared-sheep-and-says-when-only-sheared-ones-are-in-range
   (async done

@@ -68,14 +68,12 @@
           (let [{:keys [res]} (await (run w args))]
             (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
 
-(deftest on-foot-waits-for-a-boat
+(deftest on-foot-fails-its-condition-not-aboard
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[w args reason] [[(dissoc world :self) {} :not-aboard]]]
-          (let [{:keys [res seen]} (await (run w args))]
-            (is (= :not-done res))
-            (is (= [reason] (distinct (map :reason (filterv #(= :waiting (:kind %)) @seen)))))))))))
+        (let [{:keys [res]} (await (run (dissoc world :self) {}))]
+          (is (= [:condition-failed :not-aboard] [(:kind (:ending res)) (:reason res)])))))))
 
 (deftest shore-needs-seen-cells
   (let [{:keys [p]} (lt/setup (assoc world :unloaded ["21,64,3"]))]

@@ -81,14 +81,13 @@
         (let [{:keys [res]} (await (run {:blocks pond :inventory [{:name "stick" :count 1}]} {:item "stick"}))]
           (is (= {:status :stopped :reason :bad-args} (select-keys res [:status :reason]))))))))
 
-(deftest already-aboard-waits
+(deftest already-aboard-fails-its-condition-aboard
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [other {:id 5 :name "minecart" :uuid "u-5" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}}
-              {:keys [res seen]} (await (run {:blocks pond :inventory [boat-item] :self {:vehicle 5} :entities [other]} {}))]
-          (is (= :not-done res))
-          (is (= [:aboard] (distinct (map :reason (filterv #(= :waiting (:kind %)) @seen))))))))))
+              {:keys [res]} (await (run {:blocks pond :inventory [boat-item] :self {:vehicle 5} :entities [other]} {}))]
+          (is (= [:condition-failed :aboard] [(:kind (:ending res)) (:reason res)])))))))
 
 (deftest recovers-a-boat-and-picks-up-the-item
   (async done

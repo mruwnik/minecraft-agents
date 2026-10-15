@@ -13,9 +13,9 @@
   {:blocks (merge pond bank) :inventory inventory :fish fish :self {:pos [9.5 64 4.5]}})
 
 (defn ^:async run [w args]
-  (let [{:keys [eng p seen]} (lt/setup w)
+  (let [{:keys [eng p]} (lt/setup w)
         res (await (tu/child-outcome eng 'jobs.food.fish args 120))]
-    {:res res :p p :waits (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))}))
+    {:res res :p p}))
 
 (defn carried [p name] (reduce + (map #(.-count %) (filter #(= name (.-name %)) (array-seq (.-inventory (.self p)))))))
 
@@ -28,12 +28,12 @@
           (is (= 3 (:got res)))
           (is (= 3 (+ (carried p "cod") (carried p "salmon")))))))))
 
-(deftest no-rod-and-no-fetch-waits-no-rod
+(deftest no-rod-and-no-fetch-fails-its-condition-no-rod
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [waits]} (await (run (world [] {}) {:count 1 :fetch false}))]
-          (is (= [:no-rod] waits) "the order waits, it does not start"))))))
+        (let [{:keys [res]} (await (run (world [] {}) {:count 1 :fetch false}))]
+          (is (= [:condition-failed :no-rod] [(:kind (:ending res)) (:reason res)])))))))
 
 (deftest casts-that-never-bite-end-no-bite-with-the-count-got
   (async done
@@ -44,12 +44,12 @@
           (is (= :no-bite (:reason res)))
           (is (= 0 (:got res))))))))
 
-(deftest no-water-in-sight-waits-no-water
+(deftest no-water-in-sight-fails-its-condition-no-water
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [waits]} (await (run {:blocks bank :inventory [rod]} {:count 1}))]
-          (is (= [:no-water] waits)))))))
+        (let [{:keys [res]} (await (run {:blocks bank :inventory [rod]} {:count 1}))]
+          (is (= [:condition-failed :no-water] [(:kind (:ending res)) (:reason res)])))))))
 
 (deftest some-fish-then-a-stop-is-done-when-the-least-was-caught
   (let [c (fn [least] {:primitives (tu/fake {:inventory [{:name "cod" :count 2}]}) :root "j1" :slots [] :args {:count 3}
