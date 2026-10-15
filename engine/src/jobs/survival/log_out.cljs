@@ -44,7 +44,7 @@
 (a/defargs settings
   {::time-s {:default 900 :doc "Seconds a log-out stint and the wait for the sleep count may take (a stint lasts at most until morning)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def target [])
 
@@ -56,7 +56,7 @@
 
 (defn ^:async quote-of [c]
   (let [s (/ (+ (away-ms c) (:news-ms (:args c))) 1000)]
-    {:uses {:time [0 s s]}}))
+    {:uses {:job-time [0 s s]}}))
 
 (defn ^:async log-out! [c]
   (let [r (await (ctx/act c :offline #js {:ms (away-ms c) :why "logged-out-for-sleeping-player"}))

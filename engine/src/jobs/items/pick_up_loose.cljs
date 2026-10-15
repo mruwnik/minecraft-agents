@@ -63,7 +63,7 @@
   (let [items (loose/candidates (:primitives c) (ctx/view c) (:world (:engine c)) (:args c) (:root c))
         n (count items)
         t (* s-per-item n)]
-    {:uses {:time [0 t (* 3 t)]}
+    {:uses {:job-time [0 t (* 3 t)]}
      :yields {:items (update-vals (frequencies (keep #(some-> (.-item %) .-name) items)) (fn [k] [0 k k]))}
      :done [0 n n]}))
 

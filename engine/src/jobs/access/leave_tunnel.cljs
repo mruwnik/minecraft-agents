@@ -71,7 +71,7 @@
 
 (def target [:tunnel])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn no-zones [c]
   (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) :no-zones))
@@ -88,7 +88,7 @@
 
 (defn quote-of [c]
   (let [n (count (:torches (:tunnel (:args c))))]
-    {:uses {:time [1 (+ 3 (* 4 n)) (max (+ 3 (* 4 n)) (time-s))]}}))
+    {:uses {:job-time [1 (+ 3 (* 4 n)) (max (+ 3 (* 4 n)) (time-s))]}}))
 
 (def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 

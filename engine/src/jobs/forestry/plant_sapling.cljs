@@ -46,7 +46,7 @@
 
 (def target [:at :near])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn sapling-at?
   "True when the block at pos is a sapling, mangrove propagule or fungus."
@@ -101,7 +101,7 @@
   (let [t (current-target c)
         d (if t (u/dist (u/self-pos c) (:pos t)) 0)
         fetch? (and (:fetch (:args c)) (problem c))]
-    {:uses {:time [1 (+ 2 (* 0.3 d)) (if fetch? (max (time-s) (+ 4 (* 0.6 d))) (+ 4 (* 0.6 d)))]}}))
+    {:uses {:job-time [1 (+ 2 (* 0.3 d)) (if fetch? (max (time-s) (+ 4 (* 0.6 d))) (+ 4 (* 0.6 d)))]}}))
 
 (defn ^:async walk!
   "Walk to within 3 of pos with a go-to child: :there, :continue (it waits on the world, or a leg that got nearer), or

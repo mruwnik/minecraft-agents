@@ -41,8 +41,8 @@
         (let [{:keys [eng]} (fm/start ft/tall {})
               walk (await (quote-of eng 'jobs.movement.go-to {:pos [6 64 0] :range 2}))
               fell (await (quote-of eng 'jobs.forestry.fell-tree {:radius 10}))]
-          (is (js/isFinite (first (get-in walk [:uses :time]))))
-          (is (= (+ 2 (first (get-in walk [:uses :time]))) (first (get-in fell [:uses :time])))))))))
+          (is (js/isFinite (first (get-in walk [:uses :job-time]))))
+          (is (= (+ 2 (first (get-in walk [:uses :job-time]))) (first (get-in fell [:uses :job-time])))))))))
 
 (defn ^:async fell-ending
   "The ending of job with args on a fresh world of spec, in at most n ticks (nil when it does not end)."

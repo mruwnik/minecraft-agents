@@ -70,7 +70,7 @@
   [c timeout-s]
   (let [{:keys [spend deadline]} (ctx/left c)
         rooms (cond-> []
-                (:time spend) (conj (:time spend))
+                (:job-time spend) (conj (:job-time spend))
                 deadline (conj (/ (- deadline (ctx/now c)) 1000)))
         room (when (seq rooms) (- (apply min rooms) room-margin-s))]
     (if (and room (>= room min-steer-s)) (min timeout-s room) timeout-s)))

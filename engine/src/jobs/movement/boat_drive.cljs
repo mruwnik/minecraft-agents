@@ -20,7 +20,7 @@
   Ends done (data {:pos {:x :y :z} :strokes n}), info boat.driven, or
   condition-failed: :not-aboard (got out on the way), :not-a-boat (another vehicle), :not-water (the cell is not water), or
   nothing-possible: :blocked (land in the way: two forward strokes in a row that could not move), :strokes (:max-strokes used up),
-  :failed (any other paddle status, data :primitive); limit-reached :time (the call's :spend :time used up, data the distance left).
+  :failed (any other paddle status, data :primitive); limit-reached :job-time (the call's :spend :job-time used up, data the distance left).
 
   Never :continue.")
 
@@ -31,7 +31,7 @@
 
 (def target [:pos])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (a/defargs settings
   {::time-s {:default 120 :doc "Seconds a drive may take before it gives up." :spec (a/num-in 0 nil)}})
@@ -72,10 +72,10 @@
 
 (defn quote-of [c]
   (let [cell (cell-of-call c)
-        most (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))
+        most (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s))
         left (or (left-of c) 20)
         mean (min most (/ left boat-speed))]
-    (cond-> {:uses {:time [0 mean most]}}
+    (cond-> {:uses {:job-time [0 mean most]}}
       cell (assoc :moves-to [(+ (:x cell) 0.5) (:y cell) (+ (:z cell) 0.5)]))))
 
 (defn heading-error

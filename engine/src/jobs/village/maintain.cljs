@@ -212,7 +212,7 @@
 
 (def target [:plan :roles])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn (started/at-start nothing-to-do)]])
 
@@ -222,4 +222,4 @@
   {:done? false :units :steps :done (count (filter ran? (vals (:report (ctx/mem c))))) :left (count (:todo (ctx/mem c)))})
 
 (defn quote-of [_c]
-  {:uses {:time [1 60 (settings/get settings ::time-s)]}})
+  {:uses {:job-time [1 60 (settings/get settings ::time-s)]}})

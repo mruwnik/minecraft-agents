@@ -191,7 +191,7 @@
         p (:primitives c)
         n (count (remove #(= "farmland" (u/seen-name p %)) cs))
         h (hoe c)]
-    {:uses (cond-> {:time [(* 0.5 n) (* 2 n) (* 10 n)]} (and h (pos? n)) (assoc :wear {h [n n n]}))
+    {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]} (and h (pos? n)) (assoc :wear {h [n n n]}))
      :done [0 n n]}))
 
 (defn skip!

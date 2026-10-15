@@ -39,7 +39,7 @@
 (defn time-s [] (settings/get settings ::time-s))
 
 (def target [:from])
-(def defaults {:least :all :spend {:time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::time-s}})
 
 (defn no-source [c]
   (when (empty? (:from (:args c))) {:reason :no-source}))
@@ -63,7 +63,7 @@
   [c]
   (let [n (count (:from (:args c)))
         t (* n (settings/get settings ::chest-s))]
-    {:uses {:time [(/ t 4) t (max t (time-s))]}}))
+    {:uses {:job-time [(/ t 4) t (max t (time-s))]}}))
 
 (defn totals
   "{name n} carried over all stacks."

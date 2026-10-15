@@ -248,10 +248,10 @@
 
 (deftest the-default-time-budget-grows-with-the-pen
   (let [time-of #(get-in (contract/freeze {:defaults (contract/resolve-settings pen-check/defaults (partial settings/get pen-check/settings) %)} % nil)
-                         [:spend :time])
+                         [:spend :job-time])
         box (fn [n] {:min [0 0 0] :max [(dec n) 0 (dec n)]})]
     (is (< 30 (time-of {:at [1 0 1]})) "no box: up to the most cells the fill visits")
     (is (< (time-of {:box (box 3)}) (time-of {:box (box 20)})))
     (is (< (time-of {:box (box 20)}) (time-of {:box (box 200)})) "a big box is capped by :max-cells")
     (is (< (time-of {:at [1 0 1] :max-cells 50}) (time-of {:at [1 0 1]})))
-    (is (= 5 (time-of {:at [1 0 1] :spend {:time 5}})) "a given time stays")))
+    (is (= 5 (time-of {:at [1 0 1] :spend {:job-time 5}})) "a given time stays")))

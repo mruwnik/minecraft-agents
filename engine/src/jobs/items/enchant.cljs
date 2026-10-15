@@ -53,7 +53,7 @@
 
 (def target [:item :table :slot :choice])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn problem
   "The cause {:reason :bad-args} when no item name is given."
@@ -103,7 +103,7 @@
 (defn quote-of [_c]
   (let [walk (settings/get settings ::walk-s)
         visit (settings/get settings ::visit-s)]
-    {:uses {:time [visit (+ walk visit) (+ walk (* 3 visit))]
+    {:uses {:job-time [visit (+ walk visit) (+ walk (* 3 visit))]
             :items {"lapis_lazuli" [1 2 3]}}}))
 
 ;; ------------------------------------------------------------------ the choice

@@ -269,7 +269,7 @@
         mean (* (settings/get settings ::walk-s-per-block)
                 (reduce + 0 (map #(u/dist (u/self-pos c) (u/pos-of (.-pos %))) (filter #(.-pos %) items))))
         names (frequencies (keep #(some-> (.-item %) .-name) items))]
-    {:uses {:time [0 mean (if (or (pos? search) dig) ##Inf (* 3 mean))]}
+    {:uses {:job-time [0 mean (if (or (pos? search) dig) ##Inf (* 3 mean))]}
      :yields {:items (update-vals names (fn [k] [0 k k]))}
      :done [0 n n]}))
 

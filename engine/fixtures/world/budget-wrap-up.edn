@@ -1,8 +1,8 @@
-;; A time budget (:spend :time) ends a job with its wrap-up done and its data kept: lead-to lets the cow go and ends :timeout when
+;; A time budget (:spend :job-time) ends a job with its wrap-up done and its data kept: lead-to lets the cow go and ends :timeout when
 ;; less than 30 s (at most a quarter of the time) is left; attack ends itself :timeout below 6 s (at most a quarter) left and
 ;; reports :killed so far.
-;; Should-succeed (the wrap-up): lead-to a spot 80 blocks off under :spend {:time 60} ends gave-up :timeout with the cow let go and
-;; the lead back; attack on an invulnerable zombie under :spend {:time 8} emits attack.timeout and attack.done :timeout.
+;; Should-succeed (the wrap-up): lead-to a spot 80 blocks off under :spend {:job-time 60} ends gave-up :timeout with the cow let go and
+;; the lead back; attack on an invulnerable zombie under :spend {:job-time 8} emits attack.timeout and attack.done :timeout.
 ;; Should-fail (control): lead-to a near spot with ample time (180) is done :unleashed with no timeout.
 {:defaults
  {:tags [:animals :combat :budget :jobs]
@@ -14,21 +14,21 @@
  [{:name "lead-to-far-spot-short-budget-lets-the-cow-go-and-times-out"
    :act [[:summon "cow" [8.5 0 16.5]]
          [:wait-s 3]
-         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [90 0 16] :radius 20 :spend {:time 60}})]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [90 0 16] :radius 20 :spend {:job-time 60}})]]
    :expect [{:event {:source :job :kind :lead-to.gave-up :data {:reason :timeout}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :lead-to.done :data {:reason :unleashed}} :for-s 90 :until {:source :job :kind :lead-to.gave-up}}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [99 3 31]] 1] [:item "lead" [:>= 1]]]}
   {:name "lead-to-near-spot-ample-budget-is-done-unleashed"
    :act [[:summon "cow" [8.5 0 16.5]]
          [:wait-s 3]
-         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [14 0 16] :radius 20 :spend {:time 180}})]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [14 0 16] :radius 20 :spend {:job-time 180}})]]
    :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :lead-to.gave-up :data {:reason :timeout}} :for-s 5}]
    :after [[:item "lead" 2]]}
   {:name "attack-invulnerable-zombie-short-budget-times-out"
    :act [[:summon "zombie" [12.5 0 12.5] "{NoAI:1b,Invulnerable:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 2]
-         [:job (jobs.combat.attack {:targets "zombie" :spend {:time 8}})]]
+         [:job (jobs.combat.attack {:targets "zombie" :spend {:job-time 8}})]]
    :expect [{:event {:source :job :kind :attack.timeout} :within-s 40 :of-job true}
             {:event {:source :job :kind :attack.done :data {:reason :timeout :killed []}} :within-s 40 :of-job true}]
    :limit-s 60}]}

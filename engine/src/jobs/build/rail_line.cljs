@@ -197,7 +197,7 @@
     (when-not (or trouble (sound? c cells))
       (check-cache/cached c :ready #(not-ready c cells)))))
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn plan-problem] [:fn (started/at-start ready-problem)]])
 

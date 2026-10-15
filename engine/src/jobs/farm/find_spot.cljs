@@ -177,14 +177,14 @@
 
 (def target [:center :w :h])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 (def conditions [])
 
 (defn done? "An act with no goal state: a spot search is never done before it is made." [_c] {:done? false})
 
 (defn quote-of [c]
   (let [{:keys [range walk]} (merge (into {} (map (fn [[k v]] [k (:default v)])) args) (:args c))]
-    {:uses {:time [0.1 1 (+ 20 (if walk (* 4 range) 0))]}}))
+    {:uses {:job-time [0.1 1 (+ 20 (if walk (* 4 range) 0))]}}))
 
 (defn spot-text [{:keys [pos score level work water-share sky away]}]
   (str "x " (:x pos) " y " (:y pos) " z " (:z pos) " score " score " (level " level "% work " work " water "

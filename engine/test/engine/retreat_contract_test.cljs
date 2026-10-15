@@ -40,7 +40,7 @@
               c {:primitives (tu/fake {}) :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}}]
           (is (some? (:conditions def)))
           (is (nil? (:check def)))
-          (is (= {:spend {:time :jobs.survival.retreat/time-s}} (:defaults def)))
+          (is (= {:spend {:job-time :jobs.survival.retreat/time-s}} (:defaults def)))
           (is (= {:done? false :units :hostiles :done 0 :left 0} ((:done? def) c)))
           (is (nil? (contract/quote-problem (await ((:quote-of def) c))))))))))
 
@@ -65,7 +65,7 @@
                      (core/submit! eng '(jobs.survival.retreat {}) {})
                      (await (tu/run-until-empty eng 5))
                      (let [{:keys [kind cause]} (:data (first (job-ev seen :stopped)))]
-                       (is (= [:limit-reached {:line :time :spend 3}] [kind (select-keys cause [:line :spend])])))))))))))
+                       (is (= [:limit-reached {:line :job-time :spend 3}] [kind (select-keys cause [:line :spend])])))))))))))
 
 (deftest a-flight-with-under-a-steer-left-ends-limit-reached-cleanly
   (async done
@@ -78,7 +78,7 @@
                        (core/submit! eng '(jobs.survival.retreat {}) {})
                        (await (tu/run-until-empty eng 10))
                        (is (empty? (:list (core/state eng))) (str time-s " s: the flight left the list"))
-                       (is (= [[:limit-reached :time]]
+                       (is (= [[:limit-reached :job-time]]
                               (mapv #(let [{:keys [kind cause]} (:data %)] [kind (:line cause)]) (job-ev seen :stopped)))
                            (str time-s " s"))
                        (is (empty? (filter #(= :error (:level %)) @seen)) (str time-s " s: no error")))))))))))

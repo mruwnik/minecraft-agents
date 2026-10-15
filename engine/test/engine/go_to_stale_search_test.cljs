@@ -192,7 +192,7 @@
                                            (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
                                                                 :from (:pos c) :to (:pos c)}))]
             (let [{:keys [out]} (await (gt/go! {:self {:pos [0.5 64 0.5]} :blocks floor-blocks :clock clock}
-                                               {:pos [30 64 0] :range 1 :ways #{:walk :clear-seal} :spend {:time 3}}))]
+                                               {:pos [30 64 0] :range 1 :ways #{:walk :clear-seal} :spend {:job-time 3}}))]
               (is (false? (:arrived @out)) (pr-str @out))
               (is (= :leg-search-spent (:why @out)) (pr-str @out))
               (is (<= @rounds 6) "it gave up within a few slices"))))))))

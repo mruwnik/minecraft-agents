@@ -126,7 +126,7 @@
         (with-redefs [near/walk-round! (dry-walk-fails (fn [_] {:result {:status :off-plan :partial true} :status "partial"
                                                                 :to {:x 12.5 :y 63 :z 0.5}}))]
           (let [{:keys [out p] :as s} (await (gt/go! {:self {:pos [-4.5 64 0.5]} :blocks (pond 12)}
-                                                     {:pos [10 64 0] :range 3 :ways #{:walk :clear-seal} :spend {:time 30}}))
+                                                     {:pos [10 64 0] :range 3 :ways #{:walk :clear-seal} :spend {:job-time 30}}))
                 said (:text (first (gt/events-of s :go-to.in-water)))]
             (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p)))
             (is (true? (:in-water @out)) (str "result " @out))

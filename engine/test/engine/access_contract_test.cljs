@@ -26,7 +26,7 @@
 
 (deftest a-longer-bridge-quotes-more-time
   (let [quote-of (:quote-of (get registry/jobs 'jobs.access.bridge))
-        least (fn [n] (get-in (quote-of {:primitives (tu/fake {}) :args {:heading :east :length n}}) [:uses :time 0]))]
+        least (fn [n] (get-in (quote-of {:primitives (tu/fake {}) :args {:heading :east :length n}}) [:uses :job-time 0]))]
     (is (< (least 2) (least 20)))))
 
 (defn ^:async ending-of

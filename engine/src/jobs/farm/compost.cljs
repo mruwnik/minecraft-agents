@@ -67,7 +67,7 @@
 
 (def target [:at])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn problem
   "The cause {:reason :no-zones} while no zone list has been read, else nil."
@@ -85,7 +85,7 @@
 (defn quote-of [c]
   (let [times (:times (:args c))]
     {:yields {:items {"bone_meal" [0 times times]}}
-     :uses {:time [2 (* 40 times) (* 200 times)]}
+     :uses {:job-time [2 (* 40 times) (* 200 times)]}
      :done [0 times times]}))
 
 (defn level-of [b]

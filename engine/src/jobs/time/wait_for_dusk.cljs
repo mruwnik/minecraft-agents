@@ -16,7 +16,7 @@
 (a/defargs settings
   {::time-s {:default 1800 :doc "Seconds the wait for dusk may take." :spec (a/int-in 1 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:holds (list '>= '(time-of-day) facts/dusk-tick) :dusk-not-come]])
 
@@ -29,6 +29,6 @@
 (defn quote-of [c]
   (let [left (max 0 (- facts/dusk-tick (.-timeOfDay (.self (:primitives c)))))
         s (/ (settings/ticks->ms left) 1000)]
-    {:uses {:time [0 s (if (and (pos? left) (settings/frozen?)) ##Inf s)]}}))
+    {:uses {:job-time [0 s (if (and (pos? left) (settings/frozen?)) ##Inf s)]}}))
 
 (defn ^:async round [c] (ctx/end c :done nil))

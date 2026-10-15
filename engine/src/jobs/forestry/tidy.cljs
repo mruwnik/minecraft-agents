@@ -180,7 +180,7 @@
 
 (def target [:species])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [])
 
@@ -193,5 +193,5 @@
 
 (defn quote-of [c]
   (let [k (or (:max-trees (:args c)) (settings/get settings ::max-trees))]
-    {:uses {:time [2 (* 15 (min k 2)) (max (settings/get settings ::time-s) (* 30 k))]}
+    {:uses {:job-time [2 (* 15 (min k 2)) (max (settings/get settings ::time-s) (* 30 k))]}
      :done [0 1 k]}))

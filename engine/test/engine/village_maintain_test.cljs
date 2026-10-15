@@ -157,13 +157,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:plan "p" :target 4} (apply world pair)
-                                 {'jobs.build.from-plan {:status :stopped :kind :limit-reached :cause {:line :time :reason :timeout}}}))]
+                                 {'jobs.build.from-plan {:status :stopped :kind :limit-reached :cause {:line :job-time :reason :timeout}}}))]
           (is (empty? (ran s 'jobs.village.breed)) "no later step is called")
           (is (= [:stopped :timeout] (ending s))))))))
 
 (deftest it-is-a-contract-job
   (is (= [:plan :roles] maintain/target))
-  (is (= {:spend {:time ::maintain/time-s}} maintain/defaults))
+  (is (= {:spend {:job-time ::maintain/time-s}} maintain/defaults))
   (is (seq maintain/conditions))
   (is (fn? maintain/done?))
   (is (fn? maintain/quote-of)))

@@ -56,7 +56,7 @@
 
 (def target [:items])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn furnace-short
   "{material n}: the furnace products (iron_ingot ..) that the first recipes of items need together, beyond carried
@@ -138,7 +138,7 @@
   (let [st (state c)
         n (count (remove #(had? (:carried st) (:worn st) %) (:items (:args c))))
         t (* n (settings/get settings ::item-s))]
-    {:uses {:time [0 t ##Inf]}}))
+    {:uses {:job-time [0 t ##Inf]}}))
 
 (defn obtain-args [c item n]
   (let [a (:args c)]

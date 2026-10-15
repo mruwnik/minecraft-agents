@@ -23,7 +23,7 @@
 
 (deftest waiting-for-the-day-is-quoted-by-the-ticks-left-of-the-night
   (let [quote-of (fn [time] (get-in ((:quote-of (get registry/jobs 'jobs.time.wait-for-day)) {:primitives (tu/fake {:time time})})
-                                    [:uses :time]))]
+                                    [:uses :job-time]))]
     (is (= [0 0 0] (quote-of 1000)) "day: nothing to wait for")
     (is (< 0 (second (quote-of 13000)) (nth (quote-of 13000) 2)))
     (is (> (second (quote-of 13000)) (second (quote-of 20000))) "later in the night, less to wait")))

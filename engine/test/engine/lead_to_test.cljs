@@ -738,7 +738,7 @@
       (fn ^:async t []
         (let [{:keys [p clock] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})]
           (.override (.-world p) "steer" (fn [token args impl] (swap! clock + 10000) (impl token args)))
-          (await (submit s {:spend {:time 120}} 30))
+          (await (submit s {:spend {:job-time 120}} 30))
           (is (finished? s))
           (is (= :timeout (:reason (done-event s))))
           (is (false? (:still-led (done-event s))))

@@ -60,7 +60,7 @@
 
 (def target [:at :center :grass])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn raw-targets
   "The positions to fertilize (unripe crops, or open grass with :grass), before the zone rules and the refused ones."
@@ -122,7 +122,7 @@
 
 (defn quote-of [c]
   (let [n (min (:max (:args c)) (count (raw-targets c)))]
-    {:uses {:time [n (* 3 n) (* 15 n)] :items {"bone_meal" [0 n (* 2 n)]}}
+    {:uses {:job-time [n (* 3 n) (* 15 n)] :items {"bone_meal" [0 n (* 2 n)]}}
      :done [0 n n]}))
 
 (defn conclude!

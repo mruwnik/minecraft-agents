@@ -1211,8 +1211,8 @@
     (is (nil? (:check def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))
     (is (= [3 62 0] (:moves-to q)))
-    (is (< (js/Math.abs (- (* 3 (nth (get-in ((:quote-of def) (assoc-in c [:args :dir] :level)) [:uses :time]) 1))
-                           (* 2 (nth (get-in q [:uses :time]) 1))))
+    (is (< (js/Math.abs (- (* 3 (nth (get-in ((:quote-of def) (assoc-in c [:args :dir] :level)) [:uses :job-time]) 1))
+                           (* 2 (nth (get-in q [:uses :job-time]) 1))))
            1e-9)
         "a level step cuts 2 cells, a stair step 3: the mean time is 2/3 of it")))
 

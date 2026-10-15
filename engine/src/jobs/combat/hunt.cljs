@@ -71,7 +71,7 @@
 
 (def target [:mob])
 
-(def defaults {:spend {:time ::time-s} :least 1 :use {:tools :attack}})
+(def defaults {:spend {:job-time ::time-s} :least 1 :use {:tools :attack}})
 
 (defn adults-within
   "The adult entities named :mob within radius blocks, nearest first, never players, items or babies
@@ -220,7 +220,7 @@
      :data {:killed killed}}))
 
 (defn quote-of [c]
-  {:uses {:time [0 (* 20 (:count (:args c) 1)) ##Inf]}})
+  {:uses {:job-time [0 (* 20 (:count (:args c) 1)) ##Inf]}})
 
 (defn ending-of
   "The ending of a hunt of killed animals that stopped for reason: :done for :count or when the call's :least was killed,

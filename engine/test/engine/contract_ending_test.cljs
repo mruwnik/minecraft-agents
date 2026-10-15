@@ -42,10 +42,10 @@
 
 (deftest call-keys-are-specced-for-every-job
   (let [reg {'wayed wayed 'plain {:conditions [] :round #(ctx/end % :done nil) :args nil}}]
-    (is (nil? (expr/problem reg '(wayed {:ways #{:craft} :spend {:time 30 :items {"dirt" 4}} :floor {:health 12}
+    (is (nil? (expr/problem reg '(wayed {:ways #{:craft} :spend {:job-time 30 :items {"dirt" 4}} :floor {:health 12}
                                         :least :all :deadline 5}))))
-    (is (nil? (expr/problem reg '(plain {:spend {:time 30}}))) "a job that does not read them still takes them")
-    (is (re-find #":spend must be .*got" (expr/problem reg '(plain {:spend {:time "soon"}}))))
+    (is (nil? (expr/problem reg '(plain {:spend {:job-time 30}}))) "a job that does not read them still takes them")
+    (is (re-find #":spend must be .*got" (expr/problem reg '(plain {:spend {:job-time "soon"}}))))
     (is (re-find #":least must be" (expr/problem reg '(plain {:least 0}))))
     (is (re-find #"wayed has no way :gather; its ways are :carried, :craft"
                  (expr/problem reg '(wayed {:ways #{:gather}}))))
@@ -80,7 +80,7 @@
             (swap! world assoc :leaf-call (ctx/frozen-call c) :leaf-way? (ctx/way? c :craft) :leaf-use (ctx/use c :tools))
             (if (:leaf-done @world) (ctx/end c :done nil) :continue))
    :ways [:carried :craft]
-   :defaults {:spend {:time ::leaf-time} :ways #{:craft}}
+   :defaults {:spend {:job-time ::leaf-time} :ways #{:craft}}
    :settings {::leaf-time {:default 45}}})
 
 (defn parent-round [ending-of]
@@ -134,14 +134,14 @@
               id (core/submit! eng '(parent {:deadline 9000000}) {})]
           (swap! world assoc :leaf-ok true :child-args {:spend {:items {"dirt" 2}}})
           (await (core/tick! eng))
-          (is (= {:least 1 :ways #{:craft} :spend {:time 45 :items {"dirt" 2}} :use {:tools ["stone_pickaxe"]}
+          (is (= {:least 1 :ways #{:craft} :spend {:job-time 45 :items {"dirt" 2}} :use {:tools ["stone_pickaxe"]}
                   :deadline 9000000}
                  (:leaf-call @world)))
           (is (true? (:leaf-way? @world)))
           (is (= ["stone_pickaxe"] (:leaf-use @world)))
-          (swap! world assoc :child-args {:spend {:time 1} :ways #{:carried}})
+          (swap! world assoc :child-args {:spend {:job-time 1} :ways #{:carried}})
           (await (core/tick! eng))
-          (is (= 45 (get-in @world [:leaf-call :spend :time])) "a later round's args do not change the call")
+          (is (= 45 (get-in @world [:leaf-call :spend :job-time])) "a later round's args do not change the call")
           (is (= #{:craft} (get-in (raw-mem eng id [:leaf]) [:contract :call :ways])))
           (swap! world assoc :leaf-done true)
           (await (core/tick! eng))
@@ -264,7 +264,7 @@
 (def holds
   "Its goal holds while :holds; done? keeps the call it was asked under."
   {:conditions [[:fn (gate :go :not-needed)]]
-   :defaults {:spend {:time 20}}
+   :defaults {:spend {:job-time 20}}
    :round (fn [_] (swap! world assoc :holds-ran true) :continue)
    :done? (fn [c] (swap! world assoc :asked-call (ctx/frozen-call c))
             {:done? (boolean (:holds @world)) :units :items :done 0 :left 0})})
@@ -287,7 +287,7 @@
           (is (= {:kind :done :cause :already} (select-keys (:data (first (job-ev seen :completed))) [:kind :cause])))
           (is (= {:units :items :done 0 :left 0}
                  (select-keys (:report (:data (first (job-ev seen :completed)))) [:units :done :left])))
-          (is (= {:time 20} (:spend (:asked-call @world))) "done? reads the call it would start with")
+          (is (= {:job-time 20} (:spend (:asked-call @world))) "done? reads the call it would start with")
           (core/submit! eng '(calls-holds) {})
           (await (core/tick! eng))
           (is (= {:kind :done :cause :already} (select-keys (:child-ending @world) [:kind :cause])) "a child too")
@@ -556,10 +556,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup refusing-jobs refusing-triggers)]
-          (core/register-reflex! eng {:trigger :gives-up :job '(gives-up {:spend {:time 30}})})
+          (core/register-reflex! eng {:trigger :gives-up :job '(gives-up {:spend {:job-time 30}})})
           (swap! world assoc :fire #{:gives-up})
           (await (core/tick! eng))
-          (is (= {:time 30} (:spend (:call @world)))))))))
+          (is (= {:job-time 30} (:spend (:call @world)))))))))
 
 (deftest an-abandoned-slot-is-cut-off
   (async done
@@ -605,7 +605,7 @@
             {:old :continue} :continue
             {:old :declined} {:kind :condition-failed :cause :declined}
             {:need true} {:kind :condition-failed :cause {:reason :need :what "thing"}}
-            {:old {:status :stopped :reason :timeout :text "slow"}} {:kind :limit-reached :cause {:line :time :reason :timeout} :data {:text "slow"}}
+            {:old {:status :stopped :reason :timeout :text "slow"}} {:kind :limit-reached :cause {:line :job-time :reason :timeout} :data {:text "slow"}}
             {:old {:status :stopped :reason :no-way}} {:kind :nothing-possible :cause :no-way}
             {:old {:status :stopped :reason :no-tool :need "stone_pickaxe"}}
             {:kind :condition-failed :cause :no-tool :data {:need "stone_pickaxe"}}
@@ -684,7 +684,7 @@
     :not-found :condition-failed :not-found
     :chest-lacks :condition-failed :chest-lacks
     :no-food :condition-failed :no-food
-    :timeout :limit-reached {:line :time :reason :timeout}
+    :timeout :limit-reached {:line :job-time :reason :timeout}
     :low-health :limit-reached {:line :health :reason :low-health}
     :tool-spent :condition-failed :tool-spent
     :bad-args :impossible :bad-args
@@ -705,12 +705,12 @@
 (def migrated
   {:conditions [] :round (fn [c] (ctx/end c :done nil)) :args nil
    :legacy-args (fn [{:keys [timeout-s] :as args}]
-                  (cond-> (dissoc args :timeout-s) timeout-s (assoc :spend {:time timeout-s})))})
+                  (cond-> (dissoc args :timeout-s) timeout-s (assoc :spend {:job-time timeout-s})))})
 
 (deftest legacy-args-map-an-old-callers-options-to-call-keys
   (let [reg {'migrated migrated}]
     (is (nil? (expr/problem reg '(migrated {:timeout-s 30}))))
-    (is (= {:time 30} (:spend (second (expr/leaf reg 'migrated {:timeout-s 30})))))
+    (is (= {:job-time 30} (:spend (second (expr/leaf reg 'migrated {:timeout-s 30})))))
     (is (re-find #"migrated has no arg :bogus" (expr/problem reg '(migrated {:bogus 1}))))))
 
 (deftest registering-a-job-with-a-bad-fact-form-is-refused-naming-it

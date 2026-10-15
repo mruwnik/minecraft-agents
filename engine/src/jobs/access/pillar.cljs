@@ -81,7 +81,7 @@
 
 (def target [])
 
-(def defaults {:use {:blocks :pillar} :spend {:time ::time-s}})
+(def defaults {:use {:blocks :pillar} :spend {:job-time ::time-s}})
 
 (defn max-failures [] (settings/get settings ::max-failures))
 
@@ -245,7 +245,7 @@
         carried (pl/carried (:primitives c))
         item (first (filter #(pos? (get carried % 0)) (blocks-of c)))
         [x y z] (pl/feet-cell c)]
-    (cond-> {:uses {:time [(* h s 0.5) (* h s) (* h s 3)]} :moves-to [x (+ y h) z]}
+    (cond-> {:uses {:job-time [(* h s 0.5) (* h s) (* h s 3)]} :moves-to [x (+ y h) z]}
       item (assoc-in [:uses :items item] [h h h]))))
 
 (defn ^:async land!

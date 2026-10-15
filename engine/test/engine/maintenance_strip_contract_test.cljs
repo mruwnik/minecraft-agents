@@ -20,7 +20,7 @@
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
-    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:time 60}} :view (fn [] {:data {} :now 0})}))) (str sym))))
+    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:job-time 60}} :view (fn [] {:data {} :now 0})}))) (str sym))))
 
 (defn ^:async seal-ending [env args]
   (:ending (await (ss/run! env args))))

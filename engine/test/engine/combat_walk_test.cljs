@@ -29,7 +29,7 @@
         (let [{:keys [eng p seen] :as s} (ut/setup (merge (hut/hut-world {:x 5 :y 64 :z 0} {})
                                                           {:inventory sword :entities [(zed 7 5 7)]}))
               _ (waits-move-clock! s)]
-          (core/submit! eng '(jobs.combat.attack {:targets [7] :spend {:time 1000}}) {})
+          (core/submit! eng '(jobs.combat.attack {:targets [7] :spend {:job-time 1000}}) {})
           (await (st/tick-n eng 12))
           (is (= [] (ut/calls p "moveTo")) "no raw pathfinder walk")
           (is (seq (ut/calls p "attack")) "the zombie outside was swung at")
@@ -46,7 +46,7 @@
           (.override (.-world p) "attack" (fn [t a impl]
                                             (when (= 1 (swap! n inc)) (swap! (fake/state p) assoc-in [:entities 0 :pos] [-6 64 0]))
                                             (impl t a)))
-          (core/submit! eng '(jobs.combat.attack {:targets [7] :spend {:time 1000}}) {})
+          (core/submit! eng '(jobs.combat.attack {:targets [7] :spend {:job-time 1000}}) {})
           (await (core/tick! eng))
           (is (= [] (ut/calls p "moveTo")))
           (is (> -3 (.-x (.-pos (.self p)))) "the body walked after the target to its new spot")
@@ -84,6 +84,6 @@
               planned (atom 0)
               _ (waits-move-clock! s)]
           (with-redefs [threats/planner-dangers (fn [_] (swap! planned inc) nil)]
-            (core/submit! eng '(jobs.combat.attack {:targets [7] :spend {:time 1000}}) {})
+            (core/submit! eng '(jobs.combat.attack {:targets [7] :spend {:job-time 1000}}) {})
             (await (tu/tick-until-idle! eng 6)))
           (is (= 0 @planned) "the walk to the mob it attacks plans with dangers off"))))))

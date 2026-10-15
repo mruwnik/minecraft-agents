@@ -55,7 +55,7 @@
 (defn max-tries [] (settings/get settings ::max-tries))
 (def no-shovel {:reason :no-tool :kind "shovel"})
 (def target [:from :to :center :radius])
-(def defaults {:use {:tools :shovel} :spend {:time ::time-s}})
+(def defaults {:use {:tools :shovel} :spend {:job-time ::time-s}})
 
 (defn span [a b] (range (min a b) (inc (max a b))))
 (defn span-size [a b] (inc (js/Math.abs (- a b))))
@@ -169,7 +169,7 @@
         p (:primitives c)
         n (count (remove #(= "dirt_path" (u/seen-name p %)) cs))
         s (shovel c)]
-    {:uses (cond-> {:time [(* 0.5 n) (* 2 n) (* 10 n)]} (and s (pos? n)) (assoc :wear {s [n n n]}))
+    {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]} (and s (pos? n)) (assoc :wear {s [n n n]}))
      :done [0 n n]}))
 
 (defn skip! [c poss reason]

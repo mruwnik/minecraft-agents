@@ -155,7 +155,7 @@
                   (and (not (vehicle/mounted? (:primitives c))) (not (water-in-sight? c))) {:reason :not-water :text "no water in sight to launch a boat on"})]
       (cond-> cause (and cause (not (look/surveyed? c))) contract/look-first))))
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn bad-args] [:fn (started/at-start start-fact)]])
 
@@ -170,7 +170,7 @@
   (let [land (or (given-pos c) (:land (spot-of c)))
         d (if land (u/dist (u/self-pos c) (vehicle/centre land)) (:radius (:args c)))
         s (+ (settings/get settings ::launch-s) (/ d (settings/get settings ::boat-speed)))]
-    {:uses {:time [s s (* 3 s)]}}))
+    {:uses {:job-time [s s (* 3 s)]}}))
 
 (defn ^:async round [c]
   (let [p (:primitives c)

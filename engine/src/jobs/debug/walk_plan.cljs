@@ -34,7 +34,7 @@
 (a/defargs settings
   {::time-s {:default 300 :doc "Seconds one walk may take." :spec (a/int-in 1 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [])
 

@@ -63,7 +63,7 @@
 (a/defargs settings
   {::time-s {:default 600 :doc "Seconds a tend pass may take." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def steps [:breed :cull :shear :collect :deposit])
 
@@ -236,7 +236,7 @@
     {:done? false :units :steps :done (- (count steps) left) :left left}))
 
 (defn quote-of [_c]
-  {:uses {:time [0 90 600]}})
+  {:uses {:job-time [0 90 600]}})
 
 (defn summary
   "What the report keeps of a child's result."

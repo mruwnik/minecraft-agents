@@ -71,7 +71,7 @@
 (a/defargs settings
   {::time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn bad-args] [:fn (started/at-start not-aboard)] [:fn (started/at-start no-shore)]])
 
@@ -84,7 +84,7 @@
 (def drive-s "Seconds a landing takes, for the quote." 20)
 
 (defn quote-of [c]
-  {:uses {:time [2 drive-s (or (get-in (ctx/frozen-call c) [:spend :time]) ##Inf)]}})
+  {:uses {:job-time [2 drive-s (or (get-in (ctx/frozen-call c) [:spend :job-time]) ##Inf)]}})
 
 (def approach-range "A given land cell this near the boat is not driven nearer to." 3)
 

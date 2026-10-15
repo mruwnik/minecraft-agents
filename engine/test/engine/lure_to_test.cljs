@@ -170,7 +170,7 @@
       (fn ^:async t []
         (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)]
           (.override (.-world p) "steer" (fn [token a impl] (swap! clock + 25000) (impl token a)))
-          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :spend {:time 30}}) {})
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :spend {:job-time 30}}) {})
           (dotimes [_ 14] (swap! clock + 700) (await (core/tick! eng)))
           (is (finished? s))
           (is (= :timeout (:reason (done-event s)))))))))

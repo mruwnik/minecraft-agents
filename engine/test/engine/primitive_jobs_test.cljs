@@ -36,7 +36,7 @@
       (is (vector? target) k)
       (is (and (vector? args) (every? (set args) target)) (str k ": its args name the act's keys, the target's among them"))
       (is (nil? (contract/quote-problem (quote-of p {}))) k)
-      (is (every? #(< (nth % 2) ##Inf) (keep #(get-in (quote-of p {}) [:uses %]) [:time :health :food]))
+      (is (every? #(< (nth % 2) ##Inf) (keep #(get-in (quote-of p {}) [:uses %]) [:job-time :health :food]))
           (str k ": an act cannot be stopped midway, so its most is finite"))
       (is (contract/ending? (ending #js {:status "failed"})) k))))
 
@@ -50,27 +50,27 @@
     (is (= [0 0 1] (hp {:pos {:x 0 :y 70 :z 5} :maxDropDown 4})) "level 5 away: a drop and the climb back")
     (is (= [0 0 0] (hp {:pos {:x 0 :y 70 :z 4} :maxDropDown 4})) "too near to drop 4 and climb back")
     (is (= [0 0 3] (hp {:pos {:x 0 :y 64 :z 6} :maxDropDown 6})) "one 6-block drop, 3 hp")
-    (is (= [0 1 20] (get-in (quote-of :moveTo p {:pos {:x 0 :y 64 :z 0} :timeoutS 20}) [:uses :time])))))
+    (is (= [0 1 20] (get-in (quote-of :moveTo p {:pos {:x 0 :y 64 :z 0} :timeoutS 20}) [:uses :job-time])))))
 
 (deftest a-dig-is-quoted-past-its-dig-time-and-wears-the-held-tool
   (let [p (tu/fake {})]
     (swap! (fake/state p) assoc :dig-ms 3000)
     (fake/swap-self! p assoc :held "iron_pickaxe")
     (let [q (quote-of :dig p {:pos {:x 0 :y 63 :z 0}})]
-      (is (= 9 (get-in q [:uses :time 2])) "3 s of digging, the dig margin 5 and the drop wait 1")
+      (is (= 9 (get-in q [:uses :job-time 2])) "3 s of digging, the dig margin 5 and the drop wait 1")
       (is (= [0 1 1] (get-in q [:uses :wear "iron_pickaxe"]))))))
 
 (deftest a-wait-is-quoted-its-time-and-offline-its-reconnect-too
   (let [p (tu/fake {})]
-    (is (= [4 4 4] (get-in (quote-of :wait p {:ms 4000}) [:uses :time])))
-    (is (= [10 10 10] (get-in (quote-of :wait p {:ms 60000}) [:uses :time])) "the wait's own cap")
-    (is (= [0 20 240] (get-in (quote-of :offline p {:ms 20000}) [:uses :time]))
+    (is (= [4 4 4] (get-in (quote-of :wait p {:ms 4000}) [:uses :job-time])))
+    (is (= [10 10 10] (get-in (quote-of :wait p {:ms 60000}) [:uses :job-time])) "the wait's own cap")
+    (is (= [0 20 240] (get-in (quote-of :offline p {:ms 20000}) [:uses :job-time]))
         "20 s away, then up to 3 reconnects of a 60 s spawn and a 10 s world load, 5 s apart")))
 
 (deftest endings-read-the-primitives-status
   (let [end (get-in primitive/table [:dig :ending])]
     (is (= {:kind :done :cause :dug} (end #js {:status "dug"})))
-    (is (= {:kind :limit-reached :cause {:line :time}} (end #js {:status "timeout"})))
+    (is (= {:kind :limit-reached :cause {:line :job-time}} (end #js {:status "timeout"})))
     (is (= {:kind :nothing-possible :cause :failed} (end #js {:status "failed"})))
     (is (= {:kind :condition-failed :cause :unreachable} (end #js {:status "unreachable"})))))
 
@@ -191,7 +191,7 @@
             (is (= 1 (count (completed seen))) k)))))))
 
 (def quoter
-  {:conditions [] :defaults {:spend {:time 100}} :args {}
+  {:conditions [] :defaults {:spend {:job-time 100}} :args {}
    :round (fn ^:async quoter-round [c]
             (swap! world assoc :quote (await (ctx/quote c 'jobs.primitive.eat {:item "bread"})))
             (ctx/end c :done nil))})
@@ -229,10 +229,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (run-one {'waits (assoc (waits-for 5000) :defaults {:spend {:time 3}})} '(waits)
+        (await (run-one {'waits (assoc (waits-for 5000) :defaults {:spend {:job-time 3}})} '(waits)
                         (fn [seen p]
                           (is (zero? (calls p "wait")))
-                          (is (= {:kind :limit-reached :cause {:line :time :spend 3 :act :wait}} (stopped seen))))))))))
+                          (is (= {:kind :limit-reached :cause {:line :job-time :spend 3 :act :wait}} (stopped seen))))))))))
 
 (deftest an-act-past-the-deadline-is-refused
   (async done
@@ -263,7 +263,7 @@
 (defn calls-kid [kid defaults]
   {:conditions [] :defaults defaults
    :round (fn ^:async parent-round [c]
-            (await (ctx/call c :kid kid {:spend {:time 100}}))
+            (await (ctx/call c :kid kid {:spend {:job-time 100}}))
             (swap! world assoc :parent-went-on true)
             :continue)})
 
@@ -271,11 +271,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (run-one {'top (calls-kid (waits-for 5000) {:spend {:time 4}})} '(top)
+        (await (run-one {'top (calls-kid (waits-for 5000) {:spend {:job-time 4}})} '(top)
                         (fn [seen p]
                           (is (zero? (calls p "wait")))
                           (is (nil? (:parent-went-on @world)))
-                          (is (= {:kind :limit-reached :cause {:line :time :spend 4 :act :wait}}
+                          (is (= {:kind :limit-reached :cause {:line :job-time :spend 4 :act :wait}}
                                  (stopped seen))))))))))
 
 (defn cleans-up-with [defaults]
@@ -294,7 +294,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (run-one {'job (cleans-up-with {:floor {:health 12} :spend {:time 3}})} '(job)
+        (await (run-one {'job (cleans-up-with {:floor {:health 12} :spend {:job-time 3}})} '(job)
                         (fn [seen p]
                           (is (= 1 (calls p "wait")) "the cleanup act ran")
                           (is (true? (:cleaned-up @world)))
@@ -304,10 +304,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (run-one {'top (calls-kid (cleans-up-with {:floor {:health 12}}) {:spend {:time 4}})} '(top)
+        (await (run-one {'top (calls-kid (cleans-up-with {:floor {:health 12}}) {:spend {:job-time 4}})} '(top)
                         (fn [seen p]
                           (is (zero? (calls p "wait")) "refused: the outer frame has 4 s left")
                           (is (nil? (:cleaned-up @world)))
                           (is (nil? (:parent-went-on @world)))
-                          (is (= {:kind :limit-reached :cause {:line :time :spend 4 :act :wait}}
+                          (is (= {:kind :limit-reached :cause {:line :job-time :spend 4 :act :wait}}
                                  (stopped seen))))))))))

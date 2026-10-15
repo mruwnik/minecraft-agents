@@ -378,7 +378,7 @@
 
 (def target [:plan :part])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn (started/at-start not-ready)]])
 
@@ -397,5 +397,5 @@
          :units :cells :done worked :left (count todo)}))))
 
 (defn quote-of [_c]
-  {:uses {:time [1 60 (settings/get settings ::time-s)]}
+  {:uses {:job-time [1 60 (settings/get settings ::time-s)]}
    :done [0 1 1]})

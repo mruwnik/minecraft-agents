@@ -97,7 +97,7 @@
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :spec boolean? :default false}})
 
 (def target [:plan :part])
-(def defaults {:least :all :spend {:time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::time-s}})
 
 (a/defargs settings
   {::time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}
@@ -146,7 +146,7 @@
   (let [{:keys [cells trouble]} (judged-plan c)
         n (if trouble 0 (count (owed cells)))
         s (* n (settings/get settings ::cell-s))]
-    {:uses {:time [(* 0.5 s) s (* 4 s)]} :done [0 n n]}))
+    {:uses {:job-time [(* 0.5 s) s (* 4 s)]} :done [0 n n]}))
 
 ;; ------------------------------------------------------------------ steps
 

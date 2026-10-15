@@ -37,7 +37,7 @@
 
 (def target [:item :hand])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn problem
   "The cause when no item is given."
@@ -71,7 +71,7 @@
 
 (defn quote-of [_c]
   (let [t (settings/get settings ::equip-s)]
-    {:uses {:time [0 t t]}}))
+    {:uses {:job-time [0 t t]}}))
 
 (defn fetch-opts [c] (need/opts c 'jobs.items.equip))
 

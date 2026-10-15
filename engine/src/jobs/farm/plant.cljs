@@ -219,7 +219,7 @@
 (defn quote-of [c]
   (let [n (count (unsown c))
         seed (pick-seed (:seed (:args c)) (u/inventory (:primitives c)))]
-    {:uses (cond-> {:time [(* 0.5 n) (* 2 n) (* 10 n)]} (and seed (pos? n)) (assoc :items {seed [0 n n]}))
+    {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]} (and seed (pos? n)) (assoc :items {seed [0 n n]}))
      :done [0 n n]}))
 
 ;; ------------------------------------------------------------------ plan mode

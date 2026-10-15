@@ -35,7 +35,7 @@
 
 (def target [:id :near])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn carts
   "The chest minecarts in sight within radius of the anchor (:near, else the body), nearest first."
@@ -79,7 +79,7 @@
   {:done? false :units :items :done (if (:before (ctx/mem c)) (reduce + 0 (vals (gained c))) 0)})
 
 (defn quote-of [_c]
-  {:uses {:time [5 20 (settings/get settings ::time-s)]}})
+  {:uses {:job-time [5 20 (settings/get settings ::time-s)]}})
 
 (defn ^:async empty-cart!
   "Move every stack of the cart into the bag. A transfer that moves nothing (no room) ends it with :full."

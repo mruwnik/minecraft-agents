@@ -18,10 +18,10 @@
 (deftest main-prints-the-engines-answer-and-its-exit-code
   (async done
     (let [out (atom "")
-          [request-fn seen] (fake/request-fn (fn [_] {:status 200 :content-type "application/edn" :text "{:ok true :quote {:uses {:time [1 ##Inf ##Inf]}}}"}))]
+          [request-fn seen] (fake/request-fn (fn [_] {:status 200 :content-type "application/edn" :text "{:ok true :quote {:uses {:job-time [1 ##Inf ##Inf]}}}"}))]
       (-> (quote/main! ["Probe" "--world" "test" "jobs.movement.go-to"] {:output #(swap! out str %) :request-fn request-fn})
           (.then (fn [code]
                    (is (= 0 code))
-                   (is (= "{:ok true :quote {:uses {:time [1 ##Inf ##Inf]}}}\n" @out))
+                   (is (= "{:ok true :quote {:uses {:job-time [1 ##Inf ##Inf]}}}\n" @out))
                    (is (= "/quote?name=jobs.movement.go-to" (:path (first @seen))))
                    (done)))))))

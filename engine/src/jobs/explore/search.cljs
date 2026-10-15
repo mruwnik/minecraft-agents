@@ -47,7 +47,7 @@
   :failed [{:pos :reason}] :skipped :farthest} :why}) and the ending:
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :legs (:max-legs walked) or :stuck (three failed walks in a row).
-  - :limit-reached :time (the call's :spend :time, default ::time-s; the engine ends it, round time only, so go-to's wait for day in a shelter does not count), with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
+  - :limit-reached :job-time (the call's :spend :job-time, default ::time-s; the engine ends it, round time only, so go-to's wait for day in a shelter does not count), with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - :condition-failed :not-loaded (leg columns never loaded). A call with no :target waits (condition :no-target).
 
   Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
@@ -88,7 +88,7 @@
 (defn descent [] (settings/get settings ::descent))
 (def target [:target])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 
@@ -208,11 +208,11 @@
     {:done? false :units :found :done n :left (max 0 (- (:count (:args c)) n)) :data {:found (:found (ctx/mem c) []) :coverage (coverage (ctx/mem c)) :why :time}}))
 
 (defn time-limit "Seconds the call may search." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
 
 (defn quote-of [c]
   (let [most (time-limit c)]
-    {:uses {:time [0 (min 60 most) most]}}))
+    {:uses {:job-time [0 (min 60 most) most]}}))
 
 (defn cell [p] (mapv js/Math.floor [(.-x p) (.-y p) (.-z p)]))
 (defn here [c] (cell (.-pos (.self (:primitives c)))))

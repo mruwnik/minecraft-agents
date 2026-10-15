@@ -103,14 +103,14 @@
 
 (a/defargs settings
   {::time-s {:default 2400 :doc "Seconds the night may take, the morning included: a bound against a runaway night (the night itself ends it in about 10 minutes)." :spec (a/num-in 0 nil)}
-   ::elapsed-s {:default 3600 :doc "Seconds the night may last from its start, its yields to other jobs included." :spec (a/num-in 0 nil)}
+   ::wall-time-s {:default 3600 :doc "Seconds the night may last from its start, its yields to other jobs included." :spec (a/num-in 0 nil)}
    ::morning-s {:default 60 :doc "Seconds the morning (out of the shelter, a put-down bed picked up) is reckoned to take at most, in the quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
 (def ways [:bed :shelter :flee])
 
-(def defaults {:spend {:time ::time-s :elapsed ::elapsed-s} :ways (set ways)})
+(def defaults {:spend {:job-time ::time-s :wall-time ::wall-time-s} :ways (set ways)})
 
 (defn quiet-night
   "While the night trigger's condition fails: {:shelter} with the shelter the body is in (nil when none), else nil."
@@ -138,8 +138,8 @@
 (defn quote-of
   "The time left of the night (jobs.time.wait-for-day's quote), a bed possibly ending it at once, and ::morning-s on top."
   [c]
-  (let [[_ mean most] (get-in (sh/night-left-quote c) [:uses :time])]
-    {:uses {:time [0 mean (+ most (settings/get settings ::morning-s))]}}))
+  (let [[_ mean most] (get-in (sh/night-left-quote c) [:uses :job-time])]
+    {:uses {:job-time [0 mean (+ most (settings/get settings ::morning-s))]}}))
 
 (def needs-bed-policy {:cap 1 :ttl sh/ms-per-day})
 

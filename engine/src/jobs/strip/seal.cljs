@@ -37,7 +37,7 @@
 
 (def target [:at :axis :side])
 
-(def defaults {:spend {:time ::time-s} :use {:blocks :seal}})
+(def defaults {:spend {:job-time ::time-s} :use {:blocks :seal}})
 
 (a/defargs args
   {:at {:doc "the bottom centre cell of the section, [x y z]" :spec ::a/pos :default nil}
@@ -181,7 +181,7 @@
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-cell) (if (bad-args c) 0 (count (open-cells c))))]
-    {:uses {:time [0 t (max t (settings/get settings ::time-s))]}}))
+    {:uses {:job-time [0 t (max t (settings/get settings ::time-s))]}}))
 
 (defn ^:async round [c]
   (let [n (atom 0)]

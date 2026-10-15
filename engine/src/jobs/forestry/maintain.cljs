@@ -454,7 +454,7 @@
 
 (def target [:plan :part])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn (started/at-start not-ready)]])
 
@@ -465,4 +465,4 @@
     {:done? false :units :trees :done (+ (:felled m 0) (:planted m 0))}))
 
 (defn quote-of [_c]
-  {:uses {:time [1 60 (settings/get settings ::time-s)]}})
+  {:uses {:job-time [1 60 (settings/get settings ::time-s)]}})

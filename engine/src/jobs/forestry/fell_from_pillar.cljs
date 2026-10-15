@@ -56,7 +56,7 @@
 
 (def target [:base])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def pillar-items (choose/fillers :pillar))
 
@@ -77,7 +77,7 @@
 
 (defn quote-of [c]
   (let [n (count (when (base c) (tree-logs c)))]
-    {:uses {:time [5 (+ 10 (* 4 n)) (time-s)]} :done [0 1 1]}))
+    {:uses {:job-time [5 (+ 10 (* 4 n)) (time-s)]} :done [0 1 1]}))
 
 (defn result [c] {:logs (:dug (ctx/mem c) 0)})
 

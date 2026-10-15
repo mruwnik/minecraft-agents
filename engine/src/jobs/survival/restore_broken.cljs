@@ -158,7 +158,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [])
 
@@ -170,7 +170,7 @@
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-cell) (count (tidy/entries c)))]
-    {:uses {:time [0 t (max t (settings/get settings ::time-s))]}}))
+    {:uses {:job-time [0 t (max t (settings/get settings ::time-s))]}}))
 
 (defn unsafe?
   "Whether the body should not be busy with other people's blocks now."

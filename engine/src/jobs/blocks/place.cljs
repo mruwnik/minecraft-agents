@@ -54,7 +54,7 @@
    :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default true}})
 
 (def target [:pos])
-(def defaults {:use {:blocks :build} :spend {:time ::time-s}})
+(def defaults {:use {:blocks :build} :spend {:job-time ::time-s}})
 
 (defn wanted
   "The block names the call places: :item, else the call's :use {:blocks}, else (before the call starts) the carried
@@ -155,7 +155,7 @@
 (defn quote-of [c]
   (let [{:keys [pos items error]} (parse c)
         walk (if (or error (b/in-reach? c pos)) 0 (u/eye-dist (u/self-pos c) pos))]
-    {:uses (cond-> {:time [0.5 (+ 1 (/ walk 4)) (+ 10 walk)]}
+    {:uses (cond-> {:job-time [0.5 (+ 1 (/ walk 4)) (+ 10 walk)]}
              (= 1 (count items)) (assoc :items {(first items) [1 1 1]}))}))
 
 (defn finish!

@@ -101,7 +101,7 @@
 (a/defargs settings
   {::time-s {:default 1800 :doc "Seconds one attempt at getting fed may take: a hunt, a search, a cook." :spec (a/num-in 0 nil)}
    ::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
-   ::explore {:default {:max-distance 64 :max-legs 12 :spend {:time 120}} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
+   ::explore {:default {:max-distance 64 :max-legs 12 :spend {:job-time 120}} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::fish-radius {:default 48 :doc "Blocks within which seen water two deep with a bank makes fishing a way, with a fishing rod carried." :spec (a/int-in 0 nil)}
    ::kept-lifted-below {:default -1 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too; -1 (default) never." :spec (a/int-in -1 20)}
    ::eat-bad-food {:default 6 :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
@@ -150,7 +150,7 @@
 
 (def ways [:bake :cook :source :collect :hunt :crops :fish :pen])
 
-(def defaults {:spend {:time ::time-s} :ways (set ways)})
+(def defaults {:spend {:job-time ::time-s} :ways (set ways)})
 
 (defn way?
   "Whether the call allows way k."
@@ -183,7 +183,7 @@
     (when-not (risk/refused? c (u/pos-of (.-pos animal)))
       (let [e (await (child/run!* c :attack 'jobs.combat.attack
                                   {:targets [(.-id animal)] :radius (hunt-radius c) :attack-gap-ms (:attack-gap-ms (:args c))
-                                   :lost-s 0 :spend {:time 60}}))]
+                                   :lost-s 0 :spend {:job-time 60}}))]
         (if (= :continue e)
           :continue
           (do (ctx/update-mem! c update :skipped-animals (fnil conj []) (.-id animal))
@@ -271,7 +271,7 @@
   {:done? (fed? c) :units :food :left (max 0 (- foods/top-up-food (food-level c)))})
 
 (defn quote-of [_c]
-  {:uses {:time [0 90 ##Inf]}})
+  {:uses {:job-time [0 90 ##Inf]}})
 
 ;; ------------------------------------------------------------------ the round
 
@@ -331,7 +331,7 @@
 (def search-max-distance "The largest :max-distance jobs.explore.search accepts." 128)
 
 (defn widen-explore [opts k]
-  (-> opts (update :max-distance #(some-> % (* k) (min search-max-distance))) (update :max-legs #(some-> % (* k))) (update-in [:spend :time] #(some-> % (* k)))))
+  (-> opts (update :max-distance #(some-> % (* k) (min search-max-distance))) (update :max-legs #(some-> % (* k))) (update-in [:spend :job-time] #(some-> % (* k)))))
 
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),

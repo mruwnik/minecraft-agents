@@ -383,7 +383,7 @@
 
 (def target [:free])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions
   "None: a bag with room is already done, one with nothing to spare ends nothing-possible after looking."
@@ -406,7 +406,7 @@
   [c]
   (let [need (slots-short c)
         step (settings/get settings ::step-s)]
-    {:uses {:time [0 (* need step) (* (:max-steps (:args c)) step)]}
+    {:uses {:job-time [0 (* need step) (* (:max-steps (:args c)) step)]}
      :done [0 need need]}))
 
 (defn tossed-summary

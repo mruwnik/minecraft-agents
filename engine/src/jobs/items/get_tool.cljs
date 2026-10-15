@@ -62,7 +62,7 @@
 (a/defargs settings
   {::time-s {:default 600 :doc "Seconds a tool may take to get (the obtain it runs has its own cut)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:ways (set ways) :spend {:time ::time-s}})
+(def defaults {:ways (set ways) :spend {:job-time ::time-s}})
 
 (defn ways-of [c] (set (or (:ways (ctx/frozen-call c)) (:ways (:args c)) (:ways defaults))))
 
@@ -101,7 +101,7 @@
   [c]
   (let [names (tools-for (:primitives c) (:args c))]
     (if (or (map? names) (empty? names) (carried-tool (:primitives c) names))
-      {:uses {:time [0 0 0]}}
+      {:uses {:job-time [0 0 0]}}
       (let [q (await (ctx/quote c 'jobs.items.obtain (obtain-args c names)))]
         (if (contract/ending? q) contract/too-expensive q)))))
 

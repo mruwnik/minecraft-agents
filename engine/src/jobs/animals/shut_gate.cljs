@@ -180,7 +180,7 @@
 
 (def target [:plan])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn plan-fact
   "The :plan-trouble wait while :plan is missing or unreadable, else nil."
@@ -200,7 +200,7 @@
     {:done? (and (not trouble) (empty? open)) :units :gates :done (:shut (ctx/mem c) 0) :left (count open)}))
 
 (defn quote-of [_c]
-  {:uses {:time [0 15 120]}})
+  {:uses {:job-time [0 15 120]}})
 
 (def graced-ttl-ms
   "How long a gate's grace is remembered: the run that finds it still open after the grace shuts it."

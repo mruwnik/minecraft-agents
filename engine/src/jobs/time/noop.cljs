@@ -21,7 +21,7 @@
 (a/defargs settings
   {::time-s {:default 3600 :doc "Seconds one pause may take." :spec (a/int-in 1 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [])
 
@@ -36,7 +36,7 @@
   [c]
   {:done? false :units :ms :done (- (total-ms c) (left-ms c)) :left (left-ms c)})
 
-(defn quote-of [c] (let [s (:seconds (:args c) 0)] {:uses {:time [s s s]}}))
+(defn quote-of [c] (let [s (:seconds (:args c) 0)] {:uses {:job-time [s s s]}}))
 
 (defn ^:async round [c]
   (let [why (:why (:args c) :pausing)]

@@ -27,7 +27,7 @@
    :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
 (def target [:pos])
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [])
 
@@ -44,7 +44,7 @@
 (defn quote-of [c]
   (let [{:keys [pos error]} (b/parse (:args c))
         walk (if (or error (b/in-reach? c pos (:see (:args c)))) 0 (u/eye-dist (u/self-pos c) pos))]
-    {:uses {:time [0.5 (+ 1 (/ walk 4)) (+ 10 walk)]}}))
+    {:uses {:job-time [0.5 (+ 1 (/ walk 4)) (+ 10 walk)]}}))
 
 (defn finish!
   "End the call with the info event and an ending: done when used, else kind with the result's :reason (and :why)."

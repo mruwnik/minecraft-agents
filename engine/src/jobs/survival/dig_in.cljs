@@ -156,7 +156,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 
 (defn done?
@@ -172,7 +172,7 @@
         cell-s (settings/get settings ::cell-s)
         pit-s (settings/get settings ::pit-s)
         mean (cond (sheltered? c) 0 (zero? n) cell-s :else (min (* n cell-s) (+ pit-s cell-s)))]
-    {:uses {:time [(if (sheltered? c) 0 cell-s) mean (max (* 3 mean) (time-s))]} :done [0 1 1]}))
+    {:uses {:job-time [(if (sheltered? c) 0 cell-s) mean (max (* 3 mean) (time-s))]} :done [0 1 1]}))
 
 (defn ^:async step [c]
   (await (mode/choose-mode c))

@@ -83,7 +83,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn nothing-to-do
   "The wait reason while no death is open to serve: the danger remembered for one, else the decision already taken."
@@ -107,15 +107,15 @@
   (let [d (first (dth/open-deaths c))
         pos (:pos (:data d))
         window-s (if d (/ (settings/ticks->ms (game/despawn-left-ticks d (ctx/view c))) 1000) 0)
-        [least mean] (or (when pos (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range)})) [:uses :time])) [0 0])
+        [least mean] (or (when pos (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range)})) [:uses :job-time])) [0 0])
         mean (+ mean (settings/get settings ::collect-s))]
-    {:uses {:time [least mean (max mean window-s)]}}))
+    {:uses {:job-time [least mean (max mean window-s)]}}))
 
 (def endings
   "The kind and cause of a trip's end by its decision (and for an abandoned pile its reason); a pile not worth the trip is a fact about the goal."
   {:collected [:done nil]
    :skip [:condition-failed :not-worth]
-   [:abandoned :window-closed] [:limit-reached {:line :time :reason :window-closed}]
+   [:abandoned :window-closed] [:limit-reached {:line :job-time :reason :window-closed}]
    [:abandoned :danger] [:condition-failed :danger]
    [:abandoned :nothing-found] [:condition-failed :nothing-found]})
 
@@ -174,7 +174,7 @@
   [c pos]
   (if-let [d (threatened? c)]
     [:danger d]
-    [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :at-night :go :spend {:time (:leg-s (:args c))}}))]))
+    [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :at-night :go :spend {:job-time (:leg-s (:args c))}}))]))
 
 (defn ^:async go!
   "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg (the danger and the

@@ -20,7 +20,7 @@
 
 (def reason-lines
   "The limit line ({:line ..}, as the contract gives it) of an old limit reason; :reason keeps what an old parent reads."
-  {:timeout :time :low-health :health :hungry :food})
+  {:timeout :job-time :low-health :health :hungry :food})
 
 (defn reason-cause [reason]
   (if-let [line (reason-lines reason)] {:line line :reason reason} reason))

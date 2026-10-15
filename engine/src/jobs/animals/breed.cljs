@@ -65,7 +65,7 @@
 
 (def target [:mob])
 
-(def defaults {:spend {:time ::time-s} :least 2})
+(def defaults {:spend {:job-time ::time-s} :least 2})
 
 (defn no-food
   "The cause :no-food before the call starts: a known mob, no breeding food carried and :fetch off."
@@ -79,11 +79,11 @@
 (def conditions [[:fn (started/at-start no-food)]])
 
 (defn time-limit "Seconds the call may work." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
 
 (defn quote-of [c]
   (let [most (time-limit c)]
-    {:uses {:time [0 (min most (* 15 (:count (:args c) 2))) most]}}))
+    {:uses {:job-time [0 (min most (* 15 (:count (:args c) 2))) most]}}))
 
 (defn done?
   "The animals fed against :count. Never :done? itself: feeding has no goal state that holds before it runs."

@@ -36,7 +36,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [])
 
@@ -127,7 +127,7 @@
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-door) (count (targets c [])))]
-    {:uses {:time [0 t (* 3 t)]}}))
+    {:uses {:job-time [0 t (* 3 t)]}}))
 
 (defn ^:async round [c]
   (loop [shut 0 left []]

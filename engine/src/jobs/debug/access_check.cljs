@@ -36,7 +36,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn span [a b] (range (min a b) (inc (max a b))))
 

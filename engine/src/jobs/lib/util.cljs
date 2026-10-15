@@ -198,4 +198,4 @@
 (defn out-of-time?
   "Whether the call's time line is spent: the engine counts the job's own running time across rounds and cuts."
   [c]
-  (some-> (get-in (ctx/left c) [:spend :time]) (<= 0)))
+  (some-> (get-in (ctx/left c) [:spend :job-time]) (<= 0)))

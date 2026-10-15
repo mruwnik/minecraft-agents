@@ -449,7 +449,7 @@
         (let [job (get registry/jobs 'jobs.survival.log-out)
               q (await ((:quote-of job) {:primitives (tu/fake {:time night}) :args {:offline-ms 20000 :news-ms 3000}}))]
           (is (nil? (contract/quote-problem q)))
-          (is (<= 3 (second (get-in q [:uses :time])))))))))
+          (is (<= 3 (second (get-in q [:uses :job-time])))))))))
 
 ;; ------------------------------------------------------------------ one whole attempt per night
 

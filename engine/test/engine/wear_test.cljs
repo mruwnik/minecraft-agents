@@ -113,4 +113,4 @@
       (fn ^:async t []
         (let [q (await ((:quote-of (get registry/jobs job)) {:primitives (tu/fake (stacks "iron_helmet" "iron_boots")) :args {}}))]
           (is (nil? (contract/quote-problem q)))
-          (is (pos? (second (get-in q [:uses :time])))))))))
+          (is (pos? (second (get-in q [:uses :job-time])))))))))

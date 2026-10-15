@@ -72,7 +72,7 @@
 
 (def target [:target])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn bad-args
   "Impossible: no :target of at least 2."
@@ -112,7 +112,7 @@
 (defn quote-of [c]
   (let [left (max 0 (- (:target (:args c)) (:pop (sight (villagers (:primitives c) (:radius (:args c)))))))
         w (:wait-s (:args c) default-wait-s)]
-    {:uses {:time [(if (pos? left) w 0) (* left (+ w (feed-s))) ##Inf]}}))
+    {:uses {:job-time [(if (pos? left) w 0) (* left (+ w (feed-s))) ##Inf]}}))
 
 (defn born
   "The babies that came into sight since the pair now being fed or waited for was chosen."

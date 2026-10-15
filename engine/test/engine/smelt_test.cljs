@@ -269,12 +269,12 @@
 (deftest the-default-budgets-cover-the-cook-of-the-count
   (let [spend-of #(get-in (contract/freeze {:defaults (contract/resolve-settings smelt/defaults (partial settings/get smelt/settings) %)} % nil)
                           [:spend])
-        time-of (comp :time spend-of)
-        elapsed-of (comp :elapsed spend-of)]
+        time-of (comp :job-time spend-of)
+        elapsed-of (comp :wall-time spend-of)]
     (is (< 640 (time-of {:item "raw_iron" :count 64})))
     (is (< 640 (time-of {:item "raw_iron"})) "no count: up to a stack")
     (is (< (time-of {:item "raw_iron" :count 3}) (time-of {:item "raw_iron" :count 64})))
-    (is (= 5 (time-of {:count 64 :spend {:time 5}})) "a given time stays")
+    (is (= 5 (time-of {:count 64 :spend {:job-time 5}})) "a given time stays")
     (is (< (time-of {:item "raw_iron" :count 64}) (elapsed-of {:item "raw_iron" :count 64}))
         "the elapsed time also leaves room for other jobs while it cooks")
     (is (< (elapsed-of {:item "raw_iron" :count 3}) (elapsed-of {:item "raw_iron" :count 64})))))
@@ -984,7 +984,7 @@
         quote-of (fn [n] ((:quote-of job) {:primitives (tu/fake-on-floor base-world) :args (assoc contract-args :count n)}))
         q3 (quote-of 3)]
     (is (nil? (contract/quote-problem q3)))
-    (is (< (get-in (quote-of 1) [:uses :time 1]) (get-in q3 [:uses :time 1])) "more items cook longer")
+    (is (< (get-in (quote-of 1) [:uses :job-time 1]) (get-in q3 [:uses :job-time 1])) "more items cook longer")
     (is (= [3 3 3] (get-in q3 [:uses :items "raw_iron"])))
     (is (= [1 1 1] (get-in q3 [:uses :items "coal"])))
     (is (= [3 3 3] (get-in q3 [:yields :items "iron_ingot"])))))

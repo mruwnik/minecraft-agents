@@ -59,7 +59,7 @@
   - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :all-leashed) when no animal got on the lead, or
     of jobs.animals.unleash (:unreachable, :none) when the lead would not come off; :refused and :no-zones are
     condition-failed.
-  - :timeout: less than ::wrap-up-s (at most a quarter of the call's :spend :time) is left: an animal on the lead is let
+  - :timeout: less than ::wrap-up-s (at most a quarter of the call's :spend :job-time) is left: an animal on the lead is let
     go (jobs.animals.unleash) and the gates shut before the job ends :limit-reached. An end by the engine's limit
     carries {:animal :still-led} (done?'s :data).
   All but done, condition-failed and the timeout end nothing-possible with the reason as the cause.
@@ -103,7 +103,7 @@
    :no-fence [:condition-failed :no-fence]
    :refused [:condition-failed :refused]
    :no-zones [:condition-failed :no-zones]
-   :timeout [:limit-reached {:line :time :reason :timeout}]})
+   :timeout [:limit-reached {:line :job-time :reason :timeout}]})
 
 (defn end!
   "End the call with the ending of reason (ending-of) and data; a failed child's ending kept in :because is attached."
@@ -160,7 +160,7 @@
 
 (def target [:mob :pos :fence])
 
-(def defaults {:spend {:time ::timeout-s}})
+(def defaults {:spend {:job-time ::timeout-s}})
 
 (defn start-fact
   "Impossible without :mob or a destination; a wait :no-fence while the :fence cell is seen and no fence. A missing lead
@@ -175,17 +175,17 @@
 (def conditions "Starts while the order is complete and the post is no seen non-fence (start-fact)." [[:fn (started/at-start start-fact)]])
 
 (defn time-limit "Seconds the leading may take." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :time]) (timeout-s)))
+  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (timeout-s)))
 
 (defn time-up?
   "Whether the call has less time left (ctx/left) than its wrap-up margin."
   [c]
-  (some-> (get-in (ctx/left c) [:spend :time])
+  (some-> (get-in (ctx/left c) [:spend :job-time])
           (< (min (settings/get settings ::wrap-up-s) (/ (time-limit c) 4)))))
 
 (defn quote-of [c]
   (let [most (time-limit c)]
-    {:uses {:time [0 (min most 60) most]}}))
+    {:uses {:job-time [0 (min most 60) most]}}))
 
 (defn done?
   "Whether the animal is tied or let go, and the data so far. Never :done? itself: the run ends with its event and data."

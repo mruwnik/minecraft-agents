@@ -54,7 +54,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn spawn-here? [c]
   (let [bed (bed-of c)]
@@ -68,7 +68,7 @@
 
 (defn quote-of [_c]
   (let [s (settings/get settings ::click-s)]
-    {:uses {:time [0 s (* 3 s)]} :done [0 1 1]}))
+    {:uses {:job-time [0 s (* 3 s)]} :done [0 1 1]}))
 
 (defn ^:async round [c]
   (when (remembered-gone? c)

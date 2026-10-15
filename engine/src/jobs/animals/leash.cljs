@@ -50,7 +50,7 @@
 
 (def target [:mob])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn no-lead
   "The cause :no-lead before the call starts: no lead carried and :fetch off."
@@ -61,11 +61,11 @@
 (def conditions [[:fn (started/at-start no-lead)]])
 
 (defn time-limit "Seconds the call may work." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
 
 (defn quote-of [c]
   (let [most (time-limit c)]
-    {:uses {:time [0 (min most 10) most]}}))
+    {:uses {:job-time [0 (min most 10) most]}}))
 
 (defn done?
   "The animals led against the one asked. Never :done? itself: the run ends with its event and data."

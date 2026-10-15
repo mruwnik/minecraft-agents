@@ -51,7 +51,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen] e :ending} (await (go! nil 0 {:pos [10 64 0] :range 0 :spend {:time 5}}))]
+        (let [{:keys [p seen] e :ending} (await (go! nil 0 {:pos [10 64 0] :range 0 :spend {:job-time 5}}))]
           (is (= :done (:kind e)) (pr-str (:cause e) (stopped seen)))
           (is (seq (steer-timeouts p)))
           (is (every? #(< % 5) (steer-timeouts p)) (pr-str (steer-timeouts p))))))))
@@ -60,7 +60,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen] e :ending} (await (go! {:spend {:time 10}} 4000 {:pos [10 64 0] :range 0}))]
+        (let [{:keys [p seen] e :ending} (await (go! {:spend {:job-time 10}} 4000 {:pos [10 64 0] :range 0}))]
           (is (= :done (:kind e)) (pr-str (:cause e) (stopped seen)))
           (is (seq (steer-timeouts p)))
           (is (every? #(< % 6) (steer-timeouts p)) (pr-str (steer-timeouts p))))))))

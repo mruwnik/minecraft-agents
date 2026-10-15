@@ -39,7 +39,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn done?
   "Never done before it runs: a report has no state that can hold before it."
@@ -51,7 +51,7 @@
 (defn quote-of
   "Time of the chat, when it will be sent (the chat act's own bound is 3 s)."
   [c]
-  {:uses {:time [0 0 (if (:chat? (:args c)) 3 1)]}})
+  {:uses {:job-time [0 0 (if (:chat? (:args c)) 3 1)]}})
 
 (defn ^:async round [c]
   (let [{:keys [text chat? to]} (:args c)

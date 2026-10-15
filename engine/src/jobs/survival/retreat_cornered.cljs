@@ -199,7 +199,7 @@
   (let [from (u/self-pos c)
         t0 (ctx/now c)
         r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal} :y-margin y-margin :at-night :go
-                                                              :warn false :spend {:time leg-s}
+                                                              :warn false :spend {:job-time leg-s}
                                                               :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
                                                               :retry false :look-round false :floor {:health 1}}))
         res (when (contract/ending? r) (:data r))

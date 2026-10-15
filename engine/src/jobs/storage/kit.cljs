@@ -68,7 +68,7 @@
 
 (def target [:chest])
 
-(def defaults {:least :all :spend {:time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::time-s}})
 
 (defn kind-of?
   "Does item name belong to tool kind: equal to it or ending in _kind."
@@ -175,7 +175,7 @@
   [c]
   (let [kinds (inc (count (:tools (:args c))))
         t (* kinds (settings/get settings ::kind-s))]
-    {:uses {:time [0 t (max t (settings/get settings ::time-s))]}}))
+    {:uses {:job-time [0 t (max t (settings/get settings ::time-s))]}}))
 
 (defn end!
   "ctx/end, but done when the units of done? meet the call's :least."

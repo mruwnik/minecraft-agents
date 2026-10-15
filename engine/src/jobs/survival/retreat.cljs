@@ -110,7 +110,7 @@
   after a few seconds); then the flight ends :hidden. After :hide-s in the refuge with no real danger on the body as it
   stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays
   (info retreat.hide-ended): the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup).
-  A chase is bounded by the call's time spend (default ::time-s): past it the flight ends limit-reached :time where it
+  A chase is bounded by the call's time spend (default ::time-s): past it the flight ends limit-reached :job-time where it
   stands (refuge included) and the hostile trigger fires again while the danger stays. With no new best gap to the
   nearest chaser in :no-gain-steps steps it takes the cornered options instead of walking on; it ends nothing-possible
   :cannot_escape only once every option failed in two sweeps in a row with no gain between.
@@ -154,7 +154,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [])
 
@@ -167,7 +167,7 @@
 (defn quote-of
   "A flight has to find out how long the mobs chase: time (0, ::mean-s, ##Inf)."
   [_c]
-  {:uses {:time [0 (settings/get settings ::mean-s) ##Inf]}})
+  {:uses {:job-time [0 (settings/get settings ::mean-s) ##Inf]}})
 
 
 (defn close-hitters

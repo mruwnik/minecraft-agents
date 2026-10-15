@@ -234,7 +234,7 @@
   [f]
   (started/at-start (fn [c] (f (with-heading c)))))
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions
   [[:fn (started/at-start away)]
@@ -261,7 +261,7 @@
         t (geo/target-steps (assoc (:args c) :heading heading) feet)
         n (if (map? t) 0 t)
         s (* n (if (= :level dir) 2 3) (settings/get settings ::cell-s))]
-    {:uses {:time [(* 0.5 s) s (* 4 s)]} :done [0 n n]
+    {:uses {:job-time [(* 0.5 s) s (* 4 s)]} :done [0 n n]
      :moves-to (mapv + feet (map #(* n %) (geo/delta dir heading)))}))
 
 (def facts

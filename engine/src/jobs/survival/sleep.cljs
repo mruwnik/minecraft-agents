@@ -116,14 +116,14 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn done? [c] (let [d (sh/sleeping? (:primitives c))] {:done? d :units :sleeps :done (if d 1 0) :left (if d 0 1)}))
 
 (defn quote-of [c]
   (let [bed (bed-of c)
         s (if bed (/ (u/dist (u/self-pos c) bed) (settings/get settings ::speed)) 0)]
-    {:uses {:time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
+    {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn give-up-unreachable! [c bed walk]
   (let [why (some-> (get-in walk [:data :text]) (str/replace #"^gave up walking to \[[^\]]*\]: " ""))

@@ -61,7 +61,7 @@
 
 (def target [:player :item :count])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn problem
   "The cause {:reason :bad-args} unless a player name and an item name are given."
@@ -96,7 +96,7 @@
   (let [n (or (:count (:args c)) 1)
         walk (settings/get settings ::walk-s)
         toss (settings/get settings ::toss-s)]
-    {:uses {:time [toss (+ toss walk) (+ toss (* 2 walk) (:wait-s (:args c)))]}
+    {:uses {:job-time [toss (+ toss walk) (+ toss (* 2 walk) (:wait-s (:args c)))]}
      :done [0 n n]}))
 
 (defn find-player
@@ -139,7 +139,7 @@
   :again, :continue (go-to waits) or :done."
   [c pos]
   (let [reach (:reach (:args c))
-        r (await (child/call-walk* c :walk {:pos pos :range reach :doors :shut :spend {:time (walk-leg-s)}
+        r (await (child/call-walk* c :walk {:pos pos :range reach :doors :shut :spend {:job-time (walk-leg-s)}
                                                                :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true}))
         res (when-not (= :continue r) (:data r))]
     (if (= :continue r)

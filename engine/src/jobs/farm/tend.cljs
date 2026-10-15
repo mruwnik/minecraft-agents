@@ -339,7 +339,7 @@
 (defn quote-of
   "A guess: a second and a half per cell of the field."
   [c]
-  {:uses {:time [0 (* 1.5 (count (field-cells c))) ##Inf]}})
+  {:uses {:job-time [0 (* 1.5 (count (field-cells c))) ##Inf]}})
 
 ;; ------------------------------------------------------------------ rounds
 

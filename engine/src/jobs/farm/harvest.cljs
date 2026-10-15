@@ -272,7 +272,7 @@
   (let [c (with-field c (planned c))
         ripe (ripe-raw c nil)
         n (count ripe)]
-    {:uses (cond-> {:time [(* 0.5 n) (* 2 n) (* 10 n)]}
+    {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]}
              (and (:replant (:args c)) (pos? n))
              (assoc :items (update-vals (frequencies (keep #(get seed-of (u/seen-name (:primitives c) %)) ripe))
                                         (fn [k] [0 k k]))))

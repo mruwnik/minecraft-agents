@@ -213,14 +213,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [legs (await (search! {:target "diamond_block" :max-legs 2} {}))
-              timed (await (search! {:target "diamond_block" :spend {:time 2}} {} nil
+              timed (await (search! {:target "diamond_block" :spend {:job-time 2}} {} nil
                                     (fn [{:keys [p clock]}]
                                       (.override (.-world p) "look"
                                                  (fn ^:async f [token args impl]
                                                    (swap! clock + 1000)
                                                    (await (impl token args)))))))]
           (is (= [:legs 2] ((juxt :why #(get-in % [:coverage :legs])) (event-of legs :search.not-found))))
-          (is (= :time (:reason (event-of timed :stopped))) "the engine's time limit ends it"))))))
+          (is (= :job-time (:reason (event-of timed :stopped))) "the engine's time limit ends it"))))))
 
 (deftest ground-another-body-searched-for-these-targets-is-skipped
   (async done
@@ -390,7 +390,7 @@
                         [:continue :night-sheltered]
                         (await (real c slot args))))
               s (with-redefs [child/call-walk-reason* night]
-                  (await (search! {:target "diamond_block" :max-distance 20 :spend {:time 60}} {} 400)))
+                  (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}} {} 400)))
               e (event-of s :search.not-found)]
           (is (finished? s))
           (is (not= :time (:why e)) (:text e)))))))
@@ -401,10 +401,10 @@
       (fn ^:async t []
         (let [clock (atom nil)
               s (with-redefs [child/call-walk-reason* (fn [_ _ _] (swap! @clock + 5000) (js/Promise.resolve [:continue nil]))]
-                  (await (search! {:target "diamond_block" :max-distance 20 :spend {:time 60}} {} 400 #(reset! clock (:clock %)))))
+                  (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}} {} 400 #(reset! clock (:clock %)))))
               e (event-of s :limit_reached)]
           (is (finished? s))
-          (is (= :time (:line (:cause e)))))))))
+          (is (= :job-time (:line (:cause e)))))))))
 
 (deftest three-failed-legs-in-a-row-end-it-stuck
   (async done
@@ -542,7 +542,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :spacing 4 :scan-radius 16 :spend {:time 40}}
+        (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :spacing 4 :scan-radius 16 :spend {:job-time 40}}
                                 {:blocks sealed-room :cone? true :self {:pos {:x 16.5 :y 64 :z 16.5}}} 60))]
           (is (nil? (event-of s :search.done)) (pr-str (:found (event-of s :search.done)))))))))
 

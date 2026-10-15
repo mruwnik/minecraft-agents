@@ -182,7 +182,7 @@
     (is (some? (:conditions job)))
     (is (nil? (:check job)))
     (is (some? (:done? job)))
-    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (spawn-world {}) :view (constantly {:data {} :now 0}) :args {} :quote-call {:spend {:time 60}}}))))))
+    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (spawn-world {}) :view (constantly {:data {} :now 0}) :args {} :quote-call {:spend {:job-time 60}}}))))))
 
 (deftest bed-down-start-facts-are-conditions
   (async done

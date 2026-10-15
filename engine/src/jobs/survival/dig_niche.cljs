@@ -66,7 +66,7 @@
    ::walk-s {:default 5 :doc "Seconds the walk to the face takes, for the quote." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::time-s))
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 
 (defn done?
@@ -81,7 +81,7 @@
 (defn quote-of [c]
   (let [roofed (:done? (done? c))
         mean (if roofed 0 (+ (settings/get settings ::walk-s) (* (settings/get settings ::niche-cells) (settings/get settings ::cell-s))))]
-    {:uses {:time [0 mean (max (* (settings/get settings ::quote-spread) mean) (time-s))]} :done [0 1 1]}))
+    {:uses {:job-time [0 mean (max (* (settings/get settings ::quote-spread) mean) (time-s))]} :done [0 1 1]}))
 (defn max-steps [] (settings/get settings ::max-steps))
 
 

@@ -191,7 +191,7 @@
                                      {:name "crafting_table" :count 1}])
                          [])
               _ (swap! (fake/state (:p s)) assoc-in [:recipes "iron_pickaxe"] {:count 1 :needs {"iron_ingot" 3 "stick" 2} :table true})]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_pickaxe" :spend {:time 60} :explore false}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_pickaxe" :spend {:job-time 60} :explore false}) {})
           (loop [i 0]
             (await (f/run-ticks s 20))
             (.advance (.-world (:p s)) 2000)

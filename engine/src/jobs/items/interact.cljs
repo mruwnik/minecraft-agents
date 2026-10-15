@@ -30,7 +30,7 @@
 
 (def target [:id :item])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn problem
   "The cause {:reason :bad-args} when there is no entity id."
@@ -49,7 +49,7 @@
 (defn quote-of [_c]
   (let [click (settings/get settings ::click-s)
         walk (settings/get settings ::walk-s)]
-    {:uses {:time [click (+ click walk) (+ click (* walk (max-walks)))]}}))
+    {:uses {:job-time [click (+ click walk) (+ click (* walk (max-walks)))]}}))
 
 (defn entity-of
   "The sensed entity with this id, or nil."

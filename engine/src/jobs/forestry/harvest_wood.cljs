@@ -188,7 +188,7 @@
 
 (def target [:species])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn sheltered
   "The fell child's night cause before the job starts: the trees are outside the shelter."
@@ -212,8 +212,8 @@
 (defn ^:async quote-of [c]
   (let [e (await (fell-tree/quote-of (assoc c :args (fell-args (:args c)))))
         trees (max 1 (min 8 (quot (or (:count (:args c)) 3) 3)))
-        t (:time (:uses e))
+        t (:job-time (:uses e))
         scale #(* trees (+ % 6))]
-    (cond-> {:uses {:time [(scale (nth t 0)) (scale (nth t 1)) (max (settings/get settings ::time-s) (scale (nth t 2)))]}
+    (cond-> {:uses {:job-time [(scale (nth t 0)) (scale (nth t 1)) (max (settings/get settings ::time-s) (scale (nth t 2)))]}
              :done [0 1 1]}
       (:yields e) (assoc :yields (:yields e)))))

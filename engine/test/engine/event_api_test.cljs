@@ -534,17 +534,17 @@
     (is (= {:closed? false :reason :leak :cells 15} (select-keys bounded [:closed? :reason :cells])))))
 
 (deftest catalog-entry-shows-target-ways-and-defaults
-  (let [eng {:jobs {'jobs.demo.go {:doc "go" :args {} :target [:pos] :ways [:walk :stair] :defaults {:spend {:time 30 :food (fn [_] 2)} :least 1}}
+  (let [eng {:jobs {'jobs.demo.go {:doc "go" :args {} :target [:pos] :ways [:walk :stair] :defaults {:spend {:job-time 30 :food (fn [_] 2)} :least 1}}
                     'jobs.demo.old {:doc "old" :args {}}}}
         entry (event-api/catalog-entry eng "job" "jobs.demo.go")]
     (is (= [:pos] (:target entry)))
     (is (= [:walk :stair] (:ways entry)))
-    (is (= {:spend {:time 30 :food :from-args} :least 1} (:defaults entry)) "a default set by a fn of the args reads :from-args")
+    (is (= {:spend {:job-time 30 :food :from-args} :least 1} (:defaults entry)) "a default set by a fn of the args reads :from-args")
     (is (not-any? #(contains? (event-api/catalog-entry eng "job" "jobs.demo.old") %) [:target :ways :defaults]))))
 
 (def quoted-job
   {:conditions [] :args {:pos {:doc "where" :default nil}} :target [:pos]
-   :quote-of (fn [_] {:uses {:time [1 2 3]}})
+   :quote-of (fn [_] {:uses {:job-time [1 2 3]}})
    :round (fn [c] (ctx/end c :done nil))})
 
 (deftest quote-view-asks-a-job-for-its-quote
@@ -556,7 +556,7 @@
                                (event-api/quote-view eng "jobs.demo.nope" nil)
                                (event-api/quote-view eng "jobs.demo.q" "{:pos")])
           (.then (fn [[ok no-args unknown bad]]
-                   (is (= {:ok true :job 'jobs.demo.q :quote {:uses {:time [1 2 3]}}} ok))
+                   (is (= {:ok true :job 'jobs.demo.q :quote {:uses {:job-time [1 2 3]}}} ok))
                    (is (true? (:ok no-args)))
                    (is (= :unknown-job (:reason unknown)))
                    (is (= :bad-args (:reason bad)))

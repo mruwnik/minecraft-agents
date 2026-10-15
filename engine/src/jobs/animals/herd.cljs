@@ -131,11 +131,11 @@
 (defn out-of-time?
   "True when the call's time left (ctx/left) is under the release margin."
   [c]
-  (some-> (:time (:spend (ctx/left c))) (< (release-margin-s))))
+  (some-> (:job-time (:spend (ctx/left c))) (< (release-margin-s))))
 
 (def target [:mob :box])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn box-sides
   "The box's lengths in cells along x and z that a gate's axis could run, only the :gate's when it stands beside a side."
@@ -178,7 +178,7 @@
 (defn quote-of
   "Find-out: a minute an animal as the guess, no most."
   [c]
-  {:uses {:time [0 (* 60 (max 1 (:target (:args c) 2))) ##Inf]}})
+  {:uses {:job-time [0 (* 60 (max 1 (:target (:args c) 2))) ##Inf]}})
 
 (defn lure-lost!
   "The lured animal is given up (reason :lost, unseen; :animal-stalled, seen but not coming; :unreachable); the run goes on as when nobody is led."

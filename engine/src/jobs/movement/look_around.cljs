@@ -24,7 +24,7 @@
 (a/defargs settings
   {::time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [])
 
@@ -33,9 +33,9 @@
   [c]
   (let [p (:primitives c)
         quote-act #(let [{:keys [quote-of]} (get primitive/table %)] (quote-of p %2))
-        [l m x] (get-in (quote-act :look {}) [:uses :time])
-        [wl wm wx] (get-in (quote-act :wait {:ms (:every-ms (:args c))}) [:uses :time])]
-    {:uses {:time [(+ l wl) (+ m wm) (+ x wx)]}}))
+        [l m x] (get-in (quote-act :look {}) [:uses :job-time])
+        [wl wm wx] (get-in (quote-act :wait {:ms (:every-ms (:args c))}) [:uses :job-time])]
+    {:uses {:job-time [(+ l wl) (+ m wm) (+ x wx)]}}))
 
 (defn look-point
   "The point look-ahead blocks from pos horizontally at yaw 2*pi*u, and

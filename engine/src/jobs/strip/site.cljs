@@ -446,7 +446,7 @@
 
 (def target [:site])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn bad-args
   "Never possible: no :site or :base, and a new site without :at (that one only at the call's start, the site is saved after)."
@@ -465,4 +465,4 @@
     {:done? false :units :segments :done (count (filter settled states)) :left (count (remove settled states))}))
 
 (defn quote-of [c]
-  {:uses {:time [1 (* 120 (max 1 (count (:segments (site c))))) (settings/get settings ::time-s)]}})
+  {:uses {:job-time [1 (* 120 (max 1 (count (:segments (site c))))) (settings/get settings ::time-s)]}})

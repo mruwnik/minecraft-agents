@@ -35,7 +35,7 @@
           (is (some? (:done? def)))
           (is (nil? (contract/quote-problem
                      (await ((:quote-of def) {:primitives (tu/fake {}) :view (constantly {:data {} :now 0})
-                                              :args {} :quote-call {:spend {:time 60}}}))))))))))
+                                              :args {} :quote-call {:spend {:job-time 60}}}))))))))))
 
 (deftest a-collected-pile-ends-done
   (async done

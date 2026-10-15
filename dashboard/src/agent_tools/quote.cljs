@@ -7,7 +7,7 @@
             ["node:path" :as path]))
 
 (def usage "usage: quote.mjs <body> --world <world> <job-name> [<args-EDN>] [--worlds DIR --state LEGACY_PARENT]
-Asks the body's engine what the job expects to use and yield for a call with those args, without running it: {:ok true :job .. :quote {:uses {:time [least mean most] ..} :yields ..}}. ##Inf means unbounded. Find a job's target, ways, defaults and args with observe.mjs <body> catalog job <name>.")
+Asks the body's engine what the job expects to use and yield for a call with those args, without running it: {:ok true :job .. :quote {:uses {:job-time [least mean most] ..} :yields ..}}. ##Inf means unbounded. Find a job's target, ways, defaults and args with observe.mjs <body> catalog job <name>.")
 
 (def request-timeout-ms 10000)
 (def max-response-bytes 65536)

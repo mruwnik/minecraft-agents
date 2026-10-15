@@ -382,5 +382,5 @@
           (await (tu/run-until-empty eng 5))
           (let [[near far use] @out]
             (is (= {"cobblestone" [1 1 1]} (get-in near [:uses :items])))
-            (is (< (second (get-in near [:uses :time])) (second (get-in far [:uses :time]))))
-            (is (< (second (get-in near [:uses :time])) (second (get-in use [:uses :time]))))))))))
+            (is (< (second (get-in near [:uses :job-time])) (second (get-in far [:uses :job-time]))))
+            (is (< (second (get-in near [:uses :job-time])) (second (get-in use [:uses :job-time]))))))))))

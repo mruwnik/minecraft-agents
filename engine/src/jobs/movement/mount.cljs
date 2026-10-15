@@ -86,7 +86,7 @@
 (a/defargs settings
   {::time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn bad-args] [:fn (started/at-start no-vehicle)] [:fn (started/at-start aboard-other)]])
 
@@ -96,7 +96,7 @@
         id (if (and (nil? id) (string? name)) (nearest-named c name) id)
         e (when id (entity-of p id))
         walk-s (if e (/ (max 0 (- (u/dist (u/self-pos c) (u/pos-of (.-pos e))) reach)) walk-speed) 0)]
-    {:uses {:time [seat-s (+ seat-s walk-s) (+ (* 2 seat-s) (* 3 walk-s) 10)]}}))
+    {:uses {:job-time [seat-s (+ seat-s walk-s) (+ (* 2 seat-s) (* 3 walk-s) 10)]}}))
 
 (defn stop!
   "End the call without a seat: kind and reason, data the vehicle id and more."

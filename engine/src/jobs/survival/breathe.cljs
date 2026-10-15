@@ -119,7 +119,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [])
 
@@ -129,7 +129,7 @@
   (let [needs (needs-air? c)]
     {:done? (not needs) :units :cells :left (if needs 1 0)}))
 
-(defn quote-of [_c] {:uses {:time [1 10 60]}})
+(defn quote-of [_c] {:uses {:job-time [1 10 60]}})
 
 (defn surface-pos
   "pos with y raised to the feet cell at the top of the own water column (breath/surface-in-column), so a body that has

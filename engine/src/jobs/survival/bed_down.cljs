@@ -34,7 +34,7 @@
 
 (a/defargs settings
   {::time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched (an obtain may take its own 600 without a change), the sleep." :spec (a/num-in 0 nil)}
-   ::elapsed-s {:default 1800 :doc "Seconds a bed-down may last from its start, the jobs that run between its rounds included." :spec (a/num-in 0 nil)}
+   ::wall-time-s {:default 1800 :doc "Seconds a bed-down may last from its start, the jobs that run between its rounds included." :spec (a/num-in 0 nil)}
    ::walk-speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn bed-permit
@@ -54,7 +54,7 @@
   (or (some-> (:bed (:args c)) places/parse-pos :pos)
       (sh/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c))))
 
-(def defaults {:spend {:time ::time-s :elapsed ::elapsed-s}})
+(def defaults {:spend {:job-time ::time-s :wall-time ::wall-time-s}})
 
 (def target [])
 
@@ -91,7 +91,7 @@
 (defn quote-of [c]
   (let [bed (bed-to-use c)
         s (if bed (/ (u/dist (u/self-pos c) bed) (settings/get settings ::walk-speed)) 0)]
-    {:uses {:time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
+    {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn ^:async sleep!
   "jobs.survival.sleep on bed (open-ok?: also one not shut in a roofed room: a bed the body just put down, or an overdue body)."

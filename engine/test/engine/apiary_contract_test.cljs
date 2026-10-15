@@ -19,7 +19,7 @@
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
-    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args {:max 4} :quote-call {:spend {:time 60}}}))) (str sym))))
+    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args {:max 4} :quote-call {:spend {:job-time 60}}}))) (str sym))))
 
 (defn ^:async ends
   "Submit spec over world w (its :zones kept) and tick until the job ends or waits: {:event :completed|:stopped :kind :reason}, or {:event :waiting :reason}."

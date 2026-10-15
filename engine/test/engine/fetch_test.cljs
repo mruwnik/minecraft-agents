@@ -1240,6 +1240,6 @@
   (is (= :no-table (obtain-craft/stop-why {:kind :condition-failed :cause {:reason :no-table}}))))
 
 (deftest fetch-limits-become-the-childs-call-keys
-  (is (= {:ways #{:craft :smelt :gather} :spend {:time 120}} (need/child-limits 'jobs.items.obtain {:how #{:craft :gather} :minutes 2})))
+  (is (= {:ways #{:craft :smelt :gather} :spend {:job-time 120}} (need/child-limits 'jobs.items.obtain {:how #{:craft :gather} :minutes 2})))
   (is (= {:ways #{:chest :gather}} (need/child-limits 'jobs.items.get-tool {:how #{:chest :gather}})))
   (is (= {} (need/child-limits 'jobs.items.get-tool {}))))

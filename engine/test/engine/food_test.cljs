@@ -274,7 +274,7 @@
           (await (core/tick! eng))
           (is (= {:status :done :ate 2} (select-keys @out [:status :ate])))
           (is (nil? (contract/quote-problem q)))
-          (is (pos? (second (get-in q [:uses :time])))))))))
+          (is (pos? (second (get-in q [:uses :job-time])))))))))
 
 (deftest a-cut-eat-round-yields-without-eating
   (async done

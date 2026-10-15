@@ -62,18 +62,18 @@
 
 (def target [:color])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions
   "None wait: no shears with :fetch off ends the first round (finish! :no-shears), so a queued order never blocks the queue."
   [])
 
 (defn time-limit "Seconds the call may work." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
 
 (defn quote-of [c]
   (let [most (time-limit c)]
-    {:uses {:time [0 (min most (* 10 (or (:count (:args c)) 1))) most]}}))
+    {:uses {:job-time [0 (min most (* 10 (or (:count (:args c)) 1))) most]}}))
 
 (def ending-of
   "The kind and cause of a finish by reason."

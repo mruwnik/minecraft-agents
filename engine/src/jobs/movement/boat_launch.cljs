@@ -29,7 +29,7 @@
   Condition at the start: :no-boat (none in sight). Ends done (data {:id :item name :collected n}), info boat.recovered, or
   condition-failed :gone (the boat is no longer in sight), or
   nothing-possible: :leave-failed, :unreachable (the walk failed twice), :not-collected (the item was not picked up), or
-  limit-reached :time (the engine ends it when the call's :spend :time ran out; data {:id :hits} of a recovery, {:placed} of a launch).
+  limit-reached :job-time (the engine ends it when the call's :spend :job-time ran out; data {:id :hits} of a recovery, {:placed} of a launch).
 
   Never :continue except when a child waits on the world.")
 
@@ -43,7 +43,7 @@
 
 (def target [:action :pos :id])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (a/defargs settings
   {::time-s {:default 120 :doc "Seconds a launch or a recovery may take (a boat that does not break is hit until then)." :spec (a/num-in 0 nil)}})
@@ -162,9 +162,9 @@
      :data (if (launching? c) {:placed placed} {:id (:id (:args c)) :hits (or hits 0)})}))
 
 (defn quote-of [c]
-  (let [most (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))
+  (let [most (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s))
         mean (min most (if (launching? c) launch-s recover-s))]
-    {:uses {:time [(min 1 mean) mean most]}}))
+    {:uses {:job-time [(min 1 mean) mean most]}}))
 
 (defn placed-boat
   "The boat just put at cell, as seen: the nearest boat entity within 2 blocks of its centre."

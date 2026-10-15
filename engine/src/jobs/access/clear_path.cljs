@@ -71,7 +71,7 @@
                (nil? (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) max-thick)))
       {:reason :no-door :why (no-door-why heading max-thick p)})))
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn bad-args] [:fn (started/at-start no-door)]])
 
@@ -81,7 +81,7 @@
         {:keys [cells through]} (when (headings heading)
                                   (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) max-thick))
         s (* (count cells) (settings/get settings ::cell-s))]
-    (cond-> {:uses {:time [s (* 1.5 s) (* 4 s)]}}
+    (cond-> {:uses {:job-time [s (* 1.5 s) (* 4 s)]}}
       through (assoc :moves-to through))))
 
 (def facts

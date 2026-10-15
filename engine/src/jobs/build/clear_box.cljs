@@ -147,7 +147,7 @@
              fields)))))))
 
 (def target [:from :to])
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 (def conditions [[:fn bad-args] [:fn no-zones] [:fn all-refused]])
 
 (defn done?
@@ -159,7 +159,7 @@
   (let [p (:primitives c)
         n (if (box-error (:args c)) 0 (count (remove #(air (u/seen-name p %)) (cells (:args c)))))
         s (* n (settings/get settings ::cell-s))]
-    {:uses {:time [(* 0.5 s) s (* 4 s)]}
+    {:uses {:job-time [(* 0.5 s) s (* 4 s)]}
      :done [0 n n]}))
 
 (defn skip! [c pos reason]

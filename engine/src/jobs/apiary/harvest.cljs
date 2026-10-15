@@ -245,7 +245,7 @@
 
 (def target [:box :center])
 
-(def defaults {:least 1 :spend {:time ::time-s}})
+(def defaults {:least 1 :spend {:job-time ::time-s}})
 
 (defn start-fact
   "The cause that bars the first step, or nil: no hive can be worked (idle-reason), none of :with is carried or the zone
@@ -272,7 +272,7 @@
     {:done? false :units :hives :done (:harvested (ctx/mem c) 0) :left (count (:todo seen))}))
 
 (defn quote-of [c]
-  {:uses {:time [0 (* 15 (or (:max (:args c)) 8)) ##Inf]}})
+  {:uses {:job-time [0 (* 15 (or (:max (:args c)) 8)) ##Inf]}})
 
 (defn ^:async supply!
   "Fetch the tool when :fetch allows: :again once it is carried, :continue while the fetch waits, else the ending of

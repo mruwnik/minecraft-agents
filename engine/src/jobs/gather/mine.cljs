@@ -208,12 +208,12 @@
 
 (a/defargs settings
   {::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :time)." :spec (a/num-in 0 nil)}
+   ::time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
    ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}})
 
 (def target [:block :heading])
 
-(def defaults {:least :all :spend {:time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::time-s}})
 
 ;; ------------------------------------------------------------------ the contract
 
@@ -259,7 +259,7 @@
   [c]
   (let [{:keys [count] :as a} (:args c)
         mean (* count (settings/get settings ::item-s))]
-    {:uses {:time [(min count mean) mean ##Inf]}
+    {:uses {:job-time [(min count mean) mean ##Inf]}
      :yields {:items {(blocks/item-name a) [0 count count]}}
      :done [0 count count]}))
 

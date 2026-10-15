@@ -30,7 +30,7 @@
 
 (def target [])
 (def ways [:step :dig])
-(def defaults {:spend {:time ::time-s} :ways #{:step :dig}})
+(def defaults {:spend {:job-time ::time-s} :ways #{:step :dig}})
 
 (def conditions [])
 
@@ -81,7 +81,7 @@
 
 (defn ^:async quote-of [_]
   (let [t (settings/get settings ::pass-s)]
-    {:uses {:time [t (* 2 t) (* t (max 2 (max-passes)))]}}))
+    {:uses {:job-time [t (* 2 t) (* t (max 2 (max-passes)))]}}))
 
 (defn ^:async pass!
   "One try at the wedged cell: the side step once, else a dig. Resolves :again or an ending."

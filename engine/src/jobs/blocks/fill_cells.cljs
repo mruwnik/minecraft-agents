@@ -38,7 +38,7 @@
 
 (def target [:cells])
 
-(def defaults {:use {:blocks :build} :least :all :spend {:time ::time-s}})
+(def defaults {:use {:blocks :build} :least :all :spend {:job-time ::time-s}})
 
 (defn wanted
   "The block names the call fills with: its :use {:blocks}, else (before the call starts) the carried building blocks."
@@ -109,7 +109,7 @@
   [c]
   (let [n (count (owed c))
         t (* 3 n)]
-    {:uses {:time [0 t (* 3 t)]}
+    {:uses {:job-time [0 t (* 3 t)]}
      :done [0 n n]}))
 
 (defn finish!

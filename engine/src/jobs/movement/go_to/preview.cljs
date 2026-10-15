@@ -109,9 +109,9 @@
         rest-s (* rest-blocks cost-planner/walk-floor (quote-unseen-factor))
         time (cond
                found [s s (* s (quote-most-factor))]
-               (refusals reason) (get-in contract/too-expensive [:uses :time])
+               (refusals reason) (get-in contract/too-expensive [:uses :job-time])
                (or partial escalating?) [s (+ s rest-s) ##Inf]
-               :else (get-in contract/too-expensive [:uses :time]))]
-    (cond-> {:uses {:time time} :route (dissoc r :goal)}
+               :else (get-in contract/too-expensive [:uses :job-time]))]
+    (cond-> {:uses {:job-time time} :route (dissoc r :goal)}
       (and found damage) (assoc-in [:uses :health] [0 damage damage])
       goal (assoc :moves-to goal))))

@@ -26,7 +26,7 @@
 
 (deftest the-quote-is-the-time-left-of-the-night
   (let [q ((:quote-of (get registry/jobs night-job)) {:primitives (tu/fake {:time st/night}) :args {}})
-        [least mean most] (get-in q [:uses :time])]
+        [least mean most] (get-in q [:uses :job-time])]
     (is (nil? (contract/quote-problem q)))
     (is (= 0 least) "a bed can end it at once")
     (is (= (sh/ticks->s (- sh/day-tick st/night)) mean))

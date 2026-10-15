@@ -14,7 +14,7 @@
 
 (defn upto "A figure of 0 up to most, mean a guess." [mean most] [0 (min mean most) most])
 
-(defn timed "A quote of time only, bounded by most s." [most] {:uses {:time (upto 1 most)}})
+(defn timed "A quote of time only, bounded by most s." [most] {:uses {:job-time (upto 1 most)}})
 
 (defn use-items
   "q using up to n of item (least 0: an act that fails uses none); unchanged without an item."
@@ -51,7 +51,7 @@
           k (keyword s)]
       (cond
         (contains? done s) (contract/ending :done k nil)
-        (= "timeout" s) (contract/ending :limit-reached {:line :time} nil)
+        (= "timeout" s) (contract/ending :limit-reached {:line :job-time} nil)
         (#{"cut" "offline" "closed" "disconnected"} s) (contract/ending :cut-off k nil)
         (= "failed" s) (contract/ending :nothing-possible :failed nil)
         :else (contract/ending :condition-failed (or k :no-status) nil)))))
@@ -132,10 +132,10 @@
    :wait (entry [:ms] [] #{"ok"}
                 (fn [_ {:keys [ms]}]
                   (let [s (/ (min (max (if (number? ms) ms 0) 0) (js-setting "prim/wait-max-ms" 10000)) 1000)]
-                    {:uses {:time [s s s]}})))
+                    {:uses {:job-time [s s s]}})))
    :offline (entry [:ms :why] [] #{"ok"}
                    (fn [_ {:keys [ms]}]
                      (let [s (/ (min (or ms (js-setting "prim/offline-default-ms" 300000))
                                      (js-setting "prim/offline-max-ms" 600000))
                                 1000)]
-                       {:uses {:time [0 s (+ s (reconnect-s))]}})))})
+                       {:uses {:job-time [0 s (+ s (reconnect-s))]}})))})

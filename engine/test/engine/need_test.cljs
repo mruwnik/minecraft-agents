@@ -14,7 +14,7 @@
 (def ending-of
   "The [kind cause] a fetch child ends with for a step's reason; any other reason is :nothing-possible."
   {:no-source [:condition-failed :no-source]
-   :timeout [:limit-reached {:line :time :reason :timeout}]})
+   :timeout [:limit-reached {:line :job-time :reason :timeout}]})
 
 (defn stopper
   "A fetch job: each round records its args and slot, then does (step c), which ends it :done (nil) or with the
@@ -176,4 +176,4 @@
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (run! #(need/item! % "coal" 1 {:minutes 2}) nil 1))]
-          (is (= {:time 120} (:spend (first @(:obtain r))))))))))
+          (is (= {:job-time 120} (:spend (first @(:obtain r))))))))))

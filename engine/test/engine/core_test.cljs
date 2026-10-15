@@ -514,7 +514,7 @@
         (let [{:keys [eng seen]} (setup {:self (assoc fake/default-self :food 2) :inventory [{:name "bread" :count 2}]})]
           (core/submit! eng '(eat-parent) {})
           (await (core/tick! eng))
-          (is (= {:uses {:items {"bread" 1} :time 0 :elapsed 0}}
+          (is (= {:uses {:items {"bread" 1} :job-time 0 :wall-time 0}}
                  (:report (first (filter #(= :child_ended (:kind %)) @seen))))))))))
 
 (deftest a-child-returning-a-bad-result-emits-child-ended-error-and-throws

@@ -71,7 +71,7 @@
   {::collect-radius {:default 8 :doc "Blocks within which dropped items are collected after a dig." :spec (a/int-in 0 nil)}
    ::max-walks {:default 2 :doc "Failed walks of one call before it declines :unreachable." :spec (a/int-in 0 nil)}
    ::max-steps {:default 12 :doc "Walks, digs and fetches of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::time-s {:default 300 :doc "Seconds one call may spend (walk, tool fetch, dig, drops) when the caller sets no :spend :time." :spec (a/num-in 0 nil)}})
+   ::time-s {:default 300 :doc "Seconds one call may spend (walk, tool fetch, dig, drops) when the caller sets no :spend :job-time." :spec (a/num-in 0 nil)}})
 (defn collect-radius [] (settings/get settings ::collect-radius))
 
 (defn use-tools
@@ -170,7 +170,7 @@
 
 (def target [:pos])
 
-(def defaults {:spend {:time ::time-s} :least 1 :use {:tools :dig}})
+(def defaults {:spend {:job-time ::time-s} :least 1 :use {:tools :dig}})
 
 (def conditions [[:fn bad-args] [:fn not-loaded] [:fn refused] [:fn no-tool-unfetched]])
 
@@ -182,7 +182,7 @@
 (defn quote-of [c]
   (let [{:keys [pos]} (b/parse (:args c))
         walk (if (and pos (not (b/in-reach? c pos))) (/ (u/eye-dist (u/self-pos c) pos) 4) 0)]
-    {:uses {:time [1 (+ 2 walk) (+ 20 (* 2 walk))]}}))
+    {:uses {:job-time [1 (+ 2 walk) (+ 20 (* 2 walk))]}}))
 
 (def done-reasons #{:dug :already-clear})
 
@@ -202,7 +202,7 @@
 (defn finish!
   "Tell blocks.dig.done and end the call with result {:dug :pos :block :reason ..}: :done for :dug and :already-clear,
   else condition-failed (:fluid :fluid-adjacent :cannot), nothing-possible (:lava-unsealed, a refused dig) or
-  limit-reached :time (the primitive timed out). The data is the result."
+  limit-reached :job-time (the primitive timed out). The data is the result."
   [c result]
   (let [result (cond-> result (:stepped-aside (ctx/mem c)) (assoc :stepped-aside (:stepped-aside (ctx/mem c))))
         {:keys [cell place stepped-aside reason]} result]
@@ -210,7 +210,7 @@
     (cond
       (done-reasons reason) (ctx/end c :done nil result)
       (condition-reasons reason) (ctx/end c :condition-failed reason (dissoc result :reason))
-      (= "timeout" (:primitive result)) (ctx/end c :limit-reached {:line :time :reason :timeout} (dissoc result :reason))
+      (= "timeout" (:primitive result)) (ctx/end c :limit-reached {:line :job-time :reason :timeout} (dissoc result :reason))
       :else (ctx/end c :nothing-possible reason (dissoc result :reason)))))
 
 (def search-blocks

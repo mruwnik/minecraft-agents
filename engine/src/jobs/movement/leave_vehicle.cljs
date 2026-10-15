@@ -29,7 +29,7 @@
 (a/defargs settings
   {::time-s {:default 30 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn (started/at-start not-mounted)]])
 
@@ -41,7 +41,7 @@
 
 (defn quote-of [c]
   (let [{:keys [max-tries wait-ms]} (:args c)]
-    {:uses {:time [0.1 0.5 (+ 1 (* max-tries (min 1 (/ wait-ms 1000))))]}}))
+    {:uses {:job-time [0.1 0.5 (+ 1 (* max-tries (min 1 (/ wait-ms 1000))))]}}))
 
 (defn vehicle-pos
   "Where the ridden entity is, else the body."

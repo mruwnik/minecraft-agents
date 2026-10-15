@@ -31,9 +31,9 @@
 (a/defargs settings
   {::time-s {:default 5 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
-(defn quote-of [_c] {:uses {:time [0 0 1]}})
+(defn quote-of [_c] {:uses {:job-time [0 0 1]}})
 
 (defn refusal [reason text] {:reason reason :text text})
 

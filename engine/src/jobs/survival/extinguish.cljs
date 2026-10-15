@@ -102,7 +102,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s} :use {:blocks :cover}})
+(def defaults {:spend {:job-time ::time-s} :use {:blocks :cover}})
 
 (def conditions [])
 
@@ -112,7 +112,7 @@
   (let [out? (not (or (body-burning? c) (poured c)))]
     {:done? out? :units :fires :left (if out? 0 1)}))
 
-(defn quote-of [_c] {:uses {:time [0 5 60]}})
+(defn quote-of [_c] {:uses {:job-time [0 5 60]}})
 
 (defn floor-cell [pos] (into {} (map (fn [[k v]] [k (js/Math.floor v)])) pos))
 
@@ -313,7 +313,7 @@
     :again))
 
 (defn still-burning [c text]
-  (ctx/end c :limit-reached {:line :time :reason :still-burning} {:text text}))
+  (ctx/end c :limit-reached {:line :job-time :reason :still-burning} {:text text}))
 
 (defn ^:async stand-wait!
   "One wait off the fire: eat to keep regenerating, tell the agent once, wait a second. Stopped :still-burning after

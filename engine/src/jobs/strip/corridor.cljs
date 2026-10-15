@@ -266,7 +266,7 @@
 
 (def target [:segment])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn bad-segment] [:fn (started/at-start not-now)]])
 
@@ -278,4 +278,4 @@
 
 (defn quote-of [c]
   (let [{:keys [from to]} (seg-of (:segment (:args c)))]
-    {:uses {:time [1 (max 1 (- (or to 0) (or from 0))) (settings/get settings ::time-s)]}}))
+    {:uses {:job-time [1 (max 1 (- (or to 0) (or from 0))) (settings/get settings ::time-s)]}}))

@@ -80,7 +80,7 @@
 
 (def target [:villager])
 
-(def defaults {:least :all :spend {:time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::time-s}})
 
 (defn bad-args
   "Impossible :bad-args when no villager uuid is given or :item is not food a villager picks up."
@@ -104,7 +104,7 @@
   {:done? false :units :items :done (fed c) :left (max 0 (- (:count (:args c)) (fed c)))})
 
 (defn quote-of [c]
-  {:uses {:time [0 (* 10 (:count (:args c) 1)) ##Inf]}})
+  {:uses {:job-time [0 (* 10 (:count (:args c) 1)) ##Inf]}})
 
 (defn ending-of
   "The ending of a feeding that stopped for reason: :done when the call's :least was taken, condition-failed :no-food or :gone, else
@@ -155,7 +155,7 @@
   "One go-to leg to the villager at pos. A leg or arrival resets the blocked count, anything else counts (the third in a
   row ends unreachable); the legs since the last toss are bounded by max-walks. :again, :continue or :done."
   [c pos]
-  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach) :spend {:time (leg-s)} :doors :shut
+  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach) :spend {:job-time (leg-s)} :doors :shut
                                             :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true}))]
     (if (= :continue r)
       :continue

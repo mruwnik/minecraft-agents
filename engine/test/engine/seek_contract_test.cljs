@@ -22,7 +22,7 @@
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
-    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:time 60}}}))) (str sym))))
+    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:job-time 60}}}))) (str sym))))
 
 (def flight-world {:floor h/flight-floor})
 
@@ -82,7 +82,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :stopped :kind :limit-reached :reason :timeout}
-               (await (fight {:targets [7] :spend {:time 3} :no-damage-hits 100 :max-hits 1000}
+               (await (fight {:targets [7] :spend {:job-time 3} :no-damage-hits 100 :max-hits 1000}
                              {:inventory h/sword :entities [(zed 7 2 {:invulnerable true})]}))))))))
 
 (defn ^:async equipped

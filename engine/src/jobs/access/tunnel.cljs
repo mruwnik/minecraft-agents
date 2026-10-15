@@ -128,7 +128,7 @@
 
 (def target [:target])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn target-of
   "The :target arg as [x y z], or nil when unset."
@@ -171,7 +171,7 @@
   (let [feet (reach/standing-vec (:primitives c))
         t (target-of c)
         s (* (if t (cells-estimate feet t) 0) (settings/get stair/settings ::stair/cell-s))]
-    (cond-> {:uses {:time [(* 0.5 s) s (max (* 4 s) (time-s))]}}
+    (cond-> {:uses {:job-time [(* 0.5 s) s (max (* 4 s) (time-s))]}}
       t (assoc :moves-to t))))
 
 (def facts

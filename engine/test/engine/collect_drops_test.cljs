@@ -301,7 +301,7 @@
           (drop! p [4 64 0] "porkchop")
           (drop! p [90 64 0] "dirt")
           (let [{:keys [ok quote]} (await (event-api/quote-view eng (str job) "{:radius 6}"))
-                [least mean most] (get-in quote [:uses :time])]
+                [least mean most] (get-in quote [:uses :job-time])]
             (is (true? ok))
             (is (= {"porkchop" [0 2 2]} (get-in quote [:yields :items])) "only what is in the radius")
             (is (= [0 2 2] (:done quote)))

@@ -35,7 +35,7 @@
   - :done (:cleared): no target within :radius for :lost-s (waiting in 1 s steps), and every target seen was killed.
   - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
   - :nothing-possible :lost: some target was neither killed nor given up on.
-  - :limit-reached :timeout (warn attack.timeout): less than ::wrap-up-s (at most a quarter of the call's :spend :time,
+  - :limit-reached :timeout (warn attack.timeout): less than ::wrap-up-s (at most a quarter of the call's :spend :job-time,
     default ::time-s) is left. An end by the engine's limit carries the same data (done?'s :data).
   - :condition-failed :absent: no target was present after a 2 s grace for the world's entities to arrive, a look round and, for a target heard but not seen, up to four steps toward the sound (jobs.lib.vantage).
   :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
@@ -62,12 +62,12 @@
 (defn time-up?
   "Whether the call has less time left (ctx/left) than its wrap-up margin."
   [c]
-  (some-> (get-in (ctx/left c) [:spend :time])
-          (< (min (settings/get settings ::wrap-up-s) (/ (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)) 4)))))
+  (some-> (get-in (ctx/left c) [:spend :job-time])
+          (< (min (settings/get settings ::wrap-up-s) (/ (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)) 4)))))
 
 (def target [:targets])
 
-(def defaults {:spend {:time ::time-s} :use {:tools :attack}})
+(def defaults {:spend {:job-time ::time-s} :use {:tools :attack}})
 
 (def absent-grace-ms
   "How long a job that has seen nothing waits for the world's entities to arrive."
@@ -149,8 +149,8 @@
     {:done? false :units :targets :done (count killed) :left (count (remove (set killed) seen)) :data (fight-data c :timeout)}))
 
 (defn quote-of [c]
-  (let [most (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))]
-    {:uses {:time [0 (min 30 most) most]}}))
+  (let [most (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s))]
+    {:uses {:job-time [0 (min 30 most) most]}}))
 
 (defn book-kill!
   "Add id to :killed; its username, if any, is not attacked again."
@@ -214,7 +214,7 @@
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) (reach))
       :there
-      (case (await (near/go-near! c tpos 2 {:doors :shut :spend {:time (:walk-timeout-s (:args c))} :dangers false :ways #{:walk :clear-seal} :look-round false}))
+      (case (await (near/go-near! c tpos 2 {:doors :shut :spend {:job-time (:walk-timeout-s (:args c))} :dangers false :ways #{:walk :clear-seal} :look-round false}))
         :there :arrived
         :partial :partial
         :blocked))))
@@ -238,7 +238,7 @@
 (defn ^:async close-in!
   "Walk right up to a target that cannot be hit from here, and count a failure."
   [c target]
-  (await (near/go-near! c (u/pos-of (.-pos target)) 1 {:doors :shut :spend {:time (:walk-timeout-s (:args c))} :dangers false :ways #{:walk :clear-seal} :look-round false}))
+  (await (near/go-near! c (u/pos-of (.-pos target)) 1 {:doors :shut :spend {:job-time (:walk-timeout-s (:args c))} :dangers false :ways #{:walk :clear-seal} :look-round false}))
   (fail! c target))
 
 (defn ^:async swing-or-close-in!
@@ -258,7 +258,7 @@
     (ctx/emit! c :attack.done :info (assoc result :text (str "attack done: " (name reason) ", killed " (count (:killed m)))))
     (case reason
       :cleared (ctx/end c :done nil result)
-      :timeout (ctx/end c :limit-reached {:line :time :reason :timeout} result)
+      :timeout (ctx/end c :limit-reached {:line :job-time :reason :timeout} result)
       :absent (ctx/end c :condition-failed :absent result)
       (ctx/end c :nothing-possible reason result))))
 

@@ -21,9 +21,9 @@
 
 (def target [:at])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 (defn done? "An act with no goal state: a look is never done before it is made." [_c] {:done? false})
-(defn quote-of [_c] {:uses {:time [0 0 1]}})
+(defn quote-of [_c] {:uses {:job-time [0 0 1]}})
 (def useful-names #{"crafting_table" "furnace" "blast_furnace" "smoker" "chest" "trapped_chest" "barrel" "ender_chest"
                     "enchanting_table" "anvil" "brewing_stand" "ancient_debris"})
 (defn useful-block?

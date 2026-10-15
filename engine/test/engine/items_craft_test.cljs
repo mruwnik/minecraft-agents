@@ -637,11 +637,11 @@
   (let [q ((:quote-of (get registry/jobs job)) {:primitives (tu/fake {}) :args {:item "dragon_egg" :count 1}})]
     (is (nil? (contract/quote-problem q)) (pr-str q))
     (is (nil? (get-in q [:yields :items "dragon_egg"])))
-    (is (every? #(js/isFinite %) (get-in q [:uses :time])))))
+    (is (every? #(js/isFinite %) (get-in q [:uses :job-time])))))
 
 (deftest a-quote-with-a-full-bag-is-finite-and-still-valid
   (let [filler (mapv (fn [_] {:name "iron_pickaxe" :count 1}) (range 35))
         q ((:quote-of (get registry/jobs job)) {:primitives (tu/fake {:inventory (conj filler {:name "oak_log" :count 1})}) :args {:item "oak_planks" :count 4}})]
     (is (nil? (contract/quote-problem q)) (pr-str q))
-    (is (every? #(js/isFinite %) (get-in q [:uses :time])))
+    (is (every? #(js/isFinite %) (get-in q [:uses :job-time])))
     (is (= [4 4 4] (get-in q [:yields :items "oak_planks"])))))

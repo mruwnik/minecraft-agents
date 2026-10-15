@@ -60,7 +60,7 @@
      :doc (str "The primitive " k " as a job: one act, which cannot be stopped midway. Takes the act's args (engine/README,"
                " Acting). Ends done when the act's status is a success, else with the ending its status maps to; the result"
                " fields are the ending's data.")
-     :defaults {:spend {:time ::time-s}} :settings settings
+     :defaults {:spend {:job-time ::time-s}} :settings settings
      :quote-of (fn [c] (quote-of (:primitives c) (:args c)))
      :round (fn ^:async primitive-round [c]
               (let [r (try (await (ctx/act c k (act-args (:args c))))

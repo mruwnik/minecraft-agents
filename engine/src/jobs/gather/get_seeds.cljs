@@ -77,7 +77,7 @@
 
 (def target [:item :chest :plan])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def materials
   {"wheat_seeds" {:from :grass :sources ["short_grass" "tall_grass"]}
@@ -191,7 +191,7 @@
   (let [{:keys [item count] :as a} (:args c)
         per (case (mode a) :grass 12 :stalk 4 3)
         mean (+ 2 (* per count))]
-    {:uses {:time [(min 2 mean) mean (max mean (time-s))]}
+    {:uses {:job-time [(min 2 mean) mean (max mean (time-s))]}
      :yields {:items {item [0 count count]}}
      :done [0 count count]}))
 

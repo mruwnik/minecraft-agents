@@ -49,7 +49,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out quote p]} (await (preview (floor 0 0 11 2) {:pos [10 64 1] :range 0}))
-              [least mean most] (get-in quote [:uses :time])]
+              [least mean most] (get-in quote [:uses :job-time])]
           (is (true? (:found out)))
           (is (= 10 (js/Math.round (:length out))))
           (is (pos? (:seconds out)))
@@ -79,7 +79,7 @@
           (is (false? (:found out)))
           (is (= :partial (:reason out)) "the island is out of reach: the plan only gets nearer")
           (is (number? (:near out)))
-          (is (= ##Inf (nth (get-in quote [:uses :time]) 2))))))))
+          (is (= ##Inf (nth (get-in quote [:uses :job-time]) 2))))))))
 
 (deftest a-walk-only-call-with-no-way-quotes-no-time-at-all
   (async done
@@ -90,15 +90,15 @@
               any (:quote (await (preview shut-in {:pos [10 64 1] :range 0})))]
           (is (false? (:found (:route walk))))
           (is (nil? (:partial (:route walk))) (pr-str (:route walk)))
-          (is (= ##Inf (first (get-in walk [:uses :time]))) "walking alone never gets out")
-          (is (js/isFinite (first (get-in any [:uses :time]))) "digging out may"))))))
+          (is (= ##Inf (first (get-in walk [:uses :job-time]))) "walking alone never gets out")
+          (is (js/isFinite (first (get-in any [:uses :job-time]))) "digging out may"))))))
 
 (deftest a-partial-route-keeps-a-least-and-has-no-most
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [quote]} (await (preview (merge (floor 0 0 3 2) (floor 8 0 11 2)) {:pos [10 64 1] :range 0 :ways #{:walk}}))
-              [least mean most] (get-in quote [:uses :time])]
+              [least mean most] (get-in quote [:uses :job-time])]
           (is (js/isFinite least) "the goal may lie past what is loaded")
           (is (< least mean))
           (is (= ##Inf most)))))))
@@ -106,7 +106,7 @@
 (deftest a-partial-routes-rest-counts-the-blocks-past-its-end-once
   (let [r {:found false :reason :partial :near 30 :goal [14 64 0]
            :partial {:seconds 5 :waypoints [[0 64 0] [10 64 0]]}}
-        [least mean] (get-in (pv/quote-of-route r false) [:uses :time])]
+        [least mean] (get-in (pv/quote-of-route r false) [:uses :job-time])]
     (is (= 5 least))
     (is (< (js/Math.abs (- mean (+ 5 (* 4 cost-planner/walk-floor (quote-unseen-factor))))) 1e-9)
         "four blocks are left past the route's end, not the 30 of the body")))
@@ -157,7 +157,7 @@
             (is (false? (:found out)) (str reason))
             (is (= reason (:reason out)))
             (is (string? (:text out)) (str reason))
-            (is (= [##Inf ##Inf ##Inf] (get-in quote [:uses :time])) (str reason))))))))
+            (is (= [##Inf ##Inf ##Inf] (get-in quote [:uses :job-time])) (str reason))))))))
 
 (deftest a-place-is-quoted-from-memory-and-from-a-shared-marker
   (async done

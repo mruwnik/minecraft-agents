@@ -37,7 +37,7 @@
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
-    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:time 60}}}))) (str sym))))
+    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:job-time 60}}}))) (str sym))))
 
 ;; ------------------------------------------------------------------ fish
 
@@ -61,8 +61,8 @@
                (await (angle {:count 1} {:inventory rod :blocks bank}))))
         (is (= {:event :stopped :kind :nothing-possible :reason :no-bite}
                (await (angle {:count 2 :max-misses 3} {:inventory rod :fish {:misses 100}}))))
-        (is (= {:event :stopped :kind :limit-reached :reason :time}
-               (await (angle {:count 2 :spend {:time 0} :max-misses 1000} {:inventory rod :fish {:misses 100}}))))))))
+        (is (= {:event :stopped :kind :limit-reached :reason :job-time}
+               (await (angle {:count 2 :spend {:job-time 0} :max-misses 1000} {:inventory rod :fish {:misses 100}}))))))))
 
 ;; ------------------------------------------------------------------ shear
 
@@ -163,10 +163,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[spec world] [['(jobs.animals.leash {:mob "cow" :spend {:time 0}}) {:inventory lead :entities [(cow-at 1 2)]}]
-                              ['(jobs.animals.unleash {:spend {:time 0}}) {:entities [(cow-at 1 2 {:leashed true :leashedToMe true})]}]
-                              ['(jobs.animals.breed {:mob "cow" :spend {:time 0}}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]}]
-                              ['(jobs.animals.shear {:spend {:time 0}}) {:inventory shears :entities [(sheep 1 2)]}]]]
+        (doseq [[spec world] [['(jobs.animals.leash {:mob "cow" :spend {:job-time 0}}) {:inventory lead :entities [(cow-at 1 2)]}]
+                              ['(jobs.animals.unleash {:spend {:job-time 0}}) {:entities [(cow-at 1 2 {:leashed true :leashedToMe true})]}]
+                              ['(jobs.animals.breed {:mob "cow" :spend {:job-time 0}}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]}]
+                              ['(jobs.animals.shear {:spend {:job-time 0}}) {:inventory shears :entities [(sheep 1 2)]}]]]
           (is (= {:event :stopped :kind :limit-reached} (select-keys (await (ending spec world)) [:event :kind])) (str spec)))))))
 
 (deftest unleashing-ends-with-a-kind-and-a-cause
@@ -266,4 +266,4 @@
           (is (= {:event :stopped :kind :impossible :reason :no-destination} (await (ending '(jobs.animals.lure-to {:mob "cow"}) world))))
           (is (= {:event :stopped :kind :condition-failed :reason :no-food} (await (lure {} (assoc world :inventory [])))))
           (is (= {:event :stopped :kind :nothing-possible :reason :no-animal} (await (lure {} (assoc world :entities [])))))
-          (is (= {:event :stopped :kind :limit-reached :reason :time} (await (lure {:spend {:time 0}} world)))))))))
+          (is (= {:event :stopped :kind :limit-reached :reason :job-time} (await (lure {:spend {:job-time 0}} world)))))))))

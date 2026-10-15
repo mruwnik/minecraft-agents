@@ -43,10 +43,10 @@
     {}))
 
 (deftest the-report-adds-the-round-time-and-the-time-since-the-start-to-the-uses
-  (is (= {:uses {:items {"bread" 2} :time 1.5 :elapsed 9} :yields {:items {"dirt" 1}}}
+  (is (= {:uses {:items {"bread" 2} :job-time 1.5 :wall-time 9} :yields {:items {"dirt" 1}}}
          (contract/report {:tally {:uses {:items {"bread" 2}} :yields {:items {"dirt" 1}}} :ran-ms 1500 :started-ms 1000}
                           10000)))
-  (is (= {:uses {:time 0}} (contract/report nil 10000))))
+  (is (= {:uses {:job-time 0}} (contract/report nil 10000))))
 
 ;; ---------------------------------------------------------------- the engine
 
@@ -169,8 +169,8 @@
           (await (core/tick! eng))
           (let [ended (first (filter #(= :child_ended (:kind %)) @seen))
                 completed (first (filter #(= :completed (:kind %)) @seen))]
-            (is (= {:uses {:time 0.3 :elapsed 0.3}} (:report ended)) "the child's own round")
-            (is (= {:uses {:time 0.45 :elapsed 0.45}} (:report completed)) "the parent's round holds the child's once")))))))
+            (is (= {:uses {:job-time 0.3 :wall-time 0.3}} (:report ended)) "the child's own round")
+            (is (= {:uses {:job-time 0.45 :wall-time 0.45}} (:report completed)) "the parent's round holds the child's once")))))))
 
 (deftest a-finished-job-reports-and-is-remembered
   (async done
@@ -179,7 +179,7 @@
         (let [{:keys [eng seen]} (setup)]
           (core/submit! eng '(craft) {})
           (await (core/tick! eng))
-          (let [report {:uses {:items {"oak_log" 1} :time 0 :elapsed 0} :yields {:items {"oak_planks" 4}}}]
+          (let [report {:uses {:items {"oak_log" 1} :job-time 0 :wall-time 0} :yields {:items {"oak_planks" 4}}}]
             (is (= report (:report (first (filter #(= :completed (:kind %)) @seen)))))
             (is (= [{:job 'craft :report report :kind :done :cause nil}]
                    (mapv :data (mem/entries (mem/view (:store eng)) :job-report))))))))))

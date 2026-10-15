@@ -34,7 +34,7 @@
 (defn hurt! [c health] (fake/swap-self! (:primitives c) assoc :health health))
 
 (def slow
-  {:conditions [] :defaults {:spend {:time 5}}
+  {:conditions [] :defaults {:spend {:job-time 5}}
    :round (fn [_] (swap! clock + 6000) (swap! world update :slow-rounds (fnil inc 0)) :continue)})
 
 (deftest its-own-clock-ends-a-job-past-its-time
@@ -46,7 +46,7 @@
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= 1 (:slow-rounds @world)) "the round after the crossing does not run")
-          (is (= {:kind :limit-reached :cause {:line :time :spend 5}} (stopped seen))))))))
+          (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen))))))))
 
 (def waits
   {:conditions []
@@ -57,7 +57,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'waits waits})]
-          (core/submit! eng '(waits {:spend {:time 5 :elapsed 10}}) {})
+          (core/submit! eng '(waits {:spend {:job-time 5 :wall-time 10}}) {})
           (swap! clock + 60000)
           (await (core/tick! eng))
           (swap! clock + 4000)
@@ -68,8 +68,8 @@
           (swap! clock + 3000)
           (await (core/tick! eng))
           (is (= 3 (:wait-rounds @world)))
-          (is (= {:kind :limit-reached :cause {:line :elapsed :spend 10}} (stopped seen)))
-          (is (= {:time 0 :elapsed 11} (get-in (first (job-ev seen :limit_reached)) [:data :report :uses]))))))))
+          (is (= {:kind :limit-reached :cause {:line :wall-time :spend 10}} (stopped seen)))
+          (is (= {:job-time 0 :wall-time 11} (get-in (first (job-ev seen :limit_reached)) [:data :report :uses]))))))))
 
 (deftest the-limit-that-ends-a-job-is-told-with-its-amount-and-report
   (async done
@@ -82,19 +82,19 @@
           (let [told (job-ev seen :limit_reached)
                 data (:data (first told))]
             (is (= [id] (mapv #(get-in % [:context :job-id]) told)))
-            (is (= {:name 'slow :cause {:line :time :spend 5} :used 6 :call {:spend {:time 5} :least 1}}
+            (is (= {:name 'slow :cause {:line :job-time :spend 5} :used 6 :call {:spend {:job-time 5} :least 1}}
                    (select-keys data [:name :cause :used :call])))
-            (is (= 6 (get-in data [:report :uses :time])))))))))
+            (is (= 6 (get-in data [:report :uses :job-time])))))))))
 
 (deftest a-default-spend-may-be-a-fn-of-the-args
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'slow (assoc slow :defaults {:spend {:time (fn [{:keys [n]}] (* 2 n))}})})]
+        (let [{:keys [eng seen]} (setup {'slow (assoc slow :defaults {:spend {:job-time (fn [{:keys [n]}] (* 2 n))}})})]
           (core/submit! eng '(slow {:n 2}) {})
           (await (core/tick! eng))
           (await (core/tick! eng))
-          (is (= {:kind :limit-reached :cause {:line :time :spend 4}} (stopped seen))))))))
+          (is (= {:kind :limit-reached :cause {:line :job-time :spend 4}} (stopped seen))))))))
 
 (def counted
   (assoc slow :done? (fn [_] (if (when-let [n (:done-throws @world)] (>= (:slow-rounds @world 0) n)) (throw (js/Error. "boom")) {:done? false :units :cells :done 5 :left 3 :data {:dug [1 2]}}))))
@@ -138,7 +138,7 @@
           (let [d (:data (first (job-ev seen :completed)))]
             (is (= :done (:kind d)))
             (is (= [1 2] (:dug d)))
-            (is (= {:line :time :spend 5} (:limit (:report d)))))
+            (is (= {:line :job-time :spend 5} (:limit (:report d)))))
           (is (= 1 (count (job-ev seen :limit_reached))) "the limit is still told"))))))
 
 ;; ---------------------------------------------------------------- handed down
@@ -178,14 +178,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [jobs {'top (merge (caller (kid (fn [_] (swap! clock + 11000))) {:spend {:time 60 :health 4}})
-                                {:defaults {:spend {:time 10}}})}
+        (let [jobs {'top (merge (caller (kid (fn [_] (swap! clock + 11000))) {:spend {:job-time 60 :health 4}})
+                                {:defaults {:spend {:job-time 10}}})}
               {:keys [eng seen]} (setup jobs)]
           (core/submit! eng '(top) {})
           (await (core/tick! eng))
-          (is (= {:time 10 :health 4} (:spend (:kid-call @world))) "time held to the caller's; health the caller has no line for")
-          (is (= [[:spend :time]] (:lines (:data (first (job-ev seen :budget_clamped))))))
-          (is (= {:kind :limit-reached :cause {:line :time :spend 10}} (stopped seen))))))))
+          (is (= {:job-time 10 :health 4} (:spend (:kid-call @world))) "time held to the caller's; health the caller has no line for")
+          (is (= [[:spend :job-time]] (:lines (:data (first (job-ev seen :budget_clamped))))))
+          (is (= {:kind :limit-reached :cause {:line :job-time :spend 10}} (stopped seen))))))))
 
 (deftest a-childs-left-is-the-least-its-chain-has-left
   (async done
@@ -193,11 +193,11 @@
       (fn ^:async t []
         (let [jobs {'top (merge (caller (kid (fn [c] (swap! clock + 3000) (swap! world assoc :kid-left (ctx/left c))))
                                         {:spend {:health 4}})
-                                {:defaults {:spend {:time 10} :floor {:health 5}}})}
+                                {:defaults {:spend {:job-time 10} :floor {:health 5}}})}
               {:keys [eng]} (setup jobs)]
           (core/submit! eng '(top) {})
           (await (core/tick! eng))
-          (is (= {:spend {:time 7 :health 4} :floor {:health 5}} (:kid-left @world))
+          (is (= {:spend {:job-time 7 :health 4} :floor {:health 5}} (:kid-left @world))
               "the caller's time, which the child sets no line for, is the child's too"))))))
 
 (deftest a-mob-hit-ends-the-child-whose-floor-it-crosses-not-the-caller
@@ -312,7 +312,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [e (contract/limit-error "j1" {:line :time :spend 5})
+        (let [e (contract/limit-error "j1" {:line :job-time :spend 5})
               c {:update-mem (fn [_ _] (swap! world assoc :booked true))}]
           (reset! world {})
           (is (contract/passes-through? e))

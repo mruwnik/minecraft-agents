@@ -226,8 +226,8 @@
 (defn ^:async go-near!
   "Walk until the body's cell is within range cells of pos's cell (u/within?), as a jobs.movement.go-to child in slot :walk,
   so a body shut in escalates (pillar, stair, dig a way out and put back). Resolves to :there, :partial (the child waits on the world: yield and call
-  again; also a :spend :time leg that got nearer) or :blocked (it gave up or declined). opts: :doors (jobs.lib.pass policy, default :shut; a job that works gates itself passes :never), :dangers (false: plan
-  straight past known dangers), :tolls (cells the plan prices), :zone-tolls (true adds other bodies' zone cells), :ways (go-to's), :spend (go-to's; {:time s} is a leg of at most that many s, :partial when it got nearer, for a
+  again; also a :spend :job-time leg that got nearer) or :blocked (it gave up or declined). opts: :doors (jobs.lib.pass policy, default :shut; a job that works gates itself passes :never), :dangers (false: plan
+  straight past known dangers), :tolls (cells the plan prices), :zone-tolls (true adds other bodies' zone cells), :ways (go-to's), :spend (go-to's; {:job-time s} is a leg of at most that many s, :partial when it got nearer, for a
   caller chasing something that moves; default one 60 s steer), :look-round (default true; false for a caller that keeps moving),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always :retry false (the job counts its own

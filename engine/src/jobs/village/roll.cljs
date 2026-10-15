@@ -74,7 +74,7 @@
 
 (def target [:villager :pos])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn bad-args
   "Impossible :bad-args when a cell, a workstation item (or profession) and a wanted item (or trade) are not given."
@@ -120,7 +120,7 @@
   {:done? false :units :rolls :done (rolls c) :left (max 0 (- (:tries (:args c)) (rolls c)))})
 
 (defn quote-of [c]
-  {:uses {:time [0 (* 30 (:tries (:args c) 1)) ##Inf]}})
+  {:uses {:job-time [0 (* 30 (:tries (:args c) 1)) ##Inf]}})
 
 (defn data-of [c extra]
   (merge {:found false :rolls (rolls c) :item (item-of (:args c))} extra))
@@ -162,7 +162,7 @@
   "One go-to leg toward the villager at pos. :again, :continue or the stop."
   [c pos]
   (let [r (await (child/call-walk* c :walk
-                                  {:pos pos :range (reach) :spend {:time (leg-s)} :ways #{:walk :clear-seal} :warn false}))]
+                                  {:pos pos :range (reach) :spend {:job-time (leg-s)} :ways #{:walk :clear-seal} :warn false}))]
     (cond
       (= :continue r) :continue
       (let [res (:data r)] (or (:arrived res) (:leg res))) :again

@@ -383,7 +383,7 @@
 
 (def target [:at])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn sheltered
   "The cause {:reason :night-sheltered :shelter kind} at night in a shelter: the trees are outside, and a search from
@@ -411,8 +411,8 @@
   (let [{:keys [species radius at]} (:args c)
         t (if at (tree-at (:primitives c) at) (tree-near (:primitives c) radius species))
         n (if t (count (log/tree-logs c radius t)) 0)
-        [wl wm] (or (when t (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos (:base t) :range 2})) [:uses :time])) [0 0])
+        [wl wm] (or (when t (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos (:base t) :range 2})) [:uses :job-time])) [0 0])
         least (+ 2 wl)
         mean (+ 2 wm 3 (* 1.5 n))]
-    (cond-> {:uses {:time [least mean (max mean (time-s))]} :done [0 1 1]}
+    (cond-> {:uses {:job-time [least mean (max mean (time-s))]} :done [0 1 1]}
       t (assoc :yields {:items {(str (:species t) "_log") [0 n n]}}))))

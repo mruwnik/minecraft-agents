@@ -54,7 +54,7 @@
 
 (def target [:pos])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def valid-states
   {:openable #{:open :closed} :lever #{:on :off} :button #{:press}})
@@ -124,7 +124,7 @@
         reached (boolean (and b (contains? (valid-states (click/kind-of (.-name b))) state) (click/reached? state (click/props-of b))))]
     {:done? reached :units :toggles :done (if reached 1 0) :left (if reached 0 1)}))
 
-(defn quote-of [_c] {:uses {:time [0.1 2 (time-s)]}})
+(defn quote-of [_c] {:uses {:job-time [0.1 2 (time-s)]}})
 
 (defn reach
   "The reach the walk aims for now: :reach, less one for each walk closer after a click out of reach (at least 1)."

@@ -65,7 +65,7 @@
              firsts (atom [])
              job {:conditions []
                   :round (fn ^:async leg-round [c]
-                           (swap! firsts conj (await (near/go-near! c {:x 35 :y 64 :z 0} 0 {:spend {:time 1} :ways #{:walk :clear-seal}})))
+                           (swap! firsts conj (await (near/go-near! c {:x 35 :y 64 :z 0} 0 {:spend {:job-time 1} :ways #{:walk :clear-seal}})))
                            (ctx/end c :done nil))}
              eng (assoc eng :jobs (assoc (:jobs eng) 'leg-probe job))]
          (core/submit! eng '(leg-probe) {})

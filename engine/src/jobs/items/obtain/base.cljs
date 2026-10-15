@@ -12,7 +12,7 @@
    :jobs.items.obtain.base/max-gap-ms {:default 60000 :doc "Longest gap between two steps that counts toward the stall time; a longer one (a preemption) counts this much." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/seen-radius {:default 48 :doc "Blocks within which a seen raw block (ore, dirt, leaves) counts as a source; the gather gets the same radius." :spec (a/int-in 0 64)}
    :jobs.items.obtain.base/sheep-radius {:default 24 :doc "Blocks within which sheep are looked for when wool is gathered." :spec (a/num-in 0 nil)}
-   :jobs.items.obtain.base/explore {:default {:max-distance 64 :max-legs 12 :spend {:time 300}} :doc "jobs.explore.search options of a search for a raw need (:explore true)." :spec map?}})
+   :jobs.items.obtain.base/explore {:default {:max-distance 64 :max-legs 12 :spend {:job-time 300}} :doc "jobs.explore.search options of a search for a raw need (:explore true)." :spec map?}})
 (defn max-inspections [] (settings/get settings :jobs.items.obtain.base/max-inspections))
 (defn max-gap-ms [] (settings/get settings :jobs.items.obtain.base/max-gap-ms))
 (defn sheep-radius [] (settings/get settings :jobs.items.obtain.base/sheep-radius))

@@ -51,7 +51,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn at-home? [c] (let [pos (place c)] (boolean (and pos (<= (u/dist (u/self-pos c) pos) arrive-range)))))
 
@@ -60,7 +60,7 @@
 (defn quote-of [c]
   (let [pos (place c)
         s (if pos (/ (u/dist (u/self-pos c) pos) (settings/get settings ::speed)) 0)]
-    {:uses {:time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
+    {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn ^:async walk! [c pos]
   (let [e (await (child/call-walk* c :walk {:pos pos :range arrive-range :at-night :go}))]

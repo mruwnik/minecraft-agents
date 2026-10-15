@@ -16,7 +16,7 @@
   - \"out-of-range\" (warn follow.out-of-range): three walks in a row that arrived or got closer but left the body out of range.
   - \"absent\" (info follow.absent): the player was never seen within 2 s of the first round
     (the grace lets the world's entities arrive).
-  - The engine ends it :limit-reached when :spend :time is used up, with {:met} (the player was seen). Nothing to undo then.
+  - The engine ends it :limit-reached when :spend :job-time is used up, with {:met} (the player was seen). Nothing to undo then.
   Idling is look and wait, neutral for backoff. A cut leaves nothing to undo. The last-seen position stays in job memory.")
 
 (a/defargs args
@@ -43,7 +43,7 @@
 (a/defargs settings
   {::time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn bad-args]])
 
@@ -74,7 +74,7 @@
   (if (or (pos? blocked) (u/within? self now range)) 0 (inc out)))
 
 (defn time-limit "Seconds the call may follow, or nil." [c]
-  (get-in (ctx/frozen-call c) [:spend :time]))
+  (get-in (ctx/frozen-call c) [:spend :job-time]))
 
 (defn done?
   "Never done: a follow ends with a cause. Counts the player as met once seen."
@@ -85,7 +85,7 @@
 (defn quote-of [c]
   (let [most (or (time-limit c) ##Inf)
         now (find-player (:primitives c) (:player (:args c)) (:radius (:args c)))]
-    (cond-> {:uses {:time [0 (min 60 most) most]}}
+    (cond-> {:uses {:job-time [0 (min 60 most) most]}}
       now (assoc :moves-to [(:x now) (:y now) (:z now)]))))
 
 (defn finish!
@@ -104,7 +104,7 @@
    (loop [pos pos blocked 0 out 0]
      (let [r (await (child/call-walk* c :walk
                                      (cond-> {:pos pos :range range :doors :shut :ways #{:walk :clear-seal} :warn false}
-                                       leg-s (assoc-in [:spend :time] leg-s))))
+                                       leg-s (assoc-in [:spend :job-time] leg-s))))
            res (:data r)
            blocked (if (or (:arrived res) (:leg res)) 0 (inc blocked))
            now (target-now)

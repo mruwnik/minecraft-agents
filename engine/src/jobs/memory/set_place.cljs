@@ -31,7 +31,7 @@
 (a/defargs settings
   {::time-s {:default 5 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn standing
   "The cell the body stands in."
@@ -58,7 +58,7 @@
         set? (and (not (:reason r)) (= (:pos r) (mem/place (ctx/view c) (:name r))))]
     {:done? set? :units :places :left (if set? 0 1)}))
 
-(defn quote-of [_c] {:uses {:time [0 0 1]}})
+(defn quote-of [_c] {:uses {:job-time [0 0 1]}})
 
 (defn round [c]
   (let [p (:primitives c)

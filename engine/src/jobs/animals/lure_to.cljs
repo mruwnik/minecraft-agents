@@ -39,8 +39,8 @@
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
   Every result gives :distance: the animal's, or its last sighting's when it is unseen.
   - :no-animal (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
-    :unreachable (a walk gave up), :timeout (less than ::wrap-up-s of the call's :spend :time left: the food is put away first).
-  Endings: :arrived is done; :no-food is condition-failed (the fetch's kind when it gave one); :timeout is limit-reached (the call's :spend :time, default
+    :unreachable (a walk gave up), :timeout (less than ::wrap-up-s of the call's :spend :job-time left: the food is put away first).
+  Endings: :arrived is done; :no-food is condition-failed (the fetch's kind when it gave one); :timeout is limit-reached (the call's :spend :job-time, default
   ::timeout-s); the rest are nothing-possible with the reason as the cause. Every reason but :arrived carries a :text.
 
   Zones: an animal standing in another owner's zone or claim is not lured (:ignore-zones? true skips the check).")
@@ -69,7 +69,7 @@
 
 (def target [:mob :pos])
 
-(def defaults {:spend {:time ::timeout-s}})
+(def defaults {:spend {:job-time ::timeout-s}})
 
 (defn start-fact
   "Impossible without :mob or a destination."
@@ -82,17 +82,17 @@
 (def conditions "Starts while the order is complete (start-fact)." [[:fn (started/at-start start-fact)]])
 
 (defn time-limit "Seconds the lure may take." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :time]) (timeout-s)))
+  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (timeout-s)))
 
 (defn time-up?
   "Whether the call has less time left (ctx/left) than its wrap-up margin."
   [c]
-  (some-> (get-in (ctx/left c) [:spend :time])
+  (some-> (get-in (ctx/left c) [:spend :job-time])
           (< (min (settings/get settings ::wrap-up-s) (/ (time-limit c) 4)))))
 
 (defn quote-of [c]
   (let [most (time-limit c)]
-    {:uses {:time [0 (min most 60) most]}}))
+    {:uses {:job-time [0 (min most 60) most]}}))
 
 (defn done?
   "Whether the animal arrived."
@@ -149,7 +149,7 @@
   "The kind and cause of a lure that ended for reason, else nothing-possible with the reason as the cause."
   {:arrived [:done nil]
    :no-food [:condition-failed :no-food]
-   :timeout [:limit-reached {:line :time :reason :timeout}]})
+   :timeout [:limit-reached {:line :job-time :reason :timeout}]})
 
 (defn ^:async conclude!
   "Put the food away, emit the outcome, hand it to the parent and end the job."

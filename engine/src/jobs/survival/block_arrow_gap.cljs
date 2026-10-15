@@ -52,7 +52,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s} :use {:blocks :shelter}})
+(def defaults {:spend {:job-time ::time-s} :use {:blocks :shelter}})
 
 (defn blocks
   "The blocks it may place: the call's :use :blocks, else (nothing carried when the call began) the shelter fillers."
@@ -167,7 +167,7 @@
   [c]
   {:done? (empty? (ranged-dangers c)) :units :cells :done (count (:placed (ctx/mem c)))})
 
-(defn quote-of [_c] {:uses {:time [0 3 30]}})
+(defn quote-of [_c] {:uses {:job-time [0 3 30]}})
 
 (defn ^:async round
   "Fill the gap (see doc), one cell a step with a timer between."

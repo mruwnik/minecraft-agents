@@ -30,7 +30,7 @@
     (is (some? (:conditions (job sym))) (str sym " has conditions"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
-    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:time 60}}}))) (str sym))))
+    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:job-time 60}}}))) (str sym))))
 
 (deftest every-movement-access-block-job-has-a-time-line-default
   (let [syms (->> (keys registry/jobs)
@@ -38,13 +38,13 @@
                   (filter #(:round (job %))))]
     (is (seq syms))
     (doseq [sym syms]
-      (is (some? (get-in (job sym) [:defaults :spend :time])) (str sym " defaults :spend :time")))))
+      (is (some? (get-in (job sym) [:defaults :spend :job-time])) (str sym " defaults :spend :job-time")))))
 
 (deftest go-to-s-time-line-default-is-a-setting
   (let [{:keys [defaults] :as def} (job 'jobs.movement.go-to)
         resolve #(contract/resolve-settings defaults (fn [k] (settings/get (:settings def) k)) {})]
-    (is (= 1800 (get-in (resolve) [:spend :time])))
-    (is (= 60 (settings/with-settings {:jobs.movement.go-to/time-s 60} #(get-in (resolve) [:spend :time]))))))
+    (is (= 1800 (get-in (resolve) [:spend :job-time])))
+    (is (= 60 (settings/with-settings {:jobs.movement.go-to/time-s 60} #(get-in (resolve) [:spend :job-time]))))))
 
 (deftest targets-and-moves-to
   (is (= [:player] (:target (job 'jobs.movement.follow))))
@@ -85,7 +85,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed}
-               (select-keys (await (ending-of {:entities [steve]} '(jobs.movement.follow {:player "Steve" :spend {:time 2}}))) [:event])))
+               (select-keys (await (ending-of {:entities [steve]} '(jobs.movement.follow {:player "Steve" :spend {:job-time 2}}))) [:event])))
         (is (= {:event :stopped :kind :condition-failed :reason :absent}
                (await (ending-of {} '(jobs.movement.follow {:player "Steve"}))))))))) 
 
@@ -146,7 +146,7 @@
     {:floor {:health 1}} {:floor {:health 6}} {:min-health 6}
     {} {:floor {:health 6}} {}
     {} {:floor {:health 15}} {:min-health 15}
-    {:spend {:health 2 :time 4}} {:spend {:health 1 :time 0}} {:max-damage 2 :leg-s 4}))
+    {:spend {:health 2 :job-time 4}} {:spend {:health 1 :job-time 0}} {:max-damage 2 :leg-s 4}))
 
 (deftest go-to-endings
   (async done

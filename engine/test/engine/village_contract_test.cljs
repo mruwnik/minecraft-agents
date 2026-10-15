@@ -22,8 +22,8 @@
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (some? (:done? (job sym))) (str sym " has done?"))
-    (is (some? (get-in (job sym) [:defaults :spend :time])) (str sym " has a time default"))
-    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:time 60}}}))) (str sym))))
+    (is (some? (get-in (job sym) [:defaults :spend :job-time])) (str sym " has a time default"))
+    (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:job-time 60}}}))) (str sym))))
 
 (def bread [{:name "bread" :count 5}])
 

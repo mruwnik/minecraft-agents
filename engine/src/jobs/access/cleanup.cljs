@@ -209,7 +209,7 @@
 
 (def target [:job :near])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn picked-entries [c]
   (let [view (ctx/view c)]
@@ -222,7 +222,7 @@
 
 (defn quote-of [c]
   (let [n (max 1 (count (picked-entries c)))]
-    {:uses {:time [(* 0.5 n) (* 4 n) (max (* 4 n) (time-s))]}}))
+    {:uses {:job-time [(* 0.5 n) (* 4 n) (max (* 4 n) (time-s))]}}))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -268,7 +268,7 @@
     (do (ctx/update-mem! c assoc-in [:held cell] {:reason :danger}) :again)
     (let [e (await (child/call-walk* c :walk {:pos cell :range (walk-range) :ways #{:walk} :zone-tolls true
                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))
-                                              :spend {:time (:leg-s (:args c))}}))
+                                              :spend {:job-time (:leg-s (:args c))}}))
           status (if (= :done (:kind e)) :done :stopped)]
       (cond
         (:leg (:data e)) nil

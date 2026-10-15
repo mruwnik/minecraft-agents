@@ -30,30 +30,30 @@
 (defn asking
   "A contract job whose round runs (f c), keeps what it returns in world :got and ends :done."
   [f]
-  {:conditions [] :defaults {:spend {:time 100} :floor {:health 5}} :args no-args
+  {:conditions [] :defaults {:spend {:job-time 100} :floor {:health 5}} :args no-args
    :round (fn ^:async asking-round [c] (swap! world assoc :got (await (f c))) (ctx/end c :done nil))})
 
 ;; ---------------------------------------------------------------- the quote ctx
 
 (def kid
-  {:conditions [] :target [:pos] :ways [:a :b] :defaults {:ways #{:a} :spend {:time 30}} :args pos-args
+  {:conditions [] :target [:pos] :ways [:a :b] :defaults {:ways #{:a} :spend {:job-time 30}} :args pos-args
    :quote-of (fn ^:async kid-quote [c]
                (swap! world assoc :seen {:pos (:pos (:args c)) :left (ctx/left c) :a (ctx/way? c :a) :b (ctx/way? c :b)
                                          :mem (ctx/mem c)})
                (try (await (ctx/act c :look #js {:yaw 0 :pitch 0}))
                     (catch :default e (swap! world assoc :act-refused (.-message e))))
-               {:uses {:time [1 2 ##Inf]} :yields {:items {"dirt" [0 1 2]}}})
+               {:uses {:job-time [1 2 ##Inf]} :yields {:items {"dirt" [0 1 2]}}})
    :round (fn [_] (swap! world assoc :kid-ran true) :continue)})
 
 (deftest a-quote-reads-like-a-round-plus-what-is-left-and-cannot-act
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {'kid kid 'asker (asking #(ctx/quote % 'kid {:pos [1 2 3] :spend {:time 500}}))})]
+        (let [{:keys [eng]} (setup {'kid kid 'asker (asking #(ctx/quote % 'kid {:pos [1 2 3] :spend {:job-time 500}}))})]
           (core/submit! eng '(asker) {})
           (await (core/tick! eng))
-          (is (= {:uses {:time [1 2 ##Inf]} :yields {:items {"dirt" [0 1 2]}}} (:got @world)))
-          (is (= {:pos [1 2 3] :left {:spend {:time 100} :floor {:health 5}} :a true :b false :mem {}} (:seen @world))
+          (is (= {:uses {:job-time [1 2 ##Inf]} :yields {:items {"dirt" [0 1 2]}}} (:got @world)))
+          (is (= {:pos [1 2 3] :left {:spend {:job-time 100} :floor {:health 5}} :a true :b false :mem {}} (:seen @world))
               "the would-be call: given spend clamped to the caller's remainder, the caller's floor, the default ways")
           (is (re-find #"quote cannot act" (str (:act-refused @world))) "a clear error, not a cut")
           (is (not (:kid-ran @world)) "a quote runs no round"))))))
@@ -74,16 +74,16 @@
                                                                 (let [p (await (ctx/quote c 'plain {}))
                                                                       o (await (ctx/quote c 'old {}))]
                                                                   [p o])))})]
-                     (doseq [s [4 8]] (mem/write! (:store eng) :job-report {:job 'plain :report {:uses {:time s}}}))
+                     (doseq [s [4 8]] (mem/write! (:store eng) :job-report {:job 'plain :report {:uses {:job-time s}}}))
                      (core/submit! eng '(asker) {})
                      (await (core/tick! eng))
-                     (is (= [{:uses {:time [0 6 ##Inf]}} {:uses {:time [0 7 ##Inf]}}] (:got @world)))))))))))
+                     (is (= [{:uses {:job-time [0 6 ##Inf]}} {:uses {:job-time [0 7 ##Inf]}}] (:got @world)))))))))))
 
 ;; ---------------------------------------------------------------- the quote deadline
 
 (def slow-quote
   {:conditions [] :args no-args :round (constantly :continue)
-   :quote-of (fn [_] (swap! world update :slow-quotes (fnil inc 0)) (swap! clock + 5000) {:uses {:time [1 1 1]}})})
+   :quote-of (fn [_] (swap! world update :slow-quotes (fnil inc 0)) (swap! clock + 5000) {:uses {:job-time [1 1 1]}})})
 
 (def outer
   {:conditions [] :args no-args :round (constantly :continue)
@@ -91,7 +91,7 @@
                (swap! world assoc :handed (:quote-deadline c))
                (swap! world assoc :inner (await (ctx/quote c 'slow {})))
                (swap! world assoc :after (await (ctx/quote c 'slow {})))
-               {:uses {:time [1 2 3]}})})
+               {:uses {:job-time [1 2 3]}})})
 
 (deftest past-the-quote-deadline-time-is-infinite
   (async done
@@ -99,7 +99,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'slow slow-quote 'outer outer
                                     'asker (asking #(ctx/quote % 'outer {} (+ @clock 1000)))})
-              inf {:uses {:time [##Inf ##Inf ##Inf]}}]
+              inf {:uses {:job-time [##Inf ##Inf ##Inf]}}]
           (core/submit! eng '(asker) {})
           (await (core/tick! eng))
           (is (= 1001000 (:handed @world)) "handed down")
@@ -114,7 +114,7 @@
   {:conditions [] :target [:pos] :args pos-args
    :quote-of (fn ^:async ping-quote [c]
                (swap! world assoc :inner (await (ctx/quote c 'ping {:pos (:pos (:args c))})))
-               {:uses {:time [1 1 1]}})
+               {:uses {:job-time [1 1 1]}})
    :round (fn ^:async ping-round [c]
             (swap! world assoc :same (await (ctx/quote c 'ping {:pos (:pos (:args c))}))
                    :other (await (ctx/quote c 'ping {:pos 2})))
@@ -130,18 +130,18 @@
           (let [{:keys [same other inner]} @world]
             (is (= :duplicate-call (contract/cause-key same)) "the caller's frame")
             (is (= :duplicate-call (contract/cause-key inner)) "the quote that asks for it")
-            (is (= {:uses {:time [1 1 1]}} other))))))))
+            (is (= {:uses {:job-time [1 1 1]}} other))))))))
 
 ;; ---------------------------------------------------------------- the least check
 
 (def field
   {:conditions [] :args no-args
    :done? (fn [_] {:done? false :done 0 :left 4 :units :cells})
-   :quote-of (fn [_] {:uses {:time [1 1 1]} :done [0 2 2]})
+   :quote-of (fn [_] {:uses {:job-time [1 1 1]} :done [0 2 2]})
    :round (fn [c] (swap! world assoc :ran true) (ctx/end c :done nil))})
 
 (def idle-field
-  (assoc field :quote-of (fn [_] (swap! world update :quotes (fnil inc 0)) {:uses {:time [1 1 1]} :done [0 0 0]})))
+  (assoc field :quote-of (fn [_] (swap! world update :quotes (fnil inc 0)) {:uses {:job-time [1 1 1]} :done [0 0 0]})))
 
 (deftest the-default-least-asks-no-quote
   (async done
@@ -173,22 +173,22 @@
 
 (defn way-quote [way]
   (case way
-    :b {:uses {:time [20 30 40]}}
+    :b {:uses {:job-time [20 30 40]}}
     :d (contract/ending :nothing-possible nil nil)
-    {:uses {:time [1 2 3]}}))
+    {:uses {:job-time [1 2 3]}}))
 
 (def chooser
-  {:conditions [] :ways [:a :b :c :d :e] :defaults {:ways #{:b :c :d :e} :spend {:time 10}} :args no-args
+  {:conditions [] :ways [:a :b :c :d :e] :defaults {:ways #{:b :c :d :e} :spend {:job-time 10}} :args no-args
    :round (fn ^:async chooser-round [c]
             (let [w1 (await (ctx/next-way c way-quote :x))
                   _ (await (ctx/call c :try 'failer {}))
                   w2 (await (ctx/next-way c way-quote :x))
                   w3 (await (ctx/next-way c way-quote :y))
-                  w4 (await (ctx/next-way c (constantly {:uses {:time [##Inf ##Inf ##Inf]}}) :x))]
+                  w4 (await (ctx/next-way c (constantly {:uses {:job-time [##Inf ##Inf ##Inf]}}) :x))]
               (swap! world assoc :ways [w1 w2 w3 w4])
               (ctx/end c :done nil)))})
 
-(def slow {:line :time :least 20 :left 10})
+(def slow {:line :job-time :least 20 :left 10})
 
 (deftest next-way-drops-the-ways-not-allowed-failed-or-over-a-remainder
   (async done
@@ -202,7 +202,7 @@
             (is (= {:way :e :dropped {:a :not-allowed :b slow :c {:failed :empty} :d :ending}} w2)
                 "failed on :x for :empty; a nil cause is dropped as :ending")
             (is (= :c (:way w3)) "another thing")
-            (is (= (let [inf {:line :time :least ##Inf :left 10}]
+            (is (= (let [inf {:line :job-time :least ##Inf :left 10}]
                      {:way nil :dropped {:a :not-allowed :b inf :c {:failed :empty} :d inf :e inf}})
                    w4))))))))
 

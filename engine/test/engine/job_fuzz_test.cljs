@@ -101,11 +101,11 @@
   (let [ways (:ways entry)
         gens {:use #(pick r [{:tools ["stone_pickaxe"]} {:blocks ["dirt" "cobblestone"]} {}])
               :ways #(set (filter (fn [_] (chance? r 0.5)) ways))
-              :spend #(pick r [{:time (pick r [0 5 30 600])} {:time 5 :items {"dirt" 4}} {:health 4 :wear {"iron_pickaxe" 3}}])
+              :spend #(pick r [{:job-time (pick r [0 5 30 600])} {:job-time 5 :items {"dirt" 4}} {:health 4 :wear {"iron_pickaxe" 3}}])
               :floor #(pick r [{:health (pick r [0 6 12 20])} {:food 6}])
               :deadline #(pick r [0 1000000 2000000])
               :least #(pick r [1 3 :all])}
-        wrong {:use ["dirt"] :ways #{:no-such-way} :spend {:time "soon"} :floor 3 :deadline -5 :least 0}]
+        wrong {:use ["dirt"] :ways #{:no-such-way} :spend {:job-time "soon"} :floor 3 :deadline -5 :least 0}]
     (reduce (fn [acc k]
               (cond
                 (or (and (= :ways k) (empty? ways)) (not (chance? r 0.15))) acc

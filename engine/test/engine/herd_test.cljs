@@ -368,7 +368,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :spend {:time 40}})
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :spend {:job-time 40}})
               opened (atom false)]
           (on-step-when! s #(gate-open? s) #(reset! opened true))
           (await (run-ticks s 400))

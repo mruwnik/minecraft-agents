@@ -39,7 +39,7 @@
 (a/defargs settings
   {::time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn bad-args]])
 
@@ -52,7 +52,7 @@
 
 (defn quote-of [c]
   (let [wait-s (:wait-s (:args c))]
-    {:uses {:time [wait-s wait-s (+ wait-s (* 4 wait-s))]}}))
+    {:uses {:job-time [wait-s wait-s (+ wait-s (* 4 wait-s))]}}))
 
 (defn finish!
   "Release the hold and end the call."

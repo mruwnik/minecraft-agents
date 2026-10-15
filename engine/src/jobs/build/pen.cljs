@@ -184,7 +184,7 @@
                            :text (str "pen build declines plan " (:plan (:args c)) ": " why)})
           {:reason :uneven :why why})))))
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions
   [[:fn plan-problem] [:fn (started/at-start uneven-problem)] [:fn (started/at-start from-plan/no-items)]])

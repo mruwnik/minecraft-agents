@@ -57,8 +57,8 @@
   solves it; then a body too hurt to walk off fails :low-health); when every raw need is seen and the gather child's
   own check declines (night in a shelter), that cause stands instead.
   Ends :done {:got n :item name} only with the count carried. Nothing-possible {:reason :no-source :why} or
-  :table-unreachable when every allowed way was tried, data {:got n :tried {way why} :why}. Limit-reached {:line :time
-  :reason :timeout} after :spend :time seconds (default ::time-s) without a change in what is carried; it keeps its own stall check (a long chain goes on while it makes progress) and an engine end by the total budget takes the data of done? ({:got :tried}). A nested call
+  :table-unreachable when every allowed way was tried, data {:got n :tried {way why} :why}. Limit-reached {:line :job-time
+  :reason :timeout} after :spend :job-time seconds (default ::time-s) without a change in what is carried; it keeps its own stall check (a long chain goes on while it makes progress) and an engine end by the total budget takes the data of done? ({:got :tried}). A nested call
   for the same item is the engine's :duplicate-call.
   Quote: the plan's figures; yields the count, time a guess per step, no most for a gather.")
 
@@ -84,7 +84,7 @@
   #{:unreachable :not-home :not-back :zone-exit :walk-failed :walk-in-failed :shut-in :exhausted :tree-unreachable
     :no-approach :out-of-reach :one-way :way-dives :detour :door-stuck :cut-again :replan-limit})
 
-(def defaults {:ways (set ways) :spend {:time ::time-s}})
+(def defaults {:ways (set ways) :spend {:job-time ::time-s}})
 
 (defn source-cause
   "nil when a way would start: a usable seen chest that might hold one of the names, a chain made from what is
@@ -144,7 +144,7 @@
         gathers (count (:gather pl))
         mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (* smelt-s smelts) (* gather-s gathers))
         item (or (:item pl) (first names))]
-    {:uses {:time [0 (max step-s mean) (if (or (nil? pl) (pos? gathers)) ##Inf (* 3 (max step-s mean)))]}
+    {:uses {:job-time [0 (max step-s mean) (if (or (nil? pl) (pos? gathers)) ##Inf (* 3 (max step-s mean)))]}
      :yields {:items {item [0 n n]}}}))
 
 (defn survey-first?
@@ -165,9 +165,9 @@
     {:inv inv :t now :at now}))
 
 (defn stall-s
-  "Seconds without a change in what is carried that end the call: its :spend :time."
+  "Seconds without a change in what is carried that end the call: its :spend :job-time."
   [c]
-  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
 
 (defn ^:async step! [c]
   (let [a (:args c)
@@ -197,7 +197,7 @@
         (cond
           (get-in m [:gather :tree]) (await (finish-tree! c))
           (>= have target) (ctx/end c :done nil {:got got :item (or (holds (into {} (map (juxt :name :count)) inv) names) (first names))})
-          (> (- now t) (* 1000 (stall-s c))) (ctx/end c :limit-reached {:line :time :reason :timeout} (assoc data :tried (:tried m)))
+          (> (- now t) (* 1000 (stall-s c))) (ctx/end c :limit-reached {:line :job-time :reason :timeout} (assoc data :tried (:tried m)))
           (and (way? c :chest) (not (get-in m [:tried :chest])))
           (let [cs (candidates c names)
                 known (first (filter :stock cs))

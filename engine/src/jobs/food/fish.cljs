@@ -21,7 +21,7 @@
   within :radius).
   - :condition-failed :no-water (the water gone mid-run), or a failed rod fetch (the cause names the rod, :because the fetch's ending).
   - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (:max-misses casts in a row caught nothing).
-  - :limit-reached: the call's :spend :time (default ::time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
+  - :limit-reached: the call's :spend :job-time (default ::time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
   Resumes from the carried fish: the goal is the count carried at the first round plus :count.")
 
 (a/defargs args
@@ -38,7 +38,7 @@
 
 (def target [:pos])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def fish-items #{"cod" "salmon" "tropical_fish" "pufferfish"})
 
@@ -67,11 +67,11 @@
     {:done? (>= n want) :units :fish :done n :left (max 0 (- want n)) :data {:got n}}))
 
 (defn time-limit "Seconds the call may fish." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
+  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
 
 (defn quote-of [c]
   (let [most (time-limit c)]
-    {:uses {:time [0 (min most (* 30 (:count (:args c) 1))) most]}}))
+    {:uses {:job-time [0 (min most (* 30 (:count (:args c) 1))) most]}}))
 
 (defn stop!
   "End the call with the fish got so far and text as the data: done when the call's :least (default 1, :all = :count)

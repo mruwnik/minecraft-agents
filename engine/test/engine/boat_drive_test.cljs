@@ -58,7 +58,7 @@
                  ["the cell is not water" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [10 64 2]} :not-water]
                  ["land in the way" {:blocks (merge (pond 0 10 0 3) (pond 0 10 8 12)) :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [5 63 10]} :blocked]
                  ["out of strokes" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18] :max-strokes 2} :strokes]
-                 ["out of time" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18] :spend {:time 0}} :time]]]
+                 ["out of time" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18] :spend {:job-time 0}} :job-time]]]
           (let [{:keys [res]} (await (run world args))]
             (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
 
@@ -111,5 +111,5 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (lt/setup {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}})
               _ (.override (.-world p) "paddle" (fn [token a impl] (swap! clock + 40000) (impl token a)))
-              res (await (tu/child-outcome eng 'jobs.movement.boat-drive {:pos [18 63 18] :spend {:time 100}} 60))]
-          (is (= {:status :stopped :reason :time} (select-keys res [:status :reason])) (pr-str res)))))))
+              res (await (tu/child-outcome eng 'jobs.movement.boat-drive {:pos [18 63 18] :spend {:job-time 100}} 60))]
+          (is (= {:status :stopped :reason :job-time} (select-keys res [:status :reason])) (pr-str res)))))))

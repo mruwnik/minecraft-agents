@@ -62,7 +62,7 @@
 (a/defargs settings
   {::time-s {:default 300 :doc "Seconds a cull may take." :spec (a/num-in 0 nil)}})
 
-(def defaults {:least 1 :spend {:time ::time-s} :use {:tools :attack}})
+(def defaults {:least 1 :spend {:job-time ::time-s} :use {:tools :attack}})
 
 (defn corners
   "The eight corners of a box of cells: the far corners are the outer edges of the max cells."
@@ -145,7 +145,7 @@
     {:done? (zero? left) :units :animals :done (:killed (ctx/mem c) 0) :left left}))
 
 (defn quote-of [c]
-  {:uses {:time [0 (* 20 (or (:count (:args c)) 4)) ##Inf]}})
+  {:uses {:job-time [0 (* 20 (or (:count (:args c)) 4)) ##Inf]}})
 
 (defn ending-of
   "The ending of a cull of killed animals that stopped for reason: :done for :count and :keep or when the call's :least

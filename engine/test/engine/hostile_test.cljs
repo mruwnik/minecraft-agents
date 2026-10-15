@@ -370,7 +370,7 @@
               _ (await (tu/with-near-spy calls* (fn ^:async b [] (await (first-round-ms '(jobs.survival.fight-back {:range 6}) {:inventory sword :entities [(zombie 5 0)]} 20)))))
               opts (map #(nth % 2) @calls*)]
           (is (seq opts))
-          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 10 (get-in % [:spend :time])) (false? (:look-round %)) (false? (:dangers %))) opts)
+          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 10 (get-in % [:spend :job-time])) (false? (:look-round %)) (false? (:dangers %))) opts)
               "a moving mob is chased in legs, never dug or pillared toward"))))))
 
 (deftest fight-back-declines-when-nothing-is-near
@@ -1024,9 +1024,9 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup-flight {:entities [(zombie 5 0)]})]
           (stuck-walks! p)
-          (core/register-reflex! eng {:trigger :hostile-near :job '(jobs.survival.respond-to-hostile {:spend {:time 2}})})
+          (core/register-reflex! eng {:trigger :hostile-near :job '(jobs.survival.respond-to-hostile {:spend {:job-time 2}})})
           (await (core/tick! eng))
-          (is (= [[:stopped :time]] (mapv (juxt :outcome :reason) (reflex-ended seen))) "the time budget ended the call")
+          (is (= [[:stopped :job-time]] (mapv (juxt :outcome :reason) (reflex-ended seen))) "the time budget ended the call")
           (await (core/tick! eng))
           (is (= 2 (count (reflex-fired seen))) "fired again at once: the zombie still stands")
           (is (empty? (filter #(= :backoff (:kind %)) @seen)) "never backed off"))))))

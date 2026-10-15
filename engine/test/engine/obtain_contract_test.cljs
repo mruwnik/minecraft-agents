@@ -39,10 +39,10 @@
         (let [q (await (quote-in (f/start (f/bare [{:name "oak_log" :count 2}]) []) 'jobs.items.obtain {:item "oak_planks" :count 4}))]
           (is (nil? (contract/quote-problem q)))
           (is (= [0 4 4] (get-in q [:yields :items "oak_planks"])))
-          (is (< (get-in q [:uses :time 2]) ##Inf) "a craft from what is carried has a most"))
+          (is (< (get-in q [:uses :job-time 2]) ##Inf) "a craft from what is carried has a most"))
         (let [q (await (quote-in (f/start (f/bare []) []) 'jobs.items.obtain {:item "oak_planks" :count 4}))]
           (is (nil? (contract/quote-problem q)))
-          (is (= ##Inf (get-in q [:uses :time 2])) "a gather has no most"))))))
+          (is (= ##Inf (get-in q [:uses :job-time 2])) "a gather has no most"))))))
 
 (deftest planks-crafted-from-a-carried-log-are-done-with-what-was-got
   (async done

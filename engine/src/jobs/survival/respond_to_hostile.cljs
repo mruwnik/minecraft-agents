@@ -70,7 +70,7 @@
 
 (def target [])
 
-(def defaults {:spend {:time ::time-s} :use {:tools :attack}})
+(def defaults {:spend {:job-time ::time-s} :use {:tools :attack}})
 
 (defn weapons
   "The weapons of the call: its :use :tools, else the default substrings."
@@ -288,7 +288,7 @@
 (defn quote-of
   "Find-out: an encounter lasts as long as the danger stays."
   [_c]
-  {:uses {:time [0 (settings/get settings ::quote-mean-s) ##Inf]}})
+  {:uses {:job-time [0 (settings/get settings ::quote-mean-s) ##Inf]}})
 
 (defn signature
   "What a call may change: the body's cell, its health (a fight that costs health is a response), the ids of the

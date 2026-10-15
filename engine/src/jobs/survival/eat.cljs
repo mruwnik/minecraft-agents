@@ -29,7 +29,7 @@
    :max-bites {:doc "eat at most this many bites; unlimited when nil" :spec (a/int-in 1 nil) :default nil}
    :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :spec boolean? :default false}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def target [:item])
 
@@ -98,7 +98,7 @@
         wanted (js/Math.ceil (/ (max 0 (- until (food-of c))) (max 1 (if best (foods/points best) 1))))
         bites (cond-> (min wanted carried) max-bites (min max-bites))
         t (* bites (settings/get settings ::bite-s))]
-    (cond-> {:uses {:time [(min t (settings/get settings ::bite-s)) t t]}}
+    (cond-> {:uses {:job-time [(min t (settings/get settings ::bite-s)) t t]}}
       (pos? bites) (assoc-in [:uses :items best] [1 bites bites]))))
 
 (defn ^:async round

@@ -53,7 +53,7 @@
 (defn time-s [] (settings/get settings ::time-s))
 
 (def target [:chest])
-(def defaults {:least :all :spend {:time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::time-s}})
 
 (defn no-chest
   "A chest is known; else the cause {:reason :no-chest}."
@@ -79,7 +79,7 @@
         chest (storage/chest-of (ctx/view c) (:args c))
         walk (if chest (/ (u/dist (u/self-pos c) chest) (settings/get settings ::walk-speed)) 0)
         t (+ walk (* (count short) (settings/get settings ::take-s)))]
-    {:uses {:time [(* (count short) (settings/get settings ::take-s)) t (max t (time-s))]}
+    {:uses {:job-time [(* (count short) (settings/get settings ::take-s)) t (max t (time-s))]}
      :yields {:items (into {} (map (fn [[name n]] [name [0 n n]])) short)}}))
 
 (defn end!

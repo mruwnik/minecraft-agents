@@ -42,7 +42,7 @@
    ::ranged-chase {:default 6 :doc "Farthest a ranged mob may be for the body to cross open ground to it while another hostile is in range; beyond it the fight declines." :spec (a/num-in 0 nil)}})
 (def target [])
 
-(def defaults {:spend {:time ::time-s} :use {:tools :attack}})
+(def defaults {:spend {:job-time ::time-s} :use {:tools :attack}})
 
 (defn reach [] (settings/get settings ::reach))
 (defn ranged-chase [] (settings/get settings ::ranged-chase))
@@ -105,7 +105,7 @@
   (let [n (count (in-range c))]
     {:done? false :units :hostiles :done (count (:killed (ctx/mem c))) :left n}))
 
-(defn quote-of [_c] {:uses {:time [0 10 60]}})
+(defn quote-of [_c] {:uses {:job-time [0 10 60]}})
 
 (defn weapons
   "The weapons of the call: its :use :tools, else the default substrings."
@@ -167,7 +167,7 @@
             hold? (do (ctx/update-mem! c update :held-since #(or % (ctx/now c)))
                       (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
                       :held)
-            :else (await (near/go-near! c tpos 2 {:spend {:time chase-timeout-s} :dangers false :ways #{:walk :clear-seal} :look-round false})))]
+            :else (await (near/go-near! c tpos 2 {:spend {:job-time chase-timeout-s} :dangers false :ways #{:walk :clear-seal} :look-round false})))]
     (when (= :blocked r) (note-blocked! c target))
     (when (= :there r)
       (ctx/update-mem! c assoc :last-attack (ctx/now c))

@@ -25,7 +25,7 @@
 
 (def target [:item])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (defn plan-of
   "armour/plan for c: worn pieces and carried item names read from the body."
@@ -53,7 +53,7 @@
 (defn ^:async quote-of [c]
   (let [n (count (:put (plan-of c)))
         t (* n (settings/get settings ::piece-s))]
-    {:uses {:time [(min t (settings/get settings ::piece-s)) t t]}}))
+    {:uses {:job-time [(min t (settings/get settings ::piece-s)) t t]}}))
 
 (defn ^:async round
   [c]

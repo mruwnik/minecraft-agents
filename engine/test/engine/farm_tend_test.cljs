@@ -440,8 +440,8 @@
          (:report (tend/after-child {:report {}} :till {:from {:x 1 :y 63 :z 1}} {:kind :condition-failed :cause {:reason :no-zones}})))))
 
 (deftest a-child-that-hit-a-limit-ends-the-step-and-the-run-with-its-cause
-  (let [m (tend/after-child {:todo [:harvest :till] :report {}} :harvest {} {:kind :limit-reached :cause {:limit :time} :data {:cut 1}})]
-    (is (= {:limit :time} (:limit m)))
+  (let [m (tend/after-child {:todo [:harvest :till] :report {}} :harvest {} {:kind :limit-reached :cause {:limit :job-time} :data {:cut 1}})]
+    (is (= {:limit :job-time} (:limit m)))
     (is (= {:harvest {:cut 1}} (:report m)))
     (is (= [:till] (:todo m)))))
 

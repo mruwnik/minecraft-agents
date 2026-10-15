@@ -67,7 +67,7 @@
 
 (def target [:heading])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def purpose :bridge)
 
@@ -207,7 +207,7 @@
 (defn quote-of [c]
   (let [{:keys [length item]} (:args c)
         n (or length 1)]
-    {:uses (cond-> {:time [(* 0.3 n) n (max n (time-s))]} item (assoc :items {item [0 n n]}))}))
+    {:uses (cond-> {:job-time [(* 0.3 n) n (max n (time-s))]} item (assoc :items {item [0 n n]}))}))
 
 (defn ^:async place!
   "Write the intent, place one block, confirm it when the cell shows it. Three failed places in a row give up."

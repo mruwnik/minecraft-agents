@@ -62,11 +62,11 @@
 (defn add [a b] (merge-with (fn [x y] (if (map? x) (add x y) (+ x y))) a b))
 
 (defn used
-  "What a frame's :contract state has used of each spend line at wall-clock now: :time the s its rounds ran (plus
-  extra-ms, the round in flight's), :elapsed the s since its call started, yields and waits included."
+  "What a frame's :contract state has used of each spend line at wall-clock now: :job-time the s its rounds ran (plus
+  extra-ms, the round in flight's), :wall-time the s since its call started, yields and waits included."
   [{:keys [tally ran-ms started-ms]} now extra-ms]
-  (cond-> (assoc (:uses tally) :time (/ (+ (or ran-ms 0) extra-ms) 1000))
-    started-ms (assoc :elapsed (/ (- now started-ms) 1000))))
+  (cond-> (assoc (:uses tally) :job-time (/ (+ (or ran-ms 0) extra-ms) 1000))
+    started-ms (assoc :wall-time (/ (- now started-ms) 1000))))
 
 (defn report
   "The report of a frame's :contract state at now: its tally with what used gives among the uses."
@@ -265,10 +265,10 @@
          :spec (a/map-of keyword? (a/coll-of (a/or-of a/item? map?)))}
    :ways {:doc "the ways allowed, a set of the job's way keywords; default the job's defaults, else all" :default nil
           :spec (a/set-of keyword?)}
-   :spend {:doc "what the job may use up: {:time s (its rounds ran) :elapsed s (since it started) :health hp :food pts :items {name n} :wear {tool uses}}"
+   :spend {:doc "what the job may use up: {:job-time s (its rounds ran) :wall-time s (since it started) :health hp :food pts :items {name n} :wear {tool uses}}"
            :default nil
-           :spec (a/valid-by "a map {:time s :elapsed s :health hp :food pts :items {name n} :wear {tool uses}} of numbers >= 0"
-                             (partial lines-problem #{:time :elapsed :health :food} #{:items :wear}))}
+           :spec (a/valid-by "a map {:job-time s :wall-time s :health hp :food pts :items {name n} :wear {tool uses}} of numbers >= 0"
+                             (partial lines-problem #{:job-time :wall-time :health :food} #{:items :wear}))}
    :floor {:doc "levels the job does not go below: {:health hp :food pts}" :default nil
            :spec (a/valid-by "a map {:health hp :food pts} of numbers >= 0" (partial lines-problem #{:health :food} #{}))}
    :deadline {:doc "the wall-clock ms by which the call must have ended; default the caller's" :default nil
@@ -359,7 +359,7 @@
                   :let [f (get floor k) l (get levels k)]
                   :when (and f (number? l) (< l f))]
               [{:line k :floor f} {k l}])
-            (for [k [:time :elapsed :health :food]
+            (for [k [:job-time :wall-time :health :food]
                   :let [s (get spend k) x (get u k 0)]
                   :when (and s (> x s))]
               [{:line k :spend s} {:used x}])
@@ -381,15 +381,15 @@
         crossed (set (map first (crossings state levels now extra-ms)))
         over (fn [cause m room] (when (and m (> m room) (not (crossed cause))) [cause {:most m :left room}]))]
     (keep identity
-          (concat [(when deadline (over {:line :deadline :deadline deadline} (most (:time uses)) (/ (- deadline now) 1000)))]
+          (concat [(when deadline (over {:line :deadline :deadline deadline} (most (:job-time uses)) (/ (- deadline now) 1000)))]
                   (for [k [:health :food]
                         :let [f (get floor k) l (get levels k)]
                         :when (and f (number? l))]
                     (over {:line k :floor f} (most (get uses k)) (- l f)))
-                  (for [k [:time :elapsed :health :food]
+                  (for [k [:job-time :wall-time :health :food]
                         :let [s (get spend k)]
                         :when s]
-                    (over {:line k :spend s} (most (get uses (if (= :elapsed k) :time k))) (- s (get u k 0))))
+                    (over {:line k :spend s} (most (get uses (if (= :wall-time k) :job-time k))) (- s (get u k 0))))
                   (for [[k what] [[:items :item] [:wear :tool]]
                         [n s] (get spend k)]
                     (over {:line k what n :spend s} (most (get-in uses [k n])) (- s (get-in u [k n] 0))))))))
@@ -440,16 +440,16 @@
 
 ;; ------------------------------------------------------------------ quotes
 
-(def too-expensive "The quote of a quote that ran past its deadline." {:uses {:time [##Inf ##Inf ##Inf]}})
+(def too-expensive "The quote of a quote that ran past its deadline." {:uses {:job-time [##Inf ##Inf ##Inf]}})
 
 (defn figure? [x] (and (vector? x) (= 3 (count x)) (every? number? x) (apply <= x)))
 
 (defn quote-problem
-  "Why q is no quote {:uses {:time :health :food fig :items {name fig} :wear {tool fig}} :yields {:items {name fig}}
+  "Why q is no quote {:uses {:job-time :health :food fig :items {name fig} :wear {tool fig}} :yields {:items {name fig}}
   :done fig :moves-to [x y z]}, each fig [least mean most], or nil."
   [q]
   (let [{:keys [uses yields]} q
-        figs (concat (keep #(get uses %) [:time :health :food]) (vals (:items uses)) (vals (:wear uses))
+        figs (concat (keep #(get uses %) [:job-time :health :food]) (vals (:items uses)) (vals (:wear uses))
                      (vals (:items yields)) (keep :done [q]))]
     (cond
       (not (map? q)) "not a map"
@@ -458,8 +458,8 @@
 (defn default-quote
   "The quote of a job with no quote-of: time (0, the mean time of reports, else guess-s, ##Inf)."
   [reports guess-s]
-  (let [ts (keep #(get-in % [:uses :time]) reports)]
-    {:uses {:time [0 (if (seq ts) (/ (reduce + ts) (count ts)) guess-s) ##Inf]}}))
+  (let [ts (keep #(get-in % [:uses :job-time]) reports)]
+    {:uses {:job-time [0 (if (seq ts) (/ (reduce + ts) (count ts)) guess-s) ##Inf]}}))
 
 (defn least-cause
   "{:reason :least :least :most} when quote q's most :done is short of call's :least (:all: done?'s :left, d), else
@@ -482,9 +482,9 @@
                            f (get floor k)
                            above (when (and f (number? (get levels k))) (- (get levels k) f))]
                        (if (and s above) (min s above) (or s above))))]
-    (or (over :time (:time u) (:time spend))
-        (when (:elapsed spend) (over :elapsed (:time u) (:elapsed spend)))
-        (when deadline (over :deadline (:time u) (/ (- deadline now) 1000)))
+    (or (over :job-time (:job-time u) (:job-time spend))
+        (when (:wall-time spend) (over :wall-time (:job-time u) (:wall-time spend)))
+        (when deadline (over :deadline (:job-time u) (/ (- deadline now) 1000)))
         (over :health (:health u) (room :health))
         (over :food (:food u) (room :food))
         (some (fn [[k what]] (some (fn [[n fig]] (some-> (over k fig (get-in spend [k n])) (assoc what n))) (get u k)))

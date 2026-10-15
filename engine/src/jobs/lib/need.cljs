@@ -31,11 +31,11 @@
 
 (defn child-limits
   "The call keys of limits o for a fetch child job: :how as :ways (an obtain's :craft brings :smelt), :minutes as
-  :spend {:time}."
+  :spend {:job-time}."
   [job {:keys [how minutes]}]
   (cond-> {}
     how (assoc :ways (set (cond-> how (and (= job 'jobs.items.obtain) (contains? how :craft)) (conj :smelt))))
-    minutes (assoc :spend {:time (* 60 minutes)})))
+    minutes (assoc :spend {:job-time (* 60 minutes)})))
 
 (def limit-keys [:what :how :minutes :fail-minutes :explore])
 

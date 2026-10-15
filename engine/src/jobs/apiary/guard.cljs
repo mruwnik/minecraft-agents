@@ -306,7 +306,7 @@
 
 (def target [:box :center])
 
-(def defaults {:least 1 :spend {:time ::time-s}})
+(def defaults {:least 1 :spend {:job-time ::time-s}})
 
 (defn start-fact
   "The cause that bars the first step, or nil: no fire needs work, the body carries no carpet or campfire the work
@@ -333,7 +333,7 @@
     {:done? false :units :fires :done (actions (ctx/mem c)) :left (+ (count (:todo seen)) (count (:left seen)))}))
 
 (defn quote-of [c]
-  {:uses {:time [0 (* 10 (or (:max (:args c)) 12)) ##Inf]}})
+  {:uses {:job-time [0 (* 10 (or (:max (:args c)) 12)) ##Inf]}})
 
 (def lacked-item {:no-carpet "white_carpet" :no-campfire "campfire"})
 

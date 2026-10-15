@@ -47,7 +47,7 @@
 
 (def target [:villager :buy])
 
-(def defaults {:least :all :spend {:time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::time-s}})
 
 (defn bad-args
   "Impossible :bad-args when no villager uuid or no item name is given."
@@ -66,7 +66,7 @@
   {:done? (>= (bought c) (:count (:args c))) :units :items :done (bought c) :left (max 0 (- (:count (:args c)) (bought c)))})
 
 (defn quote-of [c]
-  {:uses {:time [0 (* 5 (:count (:args c) 1)) ##Inf]}})
+  {:uses {:job-time [0 (* 5 (:count (:args c) 1)) ##Inf]}})
 
 (def failed-conditions "Reasons the body could mend itself: the rest are nothing-possible." #{:gone :not-villager :payment-short :no-room})
 
@@ -202,7 +202,7 @@
       (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach)) (await (trade! c))
       :else
       (let [r (await (child/call-walk* c :walk
-                                      {:pos (u/pos-of (.-pos e)) :range (reach) :spend {:time chase-timeout-s} :ways #{:walk :clear-seal} :warn false}))]
+                                      {:pos (u/pos-of (.-pos e)) :range (reach) :spend {:job-time chase-timeout-s} :ways #{:walk :clear-seal} :warn false}))]
         (cond
           (= :continue r) :continue
           (let [res (:data r)] (or (:arrived res) (:leg res))) :again

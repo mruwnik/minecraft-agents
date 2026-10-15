@@ -320,7 +320,7 @@
 
 (def target [:plan :part])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def conditions [[:fn plan-problem]])
 
@@ -337,5 +337,5 @@
          :left (count (:dig (strays cells #(tr/world-block (:primitives c) %))))}))))
 
 (defn quote-of [_c]
-  {:uses {:time [1 30 (settings/get settings ::time-s)]}
+  {:uses {:job-time [1 30 (settings/get settings ::time-s)]}
    :done [0 1 1]})

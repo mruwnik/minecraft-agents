@@ -31,7 +31,7 @@
   (doseq [[sym def] registry/jobs
           :when (and (:conditions def) (re-find #"^jobs\.(survival|combat|food)\." (str sym)))]
     (is (vector? (:target def)) (str sym " has a target"))
-    (is (some? (get-in def [:defaults :spend :time])) (str sym " has a default :spend :time"))))
+    (is (some? (get-in def [:defaults :spend :job-time])) (str sym " has a default :spend :job-time"))))
 
 (defn hold-ctx
   "A ctx over an empty fake whose job memory says it has held since 0, the clock past every hold cap."

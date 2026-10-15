@@ -19,7 +19,7 @@
 (a/defargs settings
   {::time-s {:default 5 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}})
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:job-time ::time-s}})
 
 (def arg-refusals #{:bad-name :reserved-name :not-a-place})
 
@@ -38,7 +38,7 @@
   (let [gone? (= :no-such-place (:reason (places/resolve-forget (ctx/view c) (:name (:args c)))))]
     {:done? gone? :units :places :left (if gone? 0 1)}))
 
-(defn quote-of [_c] {:uses {:time [0 0 1]}})
+(defn quote-of [_c] {:uses {:job-time [0 0 1]}})
 
 (defn round [c]
   (let [r (places/resolve-forget (ctx/view c) (:name (:args c)))]

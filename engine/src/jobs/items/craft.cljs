@@ -63,7 +63,7 @@
 
 (def target [:item])
 
-(def defaults {:least :all :spend {:time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::time-s}})
 
 (defn bad-args
   "The cause when no item name is given."
@@ -93,7 +93,7 @@
         r (first (sort-by #(recipes/short-count st % (recipes/ceil-div count (:count %))) rs))
         batches (if r (recipes/ceil-div count (:count r)) 0)
         mean (+ 1 (* batches (batch-s)))]
-    (cond-> {:uses {:time [(* batches (batch-s)) mean (max mean (time-s))]}}
+    (cond-> {:uses {:job-time [(* batches (batch-s)) mean (max mean (time-s))]}}
       r (assoc-in [:yields :items item] [count (* batches (:count r)) (* batches (:count r))])
       (seq (dissoc (:needs r) item))
       (assoc-in [:uses :items] (into {} (map (fn [[k v]] [k [0 (* v batches) (* v batches)]])) (dissoc (:needs r) item))))))
