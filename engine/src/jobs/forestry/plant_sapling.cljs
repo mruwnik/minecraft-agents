@@ -2,7 +2,9 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
             [jobs.lib.trees :refer [debts target-of sapling-for sapling-of log-name? replant-kind species]
@@ -76,20 +78,26 @@
       (cond-> {:reason :no-sapling :species species}
         species (assoc :item (sapling-of species))))))
 
-(defn spot-refused [c]
-  (let [t (when-not (:meal (ctx/mem c)) (current-target c))]
-    (when t (refusal c (:pos t)))))
+(def spot-refused
+  (checks/refusing :spot-allowed "the spot may be planted"
+                   (fn [c]
+                     (let [t (when-not (:meal (ctx/mem c)) (current-target c))]
+                       (when t (refusal c (:pos t)))))))
 
-(defn no-sapling [c]
-  (when-not (:fetch (:args c))
-    (some-> (problem c) (dissoc :item))))
+(def no-sapling
+  (checks/refusing :sapling "a sapling is carried or fetched"
+                   (fn [c]
+                     (when-not (:fetch (:args c))
+                       (some-> (problem c) (dissoc :item))))))
 
-(defn log-on-spot [c]
-  (let [t (when-not (:meal (ctx/mem c)) (current-target c))]
-    (when (and t (log-name? (some-> (u/seen-block (:primitives c) (:pos t)) .-name)))
-      {:reason :log-on-spot :pos (:pos t)})))
+(def log-on-spot
+  (checks/refusing :spot-clear "no log on the spot"
+                   (fn [c]
+                     (let [t (when-not (:meal (ctx/mem c)) (current-target c))]
+                       (when (and t (log-name? (some-> (u/seen-block (:primitives c) (:pos t)) .-name)))
+                         {:reason :log-on-spot :pos (:pos t)})))))
 
-(def conditions [[:fn spot-refused] [:fn no-sapling] [:fn log-on-spot]])
+(def can-start? (cond/and spot-refused no-sapling log-on-spot))
 
 (defn done?
   "Done at once when nothing is owed (and no bone meal is being used)."

@@ -6,7 +6,9 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
@@ -151,7 +153,7 @@
     (boolean (seq (look/seen-blocks (:primitives c) {:names [(:block (materials item))] :radius radius :max 8 :live? true})))))
 
 (defn decline!
-  "One warn per reason, then the reason as the condition's cause."
+  "One warn per reason, then the reason as the check's cause."
   [c reason]
   (ctx/warn-once! c [:declined reason] :get-seeds.declined
                   {:reason reason :text (str "get-seeds declined: " (name reason))})
@@ -178,7 +180,11 @@
         (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
         (look/surveyed? c) :nothing-in-range))))
 
-(def conditions [[:fn no-source] [:fn chest-trouble] [:fn no-zones] [:fn nothing-in-range]])
+(def can-start?
+  (cond/and (checks/refusing :source "a source known" no-source)
+            (checks/refusing :chest "the chest is fit" chest-trouble)
+            (checks/refusing :zones-read "zone list read" no-zones)
+            (checks/refusing :in-range "a source in range" nothing-in-range)))
 
 (defn done?
   "The goal fixed by the first round (:count more than were carried) is carried; the seeds got and still wanted."

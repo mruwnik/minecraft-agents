@@ -1,5 +1,6 @@
 (ns jobs.forestry.tidy
   (:require [engine.args :as a]
+            [jobs.lib.checks :as checks]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -182,7 +183,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [])
+(def can-start? checks/always)
 
 (defn done?
   "No trunk is chosen or in sight and the body has looked round; the trunks tidied and the ones in sight."

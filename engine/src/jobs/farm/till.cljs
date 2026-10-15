@@ -7,6 +7,8 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as b]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
@@ -126,11 +128,6 @@
   [c action pos]
   (gate/allowed? c :till.declined "till" action pos {:except (:for-plan (:args c))}))
 
-(defn started?
-  "Whether a round has left anything in memory (tilled, skipped or tried a cell)."
-  [c]
-  (boolean (some #(contains? (ctx/mem c) %) [:tilled :skipped :cell-tries])))
-
 (defn survey
   "Walks cs in order, reading each cell once, and stops at the first cell the job may work. {:todo? any cell not
   farmland and not skipped, :work? a tillable cell no zone, claim or plan refuses, :verdicts [refusals]}. Without
@@ -158,26 +155,32 @@
                   (assoc fields :text (str "till declined: every target is refused by " (access/refusal-text fields))))
   fields)
 
-(defn problem
-  "Why the call cannot run now, a cause map, or nil: bad args, no zone list read (unless :ignore-zones?), before the
-  first round every tillable cell refused by a zone, claim or plan, and (before the first round) cells to till with no hoe that may be fetched.
-  Walks the cells lazily and stops at the first one that needs work, reading each cell at most once."
+(defn bad-args
+  "Never :bad-args unless the cells can be read from the args (a box within the limit, or a centre and radius)."
   [c]
   (let [cs (try (cells (:args c))
                 (catch :default e (ex-message e)))]
     (if (string? cs)
-      (contract/impossible {:reason :bad-args :why cs})
-      (let [in (access/zone-input c {:except (:for-plan (:args c))})
-            refuse (when-not (or (started? c) (:ignore-zones? in))
-                     (fn [pos] (let [v (rules/social-verdict :dig (assoc in :cell (access/cell pos)))]
-                                 (when (gate/refused? v) v))))]
-        (or (common/no-zones c :till.declined "till")
-            (let [{:keys [todo? work? verdicts]} (survey c cs refuse)]
-              (cond
-                (and (seq verdicts) (not work?)) (decline c (assoc (access/refusal-fields verdicts) :reason :refused))
-                (and todo? (not (started? c)) (nil? (hoe c)) (nil? (fetch-opts c))) no-hoe)))))))
+      (contract/never :bad-args cs :why cs)
+      (contract/ok :args "cells given"))))
 
-(def conditions [[:fn problem]])
+(defn problem
+  "Why the call cannot start now, a cause map, or nil: no zone list read (unless :ignore-zones?), every tillable cell
+  refused by a zone, claim or plan, and cells to till with no hoe that may be fetched.
+  Walks the cells lazily and stops at the first one that needs work, reading each cell at most once."
+  [c]
+  (when-let [cs (try (cells (:args c)) (catch :default _ nil))]
+    (let [in (access/zone-input c {:except (:for-plan (:args c))})
+          refuse (when-not (:ignore-zones? in)
+                   (fn [pos] (let [v (rules/social-verdict :dig (assoc in :cell (access/cell pos)))]
+                               (when (gate/refused? v) v))))]
+      (or (common/no-zones c :till.declined "till")
+          (let [{:keys [todo? work? verdicts]} (survey c cs refuse)]
+            (cond
+              (and (seq verdicts) (not work?)) (decline c (assoc (access/refusal-fields verdicts) :reason :refused))
+              (and todo? (nil? (hoe c)) (nil? (fetch-opts c))) no-hoe))))))
+
+(def can-start? (cond/and bad-args (checks/refusing :tillable "a cell to till, a hoe and zones allow" problem)))
 
 (defn done?
   "Every cell is farmland (a skipped cell is not); the cells tilled this call and the cells left to till."

@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.checks :as checks]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -142,9 +143,10 @@
                            :text (str "tidy declines plan " plan (when part (str " part " part)) ": " trouble)})
           {:trouble trouble}))))
 
-(defn plan-problem [c]
-  (when-let [trouble (:trouble (planned c))]
-    {:reason :plan-trouble :why trouble}))
+(def plan-ok
+  (checks/refusing :plan "the plan is readable"
+                   (fn [c] (when-let [trouble (:trouble (planned c))]
+                             {:reason :plan-trouble :why trouble}))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -322,7 +324,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn plan-problem]])
+(def can-start? plan-ok)
 
 (defn done?
   "Counts only: the round ends the call, reporting the kept and wrong blocks it found. The strays dug and still in the

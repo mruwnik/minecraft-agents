@@ -1,12 +1,12 @@
 (ns jobs.forestry.maintain
-  (:require [jobs.lib.started :as started]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [jobs.lib.access.rules :as rules]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.checks :as checks]
             [jobs.lib.access :as access]
             [jobs.lib.trees :as forestry]
             [jobs.lib.util :as u]
@@ -255,21 +255,22 @@
       (seq short) {:reason :no-sapling :cells (vec (sort (map (comp cell-vec key) short)))})))
 
 (defn not-ready
-  "Why the job does not start: nil once begun (its finishing round must run) or while a grown tree is ripe on a planned
-  cell or a bare one has its sapling carried; else the cells that hold it back, with a look first while one was never
-  seen. The cells are read once per check-cache window; the round says (warns) what is wrong with each."
+  "Whether the job may start: ok while a grown tree is ripe on a planned cell or a bare one has its sapling carried; else
+  later with the cells that hold it back, a look first while one was never seen. The cells are read once per
+  check-cache window; the round says (warns) what is wrong with each."
   [c]
   (let [field (planned c)]
     (if (:trouble field)
-      {:reason :plan-trouble :why (:trouble field)}
+      (checks/cause-status :later {:reason :plan-trouble :why (:trouble field)})
       (let [cells (field-cells field)
             unseen? (look/unseen? (:primitives c) cells)
             read #(classes-of c (:trees field))
             classes (if unseen? (read) (check-cache/cached c :classes read))]
-        (when-not (or (seq (ripe-cells c classes))
-                      (seq (plantable c (owed-cells c classes))))
-          (cond-> (or (blocked-reason c classes) {:reason :nothing-to-do})
-            (and unseen? (not (look/surveyed? c :near))) contract/look-first))))))
+        (if (or (seq (ripe-cells c classes))
+                (seq (plantable c (owed-cells c classes))))
+          (contract/ok :work "a tree is ripe or a sapling can be planted")
+          (checks/cause-status (if (and unseen? (not (look/surveyed? c :near))) :look :later)
+                               (or (blocked-reason c classes) {:reason :nothing-to-do})))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -456,7 +457,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn (started/at-start not-ready)]])
+(def can-start? not-ready)
 
 (defn done?
   "Counts only (a standing job): the trees felled and planted this call."

@@ -27,7 +27,7 @@
                                 :events (events/make {:body "Fake" :sinks [] :now (constantly 0)})})]
           (doseq [sym jobs
                   :let [job (get registry/jobs sym)]]
-            (is (vector? (:conditions job)) (str sym " has conditions"))
+            (is (some job [:conditions :can-start? :can-run?]) (str sym " has a start check"))
             (is (nil? (:check job)) (str sym " has no old check"))
             (is (vector? (:target job)) (str sym " has a target"))
             (is (fn? (:done? job)) (str sym " has done?"))

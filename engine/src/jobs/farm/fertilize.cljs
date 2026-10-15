@@ -1,6 +1,8 @@
 (ns jobs.farm.fertilize
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
@@ -106,13 +108,13 @@
   (when-let [o (need/opts c 'jobs.farm.fertilize)]
     (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
 
-(defn problem
-  "Why the call cannot run now, a cause map, or nil: no zone list read, or bone meal to get with :fetch off."
+(defn no-meal-source
+  "The cause :need bone_meal while bone meal is to be got and :fetch off forbids it."
   [c]
-  (or (common/no-zones c :fertilize.declined "fertilize")
-      (when (and (lacks-meal? c) (nil? (fetch-opts c))) {:reason :need :item "bone_meal"})))
+  (when (and (lacks-meal? c) (nil? (fetch-opts c))) {:reason :need :item "bone_meal"}))
 
-(def conditions [[:fn problem]])
+(def can-start? (cond/and (checks/zones-read :fertilize.declined "fertilize")
+                          (checks/refusing :meal "bone meal carried or fetchable" no-meal-source)))
 
 (defn done?
   "Counts only (the round ends the call with its data): the uses made and the targets left within :max."

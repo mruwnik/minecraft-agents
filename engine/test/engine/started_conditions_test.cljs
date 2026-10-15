@@ -10,7 +10,6 @@
             [engine.test-util :as tu]
             [jobs.lib.world-files :as ew]
             [jobs.combat.hunt :as hunt]
-            [jobs.forestry.fell-tree :as fell-tree]
             [jobs.survival.fight-back :as fight-back]))
 
 (defn fact
@@ -21,11 +20,9 @@
 (def hurt {:self {:health 0.5}})
 
 (deftest start-only-facts-hold-a-call-back-only-before-it-began
-  (with-redefs [fell-tree/night-sheltered (constantly :roofed)]
-    (are [conditions c] (and (some? (fact conditions c)) (nil? (fact conditions (assoc c :quote-call {}))))
-      hunt/conditions {:primitives (tu/fake hurt) :args {}}
-      fight-back/conditions {:primitives (tu/fake hurt) :args {}}
-      fell-tree/conditions {:primitives (tu/fake {}) :args {}})))
+  (are [conditions c] (and (some? (fact conditions c)) (nil? (fact conditions (assoc c :quote-call {}))))
+    hunt/conditions {:primitives (tu/fake hurt) :args {}}
+    fight-back/conditions {:primitives (tu/fake hurt) :args {}}))
 
 (defn ^:async ending-after
   "Submit spec over a fake world, tick ticks times (the job must still run), flip! the world, tick on until it ends:

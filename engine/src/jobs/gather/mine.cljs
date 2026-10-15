@@ -3,7 +3,6 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.started :refer [at-start]]
             [engine.settings :as settings]
             [jobs.gather.mine.descent :refer [descent-wanted? descend-due? descend-round! shaft-due? shaft-top-here? shaft-round!]]
             [jobs.gather.mine.drops :refer [collect! dig-cell!]]
@@ -18,7 +17,9 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look :refer [cell-of heading-name facing look-around!]]
             [jobs.lib.near :as near]
@@ -240,12 +241,19 @@
                         (assoc fields :text (str "mine declined: every target is refused by " (access/refusal-text fields))))
         fields))))
 
-(def conditions
-  [[:fn (at-start away)]
-   [:fn (fn [c] (when-not (:block (:args c)) (contract/impossible {:reason :no-block})))]
-   [:fn no-zones]
-   [:fn (at-start (fn [c] (body/too-hurt (:primitives c))))]
-   [:fn (at-start all-refused)]])
+(defn block-given
+  "Never :no-block without the :block to mine."
+  [c]
+  (if (:block (:args c))
+    (contract/ok :args "a block given")
+    (contract/never :no-block "no :block to mine")))
+
+(def can-start?
+  (cond/and (checks/refusing :here "where it was submitted" away)
+            block-given
+            (checks/refusing :zones-read "zone list read" no-zones)
+            (checks/refusing :healthy "health enough" (fn [c] (body/too-hurt (:primitives c))))
+            (checks/refusing :target "a target no zone refuses" all-refused)))
 
 (defn done?
   "Progress in items: got against :count. Never :done? itself: the round ends the run after the mend and the walk home."

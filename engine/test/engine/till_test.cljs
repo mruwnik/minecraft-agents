@@ -402,9 +402,9 @@
           (is (= 1 (count (:list (core/state eng)))) "still waiting")
           (is (= "chest" (block-at p {:x -2 :y 64 :z 3}))))))))
 
-(deftest problem-refuses-bad-args-as-impossible-with-bad-args-and-a-why
-  (are [args] (let [w (contract/impossible-cause (till/problem (counting-ctx {:inventory hoe} args (atom {}))))]
-                (and (= :bad-args (:reason w)) (string? (:why w))))
+(deftest bad-args-are-never-with-bad-args-and-a-why
+  (are [args] (let [[kind _ data] (till/bad-args (counting-ctx {:inventory hoe} args (atom {})))]
+                (and (= :never kind) (= :bad-args (:reason data)) (string? (:why data))))
     {}
     {:from {:x 0 :y 63 :z 0}}
     {:center {:x 0 :y 63 :z 0}}

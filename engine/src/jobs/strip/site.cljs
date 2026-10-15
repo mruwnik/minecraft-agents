@@ -12,7 +12,8 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.shafts :as shafts]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.strip :as strip]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
@@ -449,14 +450,15 @@
 (def defaults {:spend {:job-time ::time-s}})
 
 (defn bad-args
-  "Never possible: no :site or :base, and a new site without :at (that one only at the call's start, the site is saved after)."
+  "Never :bad-args: no :site or :base, and a new site without :at (the site is saved after the start)."
   [c]
   (let [{:keys [at base] id :site} (:args c)]
-    (cond (not (and id base)) (contract/impossible {:reason :bad-args :why "needs :site and :base"})
-          (and (nil? at) (not (ctx/frozen-call c)) (nil? (site c)))
-          (contract/impossible {:reason :bad-args :why "a new site needs :at"}))))
+    (cond (not (and id base)) (contract/never :bad-args "needs :site and :base")
+          (and (nil? at) (nil? (site c))) (contract/never :bad-args "a new site needs :at")
+          :else (contract/ok :args "site, base and at given"))))
 
-(def conditions [[:fn bad-args] [:fn (started/at-start (fn [c] (when (danger-wait? c) :danger)))]])
+(def can-start?
+  (cond/and bad-args (checks/refusing :no-danger "no danger to wait for" (fn [c] (when (danger-wait? c) :danger)))))
 
 (defn done?
   "Never done before the round says so: the last phase restores the home and writes the result."

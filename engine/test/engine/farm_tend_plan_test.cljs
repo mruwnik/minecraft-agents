@@ -132,7 +132,7 @@
       (fn ^:async t []
         (let [s (await (run-standing {:plan "mix" :part "wheat"} stuck-wheat {"mix" (plan-of)} 80))]
           (is (= 1 (count (events-of s :farm-tend.done))) "one pass, then the part rests")
-          (is (some #(= [:wheat] (map keyword (:backed-off (:cause %)))) (events-of s :waiting)) "the wait names the part")
+          (is (some #(= [:wheat] (map keyword (:backed-off %))) (events-of s :waiting)) "the wait names the part")
           (swap! (:clock s) + 660000)
           (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
           (is (= 2 (count (events-of s :farm-tend.done))) "after the back-off it tries again"))))))
@@ -157,7 +157,7 @@
                             {"mix" (plan-of)} 6))]
           (is (empty? (.-calls (.-world (:p s)))))
           (is (= [] (events-of s :farm-tend.short-seed)) "the check writes no warn")
-          (is (= [[:short-seed ["carrot"]]] (distinct (map (juxt :reason (comp :seeds :cause)) (events-of s :waiting))))))))))
+          (is (= [[:short-seed ["carrot"]]] (distinct (map (juxt :reason :seeds) (events-of s :waiting))))))))))
 
 (deftest the-check-reads-the-field-once-per-window
   (async done

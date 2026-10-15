@@ -3,6 +3,7 @@
             [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
             [jobs.lib.job-common :as common]
             [jobs.farm.field :as fld]
             [jobs.lib.blocks :as blocks]
@@ -242,7 +243,7 @@
 (def defaults {:least 1})
 
 (defn problem
-  "Why the call cannot run now, a cause map, or nil: no zone list read (unless :ignore-zones?), a plan that cannot be
+  "Why the call cannot start now, a cause map, or nil: no zone list read (unless :ignore-zones?), a plan that cannot be
   worked, and a field with nothing owed: no debt, no sweep, no ripe crop it may cut (:refused when zones keep it from
   every one) and no need to look around first."
   [c]
@@ -260,7 +261,7 @@
           (and (cutting? c) (seq (ripe-raw c (:skipped m)))) {:reason :refused}
           :else {:reason :nothing-to-do}))))
 
-(def conditions [[:fn problem]])
+(def can-start? (checks/refusing :work "something to harvest" problem))
 
 (defn done?
   "Counts only (the round ends the call with its data): the cells cut this call and the ripe crops left."

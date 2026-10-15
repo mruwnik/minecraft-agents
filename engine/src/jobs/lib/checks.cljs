@@ -3,6 +3,7 @@
   jobs.lib.cond holds the checks of the agent language."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.job-common :as common]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
             [jobs.lib.submitted :as submitted]
@@ -65,3 +66,26 @@
   (if (storage/chest-of (ctx/view c) (:args c))
     (contract/ok :chest "a chest is known")
     (contract/later :no-chest "no chest known")))
+
+(defn cause-status
+  "[kind text data] for a cause, a map {:reason ..} or just the reason keyword (cause-text is the text)."
+  [kind cause]
+  (let [cause (if (keyword? cause) {:reason cause} cause)]
+    (contract/status kind (:reason cause) (cause-text cause) (dissoc cause :reason))))
+
+(defn refusing
+  "The check of problem (c -> nil, or the cause map the job cannot run for): nil is ok with ok-reason and ok-text, a
+  cause is a status of kind (:later by default)."
+  ([ok-reason ok-text problem] (refusing :later ok-reason ok-text problem))
+  ([kind ok-reason ok-text problem]
+   (fn [c] (if-let [cause (problem c)] (cause-status kind cause) (contract/ok ok-reason ok-text)))))
+
+(defn looking
+  "refusing, but a cause is a :look while (look? c) holds: a look round may still change it."
+  [look? ok-reason ok-text problem]
+  (fn [c] (if-let [cause (problem c)] (cause-status (if (look? c) :look :later) cause) (contract/ok ok-reason ok-text))))
+
+(defn zones-declined
+  "zones-read, with one warn of kind from job-name (jobs.lib.job-common/no-zones)."
+  [kind job-name]
+  (refusing :zones-read "zone list read" #(common/no-zones % kind job-name)))

@@ -69,9 +69,11 @@
 (defn tree-logs [c] (log/tree-logs c (:radius (:args c)) (tree c)))
 
 (defn bad-args [c]
-  (when-not (base c) {:reason :bad-args :why "no :base: the tree's lowest log"}))
+  (if (base c)
+    (contract/ok :args "a tree base given")
+    (contract/never :bad-args "no :base: the tree's lowest log")))
 
-(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))]])
+(def can-start? bad-args)
 
 (defn done? [_c] {:done? false :units :trees :done 0 :left 1})
 

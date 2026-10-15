@@ -2479,8 +2479,8 @@
               waits (events-of s :waiting)]
           (is (zero? (dig-count s)) "nothing dug at 0.5 hp")
           (is (= [:low-health] (distinct (map :reason waits))))
-          (is (= 0.5 (:health (:cause (first waits)))))
-          (is (re-find #"heal" (str (:text (:cause (first waits))))))
+          (is (= 0.5 (:health (first waits))))
+          (is (re-find #"heal" (str (:text (first waits)))))
           (swap! (.. world -state) assoc-in [:self :health] 20)
           (await (run-ticks s 60))
           (is (>= (get (inv s) "sand") 6) "healed, it mines"))))))
@@ -2700,7 +2700,7 @@
         c {:primitives (tu/fake-on-floor {:blocks sand-patch}) :args (second (expr/leaf registry/jobs 'jobs.gather.mine {:block "sand" :count 3}))}
         q ((:quote-of def) c)]
     (is (= [:block :heading] (:target def)))
-    (is (seq (:conditions def)))
+    (is (fn? (:can-start? def)))
     (is (nil? (:check def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))
     (is (= [0 3 3] (get-in q [:yields :items "sand"])))

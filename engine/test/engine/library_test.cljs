@@ -392,7 +392,7 @@
 
 (deftest plant-sapling-is-a-contract-job
   (let [job (get registry/jobs 'jobs.forestry.plant-sapling)]
-    (is (some? (:conditions job)))
+    (is (fn? (:can-start? job)))
     (is (nil? (:check job)) "no old check")
     (is (= [:at :near] (:target job)))))
 

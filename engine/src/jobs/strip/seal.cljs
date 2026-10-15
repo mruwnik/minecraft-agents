@@ -80,11 +80,12 @@
 (defn bad-args [c]
   (let [{:keys [at axis side]} (:args c)]
     (cond
-      (nil? at) {:reason :bad-args :why "needs :at [x y z]"}
-      (nil? axis) {:reason :bad-args :why "needs :axis :x or :z"}
-      (nil? side) {:reason :bad-args :why "needs :side :from or :to"})))
+      (nil? at) (contract/never :bad-args "needs :at [x y z]")
+      (nil? axis) (contract/never :bad-args "needs :axis :x or :z")
+      (nil? side) (contract/never :bad-args "needs :side :from or :to")
+      :else (contract/ok :args "at, axis and side given"))))
 
-(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))]])
+(def can-start? bad-args)
 
 (def kinds
   "The kind of ending each stop reason is."

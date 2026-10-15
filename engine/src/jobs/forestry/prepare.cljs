@@ -1,12 +1,12 @@
 (ns jobs.forestry.prepare
-  (:require [jobs.lib.started :as started]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.trees :as forestry]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.checks :as checks]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -131,21 +131,23 @@
     (if (look/unseen? (:primitives c) cells) (read) (check-cache/cached c :states read))))
 
 (defn not-ready
-  "Why the job does not start: nil while a step can be taken on a planned cell, and once it has begun (its finishing
-  round must run). The field is assessed once per check-cache window; the round says (warns) what is wrong with
-  each cell."
+  "Whether the job may start: ok while a step can be taken on a planned cell. The field is assessed once per
+  check-cache window; the round says (warns) what is wrong with each cell."
   [c]
   (let [field (field/planned c)]
     (if (:trouble field)
-      {:reason :plan-trouble :why (:trouble field)}
+      (checks/cause-status :later {:reason :plan-trouble :why (:trouble field)})
       (let [cells (maintain/field-cells field)
             states (states-of c field cells)]
-        (when (empty? (field/todo c states))
-          (if-let [due (seq (vals (:recede (ctx/mem c))))]
-            {:reason :receding :ready-at (apply min due)}
-            (cond-> (or (blocked-reason states) {:reason :nothing-to-do})
-              (and (or (some #(= :unloaded (:state %)) (vals states)) (look/unseen? (:primitives c) cells))
-                   (not (look/surveyed? c :near))) contract/look-first)))))))
+        (cond
+          (seq (field/todo c states)) (contract/ok :work "a step can be taken on a planned cell")
+          (seq (:recede (ctx/mem c))) (checks/cause-status :later {:reason :receding :ready-at (apply min (vals (:recede (ctx/mem c))))})
+          :else (checks/cause-status
+                 (if (and (or (some #(= :unloaded (:state %)) (vals states)) (look/unseen? (:primitives c) cells))
+                          (not (look/surveyed? c :near)))
+                   :look
+                   :later)
+                 (or (blocked-reason states) {:reason :nothing-to-do})))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -380,7 +382,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn (started/at-start not-ready)]])
+(def can-start? not-ready)
 
 (defn done?
   "Every cell of the field is seen and in its state: nothing to work, nothing held back or receding; the cells worked

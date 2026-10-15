@@ -1,5 +1,6 @@
 (ns jobs.farm.find-spot
   (:require [engine.settings :as settings]
+            [jobs.lib.checks :as checks]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.surface :as surface :refer [open?]]
@@ -178,7 +179,8 @@
 (def target [:center :w :h])
 
 (def defaults {:spend {:job-time ::time-s}})
-(def conditions [])
+
+(def can-start? checks/always)
 
 (defn done? "An act with no goal state: a spot search is never done before it is made." [_c] {:done? false})
 

@@ -526,7 +526,7 @@
             (await (core/tick! (:eng s))))
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
-            (is (= 9 (:covered (:cause w))) "9 tillable cells have a block over them: the box sits too low")))))))
+            (is (= 9 (:covered w)) "9 tillable cells have a block over them: the box sits too low")))))))
 
 (def far-box {:min {:x 202 :y 63 :z 2} :max {:x 204 :y 64 :z 4}})
 (def far-ripe
@@ -569,35 +569,6 @@
           (is (empty? (events-of s :round_started)))
           (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
 
-(defn ^:async condition-in-round
-  "The tend condition, evaluated in a round of a probe job beside wait-for-dusk, as for a call with :quote-call? (started)."
-  [s args started?]
-  (let [out (atom ::none)
-        probe {:conditions []
-               :round (fn ^:async probe-round [c]
-                        (reset! out ((second (first tend/conditions)) (cond-> (assoc c :args args) started? (assoc :quote-call {}))))
-                        (ctx/end c :done nil))}
-        eng (assoc-in (:eng s) [:jobs 'probe] probe)]
-    (core/submit! eng '(jobs.time.wait-for-dusk) {})
-    (core/submit! eng '(probe) {})
-    (dotimes [_ 3] (swap! (:clock s) + 700) (await (core/tick! eng)))
-    @out))
-
-(deftest a-started-tend-is-not-ended-by-the-away-fact
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= :away (:reason (await (condition-in-round (setup far-ripe) {:box far-box} false)))) "before the start")
-        (is (nil? (await (condition-in-round (setup far-ripe) {:box far-box} true))))))))
-
-(deftest a-started-tend-with-nothing-left-to-start-does-not-end-on-the-start-facts
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [spec (farm "wheat" 0 all-cells all-cells)]
-          (is (= :nothing-to-do (:reason (await (condition-in-round (setup spec) {:box box} false)))) "before the start")
-          (is (nil? (await (condition-in-round (setup spec) {:box box} true)))))))))
-
 ;; ------------------------------------------------------------------ contract
 
 (defn ^:async ending-of
@@ -617,7 +588,7 @@
 
 (deftest tend-exports-the-contract-and-quotes-validly
   (let [job (get registry/jobs 'jobs.farm.tend)]
-    (is (vector? (:conditions job)))
+    (is (fn? (:can-start? job)))
     (is (nil? (:check job)) "no old check")
     (is (vector? (:target job)))
     (is (fn? (:done? job)))
@@ -638,9 +609,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))]
-          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}} (select-keys (await (ending-of s {:box box} 20)) [:kind :cause]))))
+          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}} (update (select-keys (await (ending-of s {:box box} 20)) [:kind :cause]) :cause dissoc :text))))
         (let [s (setup (world (farm "wheat" 7 all-cells all-cells)))]
-          (is (= {:kind :impossible :cause {:reason :no-box}} (select-keys (await (ending-of s {} 20)) [:kind :cause])))
+          (is (= {:kind :impossible :cause {:reason :no-box}} (update (select-keys (await (ending-of s {} 20)) [:kind :cause]) :cause dissoc :text)))
           (is (= :impossible (:kind (await (ending-of s {:box {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 63 :z 4}}} 20)))) "no crop layer")
           (is (= :impossible (:kind (await (ending-of s {:box {:min {:x 0 :y 63 :z 0} :max {:x 60 :y 64 :z 20}}} 20)))) "over the cell cap"))))))
 

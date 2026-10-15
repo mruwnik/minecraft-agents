@@ -1,11 +1,11 @@
 (ns jobs.forestry.harvest-wood
-  (:require [jobs.lib.started :as started]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [clojure.string :as str]
             [jobs.forestry.fell-tree :as fell-tree]
+            [jobs.lib.cond :as cond]
             [jobs.lib.need :as need]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -117,11 +117,6 @@
     (some? fetch) (assoc :fetch fetch)
     (seq avoid) (assoc :avoid avoid)))
 
-(defn tree-cause
-  "fell-tree's :no-tree condition while nothing is felled yet."
-  [c]
-  (when-not (pos? (:felled (ctx/mem c) 0))
-    (fell-tree/no-tree (assoc c :args (fell-args (:args c))))))
 
 (defn owed-data [c] (when-let [n (warn-replant-owed! c)] {:replant-owed n}))
 
@@ -190,17 +185,22 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(defn sheltered
-  "The fell child's night cause before the job starts: the trees are outside the shelter."
-  [c]
-  (fell-tree/sheltered (assoc c :args (fell-args (:args c)))))
+(defn with-fell-args [check] (fn [c] (check (assoc c :args (fell-args (:args c))))))
 
-(defn no-tree-to-fell
-  "tree-cause while the next tree is still to be felled; the other phases are the children's."
-  [c]
-  (when (= :fell (:phase (ctx/mem c) :fell)) (tree-cause c)))
+(def sheltered
+  "The fell child's night status before the job starts: the trees are outside the shelter."
+  (with-fell-args fell-tree/sheltered))
 
-(def conditions [[:fn (started/at-start sheltered)] [:fn no-tree-to-fell]])
+(def no-tree-to-fell
+  "fell-tree's :no-tree while nothing is felled yet and the next tree is still to be felled; the other phases are the
+  children's."
+  (let [no-tree (with-fell-args fell-tree/no-tree)]
+    (fn [c]
+      (if (and (= :fell (:phase (ctx/mem c) :fell)) (not (pos? (:felled (ctx/mem c) 0))))
+        (no-tree c)
+        (contract/ok :tree-found "a tree is felled or not wanted now")))))
+
+(def can-start? (cond/and sheltered no-tree-to-fell))
 
 (defn done?
   "Counts only: the plant phase follows the felling, so the round ends the call. The logs got this call."

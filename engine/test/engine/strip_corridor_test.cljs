@@ -250,7 +250,7 @@
       (fn ^:async t []
         (let [filler (mapv (fn [i] {:name (str "filler_" i) :count 1}) (range 21))
               ends (fn ^:async ends [env a] (let [e (:ending (await (run! env a)))] [(:kind e) (:cause e)]))]
-          (is (= [:impossible :bad-args] (await (ends (world) {:segment "nonsense"})))
+          (is (= [:impossible :bad-args] (let [[kind cause] (await (ends (world) {:segment "nonsense"}))] [kind (:reason cause)]))
               "a segment from the args that cannot be read is never possible")
           (is (= [:condition-failed :bag-full] (await (ends (world :inventory (into kit filler)) args))))
           (is (= [:condition-failed :no-tool] (await (ends (world :inventory (vec (take 2 kit))) args))))

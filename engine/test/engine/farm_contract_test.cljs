@@ -23,7 +23,7 @@
               'jobs.farm.plant {:box pt/field-box} 'jobs.farm.harvest {:radius 6}}]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
-      (is (vector? (:conditions job)) (str sym " has conditions"))
+      (is (some job [:conditions :can-start? :can-run?]) (str sym " has a start check"))
       (is (nil? (:check job)) (str sym " has no old check"))
       (is (vector? (:target job)) (str sym " has a target"))
       (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args (get args sym)}))) (str sym)))))
@@ -42,7 +42,7 @@
     (await (tu/run-until-empty eng n))
     @out))
 
-(defn kc [e] (select-keys e [:kind :cause]))
+(defn kc [e] (cond-> (select-keys e [:kind :cause]) (map? (:cause e)) (update :cause dissoc :text :parts)))
 
 ;; ------------------------------------------------------------------ till
 

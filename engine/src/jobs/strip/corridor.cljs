@@ -1,5 +1,6 @@
 (ns jobs.strip.corridor
-  (:require [jobs.lib.started :as started]
+  (:require [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -70,16 +71,17 @@
        (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius))))
 
 (defn bad-segment
-  "Never possible: the :segment arg is neither a map nor a readable id."
+  "Never :bad-args: the :segment arg is neither a map nor a readable id."
   [c]
-  (when-not (seg-of (:segment (:args c)))
-    (contract/impossible :bad-args)))
+  (if (seg-of (:segment (:args c)))
+    (contract/ok :args "a segment given")
+    (contract/never :bad-args "the :segment is neither a map nor a readable id")))
 
-(defn not-now
-  "Why a trip does not start: a real danger near, or no food and none to eat."
-  [c]
-  (cond (danger-near? c) :danger
-        (trip/food-short? c) :food-short))
+(def not-now
+  "Later :danger or :food-short: a real danger near, or no food and none to eat."
+  (checks/refusing :trip "no danger near and food to eat"
+                   (fn [c] (cond (danger-near? c) :danger
+                                 (trip/food-short? c) :food-short))))
 
 (def failed-conditions "Stop reasons that end condition-failed: a fact of the body or the world. The rest are nothing-possible."
   #{:bag-full :food-short :no-torches :no-tool :spawner :refused})
@@ -268,7 +270,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn bad-segment] [:fn (started/at-start not-now)]])
+(def can-start? (cond/and bad-segment not-now))
 
 (defn done?
   "Counts only: the end of the segment is the round's, which looks at its end and reports what it kept.

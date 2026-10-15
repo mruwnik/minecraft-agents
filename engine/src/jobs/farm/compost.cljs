@@ -1,6 +1,7 @@
 (ns jobs.farm.compost
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -69,12 +70,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(defn problem
-  "The cause {:reason :no-zones} while no zone list has been read, else nil."
-  [c]
-  (common/no-zones c :compost.declined "compost"))
-
-(def conditions [[:fn problem]])
+(def can-start? (checks/zones-read :compost.declined "compost"))
 
 (defn done?
   "Counts only (the round ends the call with its data): the bone meal taken and the rest of :times."

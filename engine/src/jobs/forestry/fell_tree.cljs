@@ -6,14 +6,15 @@
             [engine.settings :as settings]
             [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.access :as access]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.started :as started]
             [jobs.lib.targets :as targets]
             [jobs.lib.trees :refer [axe-worth-fetching? axe-fetch-limits trees-near tree-near tree-at unreachable-set debts replant-kind
                                     replant-policy default-radius max-partials]]
@@ -385,23 +386,26 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(defn sheltered
-  "The cause {:reason :night-sheltered :shelter kind} at night in a shelter: the trees are outside, and a search from
-  inside proves none reachable."
-  [c]
-  (when-let [k (night-sheltered c)] {:reason :night-sheltered :shelter k}))
+(def sheltered
+  "Later :night-sheltered at night in a shelter: the trees are outside, and a search from inside proves none reachable."
+  (checks/refusing :not-sheltered "not shut in a shelter by night"
+                   (fn [c] (when-let [k (night-sheltered c)] {:reason :night-sheltered :shelter k}))))
 
-(defn no-tree
+(defn tree-missing
   "The cause :no-tree while no tree is chosen or marked unreachable, none is in sight and no unseen :at is to be walked
-  to; a look first while the body has not looked round within a few blocks of here."
+  to."
   [c]
   (let [m (ctx/mem c)
         {:keys [radius species at]} (:args c)]
     (when-not (or (:column m) (seq (:unreachable m)) (first (candidates c radius species))
                   (and at (not (u/seen-name (:primitives c) at))))
-      (cond-> (no-tree-cause c) (not (look/surveyed? c :near)) contract/look-first))))
+      (no-tree-cause c))))
 
-(def conditions [[:fn (started/at-start sheltered)] [:fn no-tree]])
+(def no-tree
+  "Later :no-tree as tree-missing; a look first while the body has not looked round within a few blocks of here."
+  (checks/looking #(not (look/surveyed? % :near)) :tree-found "a tree to fell" tree-missing))
+
+(def can-start? (cond/and sheltered no-tree))
 
 (defn done? [_c] {:done? false :units :trees :done 0 :left 1})
 

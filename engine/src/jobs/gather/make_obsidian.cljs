@@ -1,9 +1,10 @@
 (ns jobs.gather.make-obsidian
-  (:require [jobs.lib.started :as started]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.shore :as shore]
@@ -168,7 +169,9 @@
   (when (and (empty? (seen-of c ["obsidian"])) (empty? (sites c)))
     {:reason :no-lava}))
 
-(def conditions [[:fn (started/at-start bucket-cause)] [:fn (started/at-start lava-cause)]])
+(def can-start?
+  (cond/and (checks/refusing :bucket "a water bucket or a bucket and water" bucket-cause)
+            (checks/refusing :lava "obsidian or lava seen" lava-cause)))
 
 (defn done? [c]
   (let [n (:count (:args c))

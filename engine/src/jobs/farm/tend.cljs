@@ -6,11 +6,11 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.checks :as checks]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.standing :as standing]
-            [jobs.lib.started :as started]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
@@ -263,18 +263,18 @@
   (cond-> (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused]))
     (:till-held f) (assoc :food-reserve (:till-held f))))
 
-(defn part-cause
-  "Why no step of the part in c would run, a cause map, or nil when a run is under way or a step would call a child.
-  :short-seed names the seeds the plan's bare cells want and the body lacks. Asks for a look first while a cell was
-  never seen and the body has not looked round near here."
+(defn part-status
+  "Why no step of the part in c would run, a :later status, or nil when a run is under way or a step would call a child.
+  :short-seed names the seeds the plan's bare cells want and the body lacks. A :look while a cell was never seen and
+  the body has not looked round near here."
   [c]
   (let [trouble (when (:plan (:args c)) (:trouble (tend-plan/planned c)))]
     (if trouble
-      {:reason :plan-trouble :why trouble}
+      (checks/cause-status :later {:reason :plan-trouble :why trouble})
       (let [f (check-facts c)]
         (when-not (would-run? c f)
-          (cond-> (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f))
-            (and (needs-look? c) (not (look/surveyed? c :near))) contract/look-first))))))
+          (checks/cause-status (if (and (needs-look? c) (not (look/surveyed? c :near))) :look :later)
+                               (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f))))))))
 
 (def job-sym 'jobs.farm.tend)
 (defn key-of [part] (or part "*"))
@@ -294,24 +294,33 @@
     (when min {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)})
     (when (:plan (:args c)) (first (keys (:crops (tend-plan/planned c)))))))
 
-(defn problem
-  "Why no run can start (checked at the call's start only; a started run decides through its steps), a cause: impossible without a usable box (or plan), away while the field is far and another job
-  is listed, else the cause of the last part not resting (the first to ask for a look), nil when some part has work."
+(defn usable-args
+  "Never :no-box without a usable box (or plan)."
   [c]
-  (let [{:keys [plan box]} (:args c)
-        away (standing/away-cause c (site c))]
-    (cond
-      (and (not plan) (not (usable-box? box))) (contract/impossible {:reason :no-box})
-      away away
-      :else
-      (let [rested (standing/rested c job-sym)
-            causes (map #(part-cause (for-part c %)) (remove #(contains? rested (key-of %)) (parts-of c)))]
-        (cond
-          (some nil? causes) nil
-          (empty? causes) {:reason :nothing-to-do :backed-off (vec (sort (keys rested)))}
-          :else (or (first (filter contract/look-cause causes)) (last causes)))))))
+  (let [{:keys [plan box]} (:args c)]
+    (if (or plan (usable-box? box))
+      (contract/ok :args "a box or plan given")
+      (contract/never :no-box "no usable box or plan"))))
 
-(def conditions [[:fn (started/at-start problem)]])
+(defn problem
+  "Why no run can start (a started run decides through its steps), a status: away while the field is far and another
+  job is listed, else the status of the last part not resting (the first to ask for a look), ok when some part has work."
+  [c]
+  (let [away (standing/away-cause c (site c))]
+    (if away
+      (checks/cause-status :later away)
+      (let [rested (standing/rested c job-sym)
+            statuses (map #(part-status (for-part c %)) (remove #(contains? rested (key-of %)) (parts-of c)))]
+        (cond
+          (some nil? statuses) (contract/ok :work "a part has work")
+          (empty? statuses) (checks/cause-status :later {:reason :nothing-to-do :backed-off (vec (sort (keys rested)))})
+          :else (or (first (filter #(= :look (first %)) statuses)) (last statuses)))))))
+
+(defn can-start?
+  "usable-args, then problem (it reads the box)."
+  [c]
+  (let [args (usable-args c)]
+    (if (= :ok (first args)) (problem c) args)))
 
 (defn worked?
   "Whether the summary of a step says it changed something."
@@ -480,7 +489,7 @@
         (let [part (first parts)]
           (ctx/update-mem! c update :tried (fnil conj #{}) (key-of part))
           (if (and (not (contains? rested (key-of part)))
-                   (let [cause (part-cause (for-part c part))] (or (nil? cause) (contract/look-cause cause))))
+                   (let [s (part-status (for-part c part))] (or (nil? s) (= :look (first s)))))
             {:part part}
             (recur (rest parts))))))))
 

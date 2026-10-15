@@ -28,7 +28,7 @@
     (await (run-until-empty eng n))
     @out)))
 
-(defn kc [e] (select-keys e [:kind :cause]))
+(defn kc [e] (cond-> (select-keys e [:kind :cause]) (map? (:cause e)) (update :cause dissoc :text :parts)))
 
 (def jobs '[jobs.farm.tidy jobs.forestry.prepare jobs.forestry.maintain])
 
@@ -36,7 +36,7 @@
   (let [p (tu/fake {})]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
-      (is (vector? (:conditions job)) (str sym " has conditions"))
+      (is (some job [:conditions :can-start? :can-run?]) (str sym " has a start check"))
       (is (nil? (:check job)) (str sym " has no old check"))
       (is (vector? (:target job)) (str sym " has a target"))
       (is (fn? (:done? job)) (str sym " has done?"))
