@@ -1,0 +1,25 @@
+;; gather.mine stops :hungry when the body is hungry, carries no food and get-food gave up lately (card a1366037; jobs.lib.trip/food-short?).
+;; A stone mass x 2..30, z 8..30 with a 1x2 tunnel cell at the body (as mine-branch-torch); iron ore at the east end of the line.
+;; Food drained by RCON to near 0; a fresh :hungry entry is the give-up.
+;; Should-succeed: no food carried: mine.hungry is logged and no ore is dug. Should-fail: bread carried: the mine goes on and ends mine.done.
+{:defaults
+ {:tags [:mine :hungry :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 8] [30 6 30] "stone"] [:fill [16 0 16] [19 1 16] "air"] [:set [20 0 16] "iron_ore"]]
+  :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["resistance" 600 4]]}
+  :memory [{:kind :hungry :data {:food 2} :age-s 5 :policy {:cap 10 :ttl 3600000}}]
+  :limit-s 120}
+ :cases
+ [{:name "hungry-with-no-food-stops-before-digging"
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:wait-s 10]
+         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.hungry :level :warn} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :mine.done} :for-s 40 :until {:source :job :kind :mine.hungry}}]
+   :after [[:item "raw_iron" 0]]}
+  {:name "bread-carried-the-mine-goes-on"
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8] ["bread" 4]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:wait-s 10]
+         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :mine.hungry} :for-s 100 :until {:source :job :kind :mine.done}}]
+   :after [[:item "raw_iron" 1]]}]}

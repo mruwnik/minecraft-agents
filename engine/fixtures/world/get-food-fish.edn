@@ -1,0 +1,26 @@
+;; survival.get-food fishes when nothing else is to hand: a rod carried and a bank beside water two deep in sight (card f76a506a).
+;; Stone ground y 0..2 (the body stands on y 2 level, so its cell is y 3), a pond 6x6 of water at y 1..2 in the middle; no
+;; animals. Hunger by RCON (food 8, hp 15).
+;; Should-succeed: with a rod the job casts, catches a fish (fish.caught) and ends :done fed.
+;; Should-fail: without a rod no fish is caught; it ends :no-food.
+{:defaults
+ {:tags [:survival :get-food :fish]
+  :time :day
+  :plot {:height 8}
+  :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [13 1 13] [18 2 18] "water"]]
+  :body {:at [10.5 3 15.5] :settle-s 2}
+  :limit-s 200}
+ :cases
+ [{:name "rod-carried-catches-a-fish-and-eats"
+   :body {:inventory [["fishing_rod" 1]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :fish.caught} :within-s 180}]}
+  {:name "no-rod-no-fish"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 40}
+            {:no-event {:source :job :kind :fish.caught} :for-s 40}]
+   :limit-s 60}]}

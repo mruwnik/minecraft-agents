@@ -1,0 +1,128 @@
+;; survival.get-food: how far and when it looks for food (cards 728080aa, 0a81324f, b871dfbf, cb576dfa, 025a58b3, f7c1d8ff,
+;; 01dca619, 517a3685, 6b628210, 7418793a, 6e7635fc). Hunger is drained by RCON (food 8 after 5 s); `damage` sets hp 15
+;; (hungry), or hp 5 with food 0 (starving: foods/starving? is food 0, or hp 6 or less and hungry). The jobs are submitted
+;; directly; a :hungry entry seeded 90 s old is a give-up inside the 10 min ask cooldown and past the 60 s starving rest.
+;; Should-succeed: a starving body past one give-up widens its hunt radius (24 -> 48) and kills a cow 40 blocks off; the
+;; give-ups widen the radius in the food.none text (24, 72); an explore search runs for a body with a stale give-up while it
+;; is starving or asked for a :stock; a melon seen is dug and eaten; a chest booked with bread 100 blocks off is walked to;
+;; 3 cows lose one, 2 are kept.
+;; Should-fail: a fed-enough body inside the ask cooldown ends condition-failed without searching; a night body that is not
+;; starving does not search; a booked chest holding cobblestone is not visited.
+{:defaults
+ {:tags [:survival :get-food :search]
+  :time :day
+  :plot {:height 6 :length 64 :width 32}
+  :body {:at [4.5 0 16.5] :inventory [["iron_sword" 1]] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "starving-body-past-one-give-up-hunts-a-cow-40-away"
+   :memory [{:kind :hungry :data {:food 0} :age-s 90 :policy {:cap 10 :ttl 3600000}}]
+   :act [[:summon "cow" [44.5 0 16.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
+         [:rcon "damage $BODY 14 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :food.killed} :within-s 100}
+            {:no-event {:source :job :kind :food.none} :for-s 100 :until {:source :job :kind :food.killed}}]}
+  {:name "radius-in-the-no-food-text-grows-with-give-ups"
+   :memory [{:kind :hungry :data {:food 3} :age-s 120 :policy {:cap 10 :ttl 3600000}}
+            {:kind :hungry :data {:food 3} :age-s 100 :policy {:cap 10 :ttl 3600000}}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
+         [:rcon "damage $BODY 14 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :food.none :data {:text [:contains "within 72 blocks"]}} :within-s 60}]}
+  {:name "no-give-up-keeps-the-24-block-radius"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :food.none :data {:text [:contains "within 24 blocks"]}} :within-s 40}]}
+  {:name "starving-with-a-stale-give-up-explores-with-a-clamped-distance"
+   :memory [{:kind :hungry :data {:food 0} :age-s 90 :policy {:cap 10 :ttl 3600000}}
+            {:kind :hungry :data {:food 0} :age-s 100 :policy {:cap 10 :ttl 3600000}}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
+         [:rcon "damage $BODY 14 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore {:max-distance 64 :max-legs 3 :spend {:job-time 30}}})]]
+   :expect [{:event {:source :job :kind #{:search.done :search.not-found}} :within-s 110}
+            {:no-event {:source :job :kind :failed} :for-s 100 :until {:source :job :kind #{:search.done :search.not-found}}}]
+   :limit-s 150}
+  {:name "fed-enough-body-inside-the-cooldown-ends-without-searching"
+   :memory [{:kind :hungry :data {:food 8} :age-s 90 :policy {:cap 10 :ttl 3600000}}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore true})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind #{:search.done :search.not-found}} :for-s 30}]}
+  {:name "stock-ask-explores-while-fed-past-a-give-up"
+   :memory [{:kind :hungry :data {:food 8} :age-s 60 :policy {:cap 10 :ttl 3600000}}]
+   :act [[:job (jobs.survival.get-food {:stock 8 :explore {:max-distance 64 :max-legs 3 :spend {:job-time 30}}})]]
+   :expect [{:event {:source :job :kind #{:search.done :search.not-found}} :within-s 110}]
+   :limit-s 150}
+  {:name "far-cow-found-by-the-explore-search"
+   :plot {:height 6 :length 96 :width 32}
+   :act [[:summon "cow" [60.5 0 16.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore true})]]
+   :expect [{:event {:source :job :kind :food.killed} :within-s 150}]
+   :limit-s 180}
+  {:name "night-starving-body-explores-calm"
+   :time :night
+   :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
+         [:rcon "damage $BODY 14 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore {:max-distance 64 :max-legs 3 :spend {:job-time 30}}})]]
+   :expect [{:event {:source :job :kind #{:search.done :search.not-found}} :within-s 110}]
+   :limit-s 150}
+  {:name "night-starving-body-with-a-zombie-near-does-not-search"
+   :time :night
+   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,Silent:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
+         [:rcon "damage $BODY 14 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore true})]]
+   :expect [{:event {:source :job :kind :food.none :data {:text [:contains "not searched"]}} :within-s 60}
+            {:no-event {:source :job :kind #{:search.done :search.not-found}} :for-s 40}]}
+  {:name "melon-seen-is-dug-and-eaten"
+   :blocks [[:set [20 0 16] "melon"]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 90}]
+   :after [[:not-block [20 0 16] "melon"]]}
+  {:name "chest-booked-with-bread-100-blocks-off-is-walked-to"
+   :plot {:height 6 :length 128 :width 32}
+   :blocks [[:set [110 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:16}]}"]]
+   :memory [{:kind :fetch/stock :data {:pos #at [110 0 16] :items {"bread" 16}} :policy {:cap 64 :ttl :forever}}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false :source-radius 8})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 110}]
+   :after [[:body-near [109.5 0 16.5] 5] [:item "bread" [:>= 1]]]
+   :limit-s 140}
+  {:name "chest-booked-with-cobblestone-is-not-visited"
+   :plot {:height 6 :length 128 :width 32}
+   :blocks [[:set [110 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:16}]}"]]
+   :memory [{:kind :fetch/stock :data {:pos #at [110 0 16] :items {"cobblestone" 16}} :policy {:cap 64 :ttl :forever}}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false :source-radius 8})]]
+   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 40}]
+   :after [[:body-far [109.5 0 16.5] 60]]}
+  {:name "three-cows-lose-one"
+   :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [21.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [20.5 0 18.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :food.killed} :within-s 90}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
+  {:name "two-cows-are-kept-for-breeding"
+   :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [21.5 0 16.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :food.none :data {:text [:contains "kept for breeding"]}} :within-s 60}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
+  {:name "starving-hungry-reflex-fires-again-after-a-give-up"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
+         [:rcon "damage $BODY 14 minecraft:generic"]]
+   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 40}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 130 :at-least 2}]
+   :limit-s 150}]}

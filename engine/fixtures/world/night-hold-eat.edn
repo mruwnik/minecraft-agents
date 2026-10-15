@@ -1,0 +1,30 @@
+;; The night hold (jobs.survival.night, hungry reflexes cannot reach a held body) eats and cooks: cards 08af40de, d6d5acb3.
+;; A closed stone hut x 8..16, z 8..16 (no bed): the body is held, hungry by RCON (food 8, hp 15). Needs night: run with
+;; --allow-time --time-log <the shared time log>.
+;; Should-succeed: raw beef is smelted at the furnace inside the hut, then eaten (shelter.ate).
+;; Should-fail: carrots reserved as bait are not eaten while food is above 3; the body keeps all of them.
+{:defaults
+ {:tags [:night :survival :get-food :cook]
+  :time :night-exclusive
+  :plot {:height 6}
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+  :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+        [:rcon "damage $BODY 3 minecraft:generic"]
+        [:job (jobs.survival.night {})]]
+  :limit-s 120}
+ :cases
+ [{:name "hold-cooks-beef-at-the-furnace-inside-then-eats"
+   :blocks [[:set [10 0 10] "furnace[facing=south]"]]
+   :body {:inventory [["beef" 2] ["coal" 2]]}
+   :expect [{:event {:source :job :kind :smelt.done} :within-s 90}
+            {:event {:source :job :kind :shelter.ate} :within-s 100}]
+   :after [[:item "beef" 0]]}
+  {:name "hold-leaves-reserved-bait-carrots-alone"
+   :body {:inventory [["carrot" 6]]}
+   :memory [{:kind :bait-reserve :data {:foods ["carrot" "potato" "beetroot"]} :policy {:cap 5 :ttl :forever}}]
+   :expect [{:event {:source :job :kind :holding} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :shelter.ate} :for-s 50}]
+   :after [[:item "carrot" 6]]
+   :limit-s 80}]}

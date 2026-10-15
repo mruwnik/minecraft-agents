@@ -1,0 +1,18 @@
+;; A get-food submitted with --now that declines (no food known, inside the ask cooldown) does not hold the body: the next job runs
+;; (card 6b628210). Hunger by RCON (food 8, hp 15); a fresh :hungry entry puts get-food inside the cooldown.
+;; Should-succeed: the go-to submitted after it arrives. Should-fail: none (the hold returns once the cooldown ends).
+{:defaults
+ {:tags [:survival :get-food :scheduler]
+  :time :day
+  :plot {:height 6}
+  :body {:at [4.5 0 16.5] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "declined-now-get-food-lets-the-go-to-run"
+   :memory [{:kind :hungry :data {:food 8} :age-s 5 :policy {:cap 10 :ttl 3600000}}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false}) [:now]]
+         [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 40}]
+   :after [[:body-near [20.5 0 16.5] 3]]}]}

@@ -1,0 +1,66 @@
+;; survival.get-food cooks raw meat before eating it (owner: cook whenever it can) and the night hold cooks a furnace-side meal too.
+;; Hunger is drained by RCON (food 8 after 5 s, near 0 after 8 s) and damage sets hp 15, so the body is hungry; the mobs are NoAI.
+;; Should-succeed: raw chicken beside a seen furnace is smelted first (smelt.done) by the hungry reflex; a carried furnace is put down
+;; and 2 raw chops cooked; food near 0 with a furnace in sight still cooks; the night hold in a closed hut cooks beef at a furnace
+;; inside and then eats it; reserved bait carrots are eaten by neither the hungry reflex nor the night hold.
+;; Should-fail: a creeper in sight rushes the body: the raw beef is eaten, no smelt.done; with carrots reserved as bait the
+;; hungry body keeps all of them.
+{:defaults
+ {:tags [:survival :get-food :cook]
+  :time :day
+  :plot {:height 6}
+  :body {:at [4.5 0 16.5] :settle-s 2}
+  :limit-s 100}
+ :cases
+ [{:name "reflex-cooks-raw-chicken-at-a-seen-furnace"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :blocks [[:set [8 0 16] "furnace[facing=west]"]]
+   :body {:inventory [["chicken" 2] ["coal" 2]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:event {:source :job :kind :smelt.done} :within-s 80}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 90}]
+   :after [[:item "chicken" 0]]}
+  {:name "carried-furnace-is-put-down-and-two-chops-cooked"
+   :body {:inventory [["furnace" 1] ["porkchop" 2] ["coal" 2]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :smelt.done} :within-s 80}
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}]
+   :after [[:item "porkchop" 0]]}
+  {:name "food-near-zero-with-a-furnace-in-sight-still-cooks"
+   :blocks [[:set [8 0 16] "furnace[facing=west]"]]
+   :body {:inventory [["beef" 2] ["coal" 2]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:wait-s 10]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :smelt.done} :within-s 80}]
+   :after [[:item "beef" 0]]}
+  {:name "creeper-in-sight-eats-the-beef-raw"
+   :blocks [[:set [8 0 16] "furnace[facing=west]"]]
+   :body {:inventory [["beef" 2] ["coal" 2]]}
+   :act [[:summon "creeper" [14.5 0 16.5] "{NoAI:1b,Silent:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :smelt.done} :for-s 50 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:item "beef" [:<= 1]]]}
+  {:name "reserved-bait-carrots-survive-the-hungry-reflex"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :body {:inventory [["carrot" 13]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :memory [{:kind :bait-reserve :data {:foods ["carrot" "potato" "beetroot"]} :policy {:cap 5 :ttl :forever}}]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry}} :within-s 70}]
+   :after [[:item "carrot" 13]]}
+  {:name "unreserved-carrots-are-eaten-by-the-hungry-reflex"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :body {:inventory [["carrot" 13]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 70}]
+   :after [[:item "carrot" [:<= 12]]]}]}
