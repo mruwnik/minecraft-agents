@@ -48,7 +48,8 @@
                                                       {:pos {:x 2 :y 63 :z 0} :item "oak_leaves"}))]
           (is (true? (:used result)))
           (is (= :done (:status result)))
-          (is (= 1 (count (calls p "useOn")))))))))
+          (is (= 1 (count (calls p "useOn"))))
+          (is (= 1 (count (ce/ends seen :used)))))))))
 
 (deftest use-on-walks-into-reach-first
   (async done
@@ -67,7 +68,8 @@
                                                     {:pos [2 63 0] :item "oak_leaves"}))]
           (is (= :stopped (:status result)))
           (is (false? (:used result)))
-          (is (= :no-item (:reason result))))))))
+          (is (= :no-item (:reason result)))
+          (is (= 1 (count (ce/ends seen :used)))))))))
 
 (deftest use-on-refuses-bad-args-without-a-click
   (async done

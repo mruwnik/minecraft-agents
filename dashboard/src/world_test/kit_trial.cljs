@@ -100,10 +100,16 @@
 
 (def progress-kinds #{:picked-up :craft.done :smelt.done :kit.progress :stair.step :completed})
 
+(defn progress?
+  "A progress kind, or a child ending that reports a dig (a long dig inside one child emits nothing else)."
+  [e]
+  (or (contains? progress-kinds (:kind e))
+      (and (= :child_ended (:kind e)) (boolean? (get-in e [:data :ending :data :dug])))))
+
 (defn stalls
   "Gaps over stall-ms between progress events, while the goal job is listed: [{:from-ms :to-ms}] up to end-ms."
   [events start-ms end-ms]
-  (let [times (concat [start-ms] (map ms (filter #(progress-kinds (:kind %)) events)) [end-ms])]
+  (let [times (concat [start-ms] (map ms (filter progress? events)) [end-ms])]
     (vec (for [[a b] (partition 2 1 times) :when (> (- b a) stall-ms)] {:from-ms a :to-ms b}))))
 
 (defn give-ups

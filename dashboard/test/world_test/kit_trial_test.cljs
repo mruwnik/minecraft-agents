@@ -48,6 +48,12 @@
   (let [events [(ev 1 :picked-up) (ev 3 :picked-up) (ev 20 :picked-up)]]
     (is (= [{:from-ms (at 3) :to-ms (at 20)}] (k/stalls events t0 (at 21))))))
 
+(deftest a-dig-ending-is-progress
+  (let [dug (ev 5 :child_ended :data {:ending {:data {:dug true}}})
+        other (ev 5 :child_ended :data {:ending {:data {:count 2}}})]
+    (is (= [] (k/stalls [(ev 1 :picked-up) dug (ev 9 :picked-up)] t0 (at 10))))
+    (is (= [{:from-ms (at 1) :to-ms (at 9)}] (k/stalls [(ev 1 :picked-up) other (ev 9 :picked-up)] t0 (at 10))))))
+
 (deftest run-names-are-valid-player-names
   (doseq [s k/spots n [1 12]]
     (is (re-matches #"[A-Za-z0-9_]{3,16}" (k/run-name s n)))))
