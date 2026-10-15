@@ -161,7 +161,7 @@
         (let [{:keys [eng p clock]} (lt/setup {:blocks pond :entities [(boat-at 9 1.5 :invulnerable true)]})
               _ (.override (.-world p) "attack" (fn [token a impl] (swap! clock + 100) (impl token a)))
               res (await (tu/child-outcome eng 'jobs.movement.boat-launch {:action :recover :spend {:time 0.3}} 40))]
-          (is (= {:status :stopped :reason :not-broken} (select-keys res [:status :reason]))))))))
+          (is (= {:status :stopped :reason :time} (select-keys res [:status :reason])) "the engine refuses the hit the time left cannot hold"))))))
 
 (deftest recover-without-a-drop-is-not-collected
   (async done
