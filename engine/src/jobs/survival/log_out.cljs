@@ -53,7 +53,7 @@
    [:fn #(when (sh/log-out-unsupported? (ctx/view %)) (contract/impossible :log-out-unsupported))]])
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a log-out stint and the wait for the sleep count may take." :spec (a/num-in 0 nil)}})
+  {::time-s {:default 900 :doc "Seconds a log-out stint and the wait for the sleep count may take (a stint lasts at most until morning)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:spend {:time ::time-s}})
 

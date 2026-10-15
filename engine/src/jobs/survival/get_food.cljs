@@ -99,7 +99,7 @@
 (defn hunt-radius [c] (* (widen c) (:hunt-radius (:args c))))
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds one attempt at getting fed may take." :spec (a/num-in 0 nil)}
+  {::time-s {:default 1800 :doc "Seconds one attempt at getting fed may take: a hunt, a search, a cook." :spec (a/num-in 0 nil)}
    ::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::fish-radius {:default 48 :doc "Blocks within which seen water two deep with a bank makes fishing a way, with a fishing rod carried." :spec (a/int-in 0 nil)}

@@ -47,7 +47,7 @@
    :fetch {:doc "get a missing block (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-blocks" :spec fetch/option? :default true}})
 
 (a/defargs settings
-  {::time-s {:default 60 :doc "Seconds stopping the arrows may take." :spec (a/num-in 0 nil)}
+  {::time-s {:default 120 :doc "Seconds stopping the arrows may take, a block fetch included." :spec (a/num-in 0 nil)}
    ::max-steps {:default 12 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
