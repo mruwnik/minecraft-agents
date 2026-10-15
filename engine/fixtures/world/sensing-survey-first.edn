@@ -1,0 +1,136 @@
+;; Cards 999c3a7b ffebe3a0 12024d02 (jobs look around before they conclude there is nothing), cca0528c 2ecea4ed (bridge and pillar look at
+;; cells they have not sensed), 68d42905 (tend reads crops through sight), e51d1fe9 (search holds back a leg the way a leg just failed),
+;; a441210f (search with notes ignores an animal noted inside the body's own plan), 9431fa18 (search time does not count the night wait in a shelter).
+;; Survey cases: body at the middle facing north (yaw 180), the work 4 south of it, behind the view: it must look round first, not end with
+;; "nothing here" or put down a second table. Day, open grass plot, resistance on.
+{:defaults
+ {:tags [:sensing :jobs :survey] :time :day
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 16.5] :yaw 180 :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "craft-uses-the-table-behind-it"
+   :blocks [[:set [16 0 20] "crafting_table"]]
+   :body {:inventory [["oak_planks" 3] ["stick" 2]]}
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 30 :until {:source :job :kind :completed}}
+            {:no-event {:source :job :kind :craft.no-table} :for-s 30 :until {:source :job :kind :completed}}]
+   :after [[:item "wooden_pickaxe" 1] [:block [16 0 20] "crafting_table"]]}
+  {:name "compost-feeds-the-composter-behind-it"
+   :blocks [[:set [16 0 20] "composter"]]
+   :body {:inventory [["wheat_seeds" 64]]}
+   :act [[:job (jobs.farm.compost {:items ["wheat_seeds"] :times 1})]]
+   :expect [{:event {:source :job :kind :compost.done :data {:bone-meal [:>= 1]}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :compost.no-composter} :for-s 40 :until {:source :job :kind :compost.done}}]
+   :after [[:item "bone_meal" [:>= 1]]]
+   :limit-s 100}
+  {:name "get-seeds-cuts-the-cane-behind-it"
+   :blocks [[:set [16 -1 20] "sand"] [:set [17 -2 20] "stone"] [:set [17 -1 20] "water"] [:fill [16 0 20] [16 2 20] "sugar_cane"]]
+   :act [[:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 16})]]
+   :expect [{:event {:source :job :kind :get-seeds.done :data {:reason :count}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :get-seeds.done :data {:reason :none}} :for-s 30 :until {:source :job :kind :get-seeds.done :data {:reason :count}}}]
+   :after [[:block [16 0 20] "sugar_cane"] [:item "sugar_cane" [:>= 1]]]}
+  {:name "tend-harvests-the-crops-behind-it"
+   :blocks [[:fill [10 -1 20] [12 -1 20] "farmland[moisture=7]"] [:fill [10 -2 21] [12 -2 21] "stone"] [:fill [10 -1 21] [12 -1 21] "water"]
+            [:fill [10 0 20] [12 0 20] "wheat[age=7]"]]
+   :body {:inventory [["wheat_seeds" 10]]}
+   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 20] :max #xyz [12 0 20]}})]]
+   :expect [{:event {:source :job :kind :farm-tend.done :data {:steps {:harvest {:cut 3 :replanted 3}}}} :within-s 80 :of-job true}]
+   :after [[:block [10 0 20] "wheat[age=0]"] [:block [12 0 20] "wheat[age=0]"]]}
+  {:name "find-spot-picks-the-spot-by-the-pond-behind-it"
+   :plot {:height 8 :floor "grass_block" :length 64 :width 64}
+   :blocks [[:fill [28 -2 44] [36 -2 48] "stone"] [:fill [28 -1 44] [36 -1 48] "water"]]
+   :body {:at [32.5 0 32.5]}
+   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 24 :depth 7})]]
+   :expect [{:event {:source :job :kind :find-spot.found :data {:best [:near #at [32 -1 42] 5]}} :within-s 40 :of-job true}
+            {:no-event {:source :system :kind :error} :for-s 20}]
+   :limit-s 60}
+  {:name "boat-launch-finds-the-water-behind-it"
+   :blocks [[:fill [12 -2 20] [20 -2 24] "stone"] [:fill [12 -1 20] [20 -1 24] "water"]]
+   :body {:inventory [["oak_boat" 1]]}
+   :act [[:job (jobs.movement.boat-launch {:board false})]]
+   :expect [{:event {:source :job :kind :boat.launched :data {:boat "oak_boat"}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :no-water}} :for-s 20 :until {:source :job :kind :boat.launched}}]}
+
+  ;; Unsensed cells: a bridge whose stand and head cells ahead are out of view (pitch up) looks before it steps; a pillar with the
+  ;; cell overhead out of view (pitch down) looks up before it can give up :ceiling.
+  {:name "bridge-with-the-body-looking-up"
+   :blocks [[:fill [9 -1 16] [13 -1 16] "air"]]
+   :body {:at [8.5 0 16.5] :yaw 270 :pitch -70 :inventory [["dirt" 8]]}
+   :act [[:job (jobs.access.bridge {:heading :east :length 5 :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :bridge.done :data {:built 5}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :bridge.gave-up} :for-s 30 :until {:source :job :kind :bridge.done}}]
+   :after [[:block [11 -1 16] "dirt"] [:body-near [13.5 0 16.5] 3]]}
+  {:name "pillar-with-the-body-looking-down"
+   :plot {:height 12 :floor "grass_block"}
+   :body {:pitch 80 :inventory [["dirt" 8]]}
+   :act [[:job (jobs.access.pillar {:height 3 :use {:blocks ["dirt"]} :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :pillar.done} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :pillar.gave-up :data {:reason :ceiling}} :for-s 30 :until {:source :job :kind :pillar.done}}]
+   :after [[:body-near [16.5 3 16.5] 1.5]]}
+
+  ;; Search: a wall of bedrock across the plot at x 18..19 (never dug). Legs east of it fail; the legs other ways still go on and find
+  ;; the target 26 north of the body, instead of the search ending :stuck after three failed legs.
+  {:name "search-goes-on-past-legs-that-fail"
+   :plot {:height 8 :floor "grass_block" :length 64 :width 32}
+   :blocks [[:fill [18 0 0] [19 7 31] "bedrock"] [:set [8 0 2] "emerald_block"]]
+   :body {:at [8.5 0 28.5] :yaw 0}
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :spacing 8 :scan-radius 8 :use-notes false
+                                     :max-distance 32 :max-legs 32 :spend {:job-time 130}})]]
+   :expect [{:event {:source :job :kind :search.done :data {:reason :found}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :search.not-found :data {:why :stuck}} :for-s 140 :until {:source :job :kind :search.done}}]
+   :limit-s 150}
+  {:name "search-for-a-target-behind-the-wall-ends-not-found"
+   :plot {:height 8 :floor "grass_block" :length 64 :width 32}
+   :blocks [[:fill [18 0 0] [19 7 31] "bedrock"] [:set [26 0 16] "emerald_block"]]
+   :body {:at [8.5 0 16.5] :yaw 0}
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :spacing 8 :scan-radius 6 :use-notes false
+                                     :max-distance 20 :max-legs 32 :spend {:job-time 130}})]]
+   :expect [{:event {:source :job :kind :search.not-found} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :search.done} :for-s 150 :until {:source :job :kind :search.not-found}}]
+   :limit-s 160}
+
+  ;; Notes: the first search (no notes used) sees a cow standing inside the body's own plan footprint and notes it; the body is then
+  ;; put 24 blocks away and a search with notes must not count that noted cow. A cow outside the footprint is counted, noted, and its
+  ;; position is in the text.
+  {:name "search-notes-ignore-a-cow-in-the-bodys-own-plan"
+   :plot {:height 8 :floor "grass_block" :length 64 :width 32}
+   :plans [{:id "pen" :metadata {:by "$body"} :parts [{:id "pen" :box [#at [4 0 12] #at [12 1 20]] :want "dirt"}]}]
+   :body {:at [8.5 0 24.5] :yaw 180}
+   :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2]
+         [:job (jobs.explore.search {:target "cow" :max-legs 0 :max-distance 12 :use-notes false})]
+         [:await {:source :job :kind :search.done} 40]
+         [:rcon "tp $BODY ~34 ~ ~-8 90 0"] [:wait-s 3]
+         [:job (jobs.explore.search {:target "cow" :max-legs 0 :max-distance 60 :use-notes true})]]
+   :expect [{:event {:source :job :kind :search.not-found} :within-s 70 :of-job true}]
+   :limit-s 90}
+  {:name "search-notes-count-a-cow-outside-and-say-where"
+   :plot {:height 8 :floor "grass_block" :length 64 :width 32}
+   :body {:at [8.5 0 24.5] :yaw 180}
+   :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2]
+         [:job (jobs.explore.search {:target "cow" :max-legs 0 :max-distance 12 :use-notes false})]
+         [:await {:source :job :kind :search.done} 40]
+         [:rcon "tp $BODY ~34 ~ ~-8 90 0"] [:wait-s 3]
+         [:job (jobs.explore.search {:target "cow" :max-legs 0 :max-distance 60 :use-notes true})]]
+   :expect [{:event {:source :job :kind :search.done :data {:found [{:noted true}] :text [:contains "found 1 cow at"]}} :within-s 70 :of-job true}]
+   :limit-s 90}
+
+  ;; Night: the body is shut in a closed stone room at night; a search for a target outside waits for day in the room
+  ;; (go-to.night-sheltered) and its job time does not run out meanwhile; once the time is set to day it leaves and finds the target.
+  ;; Run with --allow-time and a shared --time-log.
+  {:name "search-waits-the-night-in-a-room-without-timing-out"
+   :time :night-exclusive
+   :plot {:height 8 :floor "grass_block" :length 64 :width 32}
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:set [40 0 12] "emerald_block"]]
+   :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
+                                     :use-notes false :max-distance 60 :max-legs 16 :spend {:job-time 45}})]
+         [:wait-s 70]
+         [:time-set 1000]]
+   :expect [{:event {:source :job :kind :go-to.night-sheltered} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :search.not-found} :for-s 70}
+            {:no-event {:source :job :kind :limit-reached} :for-s 70}
+            {:event {:source :job :kind :search.done :data {:reason :found}} :within-s 200 :of-job true}]
+   :limit-s 220}]}
