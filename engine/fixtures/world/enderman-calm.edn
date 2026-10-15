@@ -1,0 +1,19 @@
+;; A calm enderman is no danger (jobs.lib.danger), and looking around near one never provokes it. Cards 57f49df1 (gaze rule),
+;; b74a043c (calm enderman fires no retreat), ebac9484 (enderman near a night build). The fixture cannot anger one (the
+;; provoking NBT needs the body's uuid), so the angry duck (water, roof, seal) stays a manual case. NoAI enderman 5 east.
+{:defaults
+ {:tags [:hostile :survival :enderman]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [16.5 0 16.5]}
+  :limit-s 90}
+ :cases
+ [{:name "calm-enderman-fires-no-reflex"
+   :act [[:summon "enderman" [21.5 0 16.5] "{NoAI:1b}"]
+         [:wait-s 5]
+         [:job look-around]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 40}]
+   :after [[:entities "type=enderman,tag=wt" [[0 0 0] [31 6 31]] 1]]}]}

@@ -1,0 +1,23 @@
+;; Flee takes the interrupted walk's goal (card ae205d08) and tells the agent one hostile.fled for a chain of flights
+;; (cards ef6a443f, 1befc8aa). 64x32 open plot, a real helmeted zombie chases (the body is unarmed, so it flees; resistance
+;; keeps it alive).
+{:defaults
+ {:tags [:hostile :movement :flee]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :plot {:height 12 :length 64 :width 32}
+  :body {:at [4.5 0 16.5] :effects [["resistance" 900 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "flee-leans-to-the-goal-past-the-chaser"
+   :act [[:job (jobs.movement.go-to {:pos #at [56 0 16] :range 2})]
+         [:summon "zombie" [24.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}]
+   :after [[:body-far [4.5 0 16.5] 25]]
+   :limit-s 90}
+  {:name "chain-of-flights-tells-the-agent-once"
+   :act [[:summon "zombie" [11.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.fled} :within-s 90}]
+   :limit-s 100}]}

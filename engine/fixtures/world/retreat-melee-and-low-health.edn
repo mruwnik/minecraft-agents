@@ -1,0 +1,50 @@
+;; Hostile reflex choices with a melee mob close and a ranged one or low health. Cards db6d0ab0 (armed body fights an adjacent
+;; zombie, no seal first), 72b423bf (zombie near and skeleton with a line of fire: cover, not a swing at the zombie),
+;; fabdb0ed (low health beside a creeper walks, no take-cover seal), e0dbcd37 (armed body turns on the zombie; a creeper is
+;; still backed off from). Mobs are helmeted (no sun burn). NoAI
+;; ones never hurt; the fight cases judge by the zombie dying. Open flat ground, torches for light.
+{:defaults
+ {:tags [:hostile :survival :cornered]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 70}
+ :cases
+ [{:name "armed-body-kills-the-adjacent-zombie-without-sealing"
+   :body {:inventory [["iron_sword" 1] ["cobblestone" 20]]}
+   :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}
+            {:no-event {:source :job :kind #{:retreat_sealed :pillar.done}} :for-s 40}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 0]]}
+  {:name "armed-body-with-a-creeper-near-never-fights-it"
+   :body {:inventory [["iron_sword" 1] ["cobblestone" 20]]}
+   :act [[:summon "creeper" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :flee}} :within-s 20}
+            {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 30}]
+   :after [[:entities "type=creeper,tag=wt" [[0 0 0] [31 6 31]] 1]]}
+  {:name "zombie-near-and-skeleton-in-line-takes-cover-not-a-swing"
+   :body {:inventory [["iron_sword" 1] ["cobblestone" 20]]}
+   :act [[:summon "zombie" [18.5 0 18.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [26.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 1]]}
+  {:name "low-health-creeper-and-skeleton-walks-away"
+   :body {:inventory [["cobblestone" 20]]}
+   :act [[:rcon "damage $BODY 12 minecraft:generic"]
+         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "creeper" [16.5 0 13.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.target} :within-s 15}
+            {:no-event {:source :job :kind :retreat_sealed} :for-s 15}]
+   :limit-s 40}
+  {:name "low-health-skeleton-alone-seals-in"
+   :body {:inventory [["cobblestone" 20]]}
+   :act [[:rcon "damage $BODY 12 minecraft:generic"]
+         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 30}]
+   :after [[:body-near [16.5 0 16.5] 2.5]]}
+  {:name "unarmed-full-health-body-flees-a-spider-never-fights"
+   :act [[:summon "spider" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :flee}} :within-s 20}
+            {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 30}]}]}

@@ -1,0 +1,27 @@
+;; A skeleton only heard (behind a wall, no line of sight) must not hold the body or loop the reflex: respond-to-hostile
+;; leaves it (hostile.heard-only), is done, and the job it cut goes on. Cards 2704c570 (sealed body held for a heard
+;; skeleton), 93958a46 (reflex refires ~170 times on a heard skeleton), 63d75136 (roofed body flees out for a heard zombie). Closed stone room x 12..20, z 12..20, roof y 3;
+;; the NoAI helmeted skeleton stands 4 east of the east wall.
+{:defaults
+ {:tags [:hostile :survival :reflex]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :blocks [[:fill [12 0 12] [20 3 20] "stone" :hollow]
+           [:fill [13 0 13] [19 2 19] "air"]
+           [:set [13 1 13] "torch"] [:set [19 1 19] "torch"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "heard-skeleton-behind-the-wall-lets-the-queued-job-run"
+   :act [[:summon "skeleton" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job look-around]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 60 :at-most 6}]}
+  {:name "heard-zombie-behind-the-wall-roofed-body-stays"
+   :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job look-around]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :retreat.target} :for-s 40}]
+   :after [[:body-near [16.5 0 16.5] 3.5]]}]}
