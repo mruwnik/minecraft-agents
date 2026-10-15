@@ -29,8 +29,9 @@
   :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand} and the ending by the reason:
   - :done :fed: :count animals were fed. Any stop after at least :least animals were fed (default 2: a pair) is
     done, with the stop as the data reason (warn breed.gave-up); :least :all is :count.
-  - :condition-failed :unknown-mob (no breeding food is known for :mob), :bees-indoors (bees at night or in rain),
-    :no-food (none carried and none fetched, nothing fed yet; a listed call with :fetch false waits for food; a failed fetch ends with the fetch's own ending, reason :need, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
+  - :impossible :unknown-mob (no breeding food is known for :mob, checked at the start); bees at night or in rain
+    wait :bees-indoors before every round.
+  - :condition-failed :no-food (none carried and none fetched, nothing fed yet; a listed call with :fetch false waits for food; a failed fetch ends with the fetch's own ending, reason :need, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
     :refused (some refused, none ate) or :no-zones (the zone rules refused the adults).
   - :nothing-possible :food-out (the food ran out below :least fed), :unreachable (one was given up as unreachable)
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
@@ -66,14 +67,16 @@
 (def defaults {:spend {:job-time ::job-time-s} :least 2})
 
 (defn can-start?
-  "Later :no-food: a known mob, no breeding food carried and :fetch off."
+  "Never :unknown-mob: no breeding food is known for :mob. Later :no-food: a known mob, no breeding food carried and
+  :fetch off."
   [c]
   (let [{:keys [mob fetch]} (:args c)]
-    (if (and (contains? animals/breeding-food mob)
-             (not (need/parse-arg fetch))
-             (nil? (animals/food-carried (:primitives c) mob)))
+    (cond
+      (not (contains? animals/breeding-food mob)) (contract/never :unknown-mob (str "no breeding food is known for " (pr-str mob)))
+      (and (not (need/parse-arg fetch))
+           (nil? (animals/food-carried (:primitives c) mob)))
       (contract/later :no-food (str "no breeding food for " mob " carried and :fetch is off"))
-      (contract/ok :food "food carried or fetched"))))
+      :else (contract/ok :food "food carried or fetched"))))
 
 (defn time-limit "Seconds the call may work." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
@@ -98,8 +101,6 @@
 (def ending-of
   "The kind and cause of a finish by reason."
   {:fed [:done nil]
-   :unknown-mob [:condition-failed :unknown-mob]
-   :bees-indoors [:condition-failed :bees-indoors]
    :no-food [:condition-failed :no-food]
    :food-out [:nothing-possible :food-out]
    :too-few [:condition-failed :too-few]
@@ -259,12 +260,17 @@
         p (:primitives c)]
     (boolean
      (and (need/parse-arg (:fetch (:args c)))
-          (contains? animals/breeding-food mob)
           (< fed n)
           (nil? (animals/food-carried p mob))
-          (not (bees-indoors? c))
           (or (pos? fed) (>= (count (animals/adults p mob radius)) 2))
           (seq (candidates c))))))
+
+(defn can-run?
+  "Later :bees-indoors: bees breed at night or in rain only out of the hive, so the job waits for the weather."
+  [c]
+  (if (bees-indoors? c)
+    (contract/later :bees-indoors "bees are indoors at night or in rain")
+    (contract/ok :outdoors "the animals are out")))
 
 (defn ^:async fetch-food!
   "No food carried: fetch it when :fetch allows and animals wait, else end :no-food. Resolves to :again once food
@@ -288,8 +294,6 @@
         food (animals/food-carried (:primitives c) mob)
         cands (candidates c)]
     (cond
-      (not (contains? animals/breeding-food mob)) (await (finish! c :unknown-mob))
-      (bees-indoors? c) (await (finish! c :bees-indoors))
       (>= (count (:fed m)) n) (await (finish! c :fed))
       (nil? food) (await (fetch-food! c))
       (or (empty? cands) (and (empty? (:fed m)) (< (count (animals/adults (:primitives c) mob (:radius (:args c)))) 2))) (await (finish! c (out-reason c)))

@@ -139,15 +139,23 @@
                 [["no wheat" {:mob "cow"} {:entities [(cow 1 2) (cow 2 3)]} :need 0]
                  ["one adult" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2)]} :too-few 0]
                  ["only babies" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2 {:baby true}) (cow 2 3 {:baby true})]} :too-few 2]
-                 ["both on cooldown" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2 {:cooldown true}) (cow 2 3 {:cooldown true})]} :refused 0]
-                 ["unknown mob" {:mob "zombie"} {:inventory (wheat 2) :entities [(ent 1 "zombie" 2) (ent 2 "zombie" 3)]} :unknown-mob 0]
-                 ["bee at night" {:mob "bee"} {:time 15000 :inventory [{:name "dandelion" :count 2}] :entities [(ent 1 "bee" 2) (ent 2 "bee" 3)]} :bees-indoors 0]
-                 ["bee in rain" {:mob "bee"} {:raining true :inventory [{:name "dandelion" :count 2}] :entities [(ent 1 "bee" 2) (ent 2 "bee" 3)]} :bees-indoors 0]]]
+                 ["both on cooldown" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2 {:cooldown true}) (cow 2 3 {:cooldown true})]} :refused 0]]]
           (let [s (await (scenario args world 4))]
             (is (finished? s) label)
             (is (= reason (:reason (done-event s))) label)
             (is (= babies (:babies (done-event s))) label)
             (is (= (items-total (:inventory world)) (items-total (js->clj (.-inventory (.self (:p s))) :keywordize-keys true))) label)))))))
+
+;; bees indoors (night or rain) is a wait for the weather, not an ending
+(deftest bees-at-night-or-in-rain-wait-and-feed-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label world] [["night" {:time 15000}] ["rain" {:raining true}]]]
+          (let [s (await (scenario {:mob "bee"} (merge world {:inventory [{:name "dandelion" :count 2}] :entities [(ent 1 "bee" 2) (ent 2 "bee" 3)]}) 4))]
+            (is (not (finished? s)) label)
+            (is (= :bees-indoors (:reason (first (events-of s :waiting)))) label)
+            (is (empty? (interacts s)) label)))))))
 
 (deftest the-done-text-and-warn-name-the-adults-and-babies-seen
   (async done

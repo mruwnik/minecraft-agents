@@ -191,7 +191,7 @@
             "the food ran out after four: done with the count fed")
         (doseq [[args world kind reason]
                 [[{} {:inventory wheat :entities [(cow-at 1 2)]} :condition-failed :too-few]
-                 [{:mob "rock"} {:inventory wheat :entities []} :condition-failed :unknown-mob]
+                 [{:mob "rock"} {:inventory wheat :entities []} :impossible :unknown-mob]
                  [{:count 4} {:inventory [{:name "wheat" :count 1}] :entities (mapv #(cow-at % %) [1 2 3 4])} :nothing-possible :food-out]]]
           (is (= {:event :stopped :kind kind :reason reason} (await (ending (list 'jobs.animals.breed (merge {:mob "cow"} args)) world)))))
         (is (= {:event :completed}
