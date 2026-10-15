@@ -1,0 +1,28 @@
+;; Card f9b00be4 (91cbdb7d3, 28d3cbb41): a standing (repeat) farm.tend does not start while the body is more than jobs.lib.standing/away-depth (8)
+;; below its field, even with no other job listed: it waits :away (the gap after a trip job ends), so it does not pull the body home. The same job
+;; with the body on the field runs: the ripe wheat is cut. Field on a stone platform x 6..20, z 12..22, y 0..11: farmland y 11, wheat y 12, water beside.
+;; Should-fail (control): the body 12 below the field leaves the wheat standing.
+{:defaults
+ {:tags [:farm :tend :jobs]
+  :time :any
+  :plot {:height 18}
+  :blocks [[:fill [6 0 12] [20 10 22] "stone"]
+           [:fill [10 11 16] [13 11 16] "farmland[moisture=7]"] [:fill [10 11 17] [13 11 17] "water"]
+           [:fill [6 11 12] [20 11 15] "stone"] [:fill [6 11 18] [20 11 22] "stone"]
+           [:fill [6 11 16] [9 11 17] "stone"] [:fill [14 11 16] [20 11 17] "stone"]
+           [:set [10 12 16] "wheat[age=7]"] [:set [13 12 16] "wheat[age=7]"]]
+  :body {:effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 100}
+ :cases
+ [{:name "body-far-below-the-field-waits-away"
+   :body {:at [3.5 0 16.5]}
+   :act [[:http :submit (repeat (jobs.farm.tend {:box {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :away}} :within-s 40}]
+   :after [[:block [10 12 16] "wheat[age=7]"] [:block [13 12 16] "wheat[age=7]"] [:body-near [3.5 0 16.5] 2]]
+   :limit-s 60}
+  {:name "body-on-the-field-cuts-the-wheat"
+   :body {:at [11.5 12 15.5]}
+   :act [[:http :submit (repeat (jobs.farm.tend {:box {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 30}]
+   :after [[:not-block [10 12 16] "wheat[age=7]"]]
+   :limit-s 90}]}

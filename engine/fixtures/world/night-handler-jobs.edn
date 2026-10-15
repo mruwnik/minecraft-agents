@@ -42,4 +42,17 @@
    :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 30}
             {:event {:source :job :kind :holding :data {:reason :bed-occupied}} :within-s 30 :of-job true}]
    :after [[:body-near [13.5 0 13.5] 1.5]]
-   :limit-s 50}]}
+   :limit-s 50}
+  ;; card f2e89864: a stale :bed place far away does not beat the near home and spawn bed: the body sleeps in the hut bed, no night.bed-too-far
+  {:name "stale-far-bed-place-with-a-near-spawn-bed-sleeps-in-the-hut"
+   :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
+   :body {:at [13.5 0 13.5] :spawnpoint [10 0 12]}
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [400 0 400]}) [:now]]
+         [:job (jobs.memory.set-place {:name :home :pos #at [13 0 13]}) [:now]]
+         [:job (jobs.survival.night)]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
+            {:no-event {:source :job :kind :night.bed-too-far} :for-s 90 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 90 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]
+   :after [[:body-near [10.5 0 12.5] 4]]
+   :limit-s 110}]}

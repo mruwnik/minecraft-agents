@@ -50,4 +50,22 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 6 :reason :count}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :mine.gave-up} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "granite" 6] [:not-block [4 0 16] "granite"] [:not-block [9 0 16] "granite"]]
-   :limit-s 120}]}
+   :limit-s 120}
+  ;; Card a8447323: :stay-level mines ore seen within :ore-reach (2) off the tunnel, not only in the line: a side cut, the mouth shut with a carried block
+  ;; (mine.side). The ore is seen through a glass pane in the wall (no x-ray); :ore-reach 0 leaves it.
+  {:name "stay-level-takes-seen-ore-two-off-the-tunnel"
+   :blocks [[:set [18 0 15] "glass"] [:set [18 0 14] "diamond_ore"]]
+   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.gather.mine {:block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 8 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.side} :within-s 100 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 120 :of-job true}]
+   :after [[:item "diamond" [:>= 1]] [:not-block [18 0 14] "diamond_ore"]]
+   :limit-s 130}
+  {:name "ore-reach-0-leaves-the-side-ore"
+   :blocks [[:set [18 0 15] "glass"] [:set [18 0 14] "diamond_ore"]]
+   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.gather.mine {:block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 8 :mend false :ore-reach 0})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :mine.side} :for-s 60}]
+   :after [[:block [18 0 14] "diamond_ore"] [:item "diamond" 0]]
+   :limit-s 130}]}

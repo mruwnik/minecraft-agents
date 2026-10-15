@@ -1,0 +1,26 @@
+;; Card cd5a0d81 (e3b40a30): the dirt a from-plan fetch gathers comes off the top layer of the ground, never a 3-deep pit under the body;
+;; a body walled in a hole it cannot leave stops :shut-in after two failed walks instead of idling.
+;; no-pit: a dirt pad y -4..-1, no dirt carried, a shovel-less body; after the build no column round the start is dug below the top layer.
+{:defaults
+ {:tags [:build :fetch] :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "dirt-fetch-leaves-no-pit"
+   :blocks [[:fill [0 -4 0] [31 -1 31] "dirt"]]
+   :body {:inventory [["iron_pickaxe" 1] ["iron_shovel" 1]]}
+   :plans [{:id "pad" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [22 0 16] #at [23 0 16] #at [24 0 16] #at [25 0 16] #at [26 0 16] #at [27 0 16]] :want "dirt"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:pad"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 140 :of-job true}]
+   :after [[:block [22 0 16] "dirt"] [:block [27 0 16] "dirt"]
+           [:block [16 -3 16] "dirt"] [:block [17 -3 16] "dirt"] [:block [15 -3 16] "dirt"] [:block [16 -3 17] "dirt"] [:block [16 -3 15] "dirt"]]}
+  {:name "walled-in-hole-with-no-blocks-stops-shut-in"
+   :blocks [[:fill [14 0 14] [18 4 18] "bedrock"] [:fill [16 0 16] [16 4 16] "air"]]
+   :body {:at [16.5 0 16.5] :inventory [["dirt" 2]]}
+   :plans [{:id "pad" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [24 0 16] #at [25 0 16]] :want "dirt"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:pad"})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30}]
+   :after [[:not-block [24 0 16] "dirt"]]
+   :limit-s 130}]}

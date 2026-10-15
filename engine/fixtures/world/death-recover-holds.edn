@@ -1,0 +1,35 @@
+;; Cards f4d5f362 (ef1e288b, 11c0004f): after a death the errand reflexes (hungry, ...) hold off for jobs.lib.body/recovery-hold-s while the :died
+;; reflex recovers the pile, whatever the register order (here :hungry before :died); recover-drops declines :night while the walk would leave the shelter
+;; (jobs.survival.recover-drops/hold-at-night), and walks at night when that is off.
+;; Pile: 24 raw_iron at [26 0 26], where the body dies; it respawns at [4 0 4]. The hunger effect leaves food 8 (hungry would fire).
+{:defaults
+ {:tags [:survival :death :jobs]
+  :time :any
+  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
+         :inventory [["raw_iron" 24]]}
+  :limit-s 120}
+ :cases
+ [{:name "hungry-before-died-waits-for-the-recovery"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}
+              {:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
+   :act [[:wait-s 1]
+         [:kill-body]
+         [:await {:source :body :kind :respawned} 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 255 true"]
+         [:wait-s 60]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :died}} :within-s 40}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 60}]
+   :after [[:item "raw_iron" 24]]}
+  {:name "respawned-in-a-hut-at-night-stays-in"
+   :time :night
+   :blocks [[:fill [2 0 2] [8 3 8] "stone" :hollow] [:fill [3 0 3] [7 2 7] "air"] [:set [3 1 3] "torch"] [:set [7 1 7] "torch"]
+            [:set [26 1 26] "torch"] [:set [20 0 20] "torch"]]
+   :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
+   :body {:spawnpoint [5 0 5]}
+   :act [[:wait-s 1]
+         [:kill-body]
+         [:await {:source :body :kind :respawned} 30]
+         [:wait-s 40]]
+   :expect [{:event {:source :job :kind :recover-drops.declined} :within-s 40}
+            {:no-event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :for-s 40}]
+   :after [[:body-near [5.5 0 5.5] 3.5] [:item "raw_iron" 0]]}]}

@@ -1,0 +1,35 @@
+;; Card 91379693 (follow-ups to the night doorway fill): in a home closed to the night the bed goes down under the roof or stays in the bag,
+;; the doorway fill is dug again at dawn, an overhang beside no walls still gets the bed beside it.
+;; Needs night: run with --allow-time --time-log <the shared time log>. Hut: stone x 8..16, z 8..16, y 0..3, room 9..15, torches.
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night-exclusive
+  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]]
+  :body {:effects [["resistance" 600 4]] :settle-s 2}}
+ :cases
+ [{:name "one-cell-home-keeps-the-bed-in-the-bag"
+   :blocks [[:fill [10 0 10] [14 3 14] "stone"] [:fill [12 0 12] [12 1 12] "air"]]
+   :body {:at [12.5 0 12.5] :inventory [["red_bed" 1]]}
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind #{:completed :stopped :waiting :holding}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :night.bed-placed} :for-s 40}]
+   :after [[:item "red_bed" 1] [:body-near [12.5 0 12.5] 1.5]]
+   :limit-s 80}
+  {:name "overhang-without-walls-gets-the-bed-beside-it"
+   :blocks [[:fill [11 2 11] [14 2 14] "stone"] [:fill [11 0 11] [11 1 11] "stone"]]
+   :body {:at [12.5 0 12.5] :inventory [["red_bed" 1]]}
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :night.bed-placed} :within-s 90 :of-job true}]
+   :limit-s 100}
+  {:name "doorway-is-filled-for-the-night-and-dug-again-at-dawn"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:fill [12 0 16] [12 1 16] "air"]]
+   :body {:at [13.5 0 13.5] :inventory [["red_bed" 1] ["cobblestone" 8] ["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 120]]
+   :expect [{:event {:source :job :kind :night.bed-placed} :within-s 120 :of-job true}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 300 :of-job true}]
+   :after [[:not-block [12 0 16] "cobblestone"] [:not-block [12 1 16] "cobblestone"]]
+   :limit-s 320}]}

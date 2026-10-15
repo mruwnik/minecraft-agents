@@ -1,0 +1,25 @@
+;; Card 8e060c59: a body in a tunnel network under ground takes its own way home: go-to walks the tunnel to the foot of its full own stair 34 blocks off
+;; (info go-to.own-way {:take true}) rather than the dead-end stair top beside it or a new stair, and climbs it to the surface.
+;; Stone mass x 2..61, y 0..21 (surface feet y 22); tunnel z 16 from x 4 to x 50 (memory :tunnel-way); a 6-step dead-end stair from x 8 (memory :stair-way);
+;; the full stair from x 38 (feet y 0) to x 60 (feet y 22). The goal is the surface cell [61 22 16].
+;; Should-succeed: arrives, go-to.own-way taken, no go-to.escalated (nothing is cut).
+{:defaults
+ {:tags [:movement :go-to :stairs]
+  :time :any
+  :plot {:length 64 :height 28}
+  :blocks [[:fill [2 0 2] [61 21 29] "stone"] [:fill [4 0 16] [50 1 16] "air"]
+           [:fill [8 0 16] [8 1 16] "air"] [:fill [9 1 16] [9 2 16] "air"] [:fill [10 2 16] [10 3 16] "air"] [:fill [11 3 16] [11 4 16] "air"] [:fill [12 4 16] [12 5 16] "air"] [:fill [13 5 16] [13 6 16] "air"]
+           [:fill [38 0 16] [38 1 16] "air"] [:fill [39 1 16] [39 2 16] "air"] [:fill [40 2 16] [40 3 16] "air"] [:fill [41 3 16] [41 4 16] "air"] [:fill [42 4 16] [42 5 16] "air"] [:fill [43 5 16] [43 6 16] "air"] [:fill [44 6 16] [44 7 16] "air"] [:fill [45 7 16] [45 8 16] "air"] [:fill [46 8 16] [46 9 16] "air"] [:fill [47 9 16] [47 10 16] "air"] [:fill [48 10 16] [48 11 16] "air"] [:fill [49 11 16] [49 12 16] "air"] [:fill [50 12 16] [50 13 16] "air"] [:fill [51 13 16] [51 14 16] "air"] [:fill [52 14 16] [52 15 16] "air"] [:fill [53 15 16] [53 16 16] "air"] [:fill [54 16 16] [54 17 16] "air"] [:fill [55 17 16] [55 18 16] "air"] [:fill [56 18 16] [56 19 16] "air"] [:fill [57 19 16] [57 20 16] "air"] [:fill [58 20 16] [58 21 16] "air"] [:fill [59 21 16] [59 22 16] "air"] [:fill [60 22 16] [60 23 16] "air"]
+           [:set [5 0 15] "torch"]]
+  :memory [{:kind :tunnel-way :data {:dim "overworld" :origin #at [4 0 16] :delta [1 0] :steps 47}}
+           {:kind :stair-way :data {:dim "overworld" :floors [#at [8 0 16] #at [9 1 16] #at [10 2 16] #at [11 3 16] #at [12 4 16] #at [13 5 16]]}}
+           {:kind :stair-way :data {:dim "overworld" :floors [#at [38 0 16] #at [39 1 16] #at [40 2 16] #at [41 3 16] #at [42 4 16] #at [43 5 16] #at [44 6 16] #at [45 7 16] #at [46 8 16] #at [47 9 16] #at [48 10 16] #at [49 11 16] #at [50 12 16] #at [51 13 16] #at [52 14 16] #at [53 15 16] #at [54 16 16] #at [55 17 16] #at [56 18 16] #at [57 19 16] #at [58 20 16] #at [59 21 16] #at [60 22 16]]}}]
+  :body {:at [6.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 240}
+ :cases
+ [{:name "own-long-way-beats-the-dead-end-stair-and-a-new-one"
+   :act [[:job (jobs.movement.go-to {:pos #at [61 22 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.own-way :data {:take true}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 220 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 60}]
+   :after [[:body-near [61.5 22 16.5] 3]]}]}

@@ -86,4 +86,18 @@
    :act [[:job (jobs.farm.plant {:plan "$plan:mine" :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :plant.done :data {:planted 2}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :plant.declined} :for-s 20 :until {:source :job :kind :plant.done}}]
-   :after [[:block [10 0 16] "wheat"] [:block [11 0 16] "wheat"]]}]}
+   :after [[:block [10 0 16] "wheat"] [:block [11 0 16] "wheat"]]}
+  ;; card b22e8b2c: carrots held back by the food reserve (20 carrots) are not "no seed": the run says :food-reserve and fetches nothing
+  {:name "carrots-below-the-food-reserve-say-food-reserve"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
+   :body {:inventory [["carrot" 6]]}
+   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :seed "carrot"})]]
+   :expect [{:event {:source :job :kind :plant.done :data {:reason :food-reserve}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 20}]
+   :after [[:block [10 0 16] "air"] [:item "carrot" 6]]}
+  {:name "carrots-above-the-food-reserve-are-sown"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
+   :body {:inventory [["carrot" 30]]}
+   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :seed "carrot"})]]
+   :expect [{:event {:source :job :kind :plant.done :data {:planted [:>= 3]}} :within-s 60 :of-job true}]
+   :after [[:block [10 0 16] "carrots"]]}]}

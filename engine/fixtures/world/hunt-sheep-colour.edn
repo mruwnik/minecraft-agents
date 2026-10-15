@@ -34,6 +34,7 @@
    :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:0b}"]
          [:job (jobs.items.obtain {:item "white_wool" :count 2 :explore false})]]
    :expect [{:event {:source :job :kind :obtain.wool-source} :within-s 60}
+            {:count-event {:source :job :kind :animal.killed :data {:animal "sheep" :rule :surplus}} :for-s 100 :at-least 2 :at-most 2}
             {:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 100 :of-job true}]
    :after [[:item "white_wool" [:>= 2]] [:entities "type=sheep,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "obtain-white-wool-with-only-brown-sheep-takes-brown"
@@ -56,7 +57,8 @@
          [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:0b}"]
          [:summon "sheep" [22.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [23.5 0 18.5] "{NoAI:1b,Color:0b}"]
          [:job (jobs.animals.cull {:mob "sheep" :color "white" :keep 3 :count 2})]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.animals.cull"}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.animals.cull"}} :within-s 90 :of-job true}
+            {:count-event {:source :job :kind :animal.killed :data {:rule :cull}} :for-s 90 :at-least 2}]
    :after [[:entities "type=sheep,tag=wt,nbt={Color:12b}" [[0 0 0] [31 3 31]] 2]
            [:entities "type=sheep,tag=wt,nbt={Color:0b}" [[0 0 0] [31 3 31]] 2]]}
   {:name "hunt-pig-8-blocks-off-with-keep-0"

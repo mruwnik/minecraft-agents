@@ -1,7 +1,7 @@
 ;; Where a flight on open ground leans and ends. Cards 04d4e8e6 (a goal given up is retried once :goal-off lapses, 30 s),
 ;; 64fbe13b (a goal straight up a column is :steep: no leg to it), 7be9ca17 and 05029ce5 (no step ends within 12 of a recent
 ;; death while other ground is open), 0a13d0b1 (a dry end beats a swim), 5dd53314 (a flight that gains does not turn to the
-;; cornered options). Zombies are helmeted; the chasing ones have AI and slowness so the unarmed body (resistance) gains.
+;; cornered options), 8f903b78 (an end go-to refused as not standable, here the void north of a drop edge, is not retried for the rest of the flight). Zombies are helmeted; the chasing ones have AI and slowness so the unarmed body (resistance) gains.
 {:defaults
  {:tags [:hostile :survival :flee]
   :time :any
@@ -48,4 +48,12 @@
    :act [[:summon "zombie" [6.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:1b,duration:2400}]}"]]
    :expect [{:count-event {:source :job :kind :retreat.target} :for-s 70 :at-least 3}
             {:no-event {:source :job :kind #{:retreat_sealed :retreat_blocked :pillar.done}} :for-s 70}]
-   :limit-s 80}]}
+   :limit-s 80}
+  {:name "refused-end-at-a-drop-edge-is-not-retried"
+   :plot {:height 12}
+   :blocks [[:fill [0 -1 0] [31 -1 12] "air"]]
+   :body {:at [16.5 0 14.5]}
+   :act [[:summon "zombie" [16.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.target} :within-s 20}
+            {:count-event {:source :job :kind :retreat.target} :for-s 40 :at-least 1 :at-most 8}]
+   :limit-s 60}]}

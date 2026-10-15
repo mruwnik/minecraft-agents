@@ -6,6 +6,9 @@
 ;; fetch-false-names-the-short-item: the same plan with :fetch false stops short, naming the item. grass-under-the-floor-says-short:
 ;; a cobblestone cell holds grass, no cobblestone carried, :fetch false: build.wrong says "needs cobblestone (short)", the grass stays;
 ;; with a seen chest of cobblestone the default fetch brings it, the grass is dug and cobblestone placed.
+;; air-want-clears-the-cell (cards 8a7774d1): a cell wanted "air" holding stone is dug, "air" is never fetched; the job completes with nothing missing.
+;; any-want-uses-what-is-carried (93b3dba5): a part wanting [:any cobblestone granite dirt] is built from granite carried, never fetching cobblestone;
+;; with none of them carried the first listed is fetched. in-a-pit-walks-out-and-places (8a7774d1, cd5a0d81): a body 3 deep in a pit (as after a dirt dig) escalates out of it to reach its stands, instead of idling.
 {:defaults
  {:tags [:build :fetch] :time :any
   :plot {:height 8}
@@ -56,4 +59,47 @@
          [:job (jobs.build.from-plan {:plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :fetch.done} :within-s 80 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 130 :of-job true}]
-   :after [[:block [18 -1 16] "cobblestone"]]}]}
+   :after [[:block [18 -1 16] "cobblestone"]]}
+  {:name "air-want-clears-the-cell"
+   :blocks [[:set [20 0 16] "stone"] [:set [20 0 17] "stone"]]
+   :body {:inventory [["iron_pickaxe" 1] ["dirt" 4]]}
+   :plans [{:id "door" :metadata {:by "$body"}
+            :parts [{:id "gap" :cells [#at [20 0 16] #at [20 0 17]] :want "air"}
+                    {:id "wall" :cells [#at [20 0 15]] :want "dirt"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:door"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 20}]
+   :after [[:not-block [20 0 16] "stone"] [:not-block [20 0 17] "stone"] [:block [20 0 15] "dirt"]]
+   :limit-s 120}
+  {:name "in-a-pit-walks-out-and-places"
+   :plot {:height 8 :floor "stone"}
+   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 0 16] [16 2 16] "air"]]
+   :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1] ["dirt" 4]]}
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [10 3 10] #at [11 3 10]] :want "dirt"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 120 :of-job true}]
+   :after [[:block [10 3 10] "dirt"] [:block [11 3 10] "dirt"]]
+   :limit-s 150}
+  {:name "any-want-uses-what-is-carried"
+   :body {:inventory [["cobblestone" 2] ["granite" 20] ["dirt" 20]]}
+   :plans [{:id "ramp" :metadata {:by "$body"} :parts [{:id "r" :cells [#at [20 0 14] #at [21 0 14] #at [22 0 14] #at [23 0 14] #at [24 0 14]] :want [:any "cobblestone" "granite" "dirt"]}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:ramp"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 20}]
+   :after [[:not-block [20 0 14] "air"] [:not-block [24 0 14] "air"]]
+   :limit-s 120}
+  {:name "any-want-with-none-carried-fetches-the-first-listed"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
+   :plans [{:id "ramp" :metadata {:by "$body"} :parts [{:id "r" :cells [#at [20 0 14] #at [21 0 14]] :want [:any "cobblestone" "granite" "dirt"]}]}]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.build.from-plan {:plan "$plan:ramp"})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 40 :of-job true}
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 130 :of-job true}]
+   :after [[:block [20 0 14] "cobblestone"]]}
+  ;; card a8b2455b: a from-plan check that cannot pass waits with its reason, a few events at most, not a warning each tick (farm.tend: farm-tend-zones.edn keeps tend waiting :nothing-to-do)
+  {:name "unmet-need-waits-without-warning-each-tick"
+   :plans [{:id "gold" :metadata {:by "$body"} :parts [{:id "g" :cells [#at [22 0 16]] :want "gold_block"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:gold" :fetch false})]]
+   :expect [{:event {:source :job :kind #{:waiting :stopped}} :within-s 30 :of-job true}
+            {:count-event {:source :job :level :warn} :for-s 25 :at-most 3}]
+   :limit-s 40}]}

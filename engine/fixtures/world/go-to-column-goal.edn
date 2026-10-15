@@ -64,4 +64,12 @@
    :blocks [[:fill [40 -1 0] [50 -1 31] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [70 16] :range 0})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 140 :of-job true}]
-   :after [[:body-far [70.5 0 16.5] 10]]}]}
+   :after [[:body-far [70.5 0 16.5] 10]]}
+  {:name "hill-with-a-cave-below-arrives-on-the-surface"
+   ;; card f77bb797 (0511f2d7, 234b3eda6): a column goal over a hill whose inside holds an unseen cave (mouth in its west face) aims at the hill's top,
+   ;; not at the cave floor nearest the feet; the body walks the ramp and arrives on the surface (feet y 6)
+   :blocks [[:fill [14 0 8] [14 0 24] "stone"] [:fill [15 0 8] [15 1 24] "stone"] [:fill [16 0 8] [16 2 24] "stone"] [:fill [17 0 8] [17 3 24] "stone"] [:fill [18 0 8] [18 4 24] "stone"] [:fill [19 0 8] [19 5 24] "stone"]
+            [:fill [20 0 8] [40 5 24] "stone"] [:fill [22 0 14] [36 2 18] "air"] [:fill [20 0 16] [21 1 16] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [30 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 120 :of-job true}]
+   :after [[:body-near [30.5 6 16.5] 2.5]]}]}

@@ -1,0 +1,17 @@
+;; Card cc908e11 (39a4925a): a hungry body shut in a hut with nothing to eat does not fire the hungry reflex every second: get-food finds nothing,
+;; so the trigger's default backoff (:first-s 120) holds it, and the body stays in. Hut: stone x 8..16, z 8..16, roof y 3; hp 6, food 8 (hunger effect, then damage).
+;; Should-fail: more than two hungry firings in the first 100 s, or the body leaving the hut.
+{:defaults
+ {:tags [:survival :hungry :night] :time :any
+  :plot {:height 8}
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+  :body {:at [13.5 0 13.5] :settle-s 2}
+  :limit-s 130}
+ :cases
+ [{:name "hungry-in-a-hut-with-no-food-fires-once-then-rests"
+   :register [{:trigger :hungry}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 7]
+         [:rcon "damage $BODY 14 minecraft:generic"] [:wait-s 100]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 100 :at-least 1 :at-most 2}]
+   :after [[:body-near [13.5 0 13.5] 4]]}]}

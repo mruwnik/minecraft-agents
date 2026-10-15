@@ -1,0 +1,28 @@
+;; Card bf0348c9: jobs.food.fish casts a carried rod from the bank at seen water 2 deep and reels fish in (fish.caught, the fish in the bag);
+;; with no rod and :fetch false it waits :no-rod, with only 1-deep water :no-water, and neither casts. Pond x 12..20, z 10..22 in a stone block
+;; (water y -2..-1, flush with the floor), the body on the bank at x 8.5. Bites are random: the catching case allows 170 s for one fish.
+{:defaults
+ {:tags [:food :fish :jobs]
+  :time :day
+  :plot {:height 6}
+  :blocks [[:fill [10 -4 8] [22 -1 24] "stone"] [:fill [12 -2 10] [20 -1 22] "water"]]
+  :body {:at [8.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "rod-from-the-bank-catches-a-fish"
+   :body {:inventory [["fishing_rod" 1]]}
+   :act [[:job (jobs.food.fish {:count 1})]]
+   :expect [{:event {:source :job :kind :fish.caught} :within-s 170 :of-job true}
+            {:event {:source :job :kind :completed :data {:name "jobs.food.fish"}} :within-s 175 :of-job true}]
+   :after [[:item "fishing_rod" 1]]
+   :limit-s 185}
+  {:name "no-rod-and-no-fetch-waits-no-rod"
+   :act [[:job (jobs.food.fish {:count 1 :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-rod}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :fish.caught} :for-s 30}]}
+  {:name "one-deep-water-waits-no-water"
+   :blocks [[:fill [12 -2 10] [20 -2 22] "stone"]]
+   :body {:inventory [["fishing_rod" 1]]}
+   :act [[:job (jobs.food.fish {:count 1})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-water}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :fish.caught} :for-s 30}]}]}
