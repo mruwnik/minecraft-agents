@@ -9,12 +9,15 @@
 ;; ---- the view cone
 
 (defn grid
-  "{:cols :rows :hx :hy}: the ray grid over the view plane, tangent half-extents hx (horizontal) and hy."
-  [{:keys [fov aspect ray-deg]}]
-  (let [hy (js/Math.tan (/ (* fov js/Math.PI) 360))
-        hx (* hy aspect)
-        spacing (js/Math.tan (/ (* ray-deg js/Math.PI) 180))]
-    {:hx hx :hy hy :cols (js/Math.ceil (/ (* 2 hx) spacing)) :rows (js/Math.ceil (/ (* 2 hy) spacing))}))
+  "{:cols :rows :hx :hy}: the ray grid over the view plane, tangent half-extents hx (horizontal) and hy. At effort e
+  (0-1, default 1) the grid keeps the share effort-min + (1 - effort-min) e of the rays of a ray-deg grid."
+  ([opts] (grid opts 1))
+  ([{:keys [fov aspect ray-deg effort-min]} effort]
+   (let [hy (js/Math.tan (/ (* fov js/Math.PI) 360))
+         hx (* hy aspect)
+         share (+ effort-min (* (- 1 effort-min) (max 0 (min 1 effort))))
+         spacing (js/Math.tan (/ (* (/ ray-deg (js/Math.sqrt share)) js/Math.PI) 180))]
+     {:hx hx :hy hy :cols (js/Math.ceil (/ (* 2 hx) spacing)) :rows (js/Math.ceil (/ (* 2 hy) spacing))})))
 
 (defn basis
   "Forward, right and up of a mineflayer look (yaw 0 faces -z, pitch up positive), as a flat array of 9."
@@ -32,7 +35,29 @@
          (<= (js/Math.abs (+ (* vx (aget b 6)) (* vy (aget b 7)) (* vz (aget b 8)))) (* hy f)))))
 
 (defn steps-per-pass [{:keys [opts]}] (max 1 (js/Math.round (/ (:pass-ms opts) (:step-ms opts)))))
-(defn rays-per-pass [{:keys [grid]}] (* (:cols grid) (:rows grid)))
+(defn rays-per-pass
+  "The rays of the last pass started (grid and ground rows), else of a full-effort grid."
+  [{:keys [grid st]}]
+  (or (.-passRays ^js st) (* (:cols grid) (:rows grid))))
+
+(defn ground-rays
+  "The ground rows of a pass from an eye at yaw and pitch: for each ground distance d from ground-from (plus jy) to
+  ground-to, a row of rays ground-across blocks apart (offset by jx) at the ground eye-height below the eye, kept when
+  inside the view cone. A flat [d l ...] array (forward, sideways, in blocks): far ground at a grazing angle falls
+  between grid rays, a row per block of distance does not."
+  [{:keys [ground-from ground-to ground-across]} hx hy yaw pitch jx jy]
+  (let [b (basis yaw pitch)
+        fx (- (js/Math.sin yaw)) fz (- (js/Math.cos yaw)) rx (js/Math.cos yaw) rz (- (js/Math.sin yaw))
+        out #js []]
+    (loop [d (+ ground-from jy)]
+      (when (< d ground-to)
+        (let [k (js/Math.ceil (/ (* hx (+ d game/eye-height)) ground-across))]
+          (doseq [i (range (- k) (inc k))]
+            (let [l (* ground-across (+ i jx))]
+              (when (in-cone? b hx hy (+ (* d fx) (* l rx)) (- game/eye-height) (+ (* d fz) (* l rz)))
+                (.push out d l)))))
+        (recur (inc d))))
+    out))
 
 (defn sight-of
   "The sight table, or nil while the raw world has none yet (no registry): an empty table is never kept."
@@ -151,38 +176,55 @@
              (not= (.-near last) (near-of per))))))
 
 (defn start-pass!
-  "Starts a pass, unless the sight table is not ready yet (the next step tries again)."
-  [{:keys [raw opts] :as per} ^js st ^js eye now]
+  "Starts a pass at effort (0-1: the share of grid rays, see grid; the opts' :effort when nil), unless the sight table
+  is not ready yet (the next step tries again)."
+  [{:keys [raw opts] :as per} ^js st ^js eye now effort]
   (when (sight-of per st)
     (set! (.-visible st) (table-now raw (:seeing-min opts)))
     (set! (.-lastStart st) #js {:at now :eye eye :epoch (epoch-of raw) :darken (darken-now raw) :near (near-of per)})
-    (set! (.-pass st) #js {:next 0 :jx ((:rand opts)) :jy ((:rand opts))})))
+    (let [{:keys [cols rows hx hy]} (grid opts (or effort (:effort opts)))
+          jx ((:rand opts)) jy ((:rand opts))
+          ground (ground-rays opts hx hy (.-yaw eye) (.-pitch eye) jx jy)]
+      (set! (.-pass st) #js {:next 0 :jx jx :jy jy :cols cols :rows rows :ground ground
+                             :total (+ (* cols rows) (/ (.-length ground) 2))})
+      (set! (.-passRays st) (.-total (.-pass st))))))
 
 (defn cast-slice!
-  "Casts rays [from, to) of the pass from the eye's current place and look."
+  "Casts rays [from, to) of the pass from the eye's current place and look: the grid, then the ground rows (along the
+  eye's yaw now, and only those still inside the view cone)."
   [{:keys [grid] :as per} ^js st ^js pass ^js eye from to now]
-  (let [{:keys [cols rows hx hy]} grid
-        b (basis (.-yaw eye) (.-pitch eye))
+  (let [{:keys [hx hy]} grid
+        cols (.-cols pass) n-grid (* cols (.-rows pass))
+        ^js ground (.-ground pass)
+        yaw (.-yaw eye)
+        b (basis yaw (.-pitch eye))
+        fx (- (js/Math.sin yaw)) fz (- (js/Math.cos yaw)) rx (js/Math.cos yaw) rz (- (js/Math.sin yaw))
         store (store-of st (.-dimension eye))
         ox (.-x eye) oy (.-y eye) oz (.-z eye)
-        du (/ (* 2 hx) cols) dv (/ (* 2 hy) rows)]
+        du (/ (* 2 hx) cols) dv (/ (* 2 hy) (.-rows pass))
+        cast-dir (fn [dx dy dz]
+                   (let [len (js/Math.hypot dx dy dz)]
+                     (cast! per st store ox oy oz (/ dx len) (/ dy len) (/ dz len) now)))]
     (set! (.-near st) (near-of per))
     (loop [k from cells 0]
-      (if (>= k to)
-        cells
+      (cond
+        (>= k to) cells
+        (< k n-grid)
         (let [a (+ (- hx) (* du (+ (mod k cols) (.-jx pass))))
-              v (+ (- hy) (* dv (+ (js/Math.floor (/ k cols)) (.-jy pass))))
-              dx (+ (aget b 0) (* a (aget b 3)) (* v (aget b 6)))
-              dy (+ (aget b 1) (* v (aget b 7)))
-              dz (+ (aget b 2) (* a (aget b 5)) (* v (aget b 8)))
-              len (js/Math.hypot dx dy dz)]
-          (recur (inc k) (+ cells (cast! per st store ox oy oz (/ dx len) (/ dy len) (/ dz len) now))))))))
+              v (+ (- hy) (* dv (+ (js/Math.floor (/ k cols)) (.-jy pass))))]
+          (recur (inc k) (+ cells (cast-dir (+ (aget b 0) (* a (aget b 3)) (* v (aget b 6)))
+                                            (+ (aget b 1) (* v (aget b 7)))
+                                            (+ (aget b 2) (* a (aget b 5)) (* v (aget b 8)))))))
+        :else
+        (let [i (* 2 (- k n-grid)) d (aget ground i) l (aget ground (inc i))
+              dx (+ (* d fx) (* l rx)) dy (- game/eye-height) dz (+ (* d fz) (* l rz))]
+          (recur (inc k) (if (in-cone? b hx hy dx dy dz) (+ cells (cast-dir dx dy dz)) cells)))))))
 
 (defn step!
   "One slice of the sight pass (one game tick's share). Starts a new pass when none runs and the eye moved, turned or
   idled long enough. While offline (no eye) it casts nothing and drops the pass in flight."
-  ([per] (step! per false))
-  ([{:keys [raw opts st] :as per} force?]
+  ([per] (step! per false nil))
+  ([{:keys [raw opts st] :as per} force? effort]
    (let [^js st st
          ^js eye (.eye ^js raw)
          now ((:now opts))
@@ -195,9 +237,9 @@
                       (nil? (.-lastStart st))
                       (idle-due? per (.-lastStart st) now)
                       (moved? per (.-eye (.-lastStart st)) eye)))
-         (start-pass! per st eye now))
+         (start-pass! per st eye now effort))
        (when-let [^js pass (.-pass st)]
-         (let [total (rays-per-pass per)
+         (let [total (.-total pass)
                from (.-next pass)
                to (min total (+ from (js/Math.ceil (/ total (steps-per-pass per)))))
                cells (cast-slice! per st pass eye from to now)]
@@ -218,13 +260,15 @@
        (set! (.-lastStart st) nil)))))
 
 (defn pass!
-  "A whole sight pass from the eye as it is now (tests, and a forced look). A pass in flight is dropped, not finished: this one covers the whole cone."
-  [{:keys [st] :as per}]
+  "A whole sight pass from the eye as it is now (tests, and a forced look), at {:effort} (0-1, default the opts' :effort).
+  A pass in flight is dropped, not finished: this one covers the whole cone."
+  ([per] (pass! per nil))
+  ([{:keys [st] :as per} {:keys [effort]}]
   (let [^js st st]
     (set! (.-pass st) nil)
     (when (.eye ^js (:raw per))
-      (step! per true)
-      (while (.-pass st) (step! per)))))
+      (step! per true effort)
+      (while (.-pass st) (step! per))))))
 
 ;; ---- block changes and touch
 

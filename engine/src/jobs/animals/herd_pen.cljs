@@ -284,13 +284,32 @@
       (refuse :too-shallow {:cell in :depth (depth (:inside answer) (cell gate) in) :need min-depth})
       :else {:chosen chosen})))
 
-(defn survey-pen!
-  "The pen is read in full: choose the gate and go to the leash phase, or end with the reason."
+(defn unseen-approach
+  "A cell of the approach cell that refused the gate (its floor, feet or head) the body has never seen and not yet
+  looked at, or nil."
+  [c extra]
+  (when (= :no-approach (:why extra))
+    (->> [-1 0 1]
+         (map #(update (vec (:cell extra)) 1 + %))
+         (remove (set (:looked-pen (ctx/mem c))))
+         (filter #(sense/unknown? (:primitives c) %))
+         first)))
+
+(defn ^:async survey-pen!
+  "The pen is read in full: choose the gate and go to the leash phase, or end with the reason. An approach cell never
+  seen is looked at first."
   [c answer]
   (let [{:keys [refuse extra chosen]} (verdict c answer)
-        {:keys [gate in out]} chosen]
-    (if refuse
+        {:keys [gate in out]} chosen
+        unseen (when refuse (unseen-approach c extra))]
+    (cond
+      unseen
+      (do (await (sense/look-at! c unseen))
+          (ctx/update-mem! c update :looked-pen (fnil conj []) unseen)
+          :continue)
+      refuse
       (finish! c refuse extra)
+      :else
       (do (ctx/update-mem! c assoc :phase :leash :in-pen-start (mapv animals/key-of (in-pen-adults c answer)) :gate gate :inside-cell (u/cell-pos in) :outside-cell (u/cell-pos out)
                            :axis (axis (:primitives c) (:inside answer) (cell gate) in out (depth (:inside answer) (cell gate) in)))
           :continue))))
@@ -317,7 +336,7 @@
       (let [answer (await (pen-read/read! c (pen-opts c) #(= :unloaded (:reason %))))]
         (if (= :unloaded (:reason answer))
           (await (check-unknown! c answer))
-          (survey-pen! c answer))))))
+          (await (survey-pen! c answer)))))))
 
 (declare go!)
 

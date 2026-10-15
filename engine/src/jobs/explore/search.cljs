@@ -266,7 +266,7 @@
   (let [{:keys [scan-radius seen-ttl-s entity-ttl-s searched-ttl-s] want :count} (:args c)
         seen #(vec (takeable c (sense (:primitives c) names scan-radius)))
         _ (when (< (count (add-found (:found (ctx/mem c) []) (seen) want)) want)
-            (when-not (await (look/survey! c :near)) (look/see! c)))
+            (when-not (await (look/survey! c :near (look/search-effort))) (look/see! c (look/search-effort))))
         sighted (seen)
         [x y z] (here c)
         [ox _ oz] (:origin (ctx/mem c))]

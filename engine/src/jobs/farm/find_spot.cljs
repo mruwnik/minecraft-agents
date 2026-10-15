@@ -231,7 +231,7 @@
   [c]
   (let [a (merge (into {} (map (fn [[k v]] [k (:default v)])) args) (:args c))
         found (if (water-unseen? c a)
-                (do (await (look/survey! c)) :again)
+                (do (await (look/survey! c :run (look/search-effort))) :again)
                 (or (:spots (ctx/mem c)) (scan-step! c a)))]
     (cond
       (= :again found) :again

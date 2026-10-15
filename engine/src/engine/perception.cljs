@@ -11,6 +11,9 @@
     Light rule: vanilla's lightmap brightness `seeing` of the cell's light is at least 0.2, or the cell is within 2 blocks.
     A sight-blocking cell is lit by the brighter of itself and the cell the ray came from.
     A dark cell is not recorded and the ray goes on, so a lit room is seen across a dark gap.
+    Ground rows: besides the grid, one row of rays per block of ground distance from `:ground-from` (8) to `:ground-to`
+    (32), aimed at the ground an eye height below the eye, `:ground-across` (0.7) blocks apart, inside the cone only.
+    `:effort` (0-1) scales the grid: a pass casts effort-min (0.15) to all of a `:ray-deg` grid; ground rows always.
     A pass is spread over `:pass-ms` (1.5 s) in slices of `:step-ms` (one game tick).
     A new pass starts when the eye moved or turned, every `:idle-ms` if the world changed (a block or chunk update, the
     daylight, a torch in hand), else every `:still-ms`.
@@ -83,6 +86,11 @@
    :engine.perception/fov {:default 70 :spec (a/num-in 1 nil) :doc "Vertical field of view, degrees (vanilla's default)."}
    :engine.perception/aspect {:default (/ 16 9) :spec (a/num-in 0.1 nil) :doc "Width over height of the view."}
    :engine.perception/ray-deg {:default 1 :spec (a/num-in 0.1 nil) :doc "Ray spacing at the centre of the view, degrees."}
+   :engine.perception/effort {:default 1 :spec (a/num-in 0 1) :doc "How hard the body's own passes look, 0-1: the share of grid rays between effort-min and all."}
+   :engine.perception/effort-min {:default 0.15 :spec (a/num-in 0.01 1) :doc "The share of grid rays a pass at effort 0 casts."}
+   :engine.perception/ground-from {:default 8 :spec (a/num-in 0 nil) :doc "Ground rows start this many blocks ahead."}
+   :engine.perception/ground-to {:default 32 :spec (a/num-in 0 nil) :doc "Ground rows end this many blocks ahead."}
+   :engine.perception/ground-across {:default 0.7 :spec (a/num-in 0.1 nil) :doc "Blocks between the rays of a ground row."}
    :engine.perception/pass-ms {:default 1500 :spec (a/int-in 1 nil) :doc "How long one looking pass may take, ms of wall clock."}
    :engine.perception/step-ms {:default 50 :spec (a/int-in 1 nil) :doc "How long one looking step may take, ms of wall clock."}
    :engine.perception/idle-ms {:default 3000 :spec (a/int-in 1 nil) :doc "A still body looks again this often when the world around it changed, ms."}
@@ -122,7 +130,7 @@
      :grid g
      :st #js {:stores (js/Map.) :count 0 :cap (max 1 (js/Math.floor (/ (:cap-bytes o) store/section-bytes)))
               :stamp 0 :lastKey -1 :lastSec nil :dim "overworld" :sight nil :visible nil
-              :pass nil :lastStart nil :unsubscribe nil
+              :pass nil :passRays nil :lastStart nil :unsubscribe nil
               :mobs (js/Map.) :mobSource nil
               :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.)
               :passes 0 :rays 0 :cells 0 :steps 0 :stepMs 0 :stepMsMax 0}}))

@@ -54,12 +54,13 @@
 (defn unknown? [p [x y z]] (true? (some-> (u/sensed p {:x x :y y :z z}) .-unknown)))
 
 (defn ^:async look-at!
-  "Turn to cell's centre and take a whole sight pass, again while the cell is still unknown, at most (passes)."
+  "Turn to cell's centre and take a whole sight pass at search effort, again while the cell is still unknown, at most
+  (passes)."
   [c [x y z :as cell]]
   (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))
   (loop [n 0]
     (when (< n (passes))
-      (look/see! c)
+      (look/see! c (look/search-effort))
       (when (unknown? (:primitives c) cell) (recur (inc n))))))
 
 (defn ^:async look-at-unknown!

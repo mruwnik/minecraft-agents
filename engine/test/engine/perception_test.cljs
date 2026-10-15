@@ -467,3 +467,36 @@
     (let [rows (perception/seen-blocks per {:names ["gold_block"] :radius 20 :max 3})]
       (is (= [0 65 4] (:pos (first rows))))
       (is (= #{[-1 65 4] [1 65 4]} (set (map :pos (rest rows))))))))
+
+;; ---- ground rows: far ground at a grazing angle is seen in one pass, at every jitter and every effort
+
+(def jitters (map #(/ % 20) (range 20)))
+
+(defn seen-in-one-pass
+  "For each jitter, whether one pass at effort sees any of cells (state names seen, or nil)."
+  [blocks effort cells]
+  (vec (for [j jitters]
+         (let [{:keys [per]} (rig blocks {:rand (constantly j)})]
+           (perception/pass! per {:effort effort})
+           (boolean (some #(seen-name per %) cells))))))
+
+(def pond-cells (for [x [-1 0 1] z [23 24 25]] [x 63 z]))
+
+(def pond-world
+  (merge (tu/floor -20 0 20 40) (tu/floor 62 -2 22 2 26)
+         (into {} (map (fn [[x y z]] [(str x "," y "," z) "water"])) pond-cells)))
+
+(deftest a-three-wide-pond-23-blocks-out-is-seen-in-one-pass-at-every-jitter-and-effort
+  (is (= (repeat 20 true) (seen-in-one-pass pond-world 0 pond-cells)))
+  (is (= (repeat 20 true) (seen-in-one-pass pond-world 1 pond-cells))))
+
+(deftest ground-rows-see-nothing-behind-a-wall
+  (let [blocks (merge (tu/floor -20 0 20 40) (tu/box -8 64 12 8 67 12 "stone") {"0,63,20" "gold_block"})]
+    (is (= (repeat 20 false) (seen-in-one-pass blocks 1 [[0 63 20]])))))
+
+(deftest a-lower-effort-casts-fewer-rays
+  (let [rays (fn [effort]
+               (let [{:keys [per]} (rig (tu/floor -20 0 20 40) {:rand (constantly 0.5)})]
+                 (perception/pass! per {:effort effort})
+                 (:rays (perception/stats per))))]
+    (is (< (rays 0) (rays 0.5) (rays 1)))))

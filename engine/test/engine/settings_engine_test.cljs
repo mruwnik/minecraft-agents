@@ -44,7 +44,9 @@
 (def all-specs (apply merge (vals families)))
 
 (deftest every-moved-value-keeps-its-old-default
-  (is (= defaults-then (into {} (map (fn [[k spec]] [k (:default spec)])) (dissoc all-specs :engine.perception/save-ms :engine.backoff/progress :engine.backoff/neutral)))))
+  (is (= defaults-then (into {} (map (fn [[k spec]] [k (:default spec)])) (dissoc all-specs :engine.perception/save-ms :engine.backoff/progress :engine.backoff/neutral
+                        :engine.perception/effort :engine.perception/effort-min :engine.perception/ground-from
+                        :engine.perception/ground-to :engine.perception/ground-across)))))
 
 (deftest every-key-is-declared-in-its-own-family-namespace-and-documented
   (doseq [[k spec] all-specs]

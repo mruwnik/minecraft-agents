@@ -41,4 +41,4 @@
         (if (= :partial r)
           :partial
           (do (ctx/update-mem! c assoc-in [:vantage :steps] (inc steps))
-              (if (await (look/look-around-until! c f)) :found :next)))))))
+              (if (await (look/look-around-until! c f (look/search-effort))) :found :next)))))))
