@@ -20,22 +20,22 @@
   Impossible: :bad-args. Condition: :not-aboard (on foot: a listed call waits; jobs.movement.boat-launch puts the body in a boat).
   Ends done (data {:pos {:x :y :z} :strokes n}), info boat.driven, or
   condition-failed: :not-aboard (got out on the way), :not-a-boat (another vehicle), :not-water (the cell is not water), or
-  nothing-possible: :blocked (land in the way: two forward strokes in a row that could not move), :strokes (:max-strokes used up),
+  nothing-possible: :blocked (land in the way: two forward strokes in a row that could not move), :strokes (the max-strokes setting used up),
   :failed (any other paddle status, data :primitive); limit-reached :job-time (the call's :spend :job-time used up, data the distance left).
 
   Never :continue.")
 
 (a/defargs args
   {:pos {:doc "the water cell to steer to, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
-   :range {:doc "done when the boat is within this many blocks (horizontally) of the middle of the cell" :spec (a/num-in 0 nil) :default 1.5}
-   :max-strokes {:doc "strokes before giving up" :spec (a/int-in 1 nil) :default 80}})
+   :range {:doc "done when the boat is within this many blocks (horizontally) of the middle of the cell" :spec (a/num-in 0 nil) :default 1.5}})
 
 (def target [:pos])
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds a drive may take before it gives up." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 120 :doc "Seconds a drive may take before it gives up." :spec (a/num-in 0 nil)}
+   ::max-strokes {:default 80 :doc "Strokes a drive may take before it gives up." :spec (a/int-in 1 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def aligned-deg 8)
@@ -106,7 +106,8 @@
 
 (defn ^:async drive! [c]
   (let [p (:primitives c)
-        {:keys [range max-strokes]} (:args c)
+        {:keys [range]} (:args c)
+        max-strokes (settings/get settings ::max-strokes)
         cell (cell-of-call c)
         goal (some-> cell centre-of)
         stop! (fn [kind reason & [data]] (ctx/end c kind reason data))]

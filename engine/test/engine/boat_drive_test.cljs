@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.library-test :as lt]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.movement.boat-drive :as boat-drive]))
 
@@ -56,10 +57,18 @@
                 [["not a boat" {:blocks lake :entities [(boat-at 2.5 2.5 :name "minecart")] :self {:vehicle 9}} {:pos [10 63 2]} :not-a-boat]
                  ["the cell is not water" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [10 64 2]} :not-water]
                  ["land in the way" {:blocks (merge (pond 0 10 0 3) (pond 0 10 8 12)) :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [5 63 10]} :blocked]
-                 ["out of strokes" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18] :max-strokes 2} :strokes]
                  ["out of time" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18] :spend {:job-time 0}} :job-time]]]
           (let [{:keys [res]} (await (run world args))]
             (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
+
+(deftest the-strokes-setting-bounds-the-drive
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings {:jobs.movement.boat-drive/max-strokes 2}
+                 (fn ^:async few-strokes []
+                   (let [{:keys [res]} (await (run {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18]}))]
+                     (is (= {:status :stopped :reason :strokes} (select-keys res [:status :reason])) (pr-str res))))))))))
 
 (deftest on-foot-fails-its-condition-not-aboard
   (async done
