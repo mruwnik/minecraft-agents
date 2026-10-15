@@ -107,7 +107,7 @@
   \"via shaft s (stair 54 steps to y 16), branch 2 north 32 blocks\".
 
   Strip tunnel: a 1-wide 2-high straight run at the level the body stood on at the start, along :heading or :direction
-  (north, south, east, west or n/s/e/w; give :heading to choose it, else the way the body faces), at most :tunnel-length blocks per job; it starts past cells of the line already open (info
+  (north, south, east, west or n/s/e/w; give :heading to choose it, else the way the body faces), at most :tunnel-length blocks per job; it starts past open cells of the line the body cut itself (info
   mine.tunnel-skipped, also down a stair to a floor) and never digs a torch. 0 means no tunnel: then no
   target ends :wet when a seen block was rejected only for water, else :none. Each step walks back onto the last
   cell of the run (a go-to child; failing: :walk-failed) and cuts the next by a jobs.access.stair child of one :level
