@@ -1,0 +1,39 @@
+;; Cards e30a76c6 (look :useful?), b1b8ded6 + a66e45de (search outward legs, default :max-legs, :distance ending), a5dc9f4a (obtain.exploring notice).
+;; Flat grass plot 64 x 32, body at [8.5 0 16.5] facing east (yaw 270). The look cases put a crafting table 3 east and a furnace 5 south-east
+;; in view: :useful? lists the table first (nearest) and refuses :block-names together with :useful?.
+{:defaults
+ {:tags [:explore :sensing :jobs] :time :day
+  :plot {:height 8 :floor "grass_block" :length 64 :width 32}
+  :body {:at [8.5 0 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "look-useful-lists-table-then-furnace"
+   :blocks [[:set [11 0 16] "crafting_table"] [:set [13 0 20] "furnace"]]
+   :act [[:wait-s 3] [:job (jobs.explore.look {:useful? true :radius 32 :max-blocks 16})]]
+   :expect [{:event {:source :job :kind :look.observed :data {:blocks [{:name "crafting_table"} {:name "furnace"}]}} :within-s 30 :of-job true}]}
+  {:name "look-useful-with-block-names-refused"
+   :act [[:wait-s 2] [:job (jobs.explore.look {:useful? true :block-names ["iron_ore"] :radius 16})]]
+   :expect [{:event {:source :job :kind :look.refused :data {:reason :bad-args}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :look.observed} :for-s 10}]}
+  {:name "search-default-max-legs-reaches-a-far-target"
+   :blocks [[:set [56 0 16] "emerald_block"]]
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
+                                     :use-notes false :max-distance 60 :timeout-s 150})]]
+   :expect [{:event {:source :job :kind :search.done :data {:reason :found}} :within-s 160 :of-job true}
+            {:no-event {:source :job :kind :search.not-found} :for-s 160 :until {:source :job :kind :search.done}}]
+   :limit-s 170}
+  {:name "search-with-nothing-ends-distance-not-legs"
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 6 :scan-radius 8
+                                     :use-notes false :max-distance 14 :timeout-s 100})]]
+   :expect [{:event {:source :job :kind :search.not-found :data {:why :distance}} :within-s 110 :of-job true}
+            {:no-event {:source :job :kind :search.done} :for-s 110 :until {:source :job :kind :search.not-found}}]
+   :limit-s 120}
+  {:name "get-tool-announces-its-walk-to-look-for-logs"
+   :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :obtain.exploring :data {:attention :notice :for [:any] :max-distance [:any]}} :within-s 40 :of-job true}]
+   :limit-s 60}
+  {:name "get-tool-without-explore-gives-no-notice"
+   :act [[:job (jobs.items.get-tool {:kind "pickaxe" :explore false})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :obtain.exploring} :for-s 40}]
+   :limit-s 60}]}
