@@ -337,13 +337,20 @@
       (and ended (> ended (:t e))) pos
       (let [n (u/seen-name p pos)] (and n (not (.endsWith n "_bed")))) pos)))
 
+(defn seen-not-bed?
+  "Whether the block at pos is seen and is no bed."
+  [p pos]
+  (let [n (u/seen-name p pos)]
+    (and (some? n) (not (.endsWith n "_bed")))))
+
 (defn known-beds
   "The remembered :bed place and the live :spawn-bed (unless its block is seen not a bed), at any distance, nearest first."
   [p view]
   (let [me (u/self-pos {:primitives p})
         spawn (:pos (:data (spawn-bed-live view)))
-        spawn-ok? (or (nil? spawn) (let [n (u/seen-name p spawn)] (or (nil? n) (.endsWith n "_bed"))))]
-    (->> [(mem/place view :bed) (when spawn-ok? spawn)]
+        place (mem/place view :bed)
+        ok? #(or (nil? %) (not (seen-not-bed? p %)))]
+    (->> [(when (ok? place) place) (when (ok? spawn) spawn)]
          (filter some?)
          distinct
          (sort-by #(u/dist me %)))))

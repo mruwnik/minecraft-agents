@@ -1008,7 +1008,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor :entities [awake]
+        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks (merge floor {"6,64,0" "red_bed"}) :entities [awake]
                                            :unreachable ["6,64,0"]})]
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})

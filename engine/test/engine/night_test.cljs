@@ -158,6 +158,18 @@
 
 ;; ------------------------------------------------------------------ job: beds
 
+(deftest a-remembered-bed-seen-gone-is-retracted-before-any-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
+          (st/know-bed! eng {:x 6 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 3))
+          (is (nil? (mem/place (mem/view (:store eng)) :bed)) "no longer a known place")
+          (is (= 1 (count (st/emitted seen :bed_missing))))
+          (is (empty? (filterv #(and (= :child_started (:kind %)) (= :go (:slot %))) @seen)) "never walked there"))))))
+
 (deftest the-night-digs-in-beside-an-open-bed-instead-of-sleeping-in-it
   (async done
     (tu/run-async done
@@ -167,7 +179,9 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 40))
           (is (empty? (st/calls p "sleep")) "an unwalled, unroofed bed is no place to lie")
-          (is (re-find #"bed is open, dug in beside it" (str (:text (first (st/emitted seen :shelter.bed_open))))))
+          (is (not (re-find #"dug in" (str (:text (first (st/emitted seen :shelter.bed_open)))))) "said before any dig")
+          (is (= 1 (count (st/emitted seen :shelter.bed_open))) "the open bed is judged once")
+          (is (= 1 (count (filterv #(and (= :child_started (:kind %)) (= :sleep (:slot %))) @seen))) "one sleep call for it")
           (is (<= (Math/abs (- 20 (:x (st/pos-of p)))) 3) "the body dug in beside the bed"))))))
 
 (deftest after-a-far-flight-the-night-takes-a-bed-beyond-the-usual-radius
@@ -185,7 +199,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
+        (let [{:keys [eng seen]} (st/setup {:time night :inventory st/dirt-stack :blocks (merge st/floor {"100,64,0" "red_bed"})})]
           (st/know-bed! eng {:x 100 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
           (await (st/tick-n eng 4))

@@ -104,7 +104,7 @@
       (= :continue s) :continue
       (= :bed-open (contract/cause-key s))
       (do (ctx/remember! c :bed-open {:pos bed} sh/bed-open-policy)
-          (ctx/emit! c :shelter.bed_open :info {:pos bed :text "bed is open, dug in beside it"})
+          (ctx/emit! c :shelter.bed_open :info {:pos bed :text "bed is open (not shut in a roofed room); not lying in it"})
           (ctx/end c :condition-failed :bed-open {:slept false :bed-open true}))
       (or (sh/sleeping? p) (seq (ctx/since c :slept started))) (ctx/end c :done nil {:slept true :bed bed})
       (not (sh/night? p)) (ctx/end c :condition-failed :not-night {:slept false})

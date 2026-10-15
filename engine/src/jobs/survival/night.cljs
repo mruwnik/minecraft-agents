@@ -9,6 +9,7 @@
             [jobs.survival.retreat-doors :as retreat-doors]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.look :as look]
+            [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
@@ -403,6 +404,13 @@
     (ctx/update-mem! c assoc :bed-kept-noted true)
     (ctx/emit! c :night.bed-kept :info {:text "a roofed home is close but could not be entered; the carried bed is not put down in the open"})))
 
+(defn retract-gone-bed!
+  "Retract the remembered :bed place when its block is seen and no bed, before any walk to it."
+  [c]
+  (when-let [pos (mem/place (ctx/view c) :bed)]
+    (when (sh/seen-not-bed? (:primitives c) pos)
+      (places/retract-if-missing! c :bed pos "missing"))))
+
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
   [c]
@@ -413,6 +421,7 @@
         bed-way (ctx/way? c :bed)]
     (when (and (sh/night? p) (bed-down/overdue? c)) (note-needs-bed! c))
     (note-spawn-lost! c)
+    (retract-gone-bed! c)
     (cond
       (and bed-way (sh/unlooked-for-bed? p (ctx/view c)))
       (do (await (look/look-around! c))
