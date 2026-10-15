@@ -348,3 +348,35 @@
           (is (= :done (:status @(:out s))))
           (is (empty? (events-of s :fetch.started)))
           (is (seq (digs (:p s)))))))))
+
+(def dirt-ground (into {} (for [[k v] ground] [k "dirt"])))
+
+(deftest stair-through-unseen-dirt-needs-no-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run! {:blocks dirt-ground :inventory []}
+                                           'jobs.access.stair (assoc stair-east :fetch false)))]
+          (is (not= :no-tool (:reason @out)) (pr-str @out))
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (= [3 62 0] (feet p))))))))
+
+(deftest tunnel-down-through-unseen-dirt-needs-no-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run! {:blocks (into {} (for [[k _] trench] [k "dirt"]))
+                                            :inventory [] :self {:pos {:x -2 :y 61 :z 0}}}
+                                           'jobs.access.tunnel {:target [6 57 0] :fetch false}))]
+          (is (not= :no-tool (:reason @out)) (pr-str @out))
+          (is (= :reached (:reason @out)) (pr-str @out))
+          (is (<= (second (feet p)) 58)))))))
+
+(deftest stair-dirt-that-a-look-does-not-show-is-not-judged-as-stone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (sensing {:blocks dirt-ground :inventory []})
+              _ (set! (.-look p) (fn [_] (js/Promise.resolve #js {:status "ok"})))
+              {:keys [out]} (await (tick-out! (setup p 'jobs.access.stair (assoc stair-east :fetch false))))]
+          (is (not= :no-tool (:reason @out)) (pr-str @out)))))))

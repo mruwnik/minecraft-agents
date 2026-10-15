@@ -118,20 +118,21 @@
   [c in cell cut accept]
   (let [p (:primitives c)
         block ((:block-at in) cell)
+        seen? (not (unknown? p cell))
         tries (get-in (ctx/mem c) [:cell-tries cell] 0)]
     (cond
       (>= tries (if (rules/falling? block) (sset/max-fall-digs) (sset/max-cell-digs))) (cond-> {:reason :refills :cell cell :block block}
                                    (not (rules/falling? block))
                                    (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
       (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
-      (lacks-tool? c block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
+      (and seen? (lacks-tool? c block)) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
       (and (not (:spent-ok (:args c))) (trip/spent-tool? p block))
       (if (= :continue (await (stock/spare! c block nil)))
         :yield
         (if (trip/spent-tool? p block)
           {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}
           :continue))
-      (not (drop-room? c block)) {:reason :inventory-full :cell cell :block block}
+      (and seen? (not (drop-room? c block))) {:reason :inventory-full :cell cell :block block}
       :else
       (do
         (await (tools/equip! c block))
