@@ -82,3 +82,10 @@
     {:roles [librarian]} {:entities [(villager 1 {:profession "none"})]} {} [:later :steps]
     {:roles [librarian]} {:entities [(villager 1 {:profession "librarian"})]} {} [:ok :in-order]
     {:roles [(dissoc librarian :pos)]} {:entities [(villager 1 {:profession "none"})]} {} [:later :steps]))
+
+(deftest fight-back-is-done-when-no-hostile-is-in-range
+  (are [world m want] (= want (tu/kind-reason (done-of 'jobs.survival.fight-back world {} m)))
+    {} {} [:ok :clear]
+    {} {:killed [7]} [:ok :clear]
+    {:entities [(zombie 9 3)]} {} [:later :fighting]
+    {:entities [(zombie 9 3)]} {:killed [9]} [:ok :clear]))

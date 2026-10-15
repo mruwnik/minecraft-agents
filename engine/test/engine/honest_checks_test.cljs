@@ -97,10 +97,6 @@
     'jobs.forestry.prepare {:plan "nope"} :plan-trouble
     'jobs.storage.kit {} :no-chest))
 
-(deftest wear-and-fight-back-say-why-they-decline
-  (are [job args reason] (= reason (waiting-reason job args))
-    'jobs.survival.fight-back {} :no-target))
-
 (deftest survival-and-maintenance-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
     'jobs.survival.night {} :not-night
@@ -111,6 +107,7 @@
     'jobs.movement.leave-vehicle
     'jobs.survival.breathe
     'jobs.survival.extinguish
+    'jobs.survival.fight-back
     'jobs.survival.unwedge))
 
 (deftest a-blank-or-non-string-item-is-refused-at-submit

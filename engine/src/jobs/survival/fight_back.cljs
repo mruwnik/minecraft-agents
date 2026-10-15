@@ -16,9 +16,8 @@
   With :hold the body stays where it is: a melee hostile beyond reach is waited for, 15 s at most, then the job declines (a ranged one is still walked up to).
   A ranged hostile farther than ::ranged-chase (6) is not walked to while another is in range (the job declines).
   A hostile more than :leash blocks from the point the job started at is not chased (the job declines, so the retreat takes over).
-  Not started when no hostile is in range (condition :no-target).
-  Ends :done when no hostile is within :range, with the data {:killed [ids]}.
-  Every other ending is a decline, so the retreat takes over: :nothing-possible with the cause :hold-timeout (the :hold wait ran out), :too-far, :heard-only, :given-up or :no-target;
+  Done (:already before the start) when no hostile is within :range, with the result {:killed [ids]}.
+  Every other ending is a decline, so the retreat takes over: :nothing-possible with the cause :hold-timeout (the :hold wait ran out), :too-far, :heard-only, :given-up;
   its data are {:killed :struck :memory}, the job memory as it ended.
   The weapons are the call's :use :tools (default the weapons carried).
   A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts,
@@ -98,10 +97,13 @@
   (if (seq (targets c)) (contract/ok :target "a hostile to fight") (contract/later :no-target "no hostile to fight in range")))
 
 (defn done?
-  "The hostiles killed against those in range."
+  "Done once no hostile is in range; the kills so far are the result."
   [c]
-  (let [n (count (in-range c))]
-    (contract/later :fighting (str n " hostiles in range") :units :hostiles :done (count (:killed (ctx/mem c))) :left n)))
+  (let [n (count (in-range c))
+        killed (vec (:killed (ctx/mem c)))]
+    (if (zero? n)
+      (contract/ok :clear "no hostile in range" :units :hostiles :done (count killed) :left 0 :result {:killed killed})
+      (contract/later :fighting (str n " hostiles in range") :units :hostiles :done (count killed) :left n))))
 
 (defn quote-of [_c] {:uses {:job-time [0 10 60]}})
 

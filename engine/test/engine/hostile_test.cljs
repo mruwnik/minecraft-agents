@@ -377,13 +377,15 @@
           (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 10 (get-in % [:spend :job-time])) (false? (:look-round %)) (false? (:dangers %))) opts)
               "a moving mob is chased in legs, never dug or pillared toward"))))))
 
-(deftest fight-back-declines-when-nothing-is-near
+(deftest fight-back-is-already-done-when-nothing-is-near
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {:inventory sword :entities [(zombie 6 0)]})]
+        (let [{:keys [eng p]} (setup {:inventory sword :entities [(zombie 6 0)]})]
           (core/submit! eng fight {})
-          (is (nil? (core/tick! eng)) "6 blocks is beyond range 4"))))))
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "6 blocks is beyond range 4: already done")
+          (is (empty? (concat (calls p "attack") (calls p "equip"))) "no swing, nothing equipped"))))))
 
 (deftest fight-back-leaves-a-mob-beyond-its-leash-from-the-start
   (async done
@@ -396,13 +398,15 @@
         (let [{:keys [p]} (await (first-round-ms '(jobs.survival.fight-back {:range 12 :leash 10}) {:inventory sword :entities [(zombie 8 0)]} 20))]
           (is (pos? (count (calls p "attack"))) "inside the leash it is fought"))))))
 
-(deftest fight-back-ignores-a-hidden-ranged-mob
+(deftest fight-back-is-already-done-for-a-hidden-ranged-mob
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {:inventory sword :entities [{:id 7 :name "skeleton" :kind "hostile" :visible false :pos {:x 10 :y 64 :z 0}}]})]
+        (let [{:keys [eng p]} (setup {:inventory sword :entities [{:id 7 :name "skeleton" :kind "hostile" :visible false :pos {:x 10 :y 64 :z 0}}]})]
           (core/submit! eng '(jobs.survival.fight-back {:ranged-range 16}) {})
-          (is (nil? (core/tick! eng)) "no line of fire: not a target, the job declines"))))))
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "no line of fire: not a target, nothing in range")
+          (is (empty? (concat (calls p "attack") (calls p "equip"))) "no swing, nothing equipped"))))))
 
 (defn invulnerable-zombie [] (assoc (zombie 7 3 0) :invulnerable true))
 
