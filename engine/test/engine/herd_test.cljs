@@ -216,6 +216,14 @@
           (is (= [[1 "cow"] [2 "cow"]] (sort (map (juxt :id :kind) (:animals (done-event s))))) "the animals in the pen are logged")
           (is (not (gate-open? s))))))))
 
+(deftest a-box-with-vector-corners-is-used-like-one-with-maps
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1 :box {:min [11 64 1] :max [15 64 5]}} {:entities [(cow 1 4 3)]} 1))]
+          (is (= :brought (:reason (done-event s))))
+          (is (in-pen? (cow-of s 1))))))))
+
 (deftest the-held-entry-names-the-gate-cell
   (async done
     (tu/run-async done

@@ -55,20 +55,24 @@
 
 (defn cell [{:keys [x y z]}] [x y z])
 
+(defn pen-box
+  "The :box arg as {:min {:x :y :z} :max {:x :y :z}}, whichever form its corners were given in."
+  [c]
+  (some-> (:box (:args c)) pen-read/norm-box))
+
 (defn box-centre [{:keys [min max]}]
   {:x (/ (+ (:x min) (:x max) 1) 2) :y (:y min) :z (/ (+ (:z min) (:z max) 1) 2)})
 
 (defn view-radius
   "How far from the body animals are listed: the fetch radius, plus the way to the pen."
   [c]
-  (let [{:keys [radius box]} (:args c)]
-    (+ radius (u/dist (u/self-pos c) (box-centre box)) 8)))
+  (+ (:radius (:args c)) (u/dist (u/self-pos c) (box-centre (pen-box c))) 8))
 
 (defn adults [c]
   (animals/adults (:primitives c) (:mob (:args c)) (view-radius c)))
 
 (defn pen-opts [c]
-  {:box (:box (:args c))
+  {:box (pen-box c)
    :near (let [{:keys [x y z]} (u/self-pos c)] [(Math/floor x) (Math/floor y) (Math/floor z)])})
 
 (defn read-pen [c]
@@ -178,7 +182,7 @@
   [c answer]
   (let [m (ctx/mem c)
         sensed (into #{} (map animals/key-of) (in-pen-adults c answer))
-        far? (> (u/dist (u/self-pos c) (box-centre (:box (:args c)))) (settings/get settings ::listed-range))
+        far? (> (u/dist (u/self-pos c) (box-centre (pen-box c))) (settings/get settings ::listed-range))
         unseen? #(and far? (nil? (animals/find-by-key (:primitives c) (:mob (:args c)) (watch-radius) %)))]
     (into sensed (filter unseen?) (concat (:in-pen-start m) (:brought m)))))
 

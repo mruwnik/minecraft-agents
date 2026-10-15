@@ -13,7 +13,7 @@
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
-            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell detail-text drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 pause! pen-opts read-pen set-phase! shut-failed!]]))
+            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell detail-text pen-box drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 pause! pen-opts read-pen set-phase! shut-failed!]]))
 
 ;; ------------------------------------------------------------------ the pen and its gate
 
@@ -214,7 +214,7 @@
 (defn box-gates
   "The fence gates the body has seen on the ring of cells just outside the box (at its floor level), as {:x :y :z}."
   [c]
-  (let [{:keys [min max]} (:box (:args c))
+  (let [{:keys [min max]} (pen-box c)
         y (:y min)]
     (for [x (range (dec (:x min)) (+ 2 (:x max))) z (range (dec (:z min)) (+ 2 (:z max)))
           :when (not (and (<= (:x min) x (:x max)) (<= (:z min) z (:z max))))
@@ -330,7 +330,7 @@
       (contract/ok :pen "the pen will do, or is read at the pen"))))
 
 (defn ^:async survey! [c]
-  (let [centre (box-centre (:box (:args c)))]
+  (let [centre (box-centre (pen-box c))]
     (if (> (u/dist (u/self-pos c) centre) (near-pen))
       (if (= :blocked (await (near/go-near! c centre (approach-range) {:doors :never :ways #{:walk :clear-seal}})))
         (finish! c :unreachable)
@@ -389,7 +389,7 @@
   [c]
   (let [here (u/self-pos c)
         [gx _ gz] (gate-cell c)]
-    (or (animals/in-box? (:box (:args c)) here)
+    (or (animals/in-box? (pen-box c) here)
         (and (= gx (js/Math.floor (:x here))) (= gz (js/Math.floor (:z here)))))))
 
 (defn ^:async exit-dash!

@@ -7,10 +7,11 @@
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]
             [jobs.lib.child :as child]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.cond :as cond]
             [jobs.animals.escort :as escort]
             [jobs.lib.watch :as watch]
-            [jobs.animals.herd-run :as hr :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms transient-keys]]
+            [jobs.animals.herd-run :as hr :refer [adults after-shut! pen-box cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms transient-keys]]
             [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves min-depth on-gate? pen-refusal set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [food-first! leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
@@ -104,7 +105,7 @@
 
 (a/defargs args
   {:mob {:doc "the animal's name, such as \"cow\"" :spec a/name? :default nil}
-   :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive, the feet cells of its floor" :spec a/box? :default nil}
+   :box {:doc "the pen: {:min :max}, each corner {:x :y :z} or [x y z], inclusive, the feet cells of its floor" :spec pen-read/box-arg :default nil}
    :target {:doc "grown animals of :mob the pen should hold" :spec (a/int-in 0 nil) :default 2}
    :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :spec ::a/pos :default nil}
    :radius {:doc "animals within this many blocks of where the body started the run are fetched" :spec (a/num-in 0 nil) :default 24}
@@ -150,7 +151,8 @@
 (defn bad-args
   "Never without :mob or :box, or with a box no gate axis can run min-depth cells into."
   [c]
-  (let [{:keys [mob box gate]} (:args c)]
+  (let [{:keys [mob gate]} (:args c)
+        box (some-> (:box (:args c)) pen-read/norm-box)]
     (cond
       (not (and mob box)) (contract/never :no-mob-or-box "herd needs a :mob and a :box")
       (< (apply max (box-sides box gate)) min-depth)
@@ -171,7 +173,8 @@
   "Ok when the box holds :target adults before the run touched the gate (once it has, the run ends itself, outside
   with the gate shut); the animals brought, and those still missing."
   [c]
-  (let [{:keys [box target]} (:args c)
+  (let [box (pen-box c)
+        target (:target (:args c))
         m (ctx/mem c)
         inside (count (filter #(animals/in-box? box (u/pos-of (.-pos %))) (adults c)))
         data [:units :animals :done (count (:brought m)) :left (max 0 (- target inside))
