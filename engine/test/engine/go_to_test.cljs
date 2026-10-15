@@ -440,7 +440,8 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0}
                                                 #(override-steer! % (fn ^:async f [_ _ _] #js {:status "failed" :reason "no controls"}))))]
-          (is (= {:arrived false :reason :unreachable :why :steer-failed :detail "no controls"} (dissoc @out :at :near :text :status))))))))
+          (is (= {:arrived false :reason :unreachable :why :steer-failed :detail "no controls" :escalation {:step :none :why :no-wall}}
+                 (dissoc @out :at :near :text :status)) "flat land: no way to make either"))))))
 
 (deftest go-to-says-no-progress-when-the-walk-ends-no-nearer
   (async done
@@ -448,7 +449,7 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0}
                                                 #(override-steer! % (fn ^:async f [_ _ _] #js {:status "done"}))))]
-          (is (= {:arrived false :reason :unreachable :why :no-progress} (dissoc @out :at :near :text :status))))))))
+          (is (= {:arrived false :reason :unreachable :why :no-progress :escalation {:step :none :why :no-wall}} (dissoc @out :at :near :text :status))))))))
 
 (deftest go-to-retry-false-ends-a-walk-that-got-no-nearer-at-once
   (async done

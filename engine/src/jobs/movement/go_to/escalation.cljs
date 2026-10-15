@@ -30,11 +30,17 @@
   (into (:skipped-steps (ctx/mem c) #{}) (ways/barred-steps c)))
 
 (def escalate-reasons
-  "Planner reasons that prove the way needs the world changed. A stuck or off-plan walk is the walker's fault and
-  never escalates: changing the world there would hide a go-to bug. :start-enclosed is the search running out of land
+  "Planner reasons that prove the way needs the world changed. :start-enclosed is the search running out of land
   with no loaded edge reached (a sealed pen, the goal far and unloaded); :one-way is every nearer node lying behind a drop
   (escalating then needs the body shut in, escalate?)."
   #{:exhausted :goal-enclosed :goal-cut-off :start-enclosed :one-way})
+
+(defn walker-fault?
+  "Whether a walk result is the walker's fault: stuck, off its plan (not a partial plan's end), a failed steer, or a
+  found plan walked to its end no nearer. Once the walks round it are spent it escalates as a planner reason does, for
+  a free body too: go-to arrives unless truly impossible."
+  [{:keys [status partial]}]
+  (boolean (or (#{:stuck :failed :arrived} status) (and (= :off-plan status) (not partial)))))
 
 (defn sprint-only?
   "Whether a walk result is the planner's only way needing a sprint the body lacks the food for (:abilities of kind
@@ -124,13 +130,26 @@
   {:cap 100 :ttl (* 6 60 60 1000)})
 
 (defn own-placed-fn
-  "(own? cell block): go-to itself placed block at cell (a put-back), or the body's scaffold ledger holds it there (a
-  pillar, a plug: its own temporary block), so it is not someone's build."
+  "(own? cell block): go-to itself placed block at cell (a put-back), or the body's scaffold ledger holds it there
+  placed (a pillar, a plug: its own temporary block; an :intent proves nothing), so it is not someone's build."
   [c]
   (let [placed (into (set (map (comp (juxt :cell :block) :data) (ctx/entries c :escalation-placed)))
-                     (map (juxt :cell :item))
+                     (comp (filter (comp #{:placed :removing} :state)) (map (juxt :cell :item)))
                      (ledger/open-entries (ctx/view c)))]
     (fn [cell block] (contains? placed [(vec cell) block]))))
+
+(defn forget-dug-own!
+  "Drop from the scaffold ledger each entry of dug ({:cell :block}) whose block it was and whose cell is air now: a
+  block built there later is someone else's."
+  [c dug]
+  (let [p (:primitives c)
+        l (ledger/open-entries (ctx/view c))
+        gone (set (for [{:keys [cell block]} dug
+                        :let [e (ledger/entry-at l (vec cell))]
+                        :when (and e (= block (:item e)) (b/air (u/seen-name p (zipmap [:x :y :z] cell))))]
+                    (vec cell)))]
+    (when (seq gone)
+      (ledger/remember! c (remove (comp gone :cell) l)))))
 
 (defn note-placed! [c cell]
   (when-let [block (u/seen-name (:primitives c) (zipmap [:x :y :z] cell))]
@@ -370,8 +389,8 @@
   :again)
 
 (defn escalate?
-  "Whether a give-up with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the body is shut in (reach/enclosed?) and no door or gate
-  borders where it can walk (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never,
+  "Whether a give-up with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed (walker-fault?) or the body is shut in (reach/enclosed?), and no door or
+  gate borders where it can walk (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never,
   is a wall). Never out of
   the body's own shelter: it is shut in on purpose."
   [c result]
@@ -382,15 +401,16 @@
            (sprint-only? result)
            (dive? c result)
            (goal-walled? c result)
-           (and (escalate-reason? result (some-> (:doors (:args c)) keyword))
-                (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))
-                (not (escape/door-beside? (:primitives c) (end/feet-cell c) (some-> (:doors (:args c)) keyword)))))))
+           (let [doors (some-> (:doors (:args c)) keyword)]
+             (and (or (walker-fault? result)
+                      (and (escalate-reason? result doors) (escape/enclosed? (:primitives c) doors)))
+                  (not (escape/door-beside? (:primitives c) (end/feet-cell c) doors)))))))
 
 (defn ^:async give-up-or-escalate! [c pos tries status result]
   (if (escalate? c result)
     (do (ctx/update-mem! c assoc :dive-climb (dive? c result)
                          :give-up {:tries tries :status status
-                                   :result (select-keys result [:status :reason :kind :cells :near :one-way :at :dip :rise])})
+                                   :result (select-keys result [:status :reason :kind :cells :near :one-way :at :dip :rise :move :why :step :partial])})
         (await (escalate! c pos nil)))
     (end/give-up! c pos tries status result
                   (when (and (not (sh/sheltered-in c))
@@ -511,7 +531,9 @@
         [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (spare-own? c))
         _ (await (torch/return-torch! c))
         r (await (ctx/call c :escalation job args))]
-    (when-not (:own e) (note-holes! c (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug (:data r))))))
+    (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug (:data r))))]
+      (forget-dug-own! c dug)
+      (when-not (:own e) (note-holes! c dug)))
     (cond
       (= :continue r) :continue
       (succeeded? e r) (escalated! c pos e true)

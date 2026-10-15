@@ -23,9 +23,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (g/go! (assoc-in corner-world [:self :food] 20) {:pos [1 65 1]}))]
-          ;; the fake's point body cannot slide a corner, so the walk ends stuck on the planned jump: what counts is the jump was planned
-          (is (= {:why :stuck :kind :jump} (select-keys @out [:why :kind])) (pr-str @out)))))))
+        (let [{:keys [out] :as s} (await (g/go! (assoc-in corner-world [:self :food] 20) {:pos [1 65 1]}))]
+          ;; the fake's point body cannot slide a corner, so the walks stick on the planned jump (not refused for the
+          ;; sprint) and the escalation makes a way
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [:stuck] (distinct (map :why (g/events-of s :go-to.escalated))))))))))
 
 (deftest gap-kinds-have-plain-stopped-words
   (doseq [[kind part] [[:gap-sprint "takes a sprint"] [:gap-width "gap"]]]

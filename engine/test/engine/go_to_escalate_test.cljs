@@ -612,7 +612,28 @@
           (core/submit! eng '(recording-parent) {})
           (await (tick-out! eng 1000))
           (is (true? (:arrived @out)) (pr-str @out))
-          (is (seq (calls p "dig")) "it dug its own cobblestone"))))))
+          (is (seq (calls p "dig")) "it dug its own cobblestone")
+          (is (empty? (filter (ledger/cells (ledger/open-entries (mem/view (:store eng))))
+                              (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
+              "a dug block of its own leaves the ledger at once: a block built there later is not its own"))))))
+
+(deftest go-to-does-not-dig-a-wall-its-ledger-only-meant-to-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inner (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z))
+              walled (apply dissoc (merge room (box -3 64 -3 3 65 3 "cobblestone")) inner)
+              intent (for [x (range -3 4) z (range -3 4) y [64 65]
+                           :when (or (= 3 (abs x)) (= 3 (abs z)))]
+                       {:cell [x y z] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :intent})
+              {:keys [eng p]} (setup (merge in-room {:blocks walled}))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1})))]
+          (ledger/write! (:store eng) intent)
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 1000))
+          (is (false? (:arrived @out)) (pr-str @out))
+          (is (empty? (calls p "dig")) "an :intent is no proof the cobblestone there is its own"))))))
 
 (deftest go-to-never-digs-in-another-s-zone
   (async done
@@ -1180,3 +1201,19 @@
 
 (deftest an-approach-walk-may-take-back-its-own-seal
   (is (= #{:walk :clear-seal} (:ways (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false true))))))
+
+(deftest walker-faults-past-the-retries-feed-the-escalation-ladder
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (merge (box -20 63 -40 20 63 40 "stone") (box 3 64 -12 3 65 12 "dirt"))
+              {:keys [eng p seen]} (setup {:self {:pos {:x 2.5 :y 64 :z 0.5}} :blocks wall})
+              steers (atom 0)
+              stuck (gt/steer-through (fn [_] (gt/pose 2.5 0.5)))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 0})))]
+          (gt/override-steer! p (fn [token a impl] (if (<= (swap! steers inc) 3) (stuck token a impl) (impl token a))))
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 1000))
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [:clear-path] (mapv :step (events-of seen :go-to.escalated))) "three stuck walks round the wall, then a door through it"))))))
