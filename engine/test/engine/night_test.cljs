@@ -1344,7 +1344,7 @@
 ;; ------------------------------------------------------------------ starving while held
 
 (defn held-starving
-  "(The night trigger fires the night as a reflex, as a body's night runs.) A held (exposed, nothing to build with) night at food 0 with nothing to eat; the clock moves 5 ms a read and 20 s a hold, and day comes at the first attack."
+  "(The night trigger fires the night as a reflex, as a body's night runs.) A held (exposed, nothing to build with) night at food 0 with nothing to eat; the clock moves 5 ms a read and 20 s a wait, and day comes at the 12th wait or the first attack. Every wait counts: with a moving clock a hold's pause waits a little under hold-ms."
   [entities & [self inventory]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
@@ -1355,7 +1355,10 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
     (st/refuse-placing! p)
-    (st/dawn-after! p 12 (fn [_] (swap! clock + 20000)))
+    (let [waits (atom 0)]
+      (.override (.-world p) "wait" (fn ^:async w [token a impl]
+                                      (if (>= (swap! waits inc) 12) (.setTime (.-world p) st/noon) (swap! clock + 20000))
+                                      (await (impl token a)))))
     (.override (.-world p) "attack" (fn ^:async g [token a impl]
                                       (.setTime (.-world p) st/noon)
                                       (await (impl token a))))
