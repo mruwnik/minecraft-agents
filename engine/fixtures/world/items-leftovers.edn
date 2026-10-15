@@ -47,5 +47,5 @@
    :after [[:item "diamond_pickaxe" 1]]}
   {:name "get-tool-unknown-block-is-bad-args"
    :act [[:job (jobs.items.get-tool {:block "not_a_block"})]]
-   :expect [{:event {:source :job :kind :get-tool.declined :data {:reason :bad-args}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :bad-args :cause {:why [:contains "not_a_block"]}}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]}]}
