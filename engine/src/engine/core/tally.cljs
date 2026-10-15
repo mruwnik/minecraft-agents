@@ -46,17 +46,23 @@
   (contract/report (:contract (mem/job-mem (mem/view (:store eng)) root slots))))
 
 (defn remember!
-  "Keep {:job sym :report report} (and :target, the args the job's target names) in body memory :job-report."
-  [eng sym target report]
-  (when sym
-    (mem/write! (:store eng) :job-report (cond-> {:job sym :report report} (seq target) (assoc :target target))
-                contract/report-policy)))
+  "Keep {:job sym :report report} (and :target, the args the job's target names, and the :kind and :cause of its
+  ending e, when given) in body memory :job-report."
+  ([eng sym target report] (remember! eng sym target report nil))
+  ([eng sym target report e]
+   (when sym
+     (mem/write! (:store eng) :job-report (cond-> {:job sym :report report}
+                                            (seq target) (assoc :target target)
+                                            e (merge (select-keys e [:kind :cause])))
+                 contract/report-policy))))
 
 (defn end-root!
-  "Root job id's report, read before its memory goes; with remember? a leaf job's is also kept in :job-report."
-  [eng id remember?]
-  (let [r (report eng id [])
-        {:keys [op job args]} (get-in @(:state eng) [:instances id :spec])]
-    (when (and remember? (= :leaf op))
-      (remember! eng job (some->> (get-in eng [:jobs job :target]) (select-keys args)) r))
-    r))
+  "Root job id's report, read before its memory goes; with remember? a leaf job's is also kept in :job-report, with
+  its ending e when given."
+  ([eng id remember?] (end-root! eng id remember? nil))
+  ([eng id remember? e]
+   (let [r (report eng id [])
+         {:keys [op job args]} (get-in @(:state eng) [:instances id :spec])]
+     (when (and remember? (= :leaf op))
+       (remember! eng job (some->> (get-in eng [:jobs job :target]) (select-keys args)) r e))
+     r)))

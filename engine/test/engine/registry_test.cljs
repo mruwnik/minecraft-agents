@@ -84,12 +84,9 @@
     (is (map? (:args t)) (str id))
     (is (#{:cooldown :retry :stop} (:persistence t)) (str id))))
 
-(deftest default-trigger-jobs-are-valid-and-carry-the-trigger-wants
+(deftest default-trigger-jobs-are-valid
   (doseq [[id t] triggers/all]
-    (is (nil? (expr/problem registry/jobs (:job t))) (str id)))
-  (doseq [id [:needs-bed :needs-weapon]
-          :let [t (id triggers/all)]]
-    (is (= (:args t) (second (:job t))) (str id " obtains what its condition looks for"))))
+    (is (nil? (expr/problem registry/jobs (:job t))) (str id))))
 
 (deftest trigger-lines-keep-their-defaults
   (is (= {:name :scaffold-left :job '(jobs.access.cleanup {:within 32}) :args {:within 32} :persistence :stop :level :comfort}

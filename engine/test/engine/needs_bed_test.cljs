@@ -5,6 +5,7 @@
             [engine.registry :as registry]
             [engine.memory :as mem]
             [engine.test-util :as tu]
+            [engine.triggers :as triggers]
             [jobs.lib.shelter :as sh]
             [triggers.survival.needs-bed :as nb]))
 
@@ -50,8 +51,10 @@
   (is (false? (holds? {:entries (conj slept-long-ago [:bed {:pos {:x 5 :y 64 :z 0}} 2])})))
   (is (false? (holds? {:entries slept-long-ago :night true}))))
 
-(deftest the-trigger-args-are-valid-obtain-args
-  (is (nil? (expr/problem registry/jobs (list 'jobs.items.obtain nb/defaults)))))
+(deftest the-entry-runs-a-valid-obtain-and-the-trigger-takes-no-args
+  (let [{:keys [job args]} (get triggers/all :needs-bed)]
+    (is (nil? (expr/problem registry/jobs job)))
+    (is (empty? args) "the obtain's args are the job's, not the trigger's")))
 
 (def rested [[:slept {:pos {:x 0 :y 64 :z 0}} 1]])
 (def spawn-bed-at-5 [:spawn-bed {:pos {:x 5 :y 64 :z 0}} 0.5])

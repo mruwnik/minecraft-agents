@@ -127,18 +127,24 @@
 
 (deftest hungry-reflex-wakes-when-food-is-carried-or-learned-or-the-rest-ends
   (let [when-fn (:when (get triggers/all :hungry))
-        gave-up {:food 3}
+        ended (fn [job kind cause] {:job job :kind kind :cause cause :report {}})
+        gave-up (ended 'jobs.survival.get-food :nothing-possible :no-food)
         view (fn [now & entries]
                {:data (reduce (fn [d [kind t data]] (mem/add-entry d kind {:t t :data data} nil)) mem/empty-data entries)
                 :now now})
         holds? (fn [inventory memory] (when-fn (tu/fake {:self {:food 3} :inventory inventory}) memory {}))]
     (is (holds? [] (view 1000)) "never gave up")
-    (is (not (holds? [] (view 100000 [:hungry 1000 gave-up]))) "gave up 99 s ago, nothing at hand")
-    (is (holds? [{:name "bread" :count 1}] (view 100000 [:hungry 1000 gave-up])) "food carried")
-    (is (holds? [{:name "wheat" :count 3}] (view 100000 [:hungry 1000 gave-up])) "bread can be baked")
-    (is (holds? [] (view 100000 [:hungry 1000 gave-up] [:food-source 2000 {:pos {:x 1 :y 64 :z 1} :kind :farm}]))
+    (is (not (holds? [] (view 100000 [:job-report 1000 gave-up]))) "get-food found no food 99 s ago, nothing at hand")
+    (is (not (holds? [] (view 100000 [:job-report 1000 gave-up] [:job-report 2000 (ended 'jobs.survival.eat :done nil)])))
+        "another job's ending since leaves the rest")
+    (is (holds? [] (view 100000 [:job-report 1000 (ended 'jobs.survival.get-food :nothing-possible :still-hungry)]))
+        "another cause is no rest")
+    (is (holds? [] (view 100000 [:job-report 1000 (ended 'jobs.items.get-kit :nothing-possible :no-food)])) "another job's no-food")
+    (is (holds? [{:name "bread" :count 1}] (view 100000 [:job-report 1000 gave-up])) "food carried")
+    (is (holds? [{:name "wheat" :count 3}] (view 100000 [:job-report 1000 gave-up])) "bread can be baked")
+    (is (holds? [] (view 100000 [:job-report 1000 gave-up] [:food-source 2000 {:pos {:x 1 :y 64 :z 1} :kind :farm}]))
         "a source learned since")
-    (is (holds? [] (view 602000 [:hungry 1000 gave-up])) "the rest is over")))
+    (is (holds? [] (view 602000 [:job-report 1000 gave-up])) "the rest is over")))
 
 (deftest hungry-reflex-backs-off-for-minutes-after-fruitless-hunts
   (let [{:keys [first-s max-s]} (:backoff (get triggers/all :hungry))]

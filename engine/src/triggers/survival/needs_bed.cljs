@@ -8,12 +8,6 @@
             [jobs.lib.dawn :as dawn]
             [jobs.lib.shelter :as sh]))
 
-(def beds
-  (mapv #(str % "_bed") ["white" "orange" "magenta" "light_blue" "yellow" "lime" "pink" "gray"
-                         "light_gray" "cyan" "purple" "blue" "brown" "green" "red" "black"]))
-
-(def defaults {:any-of beds :count 1 :explore true})
-
 (defn why
   "Why a body by day needs a bed: {:why :spawn-lost :pos p} (sh/spawn-lost-pos), {:why :unslept :days d} (sh/max-days-awake
   passed and sh/standing-bed finds none within sh/urgent-bed-radius), else nil."

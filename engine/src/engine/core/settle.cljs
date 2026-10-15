@@ -73,7 +73,7 @@
 (defn ending-report
   "Root job id's report at its ending e, read before its memory goes: the tally, with done?'s count from e."
   [eng id e]
-  (merge (tally/end-root! eng id true) (:report e)))
+  (merge (tally/end-root! eng id true e) (:report e)))
 
 (defn settle-listed-job! [eng {:keys [id]} {:keys [status error result child-wait ending]}]
   (note-child-wait! eng id status child-wait)
@@ -141,13 +141,13 @@
 
 (defn judge-end!
   "Classify a reflex end now and apply the entry's persistence when its trigger
-  still holds, the cooldown counted from the end's :ended-at; emit its one
-  reflex.ended with extra fields."
-  [eng {:keys [reflex job outcome reason ended-at text report]} extra]
+  still holds, the cooldown counted from the end's :ended-at; an :impossible ending stops the entry as :stop does,
+  whatever its persistence, until the trigger lets go. Emit its one reflex.ended with extra fields."
+  [eng {:keys [reflex job outcome kind reason ended-at text report]} extra]
   (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))
         still? (and entry (trigger-holds? eng entry (:primitives eng) (mem/view (:store eng))))]
     (when still?
-      (case (:persistence entry)
+      (case (if (= :impossible kind) :stop (:persistence entry))
         :cooldown (swap! (:state eng) assoc-in [:reflex-state reflex :cooldown-until]
                          (+ ended-at (* 1000 (:cooldown-s entry 0))))
         :stop (swap! (:state eng) assoc-in [:reflex-state reflex :stopped?] true)
@@ -155,6 +155,7 @@
     (emit! eng (merge {:source :reflex :kind :ended :level :info :reflex reflex :job job
                        :outcome outcome :text (str text ": " (name outcome))
                        :how (if still? :completed_not_cleared :cleared)}
+                      (when kind {:data {:kind kind}})
                       (when reason {:reason reason})
                       (when report {:report report})
                       extra))))
@@ -163,12 +164,13 @@
   "A reflex job ended on its own with outcome; classify and apply the entry's
   persistence. While the body is settling, offline or under manual control the
   senses cannot say whether the trigger still holds: the end is deferred to the first ready tick. A :stopped
-  outcome carries the result's reason."
-  [eng {:keys [id reflex]} outcome reason]
+  outcome carries the result's reason; a contract job's, its ending e."
+  [eng {:keys [id reflex]} outcome reason & [e]]
   (let [end (cond-> {:reflex reflex :job id :outcome outcome :ended-at (now eng)
                      :text (reflex-text reflex (get-in (state eng) [:instances id :spec]))
-                     :report (tally/end-root! eng id (#{:done :stopped} outcome))}
-              reason (assoc :reason reason))]
+                     :report (tally/end-root! eng id (#{:done :stopped} outcome) e)}
+              reason (assoc :reason reason)
+              e (assoc :kind (:kind e)))]
     (drop-instance! eng id :ended)
     (if (or (paused? eng) (manual? eng))
       (swap! (:state eng) update :deferred-ends conj end)
@@ -204,11 +206,11 @@
   (case status
     :ended
     (if (= :done (:kind ending))
-      (end-reflex! eng run :done nil)
+      (end-reflex! eng run :done nil ending)
       (let [data (ending-data ending)]
         (emit! eng {:source :job :kind :stopped :level :warn :job (:id run) :reflex (:reflex run)
                     :data data :text (stopped-text data) :report (merge (tally/report eng (:id run) []) (:report ending))})
-        (end-reflex! eng run :stopped (:reason data))))
+        (end-reflex! eng run :stopped (:reason data) ending)))
     :declined
     (do (emit! eng {:source :reflex :kind :declined :level :info :reflex (:reflex run) :job (:id run)
                     :text (str "reflex " (name (:reflex run)) ": job " (:id run)

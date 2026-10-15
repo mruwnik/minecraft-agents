@@ -2,11 +2,9 @@
   "The :dusk-home trigger: before night, a body whose bed or home is a walk away leaves for it in time."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
-            [engine.expr :as expr]
             [engine.job-api :as job-api]
             [engine.shelter-test :as st]
             [engine.memory :as mem]
-            [engine.registry :as registry]
             [engine.test-util :as tu]
             [triggers.survival.dusk-home :as dh]))
 
@@ -38,9 +36,6 @@
 (deftest a-body-underground-has-no-reason-to-go-home
   (is (false? (holds? 11000 [[:home 100 0]]
                       {:blocks {"0,66,0" "stone"}}))))
-
-(deftest the-trigger-args-are-valid-go-home-args
-  (is (nil? (expr/problem registry/jobs (list 'jobs.survival.go-home {:limit 160})))))
 
 (deftest go-home-walks-to-the-home-by-day-and-waits-at-night-or-with-none
   (async done

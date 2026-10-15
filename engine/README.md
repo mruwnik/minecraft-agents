@@ -295,7 +295,7 @@ debt or intent with `update-mem!` before the `act` it protects. After every `mov
 
 **Tally.** Each act's uses and yields go to every frame of its chain (`:contract` in job memory, hidden from `ctx/mem`),
 a round's time to its own frame. Endings and a root's `completed`/`stopped`/`cancelled`/`reflex.ended` carry `:report`;
-a finished job's goes to body memory `:job-report` (cap 256).
+a finished job's goes to body memory `:job-report` (cap 256), with its ending's `:kind` and `:cause`.
 
 **Contract jobs.** Export `conditions` and `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
 `defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A condition
@@ -396,7 +396,8 @@ Each tick the engine fires the first entry whose `:when` holds and which is not 
   (recover-drops' `:recover-trip`, recover's `:hurt`, the shelter's `:shelter`).
 - **Persistence**, when the trigger still holds as the job ends: `:retry` fires again next tick; `:cooldown` waits
   `:cooldown-s` counted from the job end; `:stop` waits until the condition has been false once. An entry's own values
-  override the trigger's.
+  override the trigger's. A contract job ending `:impossible` stops the entry as `:stop` does, whatever its persistence;
+  `reflex.ended` carries the ending's `:kind`. An entry's `:job` may carry call keys (`:spend`, `:ways`).
 - **Settling**: after a login, reconnect, respawn or teleport (a forced move over 16 blocks) no trigger is evaluated until
   `settleMs` (1 s) after the column under the body loads. A reflex that ends meanwhile is judged on the first ready tick.
 - Agent-only edits (`engine.core`): `register-reflex!`, `remove-reflex!` (not built-ins), `mute!` (with TTL), `move!`

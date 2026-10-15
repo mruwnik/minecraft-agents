@@ -50,7 +50,8 @@
     (settings/with-settings {:triggers.storage.inventory-nearly-full/rest-s 300}
       (fn [] (is (false? (nearly-full/inventory-nearly-full full (rested 200000 50000) {})))))))
 
-(defn gave-up [now t] {:now now :data {:entries {:hungry [{:t t :data {}}]}}})
+(defn gave-up [now t]
+  {:now now :data {:entries {:job-report [{:t t :data {:job 'jobs.survival.get-food :kind :nothing-possible :cause :no-food}}]}}})
 
 (deftest hungry-rests-after-a-give-up-but-a-starving-body-only-a-minute
   (let [at (fn [food health] (tu/fake {:self {:food food :health health}}))]

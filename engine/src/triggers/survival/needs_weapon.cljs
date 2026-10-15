@@ -8,8 +8,6 @@
             [jobs.lib.dawn :as dawn]
             [jobs.lib.shelter :as sh]))
 
-(def defaults {:any-of ["iron_sword" "stone_sword" "wooden_sword"] :count 1 :explore true})
-
 (defn weapon-in-pile?
   "Whether a death no :recovered covers, still inside the despawn window, dropped a weapon."
   [view]

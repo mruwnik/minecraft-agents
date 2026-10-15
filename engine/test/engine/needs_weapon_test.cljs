@@ -8,6 +8,7 @@
             [engine.settings :as settings]
             [jobs.lib.dawn :as dawn]
             [engine.test-util :as tu]
+            [engine.triggers :as triggers]
             [triggers.survival.needs-weapon :as nw]))
 
 (defn holds? [{:keys [night inv self time entities]}]
@@ -36,8 +37,10 @@
   (is (true? (settings/with-settings {::dawn/with-hostile true} #(holds? {:time 6000 :entities [zombie]}))))
   (is (true? (settings/with-settings {::dawn/grace-ticks 0} #(holds? {:time 23500})))))
 
-(deftest the-trigger-args-are-valid-obtain-args
-  (is (nil? (expr/problem registry/jobs (list 'jobs.items.obtain nw/defaults)))))
+(deftest the-entry-runs-a-valid-obtain-and-the-trigger-takes-no-args
+  (let [{:keys [job args]} (get triggers/all :needs-weapon)]
+    (is (nil? (expr/problem registry/jobs job)))
+    (is (empty? args) "the obtain's args are the job's, not the trigger's")))
 
 (defn holds-with-memory? [memory]
   (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) memory {}))

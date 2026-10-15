@@ -447,6 +447,47 @@
               (is (map? (get-in ended [:data :report])))
               (is (= [[(str id "/leaf") by]] (cut-offs seen))))))))))
 
+(def refusing-jobs
+  {'never never
+   'gives-up {:conditions [] :round (fn [c] (swap! world assoc :call (ctx/frozen-call c)) (ctx/end c :nothing-possible :gave-up))}})
+
+(def refusing-triggers
+  (into {} (for [k [:never :gives-up]]
+             [k {:name k :job (list (symbol (name k))) :persistence :retry :backoff false
+                 :when (fn [_ _ _] (contains? (:fire @world) k))}])))
+
+(deftest a-reflex-ending-impossible-fires-again-only-once-its-trigger-let-go
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup refusing-jobs refusing-triggers)
+              fired (fn [k] (count (filter #(= k (get-in % [:context :reflex-id])) (ev seen :reflex :fired))))]
+          (core/register-reflex! eng {:trigger :never})
+          (core/register-reflex! eng {:trigger :gives-up})
+          (swap! world assoc :go true :fire #{:never})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= 1 (fired :never)) "impossible: not fired again while the trigger holds")
+          (is (= :impossible (get-in (first (ev seen :reflex :ended)) [:data :kind])))
+          (is (= {:job 'never :kind :impossible :cause {:reason :not-smeltable :item "diamond"}}
+                 (select-keys (:data (mem/latest (mem/view (:store eng)) :job-report)) [:job :kind :cause]))
+              "the ending is remembered with the report")
+          (swap! world assoc :fire #{:gives-up})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= 3 (fired :gives-up)) "nothing-possible: tried again as its persistence says")
+          (swap! world assoc :fire #{:never})
+          (await (core/tick! eng))
+          (is (= 2 (fired :never)) "the trigger let go and holds again: a new cause"))))))
+
+(deftest a-register-entry-may-set-its-jobs-spend
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup refusing-jobs refusing-triggers)]
+          (core/register-reflex! eng {:trigger :gives-up :job '(gives-up {:spend {:time 30}})})
+          (swap! world assoc :fire #{:gives-up})
+          (await (core/tick! eng))
+          (is (= {:time 30} (:spend (:call @world)))))))))
+
 (deftest an-abandoned-slot-is-cut-off
   (async done
     (tu/run-async done
