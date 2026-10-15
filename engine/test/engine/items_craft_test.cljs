@@ -569,6 +569,23 @@
           (is (= 1 (count (calls p "dig"))) "the table was dug")
           (is (= 1 (get (inv p) "crafting_table")) "and is carried again"))))))
 
+(deftest craft-cancelled-after-the-table-went-down-still-picks-its-table-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 6} {:name "crafting_table" :count 1}]})
+              calls-seen (atom 0)
+              id (core/submit! eng (list job {:item "bread" :count 2}) {})]
+          (.override (.-world p) "craft"
+                     (fn [token a impl]
+                       (if (= 1 (swap! calls-seen inc))
+                         (impl token a)
+                         (do (core/cancel! eng id)
+                             #js {:status "timeout"}))))
+          (await (tu/run-until-empty eng 20))
+          (is (= 2 (count (calls p "craft"))) "cancelled by the call after the table went down")
+          (is (= 1 (get (inv p) "crafting_table")) "the table is carried again"))))))
+
 (deftest craft-with-keep-table-leaves-it-standing
   (async done
     (tu/run-async done

@@ -42,7 +42,7 @@
   further fetch for each batch while the last one led to more made), unless :fetch is false or the fetch failed: then
   it ends :need with a :text. With no table in reach a carried one is put down beside the body, else one is fetched
   (an obtain child for a crafting_table) and put down, the same way; :fetch false or a failed fetch ends :no-table.
-  A table this call put down is dug up again when it ends (stopped short too), unless :keep-table, it stands in an area
+  A table this call put down is dug up again by the cleanup, however the call ends (stopped short or cut too), unless :keep-table, it stands in an area
   of the body's own or a zone refuses the dig. No table is put in a cell of a stair or tunnel the body cut (memory
   :stair-way, :tunnel-way).")
 
@@ -86,17 +86,16 @@
       spot)))
 
 (defn done?
-  "Done once :count more than at the start are carried and the table this call put down is dug up."
+  "Done once :count more of :item are carried than at the start; else progress."
   [c]
   (let [{:keys [item count]} (:args c)
         have (storage/carried (u/inventory (:primitives c)) item)
         start (:start (ctx/mem c) have)
         made (max 0 (- have start))
         data [:units :items :done made :left (max 0 (- count made)) :result {:made made}]]
-    (cond
-      (< made count) (apply contract/later :crafting (str "craft: " made " of " count " " item) data)
-      (pickup-spot c) (apply contract/later :table-up "craft: the table is still to dig up" data)
-      :else (apply contract/ok :crafted (str "crafted " made " " item) data))))
+    (if (and (pos? count) (>= made count))
+      (apply contract/ok :crafted (str "crafted " made " " item) data)
+      (apply contract/later :crafting (str "craft: " made " of " count " " item) data))))
 
 (defn quote-of
   "P: the cheapest recipe for :count more of :item from what is carried. It uses its ingredients (net of the item
@@ -136,7 +135,7 @@
 (def condition-reasons "Stops that read as a failed condition, the others as nothing possible." #{:need :no-table :not-a-table :full})
 
 (defn finish!
-  "Keep the ending in memory (a cut during the table pick-up goes on with it) and return it: done with the made count, or
+  "The ending: done with the made count, or
   the stop extra names by its :reason (a condition-failed or nothing-possible ending, extra's other fields and the made
   count as data); a stop with at least the call's :least items made is done (:all wants the whole :count)."
   [c made extra]
@@ -144,13 +143,11 @@
         reason (:reason extra)
         data (cond-> (merge {:made made} (dissoc extra :reason))
                (seq placed) (merge (spent/summary placed) {:text (spent/text placed "crafting table")}))
-        total (:count (:args c))
-        e (cond
-            (nil? reason) (ctx/end c :done nil data)
-            (condition-reasons reason) (least/end! c :condition-failed (cond-> {:reason reason} (:short extra) (assoc :short (:short extra))) data made total)
-            :else (least/end! c :nothing-possible reason data made total))]
-    (ctx/update-mem! c assoc :ended e)
-    e))
+        total (:count (:args c))]
+    (cond
+      (nil? reason) (ctx/end c :done nil data)
+      (condition-reasons reason) (least/end! c :condition-failed (cond-> {:reason reason} (:short extra) (assoc :short (:short extra))) data made total)
+      :else (least/end! c :nothing-possible reason data made total))))
 
 (defn give-up!
   "u/fail!: :again until the third failure in a row, then finish with the made count and the reason."
@@ -462,18 +459,18 @@
                      (finish! c made {:reason :cannot :detail (.-reason r)}))
         (give-up! c made :craft-failed {:detail status})))))
 
-(defn ^:async pick-up!
-  "Dig up the table this call put down, once, unless :keep-table, a zone or claim refuses the dig or it stands in an area of this body's own
-  (a home): jobs.blocks.dig child, :continue while it waits, else :done."
-  [c]
+(defn ^:async cleanup
+  "However the call ended: dig up the table this call put down, once, unless :keep-table, a zone or claim refuses the dig
+  or it stands in an area of this body's own (a home): jobs.blocks.dig child, :continue while it waits."
+  [c _]
   (let [spot (pickup-spot c)]
     (if-not spot
-      :done
+      (ctx/end c :done nil {})
       (let [r (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail}))]
         (if (= :continue r)
           :continue
           (do (ctx/update-mem! c assoc :picked-up true)
-              :done))))))
+              (ctx/end c :done nil {})))))))
 
 (defn ^:async step!
   "Stop when the target is carried, else craft the rest and act on the status: :again, :continue (go-to waits) or :done.
@@ -486,10 +483,6 @@
       (await (settle! c (await (craft-act! c)))))))
 
 (defn ^:async round
-  "The whole craft in one call: step! until it ends, then pick-up!; the ending."
+  "The whole craft in one call: step! until it ends; the ending (the table is picked up by cleanup)."
   [c]
-  (await (pace/steps! c (fn ^:async craft-step []
-                          (let [r (or (:ended (ctx/mem c)) (await (step! c)))]
-                            (if (contract/ending? r)
-                              (if (= :continue (await (pick-up! c))) :continue r)
-                              r))))))
+  (await (pace/steps! c #(step! c))))
