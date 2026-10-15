@@ -17,7 +17,8 @@
   "Look for :count things named :target (a block or entity name, or several) by walking legs from where the job
   starts (the origin).
 
-  Each step looks around (blocks and entities with those names within :scan-radius), notes what it saw (:seen) and
+  Each step looks around (blocks and entities with those names within :scan-radius; not again within 3 blocks of the
+  last look round, nor when what it has seen already makes up :count), notes what it saw (:seen) and
   the spot (:searched) (engine.notes), and ends when :count are found. Otherwise it walks the next leg with
   jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
   on the world or for leg columns to load (:chunks-loading).
@@ -264,11 +265,14 @@
       takeable (filter #(or (:id %) (:ok (access/may? in :harvest (:pos %))))))))
 
 (defn ^:async scan!
-  "Look round (every heading, once per cell), note what was seen and the spot as searched, book the findings."
+  "Look round (every heading, once per spot: not again within look/near-blocks of the last look round), unless what is
+  seen already makes up :count; note what was seen and the spot as searched, book the findings."
   [c names]
   (let [{:keys [scan-radius seen-ttl-s entity-ttl-s searched-ttl-s] want :count} (:args c)
-        _ (when-not (await (look/survey! c :cell)) (look/see! c))
-        sighted (vec (takeable c (sense (:primitives c) names scan-radius)))
+        seen #(vec (takeable c (sense (:primitives c) names scan-radius)))
+        _ (when (< (count (add-found (:found (ctx/mem c) []) (seen) want)) want)
+            (when-not (await (look/survey! c :near)) (look/see! c)))
+        sighted (seen)
         [x y z] (here c)
         [ox _ oz] (:origin (ctx/mem c))]
     (notes/note! c (conj (mapv #(assoc % :kind :seen :ttl-ms (* 1000 (if (:id %) entity-ttl-s seen-ttl-s))) sighted)

@@ -489,11 +489,13 @@
         (let [s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0}
                                 {:blocks {"0,64,5" "diamond_block"} :cone? true}
                                 400 (fn [{:keys [p]}]
-                                      ;; mined after the body's last look, before sense reads memory: the body cannot know
+                                      ;; mined once the body saw it, before sense reads memory: the body cannot know
                                       (let [seen-blocks (aget p "seenBlocks")]
                                         (aset p "seenBlocks" (fn [q]
-                                                               (fake/set-block! p {:x 0 :y 64 :z 5} "air")
-                                                               (seen-blocks q)))))))]
+                                                               (let [r (seen-blocks q)]
+                                                                 (when (some #(= "diamond_block" (.-name %)) r)
+                                                                   (fake/set-block! p {:x 0 :y 64 :z 5} "air"))
+                                                                 r)))))))]
           (is (some? (event-of s :search.done)) "no sight pass corrected it: memory still says ore")
           (is (some #(= :seen (:kind %)) (file-notes s))))))))
 
@@ -561,3 +563,33 @@
               e (event-of s :search.not-found)]
           (is (finished? s))
           (is (zero? (get-in e [:coverage :scans])) (pr-str e)))))))
+
+(defn looks [{:keys [p]}] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
+
+(deftest a-target-already-seen-is-found-without-looking-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [rays (atom nil)
+              stats #(perception/stats (aget (:p %) "perception"))
+              s (await (search! {:target "diamond_block" :max-distance 20} {:blocks {"0,64,5" "diamond_block"} :cone? true} 60
+                                (fn [s] (perception/pass! (aget (:p s) "perception")) (reset! rays (:rays (stats s))))))]
+          (is (= [{:what "diamond_block" :pos [0 64 5]}] (:found (event-of s :search.done))))
+          (is (= 0 (looks s)))
+          (is (= @rays (:rays (stats s))) "no sight pass cast a ray"))))))
+
+;; walks that fail a block from where the body last looked round: it looks round once per spot, not on every cell
+(deftest a-scan-within-a-few-blocks-of-the-last-look-round-does-not-look-round-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prims (atom nil)
+              walk (fn [_ _ _]
+                     (swap! (fake/state @prims) update-in [:self :pos 0] inc)
+                     (js/Promise.resolve [{:kind :nothing-possible :cause :unreachable :data {}} nil]))
+              s (with-redefs [child/call-walk-reason* walk]
+                  (await (search! {:target "diamond_block" :max-distance 23} {} 60 #(reset! prims (:p %)))))
+              e (event-of s :search.not-found)]
+          (is (= :stuck (:why e)))
+          (is (= 3 (get-in e [:coverage :scans])))
+          (is (= 8 (looks s)) "one look round (four headings, level and down) at the first spot only"))))))
