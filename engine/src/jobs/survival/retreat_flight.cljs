@@ -253,8 +253,8 @@
 (defn end-flight!
   "Write a :threat entry per mob fled (jobs.lib.threats; one per mob, its last way out) and end the flight: done with
   {:fled [ids] :ended}, :ended why the last chaser stopped (or ended, given for the chasers still on: :hidden); ended
-  :cannot-escape ends nothing-possible :cannot_escape {:fled [ids]}."
-  [c ended]
+  :cannot-escape ends nothing-possible :cannot_escape {:fled [ids]}. A hidden end adds :hold, :quiet or :spent."
+  [c ended & [extra]]
   (let [{:keys [chasers fled]} (ctx/mem c)
         by-id (merge (into {} (map (juxt :id identity)) fled)
                      (into {} (map (fn [[id ch]] [id (assoc ch :ended ended)])) chasers))
@@ -272,4 +272,4 @@
     (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back :pocket-tried :pocket-dug :early-refuge-failed :refused)
     (if (= :cannot-escape ended)
       (ctx/end c :nothing-possible :cannot_escape {:fled ids :text "every way of escaping failed twice in a row"})
-      (ctx/end c :done nil {:fled ids :ended why}))))
+      (ctx/end c :done nil (merge {:fled ids :ended why} extra)))))

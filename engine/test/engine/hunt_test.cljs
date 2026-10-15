@@ -221,6 +221,7 @@
               gave-up (events-of s :hunt.gave-up)]
           (is (empty? gave-up) "the ending carries it")
           (is (= :gave-up (:reason (done-event s))))
+          (is (seq (:skipped (done-event s))) "the ending names the skipped animals")
           (is (= 0 (:killed (done-event s))))
           (is (finished? s)))))))
 

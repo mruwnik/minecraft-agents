@@ -260,7 +260,7 @@
         remaining (count (present c))
         by (when (= :spared reason) (frequencies (vals (spare-rules c))))
         out (cond-> {:killed killed :reason reason :spared spared :remaining remaining}
-              (= :gave-up reason) (merge (sh/shelter-hint c))
+              (= :gave-up reason) (-> (merge (sh/shelter-hint c)) (assoc :skipped (vec (:skipped (ctx/mem c)))))
               by (assoc :spared-by by))
         text (str "hunt done: " (name reason) ", killed " killed ", spared " spared " of the ask, " remaining " adults left"
                   (when by (str "; left alone: " (str/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))]

@@ -292,6 +292,11 @@
   [seen]
   (vec (keep #(or (:ended %) (get-in % [:ending :data :ended])) (filter #(#{:completed :child_ended} (:kind %)) @seen))))
 
+(defn hidden-holds
+  "The :hold (:spent or :quiet) of each flight ending that carries one."
+  [seen]
+  (vec (keep #(or (:hold %) (get-in % [:ending :data :hold])) (filter #(#{:completed :child_ended} (:kind %)) @seen))))
+
 (defn ^:async hide-steps
   "Submit spec over world and run its round. Once it hides, each [entities jump-ms] of steps replaces the mobs and
   moves the clock; after a short real wait the job list is noted. Then the mobs go and the round is awaited.
@@ -360,6 +365,7 @@
                                  [[[] 0]]))]
           (is (hiding? seen))
           (is (>= waits 25) "about 30 s of holds after the zombie is gone")
+          (is (= [:quiet] (hidden-holds seen)))
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest respond-to-hostile-passes-quiet-s-to-the-retreat
@@ -632,7 +638,8 @@
                                           :entities [(zombie 0 64 1)]}
                                  [[[(zombie 0 64 1)] 61000] [[(zombie 0 64 1)] 400000]]))]
           (is (= [["j1"] []] listed) "held at 61 s with the zombie at the foot, handed back past :hide-max-s")
-          (is (= [:hidden] (hidden-ends seen))))))))
+          (is (= [:hidden] (hidden-ends seen)))
+          (is (= [:spent] (hidden-holds seen)) "the ending says the hide was spent, not quiet"))))))
 
 (deftest hitbox-cells-are-every-cell-a-mob-overlaps
   (is (= #{[0 64 0] [1 64 0] [0 65 0] [1 65 0]} (set (map (juxt :x :y :z) (seal/hitbox-cells {:x 0.8 :y 64 :z 0.5})))))

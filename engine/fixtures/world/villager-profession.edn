@@ -1,8 +1,8 @@
 ;; Card 4af16cbe: entities() villager rows carry :profession ("farmer", "librarian", "unemployed" for none). Rows are not logged
 ;; as such, so this reads them through jobs.village.maintain, which compares each role's :profession with the seen villagers'
 ;; and books a role a villager holds as {:skipped :filled}. Two roles, farmer then librarian: the librarian one has no villager
-;; holding it, and the roles carry no :pos, so the pass books :no-pos and ends stopped :incomplete (maintain.gave-up); the
-;; steps stay in the event's data.
+;; holding it, and the roles carry no :pos, so the pass books :no-pos and ends stopped :incomplete; the
+;; steps stay in the ending data.
 ;; NoAI villagers keep the profession they are summoned with (no workstation needed). Should-succeed: a farmer fills :roll-0.
 ;; Should-fail: an unemployed villager (no profession) does not fill it, a nitwit neither.
 {:defaults

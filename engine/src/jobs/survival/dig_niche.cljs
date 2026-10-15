@@ -202,8 +202,9 @@
   #{:no-site :no-tool :refused :no-blocks :fluid :open-shell})
 
 (defn fail! [c reason text]
-  (ctx/update-mem! c dissoc :site :plug-since)
-  (ctx/end c (if (fact-stops reason) :condition-failed :nothing-possible) reason {:text text}))
+  (let [site (:site (ctx/mem c))]
+    (ctx/update-mem! c dissoc :site :plug-since)
+    (ctx/end c (if (fact-stops reason) :condition-failed :nothing-possible) reason {:text text :site site})))
 
 (defn ^:async go!
   "One go-to to cell; :continue while it waits, :arrived, or :failed."

@@ -1,7 +1,7 @@
 ;; Card a18281f1: jobs.village.trade ends stopped :unreachable in one call when the villager cannot be reached (it used to
 ;; treat go-to's :done give-up as :again and walk about nine times). NoAI villager, fixed UUID as in village-feed.edn, a farmer with
 ;; one offer (1 emerald for 6 bread). Should-succeed: a reachable villager sells. Should-fail: a villager in a glass box ends
-;; trade.gave-up "unreachable" and no second walk follows.
+;; stopped "unreachable" and no second walk follows.
 ;; One-off (not here): jobs.movement.follow of a player sealed in a box ends follow.unreachable after one go-to give-up, and a
 ;; player walking away still ends out-of-range after 3 legs; both need a player.
 {:defaults

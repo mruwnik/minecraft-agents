@@ -154,7 +154,8 @@
           (.override (.-world p) "steer"
                      (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
           (await (run! s {}))
-          (is (= :unreachable (:reason (failed seen)))))))))
+          (is (= :unreachable (:reason (failed seen))))
+          (is (some? (:site (failed seen))) "the ending names the site"))))))
 
 (deftest a-dig-the-world-refuses-fails-dig-failed
   (async done
