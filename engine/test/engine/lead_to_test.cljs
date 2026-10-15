@@ -179,14 +179,6 @@
                    (swap! (fake/state p) update :entities #(vec (rest %))))
                  r))))
 
-(defn slow-clock-from!
-  "Each steer from x on takes 25 s of the clock."
-  [p x clock]
-  (.override (.-world p) "steer"
-             (fn [token args impl]
-               (when (<= x (first (:pos (fake/self p)))) (swap! clock + 25000))
-               (impl token args))))
-
 (defn ^:async scenario-slow-at-the-end
   "A cow that keeps up until the body is within a leg of the spot, then is trail blocks behind the spot (more is
   :break-at). The body would wait for such a cow on the way; at the end it is the gather phase's business."
@@ -511,22 +503,6 @@
           (is (= :lead-broke (:reason (done-event s))))
           (is (< (first (:pos (fake/self (:p s)))) 15) "the body did not walk on to the spot")
           (is (every? #(< (:x %) 15) legs)))))))
-
-(deftest a-pull-over-20-s-is-given-up-even-while-each-leg-makes-progress
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p eng clock] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 5})]})]
-          (slow-clock-from! p 28 clock)
-          (core/submit! eng (list 'jobs.animals.lead-to {:mob "cow" :pos goal :gather-radius 0}) {})
-          (await (run-ticks s 60 700))
-          (is (finished? s))
-          (is (= :unleashed (:reason (done-event s))))
-          (is (false? (:gathered (done-event s))))
-          (is (= 1 (count (events-of s :lead-to.gather-short))))
-          (let [pull-legs (filter #(< 30 (:x %)) (tu/walked-to eng))]
-            (is (= 1 (count pull-legs)) "the pull was cut after one leg")
-            (is (every? #(< (:x %) 34) pull-legs) "that leg is short of the pull's end")))))))
 
 ;; ------------------------------------------------------- a led cow out of sight is not lost (card 0dd5dca8)
 

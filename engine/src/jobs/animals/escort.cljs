@@ -222,11 +222,11 @@
   "Walk to target (within range) in short go-to legs in child slot, looking at the animal after each (a pull passes
   follow-reach as gap: it strains the lead on purpose; a plain walk safe-gap). The body does not
   outrun the animal: when it is out of sight or trails too far the walk answers :catching-up and looks again at the next
-  round before the next leg. Answer :arrived, :failed (a leg did not arrive), :limit (limit-ms from started passed),
+  round before the next leg. Answer :arrived, :failed (a leg did not arrive),
   :waiting (a leg's child is waiting on the world: the job yields), :catching-up (the caller waits for the animal) or
   {:problem :lost|:lead-broke|:animal-stalled}. :searching: the plan search for the next leg is still
   going on (nothing was walked; the caller calls again), at most max-search-rounds calls in a row, then :failed."
-  [c slot target range started limit-ms gap]
+  [c slot target range gap]
   (let [pre (when (:catching-up (ctx/mem c)) (escort-problem c gap))]
     (cond
       (= :wait pre) :catching-up
@@ -253,5 +253,4 @@
                                             :arrived)
                         problem {:problem problem}
                         (not leg) :arrived
-                        (and limit-ms (>= (- (ctx/now c) started) limit-ms)) :limit
                         :else (recur))))))))))

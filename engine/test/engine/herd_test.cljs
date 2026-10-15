@@ -364,22 +364,20 @@
             (is (< (self-x s) 10))
             (is (empty? (on-lead s)))))))))
 
-(deftest a-run-ending-with-the-gate-open-and-an-animal-led-lets-it-go-and-shuts-the-gate
+(deftest a-run-low-on-time-with-the-gate-open-and-an-animal-led-lets-it-go-and-shuts-the-gate
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (settings/with-settings {::herd/animal-timeout-s 40}
-                 (fn ^:async timed []
-                   (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1})
-                         opened (atom false)]
-                     (on-step-when! s #(gate-open? s) #(reset! opened true))
-                     (await (run-ticks s 400))
-                     (is @opened "the gate was opened")
-                     (is (stopped? s))
-                     (is (= :timeout (:reason (done-event s))))
-                     (is (empty? (on-lead s)) "the animal is let go")
-                     (is (not (gate-open? s)))
-                     (is (empty? (held-entries s)))))))))))
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :spend {:time 40}})
+              opened (atom false)]
+          (on-step-when! s #(gate-open? s) #(reset! opened true))
+          (await (run-ticks s 400))
+          (is @opened "the gate was opened")
+          (is (stopped? s))
+          (is (= :timeout (:reason (done-event s))))
+          (is (empty? (on-lead s)) "the animal is let go")
+          (is (not (gate-open? s)))
+          (is (empty? (held-entries s))))))))
 
 (deftest a-led-animal-is-let-go-when-the-way-to-the-gate-is-blocked
   (async done

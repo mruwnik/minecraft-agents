@@ -54,7 +54,7 @@
 (defn start-trip!
   "The animal k is with the body (on its lead, or following its food): its trip to the gate starts."
   [c k]
-  (set-phase! c :approach {:animal k :led [k] :animal-started (ctx/now c)
+  (set-phase! c :approach {:animal k :led [k]
                            :animal-tries (update (:animal-tries (ctx/mem c)) k (fnil inc 0))
                            :pos-index 0 :backs 0 :retried false :deepest-tried false}))
 

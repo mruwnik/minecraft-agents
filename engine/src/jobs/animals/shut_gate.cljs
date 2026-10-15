@@ -17,13 +17,14 @@
 
   - Without :plan: the open planned gates within :radius of the body. This is the job of the pen-gate trigger,
     which fires for a gate seen open with the body more than 2 blocks away, so a job that holds a gate open on
-    purpose is not fought. When one stands open the run first pauses :open-s (4 s, a jobs.time.noop child), so a gate a player just opened
-    is not shut on them, and reads the gates again.
+    purpose is not fought. A gate seen open for the first time is given :open-s (4 s) of grace, so a gate a player just opened
+    is not shut on them: that run ends condition-failed :gate-grace at once (a :gate-graced entry, and the gate hidden for
+    :open-s), and the trigger's next run shuts it.
   - With :plan: every open gate of that plan, wherever it is. A gate the body has not seen lately is walked to and
     looked at, never taken for shut; one that still cannot be read is left (:unseen).
 
   One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never, :ways #{:walk}),
-  waits a few seconds when an animal stands in the gate (never pushes it), clicks it with an empty hand and reads
+  waits a few moments (pass/shut-waits) when an animal stands in the gate (never pushes it), clicks it with an empty hand and reads
   the block again. A gate the body stands in is left (reason :standing-in), as is one an animal never left
   (:animal-in-the-way), or one the walk to it was interrupted for (:walk-interrupted); both get a 30 s :gate-gave-up
   entry, no warn. A gate that could not be reached or did not shut after :tries clicks is given up with one warn
@@ -134,18 +135,14 @@
                 :unreachable))))
 
 (defn ^:async clear-of-animals?
-  "Whether no animal stands in the gate's cell, after waiting out one for pass/shut-waits pauses of pass/shut-wait-ms
-  (jobs.time.noop children, the count kept in memory): :continue while a pause is on."
+  "Whether no animal stands in the gate's cell, after waiting out one for pass/shut-waits waits of pass/shut-wait-ms."
   [c cell]
   (let [col (pass/column-of (u/cell-pos cell) {})]
-    (loop []
-      (let [n (:gate-waits (ctx/mem c) 0)]
-        (cond
-          (empty? (pass/animals-in c col)) (do (ctx/update-mem! c dissoc :gate-waits) true)
-          (>= n (pass/shut-waits)) (do (ctx/update-mem! c dissoc :gate-waits) false)
-          :else (if (= :continue (await (child/pause! c (/ (pass/shut-wait-ms) 1000) :animal-in-gate)))
-                  :continue
-                  (do (ctx/update-mem! c assoc :gate-waits (inc n)) (recur))))))))
+    (loop [n 0]
+      (cond
+        (empty? (pass/animals-in c col)) true
+        (>= n (pass/shut-waits)) false
+        :else (do (await (ctx/act c :wait #js {:ms (pass/shut-wait-ms)})) (recur (inc n)))))))
 
 (defn ^:async click!
   "Click the gate at cell once the body is in reach, then read it again: nil when shut, else the reason."
@@ -172,16 +169,14 @@
     (case (await (read-gate! c cell))
       :shut :was-shut
       :unknown :unseen
-      (let [clear (await (clear-of-animals? c cell))]
-        (cond
-          (= :continue clear) :continue
-          (not clear) :animal-in-the-way
-          :else (loop [n 1]
-                  (let [reason (await (click! c cell))]
-                    (cond
-                      (nil? reason) (do (ctx/emit! c :gate.shut :info {:cell cell :text (str "gate " cell " shut")}) nil)
-                      (< n (:tries (:args c))) (recur (inc n))
-                      :else reason))))))))
+      (if-not (await (clear-of-animals? c cell))
+        :animal-in-the-way
+        (loop [n 1]
+          (let [reason (await (click! c cell))]
+            (cond
+              (nil? reason) (do (ctx/emit! c :gate.shut :info {:cell cell :text (str "gate " cell " shut")}) nil)
+              (< n (:tries (:args c))) (recur (inc n))
+              :else reason)))))))
 
 (def target [:plan])
 
@@ -196,32 +191,45 @@
 
 (def conditions "Waits while :plan is missing or unreadable (plan-fact)." [[:fn plan-fact]])
 
+(defn wrapped-up?
+  "True when no shut or left gate waits for the round to report it: done? holds only then."
+  [m]
+  (not (or (pos? (:shut m 0)) (seq (:left m)))))
+
 (defn done?
-  "The gates shut and the watched gates still open or unread: done once none is (the goal held: no event, the call just ends done)."
+  "The gates shut and the watched gates still open or unread: done once none is and nothing awaits its report (the
+  goal held: no event, the call just ends done)."
   [c]
   (let [[cells trouble] (watched-cells c)
         open (if trouble [] (into (open-now c cells []) (unread-now c cells [] #{})))]
-    {:done? (and (not trouble) (empty? open)) :units :gates :done (:shut (ctx/mem c) 0) :left (count open)}))
+    {:done? (and (not trouble) (empty? open) (wrapped-up? (ctx/mem c))) :units :gates :done (:shut (ctx/mem c) 0) :left (count open)}))
 
 (defn quote-of [_c]
   {:uses {:time [0 15 120]}})
 
-(defn ^:async grace!
-  "Without :plan, pause :open-s seconds once (a jobs.time.noop child; a cut goes on with it) when a watched gate stands
-  open now: :continue while the pause is on."
+(def graced-ttl-ms
+  "How long a gate's grace is remembered: the run that finds it still open after the grace shuts it."
+  60000)
+
+(defn grace!
+  "Without :plan, a watched gate that stands open and was not graced yet is given :open-s seconds: it is hidden from the
+  trigger and this job for that long (a :gate-gave-up entry) and remembered as graced. The cells given grace, or nil."
   [c cells]
-  (let [{:keys [plan open-s]} (:args c)]
-    (when (and (not plan) (pos? open-s) (not (:grace-done (ctx/mem c))) (seq (open-now c cells [])))
-      (if (= :continue (await (child/pause! c open-s :gate-grace)))
-        :continue
-        (ctx/update-mem! c assoc :grace-done true)))))
+  (let [{:keys [plan open-s]} (:args c)
+        graced (into #{} (keep #(some-> % :data :cell vec)) (ctx/entries c :gate-graced))
+        fresh (when (and (not plan) (pos? open-s)) (vec (remove graced (open-now c cells []))))]
+    (when (seq fresh)
+      (doseq [cell fresh]
+        (ctx/remember! c :gate-graced {:cell cell} {:cap 50 :ttl graced-ttl-ms})
+        (ctx/remember! c :gate-gave-up {:cell cell :reason :grace} {:cap 50 :ttl (* 1000 open-s)}))
+      fresh)))
 
 (defn ^:async round [c]
   (let [[cells trouble] (watched-cells c)]
     (if trouble
       (decline! c trouble)
-      (if (= :continue (await (grace! c cells)))
-        :continue
+      (if-let [fresh (grace! c cells)]
+        (ctx/end c :condition-failed :gate-grace {:shut 0 :left [] :graced fresh})
         (loop [shut (:shut (ctx/mem c) 0) left (:left (ctx/mem c) []) skip #{}]
           (let [here (u/self-pos c)
                 open (into (open-now c cells left) (unread-now c cells left skip))
@@ -231,7 +239,6 @@
             (if-let [cell (nearest c todo)]
               (let [reason (await (shut-once! c cell))]
                 (cond
-                  (= :continue reason) (do (ctx/update-mem! c assoc :shut shut :left left) :continue)
                   (nil? reason) (recur (inc shut) left skip)
                   (= :was-shut reason) (recur shut left (conj skip cell))
                   (#{:animal-in-the-way :walk-interrupted} reason) (recur shut (conj left (leave! c cell reason)) skip)

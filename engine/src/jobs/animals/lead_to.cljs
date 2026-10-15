@@ -39,7 +39,7 @@
   Gather: a led animal trails about a lead length behind the body. On arrival, if the animal is farther than
   :gather-radius from :pos, the body walks on past :pos (range 1) so the lead pulls it in. It waits for the
   animal to settle between pulls, at most :gather-tries pulls. A pull stays within 11 blocks of the animal (the
-  lead breaks past 12). A pull walks in the same legs, aiming a block past the point that would just gather; it is given up after 20 s (checked after each leg), or before it starts when the planned walk strays more than 11
+  lead breaks past 12). A pull walks in the same legs, aiming a block past the point that would just gather; it is given up before it starts when the planned walk strays more than 11
   blocks from the animal (a wall in the way). An animal 10 or more blocks from :pos is never pulled. None of
   this is a failure: the animal is let go where it is, with a warn
   lead-to.gather-short (:distance from :pos) and :gathered false. :gathered is true when the animal was within
@@ -221,10 +221,6 @@
   range 1, so 10 leaves a block to spare."
   10)
 
-(def pull-timeout-s
-  "A pull walk still going after this long (a detour round a wall, say) is given up."
-  20)
-
 (def pull-range
   "How close to the pull target the walk must get."
   1)
@@ -259,7 +255,7 @@
            (:steps plan)))))
 
 (defn ^:async walk! [c]
-  (let [r (await (escort/walk-legs! c :walk (destination c) (:range (:args c)) nil nil escort/safe-gap))]
+  (let [r (await (escort/walk-legs! c :walk (destination c) (:range (:args c)) escort/safe-gap))]
     (cond
       (= :waiting r) :yield
       (= :searching r) :again
@@ -273,28 +269,23 @@
   "Give up pulling: the animal is let go where it is, :gathered false at distance d from the spot."
   [c d]
   (ctx/update-mem! c assoc :gathered false :gather-dist d)
-  (ctx/update-mem! c dissoc :pull-target :pull-started)
+  (ctx/update-mem! c dissoc :pull-target)
   (ctx/update-mem! c update :children dissoc :pull)
   (set-phase! c :arrive)
   :again)
 
 (defn ^:async pull! [c target animal-pos]
-  (let [now (ctx/now c)
-        started (:pull-started (ctx/mem c) now)
-        d (u/flat-dist animal-pos (:pos (:args c)))]
-    (ctx/update-mem! c assoc :pull-started started)
-    (cond
-      (>= (- now started) (* 1000 pull-timeout-s)) (stop-gathering! c d)
-      (await (path-leaves-reach? c target animal-pos)) (stop-gathering! c d)
-      :else
-      (let [r (await (escort/walk-legs! c :pull target pull-range started (* 1000 pull-timeout-s) escort/follow-reach))]
+  (let [d (u/flat-dist animal-pos (:pos (:args c)))]
+    (if (await (path-leaves-reach? c target animal-pos))
+      (stop-gathering! c d)
+      (let [r (await (escort/walk-legs! c :pull target pull-range escort/follow-reach))]
         (cond
           (= :waiting r) :yield
           (= :searching r) :again
           (= :catching-up r) (await (escort/wait-for-animal! c))
           (map? r) (do (ctx/update-mem! c assoc :still-led (= :animal-stalled (:problem r)))
                        (finish! c (:problem r)))
-          :else (do (ctx/update-mem! c dissoc :pull-target :pull-started)
+          :else (do (ctx/update-mem! c dissoc :pull-target)
                     (ctx/update-mem! c update :pulls (fnil inc 0))
                     (if (= :arrived r) :again (stop-gathering! c d))))))))
 

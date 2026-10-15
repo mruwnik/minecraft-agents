@@ -277,7 +277,7 @@
                 (await (escort/wait-for-animal! c))))))
 
 (defn ^:async walk-legs! [c]
-  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) nil nil escort/safe-gap))]
+  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) escort/safe-gap))]
     (cond
       (= :waiting r) :yield
       (= :searching r) :again

@@ -76,7 +76,8 @@
   Lead watching: an animal seen off this body's lead is given up on (:lead-broke), one not seen at all too
   (:lost); a lured animal seen beyond follow-range while the gate stands open is kept (the pinned steps go back for it). With nobody led, the open gate is shut, leads within 8 blocks are picked up
   (jobs.forestry.collect-drops) and leashing starts again once, with the :lead-broke animals forgiven. A second time ends :lost. One
-  animal may take ::animal-timeout-s (180) from its lead on until it is let go, else :timeout. An end with an animal on the lead lets it go where the body
+  run that has less than ::release-margin-s (30) of its time left while an animal is led ends :timeout, so the animal is let go
+  before the call's budget runs out. An end with an animal on the lead lets it go where the body
   stands and shuts the gate from the body's side.
 
   One call is the whole run: it ends with the run, never yields. Waits for an animal to settle or a cell to clear are
@@ -114,7 +115,7 @@
 
 (def leading
   "The phases in which the animal is on the lead and the walk is the body's own: watched before each step, bound
-  by ::animal-timeout-s."
+  by the time left (::release-margin-s)."
   #{:approach :clear-out :line-up :open :step :shut-behind :shut-deepest :shut-back :shut-click :retry-back :retry-shut
     :retry-out
     :give-up-walk :deep})
@@ -123,9 +124,14 @@
 (a/defargs settings
   {::pace-ms {:default 100 :doc "A step that changed nothing and took less than this is followed by a pause of settle-ms." :spec (a/int-in 0 nil)}
    ::time-s {:default 900 :doc "Seconds a herd run may take." :spec (a/num-in 0 nil)}
-   ::animal-timeout-s {:default 180 :doc "Seconds one animal may take from its lead on until it is let go." :spec (a/num-in 0 nil)}})
+   ::release-margin-s {:default 30 :doc "A run with an animal on the lead and less than this many seconds of its time left lets it go and ends :timeout." :spec (a/num-in 0 nil)}})
 (defn pace-ms [] (settings/get settings ::pace-ms))
-(defn animal-timeout-s [] (settings/get settings ::animal-timeout-s))
+(defn release-margin-s [] (settings/get settings ::release-margin-s))
+
+(defn out-of-time?
+  "True when the call's time left (ctx/left) is under the release margin."
+  [c]
+  (some-> (:time (:spend (ctx/left c))) (< (release-margin-s))))
 
 (def target [:mob :box])
 
@@ -269,13 +275,12 @@
 (defn ^:async step-once!
   "One step of the run: the timeout and the lead looked at, the :gate-held entry kept fresh, then the phase's step."
   [c]
-  (let [now (ctx/now c)
-        {:keys [phase animal-started gate]} (ctx/mem c)
+  (let [{:keys [phase gate]} (ctx/mem c)
         phase (or phase :survey)
         lead-phase? (contains? leading phase)]
     (when (and gate (gate-open? c)) (hold-gate! c))
     (cond
-      (and lead-phase? animal-started (>= (- now animal-started) (* 1000 (animal-timeout-s)))) (end! c :timeout)
+      (and lead-phase? (out-of-time? c)) (end! c :timeout)
       (and lead-phase? (not (and (= :approach phase) (lure? c) (not (:walked (ctx/mem c))))) (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
       :else (do (when lead-phase? (await (watch/watch! c {})))
                 (await (step! c phase))))))
@@ -318,8 +323,7 @@
                                         :text (str "herd restarts from what it sees: " (count led) " led, body "
                                                    (if inside? "in the pen" "outside") ", gate " (if open? "open" "shut"))})
     (ctx/update-mem! c #(-> (apply dissoc % :releasing :release-tried transient-keys)
-                            (assoc :children {} :led led :animal (first led))
-                            (cond-> (and (seq led) (nil? (:animal-started %))) (assoc :animal-started (ctx/now c)))))
+                            (assoc :children {} :led led :animal (first led))))
     (cond
       (:ending m) (end! c (:ending m))
       (and (seq led) inside?) (set-phase! c :step {:pos-index (nearest-axis-index c) :back-step false :backs 0
