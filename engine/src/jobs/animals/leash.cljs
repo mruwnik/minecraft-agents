@@ -12,7 +12,7 @@
   ends itself; a cut job resumes.
 
   One call is the whole run. It takes the nearest animal that is not on anyone's lead, not given up on and not in :skip (uuids or
-  ids). The body walks to within 3 blocks (doors :shut, each leg bounded by :walk-timeout-s) and uses the lead
+  ids). The body walks to within 3 blocks (doors :shut) and uses the lead
   it carries (fetching one first when none is carried and an animal waits, jobs.lib.need, unless :fetch is false). The use counts only when the sensing then shows the animal on this body's lead. Animals are
   tracked by uuid, by id when it has none.
 
@@ -36,7 +36,6 @@
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 8}
    :center {:doc "where :radius is measured from; the body's own spot when nil" :spec ::a/pos :default nil}
    :skip {:doc "keys (uuids, else ids) of animals never to leash" :spec (a/coll-of (a/or-of string? number?)) :default []}
-   :walk-timeout-s {:doc "bound of one walk towards the animal" :spec (a/num-in 0 nil) :default 5}
    :fetch {:doc "get a lead when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-lead; a failed fetch ends :need" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 

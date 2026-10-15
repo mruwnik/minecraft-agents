@@ -11,7 +11,7 @@
   "Shear the adult sheep within :radius and pick up the wool. A one-shot order that starts and ends itself; a cut job resumes.
 
   One call is the whole run. It takes the nearest adult sheep not yet shorn or given up on (babies and sheared sheep are
-  skipped). The body walks to within 3 blocks (doors :shut, each leg bounded by :walk-timeout-s) and uses the
+  skipped). The body walks to within 3 blocks (doors :shut) and uses the
   shears it carries (fetching them first when none are carried and sheep wait, jobs.lib.need, unless :fetch is false). Sheep are tracked by uuid, by id when it has none.
 
   A sheep is given up on when its walk is blocked or two shearings were out of reach (:unreachable), nothing
@@ -39,7 +39,6 @@
 (a/defargs args
   {:count {:doc "sheep to shear; every one in radius when nil" :spec (a/int-in 1 nil) :default nil}
    :radius {:doc "sheep within this many blocks count" :spec (a/num-in 0 nil) :default 16}
-   :walk-timeout-s {:doc "bound of one walk towards a sheep" :spec (a/num-in 0 nil) :default 5}
    :color {:doc "shear only sheep of this wool colour (e.g. \"white\"); nil: any" :spec a/name? :default nil}
    :collect {:doc "pick up the wool afterwards" :spec boolean? :default true}
    :fetch {:doc "get shears when none are carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-shears; a failed fetch ends :need" :spec need/option? :default true}

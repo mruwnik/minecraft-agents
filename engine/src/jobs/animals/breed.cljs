@@ -50,7 +50,6 @@
   {:mob {:doc "the mob type to breed, such as \"cow\"" :spec a/name? :default nil}
    :count {:doc "animals to feed" :spec (a/int-in 1 nil) :default 2}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 16}
-   :walk-timeout-s {:doc "bound of one walk towards an animal" :spec (a/num-in 0 nil) :default 5}
    :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food; a failed fetch ends :need" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 

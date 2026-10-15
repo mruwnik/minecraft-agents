@@ -14,7 +14,7 @@
   :mob limits it to one kind (any when nil), :animal to one animal by uuid (any when nil).
 
   One call is the whole run. It takes the nearest such animal not given up on. The body walks to within 3 blocks of what it
-  clicks (doors :shut, each leg bounded by :walk-timeout-s) and clicks with an empty hand:
+  clicks (doors :shut) and clicks with an empty hand:
   - An animal on this body's lead is clicked itself. It counts when the sensing then shows it off the lead
     (checked for up to 1.5 s).
   - An animal tied to a knot: the knot is clicked. That removes the knot and hands every animal tied to it to
@@ -43,7 +43,6 @@
   {:mob {:doc "the animal's name, such as \"cow\"; any animal when nil" :spec a/name? :default nil}
    :animal {:doc "uuid (or id) of the one animal to free; any when nil" :spec (a/or-of string? number?) :default nil}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 8}
-   :walk-timeout-s {:doc "bound of one walk towards the click" :spec (a/num-in 0 nil) :default 5}
    :collect {:doc "pick up the leads afterwards" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
