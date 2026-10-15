@@ -4,7 +4,6 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
-            [engine.core.ending :as ending]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
@@ -137,18 +136,6 @@
           (core/cancel! eng id)
           (is (= {:kind :cut-off :cause :agent :placed 0} (select-keys (:data (first (job-ev seen :cancelled))) [:kind :cause :placed])))
           (is (empty? (:list (core/state eng))) "the job is gone"))))))
-
-(deftest a-cancel-goes-ahead-when-the-progress-step-throws
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'builder builder})
-              id (core/submit! eng '(builder) {})]
-          (await (core/tick! eng))
-          (with-redefs [ending/progress-of (fn [& _] (throw (js/Error. "boom")))]
-            (core/cancel! eng id :death))
-          (is (= {:kind :cut-off :cause :death} (select-keys (:data (first (job-ev seen :cancelled))) [:kind :cause])))
-          (is (= 1 (count (filterv #(= :warn (:level %)) @seen)))))))))
 
 (deftest done-is-asked-once-per-round
   (async done

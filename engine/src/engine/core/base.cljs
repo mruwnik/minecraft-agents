@@ -225,6 +225,7 @@
 (defn delete-root!
   "Delete root job id's memory, its started contract frames cut off by cause first."
   [eng id cause]
+  (swap! (:seen-done eng) dissoc (mem/path->id id []))
   (cut-off! eng id [] (mem/job-mem (mem/view (:store eng)) id []) cause)
   (mem/delete-job! (:store eng) id))
 

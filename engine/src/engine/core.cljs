@@ -111,11 +111,7 @@
   "End job id (list-edits/cancel!); its cut-off carries done?'s count and :result (ending/with-progress)."
   ([eng id] (cancel! eng id :agent))
   ([eng id by]
-   (list-edits/cancel! eng id by (try (ending/progress-of eng id (contract/ending :cut-off by nil))
-                                      (catch :default e
-                                        (emit! eng {:source :job :kind :cancel_progress_failed :level :warn :job id
-                                                    :error (str (or (.-message e) e))})
-                                        (contract/ending :cut-off by nil))))))
+   (list-edits/cancel! eng id by (ending/progress-of eng id (contract/ending :cut-off by nil)))))
 (def insert-next list-edits/insert-next)
 (def insert-now list-edits/insert-now)
 (def retry! list-edits/retry!)

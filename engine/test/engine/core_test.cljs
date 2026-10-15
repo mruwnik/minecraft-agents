@@ -1262,11 +1262,9 @@
 
 ;; ---------------------------------------------------------------- doing nothing
 
-(def gate (atom nil))
-
 (defn ^:async parked-round
-  "Awaits @gate's promise with no act (a round doing nothing), then acts once if :act-after, and ends :continue."
-  [c]
+  "Awaits its gate's promise with no act (a round doing nothing), then acts once if :act-after, and ends :continue."
+  [gate c]
   (when (:hold (:args c)) (ctx/hold-still! c (:hold (:args c))))
   (await (js/Promise. (fn [resolve] (reset! gate resolve))))
   (when (:act-after (:args c))
@@ -1279,28 +1277,31 @@
   :continue)
 
 (defn ^:async hold-then-clear-round
-  "Holds :night until @gate, clears the hold, then parks with no act until @gate again."
-  [c]
+  "Holds :night until its gate, clears the hold, then parks with no act until the gate again."
+  [gate c]
   (ctx/hold-still! c :night)
   (await (js/Promise. (fn [resolve] (reset! gate resolve))))
   (ctx/hold-still! c nil)
   (await (js/Promise. (fn [resolve] (reset! gate resolve))))
   :continue)
 
-(def idle-registry
-  (merge registry {'hold-clear (tu/job hold-then-clear-round)
-                   'parked (assoc (tu/job parked-round) :args {:hold {:default nil} :act-after {:default false}})
+(defn idle-registry
+  "Registry whose parked jobs wait on gate, so no test sees another's rounds."
+  [gate]
+  (merge registry {'hold-clear (tu/job (partial hold-then-clear-round gate))
+                   'parked (assoc (tu/job (partial parked-round gate)) :args {:hold {:default nil} :act-after {:default false}})
                    'why-wait (tu/job why-wait-round)}))
 
 (defn idle-setup [opts]
   (let [clock (atom 1000000)
+        gate (atom nil)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake {})
-        eng (core/create (merge {:primitives p :jobs idle-registry :triggers triggers :dir (tu/tmp-dir)
+        eng (core/create (merge {:primitives p :jobs (idle-registry gate) :triggers triggers :dir (tu/tmp-dir)
                                  :now #(deref clock)
                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                                 opts))]
-    {:eng eng :seen seen :clock clock :p p}))
+    {:eng eng :seen seen :clock clock :p p :gate gate}))
 
 (defn ^:async settle-until
   "Let timers run until (pred) holds, at most n times."
@@ -1317,8 +1318,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen clock]} (idle-setup {})
-              _ (reset! gate nil)
+        (let [{:keys [eng seen clock gate]} (idle-setup {})
               _ (core/submit! eng (list 'parked {:act-after true}) {})
               round (core/tick! eng)
               _ (await (settle-until #(some? @gate) 50))]
@@ -1346,8 +1346,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen clock]} (idle-setup {:idle-s 5})
-              _ (reset! gate nil)
+        (let [{:keys [eng seen clock gate]} (idle-setup {:idle-s 5})
               _ (core/submit! eng (list 'parked {:hold :night}) {})
               round (core/tick! eng)
               _ (await (settle-until #(seq (holdings seen)) 50))]
@@ -1365,8 +1364,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen clock]} (idle-setup {:idle-s 5})
-              _ (reset! gate nil)
+        (let [{:keys [eng seen clock gate]} (idle-setup {:idle-s 5})
               _ (core/submit! eng '(hold-clear) {})
               round (core/tick! eng)
               _ (await (settle-until #(some? @gate) 50))]
@@ -1986,3 +1984,10 @@
             (is (= (set (map #(str "j" %) (range 3 13))) (set (keys (core/recent-results eng))))
                 "the newest ten, though every end shares one millisecond")
             (finally (swap! settings/state update :values dissoc key))))))))
+
+(deftest dropping-a-root-forgets-its-last-done-status
+  (let [{:keys [eng]} (idle-setup {})
+        id (core/submit! eng '(count) {})]
+    (swap! (:seen-done eng) assoc (mem/path->id id []) [:ok nil {}])
+    (base/drop-instance! eng id :ended)
+    (is (= {} @(:seen-done eng)))))
