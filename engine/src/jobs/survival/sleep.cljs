@@ -20,7 +20,7 @@
   the bed, a roofed room, else :bed-open. A body already asleep is done.
   Holds (a :pause-s pause holding still with the reason, then :continue) for at most :hold-s seconds in all, then ends nothing-possible with that cause: a bed
   occupied by another player (sh/bed-permit; also when it became so mid-round) :bed-occupied {:pos}; a body in a shelter with the bed more
-  than 16 blocks away :night-sheltered.
+  than 16 blocks away :night-sheltered; a server refusal for monsters near the bed :monsters-near {:pos}.
   Done {:pos bed} when asleep. Day coming before it slept is condition-failed :not-night; the bed gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
@@ -150,6 +150,8 @@
   [c r cause text bed]
   (if (= :done r) (ctx/end c :nothing-possible cause {:pos bed :text text}) r))
 
+(declare hold!)
+
 (defn ^:async sleep-at! [c bed]
   (let [t0 (ctx/now c)
         r (await (ctx/act c :sleep (clj->js {:pos bed})))]
@@ -162,6 +164,7 @@
                      (places/offer! c :home bed)
                      (ctx/end c :done nil {:pos bed}))
       "not-night" (ctx/end c :condition-failed :not-night)
+      "monsters-near" (await (hold! c {:reason :monsters-near :pos bed :text "monsters are near the bed; the server refuses sleep"}))
       "missing" (if (nil? (u/sensed (:primitives c) bed))
                   (let [text "bed chunk not loaded yet"]
                     (fail-ending c (u/fail! c :bed_unloaded text) :bed-unloaded text bed))

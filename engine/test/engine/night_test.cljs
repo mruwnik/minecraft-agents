@@ -1286,6 +1286,18 @@
           (is (empty? (st/calls p "place")) "no second bed")
           (is (empty? (st/emitted seen :shelter.bed_place_failed)) "did not decide to put the carried bed down unlooked"))))))
 
+(deftest monsters-near-a-free-bed-hold-the-sleep-as-monsters-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"1,64,0" "red_bed"} :monstersNear true})
+              _ (core/submit! eng '(jobs.survival.sleep {:bed {:x 1 :y 64 :z 0}}) {})]
+          (tu/seeing-after-look p)
+          (await (st/tick-n eng 6))
+          (is (empty? (st/emitted seen :bed_unusable)) "not a failed sleep")
+          (is (= 1 (count (:list (core/state eng)))) "the call holds")
+          (is (= [:monsters-near] (distinct (map :reason (st/emitted seen :holding))))))))))
+
 (deftest an-occupied-bed-not-yet-looked-at-is-refused-before-the-sleep
   (async done
     (tu/run-async done

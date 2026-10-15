@@ -207,6 +207,7 @@
          :yaw (:yaw spec 0)
          :pitch (:pitch spec 0)
          :skip-night (:skipNight spec true)
+         :monsters-near (:monstersNear spec)
          :settles (:settles spec false)
          :body-hitbox (:bodyHitbox spec false)
          :view-chunks (:viewChunks spec)
@@ -616,6 +617,7 @@
     (senses/day-at? (:time w)) [w {:status "not-night"}]
     (not (str/ends-with? (block-name w pos) "_bed")) [w {:status "missing"}]
     (not (near? w pos)) [w {:status "unreachable"}]
+    (:monsters-near w) [w {:status "monsters-near"}]
     ;; the night is skipped at once and the server wakes the body at morning; with others awake it lies in bed
     (:skip-night w) [(assoc w :time 0) {:status "sleeping"}]
     :else [(assoc-in w [:self :isSleeping] true) {:status "sleeping"}]))
