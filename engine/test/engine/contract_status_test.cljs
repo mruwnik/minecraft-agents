@@ -296,3 +296,21 @@
           (swap! world assoc :step :call :n 2)
           (await (core/tick! eng))
           (is (= 2 (last (asks))) "the call asked can-run? under its own args"))))))
+
+(deftest a-child-status-of-a-registry-child-passes-its-never-and-look-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [kid (fn [status] {:can-start? (constantly status) :round (fn [c] (ctx/end c :done nil))})
+              parent {:can-run? ok
+                      :round (fn [c]
+                               (swap! world assoc :answers (mapv #(tu/kind-reason (ctx/child-status c :kid % {})) ['never-kid 'look-kid 'later-kid 'ok-kid]))
+                               (ctx/end c :done nil))}
+              {:keys [eng]} (setup {'parent parent
+                                    'never-kid (kid (contract/never :gone "gone"))
+                                    'look-kid (kid (contract/look :unseen "unseen"))
+                                    'later-kid (kid (contract/later :paused "paused"))
+                                    'ok-kid (kid (contract/ok :go "go"))})]
+          (core/submit! eng '(parent) {})
+          (await (core/tick! eng))
+          (is (= [[:never :gone] [:look :unseen] [:later :paused] [:ok :ready]] (:answers @world))))))))

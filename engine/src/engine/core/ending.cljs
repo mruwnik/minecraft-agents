@@ -293,11 +293,21 @@
       (and later? (spent? c)) true
       :else (ctx/wait c w))))
 
+(defn passed-status
+  "The status a check that just passed for c left: its :never or :look, which the check lets through for the round to
+  act on, else :ok (also for a goal that holds and a spent job)."
+  [c]
+  (let [{:keys [start run done]} (second (get @(:asked (:engine c)) (asked-key c)))]
+    (let [s (contract/all (keep identity [start run]))]
+      (if (and (not (some-> done ends?)) (#{:never :look} (first s)))
+        s
+        (contract/ok :ready "ready")))))
+
 (defn wrap
   "Job def with the engine's check and round when it is a contract job; any other def as it is."
   [def]
   (if (or (not (contract-job? def)) (::wrapped def))
     def
-    (assoc def ::wrapped true :check #(check def %) :round #(run def %))))
+    (assoc def ::wrapped true :check #(check def %) :passed-status passed-status :round #(run def %))))
 
 (defn registry "jobs with every contract job wrapped." [jobs] (some-> jobs (update-vals wrap)))

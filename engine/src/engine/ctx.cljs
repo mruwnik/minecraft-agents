@@ -152,13 +152,13 @@
   false)
 
 (defn check-status
-  "The status def would start with now under ctx: its check's (:ok, or :later with its wait reason), or, for a def with
-  no check (a combinator), contract/verdict of its checks, which a parent passes on."
+  "The status def would start with now under ctx: :later with its check's wait reason, else contract/verdict of its
+  checks (a registry job's check passes a :never or :look, so they are read from the checks), which a parent passes on."
   [ctx def]
   (if-let [check (:check def)]
     (let [a (atom nil)]
       (if (check (assoc ctx :wait a))
-        (contract/ok :ready "ready")
+        (if-let [f (:passed-status def)] (f ctx) (contract/ok :ready "ready"))
         (let [w @a
               w (cond (map? w) w (some? w) {:reason w} :else {:reason :not-ready})
               reason (if (keyword? (:reason w)) (:reason w) :not-ready)]

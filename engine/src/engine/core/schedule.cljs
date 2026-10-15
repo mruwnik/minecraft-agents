@@ -51,7 +51,7 @@
         ok? (try (let [[def args] (job-of eng inst)]
                    (or (cleanup/closing? eng id [])
                        (let [s (ctx/check-status (check-ctx eng inst args) def)]
-                         (or (= :ok (first s)) (do (reset! wait (contract/status-cause s)) false)))))
+                         (or (not= :later (first s)) (do (reset! wait (contract/status-cause s)) false)))))
                  (catch :default e
                    (let [error (str e)]
                      (emit! eng {:source :system :kind :error :level :warn :job id

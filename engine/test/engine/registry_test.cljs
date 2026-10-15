@@ -146,7 +146,7 @@
   (is (not (choose/use-spec? :blocks :nonsense)))
   (is (not (choose/use-spec? :food :build))))
 
-(deftest a-job-file-with-a-check-and-no-conditions-fails-to-load
+(deftest a-job-file-with-a-check-and-no-can-start-or-can-run-fails-to-load
   (is (re-find #"defines check but no can-start\? or can-run\?"
                (describe-message "(ns jobs.probe)\n(defn check [c] nil)\n(defn round [c] :continue)")))
   (is (nil? (describe-message "(ns jobs.probe)\n(def conditions [])\n(defn round [c] :continue)"))))
