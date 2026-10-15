@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
             [engine.fake :as fake]
+            [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.strip :as strip]))
 
@@ -83,6 +84,18 @@
               why (await (bd/waiting-after env (list job args) 3))]
           (is (= :danger (:reason why)))
           (is (empty? (bd/calls (:p env) "dig"))))))))
+
+(deftest a-danger-is-asked-between-steps-by-can-run
+  (let [can-run? (:can-run? (get registry/jobs job))
+        asked (fn [entities] (first (can-run? {:primitives (:p (world :entities entities)) :args (assoc args :danger-check true)})))]
+    (is (= :later (asked [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0} :health 20}])))
+    (is (= :ok (asked [])))))
+
+(deftest a-long-corridor-is-one-round-not-cut-at-a-step-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (true? (await (bd/ended-in-one-tick? (world) (list job args)))))))))
 
 (deftest a-bag-at-want-free-stops-bag-full-after-the-first-dig
   (async done

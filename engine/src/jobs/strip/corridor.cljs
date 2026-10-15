@@ -21,7 +21,6 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one corridor trip may take: the digs, torches and walks." :spec (a/num-in 0 nil)}})
 
-(def max-steps "Pieces of work of one round before it gives the round back with :continue (danger is weighed again in between)." 6)
 (def lit "Light at the feet from which no torch is hung." 8)
 (def torch-gap "Cells within which a torch already hung counts as lighting the feet." 3)
 
@@ -36,7 +35,7 @@
   walks to the far end and looks round there, so crossings and new corridors come into view, then takes back the torches
   standing in the segment (the caller seals behind it).
   It does not start (a skipped job) while a real danger is near (jobs.lib.danger, unless :danger-check is false: :danger)
-  or the body is short of food (:food-short); a run under way yields :continue while a danger is near. A :segment that
+  or the body is short of food (:food-short); a run under way waits :danger (can-run?, asked between steps) while one is near. A :segment that
   is neither a map nor a readable id is never possible (:bad-args).
   A spawner follows :spawner: :light (default) hangs torches on the dark standable centre-line cells of the segment inside its
   spawn box (4 either side, 1 up or down; light 8), leaves the spawner and those torches, and lists it in :kept {:why :spawner :lit true};
@@ -265,9 +264,8 @@
       :else (or (ctx/done c) :continue))))
 
 (defn ^:async round [c]
-  (let [seg (seg-of (:segment (:args c)))
-        n (atom 0)]
-    (await (pace/steps! c #(if (and (< (swap! n inc) max-steps) (not (danger-near? c))) (step! c seg) :continue)))))
+  (let [seg (seg-of (:segment (:args c)))]
+    (await (pace/steps! c #(step! c seg)))))
 
 ;; ------------------------------------------------------------------ the contract
 
@@ -276,6 +274,9 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? (cond/and bad-segment not-now))
+
+(def can-run?
+  (checks/refusing :trip "no danger near" (fn [c] (when (danger-near? c) :danger))))
 
 (defn done?
   "The segment is stripped: nothing left to take or light, the far end looked at. The result is what it leaves behind."
