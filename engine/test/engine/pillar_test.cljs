@@ -11,7 +11,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
-            [jobs.access.pillar :as pillar]))
+            [jobs.access.pillar :as pillar]
+            [jobs.lib.pillar :as pl]))
 
 ;; ------------------------------------------------------------------ the step
 
@@ -482,10 +483,10 @@
           (is (= ["cow"] (map :mob (of-kind seen :pillar.gave-up)))))))))
 
 (deftest a-mob-beside-the-cell-is-no-reason-to-wait
-  (is (nil? (pillar/mob-in [{:name "cow" :width 0.9 :height 1.4 :pos {:x 1.5 :y 64 :z 0.5}}] [0 64 0])))
-  (is (nil? (pillar/mob-in [{:name "item" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}}] [0 64 0])) "a dropped item does not block a place")
-  (is (= "cow" (:name (pillar/mob-in [cow] [0 64 0]))))
-  (is (= "zombie" (:name (pillar/mob-in [{:name "zombie" :kind "hostile" :pos {:x 0.5 :y 63.2 :z 0.5}}] [0 64 0]))) "its upper body is in the cell"))
+  (is (nil? (pl/mob-in [{:name "cow" :width 0.9 :height 1.4 :pos {:x 1.5 :y 64 :z 0.5}}] [0 64 0])))
+  (is (nil? (pl/mob-in [{:name "item" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}}] [0 64 0])) "a dropped item does not block a place")
+  (is (= "cow" (:name (pl/mob-in [cow] [0 64 0]))))
+  (is (= "zombie" (:name (pl/mob-in [{:name "zombie" :kind "hostile" :pos {:x 0.5 :y 63.2 :z 0.5}}] [0 64 0]))) "its upper body is in the cell"))
 
 (defn shove-after-place!
   "Override jumpPlace so that after each real placement the body is moved by the next of offsets [dx dy dz]."

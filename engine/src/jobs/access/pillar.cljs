@@ -120,23 +120,6 @@
             (when-not (:ok v) (assoc v :at cell))))
         cells))
 
-(def no-hitbox
-  "Entities a block is placed through."
-  #{"item" "experience_orb" "arrow" "spectral_arrow" "area_effect_cloud" "marker"})
-
-(defn mob-in
-  "The first of entities (seen-entities maps; width 0.6 and height 1.8 when not given) whose box overlaps cell, or
-  nil: the server refuses a block there."
-  [entities [x y z]]
-  (first (filter (fn [{:keys [name pos width height]}]
-                   (let [hw (/ (or width 0.6) 2)
-                         {ex :x ey :y ez :z} pos]
-                     (and ex (not (no-hitbox name))
-                          (< (- ex hw) (inc x)) (> (+ ex hw) x)
-                          (< (- ez hw) (inc z)) (> (+ ez hw) z)
-                          (< ey (inc y)) (> (+ ey (or height 1.8)) y))))
-                 entities)))
-
 (defn give-up [reason & {:as more}] (merge {:step :give-up :reason reason} more))
 
 (defn refusal->give-up [v] (merge (dissoc v :ok) {:step :give-up}))
@@ -308,7 +291,7 @@
   "A seen mob other than a hostile in cell: one to wait for. A hostile there is not waited on while it hits; the
   failed places end the pillar, for its caller to deal with the mob."
   [c cell]
-  (mob-in (remove #(= "hostile" (:kind %)) (sight/seen-entities (:primitives c) {:radius 4})) cell))
+  (pl/mob-in (remove #(= "hostile" (:kind %)) (sight/seen-entities (:primitives c) {:radius 4})) cell))
 
 (defn mob-wait!
   "Count one wait for a mob in the cell of the next block (reset by a placed block); false once they add up to

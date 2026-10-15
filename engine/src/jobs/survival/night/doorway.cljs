@@ -3,7 +3,7 @@
   dug, or one never shut) fills the gap first, so it does not sleep open to the night. The filled cells are remembered
   (:doorway-filled) and dug again by day (night.morning), so no doorway stays walled up."
   (:require [engine.ctx :as ctx]
-            [jobs.access.pillar :as pillar]
+            [jobs.lib.pillar :as pillar]
             [jobs.lib.access :as access]
             [jobs.lib.choose :as choose]
             [jobs.lib.look :as sight]

@@ -18,3 +18,20 @@
 
 (defn carried [p]
   (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory p)))
+
+(def no-hitbox
+  "Entities a block is placed through."
+  #{"item" "experience_orb" "arrow" "spectral_arrow" "area_effect_cloud" "marker"})
+
+(defn mob-in
+  "The first of entities (seen-entities maps; width 0.6 and height 1.8 when not given) whose box overlaps cell, or
+  nil: the server refuses a block there."
+  [entities [x y z]]
+  (first (filter (fn [{:keys [name pos width height]}]
+                   (let [hw (/ (or width 0.6) 2)
+                         {ex :x ey :y ez :z} pos]
+                     (and ex (not (no-hitbox name))
+                          (< (- ex hw) (inc x)) (> (+ ex hw) x)
+                          (< (- ez hw) (inc z)) (> (+ ez hw) z)
+                          (< ey (inc y)) (> (+ ey (or height 1.8)) y))))
+                 entities)))
