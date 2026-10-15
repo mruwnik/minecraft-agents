@@ -49,7 +49,9 @@
           (let [{:keys [eng p]} (setup {:containers stock} (some-> zone vector))
                 result (await (wt/ending-of eng 'jobs.storage.withdraw (merge {:chest chest :items {"bread" 8}} extra) 12))]
             (is (= taken? (pos? (count (calls p "transfer")))) (pr-str [zone extra]))
-            (is (= ({true {:kind :done} false refused-ending} taken?) result) (pr-str [zone extra]))))))))
+            (is (= ({true :done false :condition-failed} taken?) (:kind result)) (pr-str [zone extra]))
+            (is (= ({true "withdraw: everything wanted is carried" false nil} taken?) (get-in result [:data :text])) (pr-str [zone extra]))
+            (is (= ({true nil false refused-ending} taken?) ({true nil false result} taken?)) (pr-str [zone extra]))))))))
 
 (deftest withdraw-from-a-foreign-chest-warns-and-never-inspects-its-way-in
   (async done
@@ -85,7 +87,8 @@
           (let [{:keys [eng p]} (setup {:containers {"10,64,0" []} :inventory [{:name "dirt" :count 5}]} [zone])
                 result (await (wt/ending-of eng 'jobs.storage.deposit (merge {:chest chest} extra) 12))]
             (is (= put? (pos? (count (calls p "transfer")))) (pr-str [zone extra]))
-            (is (= ({true {:kind :done} false refused-ending} put?) result) (pr-str [zone extra]))))))))
+            (is (= ({true :done false :condition-failed} put?) (:kind result)) (pr-str [zone extra]))
+            (is (= ({true nil false refused-ending} put?) ({true nil false result} put?)) (pr-str [zone extra]))))))))
 
 ;; ------------------------------------------------------------------ the parents propagate :refused
 
