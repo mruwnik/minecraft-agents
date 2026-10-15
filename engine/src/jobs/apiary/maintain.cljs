@@ -23,7 +23,7 @@
     stands over a fire that is still unsafe. The harvest child cannot leave one hive out, so one unsafe fire holds
     the whole step back.
   - :breed (jobs.animals.breed, 2 bees): :target is given, the bees in the area (adults and babies) are below it,
-    there are 2 adults, it is day, it is not raining and a flower is carried.
+    there are 2 adults, it is day, it is not raining and a flower is carried (breed fetches one unless :fetch is off).
   - :deposit (jobs.storage.deposit): a :chest is given and honeycomb or honey bottles above their :keep entry are
     carried. Only produce is deposited; tools, bottles, carpet, campfires and flowers stay carried.
   A step whose conditions do not hold is booked {:skipped reason} (:safe, :no-fire, :no-carpet, :no-campfire,
@@ -35,7 +35,7 @@
   It ends :done with {:target :bees :steps {step summary}} , also when every step was
   skipped. Summaries: guard {:sunk :carpeted :reason :left}, harvest {:harvested :reason :declined}, breed {:fed
   :reason}, deposit {:gave-up :reason}.
-  :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs); they run with :fetch false, a missing item skips the step.")
+  :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs); with :fetch off a missing item skips the step. :fetch is passed to guard, harvest and breed.")
 
 (a/defargs args
   {:box {:doc "the apiary: {:from pos :to pos}; overrides :center and :radius" :spec (a/map-with {:from a/position? :to a/position?}) :default nil}
@@ -135,14 +135,14 @@
     :else {:call {:slot :harvest :args {}}}))
 
 (defn decide-breed
-  [{:keys [target]} {:keys [bees adults day raining flower reach]}]
+  [{:keys [target] :as args} {:keys [bees adults day raining flower reach]}]
   (cond
     (nil? target) {:skip :no-target}
     (>= bees target) {:skip :at-target}
     (not day) {:skip :night}
     raining {:skip :raining}
     (< adults 2) {:skip :too-few-adults}
-    (nil? flower) {:skip :no-food}
+    (and (nil? flower) (not (fetching? args))) {:skip :no-food}
     :else {:call {:slot :breed :args {:mob "bee" :count 2 :radius reach}}}))
 
 (defn decide-deposit
@@ -167,6 +167,7 @@
   (case step
     (:guard :harvest) (merge (area c center) {:fetch (:fetch (:args c))} (when (= :harvest step) {:with (:with (:args c))})
                              (when (:ignore-zones? (:args c)) {:ignore-zones? true}))
+    :breed (assoc (:args decided) :fetch (:fetch (:args c)))
     (:args decided)))
 
 (defn would-run?
