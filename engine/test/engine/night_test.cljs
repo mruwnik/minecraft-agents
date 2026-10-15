@@ -890,6 +890,18 @@
           (is (= [] (st/calls p "sleep")) "and no sleep out there")
           (is (seq (st/calls p "place")) "the shelter step dug in instead"))))))
 
+(deftest a-roof-walk-into-a-breached-home-is-not-repeated
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (await (night-at-home bed-world {:x 10 :y 64 :z 0}))
+              _ (mem/write! (:store eng) :bed-open {:pos {:x 10 :y 64 :z 0}} sh/bed-open-policy)
+              walks (atom 0)
+              log (await (with-child-log #(tu/run-until-empty eng 60)
+                           (fn [_ k _ _] (when (and (= :roof-walk k) (< 2 (swap! walks inc)))
+                                           {:kind :nothing-possible :data {}}))))]
+          (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "walked once, found the home open, did not walk again"))))))
+
 (defn ^:async dug-into-home
   "The night with a carried bed and a natural-stone home (go-to digs into it) at x 10; a looping night is cut off at the
   third walk in (a walk that fails ends it), so a red run ends. {:p :log}."

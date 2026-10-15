@@ -191,12 +191,13 @@
 ;; ------------------------------------------------------------------ a safe place
 
 (defn ^:async roof-walk!
-  "Walk (go-to :place) to the roofed place; :again. A walk that ends without arriving, or arrives and is still not roofed, is marked :roof-walk-failed."
+  "Walk (go-to :place) to the roofed place; :again. A walk that ends without arriving, or arrives and is still not roofed (or its room is breached), is marked :roof-walk-failed."
   [c {:keys [name]}]
   (hold/busy! c)
   (let [w (await (ctx/call c :roof-walk 'jobs.movement.go-to {:place name :range 0 :at-night :go}))]
     (when (and (not= :continue w)
-               (not (and (:arrived (:data w)) (sh/roofed? (:primitives c) (:roof-height (:args c))))))
+               (not (and (:arrived (:data w)) (sh/roofed? (:primitives c) (:roof-height (:args c)))
+                         (not (sh/breached-home? (:primitives c) (ctx/view c))))))
       (ctx/update-mem! c assoc :roof-walk-failed true))
     :again))
 
