@@ -14,7 +14,7 @@
  :cases
  [{:name "cow-in-gate-wanders-off"
    :act [[:summon "cow" [16.5 0 12.5] "{}"]]
-   :expect [{:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 80}]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :pen-gate} :data {:kind :done}} :within-s 80}]
    :after [[:block [16 0 12] "oak_fence_gate[open=false]"]]}
   {:name "cow-stuck-in-gate-stops"
    :act [[:summon "cow" [16.5 0 12.5] "{NoAI:1b}"]]

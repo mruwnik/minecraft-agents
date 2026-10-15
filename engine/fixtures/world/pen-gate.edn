@@ -19,12 +19,12 @@
  [{:name "both-planned-gates-shut"
    :plans [{:id "pen" :parts [{:id "gates" :cells [#at [13 0 12] #at [19 0 12]] :want [:any "oak_fence_gate"]}]}]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :within-s 30}
-            {:event {:source :job :kind :completed :data {:shut 2 :left []}} :within-s 50}]
+            {:event {:source :reflex :kind :ended :context {:reflex-id :pen-gate} :data {:kind :done}} :within-s 50}]
    :after [[:block [13 0 12] "oak_fence_gate[open=false]"]
            [:block [19 0 12] "oak_fence_gate[open=false]"]]}
   {:name "only-the-planned-gate-shut"
    :plans [{:id "pen" :parts [{:id "gate" :cells [#at [13 0 12]] :want [:any "oak_fence_gate"]}]}]
-   :expect [{:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 50}]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :pen-gate} :data {:kind :done}} :within-s 50}]
    :after [[:block [13 0 12] "oak_fence_gate[open=false]"]
            [:block [19 0 12] "oak_fence_gate[open=true]"]]}
   {:name "unplanned-gates-left-open"
@@ -44,7 +44,7 @@
             [:set [2 0 28] "oak_fence_gate[facing=south,open=true]"]]
    :body {:at [16.5 0 8.5] :yaw 0}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :within-s 30}
-            {:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 80}]
+            {:event {:source :reflex :kind :ended :context {:reflex-id :pen-gate} :data {:kind :done}} :within-s 80}]
    :after [[:block [2 0 28] "oak_fence_gate[open=false]"]]
    :limit-s 100}
   {:name "gate-walled-into-stone-gives-up"
