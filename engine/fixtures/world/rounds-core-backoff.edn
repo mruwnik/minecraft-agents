@@ -1,3 +1,4 @@
+;; Card 7fd2b650 case at the end: a status-only :backoff map never turns backoff on for a reflex that has none.
 ;; Rounds redesign (card 978285e1): backoff belongs to register entries only, a listed job is only flagged.
 ;; A stone island x 10..22, z 10..12 sits inside a 5-wide, 6-deep void ring (x 5..27, z 5..17); the body stands south of the ring (z 18.5)
 ;; and cannot cross it. The gates and the chest on the island are in click range of nothing the walker can reach.
@@ -29,6 +30,15 @@
             {:no-event {:source :job :kind :backoff} :for-s 90 :until {:source :job :kind :fruitless}}]}
   {:name "burning-never-backs-off"
    :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
+   :blocks [[:set [10 -1 22] "netherrack"] [:set [10 0 22] "fire"]]
+   :body {:at [10.5 0 22.5] :settle-s 1}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :burning}} :within-s 20}
+            {:no-event {:source :reflex :kind :backoff} :for-s 45}]
+   :limit-s 80}
+  ;; card 7fd2b650: a status-only :backoff map (no :after/:first-s/:max-s) on a reflex whose default is no backoff keeps it off
+  {:name "burning-with-a-status-only-backoff-map-never-backs-off"
+   :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :backoff {:failure #{"no-water"} :neutral #{"timeout"}}
+               :job (jobs.survival.extinguish {:water-radius 6})}]
    :blocks [[:set [10 -1 22] "netherrack"] [:set [10 0 22] "fire"]]
    :body {:at [10.5 0 22.5] :settle-s 1}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :burning}} :within-s 20}

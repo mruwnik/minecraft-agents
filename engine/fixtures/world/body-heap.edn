@@ -1,0 +1,12 @@
+;; Cards 2f03f1a6, dff4e337, 791bffab, fe9c192f, 135852ce: a body logs a periodic body.heap event (V8 heap used and limit, rss, external,
+;; array buffers). The runner starts bodies from out/body-release.cjs with --max-old-space-size=128, so the reported limit is the
+;; capped one (an uncapped V8 limit is some GB). Stats every 2 s for the test.
+;; Should-succeed: body.heap arrives with a used size and a limit under 400 MB. Should-fail: a limit above that never appears.
+{:name "heap-event-reports-a-capped-limit"
+ :tags [:engine :memory] :time :any
+ :plot {:height 6}
+ :settings {:engine.perception/stats-ms 2000}
+ :body {:at [16.5 0 16.5] :settle-s 2}
+ :expect [{:event {:source :body :kind :body.heap :data {:heap-used [:> 0] :heap-limit [:< 400000000] :rss [:> 0]}} :within-s 20}
+          {:no-event {:source :body :kind :body.heap :data {:heap-limit [:>= 400000000]}} :for-s 8}]
+ :limit-s 40}

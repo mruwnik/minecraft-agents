@@ -1,0 +1,19 @@
+;; Card 608d2956: the jobs tool marks a submitted (repeat ...) job survive-death, so a standing farm/kitchen loop outlives a death;
+;; a one-shot job still goes with the dead body (job.cancelled). The jobs are submitted through jobs.mjs (the agent tool), no flag.
+;; Should-succeed: after the respawn the repeat job is still listed. Should-fail: the one-shot go-to is cancelled by the death.
+{:defaults
+ {:tags [:scheduler :survival :death :tool] :time :any
+  :plot {:height 8}
+  :body {:at [10.5 0 10.5] :spawnpoint [4 0 4]}
+  :limit-s 90}
+ :cases
+ [{:name "repeat-job-survives-a-death"
+   :act [[:http :submit (repeat (jobs.movement.look-around {:every-ms 500})) [] {:ok true}]
+         [:kill-body] [:await {:source :body :kind :respawned} 30] [:wait-s 3]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
+   :expect [{:event {:source :body :kind :respawned} :within-s 40}
+            {:no-event {:source :job :kind :cancelled} :for-s 10 :of-job true}]}
+  {:name "one-shot-job-is-cancelled-by-a-death"
+   :act [[:http :submit (jobs.movement.go-to {:pos #at [28 0 28] :range 1}) [] {:ok true}]
+         [:kill-body]]
+   :expect [{:event {:source :job :kind :cancelled} :within-s 40 :of-job true}]}]}

@@ -1,0 +1,27 @@
+;; Cards e9da64ac, b0bc6582, 2fc5602d: the default :needs-bed trigger fires jobs.items.obtain with its own :any-of (it ended bad-args
+;; with no args), and a register that names :needs-bed reaches the body. The respawn bed the body remembers (:spawn-bed at [8 0 16]) is
+;; gone (no bed block there), so the trigger holds by day; wool, planks and a crafting table beside the body make the bed.
+;; Should-succeed: the reflex fires, obtain does not stop bad-args, the body ends with a bed. Should-fail: a body that still sees its
+;; remembered spawn bed does not fire it.
+{:defaults
+ {:tags [:survival :triggers :items] :time :day
+  :plot {:height 6}
+  :register [{:trigger :needs-bed :persistence :cooldown :cooldown-s 600}]
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "lost-spawn-bed-fetches-a-bed"
+   :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}]
+   :blocks [[:set [20 0 16] "crafting_table"]]
+   :body {:inventory [["white_wool" 3] ["oak_planks" 3]]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :within-s 30}
+            {:no-event {:source :job :kind :stopped :data {:reason :bad-args}} :for-s 60 :until {:source :job :kind :completed}}
+            {:event {:source :job :kind :completed} :within-s 80}]
+   :after [[:item "white_bed" [:>= 1]]]}
+  {:name "standing-spawn-bed-does-not-fire"
+   :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}]
+   :blocks [[:set [8 0 16] "red_bed[facing=east,part=foot]"] [:set [9 0 16] "red_bed[facing=east,part=head]"]]
+   :body {:inventory [["white_wool" 3] ["oak_planks" 3]]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :for-s 20}]
+   :after [[:block [8 0 16] "red_bed"] [:item "white_bed" 0]]
+   :limit-s 40}]}

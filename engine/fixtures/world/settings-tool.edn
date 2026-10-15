@@ -1,0 +1,29 @@
+;; Card 9e2de56a: observe.mjs settings reads the resolved settings with each key's layer and the game rate; settings set/unset write the
+;; body's settings.edn (validated) and reload at once. The server's tick rate is not touched here (the sweep owns it): only that
+;; game-rate is shown. Should-succeed: a :settings override shows with layer :body; set shows its value without a reload step;
+;; unset puts the code default back. Should-fail: a value that fails the key's spec is refused and the file keeps the old value.
+{:defaults
+ {:tags [:settings :tool] :time :any
+  :plot {:height 6}
+  :body {:at [16.5 0 16.5] :settle-s 2}
+  :limit-s 40}
+ :cases
+ [{:name "override-in-settings-edn-shows-layer-body"
+   :settings {:engine.backoff/after 5}
+   :act [[:cli "observe" ["$body" "--world" "$world" "settings" "--changed"]
+          {:game-rate [:> 0] :frozen? false :settings {:engine.backoff/after {:value 5 :layer :body}}}]]
+   :expect [{:no-event {:source :job :kind :failed} :for-s 3}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+  {:name "set-shows-without-reload-and-unset-restores"
+   :act [[:cli "observe" ["$body" "--world" "$world" "settings" "set" ":engine.backoff/first-s" "2"] {:ok true}]
+         [:cli "observe" ["$body" "--world" "$world" "settings" "--changed"] {:settings {:engine.backoff/first-s {:value 2 :layer :body}}}]
+         [:cli "observe" ["$body" "--world" "$world" "settings" "unset" ":engine.backoff/first-s"] {:ok true}]
+         [:cli "observe" ["$body" "--world" "$world" "settings"] {:settings {:engine.backoff/first-s {:value 1 :layer :code}}}]]
+   :expect [{:no-event {:source :job :kind :failed} :for-s 3}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+  {:name "bad-value-is-refused-and-file-unchanged"
+   :settings {:engine.backoff/after 5}
+   :act [[:cli "observe" ["$body" "--world" "$world" "settings" "set" ":engine.backoff/after" "\"many\""] {:ok false}]
+         [:cli "observe" ["$body" "--world" "$world" "settings" "--changed"] {:settings {:engine.backoff/after {:value 5 :layer :body}}}]]
+   :expect [{:no-event {:source :job :kind :failed} :for-s 3}]
+   :after [[:body-near [16.5 0 16.5] 3]]}]}
