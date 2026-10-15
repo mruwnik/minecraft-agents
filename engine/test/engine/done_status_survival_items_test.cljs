@@ -25,7 +25,7 @@
     (stack 2) {} {:start 1} [:later :crafting]
     (stack 2) {} {} [:later :crafting]
     (stack 0) {:count 0} {} [:ok :crafted]
-    (stack 2) {} {:start 0 :table-placed {:x 1 :y 64 :z 0}} [:later :table-up]
+    (stack 2) {} {:start 0 :table-placed {:x 1 :y 64 :z 0}} [:ok :crafted]
     (stack 2) {:keep-table true} {:start 0 :table-placed {:x 1 :y 64 :z 0}} [:ok :crafted]
     (stack 2) {} {:start 0 :table-placed {:x 1 :y 64 :z 0} :picked-up true} [:ok :crafted]
     (stack 2) {} {:start 0 :table-placed {:x 5 :y 64 :z 0}} [:ok :crafted]))
