@@ -1,0 +1,121 @@
+;; A refuge (pillar, seal) and what follows it. Cards 090211e8 (a creeper arriving at a pillar: the body leaves before a hit;
+;; setting off: it stays), 4c5ec59c (a zombie waiting at the pillar's foot keeps the hide past :hide-s 60), c3676cae (a walk
+;; off a pillar keeps out of reach of a zombie at its foot), 24fe30d6 (the hide names the zombie; a queued job runs after),
+;; e0670a91 and 8d9b5bbc (seal blocks are ledgered: cleanup takes them back once the mob is gone), b5c1d94a 40613c1e 94b5eaee
+;; 73aa2088 (a walk from inside the plug holds :sealed-hostile-near for a skeleton heard near, for :plug-wait-ms in all, then
+;; gives up; a skeleton heard far does not hold), 1f0b4279 and 8035feed (a body in a hole with dirt, a zombie that moves).
+;; Pillar cases: open ground, 20 dirt, one NoAI zombie 7 blocks off (a lone melee mob between cover-gap 5 and refuge-gap 10:
+;; pillar first). Tunnel cases: the cornered-retreat stone mass (x 2..30, z 10..22, y 0..4), 1x2 tunnel along z 16 from x 5.
+{:defaults
+ {:tags [:hostile :survival :cornered :refuge]
+  :time :any
+  :mobs :keep
+  :plot {:height 16}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 900 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "creeper-at-the-pillar-body-leaves-before-a-hit"
+   :body {:inventory [["dirt" 20]]}
+   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 40]
+         [:summon "creeper" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :within-s 40}
+            {:event {:source :job :kind :retreat.hide-breached :message [:contains "creeper"]} :within-s 70}]}
+  {:name "creeper-at-the-pillar-setting-off-body-stays"
+   :settings {:jobs.survival.retreat-refuge/leave-for-breakers false}
+   :body {:inventory [["dirt" 20]]}
+   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 40]
+         [:summon "creeper" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :within-s 40}
+            {:no-event {:source :job :kind :retreat.hide-breached} :for-s 70}]
+   :after [[:body-near [16.5 3 16.5] 1.5]]
+   :limit-s 80}
+  {:name "zombie-at-the-pillar-foot-keeps-the-hide-past-60-s"
+   :body {:inventory [["dirt" 20]]}
+   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 40]
+         [:rcon "execute as @e[type=zombie,tag=wt,$BOX] at @s run tp @s ~5 ~ ~"]
+         [:wait-s 90]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   :expect [{:event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :within-s 40}
+            {:no-event {:source :job :kind :retreat.hide-ended} :for-s 110}
+            {:event {:source :job :kind :retreat.hide-ended} :within-s 180}]
+   :limit-s 190}
+  {:name "walk-off-a-pillar-keeps-clear-of-the-zombie-at-its-foot"
+   :register []
+   :blocks [[:fill [16 0 16] [16 2 16] "dirt"]]
+   :body {:at [16.5 3 16.5] :effects []}
+   :act [[:summon "zombie" [14.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:255b,duration:2400}]}"]
+         [:wait-s 3]
+         [:job (jobs.movement.go-to {:pos #at [3 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result :data {:arrived true}}}]
+   :limit-s 70}
+  {:name "hide-names-the-zombie-and-the-queued-dig-runs-after"
+   :blocks [[:set [24 0 24] "dirt"]]
+   :body {:inventory [["dirt" 20]]}
+   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 40]
+         [:job (jobs.blocks.dig {:pos #xyz [24 0 24]})]]
+   :expect [{:event {:source :job :kind :retreat_sealed :message [:contains "zombie"] :data {:hostiles [:has [:any]]}} :within-s 40}
+            {:event {:source :job :kind :completed} :within-s 170 :of-job true}]
+   :after [[:not-block [24 0 24] "dirt"]]
+   :limit-s 180}
+  {:name "dead-end-seal-is-taken-back-once-the-skeleton-is-gone"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
+              {:trigger :scaffold-left :args {} :job (jobs.access.cleanup {:within 32})}]
+   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
+            [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
+   :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
+   :act [[:summon "skeleton" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 40]
+         [:wait-s 5]
+         [:rcon "kill @e[type=skeleton,tag=wt,$BOX]"]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 150}]
+   :after [[:not-block [6 0 16] "cobblestone"] [:not-block [6 1 16] "cobblestone"]]
+   :limit-s 170}
+  {:name "walk-from-the-plug-holds-for-the-skeleton-near-then-gives-up"
+   :settings {:jobs.movement.go-to.tuning/plug-wait-ms 40000}
+   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
+            [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
+   :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
+   :act [[:summon "skeleton" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 40]
+         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
+            {:event {:source :job :kind :go-to.sealed-hostile-near :data {:mob "skeleton"}} :within-s 150}
+            {:event {:source :job :kind :result :data {:arrived false}} :within-s 230 :of-job true}]
+   :after [[:block [6 0 16] "cobblestone"] [:body-near [5.5 0 16.5] 1.5]]
+   :limit-s 240}
+  {:name "walk-from-the-plug-skeleton-heard-far-gives-no-hold"
+   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
+            [:set [8 1 16] "torch"] [:set [14 1 16] "torch"] [:set [20 1 16] "torch"]]
+   :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
+   :act [[:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 40]
+         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
+            {:event {:source :job :kind :result} :within-s 200 :of-job true}
+            {:no-event {:source :job :kind :go-to.sealed-hostile-near} :for-s 200 :until {:source :job :kind :result :data {:arrived [:any]}} :of-job true}]
+   :limit-s 210}
+  {:name "zombie-diagonal-to-a-stair-hole-body-survives"
+   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 2 16] [16 2 16] "air"]]
+   :body {:at [16.5 2 16.5] :inventory [["dirt" 12]] :effects [["resistance" 900 1]]}
+   :act [[:summon "zombie" [17.5 3 17.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
+            {:no-event {:source :body :kind :died} :for-s 60}
+            {:count-event {:source :body :kind :hurt :data {:causes [:has "zombie"]}} :for-s 60 :at-most 6}]
+   :limit-s 70}
+  {:name "zombie-coming-at-a-body-in-a-pit-with-4-dirt-seals-it"
+   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 1 16] [16 2 16] "air"]]
+   :body {:at [16.5 1 16.5] :inventory [["dirt" 4]] :effects [["resistance" 900 1]]}
+   :act [[:summon "zombie" [28.5 3 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 60}
+            {:no-event {:source :body :kind :died} :for-s 60}]
+   :after [[:block [16 3 16] "dirt"]]
+   :limit-s 70}]}

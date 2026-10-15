@@ -1,0 +1,17 @@
+;; go-to's danger re-plan on a long route (card d68c3b65): a serpentine course (walls along z with the gap at alternate
+;; ends, ~300 blocks of walking) and a NoAI zombie in the middle corridor, sensed only once the body turns into it. The
+;; re-plan round the zombie must not stop-and-go until go-to's :searching give-up: the walk arrives.
+{:tags [:movement :go-to :danger]
+ :name "serpentine-route-with-a-zombie-mid-way-arrives"
+ :time :any
+ :mobs :keep
+ :plot {:height 8 :length 96 :width 32}
+ :blocks [[:fill [12 0 0] [12 2 25] "stone"] [:fill [24 0 6] [24 2 31] "stone"] [:fill [36 0 0] [36 2 25] "stone"]
+          [:fill [48 0 6] [48 2 31] "stone"] [:fill [60 0 0] [60 2 25] "stone"] [:fill [72 0 6] [72 2 31] "stone"]
+          [:fill [84 0 0] [84 2 25] "stone"]]
+ :body {:at [4.5 0 4.5] :effects [["resistance" 900 4]]}
+ :act [[:summon "zombie" [44.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+       [:job (jobs.movement.go-to {:pos #at [92 0 4] :range 1})]]
+ :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 220 :of-job true}]
+ :after [[:body-near [92.5 0 4.5] 2]]
+ :limit-s 230}

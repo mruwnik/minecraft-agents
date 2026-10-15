@@ -1,0 +1,74 @@
+;; Fight or flee at close quarters, with mobs that move and hit (AI on; helmets stop sun burn). Cards 23c5129e (a fist body
+;; with food 6 cannot outrun a spider: it fights), f7e75f9e 89661b40 db3338ae 7725ab3f a0e376ef (a flee leg never stands
+;; searching with a mob in reach: the body swings within seconds), 8ab62538 (an axe swings at its own cooldown: few strong
+;; hits), 05029ce5 (an armed body hit at a dead end fights before it seals), 222faba7 (a witch is not fought in iron at
+;; health 11), d2f4d76e (a full-iron body with a sword does not flee skeletons it only hears).
+;; Food 6: the runner feeds the body to food 20 and saturation 20; hunger amplifier 226 for 6 s burns 136 exhaustion, 34 points (20 saturation, 14 food).
+{:defaults
+ {:tags [:hostile :survival :combat]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [16.5 0 16.5]}
+  :limit-s 70}
+ :cases
+ [{:name "fist-body-at-food-6-fights-the-spider"
+   :act [[:rcon "effect give $BODY minecraft:hunger 6 226 true"]
+         [:wait-s 7]
+         [:rcon "damage $BODY 2 minecraft:generic"]
+         [:summon "spider" [19.5 0 16.5] "{NoAI:1b}"]]
+   :expect [{:event {:source :body :kind :hurt :data {:food [:<= 6]}} :within-s 15}
+            {:event {:source :job :kind :hostile.decided :data {:mob "spider" :decision :fight}} :within-s 30}
+            {:no-event {:source :job :kind :child_started :data {:slot :flee}} :for-s 30}]}
+  {:name "unarmed-body-walled-in-with-a-zombie-swings-within-seconds"
+   :blocks [[:fill [12 0 12] [20 2 20] "obsidian" :hollow] [:fill [13 0 13] [19 2 19] "air"]
+            [:set [13 1 13] "torch"] [:set [19 1 19] "torch"]]
+   :body {:effects [["resistance" 600 3]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [27 0 16] :range 1})]
+         [:wait-s 2]
+         [:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
+            {:event {:source :action :kind :started :data {:name "attack"}} :within-s 15}
+            {:no-event {:source :body :kind :died} :for-s 40}]
+   :limit-s 50}
+  {:name "iron-axe-kills-a-zombie-in-few-full-swings"
+   :body {:inventory [["iron_axe" 1]] :effects [["resistance" 600 3]]}
+   :act [[:summon "zombie" [20.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:count-event {:source :action :kind :done :data {:name "attack" :status "hit"}} :for-s 45 :at-least 2 :at-most 4}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 0]]
+   :limit-s 60}
+  {:name "armed-body-hit-at-a-dead-end-fights-before-it-seals"
+   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
+            [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
+   :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20] ["iron_sword" 1]] :effects [["resistance" 600 1]]}
+   :act [[:rcon "damage $BODY 6 minecraft:generic"]
+         [:summon "zombie" [9.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [12.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :action :kind :started :data {:name "attack"}} :within-s 30}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :action :kind :started :data {:name "attack"}}}]}
+  {:name "iron-body-at-health-11-does-not-fight-a-witch"
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet"]
+         [:rcon "item replace entity $BODY armor.chest with minecraft:iron_chestplate"]
+         [:rcon "item replace entity $BODY armor.legs with minecraft:iron_leggings"]
+         [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
+         [:rcon "damage $BODY 9 minecraft:generic"]
+         [:summon "witch" [22.5 0 16.5] "{NoAI:1b}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "witch" :decision :flee}} :within-s 20}
+            {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 30}]
+   :after [[:entities "type=witch,tag=wt" [[0 0 0] [31 6 31]] 1]]
+   :limit-s 45}
+  {:name "full-iron-body-does-not-flee-skeletons-it-only-hears"
+   :blocks [[:fill [20 0 10] [20 4 22] "stone"]]
+   :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]]}
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet"]
+         [:rcon "item replace entity $BODY armor.chest with minecraft:iron_chestplate"]
+         [:rcon "item replace entity $BODY armor.legs with minecraft:iron_leggings"]
+         [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
+         [:summon "skeleton" [23.5 0 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [23.5 0 17.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.heard-only} :within-s 50}
+            {:no-event {:source :job :kind #{:retreat.target :hostile.fled}} :for-s 50}]
+   :after [[:body-near [16.5 0 16.5] 3]]
+   :limit-s 60}]}

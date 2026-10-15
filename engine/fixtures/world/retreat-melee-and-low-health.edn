@@ -2,7 +2,8 @@
 ;; zombie, no seal first), 72b423bf (zombie near and skeleton with a line of fire: cover, not a swing at the zombie),
 ;; fabdb0ed (low health beside a creeper walks, no take-cover seal), e0dbcd37 (armed body turns on the zombie; a creeper is
 ;; still backed off from). Mobs are helmeted (no sun burn). NoAI
-;; ones never hurt; the fight cases judge by the zombie dying. Open flat ground, torches for light.
+;; ones never hurt; the fight cases judge by the zombie dying. The 72b423bf skeleton has AI (its arrows are the "under
+;; fire" the cover rule reads; resistance 1 lets the hits count) and the zombie walks in slowed, after the first arrow. Open flat ground, torches for light.
 {:defaults
  {:tags [:hostile :survival :cornered]
   :time :any
@@ -25,9 +26,9 @@
             {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 30}]
    :after [[:entities "type=creeper,tag=wt" [[0 0 0] [31 6 31]] 1]]}
   {:name "zombie-near-and-skeleton-in-line-takes-cover-not-a-swing"
-   :body {:inventory [["iron_sword" 1] ["cobblestone" 20]]}
-   :act [[:summon "zombie" [18.5 0 18.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:summon "skeleton" [26.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :body {:inventory [["iron_sword" 1] ["cobblestone" 20]] :effects [["resistance" 600 1]]}
+   :act [[:summon "skeleton" [25.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [16.5 0 21.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:2b,duration:2400}]}"]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 1]]}
   {:name "low-health-creeper-and-skeleton-walks-away"

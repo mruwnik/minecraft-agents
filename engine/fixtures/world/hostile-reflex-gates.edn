@@ -1,0 +1,91 @@
+;; Which reflex or fight takes a body with a hostile about. Cards 8e7ff6d6 (on fire from a fire-aspect zombie's hit: the
+;; burning reflex yields to hostile-near, no extinguish standing still), 4bfba733 (needs-weapon waits 1500 ticks after dawn
+;; and while a hostile is known within 40; put after the time set, else it fires in the settle), 55a1871b (fight-back's :leash: a hostile beyond it is not chased), 57f49df1
+;; b74a043c ebac9484 (a provoked enderman, hit by the body through /damage: water first, else a roofed 2-high gap, else a
+;; seal; never a fight). Mobs helmeted.
+{:defaults
+ {:tags [:hostile :survival :reflex]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [16.5 0 16.5]}
+  :limit-s 70}
+ :cases
+ [{:name "set-alight-by-a-zombie-hostile-near-keeps-the-body"
+   :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}
+              {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :body {:effects [["resistance" 900 2]]}
+   :act [[:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1},mainhand:{id:\"minecraft:iron_sword\",count:1,components:{\"minecraft:enchantments\":{\"minecraft:fire_aspect\":2}}}}}"]]
+   :expect [{:event {:source :body :kind :hurt :data {:causes [:has "fire"]}} :within-s 30}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :burning}} :for-s 40}
+            {:no-event {:source :job :kind :extinguish_wait} :for-s 40}]
+   :limit-s 50}
+  {:name "needs-weapon-waits-the-dawn-grace"
+   :time :day
+   :register []
+   :act [[:time-set 23500]
+         [:cli "triggers" ["$body" "--world" "$world" "put" "needs-weapon" "--trigger" "needs-weapon" "--persistence" "cooldown" "--cooldown-s" "600" "--job" "(jobs.items.obtain {:any-of [\"stone_sword\" \"wooden_sword\"] :count 1 :explore true})" "--by" "world-test"]]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 55}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 120}]
+   :limit-s 130}
+  {:name "needs-weapon-holds-while-a-zombie-is-known"
+   :time :day
+   :register []
+   :act [[:summon "zombie" [26.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:time-set 23500]
+         [:cli "triggers" ["$body" "--world" "$world" "put" "needs-weapon" "--trigger" "needs-weapon" "--persistence" "cooldown" "--cooldown-s" "600" "--job" "(jobs.items.obtain {:any-of [\"stone_sword\" \"wooden_sword\"] :count 1 :explore true})" "--by" "world-test"]]
+         [:wait-s 95]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 95}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 170}]
+   :limit-s 180}
+  {:name "fight-back-leash-does-not-chase-past-it"
+   :register []
+   :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]]}
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:job (jobs.survival.fight-back {:range 8 :leash 3})]]
+   :expect [{:event {:source :job :kind :nothing-possible} :within-s 20 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "attack"}} :for-s 20}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 1] [:body-near [16.5 0 16.5] 3]]
+   :limit-s 30}
+  {:name "fight-back-within-the-leash-kills"
+   :register []
+   :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]]}
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:job (jobs.survival.fight-back {:range 8})]]
+   :expect [{:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 20}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 0]]
+   :limit-s 40}
+  {:name "provoked-enderman-no-shelter-body-seals"
+   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
+   :act [[:summon "enderman" [20.5 0 16.5] "{}"]
+         [:wait-s 1]
+         [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
+            {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 40}]
+   :limit-s 50}
+  {:name "provoked-enderman-water-near-body-steps-in"
+   :blocks [[:fill [19 0 14] [23 0 18] "stone"] [:fill [20 0 15] [22 0 17] "water"]]
+   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
+   :act [[:summon "enderman" [11.5 0 16.5] "{}"]
+         [:wait-s 1]
+         [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
+   :after [[:body-near [21.5 0 16.5] 2]]
+   :limit-s 40}
+  {:name "provoked-enderman-roof-gap-body-walks-under"
+   :blocks [[:fill [20 0 14] [20 1 14] "stone"] [:fill [24 0 18] [24 1 18] "stone"] [:fill [20 2 14] [24 2 18] "stone"]]
+   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
+   :act [[:summon "enderman" [11.5 0 16.5] "{}"]
+         [:wait-s 1]
+         [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
+   :after [[:body-near [22.5 0 16.5] 2.5]]
+   :limit-s 40}]}

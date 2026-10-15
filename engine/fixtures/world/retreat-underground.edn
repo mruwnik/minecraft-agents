@@ -1,0 +1,90 @@
+;; Flights under ground, in closed stone (no sky light: shelter/buried?), lit by torches. Cards 871c180a (takes its own
+;; stair up, ledgered as :stair-way, before a hop across the cave; with none and a pickaxe digs a pocket first), 381bb20c and
+;; 46997179 (the interrupted walk's goal up on the surface, past the mob, gets no leg: the own stair first), a45562d8 (a
+;; dead-end slope: no step ends more than 3 below the start), c5b20862 (a creeper up the own stair and a zombie below: no
+;; step ends within 4 of either; it seals), bd8b6572 (a lit 1-wide tunnel: the flight does not look into the rock).
+;; Mobs are NoAI unless named, helmeted; the stair cases' room is x 3..14, z 13..19, y 0..2, the stair climbs east along
+;; z 16 from x 15 (feet y 1) to x 22 (feet y 8), roof y 11.
+{:defaults
+ {:tags [:hostile :survival :flee :underground]
+  :time :any
+  :mobs :keep
+  :plot {:height 16}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:effects [["resistance" 600 4]]}
+  :limit-s 70}
+ :cases
+ [{:name "buried-body-takes-its-own-stair-up"
+   :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 13] [14 2 19] "air"]
+            [:fill [15 1 16] [15 3 16] "air"] [:fill [16 2 16] [16 4 16] "air"] [:fill [17 3 16] [17 5 16] "air"]
+            [:fill [18 4 16] [18 6 16] "air"] [:fill [19 5 16] [19 7 16] "air"] [:fill [20 6 16] [20 8 16] "air"]
+            [:fill [21 7 16] [21 9 16] "air"] [:fill [22 8 16] [22 10 16] "air"]
+            [:set [3 0 13] "torch"] [:set [14 0 19] "torch"] [:set [3 0 19] "torch"] [:set [14 0 13] "torch"] [:set [19 5 16] "torch"]]
+   :memory [{:kind :stair-way :data {:dim "overworld" :floors [#at [15 0 16] #at [16 1 16] #at [17 2 16] #at [18 3 16]
+                                                                #at [19 4 16] #at [20 5 16] #at [21 6 16] #at [22 7 16]]}}]
+   :body {:at [11.5 0 16.5]}
+   :act [[:summon "zombie" [4.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.target :data {:target [:near #at [22 8 16] 2.5]}} :within-s 30}
+            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [8 0 16] 4]}} :for-s 30}]
+   :after [[:body-near [22.5 8 16.5] 3]]}
+  {:name "buried-body-with-a-pickaxe-and-no-stair-digs-a-pocket-first"
+   :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 13] [14 2 19] "air"]
+            [:set [3 0 13] "torch"] [:set [14 0 19] "torch"] [:set [3 0 19] "torch"] [:set [14 0 13] "torch"]]
+   :body {:at [11.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:summon "zombie" [4.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :action :kind :started :data {:name "dig"}} :within-s 30}
+            {:no-event {:source :job :kind :retreat.target} :for-s 30 :until {:source :action :kind :started :data {:name "dig"}}}
+            {:event {:source :job :kind :retreat_sealed} :within-s 50}]}
+  {:name "goal-on-the-surface-past-the-mob-gets-no-leg-the-stair-does"
+   :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 13] [14 2 19] "air"]
+            [:fill [15 1 16] [15 3 16] "air"] [:fill [16 2 16] [16 4 16] "air"] [:fill [17 3 16] [17 5 16] "air"]
+            [:fill [18 4 16] [18 6 16] "air"] [:fill [19 5 16] [19 7 16] "air"] [:fill [20 6 16] [20 8 16] "air"]
+            [:fill [21 7 16] [21 9 16] "air"] [:fill [22 8 16] [22 10 16] "air"]
+            [:set [3 0 13] "torch"] [:set [14 0 19] "torch"] [:set [3 0 19] "torch"] [:set [14 0 13] "torch"] [:set [19 5 16] "torch"]]
+   :memory [{:kind :stair-way :data {:dim "overworld" :floors [#at [15 0 16] #at [16 1 16] #at [17 2 16] #at [18 3 16]
+                                                                #at [19 4 16] #at [20 5 16] #at [21 6 16] #at [22 7 16]]}}]
+   :body {:at [11.5 0 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [2 12 4] :range 1})]
+         [:wait-s 3]
+         [:summon "zombie" [6.5 0 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:event {:source :job :kind :retreat.target :data {:target [:near #at [22 8 16] 2.5]}} :within-s 40}
+            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [2 12 4] 8]}} :for-s 40}]}
+  {:name "dead-end-slope-no-step-ends-3-below-the-start"
+   :plot {:height 18}
+   :blocks [[:fill [0 0 0] [31 14 31] "stone"] [:fill [4 10 15] [9 12 16] "air"]
+            [:fill [10 9 15] [11 11 16] "air"] [:fill [12 8 15] [13 10 16] "air"] [:fill [14 7 15] [15 9 16] "air"]
+            [:fill [16 6 15] [17 8 16] "air"] [:fill [18 5 15] [19 7 16] "air"] [:fill [20 4 15] [21 6 16] "air"]
+            [:fill [22 3 15] [23 5 16] "air"] [:fill [24 2 15] [25 4 16] "air"] [:fill [26 1 15] [27 3 16] "air"]
+            [:fill [28 0 15] [29 2 16] "air"]
+            [:set [5 10 16] "torch"] [:set [14 7 16] "torch"] [:set [20 4 16] "torch"] [:set [26 1 16] "torch"]]
+   :body {:at [7.5 10 15.5]}
+   :act [[:summon "zombie" [4.5 10 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [24 2 16] 6]}} :for-s 50}]
+   :after [[:body-near [10.5 8 15.5] 5]]}
+  {:name "creeper-up-the-own-stair-zombie-below-seals-no-step-near-either"
+   :blocks [[:fill [0 0 0] [31 12 31] "stone"] [:fill [3 0 13] [12 2 19] "air"]
+            [:fill [13 1 16] [13 3 16] "air"] [:fill [14 2 16] [14 4 16] "air"] [:fill [15 3 16] [15 5 16] "air"]
+            [:fill [16 4 16] [16 6 16] "air"] [:fill [17 5 16] [17 7 16] "air"] [:fill [18 6 16] [18 8 16] "air"]
+            [:fill [19 7 16] [19 9 16] "air"] [:fill [20 8 16] [20 10 16] "air"] [:fill [21 9 16] [21 11 16] "air"]
+            [:set [3 0 13] "torch"] [:set [12 0 19] "torch"] [:set [14 2 16] "torch"] [:set [19 7 16] "torch"]]
+   :memory [{:kind :stair-way :data {:dim "overworld" :floors [#at [13 0 16] #at [14 1 16] #at [15 2 16] #at [16 3 16] #at [17 4 16]
+                                                                #at [18 5 16] #at [19 6 16] #at [20 7 16] #at [21 8 16]]}}]
+   :body {:at [15.5 3 16.5] :inventory [["cobblestone" 20]]}
+   :act [[:summon "creeper" [18.5 6 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
+            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [18 6 16] 4]}} :for-s 40}
+            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [10 0 16] 4]}} :for-s 40}]
+   :after [[:body-near [15.5 3 16.5] 2]]}
+  {:name "lit-tunnel-flight-does-not-look-into-the-rock"
+   :plot {:height 8}
+   :blocks [[:fill [8 0 10] [30 4 22] "stone"] [:fill [8 0 16] [29 1 16] "air"]
+            [:set [11 0 16] "torch"] [:set [17 0 16] "torch"] [:set [23 0 16] "torch"] [:set [28 0 16] "torch"]]
+   :body {:at [20.5 0 16.5] :yaw 90 :settle-s 5}
+   :act [[:summon "zombie" [23.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:1b,duration:2400}]}"]]
+   :expect [{:count-event {:source :job :kind :retreat.target} :for-s 15 :at-least 2}
+            {:count-event {:source :action :kind :started :data {:name "look"} :context {:reflex-id :hostile-near}} :for-s 15 :at-most 3}]
+   :limit-s 40}]}
