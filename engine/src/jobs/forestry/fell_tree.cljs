@@ -43,7 +43,7 @@
   up to their caps.
   Before the first log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
   gets one (jobs.lib.need, a seen chest or crafted) unless :fetch is false or lacks :tool; a failed fetch is
-  warned (fetch.failed) and the tree is chopped by hand.
+  warned (fetch.failed) and the tree chopped by hand, asking once more (craft only) after two logs are dug.
   Before the first log, a carried axe that is the last of its kind and worn gets a spare (jobs.lib.trip/tool-ready!,
   unless :fetch is false or lacks :tool).
   Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
@@ -54,7 +54,7 @@
   skips the check.
 
   Conditions: :no-tree (none in sight after one look around from where it stands, the condition's look; data :radius,
-  :species; a listed job waits) and
+  :species; a listed job waits; with :at and no log there it is impossible, data :at) and
   :night-sheltered (shut in a shelter at night: the trees are outside).
   Ends :done with {:base pos :logs n :axe why} of the tree it felled: n logs dug; :axe is :carried, :skipped-fetch-off,
   :skipped-small-tree or :none-found (fetch failed: chopped by hand). Condition-failed :no-tree when the look found none;
@@ -235,32 +235,35 @@
   (boolean (some #(str/ends-with? (:name %) "_axe") (u/inventory (:primitives c)))))
 
 (defn axe-wanted?
-  "Whether an axe should be got before the first log of a tree of logs: none dug, none carried, a tree an axe pays for,
-  and no fetch failed yet."
+  "Whether an axe should be got before the next log of a tree of logs: none carried, a tree an axe pays for, and either
+  none dug yet and no fetch failed, or a fetch failed and two logs are dug since (they may now craft one; once)."
   [c logs]
-  (and (zero? (:dug (ctx/mem c) 0))
-       (not (axe-carried? c))
-       (not (:axe-failed (ctx/mem c)))
-       (axe-worth-fetching? (count logs))))
+  (let [{:keys [dug axe-failed axe-retried]} (ctx/mem c)]
+    (boolean (and (not (axe-carried? c))
+                  (axe-worth-fetching? (count logs))
+                  (if axe-failed
+                    (and (>= (or dug 0) 2) (not axe-retried))
+                    (zero? (or dug 0)))))))
 
 (defn axe-fetch-opts
-  "The limits {:how :explore} for getting an axe, nil when :fetch does not allow tools."
-  [c]
+  "The limits {:how :explore} for getting an axe, nil when :fetch does not allow tools; retry? asks only to craft."
+  [c retry?]
   (when-let [o (need/opts c job)]
     (when (contains? (:what o) :tool)
-      (select-keys (need/tighten o (axe-fetch-limits)) [:how :explore]))))
+      (cond-> (select-keys (need/tighten o (axe-fetch-limits)) [:how :explore])
+        retry? (assoc :how #{:craft})))))
 
 (defn ^:async axe!
-  "Get an axe before the first log of a tree it pays for: nil to go on (one came, or none could be had: the failure is
+  "Get an axe before a log of a tree it pays for (axe-wanted?): nil to go on (one came, or none could be had: the failure is
   warned and the tree chopped by hand), :continue while the fetch waits on the world."
   [c logs]
   (when (axe-wanted? c logs)
-    (when-let [opts (axe-fetch-opts c)]
+    (when-let [opts (axe-fetch-opts c (:axe-failed (ctx/mem c)))]
       (let [e (await (need/tool! c {:kind "axe"} opts))]
         (cond
           (= :continue e) :continue
           (= :done (:kind e)) nil
-          :else (do (ctx/update-mem! c assoc :axe-failed true)
+          :else (do (ctx/update-mem! c #(cond-> (assoc % :axe-failed true) (:axe-failed %) (assoc :axe-retried true)))
                     (ctx/emit! c :fetch.failed :warn {:reason (contract/cause-key e) :text "no axe could be had; chopping by hand"})
                     nil))))))
 
@@ -284,8 +287,8 @@
       (when (= :partial (await (log/walk-near! c at at-range true))) :partial))))
 
 (defn no-tree-cause [c]
-  (let [{:keys [radius species]} (:args c)]
-    (cond-> {:reason :no-tree :radius radius} species (assoc :species species))))
+  (let [{:keys [radius species at]} (:args c)]
+    (cond-> {:reason :no-tree :radius radius} species (assoc :species species) at (assoc :at at))))
 
 (defn ^:async fell-from-pillar!
   "One round of the fell-from-pillar child for the chosen tree: :continue while it waits on the world, else what its
@@ -402,8 +405,10 @@
       (no-tree-cause c))))
 
 (def no-tree
-  "Later :no-tree as tree-missing; a look first while the body has not looked round within a few blocks of here."
-  (checks/refusing #(if (look/surveyed? % :near) :later :look) :tree-found "a tree to fell" tree-missing))
+  "Later :no-tree as tree-missing; a look first while the body has not looked round within a few blocks of here. With
+  :at the cell is seen (tree-missing says so): no log there, never."
+  (checks/refusing #(cond (:at (:args %)) :never (look/surveyed? % :near) :later :else :look)
+                   :tree-found "a tree to fell" tree-missing))
 
 (def can-start? (cond/and sheltered no-tree))
 

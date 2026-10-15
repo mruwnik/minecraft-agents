@@ -75,6 +75,21 @@
     (is (= [:look :no-tree] ((juxt first (comp :reason last)) (status false))))
     (is (= [:later :no-tree] ((juxt first (comp :reason last)) (status true))))))
 
+(deftest an-at-column-with-no-log-ends-impossible-no-tree-naming-the-column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [at {:x 6 :y 64 :z 0}
+              {:keys [end]} (await (fell-ending {:blocks {}} 'jobs.forestry.fell-tree {:at at} 40))]
+          (is (= {:kind :impossible :cause :no-tree} (kc end)))
+          (is (= at (get-in end [:cause :at]))))))))
+
+(deftest an-at-column-with-no-log-is-never-not-later
+  (let [at {:x 6 :y 64 :z 0}
+        c {:primitives (tu/fake {:blocks {}}) :view (constantly {:now 0}) :args {:at at}}
+        status (with-redefs [ctx/mem (constantly {}) look/surveyed? (fn ([_] true) ([_ _] true))] (fell-tree/no-tree c))]
+    (is (= [:never :no-tree at] [(first status) (:reason (last status)) (:at (last status))]))))
+
 (deftest a-column-not-yet-seen-is-walked-to-not-looked-for
   (async done
     (tu/run-async done

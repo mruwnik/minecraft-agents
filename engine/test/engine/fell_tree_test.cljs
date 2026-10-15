@@ -15,6 +15,7 @@
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.table :as table]
             [jobs.lib.need :as need]
+            [jobs.forestry.fell-tree :as fell-tree]
             [jobs.lib.trees :refer [axe-fetch-limits]]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]))
@@ -389,6 +390,17 @@
         (let [s (await (fell (axe-world [] []) {:radius 10} 400))]
           (is (= 8 (:logs (:out s))) "felled without an axe")
           (is (= 1 (count (kinds s :fetch.failed)))))))))
+
+(deftest a-failed-axe-fetch-is-asked-again-by-crafting-once-two-logs-are-dug
+  (let [c {:primitives (tu/fake {:blocks {}}) :args {}}
+        logs (vec (repeat 8 {:name "oak_log"}))
+        wanted (fn [m] (with-redefs [ctx/mem (constantly m)] (fell-tree/axe-wanted? c logs)))]
+    (is (true? (wanted {:dug 0})) "before the first log")
+    (is (false? (wanted {:dug 0 :axe-failed true})) "not at once after a failed fetch")
+    (is (false? (wanted {:dug 1 :axe-failed true})))
+    (is (true? (wanted {:dug 2 :axe-failed true})) "logs in the bag may now craft one")
+    (is (false? (wanted {:dug 4 :axe-failed true :axe-retried true})) "asked once more only")
+    (is (false? (wanted {:dug 2}))  "an axe never asked for is not owed mid-tree")))
 
 (deftest a-small-tree-is-chopped-by-hand-without-a-fetch
   (async done
