@@ -6,6 +6,8 @@
             [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.perception :as perception]
+            [engine.fake.raw-world :as fake-raw]
             [jobs.lib.util :as u]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
@@ -341,3 +343,32 @@
   (let [p (tu/seeing-all (tu/fake {:blocks (merge (patch 0 0 3 3 63 "stone") (patch 10 0 3 3 63 "grass_block"))}))
         spots (fs/scan p {:w 3 :h 3 :range 12 :depth 4 :limit 2} {:x 1 :y 64 :z 1})]
     (is (= [100 0] (mapv :farmable (sort-by (comp - :farmable) spots))))))
+
+(def pond-east
+  (merge (tu/box -30 63 -30 30 63 30 "grass_block") (tu/box 18 63 -1 20 63 1 "water")))
+
+(deftest a-pond-18-blocks-out-is-found-whatever-the-pass-jitter
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [j [0 0.1 0.3 0.5 0.7 0.9]]
+          (let [raw (tu/blind (tu/fake {:blocks pond-east}))
+                p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000) :rand (constantly j)}))
+                {:keys [eng]} (setup {:blocks pond-east})
+                eng (assoc eng :primitives p)
+                r (await (child-outcome eng job {:w 5 :h 5 :range 24 :depth 7} 12))]
+            (is (pos? (:water-share (first (:spots r)))) (str "jitter " j ": " (pr-str (first (:spots r)))))))))))
+
+(def hillside
+  (into {} (for [i (range 22)] (tu/box (+ 24 (* 4 i)) 0 0 (+ 27 (* 4 i)) i 63 "grass_block"))))
+
+(deftest a-hillside-finds-spots-seen-from-its-slope
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/blind (tu/fake {:blocks hillside :self {:pos [64.5 11 32.5]}}))
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000) :rand (constantly 0.5)}))
+              {:keys [eng]} (setup {:blocks hillside})
+              eng (assoc eng :primitives p)
+              r (await (child-outcome eng job {:w 5 :h 5 :range 24 :depth 12} 20))]
+          (is (seq (:spots r)) (pr-str r)))))))
