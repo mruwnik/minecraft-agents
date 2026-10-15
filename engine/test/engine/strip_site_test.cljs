@@ -318,12 +318,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [kind [:condition-failed :limit-reached :impossible]]
+        (doseq [[kind expected] [[:condition-failed [:condition-failed :child-failed]]
+                                 [:impossible [:impossible :child-failed]]
+                                 [:limit-reached [:done nil]]]]
           (let [r (await (start! (setup :ending-jobs {'jobs.strip.seal (ending-job 'jobs.strip.seal kind :whatever)}) args))]
-            (if (= :limit-reached kind)
-              (is (= :done (:status r)) "the site stripped segments before the seal child hit its limit, so :least (1) is met")
-              (is (= [kind :child-failed] (ends r)) (str kind)))
+            (is (= expected [(or (:kind (:ending r)) (:status r)) (:cause (:ending r))]) (str kind))
             (is (= {:child "jobs.strip.seal" :because :whatever} (select-keys r [:child :because])))))))))
+
+(deftest a-seal-limit-below-least-does-not-end-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (start! (setup :ending-jobs {'jobs.strip.seal (ending-job 'jobs.strip.seal :limit-reached :whatever)})
+                               (assoc args :least 99)))]
+          (is (= [:stopped :limit-reached :child-failed] [(:status r) (:kind (:ending r)) (:cause (:ending r))]) "a :least the stripped segments do not reach ends the site stopped"))))))
 
 (deftest a-failed-walk-down-keeps-the-go-tos-own-kind-and-cause
   (async done
