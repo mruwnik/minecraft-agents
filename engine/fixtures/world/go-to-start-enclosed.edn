@@ -3,7 +3,7 @@
 ;; goal walks west as far as the floor goes and never reports :start-enclosed. The goal is 1000 blocks west of the plot (#at is plot-relative).
 ;; Plots float at y 150 over open air (floor y 149, grid from x 20000): west of the grid is a fall far past maxDrop 3, so
 ;; the open case cannot arrive; with :ways #{:walk :clear-seal} it plans :goal-unloaded and tours the loaded edge of the grid's floors
-;; (each walk loads more), so it passes :explore-blocks to bound the tour. Far-goal arrival on real terrain is not testable on this grid.
+;; (each walk loads more), so it passes a small :tour-worth to bound the tour (a goal 1000 blocks off is worth a long one). Far-goal arrival on real terrain is not testable on this grid.
 {:defaults
  {:tags [:movement :planner]
   :plot {:height 10}
@@ -25,8 +25,8 @@
             {:no-event {:source :job :kind :result :data {:why :start-enclosed}} :for-s 20}]}
   {:name "open-field-unloaded-goal-never-start-enclosed"
    ;; the plots' floors run on north and south along the grid's west edge: unbounded, go-to tours that loaded edge for
-   ;; many minutes; :explore-blocks 60 ends it at the end of the first walk that got no nearer (live: ~170 blocks, ~25 s)
-   :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :ways #{:walk :clear-seal} :explore-blocks 60})]]
+   ;; many minutes; :tour-worth 18 (about 60 blocks) ends it at the end of the first walk that got no nearer
+   :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :ways #{:walk :clear-seal} :tour-worth 18})]]
    :expect [{:event {:source :job :kind :planned :data {:why "goal-unloaded"}} :within-s 60 :of-job true}
             {:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :explore-spent}} :within-s 75 :of-job true}
             {:no-event {:source :job :kind :planned :data {:why "start-enclosed"}} :for-s 60}

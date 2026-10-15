@@ -168,3 +168,13 @@
   (are [names expected] (= expected (cost/reach-first? 5 [5] 20 names))
     ["zombie"] true
     ["spider"] false))
+
+(deftest a-frontier-tour-costs-its-blocks-walked-and-more-with-each-walk
+  (let [tour #(:cost (cost/tour-cost {:explored %1 :walks %2}))]
+    (is (= (:cost (cost/walk-cost {:distance 100})) (tour 100 0)) "no walk spent: its blocks at the walk price")
+    (is (< (tour 50 3) (tour 100 3)) "the farther it walked away")
+    (is (< (tour 100 1) (tour 100 4)) "the more walks it took")))
+
+(deftest a-goal-is-worth-a-trip-and-more-the-farther-it-lies
+  (is (= (cost/trip) (cost/tour-worth 0)))
+  (is (< (cost/tour-worth 2) (cost/tour-worth 40))))

@@ -3,6 +3,7 @@
   of a call from the world, and the hostile a cut is guessed to come from."
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.pen-entry :as pen-entry]
             [jobs.lib.threats :as threats]
@@ -19,27 +20,35 @@
 
 (defn approach-step
   "Approach record m after a tick's pose {:x :z ...} at d from the goal: :last-dist d, :closest the least, and :explored
-  the blocks walked along x and z since the body last came more than 1 block nearer than ever (:anchor, then 0 again)."
+  the blocks walked along x and z away from the goal (a step that ends farther than the last) since the body last came
+  more than 1 block nearer than ever (:anchor, then 0 again)."
   [m pose d]
   (let [{:keys [prev anchor explored] :or {anchor d explored 0}} m
         nearer? (< d (dec anchor))
-        step (if prev (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) 0)]
+        step (if (and prev (> d (:last-dist m d))) (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) 0)]
     (assoc m :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :z])
              :anchor (if nearer? d anchor) :explored (if nearer? 0 (+ explored step)))))
 
 (defn approach-recorder
   "The walk's :on-pose for a call to pos: while the round is alive, keeps approaches' record (approach-step), so a cut walk
-  leaves where the cut found it and :explore-blocks can be checked."
+  leaves where the cut found it and the tour's price can be checked."
   [c pos]
   (fn [pose]
     (when (ctx/alive? c)
       (swap! approaches update (:id c) approach-step pose (u/dist pose pos)))))
 
-(defn explore-spent?
-  "Whether the call's :explore-blocks, when given, is spent: the body walked more than that since it last came nearer."
+(defn tour
+  "The call's tour of frontiers so far, {:explored :walks}: the blocks walked away from the goal and the frontier walks
+  taken since the body last came nearer it than ever."
   [c]
-  (let [budget (:explore-blocks (:args c))]
-    (boolean (and budget (> (:explored (get @approaches (:id c)) 0) budget)))))
+  {:explored (:explored (get @approaches (:id c)) 0) :walks (:tour-walks (ctx/mem c) 0)})
+
+(defn tour-spent?
+  "Whether the tour so far (tour) costs more than its goal is worth: the call's :tour-worth, else cost/tour-worth of the
+  goal's straight blocks at the call's start."
+  [c]
+  (> (:cost (cost/tour-cost (tour c)))
+     (or (:tour-worth (:args c)) (cost/tour-worth (:detour-from (ctx/mem c) 0)))))
 
 (defn start-attempt!
   "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start
@@ -53,7 +62,7 @@
     (wworld/warn-bad-settings! c)
     (when (or (nil? (:pen-checked m)) (some #(not (contains? (:pen-checked m) %)) opened))
       (pen-entry/warn-left-open! c pos (:doors (:args c))))
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done :own-way-top :detour-from) (assoc :pen-checked opened :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done :own-way-top :detour-from :tour-walks) (assoc :pen-checked opened :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
                           (not (:torch-fetching m)) (dissoc :torch-fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))

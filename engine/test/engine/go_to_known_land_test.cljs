@@ -8,6 +8,7 @@
             [engine.go-to-test :as gt]
             [engine.events :as events]
             [engine.fake :as fake]
+            [jobs.lib.cost :as cost]
             [engine.memory :as mem]
             [jobs.lib.walk.search :as wsearch]
             [engine.registry :as registry]
@@ -263,7 +264,7 @@
           (is (= {:arrived true} (select-keys @out [:arrived]))
               (str "result " @out " at " (at p) (mapv (juxt :status :to) (moved eng)))))))))
 
-;; ---- an exploration budget (:explore-blocks): a tour past a dead end, bounded by the caller ----
+;; ---- a tour's price (jobs.lib.cost/tour-cost) against the goal's worth (:tour-worth, default jobs.lib.cost/tour-worth) ----
 
 ;; a floor strip (feet 64) 16 wide along z over open air, the goal 400 blocks west of it across the void (live: the plot grid's
 ;; west edge, go-to-start-enclosed open field): every frontier lies along the strip, none nearer the goal
@@ -272,26 +273,27 @@
          ;; one block deep down in each chunk west of and round the strip: those chunks are loaded (open air), as live
          (into {} (for [cx (range -30 2) cz (range -13 13)] [(str (* 16 cx) ",0," (* 16 cz)) "stone"]))))
 
-(deftest go-to-gives-up-a-tour-past-its-explore-budget
+(deftest go-to-gives-up-a-tour-past-its-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng]} (await (go! {:blocks abyss-strip :self {:pos {:x 2.5 :y 64 :z 0.5}} :viewChunks 1}
-                                            {:pos [-400 64 0] :range 1 :ways #{:walk :clear-seal} :explore-blocks 40}))
+                                            {:pos [-400 64 0] :range 1 :ways #{:walk :clear-seal} :tour-worth 12}))
               walked (reduce + (map #(dist-to [(:x (:from %)) 0 (:z (:from %))] [(:x (:to %)) 0 (:z (:to %))]) (moved eng)))]
           (is (= {:arrived false :reason :unreachable :why :explore-spent} (select-keys @out [:arrived :reason :why]))
               (str "result " @out " walks: " (mapv (juxt :status :from :to) (moved eng))))
-          (is (= :nothing-possible (:kind (:ending (meta @out)))) "no way found within the blocks it may explore")
-          (is (< 40 (:explored @out) 100) (str "result " @out))
+          (is (= :nothing-possible (:kind (:ending (meta @out)))) "no way found within what the goal is worth")
+          (is (< 12 (:cost (cost/tour-cost (select-keys @out [:explored :walks])))) (str "the tour cost over its worth: " @out))
+          (is (< (:explored @out) 100) (str "result " @out))
           (is (< walked 100) (str "walks: " (mapv (juxt :status :to) (moved eng)))))))))
 
-;; walking straight on toward a far unloaded goal comes nearer all the way: a budget smaller than the walk never runs out
-(deftest go-to-a-far-unloaded-goal-straight-on-arrives-within-a-small-explore-budget
+;; walking straight on toward a far unloaded goal comes nearer all the way: a worth smaller than the walk's price never runs out
+(deftest go-to-a-far-unloaded-goal-straight-on-arrives-within-a-small-tour-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (go! {:blocks (box -150 63 0 15 63 15 "stone") :self {:pos {:x 10.5 :y 64 :z 8.5}} :viewChunks 1}
-                                          {:pos [-140 64 8] :range 1 :explore-blocks 20}))]
+                                          {:pos [-140 64 8] :range 1 :tour-worth 6}))]
           (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " at " (at p))))))))
 
 (defn ^:async go-walked!
@@ -327,3 +329,18 @@
           (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out))
           ;; south end 191, back to the north end 390, the bridge 400 and back south 200
           (is (< walked 1500) (str "walked " walked)))))))
+
+;; j138: a goal 2 blocks over the floor, on a deck whose flood leaks along a bridge into unloaded land, so it is never proved
+;; walled in; the body's only frontiers lie along the strip, away from the goal. With the default worth (a goal this near is
+;; worth little) the tour ends after a short walk, not a tour of each end of the strip (about 800 blocks)
+(deftest go-to-a-near-goal-it-cannot-prove-walled-in-ends-a-tour-by-its-price
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge abyss-strip (box 4 65 -1 6 65 1 "stone") (box -100 65 0 3 65 0 "stone"))
+              {:keys [out eng walked]} (await (go-walked! {:blocks blocks :self {:pos {:x 10.5 :y 64 :z 0.5}} :viewChunks 1}
+                                                         {:pos [5 66 0] :range 1 :ways #{:walk :clear-seal}}))]
+          (is (= {:arrived false :reason :unreachable :why :explore-spent} (select-keys @out [:arrived :reason :why]))
+              (str "result " @out " walks: " (mapv (juxt :status :to) (moved eng))))
+          (is (= [true true] [(vector? (:at @out)) (number? (:near @out))]) (str "result " @out))
+          (is (< walked 200) (str "walked " walked ": " (mapv (juxt :status :to) (moved eng)))))))))

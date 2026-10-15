@@ -15,7 +15,7 @@
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! sight-end see-cell]]
-            [jobs.movement.go-to.cut :refer [approach-recorder approaches explore-spent?]]
+            [jobs.movement.go-to.cut :refer [approach-recorder tour tour-spent?]]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.faults :refer [note-fault! refused-hang shut-foreign]]
@@ -247,7 +247,8 @@
             target (:frontier-target result)
             tbests (:target-best (ctx/mem c) {})
             tdist (when target (u/dist to {:x (first target) :y (:y to) :z (second target)}))
-            nearer? (boolean (and target (< tdist (dec (get tbests target js/Infinity)))))]
+            nearer? (boolean (and target (< tdist (dec (get tbests target js/Infinity)))))
+            _ (ctx/update-mem! c assoc :tour-walks (if (< left (dec best)) 0 (cond-> (:tour-walks (ctx/mem c) 0) frontier inc)))]
         (cond
           (= "arrived" status)
           (await (arrive! c pos))
@@ -264,9 +265,9 @@
           (and (:leg-s (:args c)) (< left (dec d)))
           (end/finish! c {:arrived false :leg true})
 
-          (explore-spent? c)
+          (and frontier (tour-spent? c))
           (end/give-up! c pos (:blocked (ctx/mem c) 0) status {:status :no-path :reason :explore-spent}
-                        {:explored (js/Math.round (:explored (get @approaches (:id c))))})
+                        (update (tour c) :explored js/Math.round))
 
           fetched fetched
 

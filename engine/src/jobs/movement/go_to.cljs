@@ -90,9 +90,10 @@
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up, and so
     does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off) or on magma (:goal-on-magma), at once.
   - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
-    is progress too: a tour of frontiers ends only when every frontier within 1000 blocks of the goal is spent. :explore-blocks n
-    bounds it: once the body has walked n blocks since it last came nearer its goal than ever in the call, the call gives
-    up :why :explore-spent (:explored the blocks) at the end of that walk.
+    is progress too: a tour of frontiers ends when every frontier within 1000 blocks of the goal is spent, or at the end of
+    a frontier walk once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
+    ever in the call) passes what the goal is worth (:tour-worth, default jobs.lib.cost/tour-worth of the goal's straight
+    blocks at the call's start): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
   - A walk stuck or off its plan at a cell is a go-to.walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
     A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck).
@@ -185,7 +186,7 @@
    :leg-alert-s {:doc "seconds a search may last once the :leg-alert-within alert is on (0.1 to 120)" :spec (a/num-in 0.1 120) :default nil}
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land" :spec #{:open :closed} :default :open}
    :detour {:doc "false: under ground, walk a found way however long; true: one over mostly unseen cells and longer than the bound of jobs.movement.go-to.detour for a goal that near is not walked (:why :detour)" :spec boolean? :default true}
-   :explore-blocks {:doc "blocks the body may walk in a call without coming nearer its goal than ever before (a tour of frontiers past a dead end), then it gives up :why :explore-spent; nil: no bound (the tour ends when every frontier is spent)" :spec (a/num-in 0 nil) :default nil}
+   :tour-worth {:doc "seconds a tour of frontiers (walks to the edge of loaded land without coming nearer its goal) may cost (jobs.lib.cost/tour-cost), then it gives up :why :explore-spent; nil: jobs.lib.cost/tour-worth of the goal's straight blocks" :spec (a/num-in 0 nil) :default nil}
    :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :spec boolean? :default true}
    :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :spec boolean? :default true}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"

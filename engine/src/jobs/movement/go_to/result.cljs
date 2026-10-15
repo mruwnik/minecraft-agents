@@ -117,7 +117,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored torches waypoint-why heal hp-cost hp-budget low-passage dip rise route straight]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored walks torches waypoint-why heal hp-cost hp-budget low-passage dip rise route straight]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not= :way-dives why))
          (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation))
@@ -133,7 +133,7 @@
            :out-of-sight "no stand within range that sees the block (:see) is reachable from here"
            :goal-unloaded "the goal lies in land that is not loaded and the loaded land leads no nearer"
            :no-progress "the walk ended no nearer"
-           :explore-spent (str "walked " explored " blocks looking for a way on without coming nearer (its :explore-blocks)")
+           :explore-spent (str "walked " explored " blocks in " walks " walks to the edge of loaded land without coming nearer: more than the goal is worth (:tour-worth)")
            :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
            :off-plan (or detail "the walk left its plan")
            :steer-failed (str "steering failed" (some->> detail (str ": ")))

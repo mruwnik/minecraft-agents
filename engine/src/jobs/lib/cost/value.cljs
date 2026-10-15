@@ -56,6 +56,10 @@
                :doc "One block walked in the dark, on top of per-block: a dark block costs twice a lit one."}
    ::walk-blocks-per-s {:default 2.9 :spec (a/num-in 0.1 nil)
                         :doc "Walking speed with slack for detours (4.3 flat out, 1.5x the way), blocks a second."}
+   ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
+                        :doc "Each walk of a tour to the edge of loaded land that brought the body no nearer its goal, on top of its blocks, in seconds."}
+   ::tour-ratio {:default 20 :spec (a/num-in 0 nil)
+                 :doc "Times its straight walk a goal is worth a tour of loaded land on top of a trip: a near goal is worth a short tour."}
    ::torch-place-s {:default 1.5 :spec (a/num-in 0 nil)
                     :doc "Placing a torch to light a dark floor and waiting for the light to show it, in seconds."}})
 
@@ -381,6 +385,18 @@
   [{:keys [distance danger]}]
   (let [parts {:walk (* (per-block) distance) :danger (* per-danger (or danger 0))}]
     {:cost (reduce + (vals parts)) :parts parts}))
+
+(defn tour-cost
+  "{:cost :parts {:walk :walks}} of a tour of frontiers (walks to the edge of loaded land): the blocks `explored` since
+  the body last came nearer its goal at the walk price, and per-frontier-walk for each of the `walks` since then."
+  [{:keys [explored walks]}]
+  (let [parts {:walk (:cost (walk-cost {:distance explored})) :walks (* (settings/get settings ::per-frontier-walk) walks)}]
+    {:cost (reduce + (vals parts)) :parts parts}))
+
+(defn tour-worth
+  "Seconds of tour a goal `straight` blocks off is worth: a trip, and tour-ratio times its straight walk."
+  [straight]
+  (+ (trip) (* (settings/get settings ::tour-ratio) (:cost (walk-cost {:distance straight})))))
 
 (defn per-climb [] (settings/get settings ::per-climb))
 
