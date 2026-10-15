@@ -9,14 +9,16 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
             [jobs.lib.walk.world :as wworld]
-            [jobs.animals.escort :as escort]))
+            [jobs.animals.escort :as escort]
+            [jobs.animals.unleash :as unleash]))
 
 (def doc
   "Put a lead on one animal of type :mob, walk to :pos with it following, then tie it to the fence post :fence
   or let it go. A one-shot order that starts and ends itself. Without :mob or a destination (:pos or :fence) it can never start
   (impossible :no-mob, :no-destination); with a :fence cell seen and not a fence it waits :no-fence. A body that carries no
-  lead first gets one (phase :get-lead, a jobs.items.obtain child: withdrawn from a chest it has seen or crafted); when none
-  can be got the job ends :no-lead at once, it never waits for one.
+  lead first gets one (phase :get-lead, a jobs.items.obtain child: withdrawn from a chest it has seen or crafted, limits
+  from :fetch); when none can be got the job ends :no-lead at once, it never waits for one; with :fetch false a call
+  without a lead waits (can-start? later :no-lead).
 
   Phases, each by a child job:
   - :leash: jobs.animals.leash (radius :radius).
@@ -34,6 +36,12 @@
 
   Before each walking round the animal is looked up (within :watch-radius). Seen off this body's lead: ends
   :lead-broke. Not seen: ends :lost after 3 s unseen (see :walk), in every phase.
+
+  The legs and the pull-reach check are planned here (jobs.animals.escort/leg-plan) to choose where each leg ends and to
+  keep the animal within the lead; the go-to child of a leg plans its own walk again, as it must for doors and danger.
+
+  Done when the animal is tied to the :fence post (also one already tied there before the start) or let go, off this
+  body's lead, and every gate its legs opened is shut again.
 
   Gather: a led animal trails about a lead length behind the body. On arrival, if the animal is farther than
   :gather-radius from :pos, the body walks on past :pos (range 1) so the lead pulls it in. It waits for the
@@ -75,6 +83,7 @@
    :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :spec (a/num-in 0 nil) :default 3}
    :gather-tries {:doc "without :fence how many times the body walks on to pull a trailing animal nearer" :spec (a/int-in 0 nil) :default 3}
    :watch-radius {:doc "how far from the body the led animal is looked for" :spec (a/num-in 0 nil) :default 64}
+   :fetch {:doc "get a lead when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits for one (later :no-lead); a failed fetch ends :no-lead" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
@@ -113,16 +122,21 @@
   [e]
   (or (get-in e [:data :reason]) (contract/cause-key e)))
 
+(defn result-of
+  "The result of a leading that ended for reason."
+  [c reason]
+  (let [m (ctx/mem c)]
+    {:reason reason
+     :animal (:animal m)
+     :still-led (boolean (:still-led m))
+     :gathered (boolean (:gathered m))
+     :at (u/self-pos c)}))
+
 (defn conclude!
   "Emit the outcome, hand it to the parent and end the job."
   [c reason]
-  (let [m (ctx/mem c)
-        ok? (#{:tied :unleashed} reason)
-        result {:reason reason
-                :animal (:animal m)
-                :still-led (boolean (:still-led m))
-                :gathered (boolean (:gathered m))
-                :at (u/self-pos c)}]
+  (let [ok? (#{:tied :unleashed} reason)
+        result (result-of c reason)]
     (when-not ok?
       (ctx/emit! c :lead-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
     (end! c reason (assoc result :text (if ok? (str "lead-to done: " (name reason)) (stop-text c reason))))))
@@ -158,14 +172,15 @@
 (def defaults {:spend {:job-time ::timeout-s}})
 
 (defn can-start?
-  "Never without :mob or a destination; later :no-fence while the :fence cell is seen and no fence. A missing lead
-  is fetched, never waited for."
+  "Never without :mob or a destination; later :no-fence while the :fence cell is seen and no fence, :no-lead with
+  no lead carried and :fetch off. A missing lead is otherwise fetched."
   [c]
   (let [{:keys [mob pos fence]} (:args c)]
     (cond
       (nil? mob) (contract/never :no-mob "lead-to needs a :mob")
       (not (or pos fence)) (contract/never :no-destination "lead-to needs a :pos or a :fence")
       (and fence (not-fence? c)) (contract/later :no-fence "lead-to waits: the named cell is not a fence")
+      (not (or (need/parse-arg (:fetch (:args c))) (animals/lead-carried? c))) (contract/later :no-lead "lead-to waits: no lead carried and :fetch is off")
       :else (contract/ok :order "the order is complete"))))
 
 (defn time-limit "Seconds the leading may take." [c]
@@ -175,14 +190,36 @@
   (let [most (time-limit c)]
     {:uses {:job-time [0 (min most 60) most]}}))
 
+(defn tied-at-post
+  "An animal of :mob in sight held by a knot on the :fence cell, else nil."
+  [c]
+  (let [{:keys [mob fence watch-radius]} (:args c)
+        at-post? (fn [k] (and (= (:x fence) (js/Math.floor (.-x (.-pos k)))) (= (:z fence) (js/Math.floor (.-z (.-pos k))))))]
+    (when fence
+      (some #(when-let [k (unleash/knot-of c %)] (when (at-post? k) %))
+            (animals/herd (:primitives c) mob watch-radius)))))
+
+(defn gates-shut?
+  "True when no gate or door this job's legs opened is still open."
+  [c]
+  (not-any? #(false? (:shut? %)) (escort/walk-entries c)))
+
 (defn done?
-  "Later with whether the animal is tied or let go, and the data so far: the run ends itself."
+  "Ok when the animal is tied to the post (also one found tied before the start) or let go, off this body's lead, and the
+  gates the legs opened are shut; else later."
   [c]
   (let [m (ctx/mem c)
-        n (if (#{:tied :unleashed} (:ending m)) 1 0)]
-    (contract/later :leading (if (pos? n) "the animal is tied or let go" "the animal is on the lead")
-                    :units :animals :done n :left (- 1 n)
-                    :result {:animal (:animal m) :still-led (boolean (:still-led m))})))
+        tied (tied-at-post c)
+        reason (cond
+                 (or (:still-led m) (not (gates-shut? c))) nil
+                 (#{:tied :unleashed} (:ending m)) (:ending m)
+                 tied :tied)
+        n (if reason 1 0)]
+    (if reason
+      (contract/ok reason "the animal is tied or let go" :units :animals :done 1 :left 0
+                   :result (cond-> (result-of c reason) (not (:animal m)) (assoc :animal (some-> tied animals/key-of))))
+      (contract/later :leading "the animal is on the lead" :units :animals :done n :left (- 1 n)
+                      :result {:animal (:animal m) :still-led (boolean (:still-led m))}))))
 
 (defn set-phase! [c phase]
   (ctx/update-mem! c assoc :phase phase))
@@ -190,7 +227,8 @@
 (defn ^:async get-lead!
   "Without a lead: a jobs.items.obtain child gets one (chest or craft). Any child failure ends :no-lead."
   [c]
-  (let [e (await (need/item! c "lead" 1 {:slot :obtain :explore false}))]
+  (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :explore :minutes])
+        e (await (need/item! c "lead" 1 (merge {:slot :obtain :explore false} limits)))]
     (cond
       (= :continue e) :yield
       (animals/lead-carried? c) (do (set-phase! c :leash) :again)
@@ -228,14 +266,18 @@
   "How close to the pull target the walk must get."
   1)
 
+(def pull-slack
+  "Blocks a pull aims farther than the lead's length strictly needs: the animal comes to a little over it."
+  1)
+
 (defn pull-point
   "Where the body walks to pull the animal to within radius of pos: past pos, on the line from the
-  animal through pos, by the lead length less radius plus the walk's range (flat, pos's y: a body that
+  animal through pos, by the lead length less radius plus the walk's range and a block of slack (flat, pos's y: a body that
   stops that far short still leaves the animal within radius) but never so far that the body ends more
   than max-reach from the animal, or nil when the animal is at pos or too far out for any pull."
   [animal-pos pos radius]
   (let [d (u/flat-dist animal-pos pos)
-        extra (min (+ (- lead-length radius) pull-range) (- max-reach d))
+        extra (min (+ (- lead-length radius) pull-range pull-slack) (- max-reach d))
         k (/ extra d)]
     (when (and (pos? d) (pos? extra))
       (assoc pos

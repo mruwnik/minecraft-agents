@@ -1,10 +1,11 @@
 (ns engine.lead-to-test
   "jobs.animals.lead-to against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.expr :as expr]
             [engine.registry :as registry]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
@@ -208,6 +209,38 @@
           (is (= :unleashed (:reason (done-event s))) "too far out to pull")
           (is (false? (:gathered (done-event s))) "too far out to pull")
           (is (= 1 (count (events-of s :lead-to.gather-short))) "too far out to pull"))))))
+
+(defn ctx-of
+  "A ctx of lead-to in a seen world, args over its defaults, its memory m."
+  [world args m]
+  {:primitives (tu/seeing-all (tu/fake world)) :args (second (expr/leaf registry/jobs 'jobs.animals.lead-to (merge {:mob "cow" :pos goal} args)))
+   :root "j" :slots [] :id "j" :engine {:warned (atom #{})} :emit (fn [& _]) :sym 'jobs.animals.lead-to
+   :view (fn [] {:now 1000 :data {:entries {(mem/job-kind "j") [{:t 1000 :data m}]}}})})
+
+(def knot {:id 9 :uuid "u9" :name "leash_knot" :kind "other" :pos {:x 12.5 :y 64 :z 0.5}})
+(def post {:fence {:x 12 :y 64 :z 0}})
+
+(defn done-of [world args m]
+  (tu/kind-reason (lead-to/done? (ctx-of world args m))))
+
+(deftest done-is-ok-for-a-cow-already-tied-to-the-post-before-the-start
+  (let [tied (cow 1 3 {:leashed true :leash-holder 9})]
+    (are [world m expected] (= expected (done-of world post m))
+      {:entities [knot tied]} {} [:ok :tied]
+      {:entities [(assoc knot :pos {:x 14.5 :y 64 :z 0.5}) tied]} {} [:later :leading]
+      {:entities [knot (cow 1 3)]} {} [:later :leading])))
+
+(deftest done-is-ok-once-the-cow-is-tied-or-let-go-and-no-gate-is-left-open
+  (are [m expected] (= expected (done-of {:entities [(cow 1 3)]} {} m))
+    {:phase :arrive :ending :tied} [:ok :tied]
+    {:phase :arrive :ending :unleashed :still-led false} [:ok :unleashed]
+    {:phase :arrive :ending :unleashed :still-led true} [:later :leading]
+    {:phase :walk} [:later :leading]))
+
+(deftest a-lead-is-not-fetched-when-fetch-is-off
+  (are [args expected] (= expected (tu/kind-reason (lead-to/can-start? (ctx-of {:inventory []} args {}))))
+    {} [:ok :order]
+    {:fetch false} [:later :no-lead]))
 
 (deftest a-cow-10-out-is-not-pulled-so-far-that-the-lead-breaks
   (async done
@@ -595,9 +628,9 @@
           (is (= :unleashed (:reason (done-event s))))
           (is (empty? (events-of s :stopped))))))))
 
-(deftest a-pull-aims-a-block-past-the-radius-for-a-body-that-stops-short
-  (let [t (lead-to/pull-point {:x 24 :z 0} {:x 30 :y 64 :z 0} 3)]
-    (is (= 34 (:x t)) "lead length 6 less radius 3, plus the 1 block the walk's range may leave")))
+(deftest a-pull-aims-past-the-radius-for-a-body-that-stops-short-and-a-lead-a-little-over-its-length
+  (let [t (lead-to/pull-point {:x 26 :z 0} {:x 30 :y 64 :z 0} 3)]
+    (is (= 35 (:x t)) "lead length 6 less radius 3, plus the 1 block the walk's range may leave and 1 of slack")))
 
 (defn ^:async hide-cow-after-the-walk
   "One call; the cow goes out of sight once the body is at the spot and is back in sight k waits later."
