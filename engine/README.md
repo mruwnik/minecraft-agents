@@ -302,7 +302,10 @@ a finished job's goes to body memory `:job-report` (cap 256), with its ending's 
 `defaults` (a settings key value reads the setting; a fn value is called with the args, the catalog shows `:from-args`), `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A condition
 `[:fn f]` gives nil (start), a cause (skip: a listed job not started stays queued and waits, else `:condition-failed`),
 `(contract/impossible cause)` (ends `:impossible`, the job leaves the queue) or `(contract/look-first cause)` (the
-engine looks round once, hook `:look/around`, then asks again). Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` is asked before the start only, ahead of the conditions (an impossible one aside; a throw counts as not done, warn `job.done_failed`): a goal that holds ends `:done` `:already` and never waits; once started, the job's round decides when it is done; done?'s units go in the `:report` of every ending but an impossible, cut-off or `:duplicate-call` one, and its `:data` (the result so far) is the data of a `:limit-reached` ending without its own; a reflex run that ends `:already` is fruitless (backoff); endings are `{:kind :cause :because :report :data}`. A
+engine looks round once, hook `:look/around`, then asks again). `[:holds form reason?]` is a fact form (Conditions,
+plus `(arg :k)` for the call's arg; a missing one passes): not true (false or unknown) skips with `{:reason (reason, else
+the fact) :fact :form :text}`, the wait text the failing comparison (`waiting: inventory torch 0 < 4`); no `held-for`.
+`(ctx/fact c 'inventory "torch")` reads one fact. Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` is asked before the start only, ahead of the conditions (an impossible one aside; a throw counts as not done, warn `job.done_failed`): a goal that holds ends `:done` `:already` and never waits; once started, the job's round decides when it is done; done?'s units go in the `:report` of every ending but an impossible, cut-off or `:duplicate-call` one, and its `:data` (the result so far) is the data of a `:limit-reached` ending without its own; a reflex run that ends `:already` is fruitless (backoff); endings are `{:kind :cause :because :report :data}`. A
 started frame left without an ending (its root ends or is dropped, its parent clears its slot) gets `:cut-off`.
 
 **Quotes (engine.core.quote).** `{:uses {:time fig :health fig :food fig :items {name fig} :wear {tool fig}} :yields
@@ -446,7 +449,7 @@ An ad hoc `:when` can be a condition: an EDN list read by `engine.condition` aga
 
 - Operators: `and or not < > <= >= =`, `(held-for seconds cond)`, `(known? x)`.
 - Facts: numbers `(health) (food) (inventory "item") (free-slots) (distance-to pos) (blocks-near "name" r) (seen blocks only)
-  (since :kind)`; a position `(place :kind)`; booleans `(daytime) (in-water) (hostile-near r, a real danger) (burning) (suffocating)
+  (since :kind) (time-of-day)`; a position `(place :kind)`; booleans `(daytime) (in-water) (hostile-near r, a real danger) (burning) (suffocating)
   (night-unsafe) (wearing "item")`. `(since :kind)` is the seconds since body memory last recorded an unexpired
   entry of that kind (unknown when none).
 - A fact can be unknown (offline, no such place). Unknown propagates; `and`/`or` are three-valued; a condition holds only

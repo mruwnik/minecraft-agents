@@ -272,9 +272,11 @@
         (some? r) {:reason r}
         :else {:reason :not-ready}))
 
-(defn waiting-text [{:keys [reason] :as r}]
-  (let [more (dissoc r :reason)]
-    (str "waiting: " (if (keyword? reason) (name reason) reason) (when (seq more) (str " " (pr-str more))))))
+(defn waiting-text [{:keys [reason text] :as r}]
+  (if text
+    (str "waiting: " text)
+    (let [more (dissoc r :reason)]
+      (str "waiting: " (if (keyword? reason) (name reason) reason) (when (seq more) (str " " (pr-str more)))))))
 
 (defn stopped-result?
   "True when a job that ended :done handed over a result of status :stopped (it gave up; not a success)."

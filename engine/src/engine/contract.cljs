@@ -343,20 +343,32 @@
            (throw e)
            (throw (js/Error. (str "condition " (.-name f) ": " (or (.-message e) e))))))))
 
+(defn entry-result
+  "What one condition says now: [:fn f] is (f c); [:holds form] or [:holds form reason] (a fact form, engine.condition)
+  is nil while the form holds, else a cause {:reason (reason, else the fact's name) :fact :form :text}."
+  [c [kind x reason]]
+  (case kind
+    :fn (run-condition c x)
+    :holds (let [holds (or (:holds c) (throw (js/Error. "a fact condition needs a ctx made by the engine (:holds)")))]
+             (when-let [cause (holds x (:args c))] (assoc cause :reason (or reason (:fact cause)))))))
+
 (defn verdict
-  "What conditions ([:fn f], (f c) nil, a cause, impossible or look-first) say now: nil to start,
-  [:impossible cause] when one is impossible, else [:skip cause] for the first that fails, else [:look cause] for the
-  first that asks for a look."
+  "What conditions ([:fn f] or [:holds form reason], see entry-result) say now: nil to start, [:impossible cause]
+  when one is impossible, else [:skip cause] for the first that fails, else [:look cause] for the first that asks for a
+  look."
   [c conditions]
-  (let [rs (filter identity (map (fn [[_ f]] (run-condition c f)) conditions))]
+  (let [rs (filter identity (map #(entry-result c %) conditions))]
     (or (some #(some->> (impossible-cause %) (vector :impossible)) rs)
         (some #(when-not (look-cause %) [:skip %]) rs)
         (some #(some->> (look-cause %) (vector :look)) rs))))
 
 (defn wait-reason
-  "A failing condition's cause as a check's wait reason: {:reason (cause key)}, with :cause when it is a map."
+  "A failing condition's cause as a check's wait reason: {:reason (cause key)}, with :cause when it is a map and its
+  :text (the wait text) when it has one."
   [cause]
-  (cond-> {:reason (cause-key {:kind :condition-failed :cause cause})} (map? cause) (assoc :cause cause)))
+  (cond-> {:reason (cause-key {:kind :condition-failed :cause cause})}
+    (map? cause) (assoc :cause cause)
+    (and (map? cause) (:text cause)) (assoc :text (:text cause))))
 
 ;; ------------------------------------------------------------------ quotes
 

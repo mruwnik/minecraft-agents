@@ -78,6 +78,12 @@
 
 (defn now [ctx] (:now (view ctx)))
 
+(defn fact
+  "The value of fact sym (the condition facts, engine.condition) with args now, or the unknown value when the body
+  cannot know it."
+  [ctx sym & args]
+  ((or (:fact ctx) (throw (js/Error. "ctx/fact needs a ctx made by the engine (:fact)"))) sym args))
+
 (defn entries [ctx kind] (mem/entries (view ctx) kind))
 (defn latest [ctx kind] (mem/latest (view ctx) kind))
 (defn since [ctx kind t] (mem/since (view ctx) kind t))

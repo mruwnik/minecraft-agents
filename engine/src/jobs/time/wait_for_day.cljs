@@ -11,15 +11,12 @@
 
 (def target [])
 
-(defn day-not-come [c]
-  (when-not (.-isDay (.self (:primitives c))) :day-not-come))
-
 (a/defargs settings
   {::time-s {:default 1800 :doc "Seconds the wait for day may take." :spec (a/int-in 1 nil)}})
 
 (def defaults {:spend {:time ::time-s}})
 
-(def conditions [[:fn day-not-come]])
+(def conditions [[:holds '(daytime) :day-not-come]])
 
 (defn done?
   "Done when it is day."

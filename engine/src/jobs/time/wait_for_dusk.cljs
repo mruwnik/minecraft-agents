@@ -13,16 +13,12 @@
 
 (def target [])
 
-(defn dusk-not-come [c]
-  (when-not (>= (.-timeOfDay (.self (:primitives c))) facts/dusk-tick)
-    {:reason :dusk-not-come :dusk facts/dusk-tick}))
-
 (a/defargs settings
   {::time-s {:default 1800 :doc "Seconds the wait for dusk may take." :spec (a/int-in 1 nil)}})
 
 (def defaults {:spend {:time ::time-s}})
 
-(def conditions [[:fn dusk-not-come]])
+(def conditions [[:holds (list '>= '(time-of-day) facts/dusk-tick) :dusk-not-come]])
 
 (defn done?
   "Done when it is evening or later in the day's ticks."

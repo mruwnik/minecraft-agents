@@ -1,6 +1,8 @@
 (ns engine.condition-test
   (:require [cljs.test :refer [deftest is are]]
             [engine.condition :as c]
+            [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.triggers :as triggers]
             [engine.memory :as mem]
             [engine.test-util :as tu]))
@@ -342,7 +344,8 @@
       '(burning) false
       '(suffocating) false
       '(night-unsafe) false
-      '(= (blocks-near "stone" 8) 1) true)))
+      '(= (blocks-near "stone" 8) 1) true
+      '(= (time-of-day) 13000) true)))
 
 (deftest hostile-near-is-a-real-danger-as-the-trigger-defines-it
   (let [wall (into {} (for [[x z] [[4 0] [6 0] [5 1] [5 -1]] y [64 65]] [(str x "," y "," z) "stone"]))
@@ -452,3 +455,42 @@
           {:form '(since :slept) :value ?}
           {:form :slept :value :slept}]
          (c/explain (node '(known? (since :slept))) (env) {}))))
+
+;; ------------------------------------------------------------------ job conditions
+
+(def torches (env (tu/fake {:inventory [{:name "torch" :count 2}]})))
+
+(deftest a-job-condition-that-holds-gives-no-cause
+  (are [form args] (nil? (c/job-cause torches args form))
+    '(>= (inventory "torch") 2) {}
+    '(>= (inventory (arg :item)) (arg :count)) {:item "torch" :count 2}))
+
+(deftest a-failing-job-condition-names-its-fact-and-shows-the-comparison
+  (are [form args text] (= {:fact :inventory :form (pr-str form) :text text} (c/job-cause torches args form))
+    '(>= (inventory "torch") 4) {} "inventory torch 2 < 4"
+    '(>= (inventory (arg :item)) (arg :count)) {:item "torch" :count 4} "inventory torch 2 < 4"
+    '(and (daytime) (> (inventory "torch") 2)) {} "inventory torch 2 <= 2"))
+
+(deftest a-failing-boolean-fact-shows-its-value
+  (is (= {:fact :daytime :form "(daytime)" :text "daytime false"}
+         (c/job-cause (env (tu/fake {:time 15000})) {} '(daytime)))))
+
+(deftest an-unknown-fact-fails-a-job-condition
+  (is (= "inventory torch unknown" (:text (c/job-cause (env offline) {} '(>= (inventory "torch") 4))))))
+
+(deftest a-job-condition-passes-when-an-arg-it-names-is-missing-or-not-a-value
+  (are [args] (nil? (c/job-cause torches args '(>= (inventory "torch") (arg :count))))
+    {}
+    {:count [4]}))
+
+(deftest a-bad-job-condition-throws-naming-it
+  (are [form] (thrown-with-msg? js/Error #"condition" (c/job-cause torches {} form))
+    '(>= (inventory) 4)
+    '(held-for 5 (daytime))))
+
+(deftest ctx-fact-reads-a-fact-for-the-job-body
+  (let [eng (core/create {:primitives (tu/fake {:inventory [{:name "torch" :count 3}]}) :jobs {} :triggers {}
+                          :dir (tu/tmp-dir)})
+        c (core/make-ctx eng {:root "j1" :slots [] :chain [] :token nil})]
+    (is (= 3 (ctx/fact c 'inventory "torch")))
+    (is (thrown-with-msg? js/Error #"not a fact" (ctx/fact c 'carried "torch")))))

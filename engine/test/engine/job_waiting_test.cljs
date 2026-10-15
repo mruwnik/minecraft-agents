@@ -48,7 +48,8 @@
    'deep {:check (fn [_] true) :round calling-mid-round}
    'mixed {:check (fn [_] true) :round mixed-round}
    'gated {:check gated-check :round count-round}
-   'never {:check (constantly false) :round count-round}})
+   'never {:check (constantly false) :round count-round}
+   'torch-lit {:conditions [[:holds '(>= (inventory "torch") 4) :few-torches]] :round count-round}})
 
 (defn setup []
   (let [clock (atom 1000000)
@@ -156,3 +157,12 @@
           (await (ticks eng 3))
           (is (nil? (:waiting (job-api/summary eng id))))
           (is (empty? (waits seen))))))))
+
+(deftest a-failing-fact-condition-waits-showing-its-comparison
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (core/submit! eng '(torch-lit) {})
+          (await (ticks eng 2))
+          (is (= [[:few-torches "waiting: inventory torch 0 < 4"]] (mapv (juxt :reason :text) (waits seen)))))))))

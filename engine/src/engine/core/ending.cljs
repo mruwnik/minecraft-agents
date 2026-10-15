@@ -183,8 +183,11 @@
   (if (or (not (contract-job? def)) (::wrapped def))
     def
     (do (doseq [entry (:conditions def)]
-          (when-not (and (vector? entry) (= :fn (first entry)) (fn? (second entry)))
-            (throw (ex-info (str "a condition is [:fn f], not " (pr-str entry)) {:condition entry}))))
+          (when-not (and (vector? entry)
+                         (or (and (= :fn (first entry)) (fn? (second entry)))
+                             (and (= :holds (first entry)) (seq? (second entry)) (or (= 2 (count entry)) (keyword? (nth entry 2))))))
+            (throw (ex-info (str "a condition is [:fn f] or [:holds form reason?], not " (pr-str entry))
+                            {:condition entry}))))
         (assoc def ::wrapped true :check #(check def %) :round #(run def %)))))
 
 (defn registry "jobs with every contract job wrapped." [jobs] (some-> jobs (update-vals wrap)))

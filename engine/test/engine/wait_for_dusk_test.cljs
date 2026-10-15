@@ -3,8 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
-            [engine.test-util :as tu]
-            [jobs.time.wait-for-dusk :as dusk]))
+            [engine.test-util :as tu]))
 
 (def job 'jobs.time.wait-for-dusk)
 
@@ -15,19 +14,11 @@
     (await (core/tick! (:eng s)))
     (:list (core/state (:eng s)))))
 
-(deftest the-condition-holds-from-the-start-of-dusk-through-the-night
-  (are [time ready] (= ready (nil? (dusk/dusk-not-come {:primitives (tu/fake {:time time})})))
-    1000 false
-    11999 false
-    12000 true
-    13000 true
-    23999 true
-    0 false))
-
 (deftest declines-by-day-and-is-done-in-the-evening
   (async done
     (tu/run-async done
       (fn ^:async t []
         (is (= ["j1"] (await (listed-after-tick 6000))) "day: still waiting")
+        (is (= ["j1"] (await (listed-after-tick 11999))) "a tick before dusk: still waiting")
         (is (= [] (await (listed-after-tick 12000))) "dusk: done")
         (is (= [] (await (listed-after-tick 18000))) "already night at the start: done at once")))))

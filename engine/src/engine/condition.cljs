@@ -15,6 +15,7 @@
   (known? x) turns an unknown into a definite boolean."
   (:refer-clojure :exclude [compile])
   (:require [clojure.string :as str]
+            [clojure.walk :as walk]
             [cljs.tools.reader.edn :as edn]
             [cljs.tools.reader.reader-types :as rt]
             [engine.condition.facts :as facts]
@@ -302,3 +303,71 @@
       (let [{:keys [value] :as r} (evaluate node {:world world :memory memory} @state)]
         (reset! state (:state r))
         (true? value)))))
+
+;; ------------------------------------------------------------------ job conditions
+
+(defn fact-value
+  "The value of fact sym with argument values vs now, for env {:world :memory}: unknown when the body cannot know."
+  [env sym vs]
+  (if-let [{:keys [read]} (get triggers/facts sym)]
+    (apply read env vs)
+    (throw (js/Error. (str sym " is not a fact; the facts: " (str/join ", " (sort (keys triggers/facts))))))))
+
+(defn with-args
+  "form with every (arg :k) replaced by args' value of k, or nil when one is missing or not a literal."
+  [form args]
+  (let [bad (volatile! false)
+        out (walk/prewalk (fn [x]
+                            (if (and (seq? x) (= 'arg (first x)))
+                              (let [v (get args (second x))] (if (literal-type v) v (do (vreset! bad true) x)))
+                              x))
+                          form)]
+    (when-not @bad out)))
+
+(def negated '{< ">=" > "<=" <= ">" >= "<" = "!="})
+
+(defn value-text [v]
+  (cond (unknown? v) "unknown"
+        (and (number? v) (not (integer? v))) (.toFixed v 1)
+        :else (pr-str v)))
+
+(defn term-text
+  "A sub-term as the wait text shows it: a literal's value, else the call without brackets and its value."
+  [{:keys [form value]}]
+  (if (seq? form)
+    (str (str/join " " (map #(if (or (string? %) (keyword? %)) (name %) (pr-str %)) form)) " " (value-text value))
+    (value-text value)))
+
+(defn failing
+  "The sub-term that makes tree not true: an and's first child that is not true, followed down."
+  [{:keys [form children] :as tree}]
+  (if (and (seq? form) (= 'and (first form)))
+    (failing (first (remove #(true? (:value %)) children)))
+    tree))
+
+(defn failing-text [{:keys [form children] :as t}]
+  (let [op (when (seq? form) (negated (first form)))]
+    (cond
+      (not op) (term-text t)
+      (some #(unknown? (:value %)) children) (term-text (first (filter #(unknown? (:value %)) children)))
+      :else (str (term-text (first children)) " " op " " (term-text (second children))))))
+
+(defn first-fact [form]
+  (some #(when (and (seq? %) (contains? triggers/facts (first %))) (keyword (first %))) (tree-seq seq? rest form)))
+
+(defn job-cause
+  "nil when a job's condition form holds now for a call with args, else {:fact :form :text}: the fact the failing
+  part reads, the form, and the failing comparison as the wait text shows it (\"inventory torch 0 < 4\"). The form is
+  the trigger language plus (arg :k) for the call's arg; one whose arg is missing or not a literal holds (the job's
+  args check reports it). Unknown fails. A form outside the language, or with held-for (it keeps no timers here),
+  throws."
+  [env args form]
+  (when (some #{'held-for} (tree-seq seq? seq form))
+    (throw (js/Error. (str "condition " (pr-str form) ": held-for is for triggers only"))))
+  (when-let [f (with-args form args)]
+    (let [{:keys [ok node message]} (compile f)
+          _ (when-not ok (throw (js/Error. (str "condition " (pr-str form) ": " message))))
+          tree (first (run node env {}))]
+      (when-not (true? (:value tree))
+        (let [t (failing tree)]
+          {:fact (or (first-fact (:form t)) :condition) :form (pr-str form) :text (failing-text t)})))))
