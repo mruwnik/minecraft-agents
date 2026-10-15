@@ -587,3 +587,19 @@
               top (fn ^:async top* [spec] (let [{:keys [p]} (await (root-ending spec {:inventory both}))] (blocks-at p [[0 64 0] [0 65 0]])))]
           (is (= ["dirt" "dirt"] (await (top (list job {:height 2})))) "the chooser lists dirt first")
           (is (= ["cobblestone" "cobblestone"] (await (top (list job {:height 2 :use {:blocks ["cobblestone"]}}))))))))))
+
+(deftest a-pillar-to-an-absolute-y-builds-up-to-it-and-ends-at-once-when-the-feet-are-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {})]
+          (core/submit! eng (list job {:y 64}) {})
+          (await (ticks s eng 2))
+          (is (finished? eng))
+          (is (empty? (calls p "jumpPlace")) "the feet are at :y already")
+          (core/submit! eng (list job {:y 67}) {})
+          (await (ticks s eng 5))
+          (is (finished? eng))
+          (is (= [0 67 0] (feet p)))
+          (is (= 1 (count (of-kind seen :pillar.done))) "the done event is told once, by the cleanup")
+          (is (= 3 (count (calls p "jumpPlace")))))))))

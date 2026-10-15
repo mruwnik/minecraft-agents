@@ -23,7 +23,8 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Pillar up :height blocks from the cell the body stands in, by jump-placing one block at a time under itself.
+  "Pillar up :height blocks (or until the feet are at :y) from the cell the body stands in, by jump-placing one block at a time under itself.
+  Done (:already before the start) when the body stands on the ground with its feet at :y or above.
   One call builds the whole pillar; it yields :continue only while a recentring go-to waits on the world.
 
   Every block is written to the scaffold ledger (jobs.lib.ledger, body memory) as an intent before its
@@ -58,13 +59,14 @@
   :off-column (the body left the column it started in) and :place-failed (3 failed jumps in a row with the body in
   the column, :detail the primitive's reason). Data {:cells [[x y z] ...] :built n :height n}: :cells are this job's
   confirmed blocks, lowest first. Events: pillar.done (info) and pillar.gave-up (warn, with :reason and by
-  reason :at :block :zone :short :detail).")
+  reason :at :block :zone :short :detail). pillar.done is told by the cleanup.")
 
 (a/defargs args
   {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
    :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
    :fetch {:doc "get the blocks with jobs.items.obtain when none is carried at the start, and walk back (false: end :too-few-blocks); a set of kinds or a map of limits counts as true" :spec need/option? :default true}
-   :height {:doc "blocks to rise, 1 to 64" :spec (a/int-in 1 64) :default 1}
+   :height {:doc "blocks to rise, 1 to 64 (the short form of :y: the feet's y at the start plus this)" :spec (a/int-in 1 64) :default 1}
+   :y {:doc "the y the feet end at; nil: the start's y plus :height" :spec (a/int-in -64 320) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :mob-wait-ms {:doc "how long to wait for a mob to leave the cell; nil: ::mob-wait-ms (an escape from danger passes 0)" :spec (a/int-in 0 nil) :default nil}})
 
@@ -175,19 +177,27 @@
   "Give-ups that are no fact about the world but a pillar that could not be made: the rest end :condition-failed."
   #{:off-column :place-failed})
 
+(defn height-of
+  "The blocks to rise: :y less the base's y (the feet's before the first block), else :height."
+  [c]
+  (if-let [y (:y (:args c))]
+    (- y (second (or (:base (ctx/mem c)) (pl/feet-cell c))))
+    (:height (:args c))))
+
+(defn result-of
+  "The result data of the pillar as ledger l holds it: {:status :cells :built :height} plus its spent summary."
+  [c l status]
+  (let [cells (built c l)]
+    (merge {:status status :cells cells :built (count cells) :height (height-of c)}
+           (some-> (spent-log c l) spent/summary))))
+
 (defn finish!
-  "End the job: its event and the ending, the result (with :spent and :spent-at) as the ending's data."
+  "End the job: a give-up has its event and a kind by reason, the cause the step's; a pillar made ends :done (its event is cleanup's)."
   [c l step]
-  (let [cells (built c l)
-        height (:height (:args c))
-        spent-log (spent-log c l)
-        result (merge {:status (if (= :done (:step step)) :done :stopped) :cells cells :built (count cells) :height height}
-                      (some-> spent-log spent/summary)
-                      (dissoc step :step))]
+  (let [result (merge (result-of c l (if (= :done (:step step)) :done :stopped)) (dissoc step :step))
+        {:keys [cells height]} result]
     (if (= :done (:step step))
-      (do (ctx/emit! c :pillar.done :info (assoc result :text (str "pillar of " (count cells) " up to " (pr-str (peek cells))
-                                                                   (some->> (spent/text spent-log "pillar") (str "; ")))))
-          (ctx/end c :done nil result))
+      (ctx/end c :done nil result)
       (do (ctx/emit! c :pillar.gave-up :warn
                      (assoc result :text (str "pillar gave up at " (count cells) " of " height ": " (name (:reason step))
                                               (when (:short step) (str ", " (:short step) " blocks short"))
@@ -207,7 +217,7 @@
   [c l feet base]
   (let [p (:primitives c)]
     (next-step (merge (access-inputs c)
-                      {:feet feet :base base :height (:height (:args c)) :block-at (access/sensed-at p blocks/hidden-guess)
+                      {:feet feet :base base :height (height-of c) :block-at (access/sensed-at p blocks/hidden-guess)
                        :carried (pl/carried p) :item nil :items (blocks-of c) :ledger (ledger/cells l)}))))
 
 (defn blocks-short
@@ -221,22 +231,42 @@
   part way, the round gives up with its pillar and ledger settled."
   [c]
   (let [items (blocks-of c)
-        short (when-not (:fetch (:args c)) (blocks-short (pl/carried (:primitives c)) items (:height (:args c))))]
+        short (when-not (:fetch (:args c)) (blocks-short (pl/carried (:primitives c)) items (height-of c)))]
     (if short
       (contract/later :too-few-blocks (str short " blocks short") :short short :items items)
       (contract/ok :blocks "blocks enough or fetched"))))
 
 (def can-start? (cond/and checks/not-moved too-few-blocks))
 
-(defn done?
-  "The blocks of this job in the ledger against :height. Never :done? itself: the ledger holds the blocks of the
-  whole job tree, not of this call, so a second pillar of one go-to would read as done at its start."
+(defn on-top?
+  "Whether the body stands on the ground with its feet at the pillar's top or above."
   [c]
-  (let [n (count (built c (ledger/open-entries (ctx/view c))))]
-    (contract/later :building "the pillar is being built" :units :blocks :done n :left (max 0 (- (:height (:args c)) n)))))
+  (let [base (or (:base (ctx/mem c)) (pl/feet-cell c))]
+    (and (not (false? (.-onGround (.self (:primitives c)))))
+         (>= (second (pl/feet-cell c)) (+ (second base) (height-of c))))))
+
+(defn done?
+  "Ok once the body stands with its feet at the top (:y, else the base's y plus :height); else the blocks of this job in
+  the ledger against the height."
+  [c]
+  (let [l (ledger/open-entries (ctx/view c))
+        n (count (built c l))]
+    (if (on-top? c)
+      (contract/ok :on-top "the feet are at the top" :units :blocks :done n :left 0 :result (result-of c l :done))
+      (contract/later :building "the pillar is being built" :units :blocks :done n :left (max 0 (- (height-of c) n))))))
+
+(defn ^:async cleanup
+  "After a pillar made: pillar.done told."
+  [c ending]
+  (when (= :done (:kind ending))
+    (let [{:keys [cells] :as result} (:data ending)
+          log (spent-log c (ledger/open-entries (ctx/view c)))]
+      (ctx/emit! c :pillar.done :info (assoc result :text (str "pillar of " (count cells) " up to " (pr-str (peek cells))
+                                                               (some->> (spent/text log "pillar") (str "; ")))))))
+  (ctx/end c :done nil {}))
 
 (defn quote-of [c]
-  (let [h (:height (:args c))
+  (let [h (max 0 (height-of c))
         s (settings/get settings ::block-s)
         carried (pl/carried (:primitives c))
         item (first (filter #(pos? (get carried % 0)) (blocks-of c)))
@@ -383,7 +413,7 @@
   [c]
   (let [back (await (need/return! c))
         short (when (and (:fetch (:args c)) (not (:base (ctx/mem c))))
-                (blocks-short (pl/carried (:primitives c)) (blocks-of c) (:height (:args c))))]
+                (blocks-short (pl/carried (:primitives c)) (blocks-of c) (height-of c)))]
     (cond
       back back
       (nil? short) nil
