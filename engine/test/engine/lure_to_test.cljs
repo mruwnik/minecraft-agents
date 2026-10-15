@@ -7,6 +7,7 @@
             [engine.hostile-test :as h]
             [engine.test-util :as tu]
             [jobs.animals.escort :as escort]
+            [jobs.animals.lure-to :as lure-to]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.world-files :as ew]))
@@ -167,7 +168,7 @@
             (is (= reason (:reason (done-event s))) (name reason))
             (is (= 1 (count (stopped s))) (name reason))))))))
 
-(deftest a-lure-near-its-budget-puts-the-food-away-and-ends-timeout
+(deftest a-lure-out-of-time-ends-on-the-engines-limit-and-its-cleanup-puts-the-food-away
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -176,7 +177,8 @@
           (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :spend {:job-time 30}}) {})
           (dotimes [_ 14] (swap! clock + 700) (await (core/tick! eng)))
           (is (finished? s))
-          (is (= :timeout (:reason (done-event s)))))))))
+          (is (= [:job-time] (mapv :reason (stopped s))) "the engine's limit ends it")
+          (is (nil? (.-held (.self p))) "the cleanup puts the food away"))))))
 
 (deftest an-animal-near-the-body-takes-over-when-the-led-one-is-gone
   (async done
@@ -470,3 +472,15 @@
           (with-redefs [walk/plan-walk! (fn ([_ _ _ _ _] (js/Promise.resolve nil)) ([_ _ _ _ _ o] (reset! opts o) (js/Promise.resolve nil)))]
             (await (escort/leg-target {:primitives p} {:x 30 :y 64 :z 0} 2)))
           (is (contains? (:moves (:policy @opts)) :open) "a planned gate is a way, not a wall"))))))
+
+(deftest the-animal-is-named-by-the-start-of-its-uuid
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:uuid "ab12"} {:self {:pos {:x 22 :y 64 :z 0}} :inventory wheat
+                                               :entities [(cow 1 24 {:uuid "e60084c6-1111"}) (cow 2 18 {:uuid "ab12cd34-2222"})]} 20))]
+          (is (= "ab12cd34-2222" (:animal (done-event s)))))))))
+
+(deftest unreachable-inside-a-shut-pen-names-the-pen
+  (let [c {:primitives (tu/fake {:floor tu/walk-floor :blocks ring}) :args {:mob "cow" :pos {:x 7 :y 64 :z 0}}}]
+    (is (re-find #"shut pen" (lure-to/stop-text c :unreachable)))))
