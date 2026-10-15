@@ -14,6 +14,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
             [engine.perception :as perception]
+            [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
             [engine.shelter-test :as st]
@@ -797,6 +798,17 @@
           (is (seq (st/calls p "place")) "dark route: dug in")
           (is (< (:x (st/pos-of p)) 5)))))))
 
+(deftest an-unlit-route-within-the-dark-cells-setting-is-walked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings {:jobs.survival.night.sites/max-dark-cells 64}
+                 (fn ^:async run []
+                   (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :light-default [15 0]) {:x 10 :y 64 :z 0}))]
+                     (await (tu/run-until-empty eng 40))
+                     (is (= [] (st/calls p "place")) "go-to's route crosses no more dark cells than allowed: walked")
+                     (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z])))))))))))
+
 (deftest a-home-beyond-the-walk-radius-is-not-walked-to
   (async done
     (tu/run-async done
@@ -829,17 +841,6 @@
           (is (= [] (st/calls p "place")) "no pit dug: walked home")
           (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
 
-(deftest a-route-the-body-has-not-seen-is-not-lit
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))
-              at (.-seenBlockAt p)]
-          (aset p "seenBlockAt" (fn [pos] (let [b (.call at p pos)] (if (and (>= (.-x pos) 3) (not= "stone" (.-name b))) #js {:unknown true :pos pos} b))))
-          (await (core/tick! eng))
-          (is (seq (st/calls p "place")) "loaded light of unseen cells is not read: dug in")
-          (is (< (:x (st/pos-of p)) 5)))))))
-
 (defn ^:async with-child-log
   "Run (f), a promise, with ctx/call logging [key sym args] of every child call; the log. (on-call c k sym a) may
   answer an ending or :continue to stand for the child."
@@ -859,13 +860,27 @@
   "The home walled in with a built block, which go-to never digs to reach it."
   (into home-roof (for [x [9 10 11] y [64 65] z [-1 0 1] :when (not= [x z] [10 0])] [(str x "," y "," z) "stone_bricks"])))
 
-(deftest a-roof-walk-that-does-not-arrive-digs-in-and-is-not-retried-tonight
+(deftest a-roofed-home-go-to-finds-no-way-to-is-not-walked-to
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home (update lit-world :blocks merge walled-home) {:x 10 :y 64 :z 0}))]
           (let [log (await (with-child-log #(tu/run-until-empty eng 60)))]
-            (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "one walk attempted, never repeated"))
+            (is (empty? (filter #(= :roof-walk (first %)) log)) "go-to's quote finds no route: no walk"))
+          (is (seq (st/calls p "place")) "the night dug in"))))))
+
+(def walled-pen
+  "A cell at [10 64 4] walled in with a built block, which go-to never digs to reach it."
+  (into {} (for [x [9 10 11] y [64 65] z [3 4 5] :when (not= [x z] [10 4])] [(str x "," y "," z) "stone_bricks"])))
+
+(deftest a-roof-walk-that-does-not-arrive-digs-in-and-is-not-retried-tonight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (update lit-world :blocks merge walled-pen) {:x 10 :y 64 :z 0}))
+              log (await (with-child-log #(tu/run-until-empty eng 60)
+                           (fn [c k sym a] (when (:place a) (ctx/call c k sym (-> a (dissoc :place) (assoc :pos {:x 10 :y 64 :z 4})))))))]
+          (is (= 1 (count (filter #(and (= :roof-walk (first %)) (:place (nth % 2))) log))) "one walk attempted, never repeated")
           (is (seq (st/calls p "place")) "the night dug in after the walk failed"))))))
 
 (deftest a-roof-walk-that-arrives-but-is-still-not-roofed-is-not-repeated

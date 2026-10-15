@@ -1,10 +1,10 @@
 ;; Cards dcedd0f5, a9ae340d: at night a body without a bed walks to a close remembered roofed place (:roofed-places [:home], :walk-radius 32)
-;; when the route is lit as far as the body has seen it (block light >= :lit-light on the straight line sampled every 2 blocks;
-;; a cell the body has not seen is not lit), else it digs in where it stands (dig-in.sealed; cobblestone carried). Open ground (64x32 plot,
+;; when go-to's planned route crosses no dark cell (night.sites/max-dark-cells 0; a cell seen dark or unseen at night is dark),
+;; else it digs in where it stands (dig-in.sealed; cobblestone carried). Open ground (64x32 plot,
 ;; body at x 4.5, z 16.5); home = a stone slab at y 2 over 3x3 cells (roofed within the default roof height 4), torches beside the line at z 15.
 ;; The walk's success is the completed night job with the body at home and no dig-in; failure is dig-in.sealed with the body near its start.
-;; The wall case: a 1-thick stone wall at x 9 (its cell is skipped by the 2-block sampling), a gap at z 0..2, torches behind it light cells the body never saw;
-;; before the sight gate (a9ae340d) the body walked round through the gap, now it digs in. The failed-walk fallback (home behind a wall: walk fails,
+;; The wall case: a 1-thick stone wall at x 9, a gap at z 0..2, torches behind it light cells the body never saw: the route round
+;; through the gap is dark, it digs in. The failed-walk fallback (home behind a wall: walk fails,
 ;; :roof-walk-failed, no second walk) is a unit test only (night-test): a walk that cannot arrive is not a stable fixture (go-to escalates).
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
 {:defaults

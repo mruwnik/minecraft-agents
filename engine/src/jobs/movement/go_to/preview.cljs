@@ -4,6 +4,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cost.planner :as cost-planner]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
@@ -39,19 +40,27 @@
     (some :damage steps) (assoc :damage (/ (js/Math.round (* 10 (reduce + (keep :damage steps)))) 10))
     (pos? (or (.-drown (.-cost path)) 0)) (assoc :drown (/ (js/Math.round (* 10 (.-drown (.-cost path)))) 10))))
 
+(defn dark-cells
+  "How many feet cells of steps look/dark-fn reads dark (seen dark; unseen at night unless unknown, whose mask prices
+  them), nil without a perception."
+  [p steps unknown]
+  (when-let [{:keys [at]} (look/dark-fn p {:unseen-dark? (nil? unknown)})]
+    (count (into #{} (comp (map (fn [s] (mapv #(js/Math.floor (% s)) [:x :y :z]))) (filter (fn [[x y z]] (= 1 (at x y z))))) steps))))
+
 (defn u-dist
   "The horizontal distance in blocks, rounded, from the body to the goal cell to."
   [c to] (js/Math.round (js/Math.hypot (- (:x to) (:x (wworld/body-cell c))) (- (:z to) (:z (wworld/body-cell c))))))
 
 (defn report
-  "The route of a plan (jobs.lib.near/plan!); with unknown, what the masked plan says of unseen floors
+  "The route of a plan (jobs.lib.near/plan!), a found one with :dark (dark-cells); with unknown, what the masked plan says of unseen floors
   (near/with-sight), a dark drop as go-to's :unseen-floor-dark."
   [c plan to policy unknown]
   (let [{:keys [r steps status]} plan
         no (wplan/no-walk plan 0 policy)
         here (u-dist c to)
         result (cond
-                 (and (nil? no) (= "found" status)) (assoc (route steps (.-path r)) :found true)
+                 (and (nil? no) (= "found" status)) (let [dark (dark-cells (:primitives c) steps unknown)]
+                                                      (cond-> (assoc (route steps (.-path r)) :found true) dark (assoc :dark dark)))
                  (nil? no) {:found false :reason :partial :near here :partial (route steps (.-path r))}
                  :else (assoc (dissoc no :replans :status) :found false :near here))]
     (if-not unknown

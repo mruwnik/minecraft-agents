@@ -5,7 +5,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
-            [jobs.lib.look :as look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.tools :as tools]
@@ -26,7 +26,9 @@
    :jobs.survival.night.sites/max-flees {:default 3 :doc "Walks to somewhere safer a night tries." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/ground-candidates {:default 16 :doc "Seen ground cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/cave-candidates {:default 16 :doc "Seen cave cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
+   :jobs.survival.night.sites/max-dark-cells {:default 0 :doc "Dark cells (seen dark, or unseen at night) go-to's planned route to a roofed place may cross for the night to walk there instead of digging in." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/cave-scan {:default 2048 :doc "Solid blocks one cave search reads: nearest first, so it reaches about 16 blocks around the body." :spec (a/int-in 0 nil)}})
+(defn max-dark-cells [] (settings/get settings :jobs.survival.night.sites/max-dark-cells))
 (defn max-sites [] (settings/get settings :jobs.survival.night.sites/max-sites))
 
 (defn relocate-reach [] (settings/get settings :jobs.survival.night.sites/relocate-reach))
@@ -99,48 +101,53 @@
           offsets)))
 
 
-(defn route-lit?
-  "Whether every sample (every 2 blocks along the straight line from a to b, over the cells around that height) has some
-  cell the body has seen (look/seen-block) with block light >= min-light; an unseen cell is not lit. The straight line
-  approximates the route go-to walks (one planner call per candidate is not worth it)."
-  [p a b min-light]
-  (let [raw (some-> (aget p "perception") :raw)
-        n (max 1 (js/Math.ceil (/ (u/dist a b) 2)))
-        lit-at (fn [x y z] (and (not (:unknown (look/seen-block p {:x x :y y :z z})))
-                                (<= 0 (.stateAt ^js raw x y z))
-                                (<= min-light (bit-and (.lightAt ^js raw x y z) 15))))]
-    (boolean
-     (and raw
-          (every? (fn [i]
-                    (let [t (/ i n)
-                          at (fn [k] (js/Math.floor (+ (k a) (* t (- (k b) (k a))))))]
-                      (some #(lit-at (at :x) (+ (at :y) %) (at :z)) [-1 0 1 2])))
-                  (range 0 (inc n)))))))
-
 (defn roofed-places-in
-  "The remembered places of :roofed-places within radius, roofed within :roof-height, and with lit? also reached over a
-  lit route, as [{:name :pos}] nearest first. A roof cell the body has not seen is guessed solid (u/block-name-or): from
-  the ground the cell over a home hides behind the roof's near edge; a column seen open is no roof."
-  [c radius lit?]
+  "The remembered places of :roofed-places within radius and roofed within :roof-height, as [{:name :pos}] nearest
+  first. A roof cell the body has not seen is guessed solid (u/block-name-or): from the ground the cell over a home
+  hides behind the roof's near edge; a column seen open is no roof."
+  [c radius]
   (let [p (:primitives c)
-        {:keys [roofed-places roof-height lit-light]} (:args c)
+        {:keys [roofed-places roof-height]} (:args c)
         here (sh/feet p)
         roofed? (fn [pos] (some #(solid/solid? (u/block-name-or p (update pos :y + %) "stone")) (range 1 (inc roof-height))))]
     (->> roofed-places
          (keep (fn [nm] (when-let [pos (mem/place (ctx/view c) nm)] {:name nm :pos pos})))
-         (filter (fn [{:keys [pos]}] (and (<= (u/dist here pos) radius) (roofed? pos) (or (not lit?) (route-lit? p here pos lit-light)))))
+         (filter (fn [{:keys [pos]}] (and (<= (u/dist here pos) radius) (roofed? pos))))
          (sort-by #(u/dist here (:pos %))))))
 
-(defn roofed-place
-  "The nearest remembered place of :roofed-places within :walk-radius, roofed (see roofed-places-in) and reached over a
-  lit route, as {:name :pos}, or nil."
-  [c]
-  (first (roofed-places-in c (:walk-radius (:args c)) true)))
+(defn ^:async route-dark
+  "The dark cells (seen dark, or unseen at night) on the route go-to's quote plans to place, or nil with no route or
+  no perception to read the light with."
+  [c {:keys [name]}]
+  (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:place name :range 0})))]
+    (when (:found r) (:dark r))))
+
+(defn ^:async lit-route?
+  "Whether go-to's route to place crosses at most max-dark-cells dark cells; a route too dark is quoted again after
+  one look round per body cell (cells it has not seen read dark at night)."
+  [c place]
+  (let [lit? #(some-> % (<= (max-dark-cells)))
+        d (await (route-dark c place))
+        cell (sh/feet (:primitives c))]
+    (cond
+      (lit? d) true
+      (or (nil? d) (= cell (:route-looked (ctx/mem c)))) false
+      :else (do (ctx/update-mem! c assoc :route-looked cell)
+                (await (sense/look-round! c []))
+                (boolean (lit? (await (route-dark c place))))))))
+
+(defn ^:async roofed-place!
+  "The nearest of places (roofed-places-in, nearest first) reached over a lit route (lit-route?), as {:name :pos}, or
+  nil."
+  [c places]
+  (loop [[place & more] places]
+    (when place
+      (if (await (lit-route? c place)) place (recur more)))))
 
 (defn near-roofed-home
   "The nearest roofed place of :roofed-places within :home-radius, lit or not, as {:name :pos}, or nil."
   [c]
-  (first (roofed-places-in c (:home-radius (:args c)) false)))
+  (first (roofed-places-in c (:home-radius (:args c)))))
 
 (defn roof-walk-wanted?
   "Whether to walk to a roofed place before digging in: none failed tonight, no dig-in in flight, no walk failed."

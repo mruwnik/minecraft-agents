@@ -76,7 +76,7 @@
       (let [here (sh/feet p)
             bed (when-let [pos (sh/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c))]
                   (when (> (u/dist here pos) (bed-down/radius c)) [{:kind :bed :pos pos}]))
-            places (map #(assoc % :kind :roofed-place) (sites/roofed-places-in c flee-radius false))
+            places (map #(assoc % :kind :roofed-place) (sites/roofed-places-in c flee-radius))
             cands (->> (concat bed places (cave-sites c flee-radius) (ground-sites c flee-radius))
                        (remove #(contains? tried (:pos %)))
                        (sort-by #(u/dist here (:pos %)))

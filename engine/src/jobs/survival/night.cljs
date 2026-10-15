@@ -60,8 +60,8 @@
   - roofed, buried or shut in a closed room: done {:night :roofed} (the queue runs).
   - by day, a dug-in body with a known hostile near (jobs.lib.dawn/hostile-hold?) stays in (info night.dawn-hold) until it is gone or the dawn grace passes.
   - else, before any pit and while no site has failed tonight: a remembered roofed place (:roofed-places, nearest first)
-    within :walk-radius whose column is not seen open (a roof cell unseen after a look counts as roof), and whose route (the straight line, sampled every 2 blocks) is lit
-    as far as the body has seen it (a seen cell with block light >= :lit-light; an unseen cell is not lit; the line approximates go-to's route): walk there (go-to :place). A walk
+    within :walk-radius whose column is not seen open (a roof cell unseen after a look counts as roof), and whose route (go-to's quote) crosses at most
+    sites/max-dark-cells (0) dark cells (seen dark, or unseen; quoted again after a look round): walk there (go-to :place). A walk
     that does not arrive is not tried again tonight, and the night digs in; arrived, the next pass is roofed.
   - else a safe place: jobs.survival.dig-in here, unless a site tonight failed within 8 blocks. A dig-in that does not
     roof the body (any other ending) writes a :night-site {:pos :reason} entry, and the body walks (go-to) to the
@@ -95,7 +95,6 @@
    :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :spec (a/num-in 0 nil) :default sh/urgent-bed-radius}
    :roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :spec (a/coll-of (a/or-of keyword? string?)) :default [:home]}
    :walk-radius {:doc "a roofed place farther than this is not walked to" :spec (a/num-in 0 nil) :default 32}
-   :lit-light {:doc "block light a route cell needs to count as lit (mobs do not spawn at 1+)" :spec (a/int-in 0 15) :default 1}
    :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :spec (a/num-in 0 nil) :default sh/max-days-awake}
    :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value) is not counted as a wall block when a cave is walled in (dig-in's :wall-value)" :spec (a/num-in 0 nil) :default 3}
    :take-back? {:doc "by day, dig the blocks (above dirt) dig-in placed in the shelter again and collect them" :spec boolean? :default true}
@@ -461,7 +460,8 @@
           (and (= :exposed sheltered) (ctx/way? c :shelter) (sites/retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
           (= :exposed sheltered) (await (hold/hold! c (str "exposed: " (sites/exposed-why (sites/failed-sites c)))))
           (not (ctx/way? c :shelter)) (await (flee-or-hold! c))
-          :else (if-let [place (and (sites/roof-walk-wanted? c) (await (sense/decide! c ::roofed-place #(sites/roofed-place c) {:verify-guesses true})))]
+          :else (if-let [place (and (sites/roof-walk-wanted? c)
+                                    (await (sites/roofed-place! c (await (sense/decide! c ::roofed-place #(seq (sites/roofed-places-in c (:walk-radius (:args c)))) {:verify-guesses true})))))]
                   (await (roof-walk! c place))
                   (await (shelter! c))))))))
 
