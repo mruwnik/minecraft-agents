@@ -1,0 +1,42 @@
+;; What the agent tools tell about a real body (cards f7bb91c1 a22d6e55 746a573b 50188a24 31aac5b8 ce26dc90 899478b0 9eee05c3 3602def6 54b2e9f5 79e12eeb a118bd2e).
+;; The tool steps run one after another, so a wake that needs a wait running while the event happens is not covered here:
+;; a death before the wait is the stale-death rule (summary, no wake). Notice wakes (hostile.fled, stale job notices) are hand-run.
+{:defaults
+ {:tags [:agent-tools :observe] :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :spawnpoint [4 0 4]}
+  :limit-s 90}
+ :cases
+ [{:name "death-visible-to-tools-and-never-wakes-later"
+   :act [[:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "2s"]]
+         [:kill-body] [:await {:source :body :kind :respawned} 30]
+         [:until [:cli "observe" ["$body" "--world" "$world" "events" "--kinds" "died" "--limit" "1"]
+                  {:ok true :events [{:kind :died :data {:cause [:any]}}]}] 15]
+         [:cli "observe" ["$body" "--world" "$world" "events" "--until" "death" "--limit" "5"] {:ok true :events [:has {:kind :died}]}]
+         [:cli "observe" ["$body" "--world" "$world" "status"] {:missed {:items [:has {:event :died}]}}]
+         [:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "3s"]
+          {:wake :timeout :summary {:counts {:died [:>= 1]}}}]]
+   :expect [{:event {:source :body :kind :died :data {:cause [:any]}} :within-s 20}]}
+  {:name "old-death-does-not-wake-a-watch"
+   :act [[:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "2s"]]
+         [:kill-body] [:await {:source :body :kind :respawned} 30]
+         [:job (jobs.gather.mine {})]
+         [:await {:source :job :kind :waiting :data {:reason :no-block}} 20]
+         [:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "4s" "--watch" "$job"] {:wake :timeout}]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-block}} :within-s 30 :of-job true}]}
+  {:name "death-under-manual-control-is-announced"
+   :act [[:http :take {:who "wt" :why "fixture" :idle-s 60} {:ok true}]
+         [:kill-body] [:await {:source :body :kind :respawned} 30]]
+   :expect [{:event {:source :system :kind :takeover_body_died :level :warn} :within-s 30}]}
+  {:name "finished-job-result-is-answered-and-unknown-id-refused"
+   :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]
+         [:await {:source :job :kind :result} 40]
+         [:cli "observe" ["$body" "--world" "$world" "result" "$job"] {:ok true :status [:any]}]
+         [:cli "observe" ["$body" "--world" "$world" "result" "j999999"] {:ok false :reason :unknown-job}]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]}
+  {:name "seen-blocks-is-a-read-only-query"
+   :blocks [[:set [20 0 16] "crafting_table"]]
+   :act [[:until [:cli "observe" ["$body" "--world" "$world" "seen" "--names" "crafting_table"]
+                  {:ok true :blocks [:has {:name "crafting_table"}]}] 20]]
+   :expect [{:no-event {:source :job :kind :queued} :for-s 3}]
+   :after [[:block [20 0 16] "crafting_table"]]}]}
