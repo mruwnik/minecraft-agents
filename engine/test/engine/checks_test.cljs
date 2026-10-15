@@ -39,5 +39,5 @@
     [] {} [:ok :zones-read]
     [{:name "a"}] {} [:ok :zones-read]))
 
-(deftest always-holds
-  (is (= [:ok :holds] (tu/kind-reason (checks/always {})))))
+(deftest holds-is-ok
+  (is (= [:ok :holds] (tu/kind-reason (checks/holds)))))
