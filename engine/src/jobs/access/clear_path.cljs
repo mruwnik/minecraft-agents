@@ -90,28 +90,48 @@
   "The stops that name a wall or a rule that bars the door (condition-failed); the others are attempts that failed."
   #{:no-door :protected :footprint :dig-waits})
 
-(defn done?
-  "The door's cells dug against the cells planned. Never :done? itself: the round ends it by walking through."
-  [c]
+(defn result-of
+  "The data of the door now: {:dug :at} and the :through cell once planned, plus detail."
+  [c detail]
   (let [m (ctx/mem c)]
-    (contract/later :digging "the door's cells are being dug"
-                    :units :cells :done (count (:dug m)) :left (max 0 (- (count (:cells m)) (count (:dug m)))))))
+    (merge {:dug (:dug m []) :at (reach/standing-vec (:primitives c))}
+           (when-let [t (:through m)] {:through t})
+           detail)))
+
+(defn done?
+  "Ok once the body stands on the far cell and every cell the call planned is seen open now (a fresh call has no plan:
+  later); else the cells dug against the cells planned."
+  [c]
+  (let [m (ctx/mem c)
+        p (:primitives c)
+        cells (:cells m)
+        open? (fn [cell] (b/air (u/seen-name p (zipmap [:x :y :z] cell))))]
+    (if (and (seq cells) (:through m) (= (:through m) (reach/standing-vec p)) (every? open? cells))
+      (contract/ok :done (str "cleared a way through to " (pr-str (:through m))) :units :cells :done (count cells) :left 0
+                   :result (result-of c {}))
+      (contract/later :digging "the door's cells are being dug"
+                      :units :cells :done (count (:dug m)) :left (max 0 (- (count cells) (count (:dug m))))))))
+
+(defn ^:async cleanup
+  "After a door that ended :done: clear-path.done told."
+  [c ending]
+  (when (= :done (:kind ending))
+    (let [data (:data ending)]
+      (ctx/emit! c :clear-path.done :info (assoc data :status :done :reason :done
+                                                 :text (str "cleared a way through to " (pr-str (:through data)))))))
+  (ctx/end c :done nil {}))
 
 (defn finish!
-  "End the door: its event and the ending, the old result without :status and :reason as the ending's data."
+  "End the door: a stop tells its event and ends by reason a kind (facts condition-failed, the rest nothing possible),
+  the old result without :status and :reason as the ending's data. :done ends with the data; its event is cleanup's."
   [c reason detail]
-  (let [m (ctx/mem c)
-        result (merge {:status (if (= :done reason) :done :stopped) :reason reason :dug (:dug m [])
-                       :at (reach/standing-vec (:primitives c))}
-                      (when-let [t (:through m)] {:through t})
-                      detail)
-        data (dissoc result :status :reason)]
+  (let [data (result-of c detail)]
     (if (= :done reason)
-      (do (ctx/emit! c :clear-path.done :info (assoc result :text (str "cleared a way through to " (pr-str (:through m)))))
-          (ctx/end c :done nil data))
+      (ctx/end c :done nil data)
       (do (ctx/emit! c :clear-path.stopped :warn
-                     (assoc result :text (str "clear-path stopped: " (name reason)
-                                              (some->> (:cell detail) pr-str (str " at ")))))
+                     (assoc data :status :stopped :reason reason
+                            :text (str "clear-path stopped: " (name reason)
+                                       (some->> (:cell detail) pr-str (str " at ")))))
           (ctx/end c (if (facts reason) :condition-failed :nothing-possible) (assoc detail :reason reason) data)))))
 
 (defn ^:async plan! [c]

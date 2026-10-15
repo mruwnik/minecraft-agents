@@ -162,3 +162,22 @@
               r2 (await (run-door world nil {:heading :east :max-thick 3 :spare-own-builds false :by-hand true}))]
           (is (= [:stopped :footprint "hut"] [(:status r) (:reason r) (:plan r)]) (pr-str r))
           (is (= :done (:status r2)) (pr-str r2)))))))
+
+(defn done-of
+  "The kind and reason of clear-path's done? for a body at pos over world with the call's memory mem."
+  [world pos mem]
+  (let [c {:primitives (tu/fake (assoc-in world [:self :pos] pos)) :root "j1" :slots [] :args {:heading :east :max-thick 3}
+           :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data mem}]}}})}]
+    (tu/kind-reason ((:done? (get registry/jobs job)) c))))
+
+(def plan-mem {:cells [[1 64 0] [1 65 0] [2 64 0] [2 65 0]] :through [3 64 0]})
+
+(deftest done-reads-the-calls-own-plan-against-the-world
+  (let [open (dissoc wall :blocks)
+        floor {:blocks (box -2 63 -2 8 63 2 "stone")}
+        dug (merge wall floor {:blocks (merge (box -2 63 -2 8 63 2 "stone") (box 2 64 -1 2 65 1 "stone"))})]
+    (is (= [:later :digging] (done-of wall {:x 0 :y 64 :z 0} {})) "no plan yet")
+    (is (= [:later :digging] (done-of wall {:x 0 :y 64 :z 0} plan-mem)) "planned cells still solid")
+    (is (= [:later :digging] (done-of dug {:x 3 :y 64 :z 0} plan-mem)) "one cell still solid")
+    (is (= [:later :digging] (done-of (merge open floor) {:x 0 :y 64 :z 0} plan-mem)) "open but not yet through")
+    (is (= [:ok :done] (done-of (merge open floor) {:x 3 :y 64 :z 0} plan-mem)) "open and stood through")))
