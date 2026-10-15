@@ -1,8 +1,15 @@
 (ns jobs.lib.dig-route
   "The fewest cells to dig for a walkable way from one feet cell to another through stone: a pure search over what the
   caller says each cell is (block-at cell -> name, or nil when never seen)."
-  (:require [jobs.lib.access.rules :as rules]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.reach :as reach]))
+
+(a/defargs settings
+  {::max-digs {:default 16 :doc "The most cells a route digs." :spec (a/int-in 0 nil)}
+   ::margin {:default 3 :doc "How far (blocks) round the two ends a route may stray." :spec (a/int-in 0 nil)}
+   ::max-fall {:default 3 :doc "The longest fall (blocks) a route's step may drop." :spec (a/int-in 0 nil)}})
 
 (def air #{"air" "cave_air" "void_air"})
 (def fluids #{"water" "lava" "bubble_column"})
@@ -38,8 +45,11 @@
   cell goal, at most :max-digs of them, within :margin cells of both ends, falls of at most :max-fall; each step's floor must be a seen solid block.
   Priced :step-s a step and (:dig-s name) a cell dug (default 0 and 1: the fewest digs); a block :dig-s prices nil is
   not dug. {:dig [cell ..]} or {:problem :no-route}."
-  [block-at from goal {:keys [max-digs margin max-fall dig-s step-s] :or {max-digs 16 margin 3 max-fall 3 dig-s (constantly 1) step-s 0}}]
-  (let [lo (mapv #(- (min %1 %2) margin) from goal)
+  [block-at from goal {:keys [dig-s step-s] :or {dig-s (constantly 1) step-s 0} :as opts}]
+  (let [max-digs (get opts :max-digs (settings/get settings ::max-digs))
+        margin (get opts :margin (settings/get settings ::margin))
+        max-fall (get opts :max-fall (settings/get settings ::max-fall))
+        lo (mapv #(- (min %1 %2) margin) from goal)
         hi (mapv #(+ (max %1 %2) margin) from goal)
         inside? (fn [c] (every? true? (map #(<= %1 %2 %3) lo c hi)))
         step (fn [m n]

@@ -270,16 +270,14 @@
   (and (= :goal-enclosed (some-> (:reason result) keyword))
        (not (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))))
 
-(def max-route-digs "Cells a :dig-route escalation digs at most." 16)
-
 (defn route-cells
   "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal
-  (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most max-route-digs, falls of at most 3),
+  (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most the dig-route settings' digs and fall),
   in walking order, every one escape/diggable?, :guess on a cell not seen (read as rock); [] when nothing is left to
   dig, nil when no such route."
   [p from goal may-dig? own?]
   (let [block-at (escape/block-at-of p)
-        cells (:dig (dig-route/route block-at from goal {:max-digs max-route-digs :dig-s cost/dig-cost
+        cells (:dig (dig-route/route block-at from goal {:dig-s cost/dig-cost
                                                          :step-s (:cost (cost/walk-cost {:distance 1}))}))]
     (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells))
       (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells))))

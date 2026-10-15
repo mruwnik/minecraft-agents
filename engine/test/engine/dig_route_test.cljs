@@ -1,5 +1,6 @@
 (ns engine.dig-route-test
   (:require [cljs.test :refer [deftest is testing]]
+            [engine.settings :as settings]
             [jobs.lib.dig-route :as dr]))
 
 (defn world
@@ -42,3 +43,9 @@
         "by count the way through the obsidian wall is the shortest")
     (is (not-any? (comp #{"obsidian"} w) (:dig (dr/route w [-1 10 0] [3 10 0] {:dig-s #(if (= "obsidian" %) 50 1) :step-s 0.2})))
         "priced, it digs under the wall")))
+
+(deftest the-default-limits-are-settings
+  (let [w (world {[3 8 0] "air"})]
+    (is (seq (:dig (dr/route w [0 10 0] [3 8 0] {}))))
+    (settings/with-settings {:jobs.lib.dig-route/max-digs 0}
+      (fn [] (is (= {:problem :no-route} (dr/route w [0 10 0] [3 8 0] {})))))))
