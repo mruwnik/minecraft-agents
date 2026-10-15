@@ -8,7 +8,7 @@
 (def doc
   "Move every stack of a container entity in reach (a chest minecart, :id) into the bag, the entity form of
   jobs.storage.withdraw. The caller walks within reach and checks zones first.
-  Ends done {:full bool}: :full true when a transfer failed or moved nothing (no room for a stack), what fitted is taken.
+  Ends done {:full bool}: :full true when a transfer moved nothing for lack of room, what fitted is taken.
   Else condition-failed :missing (the entity is gone) or nothing-possible with the inspect or transfer status as the cause
   (:unreachable, ..). Spends :time (default ::job-time-s).")
 
@@ -32,7 +32,7 @@
   {:uses {:job-time [1 5 (settings/get settings ::job-time-s)]}})
 
 (defn ^:async round
-  "Inspect the container and move its stacks one after another; a transfer that moves nothing ends it :full."
+  "Inspect the container and move its stacks one after another; a transfer that moves nothing ends it :full, any other failure nothing-possible."
   [c]
   (let [id (:id (:args c))
         seen (await (ctx/act c :inspectContainer (clj->js {:entity id})))
@@ -43,6 +43,7 @@
         (if-let [[name n] (first stacks)]
           (let [r (await (ctx/act c :transfer (clj->js {:entity id :direction "withdraw" :item name :count n})))]
             (cond
-              (not (and (= "ok" (.-status r)) (pos? (.-moved r)))) (do (ctx/update-mem! c assoc :emptied true) (ctx/end c :done nil {:full true}))
-              :else (recur (rest stacks))))
+              (and (= "ok" (.-status r)) (pos? (.-moved r))) (recur (rest stacks))
+              (contains? #{"ok" "full"} (.-status r)) (do (ctx/update-mem! c assoc :emptied true) (ctx/end c :done nil {:full true}))
+              :else (ctx/end c :nothing-possible (keyword (.-status r)))))
           (do (ctx/update-mem! c assoc :emptied true) (ctx/end c :done nil {:full false})))))))
