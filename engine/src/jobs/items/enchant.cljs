@@ -192,6 +192,7 @@
   [c]
   (let [{:keys [slot level-cost]} (:attempt (ctx/mem c))
         result {:enchanted true :resumed true :slot slot :level-cost level-cost :enchants nil}]
+    (ctx/update-mem! c assoc :enchanted true)
     (finish! c :done nil (assoc result :text (str "enchanted " (:item (:args c)) " (found done after a restart)")))))
 
 (def failed-reasons {"enchant-stalled" "window-stalled" "not-confirmed" "not-confirmed" "item-not-returned" "not-confirmed"})

@@ -269,6 +269,13 @@
             (is (= 3 (:slot done-event)))
             (is (true? (:resumed done-event)))))))))
 
+(deftest a-found-done-enchant-is-noted-so-done-is-ok
+  (let [mem (atom {:attempt {:slot 3 :level-cost 5}})
+        c {:args {:item "diamond_sword"} :mem mem :update-mem (fn [f args] (apply swap! mem f args))}]
+    (with-redefs [ctx/mem (fn [c] @(:mem c))]
+      (enchant/resumed! c)
+      (is (= [:ok :enchanted] (tu/kind-reason (enchant/done? c)))))))
+
 (deftest the-attempt-is-written-before-the-enchant-call
   (async done
     (tu/run-async done
