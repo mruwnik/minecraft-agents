@@ -200,7 +200,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:target 4 :chest chest :keep {"beef" 1}} {:inventory carried :entities four-cows :containers {"10,64,0" []}} 20))]
+        (let [s (await (scenario {:target 4 :chest chest :carry {"beef" 1}} {:inventory carried :entities four-cows :containers {"10,64,0" []}} 20))]
           (is (= {"beef" 2 "leather" 2} (chest-items s)))
           (is (= 1 (get (inv s) "beef"))))))))
 

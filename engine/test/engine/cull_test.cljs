@@ -141,11 +141,11 @@
       false {:x 0.5 :y 65 :z 0.5}
       false {:x 0.5 :y 63.5 :z 0.5})))
 
-(deftest a-centre-and-radius-bound-the-herd
+(deftest a-center-and-radius-bound-the-herd
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:keep 1 :centre {:x 10 :z 0} :radius 4}
+        (let [s (await (scenario {:keep 1 :center {:x 10 :z 0} :radius 4}
                                  {:inventory h/sword :entities [(cow 1 3) (cow 2 8) (cow 3 10) (cow 4 12) (cow 5 20) (cow 6 10 9)]} 120))]
           (is (= #{1 5 6 4} (world-ids s)) "of 8, 10 and 12 (in the bound) the two nearest the body die")
           (is (= {:killed 2 :remaining 1 :reason :keep}

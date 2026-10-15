@@ -11,7 +11,7 @@
 (def doc
   "Thin a herd of one kind (:mob) down to :keep adults and collect the drops.
 
-  The herd is the animals of the kind inside a bound: :box when set, else :radius blocks around :centre
+  The herd is the animals of the kind inside a bound: :box when set, else :radius blocks around :center
   ({:x :z}, horizontal), else :radius blocks around the body. Babies are never targets and never count as
   adults. With :keep or fewer adults in the bound at the start the goal holds and it ends done :already; it waits
   while the zone rules refuse every adult and fewer than :least are killed (:refused, :no-zones, before every round), so a held cull never blocks the queue. The weapons are the call's :use :tools (default
@@ -44,9 +44,9 @@
 (a/defargs args
   {:mob {:doc "mob type name of the animals to thin" :spec a/name? :default "cow"}
    :keep {:doc "adults of the kind to leave alive in the bound (babies do not count)" :spec (a/int-in 0 nil) :default 2}
-   :centre {:doc "nil, or {:x :z}: the bound is :radius blocks (horizontal) around it" :spec (a/map-with {:x number? :z number?}) :default nil}
-   :radius {:doc "animals within this many blocks of :centre, or of the body when there is no :centre, are the herd" :spec (a/num-in 0 nil) :default 16}
-   :box {:doc "nil, or {:min {:x :y :z} :max {:x :y :z}}: inclusive bound that replaces :centre and :radius" :spec a/box? :default nil}
+   :center {:doc "nil, or {:x :z}: the bound is :radius blocks (horizontal) around it" :spec (a/map-with {:x number? :z number?}) :default nil}
+   :radius {:doc "animals within this many blocks of :center, or of the body when there is no :center, are the herd" :spec (a/num-in 0 nil) :default 16}
+   :box {:doc "nil, or {:min {:x :y :z} :max {:x :y :z}}: inclusive bound that replaces :center and :radius" :spec a/box? :default nil}
    :color {:doc "sheep only: kill only sheep of this wool colour (e.g. \"white\"); nil: any. :keep still counts every adult" :spec a/name? :default nil}
    :count {:doc "most animals to kill in one run; nil: no cap" :spec (a/int-in 1 nil) :default nil}
    :collect-radius {:doc "how far around to collect drops after a kill" :spec (a/num-in 0 nil) :default 8}
@@ -55,7 +55,7 @@
    :max-skips {:doc "animals skipped in a row before the cull gives up" :spec (a/int-in 1 nil) :default 3}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
-(def target [:mob :box :centre])
+(def target [:mob :box :center])
 
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds a cull may take." :spec (a/num-in 0 nil)}})
@@ -71,21 +71,21 @@
 (defn reach
   "How far from the body the entity query must look to cover the bound."
   [c]
-  (let [{:keys [box centre radius]} (:args c)
+  (let [{:keys [box center radius]} (:args c)
         here (u/self-pos c)]
     (cond
       box (apply max (map #(u/dist here %) (corners box)))
-      centre (+ radius (js/Math.hypot (- (:x centre) (:x here)) (- (:z centre) (:z here))))
+      center (+ radius (js/Math.hypot (- (:x center) (:x here)) (- (:z center) (:z here))))
       :else radius)))
 
 (defn in-bound?
-  "True when the position lies inside the bound (a box, else around the centre, else around the body)."
+  "True when the position lies inside the bound (a box, else around the center, else around the body)."
   [c pos]
-  (let [{:keys [box centre radius]} (:args c)
+  (let [{:keys [box center radius]} (:args c)
         {:keys [x y z]} pos]
     (cond
       box (animals/in-box? box pos)
-      centre (<= (js/Math.hypot (- x (:x centre)) (- z (:z centre))) radius)
+      center (<= (js/Math.hypot (- x (:x center)) (- z (:z center))) radius)
       :else (<= (u/dist (u/self-pos c) pos) radius))))
 
 (defn herd
