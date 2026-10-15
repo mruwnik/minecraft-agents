@@ -52,9 +52,9 @@
                (expr/problem registry/jobs '(jobs.primitive.dig {:bogus 1}))))
   (is (nil? (expr/problem registry/jobs '(jobs.primitive.dig {:pos [1 2 3] :timeoutS 5})))))
 
-(deftest every-job-exports-check-and-round-and-a-doc
+(deftest every-job-exports-conditions-and-round-and-a-doc
   (doseq [[sym job] registry/jobs]
-    (is (or (fn? (:check job)) (some? (:conditions job))) (str sym))
+    (is (some? (:conditions job)) (str sym))
     (is (fn? (:round job)) (str sym))
     (is (string? (:doc job)) (str sym))))
 

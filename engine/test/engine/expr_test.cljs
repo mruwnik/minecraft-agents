@@ -8,15 +8,15 @@
 (defn ^:async noop-round [_] :done)
 
 (def reg
-  {'jobs.a {:check (constantly true) :round noop-round
+  {'jobs.a {:conditions [] :round noop-round
             :args {:n {:doc "n" :default 1} :m {:doc "m" :default 2}}}
-   'jobs.p {:check (constantly true) :round noop-round
+   'jobs.p {:conditions [] :round noop-round
             :args (a/declare! 'jobs.p {:at {:doc "cell" :spec ::a/pos :default nil} :n {:doc "n" :spec number? :default 1}})}
-   'jobs.t {:check (constantly true) :round noop-round
+   'jobs.t {:conditions [] :round noop-round
             :args (a/declare! 'jobs.t {:k {:spec keyword?} :i {:spec (a/int-in nil nil)} :x {:spec (a/num-in 0 10)} :b {:spec boolean?}
                                        :s {:spec string?} :it {:spec a/item?} :e {:spec #{:a :b}} :u {:doc "any map" :spec map?}})}
-   'jobs.b {:check (constantly true) :round noop-round :args nil}
-   'jobs.free {:check (constantly true) :round noop-round}})
+   'jobs.b {:conditions [] :round noop-round :args nil}
+   'jobs.free {:conditions [] :round noop-round}})
 
 (defn problem [form]
   (try (expr/parse-spec reg form) nil
@@ -66,6 +66,11 @@
   (is (re-find #"a job spec is a list" (problem '[jobs.a])))
   (is (re-find #"a job spec is a list" (problem '())))
   (is (re-find #"in \(seq \(jobs.nope\)\)" (problem '(seq (jobs.nope)))) "the message names the whole spec"))
+
+(deftest a-job-without-conditions-is-refused-even-with-a-check
+  (let [reg (assoc reg 'jobs.old {:check (constantly true) :round noop-round} 'jobs.bare {:round noop-round})]
+    (is (re-find #"job jobs.old needs a round and conditions" (expr/problem reg '(jobs.old))))
+    (is (re-find #"job jobs.bare needs a round and conditions" (expr/problem reg '(jobs.bare))))))
 
 (deftest unknown-arg-keys-are-refused-naming-each-and-listing-the-known
   (is (re-find #"jobs.a has no arg :x, :y; its args are :m, :n" (problem '(jobs.a {:x 1 :n 2 :y 3}))))
@@ -118,7 +123,7 @@
     :e :c #"jobs.t :e must be one of :a, :b, got :c"))
 
 (deftest a-default-of-the-wrong-type-is-refused-too
-  (let [r {'jobs.d {:check (constantly true) :round noop-round :args (a/declare! 'jobs.d {:n {:spec (a/int-in nil nil) :default "x"}})}}]
+  (let [r {'jobs.d {:conditions [] :round noop-round :args (a/declare! 'jobs.d {:n {:spec (a/int-in nil nil) :default "x"}})}}]
     (is (re-find #"jobs.d :n must be a whole number" (try (expr/parse-spec r '(jobs.d)) nil (catch :default e (ex-message e)))))))
 
 (def pos-args

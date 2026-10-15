@@ -205,8 +205,8 @@ built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to t
 
 ## Jobs
 
-A job is a namespace under `src/jobs/` exporting `check` and `round`, and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
-`body.idle`). A contract job exports `conditions` in place of `check` (Contract jobs below). The namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
+A job is a namespace under `src/jobs/` exporting `conditions` and `round` (Contract jobs below), and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
+`body.idle`). The namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
 
 ```clojure
 (ns jobs.survival.eat
@@ -216,24 +216,23 @@ A job is a namespace under `src/jobs/` exporting `check` and `round`, and option
 (def doc "Eat the best food carried.")                       ; optional
 (a/defargs args                                              ; optional
   {:item {:doc "the food to eat" :default nil :spec a/item?}})
-(defn check [_c] true)                                       ; ctx -> boolean
-(defn ^:async round [c]                                      ; ctx -> :done | :continue | :declined
+(def conditions [])                                          ; [[:fn f] ...], f: ctx -> nil or a cause
+(defn ^:async round [c]                                      ; ctx -> :continue | an ending (ctx/end)
   (await (ctx/act c :eat #js {}))
-  :done)
+  (ctx/end c :done nil))
 ```
 
 **Args.** `engine.args/defargs` declares args as cljs.spec: every arg has a `:spec`, a predicate of `engine.args` (`int-in`, `num-in`, `pos-num?`, `item?`, `name?`, `position?`, `box?`, `coll-of`, `set-of`, `map-of`, `map-with`, `or-of`, `valid-by`), a set of the allowed values, a core predicate (`boolean?`, `string?`, `keyword?`, `map?` ...) or `::a/pos` (`[x y z]` or `{:x :y :z}`, conformed to `{:x :y :z}`). A group `{:doc :keys {k entry}}` is a nested map of args; a caller's group merges over its defaults key by key. nil = unset. At submit undeclared keys are refused at every level, then the args are conformed; a misfit is refused as one line naming job, key path, what the spec wants and the value (`jobs.x :risk :min-health must be a whole number from 1 to 20, got 30`). A child call (`ctx/call-child`) and a restore conform the same way. A predicate built with `a/pred` carries its want text; the catalog shows each `:spec` as that text. `(a/declare! sym data)` registers a hand-built job's args (tests).
 
-There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:check :round :doc :args}}`,
+There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:conditions :round :doc :args}}`,
+
 built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
-that defines `round` and `check` or `conditions` (others are helpers), fails the compile when such a file's `ns` does not match its
-path, and the macro `engine.registry/job-registry` emits the map, with each `engine.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args). `check` and `round` must be top-level `def`/`defn` forms, and a job must not
+that defines `round` and `conditions` (others are helpers), fails the compile when such a file's `ns` does not match its
+path or a file defines `round` and `check` but no `conditions`, and the macro `engine.registry/job-registry` emits the map, with each `engine.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args). `conditions` and `round` must be top-level `def`/`defn` forms, and a job must not
 require `engine.registry`.
 
-- **check**: can the job usefully run now? Cheap and side-effect free: its ctx has no token, so `act`, `update-mem!` and
-  `remember!` throw. Asked every tick. A check that throws declines with a `system.error` warn.
-- **round**: returns `:done` (the job leaves the list, its memory is deleted), `:continue`, or `:declined` (not now; see
-  Triggers). Anything else, or a throw, is a failure: the job stays listed, marked failed, with a `job.failed` warn, and
+- **round**: returns `:continue` or an ending (`ctx/end`, Contract jobs below; the job leaves the list, its memory is
+  deleted). Anything else, or a throw, is a failure: the job stays listed, marked failed, with a `job.failed` warn, and
   the scheduler skips it until `retry!` clears the mark. A reflex job that fails is dropped. A cut is never a failure.
 - A round works at its goal for as long as it can do useful work; `:continue` means yield (nothing useful to do now,
   e.g. waiting for crops or daylight), not "next step". An intentional pause is a `jobs.time.noop` child (`child/pause!`); it counts against the job's budget.

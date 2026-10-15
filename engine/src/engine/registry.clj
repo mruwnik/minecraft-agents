@@ -54,14 +54,13 @@
         symbol)))
 
 (defn job?
-  "A job file defines round, and check or (a contract job, engine.contract) conditions; any other file under jobs/
-  is a helper."
+  "A job file defines round and conditions (a contract job, engine.contract); any other file under jobs/ is a helper."
   [defines]
-  (boolean (and (defines 'round) (or (defines 'check) (defines 'conditions)))))
+  (boolean (and (defines 'round) (defines 'conditions))))
 
 (defn describe
-  "{:ns sym :defines #{...}} for a job file, nil for a helper file (no check or no round), or throws when a job
-  file's ns does not match its path."
+  "{:ns sym :defines #{...}} for a job file, nil for a helper file (no conditions or no round), or throws when a job
+  file's ns does not match its path or a file defines round and check but no conditions (an old job)."
   [dir file]
   (let [forms (read-forms file)
         ns-form (first forms)
@@ -69,6 +68,9 @@
         want (expected-ns dir file)
         defines (defined-names forms)]
     (cond
+      (and (defines 'round) (defines 'check) (not (defines 'conditions)))
+      (throw (ex-info (str "job file " (.getPath file) " defines check but no conditions; a job declares conditions")
+                      {:file (.getPath file)}))
       (not (job? defines)) nil
       (not= want ns-sym)
       (throw (ex-info (str "job file " (.getPath file) " must declare (ns " want " ...), found " (pr-str ns-sym))
@@ -141,7 +143,7 @@
   []
   (if-let [dir (jobs-dir)]
     (vec (concat (keep (fn [f] (let [id (expected-ns dir f)]
-                                 (when (job? (try (defined-names (read-forms f)) (catch Exception _ #{'check 'round})))
+                                 (when (job? (try (defined-names (read-forms f)) (catch Exception _ #{'conditions 'round})))
                                    (file-metadata id f))))
                        (job-files dir))
                  (let [file (primitive-file)]
