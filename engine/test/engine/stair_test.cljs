@@ -884,6 +884,15 @@
           (is (= [:condition-failed :y-not-beyond-feet] ((juxt :kind contract/cause-key) (:ending @out))))
           (is (empty? (digs p))))))))
 
+(deftest a-stair-to-the-height-the-feet-stand-at-is-already-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (stair! {:blocks ground} {:dir :down :heading :east :y 65} (fn [_])))]
+          (is (= :done (:status @out)))
+          (is (:already? @out))
+          (is (empty? (digs p))))))))
+
 (defn ^:async dig-reached!
   "Resolves once the job's dig call is waiting on the world."
   [world]

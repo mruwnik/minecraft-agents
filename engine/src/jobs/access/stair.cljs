@@ -262,12 +262,35 @@
             (with-heading-check not-refused)
             (with-heading-check not-lacking)))
 
+(defn result-of
+  "The data of a stair now: {:steps :at :dug :ores} plus detail."
+  [c detail]
+  (let [m (ctx/mem c)]
+    (merge {:steps (or (:at-step m) 0) :at (reach/standing-vec (:primitives c)) :dug (:dug m []) :ores (vec (ore-pick/picked c))} detail)))
+
 (defn done?
-  "The steps cut against the steps asked. Never :done? itself: the round ends the stair with its event and way."
+  "Ok once the stair is cut and its end settled; before the start, already when :y is given and the feet stand at it.
+  Else the steps cut against the steps asked."
   [c]
   (let [m (ctx/mem c)
-        n (or (:at-step m) 0)]
-    (contract/later :cutting "the stair is being cut" :units :steps :done n :left (max 0 (- (or (:target m) n) n)))))
+        n (or (:at-step m) 0)
+        y (:y (:args c))
+        at-y? (and (some? y) (nil? (:origin m)) (== y ((reach/standing-vec (:primitives c)) 1)))]
+    (if (or (:finished m) at-y?)
+      (contract/ok :done (str "the stair stands at " (pr-str (reach/standing-vec (:primitives c)))) :units :steps :done n :left 0
+                   :result (result-of c {}))
+      (contract/later :cutting "the stair is being cut" :units :steps :done n :left (max 0 (- (or (:target m) n) n))))))
+
+(defn ^:async cleanup
+  "After a stair that ended :done: the way cut is remembered (:stair-way) and stair.done told."
+  [c ending]
+  (when (= :done (:kind ending))
+    (let [{:keys [steps]} (:data ending)
+          {:keys [dir heading]} (:args (with-heading c))]
+      (when (and (pos? steps) (not= :level dir))
+        (smem/record-way! c (:origin (ctx/mem c)) dir heading steps))
+      (ctx/emit! c :stair.done :info (assoc (:data ending) :status :done :reason :done :text (str "stair " (name dir) " done, " steps " steps")))))
+  (ctx/end c :done nil {}))
 
 (defn quote-of [c]
   (let [{:keys [dir]} (:args c)
@@ -285,19 +308,18 @@
     :no-tool :tool-spent :no-free-slot :inventory-full :hazard :lava-exposed :plugged :floor-unseen :no-floor :cave-below :off-stair :no-way-back :y-not-beyond-feet})
 
 (defn finish!
-  "End the stair: its event, its way remembered, and the ending: :done, else by reason a kind (facts, the rest
-  nothing possible) with the detail in the cause and, with what the stair did, in the data."
+  "End the stair: a stop tells its event and remembers its way, and ends by reason a kind (facts, the rest nothing
+  possible) with the detail in the cause and, with what the stair did, in the data. :done ends with the data; its event
+  and way are cleanup's."
   [c reason detail]
-  (let [m (ctx/mem c)
-        steps (or (:at-step m) 0)
-        data (merge {:steps steps :at (reach/standing-vec (:primitives c)) :dug (:dug m []) :ores (vec (ore-pick/picked c))} detail)
+  (let [data (result-of c detail)
+        steps (:steps data)
         {:keys [dir heading]} (:args c)]
-    (when (and (pos? steps) (not= :level dir))
-      (smem/record-way! c (:origin m) dir heading steps))
     (if (= :done reason)
-      (do (ctx/emit! c :stair.done :info (assoc data :status :done :reason :done :text (str "stair " (name dir) " done, " steps " steps")))
-          (ctx/end c :done nil data))
-      (do (ctx/emit! c :stair.stopped :warn
+      (ctx/end c :done nil data)
+      (do (when (and (pos? steps) (not= :level dir))
+            (smem/record-way! c (:origin (ctx/mem c)) dir heading steps))
+          (ctx/emit! c :stair.stopped :warn
                      (assoc data :status :stopped :reason reason
                             :text (str "stair stopped after " steps " steps: " (name reason)
                                        (some->> (:cell detail) pr-str (str " at "))
@@ -474,7 +496,7 @@
       (let [r (await (work! c))]
         (cond
           (#{:again :continue} r) r
-          (= :finished r) (finish! c :done {})
+          (= :finished r) (if (:finished m) (finish! c :done {}) (do (ctx/update-mem! c assoc :finished true) :again))
           (= :lava-unsealed (:reason r)) (do (ctx/update-mem! c assoc :backoff {:stop r :cell (back-cell c)}) :again)
           :else (finish! c (:reason r) (dissoc r :reason)))))))
 
