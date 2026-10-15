@@ -258,6 +258,15 @@
 
 ;; ------------------------------------------------------------- fight-back
 
+(defn waited-between-swings
+  "The first ms waited (act :wait) after each swing but the last: what is left of the gap (the fake clock moves with calls,
+  not with waits)."
+  [p]
+  (let [calls (vec (.-calls (.-world p)))
+        idx (vec (keep-indexed (fn [i c] (when (= "attack" (.-name c)) i)) calls))]
+    (mapv (fn [a b] (some #(when (= "wait" (.-name %)) (.. % -args -ms)) (subvec calls a b)))
+          idx (rest idx))))
+
 (def fight '(jobs.survival.fight-back))
 
 (deftest fight-back-equips-attacks-and-finishes-when-the-mob-is-gone
@@ -270,6 +279,14 @@
           (is (= ["iron_axe"] (mapv #(.-item (.-args %)) (calls p "equip"))) "the best weapon, not the pickaxe")
           (is (= [7 7 7 7] (mapv #(.-id (.-args %)) (calls p "attack"))) "four hits kill the 20 health zombie")
           (is (= [] (:list (core/state eng))) "done in one call"))))))
+
+(deftest fight-back-waits-out-the-held-weapons-cooldown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round-ms fight {:inventory [{:name "iron_axe" :count 1}] :entities [(zombie 7 3 0)]} 10))]
+          (is (seq (waited-between-swings p)))
+          (is (every? #(<= 1072 % 1112) (waited-between-swings p)) "the iron axe's 1112 ms, so every hit lands at full strength"))))))
 
 (deftest fight-back-looks-round-while-the-cooldown-runs
   (async done
@@ -356,13 +373,10 @@
           (is (every? #(and (false? (:escalate %)) (= 10 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %))) opts)
               "a moving mob is chased in legs, never dug or pillared toward"))))))
 
-(deftest fight-back-declines-when-hurt-or-nothing-is-near
+(deftest fight-back-declines-when-nothing-is-near
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:health 7} :inventory sword :entities [(zombie 3 0)]})]
-          (core/submit! eng fight {})
-          (is (nil? (core/tick! eng)) "health 7 is below min-health 8"))
         (let [{:keys [eng]} (setup {:inventory sword :entities [(zombie 6 0)]})]
           (core/submit! eng fight {})
           (is (nil? (core/tick! eng)) "6 blocks is beyond range 4"))))))

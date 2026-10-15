@@ -72,7 +72,7 @@
    :hunt-radius {:doc "how far to look for animals and wild crops, in blocks" :spec (a/num-in 0 nil) :default 24}
    :farm-radius {:doc "how far around a known farm to harvest, in blocks" :spec (a/num-in 0 nil) :default 6}
    :take {:doc "most items to withdraw from a chest in one go" :spec (a/int-in 1 nil) :default 16}
-   :attack-gap-ms {:doc "least time between two swings at an animal, so a swing lands at full strength" :spec (a/num-in 0 nil) :default 600}
+   :attack-gap-ms {:doc "least time between two swings at an animal; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
    :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; not underground unless starving): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
    :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
    :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :spec (a/num-in 0 nil) :default (* 10 60 1000)}

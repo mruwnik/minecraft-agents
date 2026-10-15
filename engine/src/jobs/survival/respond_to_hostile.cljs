@@ -125,7 +125,7 @@
   or a retreat that ended :condition-failed: the other child may run), or the ending of a retreat that ended otherwise."
   [c decision {:keys [radius ranged-radius reserve quiet-s hide-s]} hold]
   (let [child-args (case decision
-                     :fight {:range radius :ranged-range ranged-radius :min-health 0 :use {:tools (weapons c)}
+                     :fight {:range radius :ranged-range ranged-radius :use {:tools (weapons c)}
                              :hold (or hold (hold? c))}
                      :flee {:radius radius :ranged-radius ranged-radius :use {:tools (weapons c)} :reserve reserve :quiet-s quiet-s :hide-s hide-s
                             :goal (:goal (ctx/mem c))})

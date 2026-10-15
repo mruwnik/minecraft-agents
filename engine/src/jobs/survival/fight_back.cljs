@@ -10,16 +10,15 @@
             [jobs.lib.pace :as pace]))
 
 (def doc
-  "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms.
+  "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms (nil: the held weapon's cooldown).
   Only a hostile the body has seen is fought: one only heard is judged by its direction and band (jobs.lib.danger), never
   walked to or hit; the body turns toward it and the job declines, so the retreat takes over.
   With :hold the body stays where it is: a melee hostile beyond reach is waited for, 15 s at most, then the job declines (a ranged one is still walked up to).
   A ranged hostile farther than ::ranged-chase (6) is not walked to while another is in range (the job declines).
   A hostile more than :leash blocks from the point the job started at is not chased (the job declines, so the retreat takes over).
-  Not started below :min-health (condition :low-health, or when no hostile is in range: :no-target).
+  Not started when no hostile is in range (condition :no-target).
   Ends :done when no hostile is within :range, with the data {:killed [ids]}.
-  Every other ending is a decline, so the retreat takes over: :limit-reached :low-health (hurt below :min-health after a swing),
-  or :nothing-possible with the cause :hold-timeout (the :hold wait ran out), :too-far, :heard-only, :given-up or :no-target;
+  Every other ending is a decline, so the retreat takes over: :nothing-possible with the cause :hold-timeout (the :hold wait ran out), :too-far, :heard-only, :given-up or :no-target;
   its data are {:killed :struck :memory}, the job memory as it ended.
   The weapons are the call's :use :tools (default the weapons carried; the old :weapons substrings map in legacy-args).
   A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts,
@@ -33,9 +32,8 @@
   {:range {:doc "hostiles within this many blocks are fought" :spec (a/num-in 0 nil) :default 4}
    :ranged-range {:doc "ranged hostiles (skeletons and the like) within this many blocks are fought" :spec (a/num-in 0 nil) :default 16}
    :leash {:doc "hostiles farther than this from where the job started are not chased" :spec (a/num-in 0 nil) :default 20}
-   :min-health {:doc "decline below this health" :spec (a/num-in 0 20) :default 8}
    :skip {:doc "entity ids already dead: not fought" :spec (a/coll-of number?) :default []}
-   :attack-gap-ms {:doc "least time between swings" :spec (a/num-in 0 nil) :default 600}
+   :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
    :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach (night, with more hostiles about than the body sees)" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -101,12 +99,9 @@
   (->> (in-range c) (filter danger-q/seen-only?) (filter #(in-leash? c %)) (remove #(given-up? c %))))
 
 (defn start-problem
-  "Why the fight cannot start: {:reason :low-health ..} or {:reason :no-target}; nil when it can."
+  "Why the fight cannot start: {:reason :no-target}; nil when it can."
   [c]
-  (let [health (.-health (.self (:primitives c)))]
-    (cond
-      (< health (:min-health (:args c))) {:reason :low-health :health health :min (:min-health (:args c))}
-      (empty? (targets c)) {:reason :no-target})))
+  (when (empty? (targets c)) {:reason :no-target}))
 
 (def conditions [[:fn (started/at-start start-problem)]])
 
@@ -205,13 +200,11 @@
 (defn ^:async step
   "One step of the fight: look at a heard mob, wait out the swing gap, or swing once. :again, :continue or an ending."
   [c]
-  (let [{:keys [attack-gap-ms min-health]} (:args c)
-        p (:primitives c)
+  (let [p (:primitives c)
         target (first (targets c))
         last-attack (:last-attack (ctx/mem c))]
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
     (cond
-      (and last-attack (< (.-health (.self p)) min-health)) (declined c :limit-reached {:line :health :reason :low-health})
       (held-too-long? c) (declined c :nothing-possible :hold-timeout)
       (and target (too-far-to-chase? c target)) (declined c :nothing-possible :too-far)
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
@@ -219,7 +212,7 @@
                       (do (await (ctx/act c :look (let [{:keys [x y z]} (danger-q/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))
                           (declined c :nothing-possible :heard-only))
                       (if (seq (in-range c)) (declined c :nothing-possible :given-up) (ctx/end c :done nil {:killed (vec (:killed (ctx/mem c)))})))
-      (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) (do (await (combat/wait-gap! c last-attack attack-gap-ms)) :again)
+      (combat/within-gap? c) (do (await (combat/wait-gap! c last-attack (combat/gap-ms c))) :again)
       :else
       (do (await (combat/equip-best! c (combat/best-weapon p (weapons c))))
           (await (swing! c target))

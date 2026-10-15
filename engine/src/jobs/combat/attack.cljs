@@ -281,18 +281,6 @@
       (every? settled? seen) :gave-up
       :else :lost)))
 
-(defn gap-ms
-  "The least time between swings: :attack-gap-ms, else the held weapon's cooldown."
-  [c]
-  (or (:attack-gap-ms (:args c))
-      (weapon/attack-gap-ms (.-held (.self (:primitives c))))))
-
-(defn within-gap?
-  "Whether the last swing was less than the gap ago."
-  [c]
-  (let [last-attack (:last-attack (ctx/mem c))]
-    (and last-attack (< (- (ctx/now c) last-attack) (gap-ms c)))))
-
 (defn weapon-for
   "The name of the first of uses (item names or parts of one) carried, the best of those an entry matches."
   [p uses]
@@ -334,8 +322,8 @@
                            (finish! c (settled-reason c))
                            (await (wait! c 1000)))
         :else (do (ctx/update-mem! c #(-> % (assoc :last-seen now) (update :seen (fnil into #{}) (mapv (fn [e] (.-id e)) targets))))
-                  (if (within-gap? c)
-                    (do (await (combat/wait-gap! c (:last-attack (ctx/mem c)) (gap-ms c))) :again)
+                  (if (combat/within-gap? c)
+                    (do (await (combat/wait-gap! c (:last-attack (ctx/mem c)) (combat/gap-ms c))) :again)
                     (await (engage! c (first targets)))))))))
 
 (defn ^:async round

@@ -13,7 +13,8 @@
             [engine.triggers :as triggers]
             [jobs.survival.eat :as eat]
             [jobs.lib.world-files :as ew]
-            [engine.game :as game]))
+            [engine.game :as game]
+            [engine.hostile-test :as h]))
 
 (defn setup [world & [zones]]
   (let [clock (atom 1000000)
@@ -686,6 +687,17 @@
           (is (= ["beef"] (call-args p "eat" "item")))
           (is (= 7 (food p)))
           (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+
+(deftest get-food-hunts-at-the-held-weapons-cooldown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:self {:food 2} :inventory [{:name "iron_axe" :count 1}] :entities three-cows})]
+          (.override (.-world p) "wait" (fn [token a impl] (swap! clock + (.-ms a)) (impl token a)))
+          (core/submit! eng '(jobs.survival.get-food) {})
+          (await (run-until-empty eng 40))
+          (is (seq (h/waited-between-swings p)))
+          (is (every? #(<= 1072 % 1112) (h/waited-between-swings p)) "the iron axe's 1112 ms, not a fixed gap"))))))
 
 (deftest get-food-forages-a-berry-bush-when-there-are-no-animals
   (async done

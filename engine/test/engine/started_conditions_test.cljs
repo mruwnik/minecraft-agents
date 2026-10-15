@@ -26,7 +26,7 @@
   (with-redefs [fell-tree/night-sheltered (constantly :roofed)]
     (are [conditions c] (and (some? (fact conditions c)) (nil? (fact conditions (assoc c :quote-call {}))))
       hunt/conditions {:primitives (tu/fake hurt) :args {}}
-      fight-back/conditions {:primitives (tu/fake hurt) :args {:min-health 8}}
+      fight-back/conditions {:primitives (tu/fake hurt) :args {}}
       breed/conditions {:primitives (tu/fake {}) :args {:mob "cow" :fetch false}}
       leash/conditions {:primitives (tu/fake {}) :args {:fetch false}}
       fell-tree/conditions {:primitives (tu/fake {}) :args {}})))
@@ -63,13 +63,6 @@
     (.override (.-world p) "attack" (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 15) r)))))
     p))
 (def slow-fight '(jobs.survival.fight-back))
-
-(deftest a-running-fight-back-ends-by-its-own-steps-when-hurt
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= {:event :stopped :kind :limit-reached :reason :low-health}
-               (await (ending-after fight-world slow-fight 1 #(fake/swap-self! % assoc :health 5)))))))))
 
 (deftest a-running-fight-back-is-done-when-its-last-target-died
   (async done

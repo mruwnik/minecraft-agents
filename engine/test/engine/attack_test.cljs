@@ -266,22 +266,13 @@
           (is (= :cleared (:reason (done-event s))))
           (is (= [9] (:killed (done-event s)))))))))
 
-(defn waited-between-swings
-  "The first ms waited (act :wait) after each swing but the last: what is left of the gap (the fake clock moves with calls,
-  not with waits)."
-  [p]
-  (let [calls (vec (.-calls (.-world p)))
-        idx (vec (keep-indexed (fn [i c] (when (= "attack" (.-name c)) i)) calls))]
-    (mapv (fn [a b] (some #(when (= "wait" (.-name %)) (.. % -args -ms)) (subvec calls a b)))
-          idx (rest idx))))
-
 (deftest at-most-one-swing-per-gap
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (h/first-round-ms (spec {:targets [7]}) {:inventory h/sword :entities [(zed 7 2)]} 10))]
           (is (= 4 (count (attacked s))))
-          (is (every? #(<= 585 % 625) (waited-between-swings p)) "the rest of the sword's 625 ms is waited out between swings"))))))
+          (is (every? #(<= 585 % 625) (h/waited-between-swings p)) "the rest of the sword's 625 ms is waited out between swings"))))))
 
 (deftest an-explicit-attack-gap-ms-beats-the-floor
   (async done
@@ -289,7 +280,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (h/first-round-ms (spec {:targets [7] :attack-gap-ms 100}) {:inventory h/sword :entities [(zed 7 2)]} 10))]
           (is (= 4 (count (attacked s))))
-          (is (every? #(<= 80 % 100) (waited-between-swings p)) "100 ms, not the sword's 625 nor the 500 floor"))))))
+          (is (every? #(<= 80 % 100) (h/waited-between-swings p)) "100 ms, not the sword's 625 nor the 500 floor"))))))
 
 (deftest a-started-job-stays-until-lost-s-after-its-target-leaves
   (async done

@@ -72,6 +72,18 @@
   (when (and weapon (not= weapon (.-held (.self (:primitives c)))))
     (await (ctx/act c :equip #js {:item weapon :dest "hand"}))))
 
+(defn gap-ms
+  "The least time between swings: the call's :attack-gap-ms, else the held weapon's cooldown, so a swing lands at full strength."
+  [c]
+  (or (:attack-gap-ms (:args c))
+      (weapon/attack-gap-ms (.-held (.self (:primitives c))))))
+
+(defn within-gap?
+  "Whether the job memory's :last-attack swing was less than the gap ago."
+  [c]
+  (let [last-attack (:last-attack (ctx/mem c))]
+    (and last-attack (< (- (ctx/now c) last-attack) (gap-ms c)))))
+
 (defn ^:async wait-gap!
   "Spend the rest of the attack gap after a swing at last-attack (ms): look round (watch!), then wait out what is left."
   [c last-attack gap]
