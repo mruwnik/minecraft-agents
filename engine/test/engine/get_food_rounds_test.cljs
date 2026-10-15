@@ -755,7 +755,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"40,64,0" "furnace"} :self {:food 5}
                                       :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
-                                     :step-ms 2000)]
+                                     :step-ms 500)]
           (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
           (await (run-until-idle! eng p 80))
           (is (some #{"take"} (call-args p "furnace" "op")) "walked to the furnace it had seen")
@@ -787,7 +787,7 @@
 (defn ^:async low-health-cook! [entities]
   (let [{:keys [eng p] :as w} (setup {:blocks {"30,64,0" "furnace"} :self {:food 5 :health 2} :time 6000 :entities entities
                                       :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
-                                     :step-ms 2000)]
+                                     :step-ms 500)]
     (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
     (await (run-until-idle! eng p 40))
     w))
@@ -813,7 +813,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"30,64,0" "furnace"} :self {:food 5}
                                       :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
-                                     :step-ms 2000)]
+                                     :step-ms 500)]
           (mem/write! (:store eng) :furnace {:pos {:x 30 :y 64 :z 0}} mem/place-policy)
           (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
           (await (run-until-idle! eng p 80))
@@ -836,7 +836,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 5}
                                       :inventory [{:name "beef" :count 4} {:name "furnace" :count 1} {:name "coal" :count 2}]}
-                                     :step-ms 2000
+                                     :step-ms 500
                                      :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
           (core/submit! eng (list 'jobs.survival.get-food {}) {})
           (await (run-until-idle! eng p 60))
@@ -850,7 +850,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 5}
                                       :inventory [{:name "porkchop" :count 1} {:name "furnace" :count 1} {:name "oak_planks" :count 4}]}
-                                     :step-ms 2000
+                                     :step-ms 500
                                      :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
           (core/submit! eng (list 'jobs.survival.get-food {}) {})
           (await (run-until-idle! eng p 60))
