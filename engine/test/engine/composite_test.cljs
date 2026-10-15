@@ -122,6 +122,24 @@
         (is (nil? (:check d)) (str label ": no check export"))
         (is (= w (ctx/check-wait c d)) (str label ": the child's reason"))))))
 
+(deftest combinators-pass-on-their-childs-impossible-and-look
+  (let [never [{:conditions [[:fn (constantly (contract/impossible :never))]] :round (fn [_] :done)} {}]
+        peek [{:conditions [[:fn (constantly (contract/look-first :unseen))]] :round (fn [_] :done)} {}]
+        c {:view (constantly nil) :slots []}]
+    (with-redefs [ctx/mem (constantly {})]
+      (doseq [[label mk] [[:seq #(composite/seq-def [%])] [:repeat #(composite/repeat-def % nil)] [:until #(composite/until-def [{:check (constantly false)} {}] %)]]]
+        (is (= [:impossible :never] (contract/verdict c (:conditions (mk never)))) (str label ": impossible child"))
+        (is (= [:look :unseen] (contract/verdict c (:conditions (mk peek)))) (str label ": look-first child"))))))
+
+(deftest repeat-ends-impossible-when-its-child-never-can-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [never [{:conditions [[:fn (constantly (contract/impossible :never))]] :round (fn [_] :done)} {}]
+              [c mem] (stub {})
+              r (await (round! (composite/repeat-def never nil) c mem))]
+          (is (= [:impossible :never] [(:kind r) (:cause r)])))))))
+
 ;; ------------------------------------------------------------------ on the engine
 
 (defn ending-kid

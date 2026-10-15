@@ -168,14 +168,19 @@
 
 (defn check-wait
   "Why def would wait now under ctx, as a map {:reason kw ...}, or nil when it would start: its check's wait reason
-  ({:reason :not-ready} for a plain false), or, for a def with conditions and no check (a combinator), its first
-  failing condition's cause."
+  ({:reason :not-ready} for a plain false), or, for a def with conditions and no check (a combinator), the engine's
+  reading of them (contract/verdict): the first failing cause as a wait reason (a map with :reason, as a combinator gives its child's, as it is), an impossible or look-first one as it
+  is (contract/impossible, contract/look-first), which a parent passes on."
   [ctx def]
-  (let [as-map #(cond (map? %) % (some? %) {:reason %} :else {:reason :not-ready})]
-    (if-let [check (:check def)]
-      (let [a (atom nil)]
-        (when-not (check (assoc ctx :wait a)) (as-map @a)))
-      (some->> (:conditions def) (some (fn [[_ f]] (f ctx))) as-map))))
+  (if-let [check (:check def)]
+    (let [a (atom nil)]
+      (when-not (check (assoc ctx :wait a))
+        (let [w @a] (cond (map? w) w (some? w) {:reason w} :else {:reason :not-ready}))))
+    (when-let [[k cause] (contract/verdict ctx (:conditions def))]
+      (case k
+        :impossible (contract/impossible cause)
+        :look (contract/look-first cause)
+        (if (:reason (when (map? cause) cause)) cause (contract/wait-reason cause))))))
 
 (defn child-wait
   "Why the child job (a registry symbol, or a definition) in slot with args would wait now, for a parent that asks before

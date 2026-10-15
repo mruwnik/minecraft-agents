@@ -34,11 +34,13 @@
 
 (defn held
   "What a round returns when it cannot call a child that would wait with w: a reflex job runs one round, so it ends
-  condition-failed with the wait as cause; a listed one yields (its condition waits)."
+  condition-failed with the wait as cause; a listed one yields (its condition waits). A child that can never start
+  (contract/impossible) ends it impossible."
   [c w]
-  (if (:reflex c)
-    (ctx/end c :condition-failed (if (= [:reason] (keys w)) (:reason w) w))
-    :continue))
+  (cond
+    (contract/impossible-cause w) (ctx/end c :impossible (contract/impossible-cause w))
+    (:reflex c) (ctx/end c :condition-failed (if (= [:reason] (keys w)) (:reason w) w))
+    :else :continue))
 
 (defn ^:async call
   "One ctx/call round of child i of kids, or held when it would wait."

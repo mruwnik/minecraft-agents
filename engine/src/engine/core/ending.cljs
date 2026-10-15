@@ -16,43 +16,19 @@
 
 (defn started? [c] (some? (ctx/frozen-call c)))
 
-(defn run-condition
-  "(f c); a throw is rethrown naming the condition fn."
-  [c f]
-  (try (f c)
-       (catch :default e
-         (if (contract/passes-through? e)
-           (throw e)
-           (throw (js/Error. (str "condition " (.-name f) ": " (or (.-message e) e))))))))
-
-(defn verdict
-  "What conditions ([:fn f], (f c) nil, a cause, contract/impossible or contract/look-first) say now: nil to start,
-  [:impossible cause] when one is impossible, else [:skip cause] for the first that fails, else [:look cause] for the
-  first that asks for a look."
-  [c conditions]
-  (let [rs (filter identity (map (fn [[_ f]] (run-condition c f)) conditions))]
-    (or (some #(some->> (contract/impossible-cause %) (vector :impossible)) rs)
-        (some #(when-not (contract/look-cause %) [:skip %]) rs)
-        (some #(some->> (contract/look-cause %) (vector :look)) rs))))
-
 (defn ^:async looked-verdict
   "Verdict v, or after one look round (the :look/around hook) when it asks for a look, the conditions' verdict then;
   asking again after it skips."
   [c conditions v]
   (if (= :look (first v))
     (do (await ((:look/around hooks/all) c))
-        (let [[k cause :as v] (verdict c conditions)] (if (= :look k) [:skip cause] v)))
+        (let [[k cause :as v] (contract/verdict c conditions)] (if (= :look k) [:skip cause] v)))
     v))
 
 (defn stays-listed?
   "Whether a skip leaves c's job queued: a listed root not yet started, not a reflex's nor the driver's slot job."
   [c]
   (and (empty? (:slots c)) (not (started? c)) (not (:reflex c)) (not= (:root c) (manual-job (:engine c)))))
-
-(defn wait-reason
-  "A failing condition's cause as a check's wait reason: {:reason (cause key)}, with :cause when it is a map."
-  [cause]
-  (cond-> {:reason (contract/cause-key {:kind :condition-failed :cause cause})} (map? cause) (assoc :cause cause)))
 
 (defn fill-use
   "call with a list in :use for each purpose def's defaults name a chooser for and the call gives none, from the
@@ -174,7 +150,7 @@
   impossible condition ends it; else, before it starts, a goal that holds ends it done :already, whatever the other
   conditions say (a done? that throws is told with job.done_failed and counts as not done)."
   [def c]
-  (let [v (verdict c (:conditions def))
+  (let [v (contract/verdict c (:conditions def))
         fresh? (not (started? c))
         [d err] (when (and fresh? (not= :impossible (first v))) (done-or-error def c))
         _ (when err (ctx/emit! c :done_failed :warn {:error (str (or (.-message err) err))}))
@@ -194,11 +170,11 @@
   its call (a started one otherwise runs on: any ending ends it). An impossible condition, one that asks for a look,
   or a goal that holds before the start passes: the round ends the job, or looks."
   [def c]
-  (let [[k cause] (when-not (started? c) (verdict c (:conditions def)))]
+  (let [[k cause] (when-not (started? c) (contract/verdict c (:conditions def)))]
     (if-let [cause (when-not (= :impossible k)
                      (or (when (= :skip k) cause)
                          (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def))))))]
-      (or (and (not (started? c)) (boolean (:done? (first (done-or-error def c))))) (ctx/wait c (wait-reason cause)))
+      (or (and (not (started? c)) (boolean (:done? (first (done-or-error def c))))) (ctx/wait c (contract/wait-reason cause)))
       true)))
 
 (defn wrap

@@ -137,6 +137,7 @@
 
 (defn look-cause [r] (when (map? r) (::look-first r)))
 
+
 ;; ------------------------------------------------------------------ the call
 
 (defn amounts? [m] (and (map? m) (every? (fn [[k v]] (and (a/ok? a/item? k) (a/ok? (a/num-in 0 nil) v))) m)))
@@ -332,6 +333,30 @@
   "Whether error e must pass a job's catch-all on up: a cut or a limit."
   [e]
   (and (instance? js/Error e) (contains? #{"cut" "limit"} (.-code e))))
+
+(defn run-condition
+  "(f c); a throw is rethrown naming the condition fn."
+  [c f]
+  (try (f c)
+       (catch :default e
+         (if (passes-through? e)
+           (throw e)
+           (throw (js/Error. (str "condition " (.-name f) ": " (or (.-message e) e))))))))
+
+(defn verdict
+  "What conditions ([:fn f], (f c) nil, a cause, impossible or look-first) say now: nil to start,
+  [:impossible cause] when one is impossible, else [:skip cause] for the first that fails, else [:look cause] for the
+  first that asks for a look."
+  [c conditions]
+  (let [rs (filter identity (map (fn [[_ f]] (run-condition c f)) conditions))]
+    (or (some #(some->> (impossible-cause %) (vector :impossible)) rs)
+        (some #(when-not (look-cause %) [:skip %]) rs)
+        (some #(some->> (look-cause %) (vector :look)) rs))))
+
+(defn wait-reason
+  "A failing condition's cause as a check's wait reason: {:reason (cause key)}, with :cause when it is a map."
+  [cause]
+  (cond-> {:reason (cause-key {:kind :condition-failed :cause cause})} (map? cause) (assoc :cause cause)))
 
 ;; ------------------------------------------------------------------ quotes
 

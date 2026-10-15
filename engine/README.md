@@ -278,7 +278,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/left ctx)` | what is left of the call's limits and its callers' (each line the least): `{:spend {line n} :floor {line n} :deadline ms}` |
 | `(await (ctx/quote ctx job args quote-deadline?))` | what a call would use and yield (Quotes), or the `:duplicate-call` ending |
 | `(await (ctx/next-way ctx quote-of-way thing?))` | `{:way k :dropped {way why}}`, the next way to try (Quotes) |
-| `(ctx/check-wait ctx def)` | why def would wait now as `{:reason ..}`: its check's reason, or (a combinator) its first failing condition's cause; nil when it would start |
+| `(ctx/check-wait ctx def)` | why def would wait now as `{:reason ..}`: its check's reason, or (a combinator) the engine's reading of its conditions (`contract/verdict`): a failing cause as a reason, an impossible or look-first one as `contract/impossible`/`look-first` (a combinator ends impossible on its child's); nil when it would start |
 | `(ctx/child-wait ctx slot job args)` | `check-wait` of the child in slot |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
