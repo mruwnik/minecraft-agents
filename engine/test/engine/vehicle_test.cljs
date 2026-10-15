@@ -183,8 +183,8 @@
           (is (= 8 (count (calls p "dismount")))))))))
 
 (deftest the-condition-is-whether-the-body-rides
-  (is (= :not-mounted (leave/not-mounted (bare-ctx (tu/fake {}) {}))))
-  (is (nil? (leave/not-mounted (bare-ctx (aboard) {})))))
+  (is (= [:later :not-mounted] ((juxt first #(:reason (nth % 2))) (leave/not-mounted (bare-ctx (tu/fake {}) {})))))
+  (is (= :ok (first (leave/not-mounted (bare-ctx (aboard) {}))))))
 
 ;; ------------------------------------------------------------------- end to end
 

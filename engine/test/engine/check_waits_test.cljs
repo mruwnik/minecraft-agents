@@ -66,7 +66,7 @@
       (fn ^:async t []
         (let [r (await (waiting-after '(jobs.access.stair {:dir :down :heading :east :steps 2 :fetch false})
                                       {:blocks (merge ground {"1,64,0" "stone" "1,65,0" "stone" "1,66,0" "stone"}) :self {:pos {:x 0 :y 65 :z 0}} :inventory []}))]
-          (is (= {:reason :no-tool :tool "pickaxe"} (select-keys (:cause (:waiting r)) [:reason :tool]))))))))
+          (is (= {:reason :no-tool :tool "pickaxe"} (select-keys (:waiting r) [:reason :tool]))))))))
 
 (deftest stair-with-a-pickaxe-runs
   (async done
@@ -81,7 +81,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (waiting-after '(jobs.access.pillar {:height 3 :fetch false}) {:self {:pos {:x 0 :y 64 :z 0}} :inventory []}))]
-          (is (= [:too-few-blocks 3] ((juxt :reason (comp :short :cause)) (:waiting r)))))))))
+          (is (= [:too-few-blocks 3] ((juxt :reason :short) (:waiting r)))))))))
 
 (deftest pillar-with-dirt-runs
   (async done

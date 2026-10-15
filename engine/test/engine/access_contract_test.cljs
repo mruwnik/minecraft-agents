@@ -7,7 +7,6 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [jobs.access.bridge :as bridge]
             [jobs.lib.world-files :as world]))
 
 (def quote-args
@@ -19,7 +18,7 @@
   (let [p (tu/fake {})]
     (doseq [[sym args] quote-args
             :let [job (get registry/jobs sym)]]
-      (is (some? (:conditions job)) (str sym " has conditions"))
+      (is (some? (:can-start? job)) (str sym " has can-start?"))
       (is (nil? (:check job)) (str sym " has no old check"))
       (is (vector? (:target job)) (str sym " has a target"))
       (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args args}))) (str sym)))))
@@ -132,10 +131,6 @@
           (is (= {:event :stopped :kind :impossible :reason :bad-args}
                  (await (ending-of spec {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks {"0,63,0" "stone"}})))
               (pr-str spec)))))))
-
-(deftest a-bridge-bad-args-start-fact-is-impossible
-  (is (= {:reason :bad-args :text "t"} (contract/impossible-cause (bridge/answer {:reason :bad-args :text "t"}))))
-  (is (= {:reason :zone} (bridge/answer {:reason :zone}))))
 
 (deftest clear-path-with-no-wall-waits-no-door-before-a-round
   (async done

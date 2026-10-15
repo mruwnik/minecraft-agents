@@ -861,7 +861,7 @@
         c {:primitives (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :blocks ground :inventory pick}) :args {:target {:x 6 :y 57 :z 0}}}
         q ((:quote-of def) c)]
     (is (= [:target] (:target def)))
-    (is (seq (:conditions def)))
+    (is (some? (:can-start? def)))
     (is (nil? (:check def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))
     (is (= [6 57 0] (:moves-to q)))))

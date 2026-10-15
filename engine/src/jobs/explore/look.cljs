@@ -107,11 +107,12 @@
                       {:pos (pos at) :unknown true}
                       (assoc (block exact) :seen? true))))))
 (defn bad-args
-  "The cause {:reason :bad-args :text why} when the call's args are refused."
+  "Never :bad-args when the call's args are refused."
   [c]
-  (when-let [error (:error (options (:args c) (block-name-checker (:primitives c))))]
-    (contract/impossible {:reason :bad-args :text error})))
-(def conditions [[:fn bad-args]])
+  (if-let [error (:error (options (:args c) (block-name-checker (:primitives c))))]
+    (contract/never :bad-args error :text error)
+    (contract/ok :args "args fit")))
+(def can-start? bad-args)
 (defn round [c]
   (let [a (options (:args c) (block-name-checker (:primitives c)))]
     (if-let [error (:error a)]

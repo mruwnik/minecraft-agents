@@ -2,10 +2,11 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
             [engine.settings :as settings]
             [jobs.movement.boat-launch :as launch]
             [jobs.lib.blocks :as b]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
             [jobs.lib.shore :as shore]
@@ -137,27 +138,27 @@
     (or spot (when (and (given-pos c) (or (seq (:cells reads)) (nil? (u/seen-name (:primitives c) (given-pos c)))))
                {:land (given-pos c)}))))
 
-(defn bad-args
-  "Impossible: a :pos that names no cell, or an :item that is no boat."
-  [c]
-  (let [{:keys [pos item]} (:args c)]
-    (when (or (and pos (nil? (given-pos c)))
-              (and item (not (launch/boat-name? item))))
-      (contract/impossible {:reason :bad-args :why "needs a cell :pos and a boat :item"}))))
+(def bad-args
+  "Never :bad-args when :pos names no cell or :item is no boat."
+  (checks/args-fit "needs a cell :pos and a boat :item"
+                   (fn [c] (let [{:keys [pos item]} (:args c)]
+                             (not (or (and pos (nil? (given-pos c)))
+                                      (and item (not (launch/boat-name? item)))))))))
 
 (defn start-fact
-  "At the start of a crossing not yet under way: the cause :no-far-shore with no spot to cross to, :not-water with no
-  water in sight to launch on from the shore (the engine looks round once first)."
+  "While no crossing is under way: later :no-far-shore with no spot to cross to, :not-water with no water in sight to
+  launch on from the shore (a look first while the body has not looked round)."
   [c]
-  (when-not (crossing c)
-    (let [cause (cond
-                  (nil? (spot-of c)) {:reason :no-far-shore :text (if (given-pos c) "the given cell is no seen shore" "no far shore in sight")}
-                  (and (not (vehicle/mounted? (:primitives c))) (not (water-in-sight? c))) {:reason :not-water :text "no water in sight to launch a boat on"})]
-      (cond-> cause (and cause (not (look/surveyed? c))) contract/look-first))))
+  (cond
+    (crossing c) (contract/ok :under-way "a crossing under way")
+    (nil? (spot-of c)) (checks/unseen-later c :no-far-shore (if (given-pos c) "the given cell is no seen shore" "no far shore in sight"))
+    (and (not (vehicle/mounted? (:primitives c))) (not (water-in-sight? c)))
+    (checks/unseen-later c :not-water "no water in sight to launch a boat on")
+    :else (contract/ok :start "a shore to cross to")))
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn bad-args] [:fn (started/at-start start-fact)]])
+(def can-start? (cond/and bad-args start-fact))
 
 (defn done?
   "Done once the body stands on the far shore of the crossing under way."

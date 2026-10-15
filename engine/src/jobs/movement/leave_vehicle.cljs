@@ -1,8 +1,8 @@
 (ns jobs.movement.leave-vehicle
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
 
@@ -21,17 +21,16 @@
    :wait-ms {:doc "the wait after the first failed dismount; it doubles per try, at most 1000" :spec (a/num-in 0 nil) :default 50}
    :radius {:doc "dry cells this many blocks (horizontally) from the vehicle are faced" :spec (a/num-in 0 nil) :default 2}})
 
-(defn not-mounted
-  "At the call's start: the cause :not-mounted when the body is on foot."
-  [c]
-  (when-not (vehicle/mounted? (:primitives c)) :not-mounted))
+(def not-mounted
+  "Later :not-mounted when the body is on foot."
+  (cond/because :not-mounted (cond/mounted)))
+
+(def can-start? not-mounted)
 
 (a/defargs settings
   {::time-s {:default 30 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:spend {:job-time ::time-s}})
-
-(def conditions [[:fn (started/at-start not-mounted)]])
 
 (defn done?
   "Done once the body is off."

@@ -2,9 +2,10 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
             [engine.settings :as settings]
             [jobs.lib.blocks :as b]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
@@ -115,30 +116,32 @@
 
 (defn launching? [c] (= :launch (or (:action (:args c)) :launch)))
 
-(defn bad-args
-  "The cause :bad-args for a launch of an item that is no boat or onto a :pos that names no cell."
-  [c]
-  (let [{:keys [item pos]} (:args c)]
-    (when (and (launching? c)
-               (or (and item (not (boat-name? item)))
-                   (and (some? pos) (nil? (:pos (b/parse (:args c)))))))
-      (contract/impossible :bad-args))))
+(def bad-args
+  "Never :bad-args for a launch of an item that is no boat or onto a :pos that names no cell."
+  (checks/args-fit "needs a boat :item and a cell :pos"
+                   (fn [c] (let [{:keys [item pos]} (:args c)]
+                             (not (and (launching? c)
+                                       (or (and item (not (boat-name? item)))
+                                           (and (some? pos) (nil? (:pos (b/parse (:args c))))))))))))
 
 (defn aboard
-  "At the start of a launch: the cause :aboard while the body is on a vehicle."
+  "Later :aboard at the start of a launch while the body is on a vehicle."
   [c]
-  (when (and (launching? c) (vehicle/mounted? (:primitives c)))
-    {:reason :aboard :hint "get off the vehicle first"}))
+  (if (and (launching? c) (vehicle/mounted? (:primitives c)))
+    (contract/later :aboard "on a vehicle" :hint "get off the vehicle first")
+    (contract/ok :on-foot "on foot")))
 
 (defn no-water-cause [c]
   (let [r (no-water-reason c)]
     {:reason r :hint (no-water-text r)}))
 
 (defn no-water
-  "At the start of a launch: the cause :no-water or :no-room while no cell has room for a boat; a look first while the body has not looked round."
+  "At the start of a launch: later :no-water or :no-room while no cell has room for a boat; a look first while the body has not looked round."
   [c]
-  (when (and (launching? c) (nil? (launch-pos c)))
-    (cond-> (no-water-cause c) (not (look/surveyed? c)) contract/look-first)))
+  (if (and (launching? c) (nil? (launch-pos c)))
+    (let [{:keys [reason hint]} (no-water-cause c)]
+      (checks/unseen-later c reason hint :hint hint))
+    (contract/ok :water "room for a boat")))
 
 (defn pick-boat [c]
   (let [id (:id (:args c))
@@ -146,12 +149,13 @@
     (if id (first (filter #(= id (:id %)) boats)) (first boats))))
 
 (defn no-boat
-  "At the start of a recovery: the cause :no-boat while none is in sight."
+  "At the start of a recovery: later :no-boat while none is in sight."
   [c]
-  (when (and (not (launching? c)) (nil? (pick-boat c)))
-    {:reason :no-boat :hint "no boat in sight"}))
+  (if (and (not (launching? c)) (nil? (pick-boat c)))
+    (contract/later :no-boat "no boat in sight" :hint "no boat in sight")
+    (contract/ok :boat "a boat in sight")))
 
-(def conditions [[:fn bad-args] [:fn (started/at-start aboard)] [:fn (started/at-start no-water)] [:fn (started/at-start no-boat)]])
+(def can-start? (cond/and bad-args aboard no-water no-boat))
 
 (defn done?
   "A launch is done once its boat is down; a recovery's end is its event."

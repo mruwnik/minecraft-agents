@@ -127,7 +127,7 @@
   (let [def (get registry/jobs job)
         q ((:quote-of def) {:primitives (tu/fake wall) :args {:heading :east :max-thick 3}})]
     (is (= [:heading] (:target def)))
-    (is (seq (:conditions def)))
+    (is (some? (:can-start? def)))
     (is (nil? (:check def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))))
 

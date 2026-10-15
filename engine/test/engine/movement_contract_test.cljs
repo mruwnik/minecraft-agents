@@ -132,7 +132,7 @@
 
 (deftest go-to-exports-the-contract
   (let [j (job 'jobs.movement.go-to)]
-    (is (some? (:conditions j)))
+    (is (some? (:can-start? j)))
     (is (nil? (:check j)) "no old check")
     (is (= [:pos :place] (:target j)) "a go-to may call go-to to another place")
     (is (= [:walk :clear-seal :clear-path :pillar :stair :dig-out] (:ways j)))))

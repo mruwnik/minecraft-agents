@@ -189,7 +189,7 @@
           (await (ticks s eng 3))
           (is (not (finished? eng)) "still listed: it waits for blocks")
           (is (empty? (calls p "jumpPlace")))
-          (is (= [:too-few-blocks 6] ((juxt :reason (comp :short :cause)) (core/waiting eng id)))))))))
+          (is (= [:too-few-blocks 6] ((juxt :reason :short) (core/waiting eng id)))))))))
 
 (defn obtain-stub
   "An obtain that records the args of each round in the atom and yields."
@@ -556,7 +556,7 @@
         q ((:quote-of def) {:primitives (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :inventory [{:name "dirt" :count 9}]})
                             :args {:height 4} :quote-call {:use {:blocks ["dirt"]}}})]
     (is (= [] (:target def)))
-    (is (seq (:conditions def)))
+    (is (some? (:can-start? def)))
     (is (nil? (:check def)))
     (is (= {:blocks :pillar} (:use (:defaults def))))
     (is (nil? (contract/quote-problem q)) (pr-str q))

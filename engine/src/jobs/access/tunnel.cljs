@@ -2,7 +2,8 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [engine.settings :as settings]
             [jobs.access.stair :as stair]
             [jobs.access.stair.cells :as geo]
@@ -149,9 +150,6 @@
   (let [[h v] (spans feet target)]
     (+ (* 3 v) (* 2 (max 0 (- h v))))))
 
-(defn no-zones [c]
-  (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) :no-zones))
-
 (defn bad-target? [t] (not (and (vector? t) (every? int? t))))
 
 (defn refusal
@@ -163,9 +161,15 @@
             (ln/approach (dissoc (stair/rules-in c (reach/standing-vec (:primitives c))) :feet) target (reach/standing-vec (:primitives c)) max-length (set accept)))]
     (when (contains? #{:zone :footprint :claim} (:reason a)) a)))
 
-(def conditions
-  [[:fn no-zones]
-   [:fn (started/at-start (fn [c] (when-let [a (refusal c)] (assoc (access/refusal-fields [a]) :reason :refused))))]])
+(defn not-refused
+  "Later :refused while every heading is refused by a zone, claim or plan, before a line is chosen."
+  [c]
+  (if-let [a (refusal c)]
+    (let [fields (access/refusal-fields [a])]
+      (checks/later-of (str "refused by " (access/refusal-text fields)) (assoc fields :reason :refused)))
+    (contract/ok :permitted "no zone, claim or plan refuses")))
+
+(def can-start? (cond/and checks/zones-read not-refused))
 
 (defn quote-of [c]
   (let [feet (reach/standing-vec (:primitives c))

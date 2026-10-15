@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [clojure.string :as str]
             [engine.contract :as contract]
+            [jobs.lib.cond :as cond]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as cost-health]
@@ -265,11 +266,21 @@
   (let [c (with-limits (with-body-food c))]
     (preview/quote-of-route (await (preview/route! c)) (ways/escalating? c))))
 
-(def conditions
-  "A floor or leg out of range is impossible, before the engine's floor check could hold the call. A listed go-to not
-  yet started waits while wait-reason holds; a started call, or a child, yields instead (attempt)."
-  [[:fn (fn [c] (some-> (limits-refusal (:args c)) contract/impossible))]
-   [:fn (fn [c] (when (and (empty? (:slots c)) (nil? (ctx/frozen-call c))) (wait-reason c)))]])
+(defn limits-fit
+  "Never :bad-args for a floor or leg out of range, before the engine's floor check could hold the call."
+  [c]
+  (if-let [{:keys [message]} (limits-refusal (:args c))]
+    (contract/never :bad-args message)
+    (contract/ok :args "args fit")))
+
+(defn waits
+  "Later while wait-reason holds, for a listed go-to not yet started; a started call, or a child, yields instead (attempt)."
+  [c]
+  (if-let [{:keys [reason] :as w} (when (and (empty? (:slots c)) (nil? (ctx/frozen-call c))) (wait-reason c))]
+    (apply contract/later reason (name reason) (mapcat identity (dissoc w :reason)))
+    (contract/ok :no-hold "nothing to wait for")))
+
+(def can-start? (cond/and limits-fit waits))
 
 (defn hold!
   "Keep in memory what the call waits on (:hold, nil when it walks), for a parent's jobs.lib.child walk to read."

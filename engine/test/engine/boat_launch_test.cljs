@@ -211,21 +211,21 @@
           (is (some #(= :sense.looked (:kind %)) @(:events c)) "it looked at what it had not seen"))))))
 
 (deftest a-non-boat-item-is-impossible
-  (is (= :bad-args (contract/impossible-cause (bl/bad-args {:args {:item "stick"}}))))
-  (is (nil? (bl/bad-args {:args {:item "oak_boat"}})))
-  (is (nil? (bl/bad-args {:args {}}))))
+  (is (= [:never :bad-args] ((juxt first #(:reason (nth % 2))) (bl/bad-args {:args {:item "stick"}}))))
+  (is (= :ok (first (bl/bad-args {:args {:item "oak_boat"}}))))
+  (is (= :ok (first (bl/bad-args {:args {}})))))
 
 (deftest aboard-is-a-start-condition-for-a-launch-only
   (let [other {:id 5 :name "minecart" :uuid "u-5" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}}
         c (fn [args] (assoc (st/stub-ctx (:p (lt/setup {:blocks pond :entities [other] :self {:vehicle 5}}))) :args args))]
-    (is (= :aboard (:reason (bl/aboard (c {:action :launch})))))
-    (is (nil? (bl/aboard (c {:action :recover}))))))
+    (is (= [:later :aboard] ((juxt first #(:reason (nth % 2))) (bl/aboard (c {:action :launch})))))
+    (is (= :ok (first (bl/aboard (c {:action :recover})))))))
 
 (deftest no-water-is-a-condition-that-asks-for-a-look
   (let [c (fn [world] (assoc (st/stub-ctx (:p (lt/setup world))) :args {:radius 12 :action :launch}))]
-    (is (nil? (bl/no-water (c {:blocks pond}))))
-    (is (= :no-water (:reason (contract/look-cause (bl/no-water (c {}))))))
-    (is (= :no-room (:reason (contract/look-cause (bl/no-water (c {:blocks channel}))))))))
+    (is (= :ok (first (bl/no-water (c {:blocks pond})))))
+    (is (= [:look :no-water] ((juxt first #(:reason (nth % 2))) (bl/no-water (c {})))))
+    (is (= [:look :no-room] ((juxt first #(:reason (nth % 2))) (bl/no-water (c {:blocks channel})))))))
 
 (deftest recover-is-out-of-time-when-the-calls-time-line-is-spent
   (are [left out?] (= out? (boolean (u/out-of-time? {:left (constantly {:spend {:job-time left}})})))

@@ -2,9 +2,9 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
             [jobs.lib.blocks :as b]
-            [jobs.lib.look :as look]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.sense :as sense]
             [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]
@@ -51,29 +51,30 @@
   [c]
   (some #(when (= (:root c) (:job (:data %))) (:data %)) (ctx/entries c landed-kind)))
 
-(defn bad-args
-  "The cause :bad-args when :pos names no cell."
-  [c]
-  (when (and (:pos (:args c)) (nil? (given-pos c))) (contract/impossible :bad-args)))
+(def bad-args
+  "Never :bad-args when :pos names no cell."
+  (checks/args-fit "no cell at :pos" #(not (and (:pos (:args %)) (nil? (given-pos %))))))
 
 (defn not-aboard
-  "At the start: the cause :not-aboard while the body is on foot and has no landing of this job to finish."
+  "Later :not-aboard while the body is on foot and has no landing of this job to finish."
   [c]
-  (when-not (or (vehicle/mounted? (:primitives c)) (landed-boat c))
-    {:reason :not-aboard :hint "the body is not in a boat; board one first, e.g. boat-launch"}))
+  (if (or (vehicle/mounted? (:primitives c)) (landed-boat c))
+    (contract/ok :mounted "aboard")
+    (contract/later :not-aboard "on foot" :hint "the body is not in a boat; board one first, e.g. boat-launch")))
 
 (defn no-shore
-  "At the start: the cause :no-shore while no :pos is given and no shore is in sight; a look first while the body has not looked round."
+  "Later :no-shore while no :pos is given and no shore is in sight; a look first while the body has not looked round."
   [c]
-  (when (and (nil? (:pos (:args c))) (vehicle/mounted? (:primitives c)) (empty? (candidates c)))
-    (cond-> {:reason :no-shore :hint "no seen shore to land on"} (not (look/surveyed? c)) contract/look-first)))
+  (if (and (nil? (:pos (:args c))) (vehicle/mounted? (:primitives c)) (empty? (candidates c)))
+    (checks/unseen-later c :no-shore "no seen shore to land on" :hint "no seen shore to land on")
+    (contract/ok :shore "a shore to land on")))
 
 (a/defargs settings
   {::time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn bad-args] [:fn (started/at-start not-aboard)] [:fn (started/at-start no-shore)]])
+(def can-start? (cond/and bad-args not-aboard no-shore))
 
 (defn done?
   "Done once the body is off the boat."

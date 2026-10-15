@@ -1207,7 +1207,7 @@
         c {:primitives (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :blocks ground :inventory pick}) :args east}
         q ((:quote-of def) c)]
     (is (= [:dir :heading :y] (:target def)))
-    (is (seq (:conditions def)))
+    (is (some? (:can-start? def)))
     (is (nil? (:check def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))
     (is (= [3 62 0] (:moves-to q)))

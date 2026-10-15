@@ -4,6 +4,7 @@
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [engine.contract :as contract]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.places :as places]))
@@ -99,22 +100,24 @@
     (ctx/end c :done nil (dissoc result :status))))
 
 (defn waits
-  "The cause of the wait the block's state needs from the body, or nil: :not-loaded (the block is not loaded) or
-  :standing-in (the body stands in the door or gate to be closed; it must step out). Bad args and every other refusal
-  end the round, so do these for a toggle run as an old child (herd, rail-line), whose parent reads the result."
+  "Later :not-loaded (the block is not loaded) or :standing-in (the body stands in the door or gate to be closed; it
+  must step out). Bad args and every other refusal end the round, so do these for a toggle run as an old child (herd,
+  rail-line), whose parent reads the result."
   [c]
   (let [{:keys [pos state error]} (parse (:args c))]
-    (when-not error
+    (if error
+      (contract/ok :args "nothing to wait for")
       (let [b (u/block-at (:primitives c) pos)
             props (some-> b click/props-of)]
         (cond
-          (nil? b) {:reason :not-loaded :pos pos}
+          (nil? b) (contract/later :not-loaded "the block is not loaded" :pos pos)
           (and (= :openable (click/kind-of (.-name b))) (= :closed state)
                (not (click/reached? state props))
                (click/standing-in? (u/self-pos c) pos (:half props)))
-          {:reason :standing-in :pos pos :block (.-name b)})))))
+          (contract/later :standing-in "standing in the door" :pos pos :block (.-name b))
+          :else (contract/ok :ready "nothing to wait for"))))))
 
-(def conditions [[:fn waits]])
+(def can-start? waits)
 
 (defn done?
   "Whether the block is in the wanted state already."

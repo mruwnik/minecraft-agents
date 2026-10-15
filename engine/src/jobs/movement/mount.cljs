@@ -2,8 +2,9 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
 
@@ -40,21 +41,21 @@
 (defn entity-of [p id]
   (first (filter #(= id (.-id %)) (sensed p))))
 
-(defn bad-args
-  "The cause :bad-args unless an :id or a :name is given."
-  [c]
-  (let [{:keys [id name]} (:args c)]
-    (when-not (or (and (integer? id) (pos? id)) (string? name)) (contract/impossible :bad-args))))
+(def bad-args
+  "Never :bad-args unless an :id or a :name is given."
+  (checks/args-fit "needs an :id or a :name"
+                   (fn [c] (let [{:keys [id name]} (:args c)] (or (and (integer? id) (pos? id)) (string? name))))))
 
 (defn no-vehicle
-  "At the call's start: the cause :no-vehicle while no entity of that :id or :name is in sight."
+  "Later :no-vehicle while no entity of that :id or :name is in sight."
   [c]
   (let [{:keys [id name]} (:args c)
         p (:primitives c)]
-    (when-not (if (and (nil? id) (string? name))
-                (some #(= name (.-name %)) (sensed p))
-                (some? (entity-of p id)))
-      :no-vehicle)))
+    (if (if (and (nil? id) (string? name))
+          (some #(= name (.-name %)) (sensed p))
+          (some? (entity-of p id)))
+      (contract/ok :vehicle "a vehicle in sight")
+      (contract/later :no-vehicle "no such vehicle in sight"))))
 
 
 (defn done?
@@ -75,20 +76,21 @@
              first .-id)))
 
 (defn aboard-other
-  "At the call's start: the cause :aboard-other while the body sits in a vehicle other than the wanted one."
+  "Later :aboard-other while the body sits in a vehicle other than the wanted one."
   [c]
   (let [{:keys [id name]} (:args c)
         v (vehicle/vehicle-of (.self (:primitives c)))
         wanted (if (and (nil? id) (string? name)) (nearest-named c name) id)]
-    (when (and v (not= wanted (:id v)))
-      {:reason :aboard-other :vehicle (:name v)})))
+    (if (and v (not= wanted (:id v)))
+      (contract/later :aboard-other (str "aboard another vehicle, " (:name v)) :vehicle (:name v))
+      (contract/ok :vehicle "not aboard another vehicle"))))
 
 (a/defargs settings
   {::time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn bad-args] [:fn (started/at-start no-vehicle)] [:fn (started/at-start aboard-other)]])
+(def can-start? (cond/and bad-args no-vehicle aboard-other))
 
 (defn quote-of [c]
   (let [p (:primitives c)

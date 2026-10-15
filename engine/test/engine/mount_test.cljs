@@ -145,7 +145,8 @@
 
 (defn condition-with [spec args]
   (let [c {:primitives (tu/fake spec) :args args :view (fn [] {:data {:entries {}} :now 0}) :root "j1" :slots []}]
-    (or (some-> (mount/bad-args c) contract/impossible-cause) (mount/no-vehicle c))))
+    (let [[kind _ data] (mount/can-start? c)]
+      (when-not (= :ok kind) (:reason data)))))
 
 (deftest conditions-refuse-when-no-vehicle-is-in-sight
   (is (= :no-vehicle (condition-with {:entities []} {:id 9})) "by id")

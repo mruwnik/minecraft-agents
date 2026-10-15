@@ -203,12 +203,15 @@
           (is (= 0 (kinds seen :boat.driven)) "no second drive")
           (is (= [true] (mapv :recovered (filter #(= :boat.landed (:kind %)) @seen))) "the one landing is the recovered one"))))))
 
+(defn refusal "The reason of a status that is not :ok, else nil." [[kind _ data]]
+  (when-not (= :ok kind) (:reason data)))
+
 (deftest conditions-name-the-start-facts
   (let [c (fn [w args] (assoc (st/stub-ctx (:p (lt/setup w))) :args args))]
-    (is (= :bad-args (contract/impossible-cause (boat-land/bad-args (c world {:pos [5 -9999 5]})))))
-    (is (nil? (boat-land/bad-args (c world {}))))
-    (is (= :not-aboard (:reason (boat-land/not-aboard (c (dissoc world :self) {})))))
-    (is (nil? (boat-land/not-aboard (c world {}))))
-    (is (= :no-shore (:reason (contract/look-cause (boat-land/no-shore (c world {:radius 1}))))))
-    (is (nil? (boat-land/no-shore (c world {}))))
-    (is (nil? (boat-land/no-shore (c world {:pos [10 64 10]}))) "a given cell is judged by the round, which may drive nearer")))
+    (is (= :bad-args (refusal (boat-land/bad-args (c world {:pos [5 -9999 5]})))))
+    (is (nil? (refusal (boat-land/bad-args (c world {})))))
+    (is (= :not-aboard (refusal (boat-land/not-aboard (c (dissoc world :self) {})))))
+    (is (nil? (refusal (boat-land/not-aboard (c world {})))))
+    (is (= [:look :no-shore] ((juxt first #(:reason (nth % 2))) (boat-land/no-shore (c world {:radius 1})))))
+    (is (nil? (refusal (boat-land/no-shore (c world {})))))
+    (is (nil? (refusal (boat-land/no-shore (c world {:pos [10 64 10]})))) "a given cell is judged by the round, which may drive nearer")))

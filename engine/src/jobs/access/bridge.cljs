@@ -12,7 +12,8 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]))
 
@@ -173,28 +174,22 @@
            {:feet feet :start (or (:start (ctx/mem c)) feet) :heading heading :length length :block-at (access/sensed-at p "air") :unknown? #(look/unknown? p %)
             :carried (pl/carried p) :item item :ledger (ledger/cells l)})))
 
-(defn away
-  "The wait cause of a body that stands too far from where the job was submitted, or nil."
-  [c]
-  (submitted/away-cause c))
-
 (def start-facts
   "Give-up reasons known from the args and the map under the feet, before any look: the call's own mistakes and what permission refuses."
   #{:bad-args :zone :footprint :no-zones :claim :not-on-solid})
 
-(defn answer
-  "A start fact as a condition's answer: the call's own mistake is impossible, the rest only skips."
-  [fact]
-  (if (= :bad-args (:reason fact)) (contract/impossible fact) fact))
-
 (defn start-fact
-  "At the call's start only: the first step's give-up as a cause when it is one of start-facts, else nil."
+  "At the call's start: the first step's give-up as a status when it is one of start-facts (the call's own mistake is
+  never, the rest later), else ok."
   [c]
-  (let [step (next-step (inputs c (ledger/open-entries (ctx/view c)) (pl/feet-cell c)))]
-    (when (and (= :give-up (:step step)) (start-facts (:reason step)))
-      (answer (dissoc step :step)))))
+  (let [step (next-step (inputs c (ledger/open-entries (ctx/view c)) (pl/feet-cell c)))
+        fact (dissoc step :step)]
+    (cond
+      (not (and (= :give-up (:step step)) (start-facts (:reason step)))) (contract/ok :start "the first step is not refused")
+      (= :bad-args (:reason fact)) (checks/never-of "bad args" fact)
+      :else (checks/later-of (str "the first step gives up: " (name (:reason fact))) fact))))
 
-(def conditions [[:fn away] [:fn (started/at-start start-fact)]])
+(def can-start? (cond/and checks/not-moved start-fact))
 
 (defn done?
   "Done when the row's blocks are all in the ledger."

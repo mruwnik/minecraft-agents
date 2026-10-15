@@ -6,7 +6,9 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
+            [engine.contract :as contract]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.child :as child]
             [jobs.lib.need :as need]
             [jobs.lib.access :as access]
@@ -208,11 +210,6 @@
                       {:feet feet :base base :height (:height (:args c)) :block-at (access/sensed-at p blocks/hidden-guess)
                        :carried (pl/carried p) :item nil :items (blocks-of c) :ledger (ledger/cells l)}))))
 
-(defn away
-  "The cause of a call submitted with a :from the body has since left (jobs.lib.submitted/away-cause), or nil."
-  [c]
-  (submitted/away-cause c))
-
 (defn blocks-short
   "How many blocks a pillar of height lacks when none of items is carried, else nil. Asked of the carried list alone: the
   cells above the head are not looked at yet at the call's start, and an unseen one reads as rock."
@@ -220,17 +217,16 @@
   (when-not (item-to-use nil carried items) height))
 
 (defn too-few-blocks
-  "At the call's start without :fetch: the cause when no listed block is carried (:short blocks missing), else nil. Run
-  short part way, the round gives up with its pillar and ledger settled."
+  "Later :too-few-blocks (:short blocks missing) when no listed block is carried and the call does not :fetch. Run short
+  part way, the round gives up with its pillar and ledger settled."
   [c]
-  (when-not (:fetch (:args c))
-    (let [items (blocks-of c)]
-      (when-let [short (blocks-short (pl/carried (:primitives c)) items (:height (:args c)))]
-        {:reason :too-few-blocks :short short :items items}))))
+  (let [items (blocks-of c)
+        short (when-not (:fetch (:args c)) (blocks-short (pl/carried (:primitives c)) items (:height (:args c))))]
+    (if short
+      (contract/later :too-few-blocks (str short " blocks short") :short short :items items)
+      (contract/ok :blocks "blocks enough or fetched"))))
 
-(defn moved-since-submit [c] (away c))
-
-(def conditions [[:fn (started/at-start moved-since-submit)] [:fn (started/at-start too-few-blocks)]])
+(def can-start? (cond/and checks/not-moved too-few-blocks))
 
 (defn done?
   "The blocks of this job in the ledger against :height. Never :done? itself: the ledger holds the blocks of the

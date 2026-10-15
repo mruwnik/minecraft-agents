@@ -61,8 +61,11 @@
      (await (run-ticks s n step #(before-tick s %)))
      s)))
 
+(defn refusal "The reason of a status that is not :ok, else nil." [[kind _ data]]
+  (when-not (= :ok kind) (:reason data)))
+
 (deftest follow-condition-wants-a-player-name
-  (are [args cause] (= cause (contract/impossible-cause (follow/bad-args {:args args})))
+  (are [args cause] (= cause (refusal (follow/bad-args {:args args})))
     {:player "Steve"} nil
     {:player nil} :bad-args
     {} :bad-args

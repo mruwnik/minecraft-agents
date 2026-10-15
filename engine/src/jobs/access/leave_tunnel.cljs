@@ -17,7 +17,8 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.child :as child]
             [jobs.access.tunnel.line :as ln]
-            [jobs.lib.world :as known]))
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]))
 
 (def doc
   "Leave a dead-end tunnel (the result of jobs.access.tunnel: :line :dug :torches): take its torches back and
@@ -73,13 +74,11 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(defn no-zones [c]
-  (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) :no-zones))
+(def bad-args
+  "Never :bad-args unless :tunnel is the result of jobs.access.tunnel."
+  (checks/args-fit "tunnel must be the result of jobs.access.tunnel" #(:line (:tunnel (:args %)))))
 
-(defn bad-args [c]
-  (when-not (:line (:tunnel (:args c))) (contract/impossible {:reason :bad-args :why "tunnel must be the result of jobs.access.tunnel"})))
-
-(def conditions [[:fn bad-args] [:fn no-zones]])
+(def can-start? (cond/and bad-args checks/zones-read))
 
 (defn done?
   "Progress only: the job is done by the round that has sealed the mouth."

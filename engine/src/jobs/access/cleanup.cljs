@@ -25,7 +25,9 @@
             [jobs.lib.placement :as placement]
             [jobs.lib.result :as result]
             [jobs.lib.walk :as walk]
-            [jobs.lib.world :as known]))
+            [jobs.lib.world :as known]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]))
 
 (def doc
   "Take back this body's temporary blocks: the open entries of the scaffold ledger (jobs.lib.ledger, body
@@ -188,24 +190,28 @@
                    (map (fn [{[x y z] :cell}] {:x x :y y :z z})))]
     (look/unseen? (:primitives c) cells)))
 
-(defn bad-args [c]
-  (when (bad-job? (:job (:args c))) (contract/impossible :bad-args)))
+(def bad-args
+  "Never :bad-args unless :job is nil, :all or an instance id."
+  (checks/args-fit "bad :job" #(not (bad-job? (:job (:args %))))))
 
 (defn offered-now [c]
   (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)) (ledger/near-of-args c (:args c))))
 
-(defn no-zones [c]
-  (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
-    (ctx/warn-once! c :no-zones :cleanup.declined
-                    {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"})
-    :no-zones))
+(defn no-zones
+  "Later :no-zones while no zone list has been read, with one kind warn."
+  [c]
+  (let [s (checks/zones-read c)]
+    (when-not (= :ok (first s))
+      (ctx/warn-once! c :no-zones :cleanup.declined
+                      {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"}))
+    s))
 
 (defn nothing-to-do?
   "Nothing is offered, and a cell never seen has been looked at (or none is unseen): the goal already holds."
   [c]
   (not (or (:started (ctx/mem c)) (seq (offered-now c)) (and (not (look/surveyed? c)) (unseen-entries? c)))))
 
-(def conditions [[:fn bad-args] [:fn no-zones]])
+(def can-start? (cond/and bad-args no-zones))
 
 (def target [:job :near])
 

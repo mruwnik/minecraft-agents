@@ -560,8 +560,11 @@
     (is (some? (:defaults j)))
     (is (fn? (:quote-of j)))))
 
+(defn refusal "The reason of a status that is not :ok, else nil." [[kind _ data]]
+  (when-not (= :ok kind) (:reason data)))
+
 (deftest a-bad-job-argument-is-impossible
-  (are [job cause] (= cause (contract/impossible-cause (cleanup/bad-args {:args {:job job}})))
+  (are [job cause] (= cause (refusal (cleanup/bad-args {:args {:job job}})))
     5 :bad-args
     nil nil
     :all nil

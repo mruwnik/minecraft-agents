@@ -457,11 +457,9 @@
 
 (deftest a-call-without-a-target-waits-at-its-start
   (with-redefs [ctx/frozen-call (constantly nil)]
-    (is (= :no-target (search/no-target {:args {:target nil}})))
-    (is (= :no-target (search/no-target {:args {:target []}})))
-    (is (nil? (search/no-target {:args {:target "diamond_block"}}))))
-  (with-redefs [ctx/frozen-call (constantly {:least 1})]
-    (is (nil? ((second (first search/conditions)) {:args {:target nil}})) "a started call runs on")))
+    (is (= [:later :no-target] ((juxt first #(:reason (nth % 2))) (search/no-target {:args {:target nil}}))))
+    (is (= [:later :no-target] ((juxt first #(:reason (nth % 2))) (search/no-target {:args {:target []}}))))
+    (is (= :ok (first (search/no-target {:args {:target "diamond_block"}}))))))
 
 (deftest ore-the-body-has-not-seen-is-neither-found-nor-noted
   (async done

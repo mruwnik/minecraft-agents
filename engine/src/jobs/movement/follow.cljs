@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -35,17 +36,16 @@
 (def head-height 1.6)
 (def last-seen-reach 1)
 
-(defn bad-args
-  "The cause :bad-args unless a player name is given."
-  [c]
-  (when-not (string? (:player (:args c))) (contract/impossible :bad-args)))
+(def bad-args
+  "Never :bad-args unless a player name is given."
+  (checks/args-fit "no player name" #(string? (:player (:args %)))))
 
 (a/defargs settings
   {::time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn bad-args]])
+(def can-start? bad-args)
 
 (defn find-player
   "The position {:x :y :z} of player named name within radius, or nil."

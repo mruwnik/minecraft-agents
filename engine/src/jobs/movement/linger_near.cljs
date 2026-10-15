@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
 
 (def idle-ok true)
@@ -30,18 +31,17 @@
 
 (def target [:pos])
 
-(defn bad-args
-  "The cause :bad-args unless a position and a positive :wait-s are given."
-  [c]
-  (let [{:keys [pos wait-s]} (:args c)]
-    (when-not (and (some? pos) (number? wait-s) (pos? wait-s)) (contract/impossible :bad-args))))
+(def bad-args
+  "Never :bad-args unless a position and a positive :wait-s are given."
+  (checks/args-fit "needs a position and a positive :wait-s"
+                   (fn [c] (let [{:keys [pos wait-s]} (:args c)] (and (some? pos) (number? wait-s) (pos? wait-s))))))
 
 (a/defargs settings
   {::time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn bad-args]])
+(def can-start? bad-args)
 
 (defn done?
   "Seconds waited in range against :wait-s."

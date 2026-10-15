@@ -3,7 +3,8 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
@@ -54,26 +55,27 @@
 
 (def target [:heading])
 
-(defn bad-args [c]
-  (let [{:keys [heading max-thick]} (:args c)]
-    (when-not (and (headings heading) (pos-int? max-thick))
-      (contract/impossible {:reason :bad-args :why "needs :heading (:north :east :south :west) and :max-thick > 0"}))))
+(def bad-args
+  "Never :bad-args unless :heading and a positive :max-thick are given."
+  (checks/args-fit "needs :heading (:north :east :south :west) and :max-thick > 0"
+                   (fn [c] (let [{:keys [heading max-thick]} (:args c)] (and (headings heading) (pos-int? max-thick))))))
 
 (defn no-door-why [heading max-thick p]
   (str "no wall at most " max-thick " thick with a floor beyond, " (name heading) " of " (pr-str (reach/standing-vec p))))
 
 (defn no-door
-  "At the call's start only: the cause :no-door when no wall of at most :max-thick with a floor beyond lies ahead on the map as seen."
+  "Later :no-door when no wall of at most :max-thick with a floor beyond lies ahead on the map as seen."
   [c]
   (let [{:keys [heading max-thick]} (:args c)
         p (:primitives c)]
-    (when (and (headings heading) (pos-int? max-thick)
-               (nil? (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) max-thick)))
-      {:reason :no-door :why (no-door-why heading max-thick p)})))
+    (if (and (headings heading) (pos-int? max-thick)
+             (nil? (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) max-thick)))
+      (contract/later :no-door (no-door-why heading max-thick p) :why (no-door-why heading max-thick p))
+      (contract/ok :door "a wall to clear"))))
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:fn bad-args] [:fn (started/at-start no-door)]])
+(def can-start? (cond/and bad-args no-door))
 
 (defn quote-of [c]
   (let [{:keys [heading max-thick]} (:args c)

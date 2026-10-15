@@ -2,7 +2,8 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.started :as started]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [engine.settings :as settings]
             [jobs.access.stair.cells :as geo]
             [jobs.access.stair.memory :as smem]
@@ -224,28 +225,42 @@
 
 ;; ------------------------------------------------------------------ the contract
 
-(defn away
-  "The cause of a call submitted with a :from the body has since left (jobs.lib.submitted/away-cause), or nil."
-  [c]
-  (submitted/away-cause c))
-
-(defn at-start-heading
-  "f of the call with its heading, at the call's start only."
+(defn with-heading-check
+  "The check f over the call with its heading."
   [f]
-  (started/at-start (fn [c] (f (with-heading c)))))
+  (fn [c] (f (with-heading c))))
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions
-  [[:fn (started/at-start away)]
-   [:fn (at-start-heading (fn [c]
-                           (let [t (geo/target-steps (:args c) (reach/standing-vec (:primitives c)))]
-                             (when (map? t)
-                               (if (:here t)
-                                 {:reason :y-not-beyond-feet :why (:error t)}
-                                 (contract/impossible {:reason :bad-args :why (:error t)}))))))]
-   [:fn (at-start-heading (fn [c] (when-let [stop (refusal c)] (assoc (access/refusal-fields [stop]) :reason :refused))))]
-   [:fn (at-start-heading unmet)]])
+(defn target-fit
+  "Never :bad-args for a target the args do not give; later :y-not-beyond-feet for a :y that lies at or behind the feet."
+  [c]
+  (let [t (geo/target-steps (:args c) (reach/standing-vec (:primitives c)))]
+    (cond
+      (not (map? t)) (contract/ok :args "args fit")
+      (:here t) (contract/later :y-not-beyond-feet (:error t) :why (:error t))
+      :else (contract/never :bad-args (:error t) :why (:error t)))))
+
+(defn not-refused
+  "Later :refused while a zone, claim or plan refuses the first cut."
+  [c]
+  (if-let [stop (refusal c)]
+    (let [fields (access/refusal-fields [stop])]
+      (checks/later-of (str "refused by " (access/refusal-text fields)) (assoc fields :reason :refused)))
+    (contract/ok :permitted "no zone, claim or plan refuses")))
+
+(defn not-lacking
+  "Later with what the next dig lacks that this call cannot make good (:no-tool, :no-free-slot)."
+  [c]
+  (if-let [lack (unmet c)]
+    (checks/later-of (str "lacks " (name (:reason lack))) lack)
+    (contract/ok :supplied "nothing lacking")))
+
+(def can-start?
+  (cond/and checks/not-moved
+            (with-heading-check target-fit)
+            (with-heading-check not-refused)
+            (with-heading-check not-lacking)))
 
 (defn done?
   "The steps cut against the steps asked. Never :done? itself: the round ends the stair with its event and way."

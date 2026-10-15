@@ -1,5 +1,5 @@
 (ns jobs.explore.search
-  (:require [jobs.lib.started :as started]
+  (:require
             [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
@@ -192,11 +192,13 @@
 ;; ------------------------------------------------------------------ the body
 
 (defn no-target
-  "At the call's start: the cause :no-target while no target is named."
+  "Later :no-target while no target is named."
   [c]
-  (when (empty? (targets c)) :no-target))
+  (if (empty? (targets c))
+    (contract/later :no-target "no target is named")
+    (contract/ok :target "a target is named")))
 
-(def conditions [[:fn (started/at-start no-target)]])
+(def can-start? no-target)
 
 (defn coverage [m]
   {:legs (:legs m 0) :scans (:scans m 0) :failed (:failed m []) :skipped (:skipped m 0) :farthest (:farthest m 0)})

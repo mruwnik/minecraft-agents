@@ -196,7 +196,7 @@
           (is (not (finished? eng)) "a listed call waits on its condition")
           (is (empty? (calls p "place")))
           (is (empty? (the-ledger eng)))
-          (is (= [:zone "keep-out"] ((juxt :reason :zone) (:cause (first (of-kind seen :waiting)))))))))))
+          (is (= [:zone "keep-out"] ((juxt :reason :zone) (first (of-kind seen :waiting))))))))))
 
 (deftest a-ceiling-ahead-refuses-before-any-placement
   (async done
