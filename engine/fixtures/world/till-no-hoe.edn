@@ -12,7 +12,7 @@
  [{:name "no-hoe-and-no-chest-stops-tool"
    :act [[:job (jobs.farm.till {:center #xyz [16 -1 16] :radius 1})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :tool}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :kind :stopped :data {:reason :tool}}}]
+            {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :kind :stopped :data {:reason :tool}} :of-job true}]
    :after [[:block [16 -1 16] "grass_block"]]}
   {:name "hoe-in-a-seen-chest-is-fetched-and-tills"
    :blocks [[:set [18 0 12] "chest{Items:[{Slot:0b,id:\"minecraft:stone_hoe\",count:1}]}"]]

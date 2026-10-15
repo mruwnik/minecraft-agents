@@ -5,7 +5,8 @@
             [engine.expr :as expr]
             [engine.memory :as mem]
             [engine.registry :as registry]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.lib.world-files :as world]))
 
 (defn ctx-of
   "A ctx of job sym in a seen world, args over its defaults, its memory m."
@@ -15,6 +16,11 @@
 
 (defn done-of [sym world args & [m]]
   ((:done? (get registry/jobs sym)) (ctx-of sym world args (or m {}))))
+
+(defn done-in
+  "done-of with a world of plans {id plan} and no zones."
+  [sym world args m plans]
+  ((:done? (get registry/jobs sym)) (assoc-in (ctx-of sym world args m) [:engine :world] (world/of-data plans {} []))))
 
 (def fresh-args
   {'jobs.gather.get-seeds {:count 2}
@@ -94,5 +100,18 @@
     {"0,64,0" "oak_sapling"} {:at [0 64 0]} {:children {:walk {}}} [:later :wrapping-up]
     {} {:at [0 64 0]} {} [:later :owed]))
 
-(deftest forestry-tidy-is-not-done-while-a-trunk-is-chosen
-  (is (= [:later :tidying] (tu/kind-reason (done-of 'jobs.forestry.tidy {} {} {:tree {:base {:x 0 :y 64 :z 0}}})))))
+(deftest forestry-tidy-is-done-once-looked-round-with-no-trunk-and-no-child
+  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.forestry.tidy {} {} m)))
+    {:tree {:base {:x 0 :y 64 :z 0}}} [:later :tidying]
+    {} [:later :tidying]
+    {:looked {:x 0 :y 64 :z 0} :children {:fell {}}} [:later :wrapping-up]
+    {:looked {:x 0 :y 64 :z 0}} [:ok :tidied]))
+
+(def oak-plan {:id "forest" :parts [{:id "a" :cells [[3 64 0]] :want {:tree "oak"}}]})
+
+(deftest forestry-prepare-is-done-when-every-cell-is-ready-and-no-child-is-under-way
+  (are [blocks m reason] (= reason (tu/kind-reason (done-in 'jobs.forestry.prepare {:blocks blocks} {:plan "forest"} m {"forest" oak-plan})))
+    {"3,63,0" "dirt" "3,64,0" "oak_sapling"} {} [:ok :prepared]
+    {"3,63,0" "dirt" "3,64,0" "oak_sapling"} {:collect true} [:later :wrapping-up]
+    {"3,63,0" "dirt" "3,64,0" "oak_sapling"} {:children {:dig {}}} [:later :wrapping-up]
+    {"3,63,0" "dirt"} {} [:later :preparing]))

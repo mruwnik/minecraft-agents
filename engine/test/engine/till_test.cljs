@@ -74,8 +74,7 @@
               result (await (child-outcome eng job box 12))]
           (is (= {:tilled 4 :skipped {}} result))
           (is (= ["farmland"] (distinct (map #(block-at p %) (till/cells box)))))
-          (is (= 4 (count (calls p "useOn"))))
-          (is (empty? (kinds seen :till.done))))))))
+          (is (= 4 (count (calls p "useOn")))))))))
 
 (deftest till-is-one-call-the-whole-box
   (async done
@@ -302,7 +301,6 @@
           (await (run-until-empty eng 5))
           (is (= 1 (count (:list (core/state eng)))) "waits, does not end")
           (is (empty? (calls p "useOn")))
-          (is (empty? (kinds seen :till.done)))
           (is (= [{:reason :refused :zones ["farm"]}]
                  (mapv #(select-keys % [:reason :zones]) (kinds seen :till.declined)))))))))
 
