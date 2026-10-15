@@ -206,6 +206,42 @@
           (is (= entry (feet p)))
           (is (= 1 (count (events-of s :leave-tunnel.open)))))))))
 
+(defn obtain-stub
+  "jobs.items.obtain giving 10 cobblestone to the body in the atom; calls are recorded."
+  [calls body]
+  (assoc (select-keys (get registry/jobs 'jobs.items.obtain) [:ways :args])
+         :round (fn ^:async obtain [c]
+                  (swap! calls conj (:args c))
+                  (fake/add-item! @body "cobblestone" 10)
+                  (ctx/end c :done nil {:item "cobblestone" :count 10}))))
+
+(deftest no-blocks-to-seal-with-are-fetched-by-default-and-the-mouth-is-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              body (atom nil)
+              s (setup {:blocks eight-down :inventory (inventory :cobble 0)} {:target [6 57 0]} {}
+                       :jobs {'jobs.items.obtain (obtain-stub calls body)})
+              _ (reset! body (:p s))
+              {:keys [out]} (await (run-out! s))]
+          (is (= 1 (count @calls)) "one fetch for all the open cells")
+          (is (= [:done :sealed] ((juxt :status :reason) @out)))
+          (is (= mouth (set (:filled @out)))))))))
+
+(deftest no-blocks-to-seal-with-and-fetch-off-leave-the-mouth-open-without-a-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              body (atom nil)
+              s (setup {:blocks eight-down :inventory (inventory :cobble 0)} {:target [6 57 0]} {:fetch false}
+                       :jobs {'jobs.items.obtain (obtain-stub calls body)})
+              _ (reset! body (:p s))
+              {:keys [out]} (await (run-out! s))]
+          (is (empty? @calls))
+          (is (= :open (:reason @out))))))))
+
 (deftest a-zone-that-allows-only-digging-leaves-its-mouth-cell-open
   (async done
     (tu/run-async done

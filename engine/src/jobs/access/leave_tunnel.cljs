@@ -58,7 +58,8 @@
   leave-tunnel.stopped (warn, any stop).
 
   :fetch (default true; false ends :no-tool): the escape stair's missing pickaxe is got with jobs.items.get-tool (jobs.lib.need), then
-  the body walks back to the cell it stood on and goes on.")
+  the body walks back to the cell it stood on and goes on. With nothing to fill the mouth with, building blocks are
+  got the same way, once (jobs.items.obtain); a failed fetch or :fetch off books the cell open :no-blocks.")
 
 (a/defargs args
   {:tunnel {:doc "the result of jobs.access.tunnel (:line :dug :torches)" :spec map? :default nil}
@@ -330,9 +331,23 @@
       (await (dig-torch! c torch))
       (await (walk-to! c stand (fn [_] (book-left! c (:cell torch) site :walk-failed)))))))
 
+(defn fetch-opts
+  "The limits {:how :explore :minutes} for fetching blocks, nil when :fetch does not allow items."
+  [c]
+  (when-let [o (need/opts c 'jobs.access.leave-tunnel)]
+    (when (contains? (:what o) :item) (select-keys o [:how :explore :minutes]))))
+
+(defn ^:async fetch-blocks!
+  "Get building blocks for the open mouth cells: :continue while the fetch waits, :again once got, nil when the fetch
+  failed (the cell is then booked open :no-blocks)."
+  [c short]
+  (let [e (await (need/blocks! c (choose/fillers :build) short (assoc (fetch-opts c) :return? true)))]
+    (cond (= :continue e) :continue
+          (= :done (:kind e)) :again)))
+
 (defn ^:async fill!
-  "Fill one mouth cell from the entry, or book it open with why not."
-  [c cell]
+  "Fill one mouth cell from the entry, or book it open with why not; short is how many cells are still to fill."
+  [c cell short]
   (let [{:keys [tunnel spare reach]} (:args c)
         p (:primitives c)
         in (stair/rules-in c (reach/standing-vec (:primitives c)))
@@ -343,6 +358,10 @@
     (cond
       (> (u/eye-dist (u/self-pos c) cell) reach) (book-open! c cell :out-of-reach)
       (not (:ok verdict)) (book-open! c cell (:reason verdict))
+      (and (nil? item) (fetch-opts c) (not (:blocks-fetched (ctx/mem c))))
+      (let [r (await (fetch-blocks! c short))]
+        (when-not (= :continue r) (ctx/update-mem! c assoc :blocks-fetched true))
+        (or r (book-open! c cell :no-blocks)))
       (nil? item) (book-open! c cell :no-blocks)
       :else (let [outcome (await (blocks/place-cell! c (cell-pos cell) item {:ignore-zones? true}))
                   n (block-at cell)]
@@ -365,7 +384,7 @@
       (not= entry (reach/standing-vec (:primitives c))) (await (walk-to! c entry #(open! c {:escaped true :walk %})))
       (and (empty? todo) (seq (:open m))) (open! c {})
       (empty? todo) (finish! c :done :sealed {})
-      :else (await (fill! c (first (sort-by (juxt #(% 1) #(- (u/eye-dist body %))) todo)))))))
+      :else (await (fill! c (first (sort-by (juxt #(% 1) #(- (u/eye-dist body %))) todo)) (count todo))))))
 
 (defn ^:async work-round [c]
   (let [{:keys [tunnel]} (:args c)
