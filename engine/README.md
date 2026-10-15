@@ -402,7 +402,8 @@ Each tick the engine fires the first entry whose `:when` holds and which is not 
   still holds it fires again as a new instance, subject to persistence. So a reflex job must return `:done` or `:declined`
   at the top of its round when there is nothing to do. Combinators follow this: `any`, `seq` and `repeat` return `:declined`
   when the relevant child declines.
-- A reflex job cut by a higher reflex is dropped with its job memory. What it must not lose lives in body memory
+- A reflex job cut by a higher reflex is dropped with its job memory, unless it is in its cleanup: then it is paused
+  and resumes (before the list) once no reflex holds the body. What it must not lose lives in body memory
   (recover-drops' `:recover-trip`, recover's `:hurt`, the shelter's `:shelter`).
 - **Persistence**, when the trigger still holds as the job ends: `:retry` fires again next tick; `:cooldown` waits
   `:cooldown-s` counted from the job end; `:stop` waits until the condition has been false once. An entry's own values

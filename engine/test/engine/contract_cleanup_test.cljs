@@ -304,3 +304,86 @@
           (is (= (repeat 3 [:cleanup :nothing-possible :stuck]) (:log @world)))
           (is (= [:done {:status :stopped :reason :stuck :let-go true}]
                  (update (:kid @world) 1 select-keys [:status :reason :let-go]))))))))
+
+(defn ends-slot-mid-cleanup [end!]
+  {:conditions []
+   :round (fn [_] (log! :round) :continue)
+   :cleanup (fn [c e]
+              (log! [:cleanup (:kind e)])
+              (when (= 2 (count (:log @world))) (end! (:engine c) (:root c)))
+              (if (< (count (:log @world)) 4) :continue (ctx/end c :done nil)))})
+
+(defn slot-cleanup-ends-with [end!]
+  (fn ^:async t []
+    (let [{:keys [eng]} (setup {'yields (ends-slot-mid-cleanup end!)})]
+      (takeover/take! eng {:who "driver" :why "test"})
+      (api/mutate! eng {:op :submit :spec '(yields) :by "driver" :request-id "r1"
+                        :generation-id (:generation-id (core/state eng))})
+      (dotimes [_ 4] (await (core/tick! eng)))
+      (is (= [:round [:cleanup :cut-off] [:cleanup :cut-off] [:cleanup :cut-off]] (:log @world)))
+      (is (= [] (:list (core/state eng)))))))
+
+(deftest the-driver-stopping-the-slot-job-mid-cleanup-does-not-cut-its-cleanup
+  (async done (tu/run-async done (slot-cleanup-ends-with (fn [eng id] (core/cancel! eng id :driver))))))
+
+(deftest a-release-mid-cleanup-does-not-cut-the-slot-jobs-cleanup
+  (async done (tu/run-async done (slot-cleanup-ends-with (fn [eng _] (takeover/release! eng {:who "driver" :reason "test"}))))))
+
+(def paused-low
+  {:conditions []
+   :round (fn [c] (ctx/end c :nothing-possible :stuck))
+   :cleanup (fn [c e]
+              (log! [:low-cleanup (:kind e)])
+              (when (= 1 (count (:log @world)))
+                (swap! world assoc :alarm true)
+                (js/setTimeout #(core/tick! (:engine c)) 0))
+              (if (< (count (:log @world)) 4) :continue (ctx/end c :done nil {:let-go true})))})
+
+(def high {:conditions [] :round (fn [c] (log! :high) (ctx/end c :done nil))})
+
+(deftest a-reflex-cut-by-a-higher-one-mid-cleanup-resumes-its-cleanup-after
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! world {})
+        (reset! clock 1000000)
+        (let [[seen sink] (tu/capture-sink)
+              once (fn [k pred] (fn [_ _ _] (let [go? (and (pred) (not (k @world)))] (when go? (swap! world assoc k true)) go?)))
+              eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref clock) :jobs {'low paused-low 'high high}
+                                :triggers {:high {:name :high :job '(high) :when (once :high-fired #(:alarm @world))}
+                                           :low {:name :low :job '(low) :when (once :low-fired (constantly true))}}
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/register-reflex! eng {:trigger :high})
+          (core/register-reflex! eng {:trigger :low})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= [[:low-cleanup :nothing-possible] :high [:low-cleanup :nothing-possible] [:low-cleanup :nothing-possible]]
+                 (:log @world)))
+          (is (= [[:high :done] [:low :stopped]]
+                 (mapv (juxt (comp :reflex-id :context) (comp :outcome :data)) (filter #(= [:reflex :ended] [(:source %) (:kind %)]) @seen)))))))))
+
+(def old-done
+  {:check (constantly true)
+   :round (fn ^:async old-done [c]
+            (await (ctx/call c :kid 'cut-in-cleanup {}))
+            (ctx/result! c {:x 1})
+            :done)})
+
+(def cut-in-cleanup
+  {:conditions []
+   :round (fn [_] :continue)
+   :cleanup (fn [c e]
+              (log! [:cleanup (:kind e)])
+              (when (= 1 (count (:log @world))) (core/do-now! (:engine c) '(quick)))
+              (if (< (count (:log @world)) 2) :continue (ctx/end c :done nil)))})
+
+(def quick {:conditions [] :round (fn [c] (log! :quick) (ctx/end c :done nil))})
+
+(deftest an-old-child-cut-mid-cleanup-under-call-child-still-hands-its-done-and-result-over
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'top (caller-of old-done) 'cut-in-cleanup cut-in-cleanup 'quick quick})]
+          (core/submit! eng '(top) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [[:cleanup :cut-off] :quick [:cleanup :cut-off]] (:log @world)))
+          (is (= [:done {:status :done :x 1}] (update (:kid @world) 1 select-keys [:status :x]))))))))

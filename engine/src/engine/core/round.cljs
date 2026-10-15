@@ -190,12 +190,12 @@
           c rel))
 
 (defn ^:async close-child
-  "A call-child child c (def) whose round gave res: when it ended (an ending, or an old :done), its cleanups run to their
-  end in this round, since an old caller does not come back for the rest; res, with a contract child's ending as its
-  cleanup left it."
-  [eng def c res below]
+  "A call-child child c (def) whose round gave res: when it ended (an ending, or an old :done with result), its cleanups
+  run to their end in this round, since an old caller does not come back for the rest; res, with a contract child's
+  ending as its cleanup left it. An old :done waits as its ending, so a call resumed after a cut still hands it over."
+  [eng def c res result below]
   (if (#{:ended :done} (:status res))
-    (let [e (await (cleanup/close-now eng def c (or (:ending res) (contract/ending :cut-off :ended nil)) below))]
+    (let [e (await (cleanup/close-now eng def c (or (:ending res) (legacy/ending-of :done result nil)) below))]
       (if (:ending res) (normalize-result e) res))
     res))
 
@@ -247,7 +247,7 @@
                                                                                         (await ((:round def) c))))
                                                                   (catch :default e
                                                                     (if-let [l (ending/with-progress def c (limits/ending eng (:root base) slots e))] {:status :ended :ending l} (throw e))))]
-                                                     (await (close-child eng def c res below))))
+                                                     (await (close-child eng def c res (get @(:results base) child-id) below))))
                                                  (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))
               report (merge (tally/report eng (:root base) slots) (:report ending))
               status (if ending :done status)]

@@ -88,15 +88,22 @@
   (running eng))
 
 (defn cut!
-  "Take the body from holder h for entry; cause is the seq of the firing."
+  "Take the body from holder h for entry; cause is the seq of the firing. A reflex job is dropped, unless it is in its
+  cleanup: a pause is not an ending, so it stays (paused-reflex) and resumes."
   [eng h by cause]
   (free-owner! eng)
   (reset! (:running eng) nil)
-  (if (:reflex h)
-    (drop-reflex-job! eng (:id h) (:reflex h) :dropped {:how :dropped :by by :cause cause})
-    (do (swap! (:state eng) assoc :resume (:id h) :current nil)
-        (emit! eng (merge (job-fields eng (:id h))
-                          {:source :job :kind :cut :level :info :by by :cause cause})))))
+  (let [paused? (or (not (:reflex h)) (cleanup/closing? eng (:id h) []))]
+    (cond
+      (not (:reflex h)) (swap! (:state eng) assoc :resume (:id h) :current nil)
+      (not paused?) (drop-reflex-job! eng (:id h) (:reflex h) :dropped {:how :dropped :by by :cause cause}))
+    (when paused?
+      (emit! eng (merge (job-fields eng (:id h)) {:source :job :kind :cut :level :info :by by :cause cause})))))
+
+(defn paused-reflex
+  "A reflex job cut in its cleanup (cut!): it gets the body before the list does."
+  [eng]
+  (some (fn [[id inst]] (when (and (:reflex inst) (cleanup/closing? eng id [])) id)) (:instances (state eng))))
 
 (defn fire! [eng entry h]
   (let [id (new-id! eng)
@@ -184,7 +191,7 @@
     (cond
       firing (fire! eng firing h)
       (running eng) (check-idle! eng)
-      :else (when-let [id (choose-listed eng)] (start-round! eng id)))))
+      :else (when-let [id (or (paused-reflex eng) (choose-listed eng))] (start-round! eng id)))))
 
 (defn tick!
   "One scheduling pass. Synchronous; returns the promise of a round it

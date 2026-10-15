@@ -164,26 +164,31 @@
   [eng]
   (js/Promise. (fn [ok] (js/setTimeout ok (settings/physics-ms (:primitives eng))))))
 
+(defn ^:async drain-on
+  "After a step of the closing frame of c gave r: while r is :continue and the round holds the body, a tick, then the
+  next step. For a frame whose caller cannot come back for the rest (a reflex root, the driver's slot job, a call-child
+  child)."
+  [eng def c r ctx-below]
+  (if (and (= :continue r) (owner? eng (:token c)))
+    (do (await (next-tick eng))
+        (if (owner? eng (:token c)) (await (drain-on eng def c (await (step eng def c ctx-below)) ctx-below)) r))
+    r))
+
 (defn ^:async drain
-  "Step the closing frame of c, a tick between steps, until its cleanups have run or the round is cut: for a frame
-  whose caller cannot come back for the rest (a reflex root, the driver's slot job, a call-child child)."
+  "Step the closing frame of c until its cleanups have run or the round is cut (drain-on)."
   [eng def c ctx-below]
-  (let [r (await (step eng def c ctx-below))
-        more? (and (= :continue r) (owner? eng (:token c)))]
-    (when more? (await (next-tick eng)))
-    (if (and more? (owner? eng (:token c))) (await (drain eng def c ctx-below)) r)))
+  (await (drain-on eng def c (await (step eng def c ctx-below)) ctx-below)))
 
 (defn ^:async close-now
-  "close, run to its end within this round (drain)."
+  "close, run to its end within this round (drain-on)."
   [eng def c e ctx-below]
-  (let [r (await (close eng def c e ctx-below))]
-    (if (= :continue r) (await (drain eng def c ctx-below)) r)))
+  (await (drain-on eng def c (await (close eng def c e ctx-below)) ctx-below)))
 
 (defn ^:async run-out
   "For a frame of c (job def) whose caller does not come back: r, what its round gave, with its cleanups run to their
   end in this round. A frame leaving on :continue closes with :cut-off :ended and still gives :continue."
   [eng def c r ctx-below]
   (cond
-    (closing? eng (:root c) (:slots c)) (await (drain eng def c ctx-below))
+    (closing? eng (:root c) (:slots c)) (await (drain-on eng def c r ctx-below))
     (contract/ending? r) r
     :else (do (await (close-now eng def c (contract/ending :cut-off :ended nil) ctx-below)) r)))
