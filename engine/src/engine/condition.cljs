@@ -338,19 +338,48 @@
     (str (str/join " " (map #(if (or (string? %) (keyword? %)) (name %) (pr-str %)) form)) " " (value-text value))
     (value-text value)))
 
-(defn failing
-  "The sub-term that makes tree not true: an and's first child that is not true, followed down."
-  [{:keys [form children] :as tree}]
-  (if (and (seq? form) (= 'and (first form)))
-    (failing (first (remove #(true? (:value %)) children)))
-    tree))
-
-(defn failing-text [{:keys [form children] :as t}]
-  (let [op (when (seq? form) (negated (first form)))]
+(defn cmp-text
+  "A comparison term as text: its operator turned round when it failed, as it is when it holds (under a not)."
+  [{:keys [form children] :as t} holds?]
+  (let [sym (when (seq? form) (first form))
+        op (when (contains? negated sym) (if holds? (name sym) (negated sym)))]
     (cond
       (not op) (term-text t)
       (some #(unknown? (:value %)) children) (term-text (first (filter #(unknown? (:value %)) children)))
       :else (str (term-text (first children)) " " op " " (term-text (second children))))))
+
+(defn failing
+  "The sub-term that makes tree not true: and/or descend to their first child that is not true (an or has only
+  such children); a not or a comparison is the term."
+  [{:keys [form children] :as t}]
+  (if (and (seq? form) (#{'and 'or} (first form)))
+    (failing (first (remove #(true? (:value %)) children)))
+    t))
+
+(defn failing-text
+  "The wait text of the failing term t: a not shows the term it negates, anything else the comparison or fact."
+  [{:keys [form children] :as t}]
+  (if (and (seq? form) (= 'not (first form)))
+    (str "not " (cmp-text (first children) true))
+    (cmp-text t false)))
+
+(defn arg-keys [form]
+  (->> (tree-seq seq? seq form) (filter #(and (seq? %) (= 'arg (first %)))) (keep second) distinct vec))
+
+(defn check-job-form
+  "nil when a job's condition form is in the language and can run (called when the job is registered), else the
+  message of the first refusal. held-for is out (a job keeps no timers); (arg :k) stands for a value of any type."
+  [form]
+  (let [bad-arg (some #(when-not (and (= 2 (count %)) (keyword? (second %))) %)
+                      (filter #(and (seq? %) (= 'arg (first %))) (tree-seq seq? seq form)))
+        ks (arg-keys form)
+        trials (reduce (fn [ms k] (for [m ms v [0 "" :k true]] (assoc m k v))) [{}] ks)
+        results (map #(compile (walk/prewalk (fn [x] (if (and (seq? x) (= 'arg (first x))) (get % (second x) x) x)) form)) trials)]
+    (cond
+      (some #{'held-for} (tree-seq seq? seq form)) (str "condition " (pr-str form) ": held-for is for triggers only")
+      bad-arg (str "condition " (pr-str form) ": " (pr-str bad-arg) " is not (arg :key)")
+      (some :ok results) nil
+      :else (str "condition " (pr-str form) ": " (:message (first results))))))
 
 (defn first-fact [form]
   (some #(when (and (seq? %) (contains? triggers/facts (first %))) (keyword (first %))) (tree-seq seq? rest form)))
@@ -358,16 +387,11 @@
 (defn job-cause
   "nil when a job's condition form holds now for a call with args, else {:fact :form :text}: the fact the failing
   part reads, the form, and the failing comparison as the wait text shows it (\"inventory torch 0 < 4\"). The form is
-  the trigger language plus (arg :k) for the call's arg; one whose arg is missing or not a literal holds (the job's
-  args check reports it). Unknown fails. A form outside the language, or with held-for (it keeps no timers here),
-  throws."
+  the trigger language plus (arg :k) for the call's arg (check-job-form vets it at registration); one whose arg is
+  missing, not a literal or of the wrong type holds (the job's args check reports it). Unknown fails."
   [env args form]
-  (when (some #{'held-for} (tree-seq seq? seq form))
-    (throw (js/Error. (str "condition " (pr-str form) ": held-for is for triggers only"))))
-  (when-let [f (with-args form args)]
-    (let [{:keys [ok node message]} (compile f)
-          _ (when-not ok (throw (js/Error. (str "condition " (pr-str form) ": " message))))
-          tree (first (run node env {}))]
-      (when-not (true? (:value tree))
-        (let [t (failing tree)]
-          {:fact (or (first-fact (:form t)) :condition) :form (pr-str form) :text (failing-text t)})))))
+  (let [{:keys [ok node]} (some-> (with-args form args) compile)
+        tree (when ok (first (run node env {})))]
+    (when-not (or (not ok) (true? (:value tree)))
+      (let [t (failing tree)]
+        {:fact (or (first-fact (:form t)) :condition) :form (pr-str form) :text (failing-text t)}))))

@@ -483,10 +483,29 @@
     {}
     {:count [4]}))
 
-(deftest a-bad-job-condition-throws-naming-it
-  (are [form] (thrown-with-msg? js/Error #"condition" (c/job-cause torches {} form))
-    '(>= (inventory) 4)
-    '(held-for 5 (daytime))))
+(deftest check-job-form-refuses-a-form-job-cause-could-not-run
+  (are [form re] (re-find re (c/check-job-form form))
+    '(>= (inventory) 4) #"inventory"
+    '(>= (carried "torch") 4) #"carried"
+    '(held-for 5 (daytime)) #"held-for"
+    '(>= (inventory "torch") (arg "count")) #"arg"
+    '(>= (inventory "torch") (arg)) #"arg"))
+
+(deftest check-job-form-accepts-forms-whose-args-take-any-type
+  (are [form] (nil? (c/check-job-form form))
+    '(>= (inventory (arg :item)) (arg :count))
+    '(and (daytime) (or (< (health) 5) (not (= (arg :mode) :x))))))
+
+(deftest a-job-condition-whose-arg-has-the-wrong-type-holds-instead-of-throwing
+  (is (nil? (c/job-cause torches {:count "many"} '(>= (inventory "torch") (arg :count))))))
+
+(deftest a-failing-or-names-its-first-comparison
+  (is (= "inventory torch 2 < 4" (:text (c/job-cause torches {} '(or (>= (inventory "torch") 4) (not (daytime))))))))
+
+(deftest a-failing-not-names-the-term-it-negates
+  (are [form text] (= text (:text (c/job-cause torches {} form)))
+    '(not (daytime)) "not daytime true"
+    '(not (< (inventory "torch") 4)) "not inventory torch 2 < 4"))
 
 (deftest ctx-fact-reads-a-fact-for-the-job-body
   (let [eng (core/create {:primitives (tu/fake {:inventory [{:name "torch" :count 3}]}) :jobs {} :triggers {}

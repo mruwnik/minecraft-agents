@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.core.legacy :as legacy]
             [engine.core :as core]
+            [engine.core.ending :as ending]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.expr :as expr]
@@ -740,3 +741,9 @@
     (is (nil? (expr/problem reg '(migrated {:timeout-s 30}))))
     (is (= {:time 30} (:spend (second (expr/leaf reg 'migrated {:timeout-s 30})))))
     (is (re-find #"migrated has no arg :bogus" (expr/problem reg '(migrated {:bogus 1}))))))
+
+(deftest registering-a-job-with-a-bad-fact-form-is-refused-naming-it
+  (are [form re] (thrown-with-msg? js/Error re (ending/wrap {:conditions [[:holds form :why]]}))
+    '(>= (inventory) 4) #"inventory"
+    '(held-for 5 (daytime)) #"held-for"
+    '(>= (carried "torch") 4) #"carried"))
