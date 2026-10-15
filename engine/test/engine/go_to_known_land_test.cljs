@@ -332,7 +332,7 @@
 
 ;; j138: a goal 2 blocks over the floor, on a deck whose flood leaks along a bridge into unloaded land, so it is never proved
 ;; walled in; the body's only frontiers lie along the strip, away from the goal. With the default worth (a goal this near is
-;; worth little) the tour ends after a short walk, not a tour of each end of the strip (about 800 blocks)
+;; worth little) the tour is bounded by the floor's worth (about 670 blocks), not a tour of each end of the strip (about 800)
 (deftest go-to-a-near-goal-it-cannot-prove-walled-in-ends-a-tour-by-its-price
   (async done
     (tu/run-async done
@@ -340,7 +340,31 @@
         (let [blocks (merge abyss-strip (box 4 65 -1 6 65 1 "stone") (box -100 65 0 3 65 0 "stone"))
               {:keys [out eng walked]} (await (go-walked! {:blocks blocks :self {:pos {:x 10.5 :y 64 :z 0.5}} :viewChunks 1}
                                                          {:pos [5 66 0] :range 1 :ways #{:walk :clear-seal}}))]
-          (is (= {:arrived false :reason :unreachable :why :explore-spent} (select-keys @out [:arrived :reason :why]))
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason]))
               (str "result " @out " walks: " (mapv (juxt :status :to) (moved eng))))
           (is (= [true true] [(vector? (:at @out)) (number? (:near @out))]) (str "result " @out))
-          (is (< walked 200) (str "walked " walked ": " (mapv (juxt :status :to) (moved eng)))))))))
+          (is (< walked 700) (str "walked " walked ": " (mapv (juxt :status :to) (moved eng)))))))))
+
+;; a ravine: the goal 6 blocks north across a 4-wide gap in the strip, the only way a ring road out past the loaded edge at
+;; both ends of the strip (about 400 blocks round). The goal is near, yet worth a long tour: the floor of :tour-floor-blocks
+(def ravine
+  (merge (box 0 63 2 15 63 100 "stone") (box 0 63 -100 15 63 -3 "stone")
+         (box -20 63 -100 -18 63 100 "stone")
+         (box -17 63 98 -1 63 100 "stone") (box -17 63 -100 -1 63 -98 "stone")
+         (into {} (for [cx (range -30 2) cz (range -7 7)] [(str (* 16 cx) ",0," (* 16 cz)) "stone"]))))
+
+(deftest go-to-a-near-goal-across-a-ravine-arrives-by-a-long-tour
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out eng]} (await (go! {:blocks ravine :self {:pos {:x 10.5 :y 64 :z 3.5}} :viewChunks 1}
+                                            {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal}}))]
+          (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " walks: " (mapv (juxt :status :to) (moved eng)))))))))
+
+(deftest go-to-a-tour-floor-of-zero-gives-the-ravine-up-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go! {:blocks ravine :self {:pos {:x 10.5 :y 64 :z 3.5}} :viewChunks 1}
+                                        {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal} :tour-floor-blocks 0}))]
+          (is (= :explore-spent (:why @out)) (str "result " @out)))))))

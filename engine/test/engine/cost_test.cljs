@@ -176,5 +176,11 @@
     (is (< (tour 100 1) (tour 100 4)) "the more walks it took")))
 
 (deftest a-goal-is-worth-a-trip-and-more-the-farther-it-lies
-  (is (= (cost/trip) (cost/tour-worth 0)))
-  (is (< (cost/tour-worth 2) (cost/tour-worth 40))))
+  (is (= (cost/trip) (cost/tour-worth 0 {:tour-floor-blocks 0})))
+  (is (< (cost/tour-worth 40) (cost/tour-worth 80))))
+
+(deftest a-near-goal-is-worth-a-tour-floor-and-the-prices-are-options
+  (is (= (cost/tour-worth 32) (cost/tour-worth 2)) "under the floor, the floor's worth")
+  (is (< (cost/tour-worth 2 {:tour-floor-blocks 0}) (cost/tour-worth 2)))
+  (is (= (+ (cost/trip) (:cost (cost/walk-cost {:distance 10}))) (cost/tour-worth 10 {:tour-floor-blocks 0 :tour-ratio 1})))
+  (is (= 7 (:cost (cost/tour-cost {:explored 0 :walks 7} {:per-frontier-walk 1})))))

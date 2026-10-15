@@ -802,7 +802,7 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
   at the first edge, then expand as many nodes again or to the round's budget, so land they read stays known once it unloads;
   each chunk holding a node they left unexpanded keeps one edge open), or until the tour since it last came nearer the goal
   costs more than the goal is worth (`jobs.lib.cost/tour-cost` over `:tour-worth`, default `tour-worth` of the straight
-  distance): `:explore-spent`.
+  distance, at least `:tour-floor-blocks` (32); `:tour-ratio`, `:per-frontier-walk` too are options): `:explore-spent`.
 - The walker watches the way ahead and replans when the world under the plan changed, when a mob blocks a leg (stuck, or standing 1 s in a 1-wide way ahead), when the hp planned for drops ahead is over what it may spend now (`:health`), and every 4 s
   for a partial plan. A fall that costs over 1 hp more than planned is a `damage-mismatch` warn.
 - Risks are priced rather than banned: gap jumps over pits, corner slides over lava or fire, time near known dangers

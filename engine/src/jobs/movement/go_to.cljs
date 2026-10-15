@@ -187,6 +187,9 @@
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land" :spec #{:open :closed} :default :open}
    :detour {:doc "false: under ground, walk a found way however long; true: one over mostly unseen cells and longer than the bound of jobs.movement.go-to.detour for a goal that near is not walked (:why :detour)" :spec boolean? :default true}
    :tour-worth {:doc "seconds a tour of frontiers (walks to the edge of loaded land without coming nearer its goal) may cost (jobs.lib.cost/tour-cost), then it gives up :why :explore-spent; nil: jobs.lib.cost/tour-worth of the goal's straight blocks" :spec (a/num-in 0 nil) :default nil}
+   :tour-ratio {:doc "times the walk of its straight blocks (at least :tour-floor-blocks) a goal is worth of a tour, on top of a trip; nil: the setting jobs.lib.cost.value/tour-ratio" :spec (a/num-in 0 nil) :default nil}
+   :tour-floor-blocks {:doc "straight blocks a goal counts as at least when worth a tour, so a near goal behind a ravine is still toured to; nil: the setting jobs.lib.cost.value/tour-floor-blocks" :spec (a/num-in 0 nil) :default nil}
+   :per-frontier-walk {:doc "seconds each frontier walk of a tour costs on top of its blocks; nil: the setting jobs.lib.cost.value/per-frontier-walk" :spec (a/num-in 0 nil) :default nil}
    :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :spec boolean? :default true}
    :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :spec boolean? :default true}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
