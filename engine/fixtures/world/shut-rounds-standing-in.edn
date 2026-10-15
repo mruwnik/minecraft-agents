@@ -1,6 +1,7 @@
 ;; Rounds migration of the door-left reflex (cards 85e1dd07, 268296ab): the run leaves the gate the body stands in
 ;; (shut-doors.stopped :standing-in, entry kept); stepped off, the reflex shuts it later. Own file: a single gate, so
 ;; the run has no second gate to walk to, and the body looks west so gate 10 is in view after the tp east.
+;; The wait lets the body look at the gate first: shut-doors reads the gate as last seen, and a body just started has seen nothing.
 {:defaults
  {:tags [:triggers :doors]
   :time :any
@@ -12,7 +13,7 @@
   :limit-s 90}
  :cases
  [{:name "standing-in-gate-kept-then-shut-later"
-   :act [[:job (jobs.maintenance.shut-doors)] [:await {:source :job :kind :shut-doors.stopped} 20]
+   :act [[:wait-s 2] [:job (jobs.maintenance.shut-doors)] [:await {:source :job :kind :shut-doors.stopped} 20]
          [:rcon "execute at $BODY run tp $BODY ~3 ~ ~"]]
    :expect [{:event {:source :job :kind :shut-doors.stopped :data {:left [{:reason :standing-in}]}} :within-s 20}
             {:event {:source :job :kind :shut-doors.done} :within-s 60}]
