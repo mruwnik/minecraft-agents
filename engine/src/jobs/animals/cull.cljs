@@ -13,8 +13,8 @@
 
   The herd is the animals of the kind inside a bound: :box when set, else :radius blocks around :centre
   ({:x :z}, horizontal), else :radius blocks around the body. Babies are never targets and never count as
-  adults. With :keep or fewer adults in the bound at the start it waits (:too-few, with
-  :mob :keep and :in-range), and likewise while the zone rules refuse every adult, so a held cull never blocks the queue. The weapons are the call's :use :tools (default
+  adults. With :keep or fewer adults in the bound at the start the goal holds and it ends done :already; it waits
+  while the zone rules refuse every adult, so a held cull never blocks the queue. The weapons are the call's :use :tools (default
   the best carried).
 
   One call is the whole run, a loop of these:

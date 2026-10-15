@@ -2,7 +2,7 @@
 ;; an adult at a fractional position in the box's max row or column (x 23.7, z 18.7 in cell 23,18) counts as inside.
 ;; Box x 19..23, z 14..18. NoAI cows stand still at exact positions. Two adults in the box with :keep 1: one is culled
 ;; (before the fix the max-row cow was not counted, one adult looked like the :keep and nothing was killed). Control: the
-;; second cow in cell 24 (outside the box) is not counted, one adult is the :keep and the cull waits :too-few.
+;; second cow in cell 24 (outside the box) is not counted, one adult is the :keep, the goal already holds and the cull ends done :already.
 {:defaults
  {:tags [:animals :cull :jobs]
   :time :any
@@ -18,7 +18,7 @@
   {:name "cow-outside-the-box-not-counted"
    :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [24.5 0 16.5] "{NoAI:1b}"] [:wait-s 2]
          [:job (jobs.animals.cull {:mob "cow" :keep 1 :box {:min #xyz [19 0 14] :max #xyz [23 1 18]}})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :too-few}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :cull.done} :for-s 20}]
    :after [[:entities "type=cow,tag=wt" [[16 0 10] [28 2 22]] 2]]
    :limit-s 40}]}
