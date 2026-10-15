@@ -1,0 +1,45 @@
+;; jobs.gather.mine / jobs.access.stair start, resume and re-run (cards e2e3c99f, c1bdf186, 940dc025, f5ffa4f1).
+;; e2e3c99f: no stone pickaxe, so the fetch walks the body south to a table; the tunnel still runs east from the cell it began on
+;; (the ore stands on that line; a tunnel from the table would find none). c1bdf186: a stair under way, the body is moved off it
+;; (as a night reflex does); the stair walks back (stair.return) and finishes instead of ending :off-stair.
+;; 940dc025: a re-run along an old open corridor starts past it (mine.tunnel-skipped) and digs the new rock; a floor torch in the corridor stays.
+;; f5ffa4f1: :heading :west beats the way the body faces (east).
+;; Stone mass x 2..30, z 8..24, y 0..6 (cases 1, 3, 4); the stair case has its own mass.
+{:defaults
+ {:tags [:mine :access :jobs] :time :any
+  :plot {:height 20}
+  :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "origin-is-taken-before-the-pickaxe-fetch"
+   :blocks [[:fill [16 0 17] [16 1 22] "air"] [:fill [14 0 22] [18 1 23] "air"] [:set [16 0 23] "crafting_table"]
+            [:set [15 0 21] "torch"] [:set [17 0 18] "torch"] [:set [21 0 16] "iron_ore"]]
+   :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["cobblestone" 8] ["torch" 8]]}
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 10 :radius 8})]]
+   :expect [{:event {:source :job :kind :fetch.done} :within-s 120 :of-job true}
+            {:event {:source :job :kind :mine.done :data {:got 1}} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind :mine.done :data {:reason :not-back}} :for-s 190 :until {:source :job :kind :mine.done}}]
+   :after [[:item "raw_iron" 1] [:not-block [21 0 16] "iron_ore"] [:block [16 0 23] "crafting_table"]]
+   :limit-s 220}
+  {:name "stair-walks-back-after-the-body-is-moved-off-it"
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+   :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]
+         [:await {:source :job :kind :stair.step :data {:at #at [12 8 16]}} 100]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~5.5 ~10 ~16.5"]]
+   :expect [{:event {:source :job :kind :stair.return} :within-s 120 :of-job true}
+            {:event {:source :job :kind :stair.done :data {:steps 8}} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind :stair.stopped :data {:reason :off-stair}} :for-s 190 :until {:source :job :kind :stair.done}}]}
+  {:name "rerun-along-an-old-corridor-digs-new-rock"
+   :blocks [[:fill [3 0 16] [14 1 16] "air"] [:set [8 0 16] "torch"] [:set [18 0 16] "iron_ore"]]
+   :body {:at [3.5 0 16.5]}
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 12 :radius 8})]]
+   :expect [{:event {:source :job :kind :mine.tunnel-skipped} :within-s 60 :of-job true}
+            {:event {:source :job :kind :mine.done :data {:got 1}} :within-s 190 :of-job true}]
+   :after [[:item "raw_iron" 1] [:block [8 0 16] "torch"]]}
+  {:name "heading-west-beats-the-facing-east"
+   :blocks [[:set [12 0 16] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :heading :west :tunnel-length 8 :radius 8})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 120 :of-job true}]
+   :after [[:item "raw_iron" 1] [:block [17 0 16] "stone"] [:block [20 0 16] "stone"]]}]}

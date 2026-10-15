@@ -1,0 +1,22 @@
+;; jobs.access.tunnel from underground to a target farther than :max-length (cards d1fc19ec, f9c2368d).
+;; The body stands in a lit 1x2 corridor cell of its own inside a stone mass (surface y 10). d1fc19ec: a target 25 blocks east on its row is
+;; cut in legs of :max-length from the body's own cell (the plan's entry is that cell, not the surface). f9c2368d: a diagonal target is cut
+;; in two legs the same way and the body gets there. Should-fail: none; the surface entry is the thing that must not be planned.
+;; Stone mass x 0..31, z 8..24, y 0..9; corridor cell [3 4..5 16].
+{:defaults
+ {:tags [:access :mining] :time :any
+  :plot {:height 20}
+  :blocks [[:fill [0 0 8] [31 9 24] "stone"] [:fill [3 4 16] [3 5 16] "air"] [:set [3 4 15] "torch"]]
+  :body {:at [3.5 4 16.5] :inventory [["stone_pickaxe" 1] ["torch" 16] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "same-row-target-farther-than-max-length-enters-where-the-body-stands"
+   :act [[:job (jobs.access.tunnel {:target #at [28 4 16] :max-length 12 :keep true})]]
+   :expect [{:event {:source :job :kind :tunnel.plan :data {:entry #at [3 4 16]}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :tunnel.plan :data {:entry [:near #at [3 10 16] 3]}} :for-s 40}]
+   :after [[:body-far [3.5 10 16.5] 4]]}
+  {:name "diagonal-target-is-cut-in-legs-from-underground"
+   :act [[:job (jobs.access.tunnel {:target #at [20 4 22] :max-length 24 :keep true})]]
+   :expect [{:event {:source :job :kind :tunnel.plan :data {:entry #at [3 4 16]}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :tunnel.done} :within-s 220 :of-job true}]
+   :after [[:body-near [20.5 4 22.5] 3]]}]}

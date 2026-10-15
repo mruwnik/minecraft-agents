@@ -1,0 +1,16 @@
+;; Card eb4febf9: jobs.access.stair :down with :accept [:falling-block] under gravel digs through it and finishes; it does not sit
+;; silent between steps. Gravel is stacked over the cells of steps 3 and 4 (the cut cells of step k: x 10+k, feet y 10-k). Stone mass x 8..24, z 8..24, y 0..9.
+{:defaults
+ {:tags [:access :mining] :time :any
+  :plot {:height 24}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"] [:fill [13 6 16] [13 9 16] "gravel"] [:fill [14 5 16] [14 9 16] "gravel"]]
+  :body {:at [10.5 10 16.5] :yaw 270 :inventory [["iron_pickaxe" 1] ["torch" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "gravel-in-the-line-with-accept-is-dug-through"
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8 :accept #{:falling-block}})]]
+   :expect [{:event {:source :job :kind :stair.done :data {:steps 8}} :within-s 190 :of-job true}]
+   :after [[:not-block [13 7 16] "gravel"] [:not-block [14 6 16] "gravel"]]}
+  {:name "gravel-in-the-line-without-accept-stops-naming-the-hazard"
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]]
+   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :hazard}} :within-s 120 :of-job true}]}]}

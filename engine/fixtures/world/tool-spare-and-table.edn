@@ -1,0 +1,52 @@
+;; Spare tools and the crafting table of a dig (cards 97d376fb, ea75fb87, 47e19b79, 88af8735, a07a1968, 660982e0).
+;; A stair down with the last, worn stone pickaxe gets a spare first (info tool.spare) and the table it needs stands in a side
+;; niche, not in a step of the stair, and is dug up again; with nothing to make one from it warns tool.no-spare and goes on. A worn iron
+;; pickaxe or axe gets the cheapest tool that does the job (stone). fell-tree does the same for its axe. A craft with the body standing
+;; across a cell edge puts its table in a cell outside the body's box. obtain raw_iron whose last pickaxe breaks mid-mine crafts a new one
+;; and goes on. Stone mass x 2..30, z 8..24, y 0..9 (surface y 10); the body starts on top at (10 10 16).
+{:defaults
+ {:tags [:tools :mine :access] :time :any
+  :plot {:height 24}
+  :blocks [[:fill [2 0 8] [30 9 24] "stone"]]
+  :body {:at [10.5 10 16.5] :yaw 270 :inventory [["torch" 8] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "worn-last-pick-gets-a-spare-and-the-table-leaves-the-stair"
+   :body {:inventory [["stone_pickaxe[damage=125]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]]
+   :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :stair.done :data {:steps 8}} :within-s 190 :of-job true}
+            {:count-event {:source :job :kind :tool.low} :for-s 190 :at-most 1}]
+   :after [[:item "stone_pickaxe" [:>= 1]] [:item "crafting_table" [:>= 1]]]}
+  {:name "worn-last-pick-nothing-to-make-a-spare-warns-and-goes-on"
+   :body {:inventory [["stone_pickaxe[damage=125]" 1] ["torch" 8]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :tool.no-spare} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :tool.spare} :for-s 60}]}
+  {:name "worn-iron-pick-gets-a-stone-spare"
+   :body {:inventory [["iron_pickaxe[damage=245]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
+   :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :tool.spare :data {:tool "iron_pickaxe"}} :for-s 60}]}
+  {:name "fell-tree-with-a-worn-last-axe-gets-a-stone-spare"
+   :blocks [[:fill [16 10 16] [16 13 16] "oak_log"] [:fill [14 12 14] [18 14 18] "oak_leaves[persistent=true]"] [:fill [16 12 16] [16 13 16] "oak_log"]]
+   :body {:at [16.5 10 21.5] :yaw 180 :inventory [["iron_axe[damage=248]" 1] ["oak_planks" 12] ["stick" 4] ["cobblestone" 4]]}
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 10 16]})]]
+   :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_axe"}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 190 :of-job true}]
+   :after [[:not-block [16 13 16] "oak_log"]]}
+  {:name "craft-puts-its-table-outside-the-body-box"
+   :body {:at [16.01 10 16.5] :inventory [["oak_planks" 8] ["stick" 4] ["cobblestone" 4]]}
+   :act [[:job (jobs.items.craft {:item "stone_pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :craft.cannot} :for-s 90 :until {:source :job :kind :completed}}]
+   :after [[:item "stone_pickaxe" 1]]}
+  {:name "obtain-raw-iron-last-pick-breaks-new-one-crafted"
+   :blocks [[:set [23 10 16] "iron_ore"] [:set [23 10 18] "iron_ore"]
+            [:set [12 10 14] "torch"] [:set [20 10 14] "torch"] [:set [16 10 18] "torch"]]
+   :body {:at [12.5 10 16.5] :inventory [["stone_pickaxe[damage=130]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 2})]]
+   :expect [{:event {:source :job :kind :tool.broke} :within-s 150 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 280 :of-job true}]
+   :after [[:item "raw_iron" 2]]
+   :limit-s 300}]}
