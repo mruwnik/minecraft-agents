@@ -450,6 +450,37 @@
           (is (re-find #"could not be opened.*timeout" (no-source-why s :stopped)))
           (is (re-find #"-2 64 3" (no-source-why s :stopped))))))))
 
+(defn shut-under-a-block
+  "inspectContainer times out while a block sits on the chest, as the game's chest lid does."
+  [s]
+  (.override (.-world (:p s)) "inspectContainer"
+             (fn [token a impl]
+               (if (= "dirt" (block-at s -2 65 3)) #js {:status "timeout"} (impl token a)))))
+
+(deftest obtain-digs-the-block-off-a-chest-that-would-not-open-and-opens-it-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {chest-at [{:name "oak_log" :count 2}]}) (assoc-in [:blocks "-2,65,3"] "dirt")) [own-zone])]
+          (shut-under-a-block s)
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest}}) {})
+          (await (run-ticks s 12))
+          (is (not= "dirt" (block-at s -2 65 3)) "the block above was dug")
+          (is (= 2 (get (inv s) "oak_log")))
+          (is (empty? (listed s))))))))
+
+(deftest obtain-leaves-a-block-it-may-not-dig-and-books-the-chest-blocked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [roof {:name "roof" :min [-2 65 3] :max [-2 65 3] :owner "Miles"}
+              s (start (-> (world {chest-at [{:name "oak_log" :count 2}]}) (assoc-in [:blocks "-2,65,3"] "dirt")) [own-zone roof])]
+          (shut-under-a-block s)
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest}}) {})
+          (await (run-ticks s 12))
+          (is (= "dirt" (block-at s -2 65 3)))
+          (is (re-find #"chest at -2 64 3 could not be opened" (no-source-why s :stopped))))))))
+
 (deftest obtain-cobblestone-wait-names-the-missing-pickaxe
   (async done
     (tu/run-async done

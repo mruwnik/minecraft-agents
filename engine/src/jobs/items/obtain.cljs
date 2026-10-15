@@ -26,7 +26,8 @@
   - :chest: the containers the body has seen (perception's seenBlocks, never x-ray) within 32 blocks,
     still there, whose zone or claim allows :take (an open, unzoned chest does; jobs.lib.access). A chest known
     to hold a wanted name (body memory :fetch/stock) is withdrawn from (jobs.storage.withdraw child :take); one of
-    unknown stock is walked to and looked into, nearest first, at most 4 per obtain; one known not to hold any is
+    unknown stock is walked to and looked into, nearest first, at most 4 per obtain (one that will not open under a
+    seen solid block gets it dug, a jobs.blocks.dig child, and is looked into once more); one known not to hold any is
     skipped. Each chest is withdrawn from once. With none usable seen at the first round, one look around first.
   - :craft and :smelt: a chain of crafts planned from the recipes (jobs.items.recipes) over what is carried: logs to
     planks to sticks to the tool, and a crafting table when the chain needs one and none is seen (crafted, then put
