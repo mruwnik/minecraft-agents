@@ -67,11 +67,12 @@
       {:name cause :pos at :left-ms left})))
 
 (defn estimate
-  "{:value :cost :parts :reason :top-items :top-mobs :hold-ms} (:hold-ms: how long a skip for this danger is remembered,
-  ::danger-memory-ms, or what is left of the killer guards when only assumed killers add danger) of recovering the
-  drops of the :died data (cost js/Infinity when they cannot be fetched)."
+  "{:value :cost :parts :reason :top-items :top-mobs :hold-ms :priced-ids} (:hold-ms: how long a skip for this danger is remembered,
+  ::danger-memory-ms, or what is left of the killer guards when only assumed killers add danger; :priced-ids: the ids
+  of the hostiles weighed) of recovering the drops of the :died data (cost js/Infinity when they cannot be fetched)."
   [c {:keys [pos inventory cause experience]} elapsed]
   (let [p (:primitives c)
+        known (danger-q/seen-hostiles p)
         here (u/self-pos c)
         kind-at (reach/lookup p)
         worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
@@ -80,7 +81,7 @@
         guard (concat (when (and pos (string? cause) (< elapsed (cfg/killer-guard-ms))) [{:name cause :pos pos :left-ms (- (cfg/killer-guard-ms) elapsed)}]) ; route-danger drops a cause that is no hostile mob
                       (later-killers c pos))
         threat (if route
-                 (cost/route-danger version kind-at route (concat (danger-q/seen-hostiles p) guard) (.-equipment (.self p))
+                 (cost/route-danger version kind-at route (concat known guard) (.-equipment (.self p))
                                     :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p)))
                  {:danger 0 :mobs []})
         wet (when (or (= "drowning" cause) (wet-pile? kind-at pos))
@@ -92,6 +93,7 @@
              :hold-ms (if (every? (set (map :pos guard)) (map :pos (:mobs threat)))
                         (min (cfg/danger-memory-ms) (apply max 0 (map :left-ms guard)))
                         (cfg/danger-memory-ms))
+             :priced-ids (vec (keep #(.-id %) known))
              :top-items (mapv #(select-keys % [:name :count :value]) (take (cfg/top-n) (:items worth)))}
       (:parts fetch) (assoc :parts (:parts fetch))
       (:reason fetch) (assoc :reason (:reason fetch))

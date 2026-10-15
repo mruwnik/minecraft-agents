@@ -48,13 +48,13 @@
           (is (= {:kind :done} (end-of seen)))
           (is (= :collected (:decision (recovered eng)))))))))
 
-(deftest a-danger-at-the-start-ends-condition-failed-danger
+(deftest a-danger-before-the-decision-ends-condition-failed-danger
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
               {:keys [eng seen]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj dt/drops zombie)})]
-          (die! eng {:pos dt/death-pos :inventory dt/diamonds})
+          (die! eng {:pos dt/death-pos :inventory dt/diamonds} 3000)
           (core/submit! eng job {})
           (await (run-until-empty eng 4))
           (is (= {:kind :condition-failed :reason :danger} (end-of seen)))

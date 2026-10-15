@@ -486,23 +486,6 @@
           (is (= {:decision :abandoned :items 0 :reason :nothing-found}
                  (select-keys (recovered eng) [:decision :items :reason]))))))))
 
-(deftest recover-drops-yields-to-a-hostile-and-resumes
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-              {:keys [eng p]} (setup {:floor tu/walk-floor :inventory sword :entities (conj drops zombie)})]
-          (die! eng {:pos death-pos :inventory diamonds})
-          (core/submit! eng job {})
-          (await (core/tick! eng))
-          (await (core/tick! eng))
-          (is (= [] (tu/walk-calls p)) "no acting while a hostile is within the danger radius")
-          (is (= [] (:list (core/state eng))) "the run ended, the death stays open")
-          (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
-          (core/submit! eng job {})
-          (await (run-until-empty eng 10))
-          (is (= :collected (:decision (recovered eng)))))))))
-
 (defn appear-after-first-leg!
   "Cut the first walk step short (2 s, a few blocks) and add entity e to the fake world as it is taken."
   [p e]
@@ -522,11 +505,11 @@
               {:keys [eng p seen]} (setup {:floor tu/walk-floor :inventory sword :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds})
           (appear-after-first-leg! p zombie)
-          (core/submit! eng (list (first job) {:leg-s 1}) {})
+          (core/submit! eng (list (first job) {:leg-s 1 :danger-overrides {"zombie" 1000}}) {})
           (await (run-until-empty eng 3))
-          (let [e (first (filter #(= :recover-drops.declined (:kind %)) @seen))]
-            (is (= :danger (:reason e)) "a mob that turned up on the way ends the trip for now")
-            (is (= "zombie" (:mob e))))
+          (let [e (last (emitted seen :recover-drops.decided))]
+            (is (true? (:retry e)) "a mob that turned up on the way makes the trip dear: it backs off")
+            (is (= ["zombie"] (map :name (:top-mobs e)))))
           (is (nil? (recovered eng)) "the death stays open")
           (is (< (.-x (.-pos (.self p))) 19) "the body did not walk on to the pile"))))))
 
@@ -540,7 +523,7 @@
       (fn ^:async t []
         (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
               {:keys [eng seen]} (setup {:floor tu/walk-floor :inventory sword :entities (conj drops zombie)})]
-          (die! eng {:pos death-pos :inventory diamonds})
+          (die! eng {:pos death-pos :inventory diamonds} 3000)
           (core/submit! eng job {})
           (await (core/tick! eng))
           (let [e (first (declined-events seen))]

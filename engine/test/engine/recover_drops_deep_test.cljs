@@ -53,7 +53,7 @@
 
 (defn feet-y [p] (js/Math.floor (.-y (.-pos (.self p)))))
 
-(deftest a-zombie-turning-up-mid-stair-ends-the-run-declined-for-danger
+(deftest a-dear-zombie-turning-up-mid-stair-backs-the-trip-off
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -61,7 +61,7 @@
               {:keys [eng p seen]} (setup {:blocks deep-ground :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 16}]
                                            :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}]})]
           (die! eng {:pos pile-pos :inventory pile} 5000)
-          (core/submit! eng job {})
+          (core/submit! eng (list (first job) {:danger-overrides {"zombie" 1000}}) {})
           (add-watch (fake/state p) ::zombie
                      (fn [_ _ _ _]
                        (when (and (<= (feet-y p) 58) (not @arrived))
@@ -70,7 +70,7 @@
                            (fake/add-entity! p
                                   {:id 7 :name "zombie" :kind "hostile" :pos {:x (- (js/Math.floor (.-x pos)) 0.5) :y (inc (js/Math.floor (.-y pos))) :z (+ 0.5 (js/Math.floor (.-z pos)))}})))))
           (await (run-until-empty eng 20))
-          (is (some #(= :danger (:reason %)) (filter #(= :recover-drops.declined (:kind %)) @seen)))
+          (is (some :retry (filter #(= :recover-drops.decided (:kind %)) @seen)) "the zombie is weighed and the trip backs off")
           (is (> (feet-y p) 50) "the stair was not carried on to the pile"))))))
 
 (def slope-pile-pos {:x 20 :y 82 :z 0})
