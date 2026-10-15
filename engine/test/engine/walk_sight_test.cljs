@@ -201,3 +201,10 @@
         [t out] (run-ticks e (walk/start-state (:steps e) {:x 1.5 :z 0.5}) (assoc still :x 2.5) 600)]
     (is (= :stuck (:status (:done out))) (pr-str out))
     (is (<= t (+ (:no-progress-ticks ex/policy) 5)) t)))
+
+(deftest a-body-pressed-against-a-wall-on-the-takeoff-is-still-and-released
+  (let [steps (ws/mark-steps (subvec road 2) (fn [x y z] (= [4 61 0] [x y z])))
+        e (assoc (env (constantly nil)) :steps steps)
+        s0 (walk/start-state steps {:x 3.5 :z 0.5})
+        [_ out] (run-ticks e s0 (assoc still :x 3.5) 200)]
+    (is (<= (:ticks (:done out)) (+ (:still-ticks opts) 2)) "the pose never moves: still, not max-ticks")))

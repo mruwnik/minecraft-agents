@@ -286,13 +286,20 @@
             c (approach controls (path-left steps i k box pose) (models-ahead steps i k floors pose) now pose opts)]
         {:out {:controls c :yaw yaw :pitch (if near? lpitch pitch)} :gstate gstate})
       (let [n (inc (:held gstate 0))
+            T (target tk g opts)
             model (if (:on-ground pose) (floor-model (floor-name floors (support-cell pose))) (air))
-            {:keys [controls choice]} (hold box (target tk g opts) model lyaw pose)
+            {:keys [controls choice]} (hold box T model lyaw pose)
             ;; on slime the client's onGround flickers every tick while the body stands: not falling is enough
-            still? (and (= :none choice) (< (js/Math.abs (:vy pose 0)) 0.1)
-                        (zero? (zeroed (:vx pose))) (zero? (zeroed (:vz pose))))
+            at-rest? (and (< (js/Math.abs (:vy pose 0)) 0.1)
+                          (zero? (zeroed (:vx pose))) (zero? (zeroed (:vz pose))))
+            ;; a move that gets the body nowhere (a wall in the way) is a stop: let go of the keys
+            pos [(:x pose) (:z pose)]
+            stuck (if (and at-rest? (= :move choice) (= pos (:pos gstate))) (inc (:stuck gstate 0)) 0)
+            blocked? (>= stuck 2)
+            still? (or (and at-rest? (= :none choice)) blocked?)
             s (if still? (inc (:still gstate 0)) 0)
-            gstate' (assoc gstate :held n :still s)]
+            gstate' (assoc gstate :held n :still s :pos pos :stuck stuck)
+            controls (if blocked? (zipmap (keys controls) (repeat false)) controls)]
         (if (or (>= s (:still-ticks opts)) (>= n (:max-ticks opts)))
           {:done (if (:light g)
                    {:status :light :cells [cell] :at at :step k :ticks n}
