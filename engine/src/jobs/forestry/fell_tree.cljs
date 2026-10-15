@@ -205,21 +205,21 @@
 
 (defn pillar-ended!
   "What the fell-from-pillar child's ending e means for the tree: done (the logs it dug count, the rest of the tree is
-  read again), the fetch's or a limit's ending passes up, a cleanup that left the scaffold open (data :cleanup) is a failed round, a scaffold taken
+  read again), the fetch's or a limit's ending passes up (with a failed cleanup as data :cleanup), a cleanup that left the scaffold open (data :cleanup) is a failed round, a scaffold taken
   back goes on with the tree, any other failure leaves the tree (the child has taken its pillar back)."
   [c e]
   (let [k (:kind e)
         why (contract/cause-key e)]
     (ctx/update-mem! c dissoc :pillar)
     (cond
+      (or (= :limit-reached k) (#{:need :tool :free-slots} why))
+      (ctx/end c k (:cause e) (cond-> {:logs (:dug (ctx/mem c) 0)} (get-in e [:data :cleanup]) (assoc :cleanup (get-in e [:data :cleanup]))))
       (get-in e [:data :cleanup]) (do (ctx/update-mem! c update :dug (fnil + 0) (get-in e [:data :logs] 0))
                                       (blocked! c "cannot take the pillar back"))
       (= :done k) (do (ctx/update-mem! c update :dug (fnil + 0) (get-in e [:data :logs] 0))
                       (ctx/update-mem! c assoc :partials 0)
                       (u/progress! c)
                       :again)
-      (= :limit-reached k) (ctx/end c k (:cause e) {:logs (:dug (ctx/mem c) 0)})
-      (#{:need :tool :free-slots} why) (ctx/end c k (:cause e) {:logs (:dug (ctx/mem c) 0)})
       (= :resumed why) :again
       :else (do (mark-unreachable! c) :again))))
 

@@ -17,6 +17,7 @@
             [jobs.lib.look :as look]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.fell-tree.log :as log]
+            [engine.core.activity :as activity]
             [engine.memory :as mem]))
 
 (def jobs '[jobs.forestry.fell-tree jobs.forestry.fell-from-pillar])
@@ -171,3 +172,34 @@
             (await (tu/run-until-empty eng 200)))
           (is (seq @dug) "the cut came while the pillar stood")
           (is (= [] (open)) "the cleanup took the pillar back"))))))
+
+(deftest the-pillar-take-back-runs-in-an-urgent-section
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fm/start ft/tall {})
+              eng (:eng s)
+              levels (atom [])
+              dig! log/dig-log!
+              call! ctx/call]
+          (ft/eye-reach! (:p s) (:lose-logs? ft/tall))
+          (with-redefs [log/dig-log! (fn ^:async cut-first [& args]
+                                       (when (empty? @levels)
+                                         (swap! levels conj :cut)
+                                         (core/cancel! eng (first (:list (core/state eng)))))
+                                       (await (apply dig! args)))
+                        ctx/call (fn [c k job & more]
+                                   (when (= 'jobs.access.cleanup job)
+                                     (swap! levels conj (activity/section-level eng (:token c))))
+                                   (apply call! c k job more))]
+            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}) {})
+            (await (tu/run-until-empty eng 200)))
+          (is (= [:cut :urgent] (take 2 @levels))))))))
+
+(deftest a-limit-or-need-ending-keeps-its-reason-when-the-pillar-cleanup-failed
+  (with-redefs [ctx/mem (constantly {:dug 2})
+                ctx/update-mem! (constantly nil)]
+    (are [e k cause] (let [r (fell-tree/pillar-ended! {} e)]
+                       (and (= k (:kind r)) (= cause (:cause r)) (= {:kind :nothing-possible :cause :cleanup-open} (get-in r [:data :cleanup]))))
+      (contract/ending :limit-reached :job-time {:cleanup {:kind :nothing-possible :cause :cleanup-open}}) :limit-reached :job-time
+      (contract/ending :condition-failed :need {:cleanup {:kind :nothing-possible :cause :cleanup-open}}) :condition-failed :need)))

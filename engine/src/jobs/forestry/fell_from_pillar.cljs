@@ -26,7 +26,7 @@
   this job's scaffold still open).
   The pillar is built of dirt, cobblestone and the logs cut so far; with too few of those carried it gets the height in
   blocks with jobs.lib.need unless :fetch is false.
-  The build, dig and clean are one urgent section (ctx/atomic): reflexes at or below that level wait for it, up to their caps.
+  The build and dig, and the cleanup's take-back, are urgent sections (ctx/atomic): reflexes at or below that level wait for them, up to their caps.
   Zones: a pillar a zone, claim or footprint refuses warns fell-tree.declined (:reason :refused, :why :pillar), as does
   one the planner finds no way for (its :reason).
   Ends :done with {:logs n} when a log was dug (a pillar the cleanup could not take back is its :cleanup-open).
@@ -242,7 +242,7 @@
   [c _]
   (if-not (log/open-scaffold? c)
     (ctx/end c :done nil)
-    (let [e (await (ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c)}))]
+    (let [e (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c)})))]
       (cond
         (= :continue e) :continue
         (log/open-scaffold? c) (ctx/end c :nothing-possible :cleanup-open (result c))
@@ -265,7 +265,7 @@
 
 (defn ^:async pillar-round!
   "The pillar's next phase. Build, dig and clean run as one urgent section (ctx/atomic :pillar): a night or low-food
-  reflex waits for the pillar to be taken back, up to its cap."
+  reflex waits for the dig to end, up to its cap."
   [c]
   (if (climbing? c)
     (await (ctx/atomic c :urgent :pillar
