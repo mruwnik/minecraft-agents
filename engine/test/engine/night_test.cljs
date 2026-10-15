@@ -877,6 +877,21 @@
           (is (= [] (st/calls p "sleep")) "and no sleep out there")
           (is (seq (st/calls p "place")) "the shelter step dug in instead"))))))
 
+(deftest a-carried-bed-in-a-home-go-to-dug-into-is-put-down-and-slept-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stone-home (update-vals walled-home #(if (= "stone_bricks" %) "stone" %))
+              {:keys [eng p]} (await (night-at-home (update bed-world :blocks merge stone-home) {:x 10 :y 64 :z 0}))
+              walks (atom 0)
+              ;; a looping night is cut off at the third walk in (a walk that fails ends it), so a red run ends
+              log (await (with-child-log #(tu/run-until-empty eng 60)
+                           (fn [_ k _ _] (when (and (= :roof-walk k) (< 2 (swap! walks inc)))
+                                           {:kind :nothing-possible :data {}}))))]
+          (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "walked into the home once, not back and forth with the bed walk")
+          (is (seq (bed-places p)) "the bed was put down")
+          (is (seq (st/calls p "sleep")) "and slept in"))))))
+
 ;; ------------------------------------------------------------------ flee somewhere safer
 
 (def dark-world (assoc lit-world :light-default [15 0]))
