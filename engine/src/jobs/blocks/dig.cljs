@@ -10,6 +10,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.child :as child]
+            [jobs.lib.pace :as pace]
             [jobs.lib.lava :as lava]
             [jobs.lib.need :as need]
             [jobs.lib.step-off :as step-off]
@@ -73,7 +74,6 @@
 (a/defargs settings
   {::collect-radius {:default 8 :doc "Blocks within which dropped items are collected after a dig." :spec (a/int-in 0 nil)}
    ::max-walks {:default 2 :doc "Failed walks of one call before it declines :unreachable." :spec (a/int-in 0 nil)}
-   ::max-steps {:default 12 :doc "Walks, digs and fetches of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 300 :doc "Seconds one call may spend (walk, tool fetch, dig, drops) when the caller sets no :spend :job-time." :spec (a/num-in 0 nil)}})
 (defn collect-radius [] (settings/get settings ::collect-radius))
 
@@ -300,7 +300,6 @@
       (finish! c {:dug false :pos pos :block block :reason :failed :primitive status}))))
 
 (defn max-walks [] (settings/get settings ::max-walks))
-(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async step-aside!
   "The block to dig is under the feet with no seen solid floor below: step off the column to a cell beside it within
@@ -351,60 +350,59 @@
 
 (defn ^:async attempt!
   "The whole dig: get a tool if due, walk into reach, dig, pick up the drops. A walk that fails or leaves the block
-  out of reach is tried once more, then the call ends :unreachable. :continue or the ending."
-  [c pos]
-  (loop [fails 0 steps 0]
-    (let [p (:primitives c)
-          _ (await (b/see-target! c pos))
-          block (b/target-name p pos b/hidden-guess)
-          refusal (fluid-refusal c)
-          dug? (:dug (ctx/mem c))
-          tool (when-not dug? (tool-problem c))]
-      (cond
-        refusal (finish! c {:dug false :pos pos :block block :reason :fluid-adjacent :hazards (:hazards refusal)
-                            :hint "pass :accept #{:fluid-adjacent} to dig beside water (:lava-adjacent for seen lava), or :on-fluid :wait to wait for it to drain"})
-        dug?
-        (let [s (await (seal-step! c pos))
-              {:keys [block ids]} (:dug (ctx/mem c))]
-          (cond
-            (= :again s) (recur fails (inc steps))
-            s s
-            (and (:collect (:args c)) (seq ids)) (await (collect! c pos))
-            :else (finish! c {:dug true :pos pos :block block :reason :dug :collected 0})))
-        (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
-        (b/fluids block) (finish! c {:dug false :pos pos :block block :reason :fluid})
-        tool (let [r (await (get-tool! c tool))]
-               (if (= :fetched r) (recur fails (inc steps)) r))
-        (>= steps (max-steps)) :continue
-        (and (not (:walk (:args c))) (not (b/in-reach? c pos (:see (:args c)))))
-        (unreachable! c :no-walk)
-        (not (b/in-reach? c pos (:see (:args c))))
-        (let [w (await (b/walk!* c pos (:see (:args c))))]
-          (cond
-            (= :continue w) :continue
-            (= :arrived w) (recur fails (inc steps))
-            (not (#{:nothing-possible :condition-failed} (:kind w))) w
-            (>= (inc fails) (max-walks)) (unreachable! c (or (:why (:data w)) (when (map? (:cause w)) (:why (:cause w))) (contract/cause-key w)))
-            :else (recur (inc fails) (inc steps))))
-        (problem c) (ctx/end c :condition-failed (problem c))
-        (and (access/under-feet? (access/may-dig? (b/rules-in c) pos)) (not (contains? (set (:accept (:args c))) :under-feet)))
-        (let [_ (note-under-feet! c pos :step-aside)
-              r (await (step-aside! c pos))]
-          (if (= :arrived r)
-            (do (ctx/update-mem! c assoc :stepped-aside (b/feet-cell c)) (recur fails (inc steps)))
-            r))
-        :else
-        (let [_ (note-under-feet! c pos :dig-on-top)
-              d (await (dig! c pos block))]
-          (cond
-            (= :collect d) (recur fails (inc steps))
-            (= :unreachable d) (unreachable! c :out-of-reach)
-            :else d))))))
+  out of reach is tried once more, then the call ends :unreachable. :again, :continue or the ending."
+  [c pos fails]
+  (let [p (:primitives c)
+        _ (await (b/see-target! c pos))
+        block (b/target-name p pos b/hidden-guess)
+        refusal (fluid-refusal c)
+        dug? (:dug (ctx/mem c))
+        tool (when-not dug? (tool-problem c))]
+    (cond
+      refusal (finish! c {:dug false :pos pos :block block :reason :fluid-adjacent :hazards (:hazards refusal)
+                          :hint "pass :accept #{:fluid-adjacent} to dig beside water (:lava-adjacent for seen lava), or :on-fluid :wait to wait for it to drain"})
+      dug?
+      (let [s (await (seal-step! c pos))
+            {:keys [block ids]} (:dug (ctx/mem c))]
+        (cond
+          (= :again s) :again
+          s s
+          (and (:collect (:args c)) (seq ids)) (await (collect! c pos))
+          :else (finish! c {:dug true :pos pos :block block :reason :dug :collected 0})))
+      (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
+      (b/fluids block) (finish! c {:dug false :pos pos :block block :reason :fluid})
+      tool (let [r (await (get-tool! c tool))]
+             (if (= :fetched r) :again r))
+      (and (not (:walk (:args c))) (not (b/in-reach? c pos (:see (:args c)))))
+      (unreachable! c :no-walk)
+      (not (b/in-reach? c pos (:see (:args c))))
+      (let [w (await (b/walk!* c pos (:see (:args c))))]
+        (cond
+          (= :continue w) :continue
+          (= :arrived w) :again
+          (not (#{:nothing-possible :condition-failed} (:kind w))) w
+          (>= (inc @fails) (max-walks)) (unreachable! c (or (:why (:data w)) (when (map? (:cause w)) (:why (:cause w))) (contract/cause-key w)))
+          :else (do (swap! fails inc) :again)))
+      (problem c) (ctx/end c :condition-failed (problem c))
+      (and (access/under-feet? (access/may-dig? (b/rules-in c) pos)) (not (contains? (set (:accept (:args c))) :under-feet)))
+      (let [_ (note-under-feet! c pos :step-aside)
+            r (await (step-aside! c pos))]
+        (if (= :arrived r)
+          (do (ctx/update-mem! c assoc :stepped-aside (b/feet-cell c)) :again)
+          r))
+      :else
+      (let [_ (note-under-feet! c pos :dig-on-top)
+            d (await (dig! c pos block))]
+        (cond
+          (= :collect d) :again
+          (= :unreachable d) (unreachable! c :out-of-reach)
+          :else d)))))
 
 (defn ^:async round [c]
   (let [{:keys [pos]} (b/parse (:args c))]
     (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
-    (await (attempt! c pos))))
+    (let [fails (atom 0)]
+      (await (pace/steps! c #(attempt! c pos fails))))))
 
 (defn ^:async cleanup
   "However the call ended: a block this call dug whose lava is not yet sealed or whose drops are not yet collected gets
