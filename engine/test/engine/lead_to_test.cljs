@@ -1,6 +1,7 @@
 (ns engine.lead-to-test
   "jobs.animals.lead-to against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -602,6 +603,7 @@
           (is (finished? s))
           (is (= :none (:reason (done-event s))))
           (is (= 1 (count (events-of s :stopped))) "the job ends stopped, not completed")
+          (is (= [:nothing-possible :none] ((juxt :kind contract/cause-key) (:because stopped))) "the leash child's ending is the because")
           (is (re-find #"no cow seen within 8" (:text stopped)))
           (is (not (re-find #":radius" (:text stopped))) "widening the radius does not help a cow that is not seen"))))))
 
@@ -653,22 +655,6 @@
           (is (= 2 (get (fetch-test/inv s) "lead")) "the crafted pair is carried, the cow let go")
           (is (empty? (fetch-test/events-of s :lead-to.gave-up))))))))
 
-(deftest a-lead-fetch-longer-than-the-time-spend-ends-timeout
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (fetch-test/start {:self {:pos {:x 0 :y 64 :z 0}}
-                                   :recipes {"lead" {:count 2 :needs {"string" 5} :table true}}
-                                   :inventory [{:name "string" :count 5} {:name "oak_planks" :count 4}]
-                                   :entities [(cow 1 3)]}
-                                  [])]
-          (.override (.-world (:p s)) "craft"
-                     (fn [token a impl] (swap! (:clock s) + 10000) (impl token a)))
-          (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal :spend {:time 3}}) {})
-          (await (fetch-test/run-ticks s 60))
-          (is (empty? (fetch-test/listed s)))
-          (is (= [:timeout] (mapv :reason (fetch-test/events-of s :lead-to.gave-up)))))))))
-
 (deftest no-lead-and-no-way-to-get-one-stops-no-lead-at-once
   (async done
     (tu/run-async done
@@ -680,6 +666,7 @@
           (is (= :no-lead (:reason r)))
           (is (re-find #"no lead carried and none could be got" (:text gave-up)))
           (is (= [:no-lead] (mapv :reason (events-of s :lead-to.gave-up))))
+          (is (some? (:because (first (events-of s :stopped)))) "the failed fetch's ending is the because")
           (is (empty? (tu/walked-to (:eng s))) "the body did not move"))))))
 
 (deftest an-animal-in-anothers-zone-is-not-led-unless-ignored

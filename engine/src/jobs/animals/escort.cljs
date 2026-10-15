@@ -1,6 +1,7 @@
 (ns jobs.animals.escort
   "Walking a led or lured animal along: the legs of the walk, the looks at the animal after each, the wait for it, and shutting the gates left open. State lives in the caller's job memory."
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -31,7 +32,8 @@
 
 (defn ^:async close-up!
   "Shut the gates the :leave-open legs left open (the animal followed through them): their entries become shut-able and a
-  jobs.maintenance.shut-doors child shuts them. :yield while that child waits, else (conclude! c reason) ends the job."
+  jobs.maintenance.shut-doors child shuts them. :yield while that child waits, else (conclude! c reason) ends the job
+  (a shut-doors child that ended short of done is told in a warn escort.shut-failed)."
   [c conclude!]
   (let [mine (walk-entries c)]
     (doseq [e mine :when (false? (:shut? e))]
@@ -39,9 +41,13 @@
       (ctx/remember! c :opened (assoc e :shut? true) pass/opened-policy))
     (if (empty? mine)
       (conclude! c (:ending (ctx/mem c)))
-      (if (= :done (await (ctx/call-child c :shut 'jobs.maintenance.shut-doors {:radius (shut-radius (doors/self-pos (:primitives c)) mine)})))
-        (conclude! c (:ending (ctx/mem c)))
-        :yield))))
+      (let [e (await (ctx/call c :shut 'jobs.maintenance.shut-doors {:radius (shut-radius (doors/self-pos (:primitives c)) mine)}))]
+        (if (= :continue e)
+          :yield
+          (do (when-not (= :done (:kind e))
+                (ctx/emit! c :escort.shut-failed :warn {:kind (:kind e) :reason (contract/cause-key e)
+                                                        :text (str "the gates the legs opened were not all shut: " (name (:kind e)))}))
+              (conclude! c (:ending (ctx/mem c)))))))))
 
 (defn animal-now
   "The led animal as the sensing shows it, or nil when it is not seen."
@@ -200,10 +206,10 @@
   ([c] (wait-for-animal! c :leave-open))
   ([c doors]
   (if-let [to (:back-to (ctx/mem c))]
-    (if (= :done (await (child/call-walk c :back {:pos to :range 2 :doors doors :escalate false :zone-tolls true
-                                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
-      :again
-      :yield)
+    (if (= :continue (await (child/call-walk* c :back {:pos to :range 2 :doors doors :escalate false :zone-tolls true
+                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+      :yield
+      :again)
     (do (await (child/pause! c (/ wait-look-ms 1000) :waiting-for-animal))
         (ctx/hold-still! c nil)
         :again))))
@@ -231,15 +237,15 @@
         (loop []
           (let [{:keys [leg searching]} (await (leg-plan c target range))
                 r (when-not searching
-                    (await (child/call-walk c slot
-                                            {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+                    (await (child/call-walk* c slot
+                                             {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
             (when-not searching (ctx/update-mem! c dissoc :search-rounds))
             (cond
               searching (let [n (inc (:search-rounds (ctx/mem c) 0))]
                           (ctx/update-mem! c assoc :search-rounds n)
                           (if (< max-search-rounds n) :failed :searching))
-              (not= :done r) :waiting
-              (not (:arrived (ctx/child-result c slot))) :failed
+              (= :continue r) :waiting
+              (not (and (= :done (:kind r)) (:arrived (:data r)))) :failed
               :else (let [problem (escort-problem c gap)]
                       (cond
                         (= :wait problem) (if leg

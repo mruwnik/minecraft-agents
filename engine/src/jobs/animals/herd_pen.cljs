@@ -406,10 +406,10 @@
 (defn ^:async go!
   "One round of a go-to (range 0, :doors :never) to the cell: :arrived, :failed or nil while it goes on."
   [c cell]
-  (let [r (await (child/call-walk c :walk {:pos (u/cell-pos cell) :range 0 :doors :never :escalate false}))]
+  (let [r (await (child/call-walk* c :walk {:pos (u/cell-pos cell) :range 0 :doors :never :escalate false}))]
     (cond
-      (not= :done r) nil
-      (:arrived (ctx/child-result c :walk)) :arrived
+      (= :continue r) nil
+      (and (= :done (:kind r)) (:arrived (:data r))) :arrived
       :else :failed)))
 
 (defn ^:async go-then!

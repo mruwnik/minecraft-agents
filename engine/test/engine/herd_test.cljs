@@ -1257,11 +1257,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [orig child/call-walk
+        (let [orig child/call-walk*
               backs (atom [])
               s (submit! (setup (world {:entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground})) {:target 1 :radius 60})
               seen (atom false)]
-          (set! child/call-walk (fn [c slot opts] (when (= :back slot) (swap! backs conj (:doors opts))) (orig c slot opts)))
+          (set! child/call-walk* (fn [c slot opts] (when (= :back slot) (swap! backs conj (:doors opts))) (orig c slot opts)))
           (try
             (doseq [act ["steer" "wait"]]
               (.override (.-world (:p s)) act
@@ -1276,7 +1276,7 @@
             (await (run-ticks s 900))
             (is (seq @backs) "the body walked back for the cow")
             (is (every? #{:never} @backs) (pr-str @backs))
-            (finally (set! child/call-walk orig))))))))
+            (finally (set! child/call-walk* orig))))))))
 
 (deftest a-penned-cow-that-vanishes-near-the-pen-is-not-counted-as-inside
   (async done

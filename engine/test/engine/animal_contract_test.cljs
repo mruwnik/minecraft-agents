@@ -271,8 +271,9 @@
                  (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos}) (assoc world :entities [])))))
           (is (= {:event :stopped :kind :nothing-possible :reason :animal-stalled}
                  (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos}) (assoc world :entities [(cow-at 1 3 {:trail 9})])))))
-          (is (= {:event :stopped :kind :limit-reached :reason :timeout}
-                 (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos :spend {:time 0}}) world)))))))))
+          (is (= {:event :completed}
+                 (select-keys (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos :spend {:time 0}}) world)) [:event]))
+              "shadow mode: the job does not end itself on the wall clock"))))))
 
 (deftest lure-to-ends-with-a-kind-and-a-cause
   (async done

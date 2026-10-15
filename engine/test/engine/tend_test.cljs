@@ -114,6 +114,21 @@
           (is (= {:skipped :no-food} (get-in (done-event s) [:steps :breed])))
           (is (true? (finished? s))))))))
 
+(deftest a-child-that-fails-is-booked-with-its-kind-and-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3) leather-on-the-ground]} 50)]
+          (.override (.-world (:p s)) "interact"
+                     (fn [_token _args _impl] (js/Promise.resolve #js {:status "out-of-reach"})))
+          (core/submit! (:eng s) (spec {:target 4}) {})
+          (dotimes [_ 30]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (= {:ended :nothing-possible :cause :unreachable :fed 0 :reason :unreachable}
+                 (get-in (done-event s) [:steps :breed])))
+          (is (true? (finished? s))))))))
+
 (deftest one-adult-cannot-breed
   (async done
     (tu/run-async done

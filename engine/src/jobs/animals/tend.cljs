@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.standing :as standing]
             [jobs.lib.started :as started]
@@ -59,7 +60,10 @@
 
 (def target [:plan :part :box])
 
-(def defaults {})
+(a/defargs settings
+  {::time-s {:default 600 :doc "Seconds a tend pass may take." :spec (a/num-in 0 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
 
 (def steps [:breed :cull :shear :collect :deposit])
 
@@ -256,7 +260,7 @@
     (ctx/end c :done nil out)))
 
 (defn ^:async step-steps
-  "One step: finish, or one call of the next step's child. :again after it ended (done or declined), :yield while it waits on the world, :done at the end."
+  "One step: finish, or one call of the next step's child. :again after it ended (a failed child is booked with its kind and cause), :yield while it waits on the world, :done at the end."
   [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {}))
@@ -266,21 +270,22 @@
       (finish! c (:report p))
       (let [step (:slot call)
             _ (ctx/update-mem! c assoc :call-args (:args call))
-            r (await (ctx/call-child c step (:job call) (:args call)))]
-        (case r
-          :done (do (ctx/update-mem! c #(-> % (update :todo rest) (dissoc :call-args) (assoc-in [:report step] (summary step (ctx/child-result c step)))))
-                    :again)
-          :declined (do (ctx/update-mem! c #(-> % (update :todo rest) (dissoc :call-args) (assoc-in [:report step] {:skipped :declined})))
-                        :again)
-          :yield)))))
+            e (await (ctx/call c step (:job call) (:args call)))
+            book! (fn [entry] (ctx/update-mem! c #(-> % (update :todo rest) (dissoc :call-args) (assoc-in [:report step] entry))))]
+        (cond
+          (= :continue e) :yield
+          (= :done (:kind e)) (do (book! (summary step (:data e))) :again)
+          :else (do (book! (merge (when (seq (:data e)) (summary step (:data e)))
+                                  {:ended (:kind e) :cause (contract/cause-key e)}))
+                    :again))))))
 
 (defn ^:async step
   "One step: first a look at the box when the body lists no animal in it, else the next step child (step-steps)."
   [c]
   (if (look-due? c)
-    (let [r (await (ctx/call-child c :look 'jobs.movement.go-to {:pos (look-pos (:box (:args c))) :range 3}))]
-      (when-not (= :yield r) (ctx/update-mem! c assoc :looked true))
-      (if (= :yield r) :yield :again))
+    (let [r (await (child/call-walk* c :look {:pos (look-pos (:box (:args c))) :range 3}))]
+      (when-not (= :continue r) (ctx/update-mem! c assoc :looked true))
+      (if (= :continue r) :yield :again))
     (await (step-steps c))))
 
 (defn ^:async round

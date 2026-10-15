@@ -122,13 +122,14 @@
 
 (a/defargs settings
   {::pace-ms {:default 100 :doc "A step that changed nothing and took less than this is followed by a pause of settle-ms." :spec (a/int-in 0 nil)}
+   ::time-s {:default 900 :doc "Seconds a herd run may take." :spec (a/num-in 0 nil)}
    ::animal-timeout-s {:default 180 :doc "Seconds one animal may take from its lead on until it is let go." :spec (a/num-in 0 nil)}})
 (defn pace-ms [] (settings/get settings ::pace-ms))
 (defn animal-timeout-s [] (settings/get settings ::animal-timeout-s))
 
 (def target [:mob :box])
 
-(def defaults {})
+(def defaults {:spend {:time ::time-s}})
 
 (defn box-sides
   "The box's lengths in cells along x and z that a gate's axis could run, only the :gate's when it stands beside a side."
@@ -201,7 +202,7 @@
           (and searching (<= n escort/max-search-rounds)) :continue
           searching (lure-lost! c :unreachable)
           (not leg) (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
-          :else (do (await (child/call-walk c :walk {:pos leg :range 1 :doors :never :escalate false}))
+          :else (do (await (child/call-walk* c :walk {:pos leg :range 1 :doors :never :escalate false}))
                     :continue))))))
 
 (defn ^:async step! [c phase]

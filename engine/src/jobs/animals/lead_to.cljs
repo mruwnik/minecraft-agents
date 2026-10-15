@@ -4,7 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
-            [jobs.lib.blocks :as b]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
@@ -54,10 +54,8 @@
   - :none (no animal seen within :radius), :lead-broke, :lost, :animal-stalled (the animal is still on the lead): as above.
   - :unreachable: the walk gave up (the animal is still on the lead).
   - :tie-failed: the post did not take the animal (still on the lead).
-  - :timeout: limit-reached; the call's :spend :time (default ::timeout-s) from the first round, the lead fetch and
-    the children included (a cut walk leaves the animal on the lead).
   - :no-fence: condition-failed, the post turned out not to be a fence on arrival.
-  - :no-lead: no lead carried and obtain could not get one (the :text says why).
+  - :no-lead: no lead carried and obtain could not get one (the :text says why; the fetch's ending is the :because).
   - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :all-leashed) when no animal got on the lead, or
     of jobs.animals.unleash (:unreachable, :none) when the lead would not come off; :refused and :no-zones are
     condition-failed.
@@ -100,14 +98,18 @@
    :unleashed [:done nil]
    :no-fence [:condition-failed :no-fence]
    :refused [:condition-failed :refused]
-   :no-zones [:condition-failed :no-zones]
-   :timeout [:limit-reached {:line :time :reason :timeout}]})
+   :no-zones [:condition-failed :no-zones]})
 
 (defn end!
-  "End the call with the ending of reason (ending-of) and data."
+  "End the call with the ending of reason (ending-of) and data; a failed child's ending kept in :because is attached."
   [c reason data]
   (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
-    (ctx/end c kind cause data)))
+    (contract/with-because (ctx/end c kind cause data) (:because (ctx/mem c)))))
+
+(defn child-reason
+  "Why a child that did not finish done stopped: the :reason its data names, else its cause."
+  [e]
+  (or (get-in e [:data :reason]) (contract/cause-key e)))
 
 (defn conclude!
   "Emit the outcome, hand it to the parent and end the job."
@@ -130,6 +132,12 @@
   [c reason]
   (ctx/update-mem! c assoc :ending reason)
   :again)
+
+(defn fail-with!
+  "Finish with reason, the ending e of the child that failed kept as the :because."
+  [c reason e]
+  (ctx/update-mem! c assoc :because e)
+  (finish! c reason))
 
 (defn destination [c]
   (let [{:keys [pos fence]} (:args c)]
@@ -179,27 +187,22 @@
 (defn ^:async get-lead!
   "Without a lead: a jobs.items.obtain child gets one (chest or craft). Any child failure ends :no-lead."
   [c]
-  (let [oargs {:item "lead" :count 1 :explore false}
-        r (await (ctx/call-child c :obtain 'jobs.items.obtain oargs))]
+  (let [e (await (need/item! c "lead" 1 {:slot :obtain :explore false}))]
     (cond
-      (= :continue r) :yield
-      (= :declined r) (do (ctx/update-mem! c assoc :lead-why (some-> (b/child-wait c :obtain 'jobs.items.obtain oargs) :reason name))
-                          (finish! c :no-lead))
+      (= :continue e) :yield
       (animals/lead-carried? c) (do (set-phase! c :leash) :again)
-      :else (do (ctx/update-mem! c assoc :lead-why (some-> (ctx/child-result c :obtain) :reason name))
-                (finish! c :no-lead)))))
+      :else (do (ctx/update-mem! c assoc :lead-why (name (contract/cause-key e)))
+                (fail-with! c :no-lead e)))))
 
 (defn ^:async leash! [c]
   (let [{:keys [mob radius]} (:args c)
-        r (await (ctx/call-child c :leash 'jobs.animals.leash
-                                 (cond-> {:mob mob :radius radius :center (:origin (ctx/mem c))} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
-    (if-not (= :done r)
-      :yield
-      (let [res (ctx/child-result c :leash)]
-        (if-not (= :leashed (:reason res))
-          (finish! c (get-in res [:ending :data :reason] (:reason res)))
-          (do (ctx/update-mem! c assoc :animal (:animal res) :still-led true :phase :walk)
-              :again))))))
+        e (await (ctx/call c :leash 'jobs.animals.leash
+                           (cond-> {:mob mob :radius radius :center (:origin (ctx/mem c))} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
+    (cond
+      (= :continue e) :yield
+      (not= :done (:kind e)) (fail-with! c (child-reason e) e)
+      :else (do (ctx/update-mem! c assoc :animal (get-in e [:data :animal]) :still-led true :phase :walk)
+                :again))))
 
 (def lead-length
   "How far behind a walking body a led animal trails."
@@ -320,14 +323,14 @@
 
 (defn ^:async let-go! [c]
   (set-phase! c :release)
-  (let [r (await (ctx/call-child c :unleash 'jobs.animals.unleash {:mob (:mob (:args c)) :animal (:animal (ctx/mem c))
-                                                                    :radius (:watch-radius (:args c))
-                                                                    :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-    (if-not (= :done r)
-      :yield
-      (let [reason (:reason (ctx/child-result c :unleash))]
-        (when (= :unleashed reason) (ctx/update-mem! c assoc :still-led false))
-        (finish! c reason)))))
+  (let [e (await (ctx/call c :unleash 'jobs.animals.unleash {:mob (:mob (:args c)) :animal (:animal (ctx/mem c))
+                                                              :radius (:watch-radius (:args c))
+                                                              :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (cond
+      (= :continue e) :yield
+      (not= :done (:kind e)) (fail-with! c (child-reason e) e)
+      :else (do (ctx/update-mem! c assoc :still-led false)
+                (finish! c (child-reason e))))))
 
 (defn tied?
   "True when the animal is held by something else than this body."
@@ -375,16 +378,13 @@
                 (await (let-go! c))))))
 
 (defn ^:async step [c]
-  (let [now (ctx/now c)
-        {:keys [fence]} (:args c)]
-    (ctx/update-mem! c update :started #(or % now))
-    (let [{:keys [phase started animal]} (ctx/mem c)
+  (let [{:keys [fence]} (:args c)]
+    (let [{:keys [phase animal]} (ctx/mem c)
           a (when animal (escort/animal-now c))]
       (when a (ctx/update-mem! c dissoc :unseen-since))
       (cond
         (:ending (ctx/mem c)) (await (escort/close-up! c conclude!))
         (and fence (contains? #{nil :arrive} phase) (not-fence? c)) (finish! c :no-fence)
-        (>= (- now started) (* 1000 (time-limit c))) (finish! c :timeout)
         (nil? phase) (do (ctx/update-mem! c assoc :origin (u/self-pos c))
                          (set-phase! c (if (animals/lead-carried? c) :leash :get-lead)) :again)
         (= :get-lead phase) (await (get-lead! c))
