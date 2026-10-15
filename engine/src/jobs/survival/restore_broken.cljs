@@ -10,14 +10,13 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
-            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
 (def doc
   "Put back what a job broke in another's zone, claim or plan, and the holes a go-to escalation dug there (the :tidy
   entries jobs.lib.tidy and jobs.movement.go-to write; the body's own diggings elsewhere stay). A dug block is placed
   again from an item of the same name carried, or for an escalation hole what the block drops (cobblestone for stone). An escalation hole waits while
-  the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. It digs nothing else.
+  the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. Both go through jobs.blocks.place / jobs.blocks.dig children (zones ignored on purpose, nothing fetched), so a cell with nothing solid beside it cannot be placed. It digs nothing else.
   Works only when the body is safe: health at least :min-health and no hostile within :danger-radius.
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),
   with at most 3 tries per cell.
@@ -198,15 +197,14 @@
   (or (some->> (tidy/entries c) (filter #(= cell (:cell %))) first (tidy/place-item (:primitives c))) was))
 
 (defn ^:async put-back!
-  "Place the recorded block again, or dig the placed one. True when it worked."
-  [c {:keys [cell action was] :as e}]
+  "Place the recorded block again (a jobs.blocks.place child), or dig the placed one (jobs.blocks.dig): both act in
+  the cell of another's zone on purpose. True when it worked, :continue while the child waits."
+  [c {:keys [cell action was]}]
   (let [pos (zipmap [:x :y :z] cell)
-        _ (when-not (= :dig action) (await (tools/equip-tool! c (:now e) {:fast true})))
-        res (await (if (= :dig action)
-                     (ctx/act c :place (clj->js {:pos pos :item (place-item c cell was)}))
-                     (ctx/act c :dig (clj->js {:pos pos}))))
-        _ (when-not (= :dig action) (await (tools/note-wear! c)))]
-    (contains? #{"placed" "dug"} (.-status res))))
+        r (await (if (= :dig action)
+                   (child/run!* c :put 'jobs.blocks.place {:pos pos :item (place-item c cell was) :ignore-zones? true :fetch false :clear false})
+                   (child/run!* c :put 'jobs.blocks.dig {:pos pos :ignore-zones? true :fetch false :collect false :need-drop false})))]
+    (if (= :continue r) :continue (= :done (:kind r)))))
 
 (defn ^:async restore-one!
   "One try at putting entry e back: a walk that yields (:continue) is no try (the next pass walks again); else the
@@ -217,12 +215,13 @@
     (if (= :continue walked)
       :continue
       (do (tidy/count-try! c cell)
-          (if (and walked (await (put-back! c e)))
-            (do (tidy/forget-cell! c cell)
-                (ctx/update-mem! c update :restored (fnil conj []) cell)
-                (ctx/update-mem! c update :seen (fnil conj #{}) cell))
-            (when (>= (inc tries) (tidy/max-tries))
-              (skip! c e :gave-up)))))))
+          (let [put (when walked (await (put-back! c e)))]
+            (cond
+              (= :continue put) :continue
+              put (do (tidy/forget-cell! c cell)
+                      (ctx/update-mem! c update :restored (fnil conj []) cell)
+                      (ctx/update-mem! c update :seen (fnil conj #{}) cell))
+              (>= (inc tries) (tidy/max-tries)) (skip! c e :gave-up)))))))
 
 (defn report!
   "Forget the cells that are settled (changed, given up), end: :done, or stopped :not-restored while a cell was not put
@@ -299,12 +298,15 @@
                   (skip! c e why))
                 :again)
       :step-clear (do (await (step-clear! c e waiting)) :again)
-      :restore (do (await (restore-one! c e (:reach (:args c)))) :again))))
+      :restore (if (= :continue (await (restore-one! c e (:reach (:args c))))) :continue :again))))
 
 (defn ^:async round [c]
   (loop [i 0]
     (cond
       (not (ctx/alive? c)) :continue
       (<= (max-passes) i) (report! c)
-      (= :again (await (pass! c))) (do (await (pace/pace!)) (recur (inc i)))
-      :else (report! c))))
+      :else (let [r (await (pass! c))]
+              (case r
+                :again (do (await (pace/pace!)) (recur (inc i)))
+                :continue :continue
+                (report! c))))))

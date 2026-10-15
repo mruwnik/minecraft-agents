@@ -23,9 +23,9 @@
 
 (defn setup
   "zs/setup with the fake's hitbox mode: the body stands at the middle of cells and the server refuses a block
-  placed into its 0.6 x 1.8 hitbox."
+  placed into its 0.6 x 1.8 hitbox. A block beside the cell at 0,65,0 gives place something to place against."
   [world zones]
-  (zs/setup (assoc world :bodyHitbox true) zones))
+  (zs/setup (-> world (assoc :bodyHitbox true) (update :blocks #(merge {"-1,65,0" "stone"} %))) zones))
 
 (defn ended-runs
   "The :completed or :stopped events of the tidy runs that carry key k."
@@ -50,7 +50,7 @@
 
 (def enclosed-body
   "The body at 0,64,0 shut in by stone on every side, as a breathe trespass finds it; a floor at y 63 is under it only."
-  {:blocks (merge {"0,66,0" "stone" "0,63,0" "stone" "1,64,0" "stone" "-1,64,0" "stone" "0,64,1" "stone" "0,64,-1" "stone"
+  {:blocks (merge {"1,66,0" "stone" "0,66,0" "stone" "0,63,0" "stone" "1,64,0" "stone" "-1,64,0" "stone" "0,64,1" "stone" "0,64,-1" "stone"
                             "0,65,0" "stone" "1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"})})
 
 (deftest breathe-records-what-it-dug-in-a-foreign-zone-only
@@ -85,6 +85,7 @@
           (await (zs/run-until-empty eng 6))
           (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))))
           (is (= [] (zs/calls p "dig")) "digs nothing")
+          (is (some #(and (= :child_started (:kind %)) (= :put (:slot %))) @seen) "the block goes back through a child job")
           (is (= [] (tidy-entries eng)))
           (is (= [[[0 65 0]]] (mapv :cells (restored-runs seen))))
           (is (= [] (not-restored-runs seen)) "nothing left, no warn"))))))
@@ -466,7 +467,7 @@
 (defn ^:async backed-off!
   "A body by an unplaceable entry with the tidy-pending trigger as registered; returns the setup once the reflex ended."
   [world]
-  (let [{:keys [eng seen] :as s} (setup-with-backoff (merge-with into aside world {:inventory [{:name "wheat_seeds" :count 4}]})
+  (let [{:keys [eng seen] :as s} (setup-with-backoff (merge-with into aside {:blocks {"-1,65,0" "stone"}} world {:inventory [{:name "wheat_seeds" :count 4}]})
                                                      [(zs/whole-zone "Miles")])]
     (seed! eng [unplaceable])
     (core/register-reflex! eng {:trigger :tidy-pending})
@@ -683,8 +684,7 @@
             (let [{:keys [eng seen]} (restore! open-floor-world [(zs/whole-zone "Miles")] [(dug-cell [3 64 0])])]
               (dotimes [_ 6] (await (core/tick! eng)))
               (is (= [0] (mapv :tries (tidy-entries eng))) "yielding go-to costs no try")
-              (is (= [[{:cell [3 64 0] :was "stone" :why :unvisited}]] (mapv :cells (not-restored-runs seen)))
-                  "kept for the next run, never :gave-up")))))))))
+              (is (= [] (not-restored-runs seen)) "the job yields, it is no ending and never :gave-up")))))))))
 
 (deftest a-run-that-hits-the-pass-cap-with-cells-waiting-ends-stopped-not-done
   (async done
