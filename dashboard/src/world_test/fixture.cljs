@@ -545,6 +545,10 @@
                 (str "effect give " body " " effect " " (or seconds 600) " " (or amp 0) " true")))
         (cond-> spawnpoint (conj (str "spawnpoint " body " " (xyz-str (abs-pos origin spawnpoint))))))))
 
+(def hurt-flush-ms
+  "Longer than the engine's hurt merge window (engine.hurt/window-ms 1000) plus the log write."
+  1500)
+
 (declare reply-pos)
 
 (defn start-hurt

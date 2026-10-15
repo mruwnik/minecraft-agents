@@ -1337,3 +1337,16 @@
                    (is (empty? @sent) "without --allow-time the rule is not touched")
                    (fs/rmSync dir #js {:recursive true})
                    (done)))))))
+
+(deftest await-hurt-flush-sleeps-only-the-rest-of-the-merge-window
+  (let [run (fn [elapsed]
+              (let [slept (atom [])]
+                (.then (r/await-hurt-flush! {:sleep (fn [ms] (swap! slept conj ms) (js/Promise.resolve nil)) :now (constantly (+ 5000 elapsed))} 5000)
+                       (fn [_] @slept))))]
+    (async done
+      (-> (run 0)
+          (.then (fn [slept] (is (= [f/hurt-flush-ms] slept) "a hurt from the login is still being merged: wait it out")))
+          (.then #(run 400))
+          (.then (fn [slept] (is (= [(- f/hurt-flush-ms 400)] slept))))
+          (.then #(run (+ f/hurt-flush-ms 1)))
+          (.then (fn [slept] (is (empty? slept) "already flushed: no sleep") (done)))))))

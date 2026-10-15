@@ -1401,6 +1401,13 @@
                            :else (.then (send [tp]) (fn [_] (.then (sleep 300) #(check (dec retries))))))))))]
       (check 16))))
 
+(defn await-hurt-flush!
+  "Sleeps the rest of the body's hurt merge window since parked-at (ms): a hit taken at login, before the park, is logged up to
+  that long later and would be read as a suffocation at the start. io: {:sleep ms->promise, :now -> ms}."
+  [{:keys [sleep now]} parked-at]
+  (let [left (- f/hurt-flush-ms (- (now) parked-at))]
+    (if (pos? left) (sleep left) (js/Promise.resolve nil))))
+
 (defn build-plot!
   "Sends the plot's setup and block commands (idempotent), then checks the replies: a plot whose chunks were not loaded
   yet is built again after a pause, up to 3 times. Resolves to nil when built, else to the failure message (a setup
@@ -1482,6 +1489,7 @@
         stop-sweep (atom (fn []))
         pre-register (atom nil)
         setup-cursor (atom nil)
+        parked-at (atom nil)
         start-cursor (log-cursor (events-file opts))
         weather (atom nil)
         result (fn [m] (cond-> (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m)
@@ -1531,11 +1539,13 @@
                        (.then #(read-weather! rcon!))
                        (.then #(reset! weather %))
                        (.then (fn [] (ev/emit! (ev/phase :setup)) (rcon! (f/park-commands (:body opts)))))
+                       (.then #(reset! parked-at (js/Date.now)))
                        (.then (fn [] (build-plot! {:send rcon! :sleep sleep} grid origin rc)))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(write-plans-settled! opts rc))
                        (.then #(reset! plan-files %))
                        (.then #(seed-shared! opts origin c))
+                       (.then #(await-hurt-flush! {:sleep sleep :now js/Date.now} @parked-at))
                        (.then #(reset! setup-cursor (log-cursor (events-file opts))))
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))
