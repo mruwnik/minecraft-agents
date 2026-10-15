@@ -218,7 +218,7 @@
                 (storage/add-to-group! c spot)
                 (u/progress! c)
                 :again)
-            (= :nothing-possible (:kind e))
+            (and (= :nothing-possible (:kind e)) (not= :unreachable (contract/cause-key e)))
             (do (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
                 (give-up! c :chest_unusable "could not place a new storage chest" :no-chest-spot))
             :else

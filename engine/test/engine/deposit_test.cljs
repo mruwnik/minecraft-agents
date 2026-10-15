@@ -272,11 +272,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [cause [:own-body :no-support :not-allowed :occupied :unreachable]]
+        (doseq [[kind cause] [[:condition-failed :own-body] [:condition-failed :no-support] [:condition-failed :not-allowed]
+                              [:condition-failed :occupied] [:nothing-possible :unreachable]]]
           (let [{:keys [eng p]} (setup-far one-chest-world)]
             (wt/know-place! eng :chest chest)
             (full-at p [10 64 0])
-            (let [eng (place-ends-at eng (fn [c] (ctx/end c :condition-failed {:reason cause :pos [11 64 0]})))
+            (let [eng (place-ends-at eng (fn [c] (ctx/end c kind {:reason cause :pos [11 64 0]})))
                   result (await (wt/ending-of eng job {:items ["dirt"]} 60))
                   new-cells (disj (chests-in p) [10 64 0])]
               (is (= {:kind :done} result) (pr-str cause))
@@ -307,6 +308,22 @@
                 result (await (wt/ending-of eng job {:items ["dirt"]} 80))]
             (is (= {:kind :nothing-possible :cause :no-chest-spot} (select-keys result [:kind :cause])))
             (is (= #{[10 64 0]} (chests-in p)))))))))
+
+(deftest deposit-tries-every-spot-when-each-place-ends-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far one-chest-world)
+              tried (atom #{})]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (let [eng (assoc-in eng [:jobs 'jobs.blocks.place :round]
+                              (fn [c]
+                                (swap! tried conj (storage/cell-of (:pos (:args c))))
+                                (ctx/end c :nothing-possible {:reason :unreachable})))
+                result (await (wt/ending-of eng job {:items ["dirt"]} 120))]
+            (is (= {:kind :nothing-possible :cause :no-chest-spot} (select-keys result [:kind :cause])))
+            (is (< 3 (count @tried)) "more spots than the failure count of a give-up")))))))
 
 (deftest deposit-with-fetching-off-does-not-fetch-the-chest
   (async done
