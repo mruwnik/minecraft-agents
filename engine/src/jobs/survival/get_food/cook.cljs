@@ -7,6 +7,7 @@
             [engine.memory :as mem]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.furnace :as furnace]
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
@@ -121,7 +122,7 @@
         _ (ctx/update-mem! c assoc :cooking cooking)]
     (loop [n 1]
       (let [e (await (child/run!* c :cook 'jobs.items.smelt args {:max-calls 1}))
-            loaded? (some? (:owed (get-in (ctx/mem c) [:children :cook])))]
+            loaded? (furnace/child-loaded? c :cook)]
         (cond
           (not (ctx/alive? c)) :continue
           (and (= :continue e) (not loaded?) (< n (child/default-max-calls))) (do (await (child/pace!)) (recur (inc n)))

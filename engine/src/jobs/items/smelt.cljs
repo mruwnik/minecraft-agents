@@ -9,6 +9,7 @@
             [jobs.items.smelt.plan :as sp]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.lib.furnace :as furnace]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.need :as need]
@@ -138,16 +139,11 @@
     (ctx/update-mem! c assoc :ready-at (+ now ms) :unlit-from (+ now (grace-ms)))
     :continue))
 
-(defn loaded?
-  "Whether a smelt call's memory m holds a load put in the furnace."
-  [m]
-  (some? (:owed m)))
-
 (defn cooking?
   "Whether a load is owed and its cook is not due: the round only yields."
   [c]
   (let [m (ctx/mem c)]
-    (and (loaded? m) (some? (:ready-at m)) (not (due? c m)))))
+    (and (furnace/loaded? m) (some? (:ready-at m)) (not (due? c m)))))
 
 (def condition-reasons
   "Give-ups that name a missing or wrong fact; any other ends nothing-possible."
