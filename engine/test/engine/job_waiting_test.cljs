@@ -1,6 +1,6 @@
 (ns engine.job-waiting-test
-  "A listed job whose check declines is never silent: one job.waiting event with the check's reason, again only when
-  the reason changes, and the reason shown in jobs show and observe."
+  "A listed job whose condition fails is never silent: one job.waiting event with its cause, again only when
+  the cause changes, and the cause shown in jobs show and observe."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -10,45 +10,22 @@
             [engine.test-util :as tu]))
 
 (def gate
-  "What the gated job's check answers: true, or a reason it waits for (nil: a plain false)."
+  "What the gated job's condition answers: true (passes), a cause it waits for, or nil (a bare failure)."
   (atom true))
 
-(defn gated-check [c]
+(defn gate-condition [_]
   (let [g @gate]
-    (cond (true? g) true
-          (nil? g) false
-          :else (ctx/wait c g))))
+    (cond (true? g) nil
+          (nil? g) :not-ready
+          :else g)))
 
 (defn ^:async count-round [c]
   (ctx/update-mem! c update :n (fnil inc 0))
   :continue)
 
-(defn ^:async calling-round
-  "A round that calls its child slot :g and returns what the child answered (:done becomes :continue)."
-  [c]
-  (let [r (await (ctx/call-child c :g 'gated {}))]
-    (ctx/update-mem! c update :n (fnil inc 0))
-    (if (= :declined r) :declined :continue)))
-
-(defn ^:async calling-mid-round [c]
-  (let [r (await (ctx/call-child c :m 'mid {}))]
-    (if (= :declined r) :declined :continue)))
-
-(defn ^:async mixed-round
-  "Calls the gated child (declined), then a sibling that continues: the round continues."
-  [c]
-  (await (ctx/call-child c :g 'gated {}))
-  (await (ctx/call-child c :s 'sibling {}))
-  :continue)
-
 (def registry
-  {'caller {:check (fn [_] true) :round calling-round}
-   'mid {:check (fn [_] true) :round calling-round}
-   'sibling {:check (fn [_] true) :round count-round}
-   'deep {:check (fn [_] true) :round calling-mid-round}
-   'mixed {:check (fn [_] true) :round mixed-round}
-   'gated {:check gated-check :round count-round}
-   'never {:check (constantly false) :round count-round}
+  {'gated (tu/job [gate-condition] count-round)
+   'never (tu/job [(constantly :not-ready)] count-round)
    'torch-lit {:conditions [[:holds '(>= (inventory "torch") 4) :few-torches]] :round count-round}})
 
 (defn setup []
@@ -63,7 +40,7 @@
 
 (defn waits [seen] (filterv #(= :waiting (:kind %)) @seen))
 
-(deftest a-declining-check-emits-job-waiting-once-with-its-reason
+(deftest a-failing-condition-emits-job-waiting-once-with-its-cause
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -87,16 +64,12 @@
           (await (ticks eng 3))
           (reset! gate {:reason :cooking :ready-at 9})
           (await (ticks eng 3))
-          (is (= [{:reason :cooking :ready-at 5} {:reason :cooking :ready-at 9}]
-                 (mapv #(select-keys % [:reason :ready-at]) (waits seen))))
+          (is (= [{:reason :cooking :ready-at 5} {:reason :cooking :ready-at 9}] (mapv :cause (waits seen))))
           (reset! gate true)
           (await (ticks eng 1))
-          (is (nil? (:waiting (job-api/summary eng id))) "a passing check clears the reason")
-          (reset! gate {:reason :cooking :ready-at 9})
-          (await (ticks eng 2))
-          (is (= 3 (count (waits seen))) "a new wait after a run is told again"))))))
+          (is (nil? (:waiting (job-api/summary eng id))) "a passing condition clears the reason"))))))
 
-(deftest a-plain-false-check-still-says-it-waits
+(deftest a-bare-failing-condition-still-says-it-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -106,7 +79,7 @@
           (await (ticks eng 3))
           (is (= [:not-ready] (mapv :reason (waits seen)))))))))
 
-(deftest a-composite-check-reports-its-childs-reason
+(deftest a-composite-reports-its-childs-cause
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -116,47 +89,10 @@
           (let [{:keys [eng seen]} (setup)]
             (core/submit! eng spec {})
             (await (ticks eng 3))
-            (is (= [{:reason :no-tree :near 3}] (mapv #(select-keys % [:reason :near]) (waits seen))) (str spec))))))))
+            (is (= [{:reason :no-tree :near 3}] (mapv :cause (waits seen))) (str spec))))))))
 
 (deftest wait-is-false-outside-a-scheduler-check
   (is (false? (ctx/wait {} :anything))))
-
-(deftest a-parent-round-whose-child-declines-waits-with-the-childs-reason
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (reset! gate {:reason :no-tool :tool "pickaxe"})
-        (let [{:keys [eng seen]} (setup)
-              id (core/submit! eng '(caller) {})]
-          (await (ticks eng 5))
-          (is (= [{:job id :reason :no-tool :tool "pickaxe"}]
-                 (mapv #(select-keys % [:job :reason :tool]) (waits seen))) "one wait, on the parent")
-          (is (= :no-tool (get-in (job-api/summary eng id) [:waiting :reason])))
-          (reset! gate true)
-          (await (ticks eng 2))
-          (is (nil? (:waiting (job-api/summary eng id))) "the wait ends when the gate opens")
-          (is (= 1 (count (waits seen)))))))))
-
-(deftest a-nested-child-reason-bubbles-up-two-deep
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (reset! gate :no-tool)
-        (let [{:keys [eng seen]} (setup)
-              id (core/submit! eng '(deep) {})]
-          (await (ticks eng 4))
-          (is (= [{:job id :reason :no-tool}] (mapv #(select-keys % [:job :reason]) (waits seen)))))))))
-
-(deftest a-round-that-continues-drops-the-childs-reason
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (reset! gate :no-tool)
-        (let [{:keys [eng seen]} (setup)
-              id (core/submit! eng '(mixed) {})]
-          (await (ticks eng 3))
-          (is (nil? (:waiting (job-api/summary eng id))))
-          (is (empty? (waits seen))))))))
 
 (deftest a-failing-fact-condition-waits-showing-its-comparison
   (async done

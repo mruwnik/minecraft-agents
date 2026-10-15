@@ -221,6 +221,14 @@
                        (js/Promise.reject (core/cut-error)))
                    (impl token a))))))
 
+(defn job
+  "A contract job for tests: round under conditions, each a fn of ctx giving nil (passes) or the cause it fails with.
+  The default round ends done."
+  ([] (job [] nil))
+  ([round] (job [] round))
+  ([conditions round]
+   {:conditions (mapv #(vector :fn %) conditions) :round (or round #(ctx/end % :done nil))}))
+
 (defn ^:async run-until-empty
   "Tick eng until its job list is empty, at most n ticks; the ticks run."
   [eng n]

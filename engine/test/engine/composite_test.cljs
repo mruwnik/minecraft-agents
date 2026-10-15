@@ -20,7 +20,7 @@
            :update-mem (fn [f args] (apply swap! mem f args))}]
     [c mem calls]))
 
-(def kid [{:check (constantly true) :round (fn [_] :done)} {}])
+(def kid [(tu/job) {}])
 (def refuses (constantly (contract/ending :condition-failed :refused nil)))
 (def impossible (constantly (contract/ending :impossible :refused nil)))
 
@@ -53,7 +53,7 @@
 (deftest seq-waits-without-calling-a-step-whose-check-fails
   (async done
     (let [[c mem calls] (stub refuses)
-          d (composite/seq-def [[{:check (constantly false) :round (fn [_] :done)} {}]])]
+          d (composite/seq-def [[(tu/job [(constantly :not-ready)] nil) {}]])]
       (-> (round! d c mem)
           (.then (fn [r]
                    (is (= :continue r))
@@ -67,7 +67,7 @@
 (deftest until-stops-when-its-child-is-impossible
   (async done
     (let [[c mem] (stub impossible)
-          d (composite/until-def [{:check (constantly false) :round (fn [_] :done)} {}] kid)]
+          d (composite/until-def [(tu/job [(constantly :not-ready)] nil) {}] kid)]
       (-> (round! d c mem)
           (.then (fn [r]
                    (is (= :impossible (:kind r)))
@@ -112,8 +112,8 @@
 
 (deftest every-combinator-waits-through-its-conditions-with-its-childs-reason
   (let [w {:reason :no-tree :near 3}
-        waits {:check #(ctx/wait % w) :round (fn [_] :done)}
-        never [{:check (constantly false) :round (fn [_] :done)} {}]
+        waits (tu/job [(constantly w)] nil)
+        never [(tu/job [(constantly :not-ready)] nil) {}]
         c {:view (constantly nil) :slots []}]
     (with-redefs [ctx/mem (constantly {})]
       (doseq [[label d] [[:seq (composite/seq-def [[waits {}]])] [:any (composite/any-def [[waits {}] [waits {}]])]
@@ -154,7 +154,7 @@
    (let [clock (atom 1000000)
          ending (atom [kind :nothing-to-do])
          runs (atom 0)
-         eng (core/create {:primitives (tu/fake {}) :jobs {'kid (ending-kid ending runs) 'never {:check (constantly false) :round (fn [_] :done)}} :triggers {} :dir (tu/tmp-dir)
+         eng (core/create {:primitives (tu/fake {}) :jobs {'kid (ending-kid ending runs) 'never (tu/job [(constantly :not-ready)] nil)} :triggers {} :dir (tu/tmp-dir)
                            :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks sinks :now #(deref clock)})})]
      (core/submit! eng spec {})
