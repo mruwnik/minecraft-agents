@@ -566,6 +566,8 @@ export const nightBatchEndArgs = (pass, body, batch) => {
 export const sleepRuleRestoreArgs = (pass, body, dead) => [dead ? '--sleep-rule-restore-dead' : '--sleep-rule-restore', ...nightBatchEndArgs(pass, body, 'x').slice(2)]
 const restoreSleepRule = (script, pass, body, dead) => spawnSync(process.execPath, [script, ...sleepRuleRestoreArgs(pass, body, dead)], { stdio: 'inherit', env: { ...process.env, WORLD_TEST_POOL_PID: String(process.pid) } })
 // stops the leftover bodies of this pool's prefix that no live runner leases (the runner reads its own lease files)
+// Once before the children start: each child would else find the bundle stale and rebuild it in turn.
+const refreshBuild = (script) => spawnSync(process.execPath, [script, '--refresh-build'], { stdio: 'inherit' }).status === 0
 const stopStaleBodies = (script, prefix) => spawnSync(process.execPath, [script, '--stop-stale-bodies', prefix], { stdio: 'inherit' })
 const endNightBatch = (script, pass, body, batch) => new Promise((resolve) => {
   const child = spawn(process.execPath, [script, ...nightBatchEndArgs(pass, body, batch)], { stdio: 'inherit', env: { ...process.env, WORLD_TEST_POOL_PID: String(process.pid) } })
@@ -595,6 +597,7 @@ const nightMain = async (p, byStem, previous, script) => {
   if (!(await waitMin(p, capNow))) return 4
   const cap = capNow()
   const workers = workerSpecs(cap, bodyCap(), p.prefix, p.firstPlot)
+  if (!refreshBuild(script)) return 2
   stopStaleBodies(script, p.prefix)
   const batches = nightBatches(cases, durationsById(previous), { bodies: workers.length })
   console.error(`world-test pool: ${cases.length} night cases in ${batches.length} batches on up to ${workers.length} bodies (${batches.map((b) => `${b.kind}:${b.ids.length}`).join(' ')}; ${cores} cores)`)
@@ -647,6 +650,7 @@ export const main = async (args) => {
   const capNow = () => poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() })
   if (!(await waitMin(p, capNow))) return 4
   const workers = workerSpecs(capNow(), bodyCap(), p.prefix, p.firstPlot)
+  if (!refreshBuild(script)) return 2
   stopStaleBodies(script, p.prefix)
   if (p.passthrough.includes('--allow-time')) restoreSleepRule(script, p.passthrough, workers[0].body, true)
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))

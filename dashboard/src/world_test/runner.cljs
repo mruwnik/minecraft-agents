@@ -24,7 +24,7 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--match-id ID ...] [--repeat N] [--body NAME]\n"
-       "         [--world test] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--trace-dir DIR [--trace-attempt N]] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check] [--stop-stale-bodies PREFIX]\n"
+       "         [--world test] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--trace-dir DIR [--trace-attempt N]] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check] [--stop-stale-bodies PREFIX] [--refresh-build]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
        "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
@@ -54,6 +54,7 @@
       (= a "--sleep-rule-restore") (recur (rest all) (assoc opts :sleep-rule-restore :now))
       (= a "--sleep-rule-restore-dead") (recur (rest all) (assoc opts :sleep-rule-restore :dead))
       (= a "--stop-stale-bodies") (recur more (assoc opts :stop-stale-bodies b))
+      (= a "--refresh-build") (recur (rest all) (assoc opts :refresh-build true))
       (= a "--night-classes") (recur (rest all) (assoc opts :night-classes true))
       (= a "--match-id") (recur more (update opts :match-ids (fnil conj #{}) b))
       (= a "--repeat") (recur more (assoc opts :repeat (js/Number b)))
@@ -1879,6 +1880,7 @@
                                          res)
                                    (log! "world-test --check: " (count res) " cases, " (count (remove #(= :pass (:status %)) res)) " failed")
                                    (check-exit-code res))
+                   (:refresh-build opts) (if (refresh-body-build!) 0 2)
                    (:stop-stale-bodies opts) (do (stop-stale-bodies! (:stop-stale-bodies opts)) 0)
                    (:sleep-rule-restore opts) (-> (restore-sleep-rule! rcon! opts "world-test restores a recorded gamerule" (if (= :dead (:sleep-rule-restore opts)) {:only-dead? true} {:pool (owner-pid)}))
                                                   (.then (fn [_] (when (= :dead (:sleep-rule-restore opts)) (reset-stray-sleep-rule! rcon! opts "pool start"))))
