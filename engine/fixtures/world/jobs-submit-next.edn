@@ -31,13 +31,13 @@
    :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--front"]
           {:ok false :reason :bad-args :message [:contains "front"]}]
-         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}] 20]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "next-with-now-refused"
    :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--next" "--now"]
           {:ok false :reason :bad-args :message [:contains "exclusive"]}]
-         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}] 20]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}]}

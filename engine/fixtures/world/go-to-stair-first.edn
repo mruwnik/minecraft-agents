@@ -28,7 +28,7 @@
             [:fill [48 4 16] [48 6 16] "air"] [:fill [49 5 16] [49 7 16] "air"] [:fill [50 6 16] [50 8 16] "air"]
             [:fill [51 7 16] [51 9 16] "air"] [:fill [52 8 16] [52 10 16] "air"] [:fill [53 9 16] [53 11 16] "air"]
             [:fill [54 10 16] [54 11 16] "air"] [:fill [14 10 16] [54 11 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1 :zone-tolls true :escalate false})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1 :zone-tolls true :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 180 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 180 :until {:source :job :kind :result :data {:arrived true}}}]
    :after [[:body-near [14.5 10 16.5] 2.5]]}]}

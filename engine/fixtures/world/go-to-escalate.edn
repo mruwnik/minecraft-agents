@@ -187,7 +187,7 @@
   {:name "escalate-false-in-a-pit-says-it-is-shut-in"
    ;; card 8e26161d: a walk that may not escalate (withdraw, craft, gather pass :escalate false) from inside a pit names the cause
    :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :escalate false})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false :shut-in true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 60 :until {:source :job :kind :result :data {:arrived false}}}]
    :after [[:block [16 0 16] "air"] [:block [17 1 16] "stone"] [:body-near [16.5 0 16.5] 1]]}

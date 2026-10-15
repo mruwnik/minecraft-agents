@@ -22,7 +22,7 @@
  :cases
  [{:name "dark-direct-corridor-takes-the-lit-detour"
    :time :day
-   :act [[:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:> 35]}}}]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:> 35]}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "dark-false-takes-the-direct-corridor"

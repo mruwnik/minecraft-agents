@@ -1373,12 +1373,23 @@
                                                 r))
                                             results))))))))))
 
+(def register-put-tries "A put to a busy body can time out (its tool waits 3 s); it is asked again this many times." 4)
+
+(defn put-until-answered!
+  "Runs (run) -> promise of {:code :out} until it exits 0, or answers other than a :timeout, or tries run out; resolves to the last answer."
+  [run tries pause-ms]
+  (.then (run)
+         (fn [{:keys [code out] :as answer}]
+           (if (and (not (zero? code)) (str/includes? out ":timeout") (> tries 1))
+             (.then (sleep pause-ms) #(put-until-answered! run (dec tries) pause-ms))
+             answer))))
+
 (defn put-register!
   "Puts the case's register entries on the running body (one triggers.mjs put each); throws when one is refused."
   [opts register origin]
   (reduce (fn [p argv]
             (.then p (fn []
-                       (.then (exec-file (into ["engine/tools/triggers.mjs"] argv))
+                       (.then (put-until-answered! #(exec-file (into ["engine/tools/triggers.mjs"] argv)) register-put-tries 1500)
                               (fn [{:keys [code out]}]
                                 (when-not (zero? code)
                                   (throw (js/Error. (str "register put failed: " (str/trim out))))))))))

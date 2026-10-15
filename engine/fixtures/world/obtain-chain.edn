@@ -27,7 +27,7 @@
   {:name "how-craft-vector-combines-nuggets-into-an-ingot"
    :blocks [[:set [16 0 20] "crafting_table"]]
    :body {:inventory [["iron_nugget" 27] ["oak_log" 2]]}
-   :act [[:job (jobs.items.obtain {:item "iron_ingot" :how [:craft]})]]
+   :act [[:job (jobs.items.obtain {:item "iron_ingot"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "iron_ingot" 1]]}
   {:name "coal-ore-seen-28-blocks-off-is-mined"

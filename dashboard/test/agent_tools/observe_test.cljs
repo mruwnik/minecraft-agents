@@ -1099,6 +1099,9 @@
 (deftest a-death-the-body-has-since-respawned-from-does-not-wake-a-plain-wait
   (wake-over-backlog #(not= :died %) (event :body :died {:cause "zombie"}) (event :body :respawned {})))
 
+(deftest the-lethal-hurt-of-a-death-the-body-has-since-respawned-from-does-not-wake-a-plain-wait
+  (wake-over-backlog #(not= :danger %) (event :body :hurt {:health 0}) (event :body :died {:cause "generic_kill"}) (event :body :respawned {})))
+
 (deftest a-death-from-before-the-wait-with-no-respawn-still-wakes
   (wake-over-backlog #(= :died %) (event :body :died {:cause "zombie"})))
 

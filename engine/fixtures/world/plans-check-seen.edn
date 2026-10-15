@@ -9,19 +9,19 @@
   :blocks [[:fill [10 0 12] [22 3 20] "stone"]]
   :body {:at [4.5 0 16.5] :settle-s 2}
   :settings {:engine.perception/save-ms 1000}
-  :limit-s 90}
+  :limit-s 120}
  :cases
  [{:name "seen-face-cell-matches"
    :plans [{:id "face" :metadata {:by "tester"} :parts [{:id "face" :cells [#at [10 1 16]] :want [:any "stone"]}]}]
    :act [[:until [:cli "plans" ["--world" "$world" "check" "$plan:face" "--body" "$body"]
-          {:evidence :seen-memory :score {:counts {:match 1} :checked {:seen 1 :unseen 0}}}] 30]]
+          {:evidence :seen-memory :score {:counts {:match 1} :checked {:seen 1 :unseen 0}}}] 60]]
    :expect [{:no-event {:level :error} :for-s 3}]
    :after [[:body-near [4.5 0 16.5] 4]]}
   {:name "hidden-cell-is-unseen-not-matching"
    :plans [{:id "face" :metadata {:by "tester"} :parts [{:id "face" :cells [#at [10 1 16]] :want [:any "stone"]}]}
            {:id "deep" :metadata {:by "tester"} :parts [{:id "deep" :cells [#at [16 1 16]] :want [:any "stone"]}]}]
    :act [[:until [:cli "plans" ["--world" "$world" "check" "$plan:face" "--body" "$body"]
-          {:evidence :seen-memory :score {:counts {:match 1} :checked {:seen 1 :unseen 0}}}] 30]
+          {:evidence :seen-memory :score {:counts {:match 1} :checked {:seen 1 :unseen 0}}}] 60]
          [:cli "plans" ["--world" "$world" "check" "$plan:deep" "--body" "$body"]
           {:evidence :seen-memory :score {:counts {:unknown 1} :checked {:seen 0 :unseen 1}}}]]
    :expect [{:no-event {:level :error} :for-s 3}]

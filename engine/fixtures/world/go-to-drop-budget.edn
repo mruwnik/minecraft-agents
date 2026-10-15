@@ -53,7 +53,7 @@
    :blocks [[:fill [0 10 0] [31 13 0] "stone"] [:fill [0 10 31] [31 13 31] "stone"] [:fill [0 10 0] [0 13 31] "stone"] [:fill [31 10 0] [31 13 31] "stone"]
             [:fill [1 10 1] [15 12 30] "stone"]]
    :body {:at [8.5 13 16.5] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :allow-over-budget true})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   ;; card e753a3ca: a hay bale landing cuts fall damage to a fifth, so the 9 drop (hay top y 1) fits the budget of 5 that the same drop onto stone would not

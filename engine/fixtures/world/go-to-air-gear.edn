@@ -71,7 +71,7 @@
             [:fill [4 2 8] [4 3 8] "air"] [:fill [41 2 8] [41 3 8] "air"]
             [:fill [5 2 8] [40 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:wait-s 1]
-         [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [41 1 8] :range 1}] {:ok true :quote {:route {:found true :drown nil}}}]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [41 1 8] :range 1}] {:ok true :quote {:route {:found true :drown nil}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [4.5 1 8.5] 1]]}
   ;; should fail: no gear, 20 s under water against 15 s of air

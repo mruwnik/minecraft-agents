@@ -86,7 +86,7 @@
    :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
    :act [[:summon "skeleton" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
-         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1 :escalate false})]]
+         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
             {:event {:source :job :kind :go-to.sealed-hostile-near :data {:mob "skeleton"}} :within-s 150}
             {:event {:source :job :kind :result :data {:arrived false}} :within-s 230 :of-job true}]
@@ -98,7 +98,7 @@
    :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
    :act [[:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
-         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1 :escalate false})]]
+         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
             {:event {:source :job :kind :result} :within-s 200 :of-job true}
             {:no-event {:source :job :kind :go-to.sealed-hostile-near} :for-s 200 :until {:source :job :kind :result :data {:arrived [:any]}} :of-job true}]

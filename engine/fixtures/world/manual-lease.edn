@@ -12,7 +12,7 @@
          [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]
          ;; absence needs a window: the submitted job must still be :queued after it (a job is :queued before its first tick too)
          [:wait-s 8]
-         [:cli "jobs" [] {:items [:has {:id "$job" :status :queued}]}]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:items [:has {:id "$job" :status :queued}]}]
          [:http :release {:who "wt"} {:ok true}]]
    :expect [{:no-event {:source :job :kind :result} :for-s 8}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]

@@ -1342,3 +1342,13 @@
                    (is (empty? @sent) "without --allow-time the rule is not touched")
                    (fs/rmSync dir #js {:recursive true})
                    (done)))))))
+
+(deftest a-register-put-that-times-out-is-asked-again
+  (let [calls (atom 0)
+        run (fn [] (js/Promise.resolve (if (< (swap! calls inc) 3) {:code 1 :out "{:ok false :reason :timeout}"} {:code 0 :out "{:ok true}"})))]
+    (async done
+      (-> (r/put-until-answered! run 4 1)
+          (.then (fn [answer] (is (= [0 3] [(:code answer) @calls]))))
+          (.then (fn [_] (reset! calls 0) (r/put-until-answered! (fn [] (swap! calls inc) (js/Promise.resolve {:code 2 :out "{:ok false :reason :bad-args}"})) 4 1)))
+          (.then (fn [answer] (is (= [2 1] [(:code answer) @calls]) "a refusal is not asked again")))
+          (.then done)))))

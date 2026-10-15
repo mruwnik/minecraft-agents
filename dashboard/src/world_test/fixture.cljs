@@ -802,7 +802,7 @@
                  (cond
                    (string? v) [(fill v)]
                    (vector? v) (mapv str v)
-                   :else [(pr-str (if-let [[x y z] (:at v)] (-> v (dissoc :at) (assoc :x x :y y :z z)) v))]))]
+                   :else [(pr-str (walk/postwalk fill (if-let [[x y z] (:at v)] (-> v (dissoc :at) (assoc :x x :y y :z z)) v)))]))]
      (if (= :cli op)
        (into [(str "engine/tools/" tool ".mjs")] (mapcat texts args))
        (http-argv body world (walk/postwalk fill step))))))

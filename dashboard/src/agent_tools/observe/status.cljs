@@ -186,10 +186,10 @@
                 (some-> (:time-ms e) (< started-ms)))))
 
 (defn stale-death?
-  "Whether a death stamped before the wait began is old news: the body has respawned since (a later online/spawned/
-  respawned in the backlog), so the summary carries it and the body is alive."
+  "Whether a death (or the hurt before it) stamped before the wait began is old news: the body has respawned since (a
+  later online/spawned/respawned in the backlog), so the summary carries it and the body is alive."
   [e later started-ms]
-  (boolean (and (= :body (:source e)) (= :died (:kind e)) started-ms
+  (boolean (and (= :body (:source e)) (#{:died :hurt} (:kind e)) started-ms
                 (some-> (:time-ms e) (< started-ms))
                 (some recovered? later))))
 

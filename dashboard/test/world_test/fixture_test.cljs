@@ -548,6 +548,9 @@
     (is (= ["engine/tools/map.mjs" "add" "marker" "hut-wt-bob" "--data" "{:kind \"base\", :x 3, :y 0, :z 4}"]
            (f/step-argv "Bob" "test" [:cli "map" ["add" "marker" "hut-$tag" "--data" {:kind "base" :at [3 0 4]}]] nil nil))
         "$tag is the body's shared tag; a map argument is printed as EDN, its :at (resolved) becoming :x :y :z")
+    (is (= ["engine/tools/plans.mjs" "add" "p-wt-bob" "--edn" "{:id \"p-wt-bob\", :by \"Bob\"}"]
+           (f/step-argv "Bob" "test" [:cli "plans" ["add" "p-$tag" "--edn" {:id "p-$tag" :by "$body"}]] nil nil))
+        "placeholders inside a map argument's strings are filled too")
     (is (= ["engine/tools/jobs.mjs" "B" "--world" "test" "submit" "(jobs.x {:a 1})" "--next"]
            (argv [:http :submit '(jobs.x {:a 1}) [:next]])))))
 

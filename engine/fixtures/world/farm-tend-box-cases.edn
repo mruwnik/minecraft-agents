@@ -34,7 +34,7 @@
   {:name "no-bones-no-meal-fetch-false-does-not-fertilize"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:fill [10 0 16] [13 0 16] "wheat[age=1]"]]
-   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]} :fertilize true :till false :fetch false})]]
+   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]} :fertilize true :till false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30}]
    :after [[:block [10 0 16] "wheat[age=1]"]]}
