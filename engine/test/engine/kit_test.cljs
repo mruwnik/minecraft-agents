@@ -84,7 +84,7 @@
           (is (= {"stone_hoe" 2 "bread" 12} (inv p)))
           (is (= [{:name "bread" :count 20} {:name "wooden_hoe" :count 1}]
                  (filterv #(pos? (:count %)) (chest-items p))))
-          (is (= {:kind :done :gave-up false :short {}} result)))))))
+          (is (= {:kind :done :short {} :text "kit: complete"} result)))))))
 
 (deftest kit-with-everything-carried-moves-nothing
   (async done
@@ -94,7 +94,7 @@
                                       :containers {"10,64,0" full-chest}})
               result (await (child-outcome eng job kit-args 4))]
           (is (zero? (count (calls p "transfer"))))
-          (is (= {:kind :done :gave-up false :short {}} result)))))))
+          (is (= {:kind :done :cause :already :short {} :text "kit: complete"} result)))))))
 
 (deftest kit-reports-an-empty-chest
   (async done
@@ -191,7 +191,7 @@
                   {"diamond_hoe" 1}
                   {"cobblestone" 5 "stick" 2 "diamond" 1}]]]
           (let [{:keys [result inv chest]} (await (craft-run world))]
-            (is (= {:kind :done :gave-up false :short {}} result) label)
+            (is (= {:kind :done :short {} :text "kit: complete"} result) label)
             (is (= expected-inv (select-keys inv (keys expected-inv))) label)
             (is (= expected-chest chest) label)))))))
 
@@ -219,7 +219,7 @@
       (fn ^:async t []
         (let [{:keys [result inv chest]} (await (craft-run {:contents [{:name "wheat" :count 10}]
                                                             :args {:chest chest :tools [] :spare 0 :food 2}}))]
-          (is (= {:kind :done :gave-up false :short {}} result))
+          (is (= {:kind :done :short {} :text "kit: complete"} result))
           (is (= 2 (get inv "bread")))
           (is (= 4 (get chest "wheat"))))))))
 
@@ -237,7 +237,7 @@
       (fn ^:async t []
         (let [{:keys [result inv chest]} (await (craft-run {:contents stone-chest
                                                               :carried [{:name "stick" :count 2}]}))]
-          (is (= {:kind :done :gave-up false :short {}} result))
+          (is (= {:kind :done :short {} :text "kit: complete"} result))
           (is (= 1 (get inv "stone_hoe")))
           (is (= 4 (get chest "stick"))))))))
 
@@ -284,7 +284,7 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "stone_hoe" :count 2} {:name "bread" :count 12}]
                                       :containers {"10,64,0" full-chest}})
               result (await (child-outcome eng job kit-args 4))]
-          (is (= {:kind :done :gave-up false :short {}} result))
+          (is (= {:kind :done :cause :already :short {} :text "kit: complete"} result))
           (is (empty? (.-calls (.-world p))) "no walk, inspect or transfer call"))))))
 
 (deftest kit-craft-short-text-uses-the-chest-counted-food-need

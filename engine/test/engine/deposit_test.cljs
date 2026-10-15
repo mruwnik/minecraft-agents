@@ -32,7 +32,7 @@
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})
               result (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 8))]
           (is (= {} (wt/inv p)))
-          (is (= {:kind :done} result)))))))
+          (is (= :done (:kind result))))))))
 
 (deftest deposit-gives-up-when-the-transfer-says-ok-but-moves-nothing
   (async done
@@ -51,7 +51,7 @@
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5} {:name "bread" :count 20}] :containers {"10,64,0" []}})
               result (await (wt/ending-of eng job {:chest chest} 16))]
           (is (= {"bread" 12} (wt/inv p)) "bread 12 is the 60 points; dirt and the 8 spare bread go")
-          (is (= {:kind :done} result)))))))
+          (is (= :done (:kind result))))))))
 
 (deftest deposit-gives-up-when-the-known-chest-is-gone
   (async done
@@ -81,7 +81,7 @@
                                           :containers {"20,64,0" []}})
               result (await (wt/ending-of eng job {:chest {:x 20 :y 64 :z 0}} 1))]
           (is (= {} (wt/inv p)))
-          (is (= {:kind :done} result))
+          (is (= :done (:kind result)))
           (is (= 3 (count (wt/calls p "transfer"))))
           (is (= 1 (count (tu/walked-to eng)))))))))
 
@@ -114,7 +114,7 @@
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})]
           (.override (.-world p) "transfer" (timed-out {"dirt" -5}))
           (let [result (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 12))]
-            (is (= {:kind :done} result))
+            (is (= :done (:kind result)))
             (is (= {} (wt/inv p)))
             (is (= 1 (count (wt/calls p "transfer"))))))))))
 
@@ -154,7 +154,7 @@
           (full-at p [10 64 0])
           (let [result (await (wt/ending-of eng job {:items ["dirt"]} 30))
                 new-cells (disj (chests-in p) [10 64 0])]
-            (is (= {:kind :done} result))
+            (is (= :done (:kind result)))
             (is (= {} (wt/inv p)))
             (is (= 1 (count new-cells)))
             (is (= 1 (js/Math.abs (apply + (map - (first new-cells) [10 64 0]))))
@@ -172,7 +172,7 @@
           (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
           (full-at p [10 64 0])
           (let [result (await (wt/ending-of eng job {:items ["dirt"]} 30))]
-            (is (= {:kind :done} result))
+            (is (= :done (:kind result)))
             (is (= {"chest" 1} (wt/inv p)) "no chest was placed")
             (is (= #{[10 64 0] [11 64 0]} (chests-in p)))
             (is (= [{"dirt" 5}] [(into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [11 64 0]]))]))))))))
@@ -229,7 +229,7 @@
           (full-at p [10 64 0])
           (let [result (await (wt/ending-of eng job {:items ["dirt"]} 40))
                 new-cells (disj (chests-in p) [10 64 0])]
-            (is (= {:kind :done} result))
+            (is (= :done (:kind result)))
             (is (= 1 (count new-cells)))
             (is (not (contains? new-cells [11 64 0])) "the zoned cell got no chest")))))))
 
@@ -252,7 +252,7 @@
                                            ((:can-start? place-fn) c)))))))
                 result (await (wt/ending-of eng job {:items ["dirt"]} 60))
                 new-cells (disj (chests-in p) [10 64 0])]
-            (is (= {:kind :done} result))
+            (is (= :done (:kind result)))
             (is (= #{[11 64 0]} @refused))
             (is (= 1 (count new-cells)))
             (is (not (contains? new-cells [11 64 0])) "the next cell took the chest")))))))
@@ -280,7 +280,7 @@
             (let [eng (place-ends-at eng (fn [c] (ctx/end c kind {:reason cause :pos [11 64 0]})))
                   result (await (wt/ending-of eng job {:items ["dirt"]} 60))
                   new-cells (disj (chests-in p) [10 64 0])]
-              (is (= {:kind :done} result) (pr-str cause))
+              (is (= :done (:kind result)) (pr-str cause))
               (is (= 1 (count new-cells)) (pr-str cause))
               (is (not (contains? new-cells [11 64 0])) (pr-str cause)))))))))
 
@@ -354,7 +354,7 @@
           (wt/know-place! eng :chest chest)
           (full-at p [10 64 0])
           (let [result (await (wt/ending-of eng job {:items ["dirt"]} 30))]
-            (is (= {:kind :done} result))
+            (is (= :done (:kind result)))
             (is (= {"chest" 1} (wt/inv p)) "no second chest was placed")
             (is (= #{[11 64 0]} (group-cells eng)))))))))
 
@@ -399,7 +399,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup-zoned one-chest-world [(assoc other-zone :min [10 60 0] :max [10 70 0])])
               result (await (wt/ending-of eng job {:chest chest :items ["dirt"] :ignore-zones? true} 12))]
-          (is (= {:kind :done} result))
+          (is (= :done (:kind result)))
           (is (nil? (chest-place-of eng))))))))
 
 (deftest a-deposit-into-an-unzoned-chest-becomes-the-chest-place
@@ -408,7 +408,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup-zoned one-chest-world [])
               result (await (wt/ending-of eng job {:chest chest :items ["dirt"] :ignore-zones? true} 12))]
-          (is (= {:kind :done} result))
+          (is (= :done (:kind result)))
           (is (= {:x 10 :y 64 :z 0} (chest-place-of eng))))))))
 
 (deftest deposit-books-what-the-opened-chest-holds
@@ -417,7 +417,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" [{:name "stone" :count 3}]}})
               result (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 8))]
-          (is (= {:kind :done} result))
+          (is (= :done (:kind result)))
           (is (= {[10 64 0] {"stone" 3 "dirt" 5}} (stock/stock-of (mem/view (:store eng))))))))))
 
 (deftest deposit-uses-its-own-chest-and-the-kept-notice-says-it-is-about-recording
@@ -428,7 +428,7 @@
               _ (wt/know-place! eng :chest {:x 11 :y 64 :z 0})
               result (await (wt/ending-of eng job {:chest chest :items ["dirt"] :make-chests? false} 8))
               kept (first (filter #(= :place.kept (:kind %)) @seen))]
-          (is (= {:kind :done} result))
+          (is (= :done (:kind result)))
           (is (= [] (get-in @(fake/state p) [:containers [11 64 0]])) "the recorded chest got nothing")
           (is (= [{"dirt" 5}] [(into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [10 64 0]]))]) "the named chest got it")
           (is (re-find #"recorded chest stays at .*11.*not recorded" (:text kept))))))))

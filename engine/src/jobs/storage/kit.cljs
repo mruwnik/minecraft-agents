@@ -162,12 +162,15 @@
         chest)))
 
 (defn done?
-  "The kinds of the kit (tools and food) that are complete (the round ends the call with the short)."
+  "Done once every kind of the kit (tools and food) is carried."
   [c]
-  (let [left (count (needs (u/inventory (:primitives c)) (:args c)))
-        all (inc (count (:tools (:args c))))]
-    (contract/later :stocking (str "kit: " left " kind(s) short") :units :kinds :done (- all left) :left left
-                    :result {:short (into {} (needs (u/inventory (:primitives c)) (:args c)))})))
+  (let [short (into {} (needs (u/inventory (:primitives c)) (:args c)))
+        left (count short)
+        all (inc (count (:tools (:args c))))
+        data [:units :kinds :done (- all left) :left left :result {:short short}]]
+    (if (zero? left)
+      (apply contract/ok :stocked "kit: complete" data)
+      (apply contract/later :stocking (str "kit: " left " kind(s) short") data))))
 
 (defn quote-of
   "A walk and a visit per kind."

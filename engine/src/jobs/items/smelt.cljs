@@ -459,17 +459,25 @@
       (checks/holds))))
 
 (defn done?
-  "What was smelted against what the load asked, in items. Never :done? itself: the round ends the job."
+  "Done once the load is smelted and taken: :got reaches the count the load owes, or every item of a batch has its result
+  without a give-up. The goal is relative (N more), so it is read from the call's own load record."
   [c]
   (let [m (ctx/mem c)
-        smelted (if (:batch m)
-                  (transduce (map #(:smelted % 0)) + 0 (vals (:batch m)))
+        batch (:batch m)
+        entries (map #(get batch %) (:items m))
+        smelted (if batch
+                  (transduce (map #(:smelted % 0)) + 0 (vals batch))
                   (max 0 (- (:got m 0) (:base (:owed m) 0))))
-        wanted (if (:batch m)
-                 (transduce (map #(:wanted % 0)) + 0 (vals (:batch m)))
-                 (- (:count (:owed m) 0) (:base (:owed m) 0)))]
-    (contract/later :smelting (str "smelt: " smelted " of " wanted " smelted") :units :items :done smelted :left (max 0 (- wanted smelted))
-                    :result {:smelted smelted})))
+        wanted (if batch
+                 (transduce (map #(:wanted % 0)) + 0 (vals batch))
+                 (- (:count (:owed m) 0) (:base (:owed m) 0)))
+        data [:units :items :done smelted :left (max 0 (- wanted smelted)) :result {:smelted smelted}]
+        text (str "smelt: " smelted " of " wanted " smelted")]
+    (if (if batch
+          (and (seq entries) (every? #(and % (not (:reason %))) entries) (pos? smelted))
+          (and (:owed m) (pos? wanted) (>= smelted wanted)))
+      (apply contract/ok :smelted text data)
+      (apply contract/later :smelting text data))))
 
 (defn quote-items
   "The items a quote is made for: the :item list, the one item, or the raw foods and ores carried."

@@ -94,12 +94,24 @@
           (recur (remove #(= n (:name %)) left) (assoc acc n (- (storage/carried left n) (get keeps n 0)))))
         acc))))
 
-(defn done?
-  "Counts only: the end of the call is the round's, which offers the chest to the :chest place first."
+(defn offer-owed?
+  "Whether the :chest argument took something this call and is still to be offered to the :chest place (not once refused)."
   [c]
-  (let [left (reduce + 0 (vals (spare-items c)))]
-    (contract/later :depositing (str "deposit: " left " spare item(s)") :units :items :done (:moved (ctx/mem c) 0) :left left
-                    :result {:moved (:moved (ctx/mem c) 0)})))
+  (boolean (and (:chest (:args c)) (pos? (:deposited (ctx/mem c) 0)) (not (:offered (ctx/mem c)))
+                (not (access/container-refusal (assoc-in c [:args :ignore-zones?] false) :put (:chest (:args c)))))))
+
+(defn done?
+  "Done once nothing spare is left to put away (:free slots met, if given) and the chest argument is offered to the :chest place."
+  [c]
+  (let [left (reduce + 0 (vals (spare-items c)))
+        {:keys [free]} (:args c)
+        moved (:moved (ctx/mem c) 0)
+        data [:units :items :done moved :left left :result {:moved moved}]]
+    (cond
+      (and free (>= (u/free-slots (:primitives c)) free) (not (offer-owed? c))) (apply contract/ok :deposited "deposit: free slots met" data)
+      (pos? left) (apply contract/later :depositing (str "deposit: " left " spare item(s)") data)
+      (offer-owed? c) (apply contract/later :offering "deposit: the chest is still to be offered" data)
+      :else (apply contract/ok :deposited (str "deposited " moved) data))))
 
 (defn quote-of
   "Time for the walk and one transfer a name; the chest takes what is spare, up to the free slots it has."
@@ -267,9 +279,9 @@
         pick (when-not (and free (>= (u/free-slots (:primitives c)) free))
                (to-deposit inventory items (if items keep (merge-with max (cost/food-reserve inventory) keep))))]
     (cond
-      (nil? pick) (do (when (and (:chest (:args c)) (pos? (:deposited (ctx/mem c) 0))
-                                 (not (access/container-refusal (assoc-in c [:args :ignore-zones?] false) :put (:chest (:args c)))))
-                        (places/offer! c :chest (:chest (:args c))))
+      (nil? pick) (do (when (offer-owed? c)
+                        (places/offer! c :chest (:chest (:args c)))
+                        (ctx/update-mem! c assoc :offered true))
                       (ctx/end c :done nil))
       (empty? pool) (stop! c :condition-failed :no-chest)
       (nil? chest) (await (make-chest! c pool))

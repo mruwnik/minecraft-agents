@@ -507,7 +507,7 @@
                        (await (impl token args))
                        #js {:status "timeout" :inventoryChange #js {"oak_planks" 4 "oak_log" -1}}))
           (let [result (await (child-outcome eng job {:item "oak_planks" :count 4} 8))]
-            (is (= {:made 4 :status :done} result))
+            (is (= {:made 4 :text "crafted 4 oak_planks" :status :done} result))
             (is (= 1 (count (calls p "craft"))))))))))
 
 (deftest craft-looks-around-before-it-says-there-is-no-table

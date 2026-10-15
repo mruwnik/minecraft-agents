@@ -74,15 +74,29 @@
 
 (defn can-start? [c] (checks/cause-status :never (bad-args c)))
 
+(defn pickup-spot
+  "The table cell this call put down and is still to dig up, else nil: not with :keep-table, once dug, gone, in an area of the
+  body's own or refused by a zone."
+  [c]
+  (let [spot (:table-placed (ctx/mem c))]
+    (when (and spot (not (:keep-table (:args c))) (not (:picked-up (ctx/mem c)))
+               (= "crafting_table" (u/seen-name (:primitives c) spot))
+               (not (access/in-own-area? c spot))
+               (:ok (access/may? c :dig spot)))
+      spot)))
+
 (defn done?
-  "Progress only: the round that sees the target carried also picks up a table it put down and ends."
+  "Done once :count more than at the start are carried and the table this call put down is dug up."
   [c]
   (let [{:keys [item count]} (:args c)
         have (storage/carried (u/inventory (:primitives c)) item)
         start (:start (ctx/mem c) have)
-        made (max 0 (- have start))]
-    (contract/later :crafting (str "craft: " made " of " count " " item) :units :items :done made :left (max 0 (- count made))
-                    :result {:made made})))
+        made (max 0 (- have start))
+        data [:units :items :done made :left (max 0 (- count made)) :result {:made made}]]
+    (cond
+      (< made count) (apply contract/later :crafting (str "craft: " made " of " count " " item) data)
+      (pickup-spot c) (apply contract/later :table-up "craft: the table is still to dig up" data)
+      :else (apply contract/ok :crafted (str "crafted " made " " item) data))))
 
 (defn quote-of
   "P: the cheapest recipe for :count more of :item from what is carried. It uses its ingredients (net of the item
@@ -452,12 +466,8 @@
   "Dig up the table this call put down, once, unless :keep-table, a zone or claim refuses the dig or it stands in an area of this body's own
   (a home): jobs.blocks.dig child, :continue while it waits, else :done."
   [c]
-  (let [spot (:table-placed (ctx/mem c))
-        cell spot]
-    (if (or (nil? spot) (:keep-table (:args c)) (:picked-up (ctx/mem c))
-            (not= "crafting_table" (u/seen-name (:primitives c) cell))
-            (access/in-own-area? c cell)
-            (not (:ok (access/may? c :dig cell))))
+  (let [spot (pickup-spot c)]
+    (if-not spot
       :done
       (let [r (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail}))]
         (if (= :continue r)
