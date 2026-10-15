@@ -219,6 +219,18 @@
             (is (= [{:reason :unseen :ids [999]}] (:left result)))
             (is (= [:unseen] (mapv :reason (bd/left-drops seen))))))))))
 
+(deftest ids-all-picked-up-end-done-with-no-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body})]
+          (drop! p [2 64 0] "oak_log")
+          (drop! p [1 64 1] "oak_sapling")
+          (let [ids (mapv :id (:entities @(fake/state p)))
+                result (await (tu/child-outcome eng job {:radius 8 :ids ids} 30))]
+            (is (= 2 (:collected result)))
+            (is (nil? (:left result)))))))))
+
 (deftest an-id-that-goes-out-of-sight-is-left-unseen-with-the-cell-it-was-last-seen-in
   (async done
     (tu/run-async done
