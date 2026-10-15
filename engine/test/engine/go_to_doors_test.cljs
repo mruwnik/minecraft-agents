@@ -14,6 +14,7 @@
             [jobs.lib.pen :as pen]
             [jobs.lib.world-files :as world]
             [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.cut :as cut]
             [jobs.movement.go-to.faults :as gfaults]))
 
 (defn dark-cells!
@@ -673,6 +674,26 @@
         (let [r (await (go! (pen-world true 3) {:pos [20 64 -3] :range 0 :doors :leave-open}))]
           (is (empty? (events-of r :go-to.pen-gate-open))))))))
 
+(deftest pens-are-checked-once-a-call-however-many-attempts-it-starts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [checks (atom 0)
+              check pen/check
+              {:keys [eng clock seen]} (setup (pen-world true 3) [])
+              pos {:x 20 :y 64 :z -3}
+              twice {:check (constantly true)
+                     :round (fn ^:async twice-round [c]
+                              (cut/start-attempt! c pos)
+                              (cut/start-attempt! c pos)
+                              :done)}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'twice twice))]
+          (with-redefs [pen/check (fn [o] (swap! checks inc) (check o))]
+            (core/submit! eng '(twice) {:range 0})
+            (await (tick-out! eng clock 5))
+            (is (= 1 @checks) "the second attempt of the call checks no pen")
+            (is (= 1 (count (filter #(= :go-to.pen-gate-open (:kind %)) @seen))))))))))
+
 (deftest pens-are-checked-only-when-an-open-gate-is-near-the-start
   (async done
     (tu/run-async done
@@ -682,5 +703,7 @@
           (with-redefs [pen/check (fn [o] (swap! checks inc) (check o))]
             (await (go! (pen-world false 3) {:pos [20 64 -3] :range 0}))
             (is (zero? @checks) "a shut gate: no pen check")
+            (await (go! (pen-world true 3) {:pos [3 64 0] :range 0}))
+            (is (zero? @checks) "an open gate the goal is by: no pen check")
             (await (go! (pen-world true 3) {:pos [20 64 -3] :range 0}))
             (is (pos? @checks) "an open gate near the start")))))))

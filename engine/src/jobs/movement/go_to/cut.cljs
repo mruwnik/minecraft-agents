@@ -44,13 +44,14 @@
 (defn start-attempt!
   "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start
   again (but for the cut count, kept by note-restart!), and a saved escalation, or a pending one, is dropped when the body is already there (its holes, if any, are
-  put back as after a made way)."
+  put back as after a made way). The open pen gate warning is checked at the call's first attempt only."
   [c pos]
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (pen-entry/warn-left-open! c pos (:doors (:args c)))
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done :own-way-top :detour-from) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
+    (when-not (:pen-checked m)
+      (pen-entry/warn-left-open! c pos (:doors (:args c))))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done :own-way-top :detour-from) (assoc :pen-checked true :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
                           (not (:torch-fetching m)) (dissoc :torch-fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
