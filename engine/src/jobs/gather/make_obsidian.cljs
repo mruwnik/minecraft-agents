@@ -95,12 +95,13 @@
 (def settle-looks 6)
 
 (defn ^:async pour!
-  "Pour at the air cell above the lava of site and note it in memory (:poured); settle! waits and scoops. :again, or :failed."
+  "Note the air cell above the lava of site in memory (:poured), then pour there (the note first: a cut right after the
+  pour still finds its water); settle! waits and scoops. :again, or :failed."
   [c {:keys [lava above] :as site}]
-  (let [st (.-status (await (ctx/act c :place (clj->js {:pos above :item "water_bucket"}))))]
-    (if-not (= "placed" st)
-      :failed
-      (do (ctx/update-mem! c assoc :poured (assoc site :looks 0)) :again))))
+  (ctx/update-mem! c assoc :poured (assoc site :looks 0))
+  (if (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos above :item "water_bucket"})))))
+    :again
+    (do (ctx/update-mem! c dissoc :poured) :failed)))
 
 (defn ^:async settle!
   "One look at the poured water: the lava turned (or the looks are spent) scoops the water back and books the success
@@ -123,13 +124,23 @@
           (do (ctx/update-mem! c update-in [:poured :looks] inc) :again))))))
 
 (defn ^:async cleanup
-  "However the run ended: water poured and not yet scooped back is taken up again."
+  "However the run ended: water poured and not yet scooped back is taken up again, from within reach (a go-to child,
+  :continue while it waits). Done, or nothing-possible :water-left (data :pos) when the walk or the scoop failed."
   [c _]
-  (let [{:keys [above]} (:poured (ctx/mem c))]
-    (when (and above (= "water" (u/seen-name (:primitives c) above)))
-      (await (ctx/act c :place (clj->js {:pos above :item "bucket"}))))
-    (ctx/update-mem! c dissoc :poured)
-    (ctx/end c :done nil {})))
+  (let [{:keys [above]} (:poured (ctx/mem c))
+        left! (fn [] (ctx/update-mem! c dissoc :poured)
+                (ctx/end c :nothing-possible :water-left {:pos above}))]
+    (if-not (and above (= "water" (u/seen-name (:primitives c) above)))
+      (do (ctx/update-mem! c dissoc :poured)
+          (ctx/end c :done nil {}))
+      (let [w (await (walk! c above 3))]
+        (case w
+          :continue :continue
+          :blocked (left!)
+          (if (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos above :item "bucket"})))))
+            (do (ctx/update-mem! c dissoc :poured)
+                (ctx/end c :done nil {}))
+            (left!)))))))
 
 (defn ^:async mine-seen!
   "The seen obsidian mined with a mine child: :again, :continue while it works, or its ending when it got none."

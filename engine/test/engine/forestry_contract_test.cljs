@@ -170,3 +170,37 @@
           (is (= 1 placed))
           (is (= [:job-time] (mapv :reason (filter #(= :stopped (:kind %)) @seen))) "the engine's limit ends it")
           (is (< waits 6) "the limit cuts the wait between its half-second looks"))))))
+
+(defn ^:async obsidian-cut-after-the-pour
+  "make-obsidian on a lava lake cancelled right after it poured, the body then moved far off (x 8.5, out of reach of the
+  pour); scoop-fails? makes the bucket's place answer failed. {:p :end} with the job's stopped event data."
+  [scoop-fails?]
+  (let [{:keys [eng p seen]} (lt/setup (ot/world ot/lava-lake [ot/pick {:name "water_bucket" :count 1}]))
+        id (core/submit! eng (list obsidian {:count 1}) {})]
+    (.override (.-world p) "place"
+               (fn ^:async f [token a impl]
+                 (cond
+                   (= "water_bucket" (.-item a)) (let [r (await (impl token a))]
+                                                   (fake/swap-self! p assoc :pos [8.5 64 0.5])
+                                                   (core/cancel! eng id)
+                                                   r)
+                   scoop-fails? #js {:status "failed"}
+                   :else (impl token a))))
+    (await (tu/run-until-empty eng 40))
+    {:p p :seen seen}))
+
+(deftest a-cut-run-walks-back-and-scoops-its-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (obsidian-cut-after-the-pour false))]
+          (is (not= "water" (.-name (.blockAt p (tu/pos 4 64 0)))) "the water is scooped up")
+          (is (= 1 (ot/carried p "water_bucket")) "the bucket is full again")
+          (is (let [pos (.-pos (.self p))] (< (fake/dist [(.-x pos) (.-y pos) (.-z pos)] [4 64 0]) 4.5)) "from within reach"))))))
+
+(deftest a-cut-run-whose-scoop-fails-reports-the-water-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (obsidian-cut-after-the-pour true))]
+          (is (= [:water-left] (mapv :cause (filter #(= :cleanup_failed (:kind %)) @seen)))))))))
