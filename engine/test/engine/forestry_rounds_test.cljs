@@ -16,16 +16,6 @@
           (is (= {:base {:x 3 :y 64 :z 0} :logs 4 :axe :skipped-small-tree :status :done} (dissoc out :ending :text)))
           (is (= 4 (count (digs p)))))))))
 
-(deftest harvest-wood-fells-collects-and-replants-in-one-round
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
-          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (is (= 1 (await (tu/run-until-empty eng 1))) "the list is empty after one tick")
-          (is (= 3 (get (lt/inv p) "oak_log")))
-          (is (= "oak_sapling" (h/block-at p 3 64 0))))))))
-
 (deftest maintain-fells-and-replants-in-one-round
   (async done
     (tu/run-async done

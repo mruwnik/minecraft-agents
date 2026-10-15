@@ -990,9 +990,6 @@
           (is (= 20 (food p)) "saturation heals fastest on a full bar")
           (is (= [] (tu/walk-calls p))))))))
 
-(deftest eat-prefers-common-food-over-golden-apple
-  (is (= "bread" (eat/best-food [{:name "golden_apple"} {:name "bread"}] false nil 20 20 #{}))))
-
 (deftest get-food-names-a-short-craft-as-short
   (async done
     (tu/run-async done

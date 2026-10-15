@@ -34,8 +34,6 @@
                     'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}}]
           (doseq [sym jobs
                   :let [job (get registry/jobs sym)]]
-            (is (nil? (:check job)) (str sym " is a contract job"))
-            (is (nil? (:check job)) (str sym " has no old check"))
             (is (vector? (:target job)) (str sym " has a target"))
             (is (nil? (contract/quote-problem (await (quote-of (:eng s) sym (get args sym))))) (str sym))))))))
 

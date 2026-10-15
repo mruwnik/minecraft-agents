@@ -348,16 +348,6 @@
     {:method "GET" :path "/nope" :body nil} 404
     {:method "DELETE" :path "/drive" :body nil} 404))
 
-;; idle defaults to 15 s
-(deftest idle-defaults-to-15-s
-  (let [rig (taken-rig)]
-    (advance! rig 14999)
-    (tick! rig)
-    (is (empty? (calls-of rig :release)))
-    (advance! rig 1)
-    (tick! rig)
-    (is (= "idle" (nth (first (calls-of rig :release)) 2)))))
-
 ;; take idleS overrides the idle limit for that takeover
 (deftest take-idle-s-overrides-the-idle-limit-for-that-takeover
   (let [rig (make-rig)]

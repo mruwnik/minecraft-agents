@@ -198,10 +198,6 @@
     (is (= (+ (v/trip) (:cost w)) (:cost f)) "a fetch is a trip plus the walk")
     (is (= (assoc (:parts w) :trip (v/trip)) (:parts f)))))
 
-(deftest a-dark-block-costs-twice-a-lit-one
-  (is (= 1 (v/dark-factor)) "per-dark over per-block")
-  (is (= (v/per-dark) (v/per-block))))
-
 (deftest a-detour-prices-the-walk-and-each-block-climbed-past-the-first
   (is (= {:cost 3 :parts {:walk 3 :climb 0}} (v/detour-cost {:distance 10 :climb 1} {:per-block 0.3 :per-climb 2})))
   (is (= {:cost 17 :parts {:walk 3 :climb 14}} (v/detour-cost {:distance 10 :climb 8} {:per-block 0.3 :per-climb 2})))

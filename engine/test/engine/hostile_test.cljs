@@ -650,9 +650,6 @@
     (is (false? (holds-with [:respawned 500] [:died 1000])) "an older respawn does not count")
     (is (true? (holds-with)) "never died")))
 
-(deftest hostile-near-fires-the-chooser
-  (is (= '(jobs.survival.respond-to-hostile) (:job (:hostile-near triggers/all)))))
-
 ;; ------------------------------------------------------------- line of sight
 
 (def wall

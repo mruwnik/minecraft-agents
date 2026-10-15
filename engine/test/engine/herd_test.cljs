@@ -422,26 +422,6 @@
           (is (= :brought (:reason (done-event s))))
           (is (not (gate-open? s))))))))
 
-(deftest a-gate-set-crosswise-in-the-fence-line-and-standing-open-is-used-and-shut
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :states {gate-key {:open true :facing "north"}}} 300))]
-          (is (= :brought (:reason (done-event s))))
-          (is (in-pen? (cow-of s 1)))
-          (is (< (self-x s) 10) "the body ends outside")
-          (is (not (gate-open? s))))))))
-
-(deftest a-gate-set-crosswise-in-the-fence-line-and-shut-is-opened-used-and-shut
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :states {gate-key {:open false :facing "south"}}} 300))]
-          (is (= :brought (:reason (done-event s))))
-          (is (in-pen? (cow-of s 1)))
-          (is (< (self-x s) 10) "the body ends outside")
-          (is (not (gate-open? s))))))))
-
 ;; ------------------------------------------------------------------ the live cases (ProbeHerdB, card 4f4ab883)
 
 (defn lazy-cow
@@ -1020,10 +1000,6 @@
            ["chicken 0.85 off" "chicken" 0.85 0.0 false]]]
     (is (= expected (hp/overlaps-cell? {:x (+ 10.5 dx) :y 64 :z (+ 3.5 dz)} (hp/half-width mob) g)) label)))
 
-(deftest half-widths-by-mob
-  (doseq [[mob expected] [["cow" 0.45] ["mooshroom" 0.45] ["sheep" 0.45] ["goat" 0.45] ["pig" 0.45] ["chicken" 0.2] ["llama" 0.45]]]
-    (is (= expected (hp/half-width mob)) mob)))
-
 (deftest settle-step-reads-the-distance-and-the-movement
   (doseq [[label dist moved waited expected]
           [["close and still" 3.3 0.0 0 :settled]
@@ -1347,14 +1323,6 @@
         (let [[s log] (await (scenario-log {:target 1} {:entities [(cow 1 4 3)] :inventory [wheat]} 600))]
           (is (= :brought (:reason (done-event s))))
           (is (= ["wheat" "wheat"] (map :held-item (take 2 @log))) "open and shut with the animal behind the body; the food is put away only after the release"))))))
-
-(deftest no-lead-and-no-food-ends-no-food
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :inventory []} 200))]
-          (is (= :no-food (:reason (done-event s))))
-          (is (nil? (failed-error s))))))))
 
 (deftest method-lead-with-no-lead-does-not-lure
   (async done

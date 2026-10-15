@@ -107,8 +107,7 @@
         (let [vanish (fn [s i] (when (= 1 i) (swap! (fake/state (:p s)) update :entities subvec 1)))
               {:keys [p out eng] :as s} (await (follow {:entities [(steve 10)]} {:player "Steve" :lost-s 3} 20 1000 vanish))]
           (is (= {:reason :lost :last-seen {:x 10 :y 64 :z 0}} (ended @out)))
-          (is (every? #{{:x 10 :y 64 :z 0}} (move-targets eng)) "only the last-seen cell is walked to")
-          (is (not (has-event? s :follow.lost)) "the ending carries it"))))))
+          (is (every? #{{:x 10 :y 64 :z 0}} (move-targets eng)) "only the last-seen cell is walked to"))))))
 
 (deftest a-player-who-is-never-there-is-absent-after-two-seconds
   (async done
@@ -116,8 +115,7 @@
       (fn ^:async t []
         (let [{:keys [clock out] :as s} (await (follow {} {:player "Steve"} 10 500))]
           (is (= {:reason :absent} (ended @out)))
-          (is (<= 2000 (- @clock 1000000)))
-          (is (not (has-event? s :follow.absent)) "the ending carries it"))))))
+          (is (<= 2000 (- @clock 1000000))))))))
 
 (deftest not-yet-absent-within-the-grace
   (async done
@@ -132,8 +130,7 @@
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 10 500))]
           (is (= {:reason :unreachable} (ended @out)))
-          (is (= gts/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up")
-          (is (not (has-event? s :follow.unreachable)) "the ending carries it"))))))
+          (is (= gts/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up"))))))
 
 (deftest one-blocked-go-to-ends-it-in-one-tick
   (async done
@@ -141,8 +138,7 @@
       (fn ^:async t []
         (let [{:keys [out] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 1 500))]
           (is (= {:reason :unreachable} (ended @out)))
-          (is (= gts/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up")
-          (is (not (has-event? s :follow.unreachable)) "the ending carries it"))))))
+          (is (= gts/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up"))))))
 
 (deftest a-far-player-is-walked-to-within-the-round
   (async done

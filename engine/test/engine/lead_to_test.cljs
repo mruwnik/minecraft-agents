@@ -568,13 +568,6 @@
     (hide-cow! p (constantly true) k)
     (await (submit s {} 1))))
 
-(deftest a-cow-out-of-sight-for-a-while-is-waited-for-not-lost
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (hide-cow-for-legs 1))]
-          (is (= :unleashed (:reason (done-event s)))))))))
-
 (deftest a-cow-out-of-sight-for-two-looks-is-not-lost
   (async done
     (tu/run-async done

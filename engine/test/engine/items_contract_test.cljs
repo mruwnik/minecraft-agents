@@ -17,7 +17,6 @@
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
       (is (fn? (:can-start? job)) (str sym " has can-start?"))
-      (is (nil? (:check job)) (str sym " has no old check"))
       (is (vector? (:target job)) (str sym " has a target"))
       (is (fn? (:done? job)) (str sym " has done?"))
       (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args (get args sym)}))) (str sym)))))

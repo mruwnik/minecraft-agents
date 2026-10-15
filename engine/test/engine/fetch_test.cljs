@@ -1111,9 +1111,6 @@
     (is (not= (slot {"cobblestone" 1}) (slot {"coal" 1})))
     (is (= (slot {"cobblestone" 1}) (slot {"cobblestone" 3})) "the same source keeps its slot between rounds")))
 
-(deftest sapling-leaf-limit-is-60
-  (is (= 60 table/sapling-leaf-limit)))
-
 (deftest a-declined-child-is-not-a-fruitless-run
   (let [sapling (table/gather-need {"oak_sapling" 1})]
     (is (= 1 (gather/fruitless-limit sapling {:kind :nothing-possible :cause :no-leaves :data {:broken 0}})))

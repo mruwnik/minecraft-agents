@@ -27,8 +27,6 @@
                                 :events (events/make {:body "Fake" :sinks [] :now (constantly 0)})})]
           (doseq [sym jobs
                   :let [job (get registry/jobs sym)]]
-            (is (nil? (:check job)) (str sym " is a contract job"))
-            (is (nil? (:check job)) (str sym " has no old check"))
             (is (vector? (:target job)) (str sym " has a target"))
             (is (fn? (:done? job)) (str sym " has done?"))
             (is (nil? (contract/quote-problem (:quote (await (event-api/quote-view eng (str sym) "{:radius 10}")))))

@@ -356,13 +356,6 @@
     {"carrot" 2} [(item "bread" 4) (item "carrot" 9)] {}
     {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 70} {} [] {"pumpkin_seeds" 70}))
 
-(deftest food-crops-are-farm-goods-but-the-reserve-stays-carried
-  (is (every? (set stock/farm-goods) ["carrot" "potato" "beetroot" "melon_slice" "wheat"])))
-
-(deftest tools-food-and-meal-are-never-farm-goods
-  (are [name] (not (some #{name} stock/farm-goods))
-    "stone_hoe" "iron_hoe" "shears" "bread" "bone_meal" "water_bucket"))
-
 (deftest crops-are-stored-down-to-the-food-reserve
   (async done
     (tu/run-async done
@@ -590,7 +583,6 @@
 (deftest tend-exports-the-contract-and-quotes-validly
   (let [job (get registry/jobs 'jobs.farm.tend)]
     (is (fn? (:can-start? job)))
-    (is (nil? (:check job)) "no old check")
     (is (vector? (:target job)))
     (is (fn? (:done? job)))
     (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (tu/fake {}) :args {:box box}}))))))

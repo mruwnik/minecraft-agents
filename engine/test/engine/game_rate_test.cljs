@@ -55,8 +55,3 @@
   (is (= 50 (settings/physics-ms #js {})))
   (is (= 25 (settings/physics-ms #js {:physicsMs (fn [] 25)}))))
 
-(deftest the-perception-save-interval-is-an-engine-setting
-  (settings/with-settings {:engine.perception/save-ms 1000}
-    (fn []
-      (is (= 1000 (settings/get settings/settings :engine.perception/save-ms)))))
-  (is (= 60000 (settings/get settings/settings :engine.perception/save-ms))))

@@ -103,7 +103,6 @@
         (let [{:keys [eng seen]} (setup {:containers {"10,64,0" []}})
               result (await (child-outcome eng job kit-args 8))]
           (is (= {:kind :condition-failed :cause :chest-lacks :gave-up false :short {"hoe" 2 :food 12}} result))
-          (is (not-any? #(= :kit.short (:kind %)) @seen))
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest kit-gives-up-on-an-unreachable-chest

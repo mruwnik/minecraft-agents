@@ -217,9 +217,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:count 3 :keep 0}
                                  {:inventory h/sword :entities [(cow 1 10) (cow 2 11) (cow 3 12)]
-                                  :unreachable ["10,64,0" "11,64,0" "12,64,0"]} 200))
-              gave-up (events-of s :hunt.gave-up)]
-          (is (empty? gave-up) "the ending carries it")
+                                  :unreachable ["10,64,0" "11,64,0" "12,64,0"]} 200))]
           (is (= :gave-up (:reason (done-event s))))
           (is (seq (:skipped (done-event s))) "the ending names the skipped animals")
           (is (= 0 (:killed (done-event s))))

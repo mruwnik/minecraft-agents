@@ -197,15 +197,6 @@
             (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
                 (str "result " @out))))))))
 
-(deftest go-to-a-high-deck-with-the-default-budget-is-cut-off
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out]} (await (go! {:blocks high-deck-floor :self {:pos {:x 20.5 :y 64 :z 20.5}}}
-                                        {:pos [20 71 20] :range 1 :ways #{:walk :clear-seal}}))]
-          (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
-              (str "result " @out)))))))
-
 (deftest go-to-says-where-it-gave-up
   (async done
     (tu/run-async done

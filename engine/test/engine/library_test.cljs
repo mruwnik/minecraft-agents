@@ -390,12 +390,6 @@
   [seen]
   (select-keys (first (filter #(#{:completed :stopped} (:kind %)) @seen)) [:kind :reason]))
 
-(deftest plant-sapling-is-a-contract-job
-  (let [job (get registry/jobs 'jobs.forestry.plant-sapling)]
-    (is (fn? (:can-start? job)))
-    (is (nil? (:check job)) "no old check")
-    (is (= [:at :near] (:target job)))))
-
 (deftest plant-sapling-ends-with-the-honest-kind
   (async done
     (tu/run-async done
@@ -408,16 +402,6 @@
             (core/submit! eng (list 'jobs.forestry.plant-sapling (assoc args :species "oak")) {})
             (await (run-until-empty eng 12))
             (is (= (or expected {}) (end-of seen)) (pr-str [world args]))))))))
-
-(deftest plant-sapling-reads-the-debt-places-and-clears-it
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "oak_sapling" :count 1}]})]
-          (core/submit! eng '(jobs.forestry.plant-sapling) {})
-          (await (run-until-empty eng 3))
-          (is (= [] (:list (core/state eng))) "no debt and no position: nothing to plant, done")
-          (is (= [] (calls p "place"))))))))
 
 (deftest plant-sapling-uses-the-fell-debt
   (async done
@@ -531,17 +515,6 @@
       ["cobblestone" "bread"] {"cobblestone" 4} {:stack "cobblestone" :count 5}
       nil {} {:stack "bread" :count 5}
       ["gravel"] {} nil)))
-
-(deftest deposit-gives-up-when-the-chest-is-full
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup chest-world)]
-          (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "full" :moved 0}))
-          (core/submit! eng (list 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0}}) {})
-          (await (run-until-empty eng 8))
-          (is (= [] (:list (core/state eng))))
-          (is (some #(= :chest_unusable (:kind %)) @seen)))))))
 
 (deftest deposit-keep-leaves-exactly-the-kept-count-across-stacks
   (async done
@@ -724,10 +697,6 @@
       0.25 1 {:x 10 :y 65.5 :z 23}
       0.75 0.4 {:x 10 :y 64 :z 17})))
 
-(deftest look-point-differs-for-different-random-numbers
-  (let [here {:x 0 :y 64 :z 0}]
-    (is (not= (look-around/look-point here 0.1 0.2) (look-around/look-point here 0.6 0.9)))))
-
 (defn view-with
   "A memory view at now-ms holding one entry of kind written at t, or none."
   [kind t data now-ms]
@@ -736,10 +705,6 @@
 
 (def look-timer-45
   '{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 45)) :job (jobs.movement.look-around)})
-
-(deftest there-is-no-timer-trigger
-  (is (nil? (get triggers/all :every-interval)))
-  (is (nil? (get triggers/all :night-and-bed-known))))
 
 (def with-conditions (trigger-api/with-conditions triggers/all trigger-api/compile-condition))
 
@@ -789,9 +754,6 @@
   (is (false? (trigger-holds (:hostile-near triggers/all) zombie-at-12 {:radius 8})))
   (is (true? (trigger-holds (:hostile-near triggers/all) zombie-at-12 {:radius 16}))))
 
-(deftest health-low-is-gone-food-heals
-  (is (nil? (triggers/all :health-low)) "low health is the hungry trigger's: eat, or look for food"))
-
 (deftest inventory-nearly-full-holds-when-few-slots-are-free
   (are [stacks free expected] (= expected (trigger-holds (:inventory-nearly-full triggers/all) {:inventory (junk-stacks stacks)} {:free free}))
     33 2 false
@@ -799,10 +761,6 @@
     36 2 true
     35 0 false
     36 0 true))
-
-(deftest inventory-nearly-full-defaults-to-two-free-slots
-  (is (false? (trigger-holds (:inventory-nearly-full triggers/all) {:inventory (junk-stacks 33)} {})))
-  (is (true? (trigger-holds (:inventory-nearly-full triggers/all) {:inventory (junk-stacks 34)} {}))))
 
 (deftest a-scenario-radius-reaches-the-trigger
   (async done

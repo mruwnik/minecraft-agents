@@ -326,26 +326,17 @@
             (is (<= (second @dists) 2) "the retry is from within 2 blocks")
             (is (= "wheat" (block-at p 3 64 0)))))))))
 
-(deftest a-place-that-always-fails-leaves-the-cell-bare-after-three-tries
+(deftest a-place-that-never-works-leaves-the-cell-bare-after-three-tries
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start {:world one-cell})]
-          (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed"}))
-          (let [result (await (child-outcome eng job {} 100))]
-            (is (= {:cut 1 :replanted 0 :bare [{:x 3 :y 64 :z 0}] :lost [] :gave-up false} (dissoc result :text)))
-            (is (= 3 (count (place-calls-at p 3))))
-            (is (= [] (:list (core/state eng))))))))))
-
-(deftest a-place-answered-no-item-leaves-the-cell-bare-after-three-tries
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (start {:world one-cell})]
-          (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "no-item"}))
-          (let [result (await (child-outcome eng job {} 100))]
-            (is (= {:cut 1 :replanted 0 :bare [{:x 3 :y 64 :z 0}] :lost [] :gave-up false} (dissoc result :text)))
-            (is (= 3 (count (place-calls-at p 3))))))))))
+        (doseq [status ["failed" "no-item" "unreachable"]]
+          (let [{:keys [eng p]} (start {:world one-cell})]
+            (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status status}))
+            (let [result (await (child-outcome eng job {} 100))]
+              (is (= {:cut 1 :replanted 0 :bare [{:x 3 :y 64 :z 0}] :lost [] :gave-up false} (dissoc result :text)) status)
+              (is (= 3 (count (place-calls-at p 3))) status)
+              (is (= [] (:list (core/state eng))) status))))))))
 
 (def far-cell
   {:blocks (field "wheat" 7 [8] [0]) :ages (ages 7 [8] [0]) :drops wheat-drops})
@@ -486,16 +477,6 @@
         p (tu/seeing-all (tu/fake {:blocks (assoc (zipmap cells (repeat "wheat")) "12,64,0" "wheat")
                     :ages (assoc (zipmap cells (repeat 3)) "12,64,0" 7)}))]
     (is (= [12] (mapv :x (fld/ripe-crops p (plain-args {}) origin []))))))
-
-(deftest a-place-that-is-unreachable-leaves-the-cell-bare-after-three-tries
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (start {:world one-cell})]
-          (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
-          (let [result (await (child-outcome eng job {} 100))]
-            (is (= [{:x 3 :y 64 :z 0}] (:bare result)))
-            (is (= 3 (count (place-calls-at p 3))) "harvest counts the tries in its own memory, one place call each")))))))
 
 (deftest one-call-cuts-and-replants-every-crop-in-reach
   (async done

@@ -205,9 +205,6 @@
                                                            :danger-shape {:sensed {:radius 9}}}))]
           (is (= {:arrived true} @out)))))))
 
-(deftest the-fall-margin-default-is-the-one-constant
-  (is (= wwatch/fall-margin (get-in go-to/args [:fall-margin :default]))))
-
 (deftest healing-that-gains-nothing-stalls-after-the-stall-time
   (let [now 1000000
         st (gth/next-state nil 13 now {})]

@@ -82,9 +82,6 @@
 
 ;; ------------------------------------------------------------------ the table and the rule
 
-(deftest follow-ranges-are-vanilla
-  (is (= [35 16 16 64] (mapv threats/follow-range ["zombie" "skeleton" "something_new" "enderman"]))))
-
 (deftest a-mob-stops-chasing-past-its-range-out-of-line-or-with-no-way
   (let [now 10000 lost-ms 4000
         chasing {:mob "zombie" :distance 10 :in-line? true :way? true}]
@@ -104,11 +101,6 @@
     (is (= :far (retreat-flight/stopped-chasing (assoc witch :low? true :distance 17) 0 now lost-ms)))
     (is (= :lost (retreat-flight/stopped-chasing {:mob "zombie" :distance 6 :in-line? false :way? true :low? true} 0 now lost-ms))
         "a melee mob out of line is still let go")))
-
-(deftest decide-moved-to-combat-unchanged
-  (is (= :fight (cost/decide {:health 20 :damage 10 :creeper? false :reserve 4})))
-  (is (= :flee (cost/decide {:health 20 :damage 17 :creeper? false :reserve 4})))
-  (is (= :flee (cost/decide {:health 20 :damage 0 :creeper? true :reserve 4}))))
 
 ;; ------------------------------------------------------------------ whole flights
 

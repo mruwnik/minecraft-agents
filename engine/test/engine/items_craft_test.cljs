@@ -56,7 +56,6 @@
         (let [[result p seen eng] (await (craft {:inventory [{:name "oak_log" :count 1}]} {:item "oak_planks" :count 4}))]
           (is (= {"oak_planks" 4} (inv p)))
           (is (= {:item "oak_planks" :made 4 :status :done} (dissoc result :text)))
-          (is (empty? (filter #(= :craft.done (:kind %)) @seen)) "the ending carries it")
           (is (empty? (tu/walked-to eng))))))))
 
 (deftest craft-walks-to-a-table-then-crafts
@@ -74,7 +73,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} {:item "bread"}))]
-          (is (not-any? #(= :craft.gave-up (:kind %)) @seen))
           (is (= {"bread" 1} (inv p)))
           (is (= {:item "bread" :made 1 :status :done} (dissoc result :text)))
           (is (empty? (tu/walked-to eng))))))))
@@ -641,7 +639,6 @@
         q ((:quote-of def) {:primitives (tu/fake {:inventory [{:name "oak_log" :count 2}]}) :args {:item "oak_planks" :count 4}})]
     (is (= [:item] (:target def)))
     (is (some? (:can-start? def)))
-    (is (nil? (:check def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))
     (is (= [4 4 4] (get-in q [:yields :items "oak_planks"])))
     (is (= [0 1 1] (get-in q [:uses :items "oak_log"])))))
