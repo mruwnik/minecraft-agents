@@ -50,7 +50,10 @@
 
 (def target [:at :box :plan])
 
-(def defaults {})
+(a/defargs settings
+  {::time-s {:default 30 :doc "Seconds a pen check may take." :spec (a/num-in 0 nil)}})
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn no-pen
   "The cause :no-pen before the call starts: none of :at, :box, :plan."

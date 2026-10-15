@@ -17,7 +17,7 @@
 
   - Without :plan: the open planned gates within :radius of the body. This is the job of the pen-gate trigger,
     which fires for a gate seen open with the body more than 2 blocks away, so a job that holds a gate open on
-    purpose is not fought. When one stands open the run first waits :open-s (4 s), so a gate a player just opened
+    purpose is not fought. When one stands open the run first pauses :open-s (4 s, a jobs.time.noop child), so a gate a player just opened
     is not shut on them, and reads the gates again.
   - With :plan: every open gate of that plan, wherever it is. A gate the body has not seen lately is walked to and
     looked at, never taken for shut; one that still cannot be read is left (:unseen).
@@ -29,8 +29,7 @@
   entry, no warn. A gate that could not be reached or did not shut after :tries clicks is given up with one warn
   shut-gate.gave-up and a :gate-gave-up memory entry, which keeps the trigger away from it for 10 minutes.
 
-  Ends :done with info shut-gate.done and the data {:shut n :left []} when every open gate was shut (or none stood
-  open); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
+  Ends :done with info shut-gate.done and the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at a round start ends done at once, with no event (done?); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
   A call whose :plan is missing or unreadable waits (:plan-trouble); one that goes bad after the start ends :condition-failed :plan-trouble with one warn
   shut-gate.declined and {:shut 0 :left [] :declined text}.")
 
@@ -44,7 +43,8 @@
 (def quiet-ttl-ms (* 1000 (:quiet-s pg/defaults)))
 
 (a/defargs settings
-  {::pause-ttl-ms {:default 30000 :doc "How long a gate stays paused after a failed shut, in ms." :spec (a/int-in 0 nil)}
+  {::time-s {:default 120 :doc "Seconds a shut-gate run may take." :spec (a/num-in 0 nil)}
+   ::pause-ttl-ms {:default 30000 :doc "How long a gate stays paused after a failed shut, in ms." :spec (a/int-in 0 nil)}
    ::unreachable-ttl-ms {:default 120000 :doc "How long the trigger leaves a gate the walk could not reach, in ms (the body may be shut in; it tries again then)." :spec (a/int-in 0 nil)}})
 (defn unreachable-ttl-ms [] (settings/get settings ::unreachable-ttl-ms))
 (defn pause-ttl-ms [] (settings/get settings ::pause-ttl-ms))
@@ -134,14 +134,18 @@
                 :unreachable))))
 
 (defn ^:async clear-of-animals?
-  "Whether no animal stands in the gate's cell, after waiting out one for pass/shut-waits times pass/shut-wait-ms."
+  "Whether no animal stands in the gate's cell, after waiting out one for pass/shut-waits pauses of pass/shut-wait-ms
+  (jobs.time.noop children, the count kept in memory): :continue while a pause is on."
   [c cell]
   (let [col (pass/column-of (u/cell-pos cell) {})]
-    (loop [n 0]
-      (cond
-        (empty? (pass/animals-in c col)) true
-        (>= n (pass/shut-waits)) false
-        :else (do (await (ctx/act c :wait #js {:ms (pass/shut-wait-ms)})) (recur (inc n)))))))
+    (loop []
+      (let [n (:gate-waits (ctx/mem c) 0)]
+        (cond
+          (empty? (pass/animals-in c col)) (do (ctx/update-mem! c dissoc :gate-waits) true)
+          (>= n (pass/shut-waits)) (do (ctx/update-mem! c dissoc :gate-waits) false)
+          :else (if (= :continue (await (child/pause! c (/ (pass/shut-wait-ms) 1000) :animal-in-gate)))
+                  :continue
+                  (do (ctx/update-mem! c assoc :gate-waits (inc n)) (recur))))))))
 
 (defn ^:async click!
   "Click the gate at cell once the body is in reach, then read it again: nil when shut, else the reason."
@@ -168,18 +172,20 @@
     (case (await (read-gate! c cell))
       :shut :was-shut
       :unknown :unseen
-      (if-not (await (clear-of-animals? c cell))
-        :animal-in-the-way
-        (loop [n 1]
-          (let [reason (await (click! c cell))]
-            (cond
-              (nil? reason) (do (ctx/emit! c :gate.shut :info {:cell cell :text (str "gate " cell " shut")}) nil)
-              (< n (:tries (:args c))) (recur (inc n))
-              :else reason)))))))
+      (let [clear (await (clear-of-animals? c cell))]
+        (cond
+          (= :continue clear) :continue
+          (not clear) :animal-in-the-way
+          :else (loop [n 1]
+                  (let [reason (await (click! c cell))]
+                    (cond
+                      (nil? reason) (do (ctx/emit! c :gate.shut :info {:cell cell :text (str "gate " cell " shut")}) nil)
+                      (< n (:tries (:args c))) (recur (inc n))
+                      :else reason))))))))
 
 (def target [:plan])
 
-(def defaults {})
+(def defaults {:spend {:time ::time-s}})
 
 (defn plan-fact
   "The :plan-trouble wait while :plan is missing or unreadable, else nil."
@@ -191,29 +197,32 @@
 (def conditions "Waits while :plan is missing or unreadable (plan-fact)." [[:fn plan-fact]])
 
 (defn done?
-  "The gates shut and the watched gates still open. Never :done? itself: the run ends with its event and data."
+  "The gates shut and the watched gates still open or unread: done once none is (the goal held: no event, the call just ends done)."
   [c]
   (let [[cells trouble] (watched-cells c)
-        open (if trouble [] (open-now c cells []))]
-    {:done? false :units :gates :done (:shut (ctx/mem c) 0) :left (count open)}))
+        open (if trouble [] (into (open-now c cells []) (unread-now c cells [] #{})))]
+    {:done? (and (not trouble) (empty? open)) :units :gates :done (:shut (ctx/mem c) 0) :left (count open)}))
 
 (defn quote-of [_c]
   {:uses {:time [0 15 120]}})
 
 (defn ^:async grace!
-  "Without :plan, wait :open-s seconds once when a watched gate stands open now."
+  "Without :plan, pause :open-s seconds once (a jobs.time.noop child; a cut goes on with it) when a watched gate stands
+  open now: :continue while the pause is on."
   [c cells]
   (let [{:keys [plan open-s]} (:args c)]
-    (when (and (not plan) (pos? open-s) (seq (open-now c cells [])))
-      (await (ctx/act c :wait #js {:ms (* 1000 open-s)})))))
+    (when (and (not plan) (pos? open-s) (not (:grace-done (ctx/mem c))) (seq (open-now c cells [])))
+      (if (= :continue (await (child/pause! c open-s :gate-grace)))
+        :continue
+        (ctx/update-mem! c assoc :grace-done true)))))
 
 (defn ^:async round [c]
   (let [[cells trouble] (watched-cells c)]
     (if trouble
       (decline! c trouble)
-      (do
-        (await (grace! c cells))
-        (loop [shut 0 left [] skip #{}]
+      (if (= :continue (await (grace! c cells)))
+        :continue
+        (loop [shut (:shut (ctx/mem c) 0) left (:left (ctx/mem c) []) skip #{}]
           (let [here (u/self-pos c)
                 open (into (open-now c cells left) (unread-now c cells left skip))
                 under (filter #(pg/standing-in? here %) open)
@@ -222,6 +231,7 @@
             (if-let [cell (nearest c todo)]
               (let [reason (await (shut-once! c cell))]
                 (cond
+                  (= :continue reason) (do (ctx/update-mem! c assoc :shut shut :left left) :continue)
                   (nil? reason) (recur (inc shut) left skip)
                   (= :was-shut reason) (recur shut left (conj skip cell))
                   (#{:animal-in-the-way :walk-interrupted} reason) (recur shut (conj left (leave! c cell reason)) skip)

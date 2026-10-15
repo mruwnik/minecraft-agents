@@ -1,6 +1,7 @@
 (ns jobs.animals.cull
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]
             [jobs.lib.hunting :as hunting]
@@ -58,8 +59,10 @@
 
 (def target [:mob :box :centre])
 
-(def defaults {:least 1 :use {:tools :attack}})
+(a/defargs settings
+  {::time-s {:default 300 :doc "Seconds a cull may take." :spec (a/num-in 0 nil)}})
 
+(def defaults {:least 1 :spend {:time ::time-s} :use {:tools :attack}})
 
 (defn corners
   "The eight corners of a box of cells: the far corners are the outer edges of the max cells."
@@ -124,23 +127,22 @@
   "The cause that bars the first step, or nil: :keep or fewer adults, or every adult refused by the zone rules
   (:refused, :no-zones; a quiet look, the decline warn comes with the first round)."
   [c]
-  (when-not (:started (ctx/mem c))
-    (let [{:keys [keep color ignore-zones?]} (:args c)
-          adults (:adults (census c))
-          targets (cond->> adults color (filter #(= color (.-color %))))]
-      (cond
-        (<= (count adults) keep) (too-few c)
-        (and (seq targets) (not ignore-zones?))
-        (when-let [why (animals/refusal-of c :harvest targets)]
-          {:reason why :text (str "cull waits: every " (:mob (:args c)) " in the bound is refused by the zone rules (" (name why) ")")})))))
+  (let [{:keys [keep color ignore-zones?]} (:args c)
+        adults (:adults (census c))
+        targets (cond->> adults color (filter #(= color (.-color %))))]
+    (cond
+      (<= (count adults) keep) (too-few c)
+      (and (seq targets) (not ignore-zones?))
+      (when-let [why (animals/refusal-of c :harvest targets)]
+        {:reason why :text (str "cull waits: every " (:mob (:args c)) " in the bound is refused by the zone rules (" (name why) ")")}))))
 
-(def conditions "Waits on a start fact (start-fact)." [[:fn start-fact]])
+(def conditions "Waits on a start fact (start-fact), at the call's start only." [[:fn (started/at-start start-fact)]])
 
 (defn done?
-  "The animals killed, and the adults above :keep that are left. Never :done? itself: the cull ends with its event and data."
+  "The animals killed, and the adults above :keep that are left: done once no more than :keep stand in the bound."
   [c]
-  {:done? false :units :animals :done (:killed (ctx/mem c) 0)
-   :left (max 0 (- (count (:adults (census c))) (:keep (:args c))))})
+  (let [left (max 0 (- (count (:adults (census c))) (:keep (:args c))))]
+    {:done? (zero? left) :units :animals :done (:killed (ctx/mem c) 0) :left left}))
 
 (defn quote-of [c]
   {:uses {:time [0 (* 20 (or (:count (:args c)) 4)) ##Inf]}})
@@ -190,9 +192,7 @@
 (defn ^:async step
   "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child waits on the world) or an ending."
   [c]
-  (let [now (ctx/now c)
-        {:keys [keep] wanted :count} (:args c)]
-    (ctx/update-mem! c update :started #(or % now))
+  (let [{:keys [keep] wanted :count} (:args c)]
     (let [{:keys [target collecting killed skipped]} (ctx/mem c)]
       (cond
         target (await (hunting/attack! c (attack-opts c)))

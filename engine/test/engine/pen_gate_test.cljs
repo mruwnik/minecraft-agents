@@ -249,7 +249,8 @@
       (fn ^:async t []
         (let [s (await (run-job (pen-world false 2 -7) {"pen-a" pen-a} {} 30))]
           (is (zero? (waited-ms-before-click s)) "nothing open: no wait")
-          (is (= 0 (:shut (first (events-of s :shut-gate.done))))))))))
+          (is (empty? (:list (core/state (:eng s)))) "done: the goal held")
+          (is (empty? (events-of s :shut-gate.stopped))))))))
 
 (deftest a-gate-shut-during-the-grace-wait-is-not-clicked
   (async done
@@ -288,7 +289,8 @@
         (let [s (await (run-job (pen-world false 2 7) {"pen-a" pen-a} {} 20))]
           (is (<= (:ticks s) 2))
           (is (zero? (count (filter #(= "useOn" (.-name %)) (.-calls (.-world (:p s)))))))
-          (is (= 0 (:shut (first (events-of s :shut-gate.done))))))))))
+          (is (empty? (:list (core/state (:eng s)))) "done: the goal held")
+          (is (empty? (events-of s :shut-gate.stopped))))))))
 
 (deftest a-gate-in-no-plan-is-left-alone
   (async done
