@@ -320,7 +320,9 @@
       (fn ^:async t []
         (doseq [kind [:condition-failed :limit-reached :impossible]]
           (let [r (await (start! (setup :ending-jobs {'jobs.strip.seal (ending-job 'jobs.strip.seal kind :whatever)}) args))]
-            (is (= [kind :child-failed] (ends r)) (str kind))
+            (if (= :limit-reached kind)
+              (is (= :done (:status r)) "the site stripped segments before the seal child hit its limit, so :least (1) is met")
+              (is (= [kind :child-failed] (ends r)) (str kind)))
             (is (= {:child "jobs.strip.seal" :because :whatever} (select-keys r [:child :because])))))))))
 
 (deftest a-failed-walk-down-keeps-the-go-tos-own-kind-and-cause
