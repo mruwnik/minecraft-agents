@@ -24,7 +24,7 @@
   a cell zones, claims and hazards allow. Quote: the walk and dig time, 1 s at least.
 
   Conditions (a listed call waits on them; once started the first to fail ends it :condition-failed with the cause):
-  - {:reason :bad-args :text}, {:reason :not-loaded :pos}.
+  - {:reason :not-loaded :pos}. Impossible: {:reason :bad-args :text}.
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the dig (jobs.lib.access). :for-plan's own footprint does not. :ignore-zones? skips the rule.
   - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent water, :lava-adjacent seen
@@ -34,7 +34,7 @@
     does not allow a tool (otherwise the round gets one; a fetch that fails ends the same way, with :why).
 
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
-  then it ends condition-failed {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
+  then it ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
   column to a cell beside it on a seen floor (a go-to child), then digs; with none to stand on it ends {:reason :hazard
   :hazards [:under-feet] :why :no-side-stand}. Only :accept :under-feet digs it from on top.
@@ -112,7 +112,7 @@
 
 (defn bad-args [c]
   (when-let [error (:error (b/parse (:args c)))]
-    {:reason :bad-args :text (str "blocks.dig " error)}))
+    (contract/impossible {:reason :bad-args :text (str "blocks.dig " error)})))
 
 (defn not-loaded [c]
   (let [{:keys [pos error]} (b/parse (:args c))]
@@ -188,7 +188,7 @@
 
 (def done-reasons #{:dug :already-clear})
 
-(def condition-reasons #{:fluid :fluid-adjacent :cannot :bad-args})
+(def condition-reasons #{:fluid :fluid-adjacent :cannot})
 
 (defn text-of [result cell place stepped-aside]
   (str (if (:dug result) "dug " "did not dig ") (or (:block result) "") " at " (pr-str (b/cell (:pos result)))
@@ -203,7 +203,7 @@
 
 (defn finish!
   "Tell blocks.dig.done and end the call with result {:dug :pos :block :reason ..}: :done for :dug and :already-clear,
-  else condition-failed (:fluid :fluid-adjacent :cannot :bad-args), nothing-possible (:lava-unsealed, a refused dig) or
+  else condition-failed (:fluid :fluid-adjacent :cannot), nothing-possible (:lava-unsealed, a refused dig) or
   limit-reached :time (the primitive timed out). The data is the result."
   [c result]
   (let [result (cond-> result (:stepped-aside (ctx/mem c)) (assoc :stepped-aside (:stepped-aside (ctx/mem c))))
@@ -301,9 +301,9 @@
                    (not= :no-cell why) (assoc :walk why)))))))
 
 (defn unreachable!
-  "End the call condition-failed {:reason :unreachable :pos :why}."
+  "End the call nothing-possible {:reason :unreachable :pos :why}: the walk ran and found no way."
   [c why]
-  (ctx/end c :condition-failed {:reason :unreachable :pos (:pos (b/parse (:args c))) :why why}))
+  (ctx/end c :nothing-possible {:reason :unreachable :pos (:pos (b/parse (:args c))) :why why}))
 
 (defn note-under-feet!
   "Debug event blocks.dig.under-feet before the first dig of the cell under the feet: the floor below as seen and as

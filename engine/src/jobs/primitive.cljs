@@ -18,7 +18,7 @@
   (let [need (distinct (concat (get-in primitive/table [k :target]) (also-required k)))]
     (fn [c]
       (when-let [missing (seq (remove #(some? (get (:args c) %)) need))]
-        {:reason :bad-args :missing (vec missing)}))))
+        (contract/impossible {:reason :bad-args :missing (vec missing)})))))
 
 (defn args-data [k]
   (into {} (map (fn [arg] [arg (if (position-keys arg)
@@ -47,6 +47,6 @@
                            (catch :default err
                              (if (.-badArgs err) err (throw err))))]
                 (if (instance? js/Error r)
-                  (ctx/end c :condition-failed {:reason :bad-args :why (.-message r)})
+                  (ctx/end c :impossible {:reason :bad-args :why (.-message r)})
                   (let [e (ending r)]
                     (ctx/end c (:kind e) (:cause e) (js->clj r :keywordize-keys true))))))}))

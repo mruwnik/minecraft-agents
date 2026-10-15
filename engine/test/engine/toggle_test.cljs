@@ -148,7 +148,7 @@
                                          ["oak_door" {:open false} {:state :open} :bad-args]]]
           (let [{:keys [result p seen]} (await (run (world name from 3 14) args))]
             (is (= {:status :stopped :reason reason} (head result [:status :reason])) (str name args))
-            (is (= :condition-failed (get-in result [:ending :kind])) (str name args))
+            (is (= (if (= :no-block reason) :condition-failed :impossible) (get-in result [:ending :kind])) (str name args))
             (is (empty? (calls p "useOn")) (str name args))
             (is (empty? (tu/walk-calls p)) (str name args ": no walk"))
             (is (= 1 (count (kinds seen :toggle.declined))) (str name args))))))))
@@ -235,7 +235,7 @@
         (let [w (assoc (world "oak_door" {:open false} 3 14) :unreachable ["3,64,0"])
               {:keys [result p seen]} (await (run w {:pos at :state :open}))]
           (is (= {:status :stopped :reason :unreachable} (head result [:status :reason])))
-          (is (= :condition-failed (get-in result [:ending :kind])))
+          (is (= :nothing-possible (get-in result [:ending :kind])))
           (is (empty? (calls p "useOn")))
           (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
 

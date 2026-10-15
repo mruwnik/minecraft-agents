@@ -1,5 +1,6 @@
 (ns jobs.movement.follow
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]))
@@ -43,7 +44,7 @@
 (defn bad-args
   "The cause :bad-args unless a player name is given."
   [c]
-  (when-not (string? (:player (:args c))) :bad-args))
+  (when-not (string? (:player (:args c))) (contract/impossible :bad-args)))
 
 (def conditions [[:fn bad-args]])
 

@@ -33,9 +33,9 @@
   Waits (conditions): :not-loaded (the block is not loaded) and :standing-in (the body stands in the door or gate to be
   closed; it must step out).
 
-  Ends :done (:changed or already there; data :pos :block :wanted :was :now), or condition-failed with the cause
-  :bad-args, :no-block, :not-toggleable, :needs-redstone, :bad-state (with :valid), :gone (block vanished or
-  unloaded), :refused (useOn said cannot or no-item) or :unreachable, or nothing-possible with :unchanged (a click
+  Ends :done (:changed or already there; data :pos :block :wanted :was :now), or impossible with the cause :bad-args,
+  :not-toggleable, :needs-redstone or :bad-state (with :valid), or condition-failed with :no-block, :gone (block vanished or
+  unloaded) or :refused (useOn said cannot or no-item), or nothing-possible with :unreachable, :unchanged (a click
   that changed nothing: iron-like block, protected area or lag, which cannot be told apart), :wrong-way (a block that
   moved but not to the wanted state) or :unseen. Each refusal is one warn toggle.declined, each give-up one warn
   toggle.gave-up, a click that worked info toggle.done. The pen-gate trigger may shut a planned pen gate this job
@@ -75,14 +75,16 @@
   [status reason pos state more]
   (merge {:status status :reason reason :pos pos :wanted state} more))
 
-(def condition-failures "Give-up reasons that read as a failed condition, the others as nothing possible." #{:gone :refused :unreachable})
+(def condition-failures "Give-up reasons that read as a failed condition, the others as nothing possible." #{:gone :refused})
+
+(def impossible-reasons "Decline reasons the args or the block's kind settle for good." #{:bad-args :needs-redstone :not-toggleable :bad-state})
 
 (defn decline!
   ([c reason pos state text] (decline! c reason pos state text nil))
   ([c reason pos state text more]
    (let [result (report :declined reason pos state more)]
      (ctx/emit! c :toggle.declined :warn (assoc result :text (str "toggle: " text)))
-     (ctx/end c :condition-failed reason (dissoc result :status :reason)))))
+     (ctx/end c (if (impossible-reasons reason) :impossible :condition-failed) reason (dissoc result :status :reason)))))
 
 (defn give-up!
   [c reason pos state text more]

@@ -51,7 +51,7 @@
 
   Ends :done with data {:reason :sealed|:open :at [x y z] :taken [cells] :left [{:cell :site :reason}] :filled [cells]
   :open [{:cell :reason}]}; :left holds torches not taken. :open with :escaped true: the entry itself was unreachable.
-  Or condition-failed with the cause :bad-args (no :line in the tunnel) or :no-tool (the escape stair has no pickaxe and
+  Impossible :bad-args (no :line in the tunnel). Or condition-failed with the cause :no-tool (the escape stair has no pickaxe and
   :fetch is off, or the fetch failed, as its :because), or nothing-possible with :walk-failed (every escape failed; data
   :escape holds the stair endings). Events: leave-tunnel.done (info, :sealed), leave-tunnel.open (warn, :open),
   leave-tunnel.stopped (warn, any stop).
@@ -77,7 +77,10 @@
 (defn no-zones [c]
   (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) :no-zones))
 
-(def conditions [[:fn no-zones]])
+(defn bad-args [c]
+  (when-not (:line (:tunnel (:args c))) (contract/impossible {:reason :bad-args :why "tunnel must be the result of jobs.access.tunnel"})))
+
+(def conditions [[:fn bad-args] [:fn no-zones]])
 
 (defn done?
   "Progress only: the job is done by the round that has sealed the mouth."
@@ -146,7 +149,7 @@
     (when (seq gone)
       (ledger/remember! c (reduce ledger/drop-cell l gone)))))
 
-(def condition-reasons "Stop reasons that read as a failed condition; any other stop is nothing possible." #{:bad-args :no-tool})
+(def condition-reasons "Stop reasons that read as a failed condition; any other stop is nothing possible." #{:no-tool})
 
 (defn finish!
   "Hand the ending over, with the event of its reason; on a stop the torches still standing are left too. reason is
@@ -170,7 +173,7 @@
       :open (ctx/emit! c :leave-tunnel.open :warn (assoc result :status status :text text))
       (ctx/emit! c :leave-tunnel.stopped :warn (assoc result :status status :text text)))
     (if stopped?
-      (ctx/end c (if (condition-reasons reason) :condition-failed :nothing-possible) cause result)
+      (ctx/end c (cond (= :bad-args reason) :impossible (condition-reasons reason) :condition-failed :else :nothing-possible) cause result)
       (ctx/end c :done nil result))))
 
 (defn ^:async walk-to!

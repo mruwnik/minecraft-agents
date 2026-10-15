@@ -1,6 +1,7 @@
 (ns engine.follow-test
   "jobs.movement.follow against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.contract :as contract]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -65,7 +66,7 @@
      s)))
 
 (deftest follow-condition-wants-a-player-name
-  (are [args cause] (= cause (follow/bad-args {:args args}))
+  (are [args cause] (= cause (contract/impossible-cause (follow/bad-args {:args args})))
     {:player "Steve"} nil
     {:player nil} :bad-args
     {} :bad-args

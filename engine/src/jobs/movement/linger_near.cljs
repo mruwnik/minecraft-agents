@@ -34,7 +34,7 @@
   "The cause :bad-args unless a position and a positive :wait-s are given."
   [c]
   (let [{:keys [pos wait-s]} (:args c)]
-    (when-not (and (some? pos) (number? wait-s) (pos? wait-s)) :bad-args)))
+    (when-not (and (some? pos) (number? wait-s) (pos? wait-s)) (contract/impossible :bad-args))))
 
 (def conditions [[:fn bad-args]])
 

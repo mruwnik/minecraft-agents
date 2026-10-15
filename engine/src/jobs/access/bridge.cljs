@@ -143,7 +143,7 @@
 
 (def condition-reasons
   "Give-up reasons that read as a failed condition; any other is nothing possible."
-  #{:bad-args :not-on-solid :blocked :zone :footprint :no-zones :not-loaded :not-replaceable :unseen :too-few-blocks})
+  #{:not-on-solid :blocked :zone :footprint :no-zones :not-loaded :not-replaceable :unseen :too-few-blocks})
 
 (defn finish!
   "End the job: the ending and its event."
@@ -161,7 +161,8 @@
                             :text (str "bridge gave up at " (count cells) " of " length ": " (name (:reason step))
                                        (when (:short step) (str ", " (:short step) " blocks short"))
                                        (when (:at step) (str " at " (pr-str (:at step)))))))
-          (ctx/end c (if (condition-reasons (:reason step)) :condition-failed :nothing-possible) (:reason step) result)))))
+          (ctx/end c (cond (= :bad-args (:reason step)) :impossible (condition-reasons (:reason step)) :condition-failed :else :nothing-possible)
+                   (:reason step) result)))))
 
 (defn inputs
   "next-step's input now, with the ledger l."

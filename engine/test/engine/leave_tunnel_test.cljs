@@ -374,7 +374,7 @@
           (core/submit! eng '(recording-parent) {})
           (dotimes [_ 5] (swap! clock + 500) (await (core/tick! eng)))
           (is (= [:stopped :bad-args] ((juxt :status :reason) @out)))
-          (is (= :condition-failed (get-in @out [:ending :kind]))))))))
+          (is (= :impossible (get-in @out [:ending :kind]))))))))
 
 (deftest a-missing-pickaxe-is-fetched-for-the-escape-with-fetch
   (async done

@@ -85,8 +85,8 @@
   once. Ends :done when nothing is left open, else nothing-possible :left-open (what could be taken back, was);
   :too-many-passes (nothing-possible) after ::max-passes steps.
 
-  Conditions: :bad-args (:job is nil, :all or an instance id), :no-zones (no zone list has been read, with one warn
-  cleanup.declined, unless :ignore-zones?) and :nothing-to-do (nothing is offered, after a look around when a cell was
+  Impossible: :bad-args (:job is not nil, :all or an instance id). Condition: :no-zones (no zone list has been read, with one warn
+  cleanup.declined, unless :ignore-zones?). Done at once when nothing is offered (after a look around when a cell was
   never seen). Quote: from the entries it would work on.")
 
 (a/defargs args
@@ -320,7 +320,7 @@
     (look/unseen? (:primitives c) cells)))
 
 (defn bad-args [c]
-  (when (bad-job? (:job (:args c))) :bad-args))
+  (when (bad-job? (:job (:args c))) (contract/impossible :bad-args)))
 
 (defn offered-now [c]
   (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)) (ledger/near-of-args c (:args c))))
@@ -331,13 +331,12 @@
                     {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"})
     :no-zones))
 
-(defn nothing-to-do
-  "Nothing is offered, and a cell never seen has been looked at (or none is unseen)."
+(defn nothing-to-do?
+  "Nothing is offered, and a cell never seen has been looked at (or none is unseen): the goal already holds."
   [c]
-  (when-not (or (:started (ctx/mem c)) (seq (offered-now c)) (and (not (look/surveyed? c)) (unseen-entries? c)))
-    :nothing-to-do))
+  (not (or (:started (ctx/mem c)) (seq (offered-now c)) (and (not (look/surveyed? c)) (unseen-entries? c)))))
 
-(def conditions [[:fn bad-args] [:fn no-zones] [:fn nothing-to-do]])
+(def conditions [[:fn bad-args] [:fn no-zones]])
 
 (def target [:job :near])
 
@@ -348,9 +347,9 @@
     (ledger/select (ledger/open-entries view) view (:job (:args c)) (ledger/near-of-args c (:args c)))))
 
 (defn done?
-  "Progress only: the job is done by the round that has nothing left to work on."
+  "Done at the start when nothing is offered; later progress only: the round that has nothing left to work on ends it."
   [c]
-  {:done? false :units :cells :done (count (:removed (ctx/mem c))) :left (count (picked-entries c))})
+  {:done? (nothing-to-do? c) :units :cells :done (count (:removed (ctx/mem c))) :left (count (picked-entries c))})
 
 (defn quote-of [c]
   (let [n (max 1 (count (picked-entries c)))]
@@ -513,7 +512,7 @@
   (let [zones (known/zones c)
         n (atom 0)]
     (if (and (not (:started (ctx/mem c))) (empty? (offered-now c)))
-      (or (await (look/survey! c)) (ctx/end c :condition-failed :nothing-to-do)) ; a block behind the body is not seen until it looks
+      (or (await (look/survey! c)) (ctx/end c :done nil nil)) ; a block behind the body is not seen until it looks
       (do (ctx/update-mem! c assoc :started true)
           (await (pace/steps! c #(if (<= (max-passes) (swap! n inc))
                                    (ctx/end c :nothing-possible :too-many-passes {:text "cleanup did not settle"})

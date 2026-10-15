@@ -122,12 +122,12 @@
           (is (= [:nothing-possible :step-failed] [(:kind r) (contract/cause-key r)]) (pr-str r))
           (is (= [[3 64 0] 0 #{:walk :clear-seal}] ((juxt :pos :range :ways) @asked)) (pr-str @asked)))))))
 
-(deftest a-missing-heading-is-bad-args
+(deftest a-missing-heading-is-impossible
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [e (await (run-door wall nil {:max-thick 3} nil ctx/call))]
-          (is (= [:condition-failed :bad-args] [(:kind e) (contract/cause-key e)]) (pr-str e)))))))
+          (is (= [:impossible :bad-args] [(:kind e) (contract/cause-key e)]) (pr-str e)))))))
 
 (deftest the-job-exports-the-contract-and-quotes-validly
   (let [def (get registry/jobs job)

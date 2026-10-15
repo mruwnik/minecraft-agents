@@ -3,6 +3,7 @@
   fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [jobs.lib.ledger :as ledger]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -561,21 +562,21 @@
     (is (some? (:defaults j)))
     (is (fn? (:quote-of j)))))
 
-(deftest a-bad-job-argument-is-a-failed-condition
-  (are [job cause] (= cause (cleanup/bad-args {:args {:job job}}))
+(deftest a-bad-job-argument-is-impossible
+  (are [job cause] (= cause (contract/impossible-cause (cleanup/bad-args {:args {:job job}})))
     5 :bad-args
     nil nil
     :all nil
     "j3" nil))
 
-(deftest nothing-open-declines-without-a-round
+(deftest nothing-open-ends-done-without-a-round
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (floor -2 2) :entries []})]
           (core/submit! eng (list job) {})
           (await (ticks s eng 20))
-          (is (= 1 (count (:list (core/state eng)))) "still listed, never run")
+          (is (empty? (:list (core/state eng))) "ended at once: the goal already holds")
           (is (= 0 (.-length (.-calls (.-world p)))))
           (is (empty? (of-kind seen :cleanup.done))))))))
 
@@ -592,7 +593,7 @@
           (core/submit! eng (list job) {})
           (let [n (.-length (.-calls (.-world p)))]
             (await (ticks s eng 10))
-            (is (= 1 (count (:list (core/state eng)))) "the second declines")
+            (is (empty? (:list (core/state eng))) "the second ends done: nothing is offered")
             (is (= n (.-length (.-calls (.-world p)))))))))))
 
 (deftest no-zone-list-declines-with-one-warn

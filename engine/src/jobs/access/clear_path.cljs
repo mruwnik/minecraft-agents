@@ -25,7 +25,7 @@
   One call is the whole door; it yields :continue only while a dig child waits on the world.
   Needs nothing carried (a tool the dig child cannot find is its :dig-waits). Quote: the door's cells times the time of a
   cell, ending at the far side.
-  :bad-args and :no-door are conditions, checked at the start. Ends :done, or with a cause {:reason r ...}: :condition-failed for :bad-args (needs :heading and :max-thick > 0),
+  :bad-args and :no-door are conditions, checked at the start. Ends :done, or with a cause {:reason r ...}: :impossible for :bad-args (needs :heading and :max-thick > 0), :condition-failed for
   :no-door (no such wall here), :protected (a block it never digs), :footprint (a cell of a plan this body made,
   unless :spare-own-builds is false) and :dig-waits (the dig child's wait or decline, as :wait); :nothing-possible for
   :dig-failed (its ending, as :dig), :refills (a cell dug max-cell-digs times, e.g. sand falling in) and :step-failed
@@ -55,7 +55,7 @@
 (defn bad-args [c]
   (let [{:keys [heading max-thick]} (:args c)]
     (when-not (and (headings heading) (pos-int? max-thick))
-      {:reason :bad-args :why "needs :heading (:north :east :south :west) and :max-thick > 0"})))
+      (contract/impossible {:reason :bad-args :why "needs :heading (:north :east :south :west) and :max-thick > 0"}))))
 
 (defn no-door-why [heading max-thick p]
   (str "no wall at most " max-thick " thick with a floor beyond, " (name heading) " of " (pr-str (reach/standing-vec p))))

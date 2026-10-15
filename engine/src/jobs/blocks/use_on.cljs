@@ -14,9 +14,9 @@
 
   Ends with info blocks.use-on.done and {:used true|false :pos :item :face :reason}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
   status (:used, :unchanged, :no-item, :no-room, :missing, :cannot, :unreachable, :failed); only :used is done.
-  condition-failed: :no-item, :missing, :cannot, a walk that failed twice (:unreachable, :why), a walk that would leave a
-  night shelter (:night-sheltered, :at-night :go walks out) or a bad :pos or :face (:bad-args, with a blocks.use-on.declined
-  warn). nothing-possible: :unchanged, :no-room, :failed.")
+  condition-failed: :no-item, :missing, :cannot, a walk that would leave a night shelter (:night-sheltered, :at-night :go walks
+  out). Impossible: a bad :pos or :face (:bad-args, with a blocks.use-on.declined warn). nothing-possible: :unreachable (a walk
+  that failed twice, :why), :unchanged, :no-room, :failed.")
 
 (a/defargs args
   {:pos {:doc "the block to click, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
@@ -71,7 +71,7 @@
         error (or error (when-not (faces face) (str "face is one of " (pr-str (sort faces)))))]
     (if error
       (do (ctx/emit! c :blocks.use-on.declined :warn {:reason :bad-args :text (str "blocks.use-on " error)})
-          (ctx/end c :condition-failed {:reason :bad-args :text error} {:used false :reason :bad-args :text error}))
+          (ctx/end c :impossible {:reason :bad-args :text error} {:used false :reason :bad-args :text error}))
       (loop [fails 0]
         (let [w (when-not (b/in-reach? c pos see) (await (walk! c pos see at-night)))]
           (cond
@@ -79,7 +79,7 @@
             (:held w) (finish! c :condition-failed {:used false :pos pos :item item :face face :reason (:held w)
                                                     :text (str "held: " (name (:held w)) "; pass :at-night :go to walk out anyway")})
             (map? w) (if (>= (inc fails) (max-walks))
-                       (finish! c :condition-failed {:used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
+                       (finish! c :nothing-possible {:used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
                        (recur (inc fails)))
             :else
             (let [r (await (ctx/act c :useOn (clj->js (cond-> {:pos pos :face face} item (assoc :item item)))))

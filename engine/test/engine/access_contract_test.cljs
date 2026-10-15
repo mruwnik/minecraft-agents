@@ -50,7 +50,7 @@
 (def ground (into {} (for [x (range -5 20) z (range -5 20)] [(str x ",63," z) "stone"])))
 (defn gate-world [name state] {:self {:pos {:x 3 :y 64 :z 2}} :blocks (assoc ground "3,64,0" name) :states {"3,64,0" state}})
 
-(deftest a-refused-toggle-is-a-failed-condition
+(deftest a-refused-toggle-is-an-impossible-call
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -58,7 +58,7 @@
                                            ["iron_door" {:open false} {:pos [3 64 0] :state :open} :needs-redstone]
                                            ["lever" {:powered false} {:pos [3 64 0] :state :open} :bad-state]
                                            ["oak_door" {:open false} {:state :open} :bad-args]]]
-          (is (= {:event :stopped :kind :condition-failed :reason reason}
+          (is (= {:event :stopped :kind :impossible :reason reason}
                  (await (ending-of (list 'jobs.access.toggle args) (gate-world block state))))
               (str block " " args)))))))
 
@@ -95,12 +95,6 @@
                                                :inventory [{:name "dirt" :count 8}]}))
                             [:event])))))))
 
-(deftest a-tunnel-result-without-a-line-is-a-failed-condition
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= {:event :stopped :reason :bad-args}
-               (select-keys (await (ending-of '(jobs.access.leave-tunnel {:tunnel {} :ignore-zones? true}) {})) [:event :reason])))))))
 
 (defn ^:async waiting-on
   "Submit spec as a root job over a fake world (zones as given) and tick: {:reasons [..] :rounds n :listed? bool}."
@@ -129,6 +123,15 @@
                 [["zone" '(jobs.access.bridge {:heading :east :length 3}) bridge-world [{:name "keep-out" :min [2 60 -2] :max [2 70 2]}] :zone]
                  ["not on solid" '(jobs.access.bridge {:heading :east :length 3 :ignore-zones? true}) (assoc bridge-world :blocks {}) [] :not-on-solid]]]
           (is (= {:reasons [reason] :rounds 0 :listed? true} (await (waiting-on spec world zones))) label))))))
+
+(deftest a-call-that-can-never-be-right-ends-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [spec ['(jobs.access.leave-tunnel {:tunnel {} :ignore-zones? true})]]
+          (is (= {:event :stopped :kind :impossible :reason :bad-args}
+                 (await (ending-of spec {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks {"0,63,0" "stone"}})))
+              (pr-str spec)))))))
 
 (deftest a-bridge-bad-args-start-fact-is-impossible
   (is (= {:reason :bad-args :text "t"} (contract/impossible-cause (bridge/answer {:reason :bad-args :text "t"}))))

@@ -200,9 +200,9 @@
           (is (= (quote-of :eat p {:item "bread"}) (:quote @world)))
           (is (zero? (calls p "eat")) "a quote does not act"))))))
 
-(deftest a-primitive-job-without-what-the-act-needs-fails-its-condition
+(deftest a-primitive-job-without-what-the-act-needs-is-impossible
   (let [[_ condition] (first (:conditions (primitive-job/job :place 'jobs.primitive.place)))]
-    (is (= {:reason :bad-args :missing [:pos :item]} (condition {:args {:pos nil}})))
+    (is (= {:reason :bad-args :missing [:pos :item]} (contract/impossible-cause (condition {:args {:pos nil}}))))
     (is (nil? (condition {:args {:pos {:x 0 :y 64 :z 0} :item "dirt"}})))))
 
 (defn waits-for [ms]

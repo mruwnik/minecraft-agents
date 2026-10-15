@@ -347,7 +347,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"3,55,0" "dirt"}})
-              r (await (ending-cause (:eng env) job {:pos [3 55 0]} 15))]
+              e (:ending (await (child-outcome (:eng env) job {:pos [3 55 0]} 15)))
+              r (:cause e)]
+          (is (= :nothing-possible (:kind e)))
           (is (= {:reason :unreachable :pos {:x 3 :y 55 :z 0}} (select-keys r [:reason :pos])))
           (is (keyword? (:why r)))
           (is (empty? (calls (:p env) "dig"))))))))
@@ -397,9 +399,10 @@
       (fn ^:async t []
         (let [walks (atom 0)
               env (failing-walks (setup {:self body :blocks {"12,64,0" "dirt"}}) walks)
-              r (await (ending-cause (:eng env) job {:pos [12 64 0]} 6))]
-          (is (= 2 @walks) "one more try, then it declines")
-          (is (= {:reason :unreachable :why :no-path} (select-keys r [:reason :why]))))))))
+              e (:ending (await (child-outcome (:eng env) job {:pos [12 64 0]} 6)))]
+          (is (= 2 @walks) "one more try, then it ends")
+          (is (= :nothing-possible (:kind e)) "the walk ran: no route is not a fact to wait on")
+          (is (= {:reason :unreachable :why :no-path} (select-keys (:cause e) [:reason :why]))))))))
 
 (defn after-walks
   "env with jobs.movement.go-to replaced by the real one followed by (f p): the world changes during the walk."
@@ -457,14 +460,15 @@
           (is (= "air" (block-at (:p env) {:x 12 :y 64 :z 0})))
           (is (= 1 (carried (:p env) "dirt"))))))))
 
-(deftest bad-args-fail-the-conditions
+(deftest bad-args-end-impossible
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup {:self body})
-              cause (:cause (await (waiting-after env (list job {}) 2)))]
-          (is (= :bad-args (:reason cause)))
-          (is (string? (:text cause))))))))
+              e (:ending (await (child-outcome (:eng env) job {} 4)))]
+          (is (= :impossible (:kind e)))
+          (is (= :bad-args (:reason (:cause e))))
+          (is (string? (:text (:cause e)))))))))
 
 (def hut {:id "hut" :parts [{:id "w" :cells [[2 64 0]] :want "stone"}]})
 

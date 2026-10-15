@@ -214,7 +214,8 @@
                                               (when (:short step) (str ", " (:short step) " blocks short"))
                                               (when (:mob step) (str ", " (:mob step) " stays in the cell"))
                                               (when (:at step) (str " at " (pr-str (:at step)))))))
-          (ctx/end c (if (nothing-possible (:reason step)) :nothing-possible :condition-failed) (dissoc step :step) result)))))
+          (ctx/end c (cond (= :bad-args (:reason step)) :impossible (nothing-possible (:reason step)) :nothing-possible :else :condition-failed)
+                   (dissoc step :step) result)))))
 
 (defn blocks-of
   "The block names the call lists for the pillar: its :use {:blocks}, before the call has started (the engine freezes

@@ -2,6 +2,7 @@
   "jobs.movement.linger-near against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.ctx :as ctx]
@@ -46,11 +47,11 @@
 (defn self-x [p] (.-x (.-pos (.self p))))
 
 (deftest condition-wants-a-pos-and-a-positive-wait
-  (are [args ok] (= ok (nil? (linger-near/bad-args {:args args})))
-    {:pos {:x 1 :y 64 :z 0} :wait-s 5} true
-    {:pos {:x 1 :y 64 :z 0} :wait-s 0} false
-    {:pos {:x 1 :y 64 :z 0}} false
-    {:wait-s 5} false))
+  (are [args cause] (= cause (contract/impossible-cause (linger-near/bad-args {:args args})))
+    {:pos {:x 1 :y 64 :z 0} :wait-s 5} nil
+    {:pos {:x 1 :y 64 :z 0} :wait-s 0} :bad-args
+    {:pos {:x 1 :y 64 :z 0}} :bad-args
+    {:wait-s 5} :bad-args))
 
 (deftest within-range-it-holds-still-and-ends-after-the-wait
   (async done

@@ -2,6 +2,7 @@
   "jobs.blocks.place against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
@@ -205,11 +206,12 @@
         (is (= {:reason :no-support :pos {:x 2 :y 67 :z 0}}
                (:cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [2 67 0] :item "cobblestone"}) 3)))))))))
 
-(deftest no-item-named-ends-with-bad-args
+(deftest no-item-named-ends-impossible-bad-args
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (bd/setup {:self body})]
+          (is (= {:kind :impossible :cause :bad-args} (update (await (ending-of {:eng eng} {:pos at} 3)) :cause :reason)))
           (is (= {:placed false :reason :bad-args} (select-keys (await (bd/child-outcome eng job {:pos at} 3)) [:placed :reason]))))))))
 
 (deftest a-cell-of-the-bodys-own-plan-is-placed-another-bodys-plan-refuses
@@ -239,7 +241,7 @@
               env (bd/failing-walks (bd/setup {:self body :inventory cobble}) walks)
               e (await (ending-of env {:pos [12 64 0] :item "cobblestone"} 5))]
           (is (= 2 @walks) "one more try, then it ends")
-          (is (= {:kind :condition-failed :cause {:reason :unreachable :why :no-path}} e)))))))
+          (is (= {:kind :nothing-possible :cause {:reason :unreachable :why :no-path}} e)))))))
 
 (deftest a-cut-at-the-place-is-resumed-and-the-block-placed-once
   (async done

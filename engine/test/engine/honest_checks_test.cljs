@@ -62,9 +62,7 @@
     'jobs.items.bake :no-chest
     'jobs.items.craft :bad-args
     'jobs.items.enchant :bad-args
-    'jobs.items.give :bad-args
-    'jobs.movement.follow :bad-args
-    'jobs.movement.linger-near :bad-args))
+    'jobs.items.give :bad-args))
 
 (deftest log-out-says-why-it-declines
   (are [args reason] (= reason (waiting-reason 'jobs.survival.log-out args))
@@ -73,7 +71,6 @@
 
 (deftest access-farm-forestry-storage-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
-    'jobs.access.cleanup {} :nothing-to-do
     'jobs.farm.harvest {:plan "nope"} :plan-trouble
     'jobs.farm.plant {:plan "nope"} :plan-trouble
     'jobs.farm.tend {:plan "nope"} :plan-trouble
