@@ -37,11 +37,13 @@
 
 (def big-floor [-200 -12 20 12])
 
-(defn setup [world]
+(defn setup
+  "An engine over a fake on big-floor; world's :ms-per-call (default ms-per-call) is the game time one call takes."
+  [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake-on-floor (merge {:floor big-floor} world)))
-        now (tu/act-clock clock p ms-per-call)
+        p (tu/seeing-all (tu/fake-on-floor (merge {:floor big-floor} (dissoc world :ms-per-call))))
+        now (tu/act-clock clock p (:ms-per-call world ms-per-call))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :seen seen :clock clock}))
@@ -214,10 +216,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (setup {:entities [(zombie 7 5 {:chase {:speed 1}})]})
+        (let [ms 5000
+              s (setup {:entities [(zombie 7 5 {:chase {:speed 1}})] :ms-per-call ms})
               {:keys [p]} s
               world (.-world p)
-              elapsed-s #(/ (* ms-per-call (.-length (.-calls world))) 1000)]
+              elapsed-s #(/ (* ms (.-length (.-calls world))) 1000)]
           (doseq [name ["steer" "moveTo" "wait" "attack" "place" "dig" "equip" "eat"]]
             (.override world name (fn ^:async f [token a impl]
                                     (when (> (elapsed-s) 180) (swap! (fake/state p) assoc :entities []))

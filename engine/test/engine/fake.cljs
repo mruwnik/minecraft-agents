@@ -68,6 +68,7 @@
 ;; blocks whose collision shape does not fill the cell (or that have none); every other block is a full cube
 (def not-full-cube
   #"^(air|cave_air|void_air|water|lava|bubble_column|fire|soul_fire|short_grass|tall_grass|fern|large_fern|snow|wheat|carrots|potatoes|beetroots|farmland|dirt_path|soul_sand|torch|wall_torch|vine|cobweb|ladder|sugar_cane|dead_bush|kelp|seagrass|tall_seagrass|rail|lever|dandelion|poppy|wither_rose|sunflower|lilac|rose_bush|peony)$|_(slab|stairs|carpet|sapling|sign|flower|button|pressure_plate|fence|pane|torch|rail|bed)$")
+(def full-cube? (memoize (fn [block] (not (re-find not-full-cube block)))))
 (def fence-post [0.375 0 0.375 0.625 1.5 0.625])
 (def pane-post [0.4375 0 0.4375 0.5625 1 0.5625])
 (def crops {"wheat_seeds" "wheat" "carrot" "carrots" "potato" "potatoes" "beetroot_seeds" "beetroots"})
@@ -1019,15 +1020,18 @@
                   (when ids (to-array (map #(.-name (aget (.-items data) %)) ids)))))
               "blockAt"
               (fn [a]
-                ;; a plain {x y z} object skips args-in's walk: reach floods and sight checks call this per cell
-                (let [w @state pos (if (object? a) [(.-x a) (.-y a) (.-z a)] (vec-pos (args-in a)))
-                      block (block-name w pos)
-                      props (properties-of w pos)]
+                ;; sensing reads every cell through here, so the answer is built as JS directly (args-in and to-js
+                ;; cost more than the lookup)
+                (let [w @state
+                      pos (if (number? (some-> a .-x)) [(.-x a) (.-y a) (.-z a)] (vec-pos (args-in a)))]
                   (when-not (or (:offline w) ((:unloaded w) pos))
-                    (to-js (merge {:name block :pos pos}
-                                  (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])})
-                                  (when (seq props) {:properties props})
-                                  (when-not (re-find not-full-cube block) {:fullCube true}))))))
+                    (let [block (block-name w pos)
+                          props (properties-of w pos)
+                          o #js {:name block :pos (pos-js pos)}]
+                      (when (contains? (:ages w) pos) (aset o "age" (get-in w [:ages pos])))
+                      (when (seq props) (aset o "properties" (to-js props)))
+                      (when (full-cube? block) (aset o "fullCube" true))
+                      o))))
               "pathWorld" (fn [unknown] (let [{:keys [snapshot table space]} (steer/path-world @state)]
                                           #js {:snapshot (if unknown (steer/masked snapshot unknown) snapshot) :table table :space space}))
               "onBodyEvent" (fn [listener] (swap! listeners conj listener) (fn [] (swap! listeners disj listener)))

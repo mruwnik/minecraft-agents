@@ -49,6 +49,13 @@
 
 (defn sleep [ms] (js/Promise. (fn [r] (js/setTimeout r ms))))
 
+(defn ^:async until-hiding
+  "Poll until the round hides (a hold), ends, or n polls of 20 ms pass."
+  [round seen n]
+  (let [ended (atom false)]
+    (.then round #(reset! ended true) #(reset! ended true))
+    (loop [i 0] (when (and (not (hiding? seen)) (not @ended) (< i n)) (await (sleep 20)) (recur (inc i))))))
+
 (defn ^:async hidden-round
   "Submit spec over world and run its round, which hides (a hold) while the mob stays. Once it hides the clock jumps
   jump-ms, (look setup-map) is noted, and the mobs leave (or give way to after, entity specs). (prep p) runs first.
@@ -61,7 +68,7 @@
      (prep p)
      (core/submit! eng spec {})
      (let [round (core/tick! eng)]
-       (loop [i 0] (when (and (not (hiding? seen)) (< i 250)) (await (sleep 20)) (recur (inc i))))
+       (await (until-hiding round seen 250))
        (swap! clock + jump-ms)
        (await (sleep 60))
        (reset! noted (look s))
@@ -250,7 +257,7 @@
         listed (atom [])]
     (core/submit! eng spec {})
     (let [round (core/tick! eng)]
-      (loop [i 0] (when (and (not (hiding? seen)) (< i 1000)) (await (sleep 20)) (recur (inc i))))
+      (await (until-hiding round seen 1000))
       (doseq [[ents jump-ms] steps]
         (swap! (fake/state p) assoc :entities [])
         (doseq [e ents] (fake/add-entity! p e))
@@ -293,7 +300,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng listed]}
-              (await (hide-steps '(jobs.survival.retreat {:quiet-s 20000 :hide-s 100000})
+              (await (hide-steps '(jobs.survival.retreat {:quiet-s 2000 :hide-s 100000})
                                  {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                   :entities [(zombie-at 4)]}
                                  [[[(zombie-at 12)] 0] [[] 10000]]))]
