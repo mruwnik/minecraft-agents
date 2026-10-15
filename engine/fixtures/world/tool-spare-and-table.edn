@@ -3,11 +3,11 @@
 ;; niche, not in a step of the stair, and is dug up again; with nothing to make one from it warns tool.no-spare and goes on. A worn iron
 ;; pickaxe or axe gets the cheapest tool that does the job (stone). fell-tree does the same for its axe. A craft with the body standing
 ;; across a cell edge puts its table in a cell outside the body's box. obtain raw_iron whose last pickaxe breaks mid-mine crafts a new one
-;; and goes on. Stone mass x 2..30, z 8..24, y 0..9 (surface y 10); the body starts on top at (10 10 16).
+;; and goes on. Stone mass x 2..30, z 8..24, y -8..9 (surface y 10; deep enough for a 13-step stair); the body starts on top at (10 10 16).
 {:defaults
  {:tags [:tools :mine :access] :time :any
   :plot {:height 24}
-  :blocks [[:fill [2 0 8] [30 9 24] "stone"]]
+  :blocks [[:fill [2 -8 8] [30 9 24] "stone"]]
   :body {:at [10.5 10 16.5] :yaw 270 :inventory [["torch" 8] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
   :limit-s 200}
  :cases
