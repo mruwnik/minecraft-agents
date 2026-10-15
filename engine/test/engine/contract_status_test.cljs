@@ -72,7 +72,7 @@
 
 (def gated
   {:can-start? (gate :start) :can-run? (gate :run)
-   :defaults {:spend {:elapsed 60}}
+   :defaults {:spend {:wall-time 60}}
    :round (fn [_] (swap! world update :rounds (fnil inc 0)) :continue)})
 
 (deftest a-listed-job-waits-on-can-start-with-its-text-and-stops-asking-it-once-started
@@ -125,7 +125,7 @@
           (swap! world assoc :run false)
           (swap! clock + 61000)
           (await (core/tick! eng))
-          (is (= {:kind :limit-reached :reason :elapsed}
+          (is (= {:kind :limit-reached :reason :wall-time}
                  (select-keys (:data (first (job-ev seen :stopped))) [:kind :reason]))))))))
 
 (deftest can-run-never-ends-a-started-job-impossible

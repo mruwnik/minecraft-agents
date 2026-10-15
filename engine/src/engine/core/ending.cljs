@@ -187,7 +187,7 @@
   "A contract job waits while its checks say :later (old conditions and can-start? until it starts, can-run? always),
   then while the body is below a floor of its call. A :never, a :look or a goal that holds before the start passes: the
   round ends the job, or looks. A started job waiting on can-run? whose spend or deadline is crossed passes too, so its
-  round ends it: waiting is bounded by the call's limits, :elapsed among them."
+  round ends it: waiting is bounded by the call's limits, :wall-time among them."
   [def c]
   (let [fresh? (not (started? c))
         s (if fresh? (contract/all (statuses def c)) (contract/verdict c (select-keys def [:can-run?])))
