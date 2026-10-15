@@ -10,6 +10,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]))
 
@@ -23,9 +24,10 @@
   (filterv #(seen-lava? p %) (map #(add cell %) rules/neighbour-deltas)))
 
 (defn ^:async look-round!
-  "Look at each unsensed neighbour of the dug cell, the cell below first (jobs.lib.dig-look), so lava the dig laid open is seen before exposed reads."
+  "Look at each unsensed neighbour of the dug cell, the cell below first, with a sight pass after each look
+  (jobs.lib.sense), so lava the dig laid open is seen before exposed reads."
   [c cell]
-  (await (dig-look/look-unknown! c (map #(add cell %) (cons [0 -1 0] rules/neighbour-deltas)))))
+  (await (sense/look-at-unknown! c (map #(add cell %) (cons [0 -1 0] rules/neighbour-deltas)) dig-look/max-floor-looks)))
 
 (def max-seals "Places per lava cell (a seal and one reseal) before the seal counts as failed." 2)
 
