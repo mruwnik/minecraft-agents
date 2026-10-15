@@ -110,7 +110,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (ore-world {} [{:name "stone_pickaxe" :count 1}]) [f/own-zone])]
+        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1}]) :floor [-30 -30 40 30]) [f/own-zone])]
           (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 4))
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
           (is (seq (mine-events s)) "the mine child ran"))))))
@@ -119,7 +119,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "crafting_table" :count 1}]) [f/own-zone])]
+        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "crafting_table" :count 1}]) :floor [-30 -30 40 30]) [f/own-zone])]
           (await (obtain! s {:item "iron_pickaxe"} 4))
           (is (empty? (f/events-of s :waiting)) "no silent wait")
           (is (seq (mine-events s)) "the mine child ran"))))))
@@ -128,7 +128,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (ore-world {} [{:name "wooden_pickaxe" :count 1}]) [f/own-zone])]
+        (let [s (f/start (assoc (ore-world {} [{:name "wooden_pickaxe" :count 1}]) :floor [-30 -30 40 30]) [f/own-zone])]
           (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather} :explore true} 6))
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
           (is (seq (mine-events s)) "the mine child ran"))))))
