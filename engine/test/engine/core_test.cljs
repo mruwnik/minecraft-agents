@@ -1557,7 +1557,7 @@
   (let [s (setup)]
     (update s :eng assoc :triggers (merge triggers declining-reflexes))))
 
-(deftest a-declining-reflex-job-is-dropped-and-refires-only-after-its-cooldown
+(deftest a-reflex-combinator-whose-children-decline-stops-and-refires-only-after-its-cooldown
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1568,8 +1568,10 @@
             (await (core/tick! eng))
             (is (= ["j1"] (ran seen)) (str trigger " fired"))
             (is (nil? (get-in (core/state eng) [:instances "j1"])) (str trigger " is gone"))
-            (is (= 1 (count (filter #(= [:reflex :declined trigger] [(:source %) (:kind %) (:reflex %)]) @seen)))
-                "one reflex.declined event")
+            (is (= [{:outcome :stopped :reason :not-ready}]
+                   (->> @seen (filter #(= [:reflex :ended trigger] [(:source %) (:kind %) (:reflex %)]))
+                        (mapv #(select-keys % [:outcome :reason]))))
+                "one reflex.ended, stopped with the child's wait")
             (is (nil? (core/tick! eng)) "cooling down: it does not fire again")
             (swap! clock + 9000)
             (is (nil? (core/tick! eng)) "still cooling down")
@@ -1933,12 +1935,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [outcomes (fn [seen] (mapv :outcome (reflex-events seen :ended)))]
-          (testing "declined"
+          (testing "stopped: a combinator whose children decline"
             (let [{:keys [eng seen]} (declined-setup)]
               (reset! flag false)
               (core/register-reflex! eng {:trigger :gated-any})
               (await (core/tick! eng))
-              (is (= [:declined] (outcomes seen)))))
+              (is (= [:stopped] (outcomes seen)))))
           (testing "failed"
             (let [{:keys [eng seen]} (setup)]
               (core/register-reflex! eng {:trigger :boom})

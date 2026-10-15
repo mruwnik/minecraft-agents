@@ -1,6 +1,7 @@
 (ns engine.composite-test
   (:require [cljs.test :refer [deftest is async]]
             [engine.composite :as composite]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -8,81 +9,108 @@
             [engine.test-util :as tu]))
 
 (defn stub
-  "A ctx whose child slot :cN ends with (ends N): [status result]. Returns [ctx mem results calls]."
+  "A ctx whose child slot :cN ends with (ends N), an ending or :continue (ctx/call). Returns [ctx mem calls]."
   [ends]
-  (let [mem (atom {}) results (atom {}) calls (atom [])
+  (let [mem (atom {}) calls (atom [])
         c {:view (constantly nil)
-           :call-child (fn [slot _ _]
-                         (swap! calls conj slot)
-                         (let [[status result] (ends slot)]
-                           (reset! results {slot result})
-                           (js/Promise.resolve status)))
-           :child-result (fn [slot] (get @results slot))
-           :result (fn [data] (swap! results assoc :self data))
+           :slots []
+           :call (fn [slot _ _]
+                   (swap! calls conj slot)
+                   (js/Promise.resolve (ends slot)))
            :update-mem (fn [f args] (apply swap! mem f args))}]
-    [(assoc c :mem-atom mem) mem results calls]))
+    [c mem calls]))
 
 (def kid [{:check (constantly true) :round (fn [_] :done)} {}])
-(def refuses (constantly [:done {:status :stopped :reason :refused}]))
-(def impossible (constantly [:done {:status :stopped :reason :refused :ending {:kind :impossible :cause :refused}}]))
+(def refuses (constantly (contract/ending :condition-failed :refused nil)))
+(def impossible (constantly (contract/ending :impossible :refused nil)))
 
 (defn round!
-  "Starts def's round; ctx/mem is read in its synchronous part, before the child call."
-  [def c]
-  (with-redefs [ctx/mem (fn [_] {})]
+  "Runs def's round with ctx/mem reading mem."
+  [def c mem]
+  (with-redefs [ctx/mem (fn [_] @mem)]
     ((:round def) c)))
 
 (deftest repeat-with-no-count-ends-when-its-child-is-impossible
   (async done
-    (let [[c _ results calls] (stub impossible)
+    (let [[c mem calls] (stub impossible)
           d (composite/repeat-def kid nil)]
-      (-> (round! d c)
+      (-> (round! d c mem)
           (.then (fn [r]
-                   (is (= :done r))
-                   (is (= {:status :stopped :reason :refused} (:self @results)))
+                   (is (= [:impossible :refused] [(:kind r) (:cause r)]))
+                   (is (= :impossible (:kind (:because r))) "the child's ending is its because")
                    (is (= [:c0] @calls))
                    (done)))))))
 
-(deftest seq-stops-with-the-cause-of-a-refusing-step
+(deftest seq-stops-with-the-ending-of-a-refusing-step
   (async done
-    (let [[c _ results] (stub refuses)
+    (let [[c mem] (stub (constantly (contract/ending :nothing-possible {:reason :no-path} nil)))
           d (composite/seq-def [kid kid])]
-      (-> (round! d c)
+      (-> (round! d c mem)
           (.then (fn [r]
-                   (is (= :done r))
-                   (is (= {:status :stopped :reason :refused} (:self @results)))
+                   (is (= [:nothing-possible {:reason :no-path}] [(:kind r) (:cause r)]) "the child's kind and cause")
                    (done)))))))
+
+(deftest seq-waits-without-calling-a-step-whose-check-fails
+  (async done
+    (let [[c mem calls] (stub refuses)
+          d (composite/seq-def [[{:check (constantly false) :round (fn [_] :done)} {}]])]
+      (-> (round! d c mem)
+          (.then (fn [r]
+                   (is (= :continue r))
+                   (is (= [] @calls))
+                   (-> (round! d (assoc c :reflex :r) mem)
+                       (.then (fn [r2]
+                                (is (= [:condition-failed :not-ready] [(:kind r2) (:cause r2)])
+                                    "a reflex job ends instead: it runs one round")
+                                (done))))))))))
 
 (deftest until-stops-when-its-child-is-impossible
   (async done
-    (let [[c _ results] (stub impossible)
+    (let [[c mem] (stub impossible)
           d (composite/until-def [{:check (constantly false) :round (fn [_] :done)} {}] kid)]
-      (-> (round! d c)
+      (-> (round! d c mem)
           (.then (fn [r]
-                   (is (= :done r))
-                   (is (= {:status :stopped :reason :refused} (:self @results)))
+                   (is (= :impossible (:kind r)))
                    (done)))))))
 
 (deftest any-skips-a-refusing-child-and-stops-when-all-refused
   (async done
-    (let [[c mem results calls] (stub refuses)
+    (let [[c mem calls] (stub refuses)
           d (composite/any-def [kid kid])]
-      (-> (round! d c)
+      (-> (round! d c mem)
           (.then (fn [r]
                    (is (= :continue r))
-                   (is (= {:refused {:c0 {:status :stopped :reason :refused}}} @mem))
-                   (let [c2 (assoc c :update-mem (fn [f args] (apply swap! mem f args)))]
-                     (-> (with-redefs [ctx/mem (fn [_] @mem)] ((:round d) c2))
-                         (.then (fn [r2]
-                                  (is (= :continue r2))
-                                  (is (= [:c0 :c1] @calls))
-                                  (-> (with-redefs [ctx/mem (fn [_] @mem)] ((:round d) c2))
-                                      (.then (fn [r3]
-                                               (is (= :done r3))
-                                               (is (= {:status :stopped :reason :refused} (:self @results)))
-                                               (done))))))))))))))
+                   (is (= [:c0] (keys (:refused @mem))))
+                   (-> (round! d c mem)
+                       (.then (fn [r2]
+                                (is (= :continue r2))
+                                (is (= [:c0 :c1] @calls))
+                                (-> (round! d c mem)
+                                    (.then (fn [r3]
+                                             (is (= [:condition-failed :refused] [(:kind r3) (:cause r3)]))
+                                             (done)))))))))))))
 
-;; ------------------------------------------------------------------ repeat on the engine: rest and run again
+(deftest any-ends-done-through-a-later-child-after-a-refusal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[c mem calls] (stub {:c0 (contract/ending :condition-failed :refused nil) :c1 (contract/ending :done nil nil)})
+              d (composite/any-def [kid kid])]
+          (is (= :continue (await (round! d c mem))))
+          (is (= :done (:kind (await (round! d c mem)))))
+          (is (= [:c0 :c1] @calls)))))))
+
+(deftest any-ends-as-the-last-refusal-in-time-among-many-children
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ends (into {} (map (fn [i] [(composite/slot i) (contract/ending :condition-failed (keyword (str "r" i)) nil)])) (range 10))
+              [c mem] (stub ends)
+              d (composite/any-def (vec (repeat 10 kid)))]
+          (dotimes [_ 10] (await (round! d c mem)))
+          (is (= :r9 (:cause (await (round! d c mem))))))))))
+
+;; ------------------------------------------------------------------ on the engine
 
 (defn ending-kid
   "A contract job that ends with @ending ([kind cause]) and counts its runs in runs."
@@ -90,20 +118,35 @@
   {:conditions []
    :round (fn ^:async kid-round [c] (swap! runs inc) (let [[k cause] @ending] (ctx/end c k cause)))})
 
-(defn repeat-setup [kind spec]
-  (let [clock (atom 1000000)
-        ending (atom [kind :nothing-to-do])
-        runs (atom 0)
-        eng (core/create {:primitives (tu/fake {}) :jobs {'kid (ending-kid ending runs) 'never {:check (constantly false) :round (fn [_] :done)}} :triggers {} :dir (tu/tmp-dir)
-                          :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [] :now #(deref clock)})})]
-    (core/submit! eng spec {})
-    {:eng eng :clock clock :ending ending :runs runs}))
+(defn repeat-setup
+  ([kind spec] (repeat-setup kind spec []))
+  ([kind spec sinks]
+   (let [clock (atom 1000000)
+         ending (atom [kind :nothing-to-do])
+         runs (atom 0)
+         eng (core/create {:primitives (tu/fake {}) :jobs {'kid (ending-kid ending runs) 'never {:check (constantly false) :round (fn [_] :done)}} :triggers {} :dir (tu/tmp-dir)
+                           :now #(deref clock)
+                           :events (events/make {:body "Fake" :sinks sinks :now #(deref clock)})})]
+     (core/submit! eng spec {})
+     {:eng eng :clock clock :ending ending :runs runs})))
 
 (defn ^:async run-s! [{:keys [eng clock]} s]
   (dotimes [_ (* 2 s)] (await (core/tick! eng)) (swap! clock + 500)))
 
 (defn listed? [{:keys [eng]}] (boolean (seq (:list (core/state eng)))))
+
+(deftest a-listed-seq-stops-with-its-childs-ending-kind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [spec ['(seq (kid)) '(seq (seq (kid)))]]
+          (let [[seen sink] (tu/capture-sink)
+                s (repeat-setup :nothing-possible spec [sink])]
+            (await (run-s! s 2))
+            (is (not (listed? s)))
+            (is (= [{:kind :nothing-possible :cause :nothing-to-do}]
+                   (->> @seen (filter #(= [:job :stopped] [(:source %) (:kind %)])) (mapv #(select-keys (:data %) [:kind :cause]))))
+                (str spec))))))))
 
 (defn rest-s [] (settings/get composite/settings ::composite/rest-s))
 
