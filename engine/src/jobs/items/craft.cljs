@@ -72,7 +72,7 @@
   (when-not (string? (:item (:args c)))
     {:reason :bad-args :why "no item name"}))
 
-(defn can-start? [c] (checks/never-with (bad-args c)))
+(defn can-start? [c] (checks/cause-status :never (bad-args c)))
 
 (defn done?
   "Progress only: the round that sees the target carried also picks up a table it put down and ends."

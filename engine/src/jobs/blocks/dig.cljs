@@ -8,6 +8,7 @@
             [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.child :as child]
             [jobs.lib.lava :as lava]
             [jobs.lib.need :as need]
@@ -181,7 +182,7 @@
 
 (def defaults {:spend {:job-time ::time-s} :least 1 :use {:tools :dig}})
 
-(def can-start? (checks/all bad-args not-loaded refused no-tool-unfetched))
+(def can-start? (cond/and {:parts? false} bad-args not-loaded refused no-tool-unfetched))
 
 (defn done?
   "Ok when the cell is air and no dug block of this call is still to seal or collect (the round ends with the

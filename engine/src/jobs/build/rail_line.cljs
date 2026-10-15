@@ -6,6 +6,7 @@
             [engine.contract :as contract]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.lib.placement :as placement]
@@ -197,7 +198,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def can-start? (checks/all plan-problem ready-problem))
+(def can-start? (cond/and {:parts? false} plan-problem ready-problem))
 (def can-run? plan-problem)
 
 (defn done?

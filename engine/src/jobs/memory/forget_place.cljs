@@ -36,8 +36,8 @@
   [c]
   (let [cause (bad-args c)]
     (if (= :not-a-place (:reason cause))
-      (checks/later-with cause)
-      (checks/never-with cause))))
+      (checks/cause-status :later cause)
+      (checks/cause-status :never cause))))
 
 (defn done?
   "Done when nothing is recorded under the name."

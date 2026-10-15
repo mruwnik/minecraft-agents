@@ -123,7 +123,7 @@
   (when-not (seq (:items (:args c)))
     {:reason :bad-args :why "needs :items, a list of item names"}))
 
-(defn can-start? [c] (checks/never-with (bad-args c)))
+(defn can-start? [c] (checks/cause-status :never (bad-args c)))
 
 (defn done?
   "Ok when every item is carried or worn (with :wear, no carried piece is left to put on) and no child is under way."

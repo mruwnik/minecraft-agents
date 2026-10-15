@@ -246,14 +246,14 @@
   [c]
   (if-let [stop (refusal c)]
     (let [fields (access/refusal-fields [stop])]
-      (checks/later-of (str "refused by " (access/refusal-text fields)) (assoc fields :reason :refused)))
+      (checks/cause-status :later (assoc fields :reason :refused) (str "refused by " (access/refusal-text fields))))
     (contract/ok :permitted "no zone, claim or plan refuses")))
 
 (defn not-lacking
   "Later with what the next dig lacks that this call cannot make good (:no-tool, :no-free-slot)."
   [c]
   (if-let [lack (unmet c)]
-    (checks/later-of (str "lacks " (name (:reason lack))) lack)
+    (checks/cause-status :later lack (str "lacks " (name (:reason lack))))
     (contract/ok :supplied "nothing lacking")))
 
 (def can-start?

@@ -210,6 +210,10 @@
     (is (= [2 2 2 2] (map (comp deref second) parts)))
     (is (= [ok-a later-a never-a ok-b] (:parts data)))))
 
+(deftest and-with-parts-off-keeps-the-failing-cause-alone
+  (let [[kind _ data] ((apply cond/and {:parts? false} (map (comp first const) [ok-a later-a])) {})]
+    (is (= [:later {:reason :la}] [kind data]))))
+
 (deftest a-check-that-returns-no-status-is-an-error-naming-it
   (is (thrown-with-msg? js/Error #"not a status" ((cond/and (fn bad-check [_] nil)) {}))))
 

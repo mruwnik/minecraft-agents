@@ -8,6 +8,7 @@
             [jobs.lib.apiary :as apiary]
             [jobs.lib.look :as look]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.build.from-plan :as from-plan]
             [jobs.lib.pen :as pen]
             [jobs.build.from-plan.plan :as plan]
@@ -188,7 +189,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def can-start? (checks/all plan-problem uneven-problem from-plan/no-items))
+(def can-start? (cond/and {:parts? false} plan-problem uneven-problem from-plan/no-items))
 (def can-run? plan-problem)
 
 (defn inside?

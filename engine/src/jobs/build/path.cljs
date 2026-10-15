@@ -13,6 +13,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.toll-cells :as tc]))
 
 (def doc
@@ -160,7 +161,7 @@
      (when (and (valid-cells c) (seq (pending c)) (nil? (shovel c)) (nil? (fetch-opts c)))
        no-shovel))))
 
-(def can-start? (checks/all bad-args no-zones all-refused shovel-lacking))
+(def can-start? (cond/and {:parts? false} bad-args no-zones all-refused shovel-lacking))
 (def can-run? no-zones)
 
 (declare result-of)

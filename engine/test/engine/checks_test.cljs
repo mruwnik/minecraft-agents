@@ -15,8 +15,11 @@
     (is (= "needs a name" (second (check {:args {}}))))))
 
 (deftest the-cause-map-becomes-reason-and-data
-  (is (= [:later "text" {:reason :zone :zone "keep"}] (checks/later-of "text" {:reason :zone :zone "keep"})))
-  (is (= [:never "text" {:reason :claim :id 3}] (checks/never-of "text" {:reason :claim :id 3}))))
+  (is (= [:later "text" {:reason :zone :zone "keep"}] (checks/cause-status :later {:reason :zone :zone "keep"} "text")))
+  (is (= [:never "text" {:reason :claim :id 3}] (checks/cause-status :never {:reason :claim :id 3} "text"))))
+
+(deftest no-cause-is-ok
+  (is (= [:ok :holds] (tu/kind-reason (checks/cause-status :later nil)))))
 
 (deftest unseen-later-asks-for-a-look-until-the-body-has-looked
   (are [mem expected] (= expected (with-redefs [ctx/mem (constantly mem)]

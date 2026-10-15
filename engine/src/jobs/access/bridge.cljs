@@ -182,8 +182,8 @@
         fact (dissoc step :step)]
     (cond
       (not (and (= :give-up (:step step)) (start-facts (:reason step)))) (contract/ok :start "the first step is not refused")
-      (= :bad-args (:reason fact)) (checks/never-of "bad args" fact)
-      :else (checks/later-of (str "the first step gives up: " (name (:reason fact))) fact))))
+      (= :bad-args (:reason fact)) (checks/cause-status :never fact "bad args")
+      :else (checks/cause-status :later fact (str "the first step gives up: " (name (:reason fact)))))))
 
 (def can-start? (cond/and checks/not-moved start-fact))
 

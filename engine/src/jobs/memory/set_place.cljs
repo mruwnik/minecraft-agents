@@ -54,8 +54,8 @@
   [c]
   (let [cause (bad-args c)]
     (if (= :not-a-place (:reason cause))
-      (checks/later-with cause)
-      (checks/never-with cause))))
+      (checks/cause-status :later cause)
+      (checks/cause-status :never cause))))
 
 (defn done?
   "Done when the place is already recorded at the cell the call resolves to."

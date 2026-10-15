@@ -194,9 +194,10 @@
 
 (defn and
   "Every check asked: any :never, else the first :later, else the first :look, else :ok (texts joined); :parts
-  holds each."
+  holds each unless a leading {:parts? false} drops them (the status then carries only the failing check's cause)."
   [& checks]
-  (fn [c] (let [ss (ask-all c checks)] (with-parts (contract/all ss) ss))))
+  (let [[{:keys [parts?] :or {parts? true}} checks] (if (map? (first checks)) [(first checks) (rest checks)] [{} checks])]
+    (fn [c] (let [ss (ask-all c checks) s (contract/all ss)] (if parts? (with-parts s ss) s)))))
 
 (defn or-later [ss]
   (let [laters (filter #(cljs.core/= :later (first %)) ss)]

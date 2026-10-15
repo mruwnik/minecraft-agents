@@ -94,7 +94,7 @@
       {:reason :too-few-levels :need 1})))
 
 (defn can-start? [c]
-  (contract/all [(checks/never-with (problem c)) (checks/later-with (lacking c)) (checks/later-with (unaffordable c))]))
+  (contract/all [(checks/cause-status :never (problem c)) (checks/cause-status :later (lacking c)) (checks/cause-status :later (unaffordable c))]))
 
 (defn done?
   "Ok once the offer is bought (the round ends the call with the data)."

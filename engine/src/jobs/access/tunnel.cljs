@@ -165,7 +165,7 @@
   [c]
   (if-let [a (refusal c)]
     (let [fields (access/refusal-fields [a])]
-      (checks/later-of (str "refused by " (access/refusal-text fields)) (assoc fields :reason :refused)))
+      (checks/cause-status :later (assoc fields :reason :refused) (str "refused by " (access/refusal-text fields))))
     (contract/ok :permitted "no zone, claim or plan refuses")))
 
 (def can-start? (cond/and checks/zones-read not-refused))

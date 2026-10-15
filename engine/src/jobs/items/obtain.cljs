@@ -116,7 +116,7 @@
       (when-not (and (= :no-source (:reason cause)) (way? c :chest) (not (look/surveyed? c)))
         cause))))
 
-(defn can-start? [c] (contract/all [(checks/never-with (bad-args c)) (checks/later-with (no-source c))]))
+(defn can-start? [c] (contract/all [(checks/cause-status :never (bad-args c)) (checks/cause-status :later (no-source c))]))
 
 (defn held-name
   "The name of names carried most of in inventory inv, else the first."

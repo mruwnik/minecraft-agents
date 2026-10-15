@@ -86,7 +86,7 @@
       (contract/ok :source "a tool is carried or none is needed")
       (ctx/child-status c :obtain 'jobs.items.obtain (obtain-args c names)))))
 
-(defn can-start? [c] (contract/all [(checks/never-with (bad-args c)) (no-source c)]))
+(defn can-start? [c] (contract/all [(checks/cause-status :never (bad-args c)) (no-source c)]))
 
 (defn done?
   "A tool that does the work is carried (or none is needed) and the obtain that got it is over; a bad call is not done."

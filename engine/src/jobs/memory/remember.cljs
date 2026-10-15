@@ -68,8 +68,8 @@
   [c]
   (let [cause (bad-args c)]
     (if (or (= :bad-kind (:reason cause)) (contains? places/owned-kinds (:kind (:args c))))
-      (checks/never-with cause)
-      (checks/later-with cause))))
+      (checks/cause-status :never cause)
+      (checks/cause-status :later cause))))
 
 (defn done?
   "Never done before it runs: it writes a fresh entry each call."

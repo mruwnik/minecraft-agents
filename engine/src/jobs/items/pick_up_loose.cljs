@@ -59,7 +59,7 @@
     (when (empty? (loose/candidates p view w (:args c) (:root c)))
       {:reason :nothing-worth-it :text (stop-text (loose/explain p view w (:args c) (:root c)))})))
 
-(defn can-start? [c] (checks/later-with (nothing-worth-it c)))
+(defn can-start? [c] (checks/cause-status :later (nothing-worth-it c)))
 
 (defn quote-of
   [c]

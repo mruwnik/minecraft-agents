@@ -39,7 +39,7 @@
   (when-not (pos-int? (:id (:args c)))
     {:reason :bad-args :why "items.interact needs a positive entity :id"}))
 
-(defn can-start? [c] (checks/never-with (problem c)))
+(defn can-start? [c] (checks/cause-status :never (problem c)))
 
 (defn done?
   "Ok once the click was made."

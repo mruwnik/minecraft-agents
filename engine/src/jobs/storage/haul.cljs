@@ -51,7 +51,7 @@
   (when-not (or (some? (:to (:args c))) (seq (storage/group (ctx/view c))))
     {:reason :no-chest}))
 
-(defn can-start? [c] (contract/all [(checks/later-with (no-source c)) (checks/later-with (no-chest c))]))
+(defn can-start? [c] (contract/all [(checks/cause-status :later (no-source c)) (checks/cause-status :later (no-chest c))]))
 
 (defn progress-data [c] (select-keys (ctx/mem c) [:trips :moved]))
 

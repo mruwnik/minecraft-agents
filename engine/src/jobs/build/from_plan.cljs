@@ -8,6 +8,7 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.need :as need]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
@@ -136,7 +137,7 @@
          {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
           :needs (into {} (shortage (owed cells) carried))})))))
 
-(def can-start? (checks/all plan-problem no-items))
+(def can-start? (cond/and {:parts? false} plan-problem no-items))
 (def can-run? plan-problem)
 
 (declare spawn-cell result-data)

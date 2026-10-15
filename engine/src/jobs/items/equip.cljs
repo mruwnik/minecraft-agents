@@ -62,7 +62,7 @@
       {:reason :no-item :item item})))
 
 (defn can-start? [c]
-  (contract/all [(checks/never-with (problem c)) (checks/never-with (unknown c)) (checks/later-with (lacking c))]))
+  (contract/all [(checks/cause-status :never (problem c)) (checks/cause-status :never (unknown c)) (checks/cause-status :later (lacking c))]))
 
 (defn done?
   "The item is in the hand asked for and no fetch of it is under way."

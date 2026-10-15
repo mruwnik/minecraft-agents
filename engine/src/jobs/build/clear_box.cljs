@@ -10,6 +10,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.step-off :as step-off]))
 
 (def doc
@@ -150,7 +151,7 @@
 
 (def target [:from :to])
 (def defaults {:spend {:job-time ::time-s}})
-(def can-start? (checks/all bad-args no-zones all-refused))
+(def can-start? (cond/and {:parts? false} bad-args no-zones all-refused))
 (def can-run? no-zones)
 
 (declare result-of)

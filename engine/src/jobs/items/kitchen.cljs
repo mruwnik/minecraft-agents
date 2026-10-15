@@ -189,7 +189,7 @@
 (defn can-start?
   "Later while the kitchen is far from its chest or has no step to run."
   [c]
-  (contract/all [(checks/later-with (away c)) (checks/later-with (nothing-to-do c))]))
+  (contract/all [(checks/cause-status :later (away c)) (checks/cause-status :later (nothing-to-do c))]))
 
 (defn quote-of
   "A smelt of each raw food carried; the rest of the pass is a guess."
