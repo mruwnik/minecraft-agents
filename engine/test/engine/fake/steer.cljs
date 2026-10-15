@@ -326,14 +326,27 @@
   (for [x (range (- cx 2) (+ cx 3)) y (range (dec cy) (+ cy 3)) z (range (- cz 2) (+ cz 3))]
     [x y z (name-at w x y z) (doors/path-props w [x y z])]))
 
+(def boxes-cache
+  "[blocks states {[cx cy cz y] boxes}]: the collision boxes near a cell, kept while the world's :blocks and :states are
+  the identical maps (any block or state write replaces one)."
+  (atom nil))
+
+(defn boxes-at
+  [w cx cy cz y]
+  (let [[blocks states cache] @boxes-cache
+        fresh? (and (identical? blocks (:blocks w)) (identical? states (:states w)))
+        k [cx cy cz y]]
+    (or (when fresh? (get cache k))
+        (let [snapshot (fx/fixture-snapshot {:blocks (local-blocks w cx cy cz)})
+              boxes (space/boxes-near snapshot (blocks/default-state-table) cx cy cz y (+ y height))]
+          (reset! boxes-cache [(:blocks w) (:states w) (assoc (if fresh? cache {}) k boxes)])
+          boxes))))
+
 (defn body-clear?
   "Does the body's box (the planner's half-width, feet at y, 1.8 tall) centred at (px, pz) touch no collision box of the
   blocks around it? Fences are joined to their neighbours as the server joins them."
   [w px y pz]
-  (let [[cx cy cz] [(floor px) (floor y) (floor pz)]
-        snapshot (fx/fixture-snapshot {:blocks (local-blocks w cx cy cz)})
-        boxes (space/boxes-near snapshot (blocks/default-state-table) cx cy cz y (+ y height))]
-    (not (space/body-hits? boxes px pz))))
+  (not (space/body-hits? (boxes-at w (floor px) (floor y) (floor pz) y) px pz)))
 
 ;; --- the tick loop
 

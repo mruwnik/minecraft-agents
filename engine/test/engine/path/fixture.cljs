@@ -128,8 +128,7 @@
     (doseq [[x y z name props] blocks] (.setState ^js snapshot x y z (state-id name props)))
     (let [placed (concat (map (fn [box] [box (nth box 6)]) fill)
                          (map (fn [[x y z name :as b]] [[x y z x y z] name]) blocks))]
-      (when (some (fn [[_ name]] (family-of-name name)) placed)
-        (run! (fn [[box]] (connect! snapshot box)) placed)))
+      (run! (fn [[box]] (connect! snapshot box)) (filter (fn [[_ name]] (family-of-name name)) placed)))
     snapshot))
 
 (defn layers
