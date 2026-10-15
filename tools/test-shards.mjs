@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Why JavaScript: a thin Node launcher (spawns the compiled test runner in shards, takes a machine-wide flock slot per shard); no engine behaviour.
 // Usage: tools/test-engine --full [--part i/N] [--shards N] [--slots M] [--slowest K]
-//  --part i/N: runs only part i (1-based) of N: the i-th, i+N-th... namespace in sorted name order (a function of the names alone, so parts never overlap or leave a gap); timings are merged into test-ns-ms.json, the full-run timings file is left alone.
+//  --part i/N: runs only part i (1-based) of N: a greedy longest-first split by the committed engine/test-weights.json (a function of names and that file alone, so parts never overlap or leave a gap); `--write-weights` copies engine/out/test-ns-ms.json there; timings are merged into test-ns-ms.json, the full-run timings file is left alone.
 //  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
 //  At most M shard processes run at once machine-wide (default: (MemAvailable - floorMb) / 2.95 GB (kinds.tests.needMb), 1..shardMax): each takes res-slot's 'tests' slot tests.<i> (i < M; slots above shardMax stay for targeted runs), so parallel agents cannot OOM the machine.
 //  Each shard is killed after runTimeoutS of its prior timing (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test.
@@ -35,8 +35,6 @@ export const parsePart = (spec) => {
   if (!m || n < 1 || i < 1 || i > n) throw new Error(`--part wants i/N with 1 <= i <= N, got ${spec}`)
   return { i, n }
 }
-export const partOf = (nss, i, n) => [...nss].sort().filter((_, k) => k % n === i - 1)
-
 // Greedy longest-first onto the lightest shard. Unknown ns get the mean known cost (or 1).
 export const splitShards = (nss, ms, n) => {
   const known = nss.map((x) => ms[x]).filter((x) => x != null)
@@ -49,6 +47,9 @@ export const splitShards = (nss, ms, n) => {
   }
   return shards.map((s) => s.nss)
 }
+
+// Part i of n by committed weights (engine/test-weights.json, refreshed with --write-weights), not the live timings file: every part must compute the same split.
+export const partOf = (nss, i, n, weights) => (splitShards([...nss].sort(), weights, n)[i - 1] ?? []).sort()
 
 const parse = (lines) => lines.filter(Boolean).map((l) => JSON.parse(l))
 export const slowest = (lines, k) => parse(lines).filter((r) => r.var).sort((a, b) => b.ms - a.ms).slice(0, k)
@@ -141,9 +142,12 @@ export const writeAtomic = (file, text) => {
   fs.writeFileSync(tmp, text); fs.renameSync(tmp, file)
 }
 
+const weightsFile = path.join(engine, 'test-weights.json')
+
 const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' }) } = {}) => {
   const argv = process.argv.slice(2)
   const opt = (name, d) => { const i = argv.indexOf(name); return i < 0 ? d : Number(argv[i + 1]) }
+  if (argv.includes('--write-weights')) return writeAtomic(weightsFile, JSON.stringify(readPrior(path.join(engine, 'out/test-ns-ms.json'))) + '\n')
   const shards = opt('--shards', 4), fixedSlots = opt('--slots', null), top = opt('--slowest', 15)
   const slotsNow = () => fixedSlots ?? memSlots(availableMb())
   fs.mkdirSync(slotDir(), { recursive: true })
@@ -152,7 +156,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   const partIdx = argv.indexOf('--part')
   const part = partIdx < 0 ? null : parsePart(argv[partIdx + 1])
   const all = testNamespaces()
-  const split = splitShards(part ? partOf(all, part.i, part.n) : all, prior, shards)
+  const split = splitShards(part ? partOf(all, part.i, part.n, readPrior(weightsFile)) : all, prior, shards)
   const events = process.env.TEST_EVENTS === '1' ? eventForwarder((l) => console.log(l), split.map((nss) => nss.length)) : null
   if (events) console.log('@@test {"event":"phase","name":"compiling"}')
   const c = compile()

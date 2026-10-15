@@ -150,15 +150,33 @@ test('main with TEST_EVENTS=1 announces compiling before the compile runs (no ea
 test('partOf: for N in 1..6 the parts are disjoint and together cover every namespace', () => {
   const nss = Array.from({ length: 23 }, (_, k) => `ns${(k * 7) % 23}-test`)
   for (let n = 1; n <= 6; n++) {
-    const parts = Array.from({ length: n }, (_, i) => partOf(nss, i + 1, n))
+    const parts = Array.from({ length: n }, (_, i) => partOf(nss, i + 1, n, {}))
     assert.deepEqual(parts.flat().sort(), [...nss].sort(), `N=${n}`)
   }
 })
 
-test('partOf: depends on the names only, not on the order they are given in', () => {
+test('partOf: depends on the names and weights only, not on the order given; unknown names still land somewhere', () => {
   const nss = ['d-test', 'a-test', 'c-test', 'b-test', 'e-test']
-  assert.deepEqual(partOf(nss, 2, 2), partOf([...nss].reverse(), 2, 2))
-  assert.deepEqual(partOf(nss, 2, 2), ['b-test', 'd-test'])
+  const w = { 'a-test': 90, 'b-test': 50, 'c-test': 40, 'd-test': 10 }
+  assert.deepEqual(partOf(nss, 2, 2, w), partOf([...nss].reverse(), 2, 2, w))
+  const parts = [1, 2].map((i) => partOf(nss, i, 2, w))
+  assert.deepEqual(parts.flat().sort(), [...nss].sort())
+})
+
+test('partOf: parts are balanced by weight, not by name position', () => {
+  const nss = Array.from({ length: 12 }, (_, k) => `n${String(k).padStart(2, '0')}-test`)
+  const w = Object.fromEntries(nss.map((x, k) => [x, k % 4 === 1 ? 100 : 5]))
+  const loads = [1, 2, 3, 4].map((i) => partOf(nss, i, 4, w).reduce((t, x) => t + w[x], 0))
+  assert.ok(Math.max(...loads) - Math.min(...loads) <= 100, String(loads))
+})
+
+test('committed engine/test-weights.json: parts over the real namespaces are disjoint, cover all and are within 15% of each other', () => {
+  const w = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'engine', 'test-weights.json'), 'utf8'))
+  const nss = testNamespaces()
+  const parts = [1, 2, 3, 4].map((i) => partOf(nss, i, 4, w))
+  assert.deepEqual(parts.flat().sort(), [...nss].sort())
+  const loads = parts.map((p) => p.reduce((t, x) => t + (w[x] ?? 0), 0))
+  assert.ok(Math.max(...loads) <= Math.min(...loads) * 1.15, String(loads))
 })
 
 test('parsePart: "i/N" with 1 <= i <= N, otherwise an error', () => {
