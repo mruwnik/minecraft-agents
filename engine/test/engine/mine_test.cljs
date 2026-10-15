@@ -284,7 +284,7 @@
           (is (zero? (dig-count s)))
           (is (finished? s)))))))
 
-(deftest a-short-first-walk-is-partial-and-go-to-walks-on-to-dig
+(deftest a-short-first-walk-is-partial-and-the-job-ends-without-digging
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -294,7 +294,7 @@
           (await (run-ticks s 1))
           (await (run-ticks s 20))
           (is (= "partial" (:status (first (moved s)))) "the first walk is cut short")
-          (is (= [[15 64 0]] (dug-cells s)) "go-to walks on after the cut-short walk")
+          (is (zero? (dig-count s)) "one cut-short walk is no walker fault to escalate")
           (is (= :none (:reason (done-event s))))
           (is (finished? s)))))))
 
