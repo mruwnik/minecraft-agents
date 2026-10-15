@@ -12,6 +12,6 @@
    :plans [{:id "ring" :metadata {:by "$body"}
             :parts [{:id "walls" :outline [#at [18 15 18] #at [20 16 20]] :want "dirt"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:ring"})]]
-   :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 240 :of-job true}
-            {:no-event {:source :job :kind :build.gave-up} :for-s 240 :until {:source :job :kind :build.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :build.gave-up} :for-s 240 :until {:source :job :kind :completed}}]
    :after [[:block [18 15 18] "dirt"] [:block [20 16 20] "dirt"] [:block [19 15 20] "dirt"]]}]}

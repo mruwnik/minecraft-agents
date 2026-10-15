@@ -118,12 +118,25 @@
      (:because e) (update :because #(when (> n 1) (dissoc (for-event % (dec n)) :report)))
      (and (contains? e :because) (<= n 1)) (dissoc :because))))
 
-(defn done?
-  "What job def's done? export says now, {:done? :done :left :units}, or nil when it has none."
-  [def c]
-  (when-let [f (:done? def)] (f c)))
+(declare status? ok)
 
-(defn progress "The report fields of a done? answer." [d] (select-keys d [:units :done :left :left-items]))
+(defn read-done
+  "done?'s answer d as a status, data {:units :done :left :result}: a status as it is; an old map {:done? :units :done
+  :left :data} as :ok or :later, its :data as :result, marked ::old (the engine asks an old done? only before the start)."
+  [d]
+  (if (status? d)
+    d
+    (let [done (boolean (:done? d))]
+      [(if done :ok :later) (if done "done" "not done")
+       (cond-> (assoc (select-keys d [:units :done :left :left-items]) :reason (if done :done :not-done) ::old true)
+         (seq (:data d)) (assoc :result (:data d)))])))
+
+(defn done?
+  "What job def's done? export says now, as a status (read-done), or nil when it has none."
+  [def c]
+  (when-let [f (:done? def)] (read-done (f c))))
+
+(defn progress "The report fields of a done? status." [[_ _ data]] (select-keys data [:units :done :left :left-items]))
 
 ;; ------------------------------------------------------------------ statuses
 

@@ -75,9 +75,9 @@
           (is (= "oak_fence_gate" (block p [3 64 2])))
           (is (= "torch" (block p [2 65 2])))
           (is (< (.indexOf order [2 64 2]) (.indexOf order [2 65 2])))
-          (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused []}
+          (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused [] :text "build of pen done: placed 9"}
                  result))
-          (is (= 1 (count (h/events-of seen :build.done))))
+          (is (empty? (h/events-of seen :build.done)) "the ending tells it")
           (is (empty? (h/events-of seen :build.short))))))))
 
 (deftest a-facing-no-click-gives-is-placed-from-the-side-it-faces-away-from
@@ -890,7 +890,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)})
               result (await (child-outcome eng job {:plan "pen"} 1))]
-          (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused []} (dissoc result :spent :spent-at))))))))
+          (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused [] :text "build of pen done: placed 9"} (dissoc result :spent :spent-at))))))))
 
 (deftest a-place-that-finds-no-item-or-an-occupied-cell-is-given-up-after-the-tries
   (async done

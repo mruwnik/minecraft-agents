@@ -36,7 +36,10 @@
 
 (defn attacked [{:keys [p]}] (mapv #(.-id (.-args %)) (h/calls p "attack")))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn done-event [s] (first (events-of s :cull.done)))
+(defn done-event
+  "The cull's ending event (job.completed or job.stopped)."
+  [{:keys [seen]}]
+  (first (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn world-ids [{:keys [p]}] (set (map :id (fake/entities p))))
@@ -59,6 +62,8 @@
           (is (= 4 (get (inv s) "leather")))
           (is (= {:killed 4 :remaining 2 :babies 0 :reason :keep :skipped []}
                  (select-keys (done-event s) [:killed :remaining :babies :reason :skipped])))
+          (is (= "cull done: killed 4, 2 cow adults left (keep 2)" (:text (done-event s))))
+          (is (empty? (events-of s :cull.done)) "the engine's job.completed tells it")
           (is (finished? s)))))))
 
 (deftest one-call-kills-the-surplus-and-collects

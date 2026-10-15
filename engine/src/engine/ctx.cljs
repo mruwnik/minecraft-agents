@@ -205,6 +205,11 @@
   [ctx]
   (if-let [f (:can-run ctx)] (f) (contract/ok :holds "holds")))
 
+(defn done
+  "The :done ending this job's done? gives now, asked between steps (jobs.lib.pace/steps!), else nil."
+  [ctx]
+  (when-let [f (:done ctx)] (f)))
+
 (defn submit!
   "Put a job spec (an expression, see engine.expr) at the end of the list;
   returns its instance id."

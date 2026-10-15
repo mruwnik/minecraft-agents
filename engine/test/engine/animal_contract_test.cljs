@@ -218,7 +218,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (hunting-cull {:keep 0} {:inventory h/sword :entities [(cow 1 3)]})) [:event])))
-        (is (= {:event :completed :kind :done}
+        (is (= {:event :completed :kind :done :reason :keep}
                (await (hunting-cull {:keep 2} {:inventory h/sword :entities [(cow 1 3)]})))
             "no more than :keep already: done, no wait")
         (is (= {:event :stopped :kind :nothing-possible :reason :unreachable}

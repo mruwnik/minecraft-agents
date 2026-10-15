@@ -34,11 +34,13 @@
 
 (defn cancel!
   "End job id (cutting its round if it is the one running): a listed job is removed, cut off by by (job.cancelled
-  :data); a reflex job ends with reflex.ended :cancelled and its trigger may fire again. by names who asked."
+  :data, ending e's data and report over it); a reflex job ends with reflex.ended :cancelled and its trigger may fire
+  again. by names who asked."
   ([eng id] (cancel! eng id :agent))
-  ([eng id by]
+  ([eng id by] (cancel! eng id by nil))
+  ([eng id by e]
    (let [fields (job-fields eng id)
-         report (tally/report eng id [])]
+         report (merge (tally/report eng id []) (:report e))]
    (when (= id (:id (running eng)))
      (free-owner! eng)
      (reset! (:running eng) nil))
@@ -51,7 +53,7 @@
          (save-memory! eng)))
    (emit! eng (merge (into {} (filter val) (select-keys fields [:name :reflex]))
                      {:source :job :kind :cancelled :level :info :job id :chain [id] :by by :report report
-                      :data {:kind :cut-off :cause by}})))))
+                      :data (merge (:data e) {:kind :cut-off :cause by})})))))
 
 (defn submit!
   "Put a job spec (an expression, see engine.expr) on the list. Returns the instance id; throws on a bad spec.

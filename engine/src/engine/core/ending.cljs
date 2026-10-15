@@ -2,8 +2,9 @@
   "Contract jobs (a job that exports conditions; engine.contract) as the engine runs them: wrap gives the job a check
   (a listed job waits while a condition fails, until it starts) and a round that checks the conditions (an impossible
   one ends the job, one that asks for a look gets a look round first), freezes the
-  call keys at the first round, asks done? before the start (and, at the first round of a call with a :least other than 1, its quote for the
-  least check) and adds :because to the ending the job's round returns. Once started, the job's round decides when it is done."
+  call keys at the first round, asks done? before every round and between steps (an :ok ends the job :done; at the first round of a
+  call with a :least other than 1 it asks its quote for the least check) and adds :because to the ending the job's round returns.
+  Every ending the engine makes carries done?'s :result and count."
   (:require [engine.contract :as contract]
             [engine.core.base :refer [cut-error manual-job now owner?]]
             [engine.core.limits :as limits]
@@ -115,7 +116,8 @@
     (when (seq lines) (ctx/emit! c :budget_clamped :debug {:lines lines :call call}))))
 
 (defn done-now
-  "What def's done? says for c; before c's call starts, under the call it would start with."
+  "What def's done? says for c, as a status (contract/read-done); before c's call starts, under the call it would start
+  with."
   [def c]
   (when (:done? def)
     (contract/done? def (if (started? c) c (assoc c :quote-call (first (call-of c def)))))))
@@ -128,24 +130,39 @@
          (if (contract/passes-through? e) (throw e) [nil e]))))
 
 (defn least-met?
-  "Whether done?'s answer d counts units at least the call's :least (default 1; :all: none left)."
+  "Whether done?'s data d counts units at least the call's :least (default 1; :all: none left)."
   [c d]
   (let [least (:least (ctx/frozen-call c) 1)]
     (and (number? (:done d)) (:units d)
          (if (= :all least) (zero? (:left d 0)) (>= (:done d) least)))))
 
+(defn ends?
+  "Whether done? status s ends the job: an :ok, once started only from a status done? (an old map's is asked only
+  before the start)."
+  [s fresh?]
+  (and (= :ok (first s)) (or fresh? (not (::contract/old (nth s 2))))))
+
+(defn done-ending
+  "The :done ending of done?'s status s: cause :already before the start; s's :result with its text as data, its count
+  in the report."
+  [s fresh?]
+  (let [[_ text {:keys [result]}] s]
+    (-> (contract/ending :done (when fresh? :already) (cond-> result (not (::contract/old (nth s 2))) (assoc :text text)))
+        (assoc :report (contract/progress s)))))
+
 (defn with-progress
-  "Limit ending e (or nil) with done?'s count in its report, and done?'s :data (the job's result so far) as the data of
-  a :limit-reached ending without its own; a :limit-reached ending whose done? counts the call's :least units is :done
-  (the limit in its report). A done? that throws leaves e as it is."
+  "Ending e (or nil) with done?'s count in its report, and done?'s :result (the job's result so far) as the data of a
+  :limit-reached or :cut-off ending without its own; a :limit-reached ending whose done? counts the call's :least units
+  is :done (the limit in its report). A done? that throws leaves e as it is."
   [def c e]
-  (if-let [d (when e (try (done-now def c) (catch :default _ nil)))]
-    (let [e (update e :report merge (contract/progress d))]
+  (if-let [s (when e (try (done-now def c) (catch :default _ nil)))]
+    (let [e (update e :report merge (contract/progress s))
+          {:keys [result] :as d} (nth s 2)]
       (cond
         (and (= :limit-reached (:kind e)) (least-met? c d))
-        (-> (contract/ending :done nil (or (:data e) (:data d))) (assoc :report (assoc (:report e) :limit (:cause e))))
+        (-> (contract/ending :done nil (or (:data e) result)) (assoc :report (assoc (:report e) :limit (:cause e))))
 
-        (and (= :limit-reached (:kind e)) (not (:data e)) (seq (:data d))) (assoc e :data (:data d))
+        (and (#{:limit-reached :cut-off} (:kind e)) (not (:data e)) (seq result)) (assoc e :data result)
         :else e))
     e))
 
@@ -162,7 +179,7 @@
         c (assoc c :job-ways (:ways def))]
     (when fresh? (freeze! c def))
     (if-let [cause (when (and fresh? (:quote-of def) (not= 1 (:least (ctx/frozen-call c))))
-                     (contract/least-cause (ctx/frozen-call c) (await ((:quote c) def (:args c) nil true)) d))]
+                     (contract/least-cause (ctx/frozen-call c) (await ((:quote c) def (:args c) nil true)) (some-> d (nth 2))))]
       (cond-> (contract/ending :nothing-possible cause nil) d (update :report merge (contract/progress d)))
       (let [r (await ((:round def) c))]
         (cond
@@ -178,24 +195,31 @@
   (let [[kind _ data] (contract/all ss)]
     (and (= :never kind) (contains? data ::contract/cause))))
 
+(defn done-between
+  "The ending done? gives between steps of a started job (ctx/done): its :done ending when it ends the job, else nil."
+  [def c]
+  (let [s (first (done-or-error def c))]
+    (when (and s (ends? s false)) (done-ending s false))))
+
 (defn ^:async run
-  "One round of contract job def: an ending, or :continue. Before it starts, a goal that holds ends it done :already,
-  whatever its checks say (but an old condition's :never); else a :never ends it impossible (a done? that throws is told with job.done_failed and
-  counts as not done). A :later from its old conditions or can-start? keeps a listed job not started queued, else ends
-  it condition-failed; one from can-run? yields (a reflex ends condition-failed: it runs one round; a called child
-  tells its caller's wait with the status). The round's ctx
-  asks can-run? between steps (ctx/can-run)."
+  "One round of contract job def: an ending, or :continue. A goal that holds ends it :done (:already before the start),
+  whatever its checks say but an old condition's :never (a done? that throws is told with job.done_failed and counts
+  as not done); else a :never ends it impossible. A :later from its old conditions or can-start? keeps a listed job
+  not started queued, else ends it condition-failed; one from can-run? yields (a reflex ends condition-failed: it runs
+  one round; a called child tells its caller's wait with the status). The round's ctx asks done? and can-run? between
+  steps (ctx/done, ctx/can-run)."
   [def c]
   (let [ss (statuses def c (take-asked! c))
         fresh? (not (started? c))
-        [d err] (when (and fresh? (not (old-never? ss))) (done-or-error def c))
+        [d err] (when (not (old-never? ss)) (done-or-error def c))
         _ (when err (ctx/emit! c :done_failed :warn {:error (str (or (.-message err) err))}))
-        [start-s run-s] (if (:done? d) ss (await (looked def c ss)))
+        done? (and d (ends? d fresh?))
+        [start-s run-s] (if done? ss (await (looked def c ss)))
         s (contract/all [start-s run-s])
         counted #(if fresh? (cond-> % d (update :report merge (contract/progress d))) (with-progress def c %))
         failed #(counted (contract/ending :condition-failed (contract/status-cause %) nil))]
     (cond
-      (:done? d) (counted (contract/ending :done :already nil))
+      done? (done-ending d fresh?)
       (= :never (first s)) (contract/ending :impossible (contract/status-cause s) nil)
       (= :later (first start-s)) (if (stays-listed? c) :continue (failed start-s))
       (= :later (first run-s)) (cond (:reflex c) (failed run-s)
@@ -203,7 +227,9 @@
                                      :else :continue)
       :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
               (counted (contract/ending :condition-failed floor nil))
-              (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))) d))))))
+              (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))
+                                               :done #(done-between def c))
+                                    d))))))
 
 (defn spent?
   "Whether a started job's spend or deadline line is crossed (a floor is not: below one it waits)."
@@ -213,9 +239,9 @@
 
 (defn check
   "A contract job waits while its checks say :later (old conditions and can-start? until it starts, can-run? always),
-  then while the body is below a floor of its call. A :never, a :look or a goal that holds before the start passes: the
-  round ends the job, or looks. A started job waiting on can-run? whose spend or deadline is crossed passes too, so its
-  round ends it: waiting is bounded by the call's limits, :wall-time among them."
+  then while the body is below a floor of its call. A :never, a :look or a goal that holds passes: the round ends the
+  job, or looks. A started job waiting on can-run? whose spend or deadline is crossed passes too, so its round ends it:
+  waiting is bounded by the call's limits, :wall-time among them."
   [def c]
   (let [fresh? (not (started? c))
         {start-s :start run-s :run} (remember-asked! c (if fresh? (zipmap [:start :run] (statuses def c)) {:run (run-status def c)}))
@@ -225,7 +251,8 @@
               (some-> (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def)))) contract/cause-wait))]
     (cond
       (or (nil? w) (= :never (first s))) true
-      fresh? (or (boolean (:done? (first (done-or-error def c)))) (ctx/wait c w))
+      (some-> (first (done-or-error def c)) (ends? fresh?)) true
+      fresh? (ctx/wait c w)
       (and later? (spent? c)) true
       :else (ctx/wait c w))))
 

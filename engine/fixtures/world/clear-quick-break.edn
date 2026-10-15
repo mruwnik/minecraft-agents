@@ -12,8 +12,8 @@
    :plans [{:id "row" :metadata {:by "$body"}
             :parts [{:id "clear" :cells [#at [11 0 11] #at [12 0 11] #at [13 0 11] #at [14 0 11]] :want :clear}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:row"})]]
-   :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :build.gave-up} :for-s 100 :until {:source :job :kind :build.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :build.gave-up} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:block [11 0 11] "air"] [:block [12 0 11] "air"] [:block [13 0 11] "air"] [:block [14 0 11] "air"]]}
   {:name "from-plan-gives-up-cobweb-and-stone-with-no-tool"
    :blocks [[:set [11 0 11] "cobweb"] [:set [12 0 11] "stone"]]

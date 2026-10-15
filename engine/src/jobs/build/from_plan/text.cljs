@@ -35,10 +35,9 @@
     (str (str/join ", " (map show shown)) (when (pos? more) (str ", and " more " more (all in :cells)")))))
 
 (defn announce!
-  "Emit the build events of a summary: build.short, build.gave-up, build.refused and build.wrong warns, build.done."
-  [c {:keys [short given-up refused wrong missing] :as result}]
-  (let [plan (:plan (:args c))
-        left missing]
+  "Emit the build warns of a summary: build.short, build.gave-up, build.refused and build.wrong."
+  [c {:keys [short given-up refused wrong]}]
+  (let [plan (:plan (:args c))]
     (when (seq short)
       (ctx/emit! c :build.short :warn {:plan plan :short short
                                        :text (str "build of " plan " is short of " (shortage-text short))}))
@@ -54,10 +53,7 @@
       (ctx/emit! c :build.wrong :warn {:plan plan :cells wrong
                                        :text (str "build of " plan " left " (count wrong) " wrong blocks: "
                                                   (cells-text wrong #(str (pr-str (:pos %)) " " (:found %)
-                                                                          (when (:short %) (str ", needs " (:want %) " (short)")))))}))
-    (ctx/emit! c :build.done :info {:plan plan :placed (:placed result) :missing (count left)
-                                    :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left)
-                                               (when-let [sp (:wood result)] (str ", wood " sp)))})))
+                                                                          (when (:short %) (str ", needs " (:want %) " (short)")))))}))))
 
 (defn fetch-failed-text
   "The booked failed fetches of the short items, in words: 'could not fetch birch_log: no-source (why)'."

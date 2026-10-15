@@ -65,12 +65,13 @@
   :lava-adjacent). A cell with an untaken one is refused as :hazard.
   :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
   fill; it is not listed :wrong.
+  done? holds when no cell is owed, none came out wrong and step 5 has nothing to do; the engine then ends it :done.
   Ends with data {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
   :want}] :refused [...] :fetch-failed {item {:failed :why}}}: done when nothing is missing or the cells placed meet
   the call's :least (default :all); else with :text naming the missing count and what it left: nothing-possible
   :incomplete when cells were given up, condition-failed {:reason :no-items :needs} when items are short, condition-failed
   :refused when the rules refuse the rest, nothing-possible :shut-in. For a block placed in the wrong state, :found names the state it came out in.
-  Events: build.done (info), build.short, build.gave-up, build.refused and build.wrong (warns). Event texts name
+  Events: build.short, build.gave-up, build.refused and build.wrong (warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   Start facts (one build.declined warn naming the plan and the reason): no zone list read (unless :ignore-zones?) is a
   failed condition {:reason :no-zones}, also later in the call (a plan that goes bad later ends impossible :plan-trouble too); a plan that is missing, unreadable or has no cells to
@@ -135,12 +136,25 @@
 
 (def conditions [[:fn plan-problem] [:fn (started/at-start no-items)]])
 
+(declare spawn-cell result-data)
+
 (defn done?
-  "Done when the plan has nothing owed; else the cells placed this call and the cells still owed."
+  "Done when the plan has nothing owed, no block came out wrong (the round ends it with its build.wrong warn) and the
+  spawn is set (spawn-cell); the cells placed this call, the cells still owed and the result so far. A check (no token)
+  reads the plan judged once per check-cache window, a round afresh."
   [c]
-  (let [{:keys [cells trouble]} (judged-plan c)
-        left (if trouble 0 (count (owed cells)))]
-    {:done? (and (not trouble) (zero? left)) :units :cells :done (:placed (ctx/mem c) 0) :left left}))
+  (let [{:keys [cells trouble]} (if (:token c) (planned c) (judged-plan c))
+        placed (:placed (ctx/mem c) 0)
+        left (count (owed cells))
+        plan (:plan (:args c))
+        result (when-not trouble (result-data c cells))
+        data [:units :cells :done placed :left left :result result]]
+    (cond
+      trouble (apply contract/later :plan-trouble (str "plan " plan ": " trouble) data)
+      (pos? left) (apply contract/later :owed (str "build of " plan ": " left " cells owed") data)
+      (seq (:wrong result)) (apply contract/later :wrong (str "build of " plan ": " (count (:wrong result)) " blocks wrong") data)
+      (spawn-cell c cells) (apply contract/later :spawn (str "build of " plan ": the spawn is to set at the bed") data)
+      :else (apply contract/ok :built (str "build of " plan " done: placed " placed) data))))
 
 (defn quote-of [c]
   (let [{:keys [cells trouble]} (judged-plan c)

@@ -40,6 +40,7 @@
             [engine.core.fruitless :as fruitless]
             [engine.core.register :as register]
             [engine.core.activity :as activity]
+            [engine.contract :as contract]
             [engine.core.ending :as ending]
             [engine.core.list-edits :as list-edits]
             [engine.core.round :as round]
@@ -106,7 +107,14 @@
 (def remove-reflex! register/remove-reflex!)
 (def away activity/away)
 (def holding activity/holding)
-(def cancel! list-edits/cancel!)
+(defn cancel!
+  "End job id (list-edits/cancel!); its cut-off carries done?'s count and :result (ending/with-progress)."
+  ([eng id] (cancel! eng id :agent))
+  ([eng id by]
+   (let [inst (get-in (state eng) [:instances id])
+         [def args] (when inst (job-of eng inst))]
+     (list-edits/cancel! eng id by (cond->> (contract/ending :cut-off by nil)
+                                     def (ending/with-progress def (round/check-ctx eng inst args)))))))
 (def insert-next list-edits/insert-next)
 (def insert-now list-edits/insert-now)
 (def retry! list-edits/retry!)

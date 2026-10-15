@@ -92,7 +92,8 @@
         (delete-root! eng id :ended)
         (emit! eng (if (= :done (:kind ending))
                      (merge fields {:source :job :kind :completed :level :info :attention :notice
-                                    :data data :report report})
+                                    :data data :report report}
+                            (when (:text data) {:text (:text data)}))
                      (merge fields {:source :job :kind :stopped :level :warn :attention :notice
                                     :data data :text (stopped-text data) :report report}))))
 
