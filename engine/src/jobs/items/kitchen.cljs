@@ -21,12 +21,12 @@
     fetches fuel). A food is tried once a pass.
   - :take (jobs.storage.withdraw): the wheat for the loaves the bread shortfall needs that the carried wheat above
     its :reserve entry does not cover, from the chest (wheat there above what :reserve still holds back).
-  - :bake (jobs.items.craft, bread, no fetch): the loaves of the carried wheat above its :reserve entry, at most the
-    shortfall. The table is the craft's: a seen one, else a carried one put down.
+  - :bake (jobs.items.craft, bread): the loaves of the carried wheat above its :reserve entry, at most the
+    shortfall. The table is the craft's: a seen one, else a carried one put down, else one fetched (:fetch false: none).
   - :deposit (jobs.storage.deposit) of the cooked food and bread this pass made, and wheat taken and not used, into
     :chest; food the body brought or withdrew stays carried. Bread is never withdrawn: carrying food is get-food's.
   :reserve is never used, carried or in the chest (wheat for bait and seed: the default keeps a breeding pair's).
-  A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-table (none seen or carried), :no-chest, :stocked,
+  A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-table (none seen or carried, :fetch false), :no-chest, :stocked,
   :nothing-to-store. A step whose child stops is booked with its summary and the stop as :reason; the pass goes on.
   Needs (conditions, a listed job waits): a run under way, or a step that would run (raw food carried above the
   reserve with a cooked shortfall, wheat for a loaf), so a body with nothing to cook is not held, and not too far from
@@ -48,6 +48,7 @@
            :default (into {"bread" 16} (map (fn [f] [f 8])) cooked-foods)}
    :reserve {:doc "{item count}: never used, carried or in the chest (wheat for bait, seed)" :spec (a/map-of string? number?)
              :default {"wheat" 2}}
+   :fetch {:doc "get a crafting table when none is seen or carried (jobs.items.craft's fetch); false skips take and bake then" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -135,7 +136,7 @@
                   need (- (* 3 want) cu)]
               (cond
                 (not chest?) {:skip :no-chest}
-                (not table?) {:skip :no-table}
+                (and (not table?) (not (:fetch a true))) {:skip :no-table}
                 (not (pos? want)) {:skip :no-wheat}
                 (not (pos? need)) {:skip :stocked}
                 :else {:call {:slot :take :job (jobs :take)
@@ -143,9 +144,9 @@
       :bake (let [n (min (loaves a f) (quot (:carried (usable reserve "wheat" f)) 3))]
               (cond
                 (not chest?) {:skip :no-chest}
-                (not table?) {:skip :no-table}
+                (and (not table?) (not (:fetch a true))) {:skip :no-table}
                 (not (pos? n)) {:skip :no-wheat}
-                :else {:call {:slot :bake :job (jobs :bake) :args {:item "bread" :count n :fetch false}}}))
+                :else {:call {:slot :bake :job (jobs :bake) :args {:item "bread" :count n :fetch (:fetch a true)}}}))
       :deposit (let [items (vec (filter #(pos? (min (get made % 0) (get carried % 0))) (conj cooked-foods "bread")))
                      spare-wheat? (> (get carried "wheat" 0) (or wheat0 (get carried "wheat" 0)))
                      items (cond-> items spare-wheat? (conj "wheat"))

@@ -133,16 +133,35 @@
           (is (= 1 (count (events-of s :kitchen.done))) "ticks 1 s apart, inside the 30 s rest")
           (is (seq (filter #(= :resting (:reason %)) (events-of s :waiting)))))))))
 
-(deftest no-table-seen-or-carried-leaves-the-chest-wheat-alone
+(deftest no-table-seen-or-carried-leaves-the-chest-wheat-alone-with-fetch-false
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world {:inventory [(item "coal" 1)] :blocks {"11,64,0" "air"} :containers {"10,64,0" [(item "wheat" 9)]}}
-              s (await (run (list job (assoc args :reserve {} :stock {"bread" 3})) world 12 {"wheat" 9}))]
+              s (await (run (list job (assoc args :reserve {} :stock {"bread" 3} :fetch false)) world 12 {"wheat" 9}))]
           (is (= {"wheat" 9} (chest-items s)))
           (is (nil? (get (inv s) "wheat")))
           (is (empty? (events-of s :round_started)))
           (is (= [[:nothing-to-do nil]] (waits s))))))))
+
+(deftest no-table-is-crafted-from-carried-planks-and-the-bread-baked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:inventory [(item "coal" 1) (item "oak_planks" 4)] :blocks {"11,64,0" "air"} :containers {"10,64,0" [(item "wheat" 9)]}}
+              s (await (run (list job (assoc args :reserve {} :stock {"bread" 3})) world 30 {"wheat" 9}))]
+          (is (true? (finished? s)))
+          (is (= 3 (get (chest-items s) "bread" 0))))))))
+
+(deftest no-table-and-no-wood-ends-naming-the-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:inventory [(item "coal" 1)] :blocks {"11,64,0" "air"} :containers {"10,64,0" [(item "wheat" 9)]}}
+              s (await (run (list job (assoc args :reserve {} :stock {"bread" 3})) world 30 {"wheat" 9}))]
+          (is (= {"wheat" 9} (chest-items s)) "the wheat is put back")
+          (is (= :no-table (:reason (first (events-of s :stopped)))))
+          (is (re-find #"crafting_table" (pr-str (:because (first (events-of s :stopped))))) "the cause names the table"))))))
 
 (deftest wheat-in-the-chest-is-baked-though-none-is-carried
   (async done
@@ -184,8 +203,8 @@
 
 (deftest bake-asks-for-the-loaves-the-stock-lacks-from-the-wheat-above-the-reserve
   (are [facts args-extra call] (= call (select-keys (:call (kitchen/decide :bake (merge base args-extra) facts)) [:args]))
-    {:carried {"wheat" 9} :chest true :table true :chest-stock {"bread" 14}} {} {:args {:item "bread" :count 2 :fetch false}}
-    {:carried {"wheat" 9} :chest true :table true :chest-stock {}} {:reserve {"wheat" 6}} {:args {:item "bread" :count 1 :fetch false}}))
+    {:carried {"wheat" 9} :chest true :table true :chest-stock {"bread" 14}} {} {:args {:item "bread" :count 2 :fetch true}}
+    {:carried {"wheat" 9} :chest true :table true :chest-stock {}} {:reserve {"wheat" 6}} {:args {:item "bread" :count 1 :fetch true}}))
 
 (deftest take-fetches-only-the-wheat-the-shortfall-needs-and-keeps-the-reserve
   (are [facts extra items] (= items (get-in (kitchen/decide :take (merge base extra) facts) [:call :args :items]))
