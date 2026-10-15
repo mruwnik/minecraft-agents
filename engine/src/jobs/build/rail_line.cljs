@@ -232,8 +232,10 @@
 
 ;; ------------------------------------------------------------------ rounds
 
+(def builder-args [:plan :part :reach :give-up :accept :fix :ignore-zones?])
+
 (defn ^:async build-step!
-  "One round of the head-first builder (jobs.build.rail); its result is kept when it ends and the phase moves on. A
+  "One round of the head-first builder (jobs.build.rail child); its result is kept when it ends and the phase moves on. A
   builder not yet begun with nothing to do is skipped: the proof says what is missing."
   [c cells]
   (if (and (not (:building (ctx/mem c))) (builder/idle? c cells))
@@ -244,7 +246,11 @@
                                :given-up {} :wrong [] :refused []})
       :again)
     (do (when-not (:building (ctx/mem c)) (ctx/update-mem! c assoc :building true))
-        (await (builder/step! c cells)))))
+        (let [e (await (ctx/call c :build 'jobs.build.rail (select-keys (:args c) builder-args)))]
+          (cond
+            (or (= :continue e) (= :cut-off (:kind e))) :continue
+            (= :done (:kind e)) (do (ctx/update-mem! c assoc :phase :switch :built (:data e)) :again)
+            :else (ctx/end c (:kind e) (:cause e)))))))
 
 (defn unlit-levers
   "The planned levers standing in the world switched off and not yet tried."

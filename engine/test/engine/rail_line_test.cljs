@@ -89,6 +89,18 @@
           (is (= "lever" (h/block-at p 3 64 -1)))
           (is (true? (:powered (props p [3 64 -1])))))))))
 
+(deftest the-builder-is-a-job-of-its-own-ending-with-the-build-result
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (b/start (spec "stone" 63 (kit {})) {"line" (line-plan {})} [])
+              built (await (outcome eng 'jobs.build.rail {:plan "line"} 400))
+              {:keys [eng]} (b/start (spec "stone" 63 (kit {})) {} [])
+              missing (await (ending-of {:eng eng} 'jobs.build.rail {:plan "line"} 20))]
+          (is (pos? (:placed built)))
+          (is (= "powered_rail" (h/block-at p 3 64 0)))
+          (is (= [:condition-failed :plan] [(:kind missing) (:cause missing)])))))))
+
 ;; ---------------------------------------------------------------- the check
 
 (defn ^:async declines

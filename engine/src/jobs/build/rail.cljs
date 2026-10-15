@@ -1,6 +1,23 @@
 (ns jobs.build.rail
-  "The head-first builder of jobs.build.rail-line. A rail takes its shape from the rails beside it when placed, so a
-  line with corners and slopes is built in line order, standing on the line.
+  "The head-first builder of jobs.build.rail-line, a job of its own."
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.access.rules :as rules]
+            [engine.contract :as contract]
+            [engine.ctx :as ctx]
+            [jobs.lib.pace :as pace]
+            [jobs.lib.world :as known]
+            [jobs.lib.util :as u]
+            [jobs.lib.storage :as storage]
+            [jobs.lib.near :as near]
+            [jobs.build.from-plan :as build]
+            [jobs.build.from-plan.plan :as plan]
+            [jobs.build.from-plan.text :as text]
+            [plan.rail :as rail]))
+
+(def doc
+  "Build the rail cells of a plan (:plan, optionally only its :part) head-first. A rail takes its shape from the rails
+  beside it when placed, so a line with corners and slopes is built in line order, standing on the line.
     1. Work is ordered station by station along the chain (plan.rail/line), from the end nearer the body at the
        start. At each station: the cells below the rail (bed, redstone block), then the rail, then what stands beside
        it (torch, lever, with its own bed).
@@ -9,17 +26,36 @@
     3. A rail has settled once every neighbour it has in the chain is a rail in the world. A settled rail of the wrong
        shape is dug and placed again (:fix times), then given up as :shape.
   Placing, access rules, refusals, give-ups and the result are jobs.build.from-plan's functions over this job's
-  memory. Every dig and place asks jobs.lib.access.rules right before it acts."
-  (:require [jobs.lib.access.rules :as rules]
-            [engine.contract :as contract]
-            [engine.ctx :as ctx]
-            [jobs.lib.util :as u]
-            [jobs.lib.storage :as storage]
-            [jobs.lib.near :as near]
-            [jobs.build.from-plan :as build]
-            [jobs.build.from-plan.plan :as plan]
-            [jobs.build.from-plan.text :as text]
-            [plan.rail :as rail]))
+  memory. Every dig and place asks jobs.lib.access.rules right before it acts.
+  Needs: a readable plan and the items for the cells to place carried (the caller fetches them). Ends done with the
+  data {:placed :missing :short :given-up :wrong :refused} once nothing more can be done; condition-failed :plan when
+  the plan cannot be read; a dig child's failure ends it with that child's kind and cause.")
+
+(a/defargs args
+  {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
+   :part {:doc "only the cells of this part" :spec a/name? :default nil}
+   :reach {:doc "as jobs.build.from-plan" :spec (a/num-in 0 nil) :default u/eye-reach}
+   :give-up {:doc "as jobs.build.from-plan" :spec (a/int-in 1 nil) :default 3}
+   :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
+   :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :spec (a/or-of (a/int-in 0 nil) false?) :default 1}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+
+(a/defargs settings
+  {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}})
+
+(def target [:plan :part])
+
+(def defaults {:spend {:job-time ::job-time-s}})
+
+(defn quote-of [_c]
+  {:uses {:job-time [30 300 (settings/get settings ::job-time-s)]}})
+
+(defn done?
+  [c]
+  (if (:built (ctx/mem c))
+    (contract/ok :built "rail: the build is finished")
+    (contract/later :building "rail: cells still to build")))
+
 
 ;; ------------------------------------------------------------------ order
 
@@ -182,12 +218,12 @@
       :else (await (dig-away! c pos)))))
 
 (defn finish!
-  "End the build: keep the result, emit its events and move on to switching levers."
+  "End the build with its result as the ending's data."
   [c cells]
   (let [result (text/summary c cells (ctx/mem c) true)]
     (text/announce! c result)
-    (ctx/update-mem! c assoc :phase :switch :built result)
-    :again))
+    (ctx/update-mem! c assoc :built result)
+    (ctx/end c :done nil result)))
 
 (defn ^:async step!
   "One round of the builder over the plan's judged cells, in this order: fix a settled wrong rail, place work in reach,
@@ -211,3 +247,20 @@
       (seq underfoot) (await (walk-to! c ps from cells (first (work-order ps from underfoot))))
       (seq unseen) (await (walk-to! c ps from cells (first (work-order ps from unseen))))
       :else (finish! c cells))))
+
+(defn cells-of
+  "The judged cells of the plan in the args, nil when it cannot be read."
+  [c]
+  (let [{:keys [plan part]} (:args c)
+        p (:primitives c)
+        answer (known/plan c plan)]
+    (when (and answer (not (:broken answer)))
+      (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))))
+
+(defn ^:async round
+  "Build in steps (pace/steps!); :continue while a walk or the dig child waits on the world."
+  [c]
+  (await (pace/steps! c (fn ^:async s []
+                          (if-let [cells (seq (cells-of c))]
+                            (await (step! c (vec cells)))
+                            (ctx/end c :condition-failed :plan))))))
