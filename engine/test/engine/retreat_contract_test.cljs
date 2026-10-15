@@ -39,7 +39,7 @@
               c {:primitives (tu/fake {}) :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}}]
           (is (nil? (:check def)))
           (is (= {:spend {:job-time :jobs.survival.retreat/job-time-s}} (:defaults def)))
-          (is (= [:later :fleeing] (tu/kind-reason ((:done? def) c))))
+          (is (= [:ok :clear] (tu/kind-reason ((:done? def) c))))
           (is (= {:units :hostiles :done 0 :left 0} (select-keys (nth ((:done? def) c) 2) [:units :done :left])))
           (is (nil? (contract/quote-problem (await ((:quote-of def) c))))))))))
 

@@ -65,14 +65,13 @@
 (def pair [(villager 1 3) (villager 2 5)])
 (def librarian {:profession "librarian" :trade "mending" :pos [4 64 4]})
 
-(deftest nothing-to-do-declines-the-job
+(deftest a-village-in-order-is-done-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {} (world) {} 10))]
-          (is (nil? (done-event s)))
-          (is (empty? @(:calls s)))
-          (is (= :nothing-to-do (:reason (first (events-of s :waiting))))))))))
+          (is (= [:completed :already] ((juxt :kind :cause) (done-event s))))
+          (is (empty? @(:calls s))))))))
 
 (deftest a-plan-is-repaired-first-then-the-rest-in-order
   (async done

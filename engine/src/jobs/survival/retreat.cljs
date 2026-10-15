@@ -117,7 +117,7 @@
   Each change of what it chose among is said in one retreat.choice info: the hostiles and where, every closed room and why
   it is not run to, the cells that are no closed room, the home and why it is no run (:home-why), the goal and why it is dropped, where it leans.
   Blocks placed are the call's :use :blocks, else every :build filler, carried or dug.
-  Needs nothing to start (no conditions). Ends done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none},
+  Needs nothing to start (no conditions); with no real danger near and no flight under way it is done at once. Ends done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none},
   nothing-possible :cannot_escape {:fled [ids]}, or limit-reached. Quote: time (0, ::mean-s, ##Inf).
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
   A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
@@ -158,10 +158,15 @@
 
 
 (defn done?
-  "The hostiles fled against those still chasing: a flight is never done before it has run."
+  "Done once no real danger is within range and the flight holds no chaser, fled mob or refuge: those are written by the
+  flight's end (flight/end-flight!), which the call still has to make."
   [c]
-  (let [m (ctx/mem c)]
-    (contract/later :fleeing "a flight is not done before it has run" :units :hostiles :done (count (:fled m)) :left (count (:chasers m)))))
+  (let [{:keys [radius ranged-radius]} (:args c)
+        {:keys [fled chasers refuge]} (ctx/mem c)
+        data [:units :hostiles :done (count fled) :left (count chasers)]]
+    (if (or (seq fled) (seq chasers) refuge (seq (danger-q/dangers (:primitives c) radius {:ranged-radius ranged-radius} {:sight? false})))
+      (apply contract/later :fleeing "a flight is on" data)
+      (apply contract/ok :clear "no hostile is near" (conj data :result {:fled [] :ended :none})))))
 
 (defn quote-of
   "A flight has to find out how long the mobs chase: time (0, ::mean-s, ##Inf)."

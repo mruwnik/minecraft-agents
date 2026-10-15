@@ -208,14 +208,18 @@
 (def can-run? checks/low-health)
 
 (defn done?
-  "Later, with the animals killed against the count asked and the data so far: the hunt ends itself with its event and data."
+  "Done once the count asked is killed (of each kind) and the drops are collected; the data is the animals killed."
   [c]
-  (let [killed (if-let [ks (kinds c)]
-                 (reduce + (map #(get-in (ctx/mem c) [:kinds % :killed] 0) ks))
-                 (:killed (ctx/mem c) 0))]
-    (checks/goal false nil [:hunting "the hunt is on"]
-                 {:units :animals :done killed :left (max 0 (- (* (:count (:args c)) (count (or (kinds c) [1]))) killed))
-                  :result {:killed killed}})))
+  (let [m (ctx/mem c)
+        ks (kinds c)
+        killed (if ks (reduce + (map #(get-in m [:kinds % :killed] 0) ks)) (:killed m 0))
+        wanted (:count (:args c))
+        reached? (if ks
+                   (every? #(= :count (get-in m [:kinds % :reason])) ks)
+                   (and (>= killed wanted) (not (:target m)) (not (:collecting m))))]
+    (checks/goal reached? [:hunted "the count is killed"] [:hunting "the hunt is on"]
+                 {:units :animals :done killed :left (max 0 (- (* wanted (count (or ks [1]))) killed))
+                  :result (if reached? {:killed killed :reason :count :spared 0 :remaining (count (present c))} {:killed killed})})))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 20 (:count (:args c) 1)) ##Inf]}})

@@ -14,7 +14,7 @@
   server answers \"respawn point set\".
   Needs a bed: the :bed argument, else the remembered :bed within :bed-radius (forgotten with a bed_missing warn when its block is seen to be gone), else a bed the body sees.
   Conditions (at the start only): not night (at night the sleep job sets it), else condition-failed :night; a bed, else :no-bed.
-  Done {:spawn pos} when the server set the point, or at once with a spawn_unchanged event and :why :unchanged when the spawn is already
+  Done at once (:already) when the :spawn-bed it writes is recorded at the bed. Done {:spawn pos} when the server set the point, or at once with a spawn_unchanged event and :why :unchanged when the spawn is already
   known at that bed (jobs.lib.shelter/spawn-known?: :spawn-bed or :spawn-set near it, not reset since). A click that did not set it
   is nothing-possible :not-set {:why reason}, with a spawn_not_set warn. Writes :spawn-bed {:pos bed} (cap 1, forever),
   which jobs.survival.sleep also writes, and :home at the bed unless a live :home is recorded.
@@ -52,14 +52,12 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(defn spawn-here? [c]
-  (let [bed (bed-of c)]
-    (boolean (and bed (not (remembered-gone? c)) (sh/spawn-known? (ctx/view c) bed (ctx/now c))))))
-
 (defn done?
-  "The spawn is already set at the bed and the call recorded it (a call that ended reports its own end)."
+  "The spawn is set at the bed and recorded (:spawn-bed, which the round writes with the home offer): a spawn the body only
+  saw set stays :later until the round has written it."
   [c]
-  (let [d (and (:ended (ctx/mem c)) (spawn-here? c))]
+  (let [bed (bed-of c)
+        d (boolean (and bed (not (remembered-gone? c)) (sh/spawn-bed-at? (ctx/view c) bed)))]
     (checks/goal d [:spawn-set "the spawn is set at the bed"] [:spawn-unset "the spawn is not set at the bed"]
                  {:units :spawns :done (if d 1 0) :left (if d 0 1)})))
 

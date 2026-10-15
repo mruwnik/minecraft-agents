@@ -48,7 +48,10 @@
 
 (defn attacked [{:keys [p]}] (mapv #(.-id (.-args %)) (h/calls p "attack")))
 
-(defn done-event [{:keys [seen]}] (first (filter #(= :attack.done (:kind %)) @seen)))
+(defn done-event
+  "The fight's ending event (job.completed or job.stopped), which carries the data."
+  [{:keys [seen]}]
+  (first (filter #(#{:completed :stopped} (:kind %)) @seen)))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 

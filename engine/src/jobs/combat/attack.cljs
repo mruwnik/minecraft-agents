@@ -33,7 +33,7 @@
   - :too-many-hits: :max-hits hits without a kill.
   A kill counts only when the attack reports killed. A killed target or player is not attacked again in this run,
   even after respawning.
-  Ends with info attack.done and the data {:reason :killed [ids] :given-up {id reason}}; the ending is
+  Ends (info attack.done, but for :cleared) with the data {:reason :killed [ids] :given-up {id reason}}; the ending is
   - :done (:cleared): no target within :radius for :lost-s (waiting in 1 s steps), and every target seen was killed.
   - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
   - :nothing-possible :lost: some target was neither killed nor given up on.
@@ -139,11 +139,16 @@
     {:reason reason :killed (vec (:killed m)) :given-up (:given-up m {})}))
 
 (defn done?
-  "The targets killed against those seen, and the data so far. Never :ok: the fight ends with its event and data."
+  "Done once every target seen is killed and none is present for :lost-s; the data is the fight so far."
   [c]
-  (let [{:keys [killed seen]} (ctx/mem c)]
-    (contract/later :fighting "the fight decides its end" :units :targets :done (count killed)
-                    :left (count (remove (set killed) seen)) :result (fight-data c :limit-reached))))
+  (let [{:keys [killed seen last-seen]} (ctx/mem c)
+        dead? (set killed)
+        data [:units :targets :done (count killed) :left (count (remove dead? seen))]
+        cleared? (and (seq seen) (every? dead? seen) (empty? (present c))
+                      (>= (- (ctx/now c) last-seen) (* 1000 (:lost-s (:args c)))))]
+    (if cleared?
+      (apply contract/ok :cleared "every target is killed" (conj data :result (fight-data c :cleared)))
+      (apply contract/later :fighting "the fight is on" (conj data :result (fight-data c :limit-reached))))))
 
 (defn quote-of [c]
   (let [most (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s))]

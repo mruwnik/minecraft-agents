@@ -59,7 +59,7 @@
 
 (defn done? [c]
   (let [out (logged-out-meanwhile c)]
-    (checks/goal (some? out) [:logged-out "logged out meanwhile"] [:online "not logged out meanwhile"] {:result (:data out)})))
+    (checks/goal (some? out) [:logged-out "logged out meanwhile"] [:online "not logged out meanwhile"] {:result (when out {:ms (:ms (:data out)) :how (:status (:data out))})})))
 
 (defn away-ms [c]
   (let [until-morning (sh/ms-until-morning (.-timeOfDay (.self (:primitives c))))]

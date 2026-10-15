@@ -22,7 +22,7 @@
   Villagers are those the body sees within :radius. Every call re-reads the villagers: a step the world no longer needs is skipped.
   A step whose child declines is booked {:skipped :declined :reason why} (the child's wait reason), one that
   throws {:skipped :failed :error text}; the pass goes on either way.
-  The job does not start (condition-failed :nothing-to-do) unless some step would run. A started run always continues.
+  A village where no step would run is in order: done at once (:already). A started run always continues.
   It ends :done with {:villagers n :target :steps {step summary}} when some step ran to its end
   and none was incomplete. A summary is the child's :reason, :placed, :missing, :fed, :rolled, :born and :count (a
   child that ended other than :done carries :stopped kind). A child that ended other than :done, declined or failed,
@@ -216,11 +216,17 @@
 (def can-start? nothing-to-do)
 
 (defn done?
-  "Later with the steps run and left: which steps remain is decided from the facts at each step, so the pass ends
-  itself."
+  "Done once no step is left to run (decided from the facts, as each step is), none is incomplete and no child is under
+  way; the data is the pass's report."
   [c]
-  (let [ran (count (filter ran? (vals (:report (ctx/mem c)))))]
-    (contract/later :steps (str ran " steps run") :units :steps :done ran :left (count (:todo (ctx/mem c))))))
+  (let [m (ctx/mem c)
+        {:keys [call report todo]} (plan (or (:todo m) (slots (:args c))) (:args c) (facts c) (:report m {}))
+        ran (count (filter ran? (vals report)))
+        data [:units :steps :done ran :left (count todo)]]
+    (if (or call (:call-args m) (some incomplete? (vals report)))
+      (apply contract/later :steps (str ran " steps run") data)
+      (apply contract/ok :in-order (str "the village is in order: " (count (filter :skipped (vals report))) " steps skipped")
+             (conj data :result {:villagers (count (:villagers (facts c))) :target (:target (:args c)) :steps report})))))
 
 (defn quote-of [_c]
   {:uses {:job-time [1 60 (settings/get settings ::job-time-s)]}})
