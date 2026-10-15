@@ -22,7 +22,8 @@
             [jobs.lib.dig-look :as look]
             [jobs.access.cleanup :as cleanup]
             [jobs.access.cleanup.step :as cleanup-step]
-            [jobs.lib.result :as result]))
+            [jobs.lib.result :as result]
+            [jobs.movement.go-to.result :as go-to-result]))
 
 ;; ------------------------------------------------------------------ the step
 
@@ -736,6 +737,31 @@
     {:kind :nothing-possible :cause {:reason :unreachable :why :abilities}} true
     {:kind :nothing-possible :cause {:reason :unreachable :why :stuck}} false
     {:kind :done :data {:why :off-plan}} false))
+
+(defn gave-up [why] {:status :stopped :reason :unreachable :why why})
+
+(deftest the-walk-verdicts-read-go-tos-real-endings
+  (are [result permanent? unreachable?]
+       (let [e (go-to-result/ending nil result)]
+         (and (= permanent? (result/permanent-walk? e)) (= unreachable? (result/unreachable-walk? e))))
+    {:status :stopped :reason :bad-pos} true true
+    {:status :stopped :reason :unsupported} true true
+    (gave-up :abilities) true true
+    (gave-up :goal-enclosed) true true
+    (gave-up :goal-cut-off) true true
+    (gave-up :one-way) true true
+    (gave-up :goal-not-standable) true true
+    (gave-up :goal-on-magma) true true
+    (gave-up :exhausted) true true
+    (gave-up :off-plan) false true
+    (gave-up :needs-health) false true
+    (gave-up :door-stuck) false false
+    (gave-up :stuck) false false
+    (gave-up :no-progress) false false
+    (gave-up :moved-while-searching) false false
+    (gave-up :leg-search-spent) false false
+    {:status :stopped :reason :unreachable :leg true} false false
+    {:status :done :arrived true} false false))
 
 (defn stub-go-to
   "A go-to that records its args and the call's :ways in calls and ends with result."
