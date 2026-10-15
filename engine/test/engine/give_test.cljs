@@ -203,7 +203,7 @@
                                                                   (swap! statuses rest)
                                                                   (when (> (count (calls p "collect")) 8) (take-drops! p))
                                                                   #js {:status st :gained #js []}))))))]
-          (is (not= :litter (:reason @out)) "two fails, a collect, two fails do not end it as litter")
+          (is (= {:given 5 :returned 0 :text "gave 5 bread"} @out) "two fails, a collect, two fails do not end it as litter")
           (is (> (count (calls p "collect")) 4)))))))
 
 (deftest a-drop-that-spawns-late-is-not-reported-as-taken

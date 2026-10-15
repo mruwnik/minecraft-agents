@@ -23,7 +23,7 @@
   A body not wedged is done at once. Ways :step and :dig (both by default);
   a way left out is not tried, and a run with no way left ends nothing-possible :no-way.
   Still wedged after max-passes tries ends nothing-possible :still-wedged. Ends :done once the feet cell is free.
-  Never :continue.
+  Never yields :continue (only a cut round returns it, unseen).
   Quote: a few passes of ::pass-s.")
 
 (a/defargs args

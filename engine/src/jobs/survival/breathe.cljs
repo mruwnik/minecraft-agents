@@ -45,7 +45,7 @@
     pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..:leg-length blocks out, outward from the run's
     start only, inside :swim-range of it, at most :max-legs legs (a leg that moved starts afresh at its end).
   Done at once when the body is neither drowning, enclosed nor surfaced but still in water. A reflex
-  (level danger): it exhausts its ways before it stops and never yields :continue. Ends :done when the head is clear
+  (level danger): it exhausts its ways before it stops and never yields :continue (only a cut round returns it, unseen). Ends :done when the head is clear
   and, after a swim, the body stands on solid ground out of the water. Else nothing-possible:
   :no-land-in-range (data :searched :swum :legs :headings-failed :step, one of :no-wall :no-blocks :refused :failed) when
   every way out of the water is spent or the run has gone 3 x :swim-range blocks; the searched area (the start and the

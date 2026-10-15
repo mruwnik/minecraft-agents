@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.crafting-table :as crafting-table]
+            [jobs.lib.pace :as pace]
             [jobs.lib.stock :as stock]
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
@@ -247,27 +248,31 @@
       (cond-> (= :smelt step) (-> (update :tried (fnil conj #{}) food) (assoc-in [:report :smelt food] booked))
               (not= :smelt step) (-> (update :todo rest) (assoc-in [:report step] booked)))))
 
+(defn ^:async step!
+  "One child call (:again after it ended), :continue while it waits on the world, or the end of the pass."
+  [c]
+  (let [m (ctx/mem c)
+        running (when-let [call-args (:call-args m)]
+                  {:slot (first (:todo m)) :job (jobs (first (:todo m))) :args call-args :food (:food m)})
+        {:keys [todo report call]} (if running
+                                     {:todo (:todo m) :report (:report m) :call running}
+                                     (steps/plan #(decide %1 %2 %3) (:todo m) (:args c) (facts c) (:report m)))]
+    (ctx/update-mem! c assoc :todo todo :report report)
+    (if-not call
+      (finish! c report)
+      (let [step (:slot call)
+            slot (if (= :smelt step) (keyword (str "smelt-" (:food call))) step)
+            _ (ctx/update-mem! c assoc :call-args (:args call) :food (:food call))
+            e (await (ctx/call c slot (:job call) (:args call)))]
+        (if (= :continue e)
+          :continue
+          (do (ctx/update-mem! c after-child step (:food call) (summary step e) e)
+              :again))))))
+
 (defn ^:async round
   "One child call after another until the pass is over; :continue only while a child waits on the world."
   [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {} :tried #{} :failed nil
                      :wheat0 (storage/carried (u/inventory (:primitives c)) "wheat")))
-  (loop []
-    (let [m (ctx/mem c)
-          running (when-let [call-args (:call-args m)]
-                    {:slot (first (:todo m)) :job (jobs (first (:todo m))) :args call-args :food (:food m)})
-          {:keys [todo report call]} (if running
-                                       {:todo (:todo m) :report (:report m) :call running}
-                                       (steps/plan #(decide %1 %2 %3) (:todo m) (:args c) (facts c) (:report m)))]
-      (ctx/update-mem! c assoc :todo todo :report report)
-      (if-not call
-        (finish! c report)
-        (let [step (:slot call)
-              slot (if (= :smelt step) (keyword (str "smelt-" (:food call))) step)
-              _ (ctx/update-mem! c assoc :call-args (:args call) :food (:food call))
-              e (await (ctx/call c slot (:job call) (:args call)))]
-          (if (= :continue e)
-            :continue
-            (do (ctx/update-mem! c after-child step (:food call) (summary step e) e)
-                (recur))))))))
+  (await (pace/steps! c #(step! c))))

@@ -483,6 +483,4 @@
   [c]
   (await (settle-intents! c))
   (let [run (atom {:chest-done false})]
-    (loop []
-      (let [r (await (step! c run))]
-        (if (= :again r) (recur) r)))))
+    (await (pace/steps! c #(step! c run)))))

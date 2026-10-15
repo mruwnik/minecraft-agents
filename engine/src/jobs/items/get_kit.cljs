@@ -10,6 +10,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
             [jobs.lib.foods :as foods]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -211,7 +212,9 @@
       (stale? m (ctx/latest c :died))
       (do (ctx/update-mem! c restarted (ctx/now c))
           (ctx/emit! c :kit.resumed :info {:text "died since the kit began: starting again from what is carried and worn"})))
-    (loop []
+    (pace/steps!
+     c
+     (fn ^:async step []
       (let [st (state c)
             wear (when (:wear a) (first (to-wear items st)))
             have (filterv #(had? (:carried st) (:worn st) %) items)
@@ -227,7 +230,7 @@
           (let [out (wear-outcome (await (ctx/call c :wear 'jobs.items.wear {:item wear})))]
             (cond (= :continue out) :continue
                   out (finish! c items have (assoc out :item wear))
-                  :else (recur)))
+                  :else :again))
 
           (empty? todo) (finish! c items have nil)
 
@@ -237,7 +240,7 @@
                   :else (do (ctx/update-mem! c assoc :weapon-tried true)
                             (when r (ctx/emit! c :kit.no-weapon :warn {:reason (:reason r) :why (:why r)
                                                                        :text "no sword or axe to fight with, going on unarmed"}))
-                            (recur))))
+                            :again)))
 
           (and short (< fp min-food) (not (:fed (ctx/mem c))) (not (< (ctx/now c) (or (:no-food-until (ctx/mem c)) 0))))
           (let [r (when (:food a) (await (run-food! c)))]
@@ -246,13 +249,13 @@
                   (do (ctx/update-mem! c assoc :no-food-until (+ (ctx/now c) (settings/get settings ::no-food-wait-ms)))
                       (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
                                                        :text (str "no food found (" (name (:cause r)) "), going on with " fp " food points carried")})
-                      (recur))
+                      :again)
                   (some? r) (finish! c items have (assoc (stop-of :condition-failed {:reason :needs-food :cause (:cause r) :food fp :min-food min-food} (:why r))
                                                          :item (first todo)))
                   (not (:food a)) (finish! c items have (assoc (stop-of :condition-failed {:reason :needs-food :food fp :min-food min-food}
                                                                         (str "carries " fp " food points, needs " min-food ": get a food supply first"))
                                                                :item (first todo)))
-                  :else (do (ctx/update-mem! c assoc :fed true) (recur))))
+                  :else (do (ctx/update-mem! c assoc :fed true) :again)))
 
           short
           (let [[mat n] short
@@ -260,9 +263,9 @@
                 carried-raw (get (:carried st) (get smelt-plan/made-from mat) 0)]
             (cond (= :continue r) :continue
                   (and (some? r) (pos? carried-raw)) (do (ctx/update-mem! c assoc :partial (assoc r :item mat))
-                                                         (recur))
+                                                         :again)
                   (some? r) (finish! c items have (assoc r :item mat))
-                  :else (recur)))
+                  :else :again))
 
           (and partial (not (:smelted partial)) (or (:smelting partial) (pos? raw)))
           (let [[mat n] need
@@ -271,7 +274,7 @@
                                       :continue)
                   (some? r) (finish! c items have (assoc r :item mat))
                   :else (do (ctx/update-mem! c assoc-in [:partial :smelted] true)
-                            (recur))))
+                            :again)))
 
           :else
           (let [item (first todo)
@@ -284,4 +287,4 @@
               :else (do (ctx/update-mem! c #(-> % (update :made (fnil conj []) item) (dissoc :fed)))
                         (ctx/emit! c :kit.progress :info {:item item :have (inc (count have)) :of (count items)
                                                           :text (str "got " item " (" (inc (count have)) " of " (count items) ")")})
-                        (recur)))))))))
+                        :again)))))))))

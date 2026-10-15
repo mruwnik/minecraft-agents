@@ -13,6 +13,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.need :as need]
+            [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
@@ -411,19 +412,23 @@
   (cond-> (merge {:smelted 0 :wanted 0} (:data e))
     (not= :done (:kind e)) (assoc :reason (name (contract/cause-key e)))))
 
+(defn ^:async batch-step!
+  "One child smelt for the next item without a result: :again, or :continue while it waits on its cook; the end after the last, before done? can cut it."
+  [c items]
+  (let [done (:batch (ctx/mem c))
+        item (first (remove #(contains? done %) items))]
+    (if-not item
+      (finish-batch! c items)
+      (let [e (await (ctx/call c (keyword (str "item-" item)) 'jobs.items.smelt (assoc (:args c) :item item)))]
+        (if (= :continue e)
+          :continue
+          (do (ctx/update-mem! c assoc-in [:batch item] (batch-entry e))
+              (if (every? #(contains? (:batch (ctx/mem c)) %) items) (finish-batch! c items) :again)))))))
+
 (defn ^:async batch-round
   "One child smelt after another, one per item; :continue while a child waits on its cook."
   [c items]
-  (loop []
-    (let [done (:batch (ctx/mem c))
-          item (first (remove #(contains? done %) items))]
-      (if-not item
-        (finish-batch! c items)
-        (let [e (await (ctx/call c (keyword (str "item-" item)) 'jobs.items.smelt (assoc (:args c) :item item)))]
-          (if (= :continue e)
-            :continue
-            (do (ctx/update-mem! c assoc-in [:batch item] (batch-entry e))
-                (recur))))))))
+  (await (pace/steps! c #(batch-step! c items))))
 
 (defn ^:async round
   "One bounded step of the one item, or one child smelt after another for several items."

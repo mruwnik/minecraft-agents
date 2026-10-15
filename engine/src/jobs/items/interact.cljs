@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -71,22 +72,27 @@
                                 (when-not used (str ": " (name reason))))}
                     more))))
 
-(defn ^:async round [c]
-  (let [{:keys [id item]} (:args c)]
-    (loop [fails 0]
-      (let [p (:primitives c)
-            e (entity-of p id)]
+(defn ^:async step!
+  "One walk or the click; :again after a walk that arrived or failed below the limit."
+  [c fails]
+  (let [{:keys [id item]} (:args c)
+        p (:primitives c)
+        e (entity-of p id)]
+    (cond
+      (nil? e) (finish! c id item :gone)
+      (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (reach))
+      (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :clear-seal}}))]
         (cond
-          (nil? e) (finish! c id item :gone)
-          (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (reach))
-          (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :clear-seal}}))]
-            (cond
-              (= :continue r) :continue
-              (and (= :done (:kind r)) (:arrived (:data r))) (recur fails)
-              (>= (inc fails) (max-walks)) (finish! c id item :unreachable {:why (contract/cause-key r)})
-              :else (recur (inc fails))))
-          :else
-          (let [r (await (ctx/act c :interact (clj->js (cond-> {:id id} item (assoc :item item)))))
-                status (keyword (.-status r))]
-            (when (= :used status) (ctx/update-mem! c assoc :used true))
-            (finish! c id item status)))))))
+          (= :continue r) :continue
+          (and (= :done (:kind r)) (:arrived (:data r))) :again
+          (>= (swap! fails inc) (max-walks)) (finish! c id item :unreachable {:why (contract/cause-key r)})
+          :else :again))
+      :else
+      (let [r (await (ctx/act c :interact (clj->js (cond-> {:id id} item (assoc :item item)))))
+            status (keyword (.-status r))]
+        (when (= :used status) (ctx/update-mem! c assoc :used true))
+        (finish! c id item status)))))
+
+(defn ^:async round [c]
+  (let [fails (atom 0)]
+    (await (pace/steps! c #(step! c fails)))))
