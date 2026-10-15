@@ -71,6 +71,14 @@
      {:list uses
       :short (max 0 (- amount (transduce (map :uses-left) + 0 uses)))})))
 
+(defn dig-wear
+  "{tool [n n n]} for the carried tools that dig the blocks (names), one use a block, each by the tool tools-for lists first."
+  [c blocks]
+  (->> blocks
+       (keep #(:item (first (:list (tools-for c [:dig %] 1)))))
+       frequencies
+       (into {} (map (fn [[tool n]] [tool [n n n]])))))
+
 (def building-blocks
   ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
    "oak_planks" "spruce_planks" "birch_planks" "jungle_planks" "acacia_planks" "dark_oak_planks"

@@ -19,7 +19,6 @@
 
 (deftest each-job-exports-the-contract-and-quotes-validly
   (doseq [[sym args] [['jobs.movement.follow {:player "Steve"}]
-                      ['jobs.movement.linger-near {:pos [0 64 0] :wait-s 5}]
                       ['jobs.movement.mount {:id 9}]
                       ['jobs.movement.leave-vehicle {}]
                       ['jobs.movement.boat-drive {:pos [10 63 2]}]

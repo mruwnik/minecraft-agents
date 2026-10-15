@@ -7,6 +7,7 @@
             [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.event-api :as event-api]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.movement.linger-near :as linger-near]))
@@ -168,3 +169,15 @@
           (await (run-ticks s 4 500))
           (is (= [{:seconds 0.5 :why :lingering}] (distinct @pauses)) "each look is a pause child, not a bare wait act")
           (is (empty? (filter #(= "wait" (.-name %)) (.-calls (.-world (:p s))))) "no bare wait act"))))))
+
+(deftest the-quote-adds-the-walk-back-when-out-of-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [least (fn ^:async least-of [pos] (let [{:keys [eng]} (setup {} {:pos pos :range 3 :wait-s 30})]
+                                        (let [q (:quote (await (event-api/quote-view eng (str job) (pr-str {:pos pos :range 3 :wait-s 30}))))]
+                                          (is (nil? (contract/quote-problem q)))
+                                          (first (get-in q [:uses :job-time])))))
+              near (await (least {:x 2 :y 64 :z 0}))
+              far (await (least {:x 10 :y 64 :z 0}))]
+          (is (> far near)))))))

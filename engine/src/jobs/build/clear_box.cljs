@@ -7,6 +7,7 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.choose :as choose]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.checks :as checks]
@@ -167,9 +168,11 @@
 
 (defn quote-of [c]
   (let [p (:primitives c)
-        n (if (box-error (:args c)) 0 (count (remove #(air (u/seen-name p %)) (cells (:args c)))))
+        blocks (if (box-error (:args c)) [] (remove air (map #(u/seen-name p %) (cells (:args c)))))
+        n (count blocks)
         s (* n (settings/get settings ::cell-s))]
-    {:uses {:job-time [(* 0.5 s) s (* 4 s)]}
+    {:uses (cond-> {:job-time [(* 0.5 s) s (* 4 s)]}
+             (pos? n) (assoc :wear (choose/dig-wear c blocks)))
      :done [0 n n]}))
 
 (defn skip! [c pos reason]

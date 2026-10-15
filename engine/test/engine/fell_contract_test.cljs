@@ -203,3 +203,12 @@
                        (and (= k (:kind r)) (= cause (:cause r)) (= {:kind :nothing-possible :cause :cleanup-open} (get-in r [:data :cleanup]))))
       (contract/ending :limit-reached :job-time {:cleanup {:kind :nothing-possible :cause :cleanup-open}}) :limit-reached :job-time
       (contract/ending :condition-failed :need {:cleanup {:kind :nothing-possible :cause :cleanup-open}}) :condition-failed :need)))
+
+(deftest fell-tree-quotes-axe-wear-and-no-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start (assoc ft/tall :inventory [{:name "iron_axe" :count 1}]) {})
+              q (await (quote-of eng 'jobs.forestry.fell-tree {:radius 10}))]
+          (is (= {"iron_axe" [8 8 8]} (get-in q [:uses :wear])))
+          (is (nil? (:yields q)) "the logs stay on the ground"))))))

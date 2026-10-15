@@ -7,6 +7,7 @@
             [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
+            [jobs.lib.choose :as choose]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
@@ -429,7 +430,8 @@
       (apply contract/later :felling (str "fell-tree: " dug " logs dug") data))))
 
 (defn ^:async quote-of
-  "The walk to the tree's base as go-to quotes it, then 3 s and 1.5 s a log."
+  "The walk to the tree's base as go-to quotes it, then 3 s and 1.5 s a log, and the wear of the axe on the logs. The
+  logs stay on the ground, so none are yielded."
   [c]
   (let [{:keys [species radius at]} (:args c)
         t (if at (tree-at (:primitives c) at) (tree-near (:primitives c) radius species))
@@ -438,4 +440,4 @@
         least (+ 2 wl)
         mean (+ 2 wm 3 (* 1.5 n))]
     (cond-> {:uses {:job-time [least mean (max mean (time-s))]} :done [0 1 1]}
-      t (assoc :yields {:items {(str (:species t) "_log") [0 n n]}}))))
+      (pos? n) (assoc-in [:uses :wear] (choose/dig-wear c (repeat n (str (:species t) "_log")))))))

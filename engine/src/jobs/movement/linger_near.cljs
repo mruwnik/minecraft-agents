@@ -53,9 +53,14 @@
       (apply contract/ok :waited (str "waited " wait-s " s in range") data)
       (apply contract/later :lingering (str "waited " done " of " wait-s " s") data))))
 
-(defn quote-of [c]
-  (let [wait-s (:wait-s (:args c))]
-    {:uses {:job-time [wait-s wait-s (+ wait-s (* 4 wait-s))]}}))
+(defn ^:async quote-of
+  "The wait, which only time in range counts, and the walk back as go-to quotes it when the body is out of range."
+  [c]
+  (let [{:keys [pos range wait-s]} (:args c)
+        [wl wm wx] (if (u/within? (u/self-pos c) pos range)
+                     [0 0 0]
+                     (or (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range range})) [:uses :job-time]) [0 0 0]))]
+    {:uses {:job-time [(+ wait-s wl) (+ wait-s wm) (+ wait-s wx (* 4 wait-s))]}}))
 
 (defn finish!
   "Release the hold and end the call."

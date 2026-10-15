@@ -185,3 +185,20 @@
           (is (= :condition-failed (:kind e)))
           (is (= {:reason :no-items :needs {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1}}
                  (select-keys (:cause e) [:reason :needs]))))))))
+
+(deftest from-plan-quotes-the-items-it-places
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (bfp/start {:inventory bfp/kit} {"pen" (bfp/pen-plan)})
+              q (:quote (await (event-api/quote-view (:eng s) (str from-plan) (pr-str {:plan "pen"}))))
+              items (get-in q [:uses :items])]
+          (is (= {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1} (update-vals items second))))))))
+
+(deftest clear-box-quotes-the-wear-of-the-tool-it-digs-with
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (cbt/setup {:blocks cbt/eight :inventory [{:name "iron_shovel" :count 1} {:name "stone_pickaxe" :count 1}]})
+              q (:quote (await (event-api/quote-view eng "jobs.build.clear-box" (pr-str cbt/box))))]
+          (is (= {"iron_shovel" [4 4 4] "stone_pickaxe" [4 4 4]} (get-in q [:uses :wear]))))))))

@@ -157,9 +157,13 @@
 
 (defn quote-of [c]
   (let [{:keys [cells trouble]} (judged-plan c)
-        n (if trouble 0 (count (owed cells)))
-        s (* n (settings/get settings ::cell-s))]
-    {:uses {:job-time [(* 0.5 s) s (* 4 s)]} :done [0 n n]}))
+        open (if trouble [] (owed cells))
+        n (count open)
+        s (* n (settings/get settings ::cell-s))
+        items (frequencies (keep :item (vals (into {} (map (juxt :pos identity)) open))))]
+    {:uses (cond-> {:job-time [(* 0.5 s) s (* 4 s)]}
+             (seq items) (assoc :items (update-vals items (fn [k] [0 k k]))))
+     :done [0 n n]}))
 
 ;; ------------------------------------------------------------------ steps
 
