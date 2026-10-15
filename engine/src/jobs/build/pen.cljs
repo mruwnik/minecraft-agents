@@ -32,7 +32,7 @@
   :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start.
   The pen ends with the body outside and the gate shut.
   Endings: done when the pen holds; nothing-possible with the :reason as cause when it does not
-  (one warn pen-build.leaky naming the leaks {:pos :why} (:gap :open-gate :climb :open :unloaded; at most 12) and what
+  (one warn pen-build.leaky naming the leaks {:pos :why} (:gap :open-gate :climb :perch-in :open :unloaded; at most 12) and what
   the build left (:refused, :given-up, :short)); nothing-possible :inside when the body cannot get out of the finished
   pen. An ending of the builder's can-start? (no data: :no-items, :no-zones) is this job's; a builder that ended
   short or refused after its work (data) goes on to the check, which reports the shortage as leaks with :built. A

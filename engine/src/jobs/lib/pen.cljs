@@ -476,8 +476,7 @@
                     (seq exits) (keep #(leak-at world (conj (path-to seen (:from %)) {:key (:to %) :s (:top %) :perch? (:perch? %)}) true) exits)
                     (and truncated? (not box)) (keep identity [(leak-at world (path-to seen end) false)])
                     (and (not box) (seq @(:unloaded world))) (keep identity [(climb-at (path-to seen (last (:order fill))))])
-                    (not box) (perch-ins (make-world block-at sealed blocks) seen)
-                    :else [])]
+                    :else (perch-ins (make-world block-at sealed blocks) seen))]
         {:world world
          :fill fill
          :leaks (dedupe-leaks (concat found (unloaded-leaks world near)))}))))

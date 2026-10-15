@@ -41,6 +41,27 @@
     (is (false? (:closed? r)))
     (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in}] (:leaks r)))))
 
+(def box-opts {:box {:min {:x 0 :y 64 :z 0} :max {:x 4 :y 64 :z 4}}})
+
+(deftest ground-beside-the-fence-top-is-a-way-in-for-a-box-too
+  (let [r (check (assoc fence-ring [6 64 2] "stone") (assoc box-opts :at nil))]
+    (is (false? (:closed? r)))
+    (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in}] (:leaks r)))))
+
+(deftest a-walled-in-pocket-beside-the-fence-is-no-way-in
+  (let [wall (fn [x z] (for [y (range 64 70)] [[x y z] "stone"]))
+        pocket (into {[6 64 2] "stone"} (mapcat #(apply wall %)) [[7 2] [6 1] [6 3]])
+        cells (merge fence-ring pocket)]
+    (is (:closed? (check cells)))
+    (is (:closed? (check cells (assoc box-opts :at nil))))))
+
+(deftest unseen-ground-beside-the-fence-is-no-definite-way-in
+  (let [cells (assoc fence-ring [6 64 2] "stone" [6 63 2] :unloaded [6 65 2] :unloaded)]
+    (are [opts] (let [r (check cells opts)]
+                  (not-any? #(= :perch-in (:why %)) (:leaks r)))
+      {}
+      (assoc box-opts :at nil))))
+
 (defn without [cells & ks] (apply dissoc cells ks))
 
 ;; ------------------------------------------------------------------ what the ring is made of

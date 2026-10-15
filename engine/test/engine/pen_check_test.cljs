@@ -195,6 +195,15 @@
           (is (= [{:pos {:x 5 :y 64 :z 1} :why :gap}] (:leaks event)))
           (is (= "pen not closed: leak: gap at [5 64 1]" (:text event))))))))
 
+(deftest open-ground-beside-the-fence-top-is-a-perch-in-leak-named-in-the-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [event]} (await (run-job {:box {:min [0 64 0] :max [4 64 4]}} (world {"6,64,2" "stone"})))]
+          (is (= :leak (:reason event)))
+          (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in}] (:leaks event)))
+          (is (= "pen not closed: leak: perch-in at [5 64 2]" (:text event))))))))
+
 (deftest a-plan-names-the-pen-by-its-fence-cells
   (async done
     (tu/run-async done
