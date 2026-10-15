@@ -6,6 +6,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -210,6 +211,10 @@
   (let [can-start? (:can-start? (primitive-job/job :place 'jobs.primitive.place))]
     (is (= [:never {:reason :bad-args :missing [:pos :item]}] ((juxt first #(dissoc (nth % 2) :text)) (can-start? {:args {:pos nil}}))))
     (is (= :ok (first (can-start? {:args {:pos {:x 0 :y 64 :z 0} :item "dirt"}}))))))
+
+(deftest a-primitive-job-with-a-wrong-valued-pos-is-refused-before-it-starts
+  (is (re-find #"jobs.primitive.place :pos must be" (expr/problem registry/jobs '(jobs.primitive.place {:pos "x" :item "dirt"}))))
+  (is (nil? (expr/problem registry/jobs '(jobs.primitive.place {:pos [0 64 0] :item "dirt"})))))
 
 (defn waits-for [ms]
   {:round (fn ^:async wait-round [c]

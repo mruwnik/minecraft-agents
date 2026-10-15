@@ -99,7 +99,10 @@
    ::max-backs {:default 2 :doc "Steps back a pinned animal gets before the walk out and retry." :spec (a/int-in 0 nil)}
    ::look-range {:default 4 :doc "How near the body goes to a pen cell it has not seen before looking at it." :spec (a/int-in 0 nil)}
    ::gate-look-range {:default 1 :doc "How near the gate the body goes to look into the pen when its cells stayed unseen from outside." :spec (a/int-in 0 nil)}
+   ::precheck? {:default true :doc "Judge the pen from what the body sees and remembers before the start (leak, no gate, too shallow); false judges it at the pen only." :spec boolean?}
    ::max-leaves {:default 2 :doc "How often a run that ends with the body on the pen side goes out before the shut." :spec (a/int-in 0 nil)}})
+(defn precheck? [] (settings/get settings ::precheck?))
+
 (defn settled-move [] (settings/get settings ::settled-move))
 
 (defn pinned-ms [] (settings/get settings ::pinned-ms))
@@ -318,9 +321,9 @@
 (defn pen-refusal
   "Why the pen, as the body sees and remembers it from where it stands, will not do: later with the verdict's refusal as
   its reason and its :why, :cell, :leaks or :depth. ok when it will do, already holds :target (done? answers)
-  or cannot be read from here (the run reads it at the pen). :precheck? false skips it."
+  or cannot be read from here (the run reads it at the pen). The setting ::precheck? false skips it."
   [c]
-  (let [answer (when (:precheck? (:args c)) (read-pen c))
+  (let [answer (when (precheck?) (read-pen c))
         {:keys [refuse extra]} (when-not (or (nil? answer)
                                              (#{:unloaded :no-start} (:reason answer))
                                              (>= (count (in-pen-adults c answer)) (:target (:args c))))
