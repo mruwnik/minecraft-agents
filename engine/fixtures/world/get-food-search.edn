@@ -29,12 +29,12 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :food.none :data {:text [:contains "within 72 blocks"]}} :within-s 60}]}
+   :expect [{:event {:source :job :kind :food.none :message [:contains "within 72 blocks"]} :within-s 60}]}
   {:name "no-give-up-keeps-the-24-block-radius"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :food.none :data {:text [:contains "within 24 blocks"]}} :within-s 40}]}
+   :expect [{:event {:source :job :kind :food.none :message [:contains "within 24 blocks"]} :within-s 40}]}
   {:name "starving-with-a-stale-give-up-explores-with-a-clamped-distance"
    :memory [{:kind :hungry :data {:food 0} :age-s 90 :policy {:cap 10 :ttl 3600000}}
             {:kind :hungry :data {:food 0} :age-s 100 :policy {:cap 10 :ttl 3600000}}]
@@ -77,7 +77,7 @@
          [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore true})]]
-   :expect [{:event {:source :job :kind :food.none :data {:text [:contains "not searched"]}} :within-s 60}
+   :expect [{:event {:source :job :kind :food.none :message [:contains "not searched"]} :within-s 60}
             {:no-event {:source :job :kind #{:search.done :search.not-found}} :for-s 40}]}
   {:name "melon-seen-is-dug-and-eaten"
    :blocks [[:set [20 0 16] "melon"]]
@@ -124,7 +124,7 @@
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :food.none :data {:text [:contains "kept for breeding"]}} :within-s 60}]
+   :expect [{:event {:source :job :kind :food.none :message [:contains "kept for breeding"]} :within-s 60}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "starving-hungry-reflex-fires-again-after-a-give-up"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]

@@ -100,7 +100,7 @@
   {:name "exposed-hold-names-the-failed-sites"
    :blocks [[:fill [12 -1 12] [20 -1 20] "stone"]]
    :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :flee-radius 0})]]
-   :expect [{:event {:source :job :kind :shelter.exposed :data {:text [:not [:contains "no site tried"]]}} :within-s 90}]
+   :expect [{:event {:source :job :kind :shelter.exposed :message [:not [:contains "no site tried"]]} :within-s 90}]
    :limit-s 100}
   ;; 1fbd292f: a wide dark natural cave is no shelter: the body digs in where it stands
   {:name "open-cave-digs-in-where-it-stands"
@@ -163,8 +163,8 @@
             [:set [11 0 12] "red_bed[facing=east,part=foot]"] [:set [12 0 12] "red_bed[facing=east,part=head]"]]
    :body {:at [4.5 0 12.5]}
    :act [[:job (jobs.survival.sleep {:bed #at [11 0 12]})]]
-   :expect [{:event {:source :job :kind :bed_unreachable :data {:text [:contains "cannot reach the bed: "]}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :bed_unreachable :data {:text [:contains "walled in"]}} :within-s 90 :of-job true}
+   :expect [{:event {:source :job :kind :bed_unreachable :message [:contains "cannot reach the bed: "]} :within-s 90 :of-job true}
+            {:event {:source :job :kind :bed_unreachable :message [:contains "walled in"]} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 30}]
    :after [[:body-far [11.5 0 12.5] 3]]
    :limit-s 100}

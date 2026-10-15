@@ -65,7 +65,7 @@
    :plans [{:id "s" :kind :mineshaft :metadata {:by "SomeoneElse"}
             :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
-   :expect [{:event {:source :job :kind :mine.no-shaft :data {:text [:contains "mine uses no mineshaft"]}} :within-s 100 :of-job true}
+   :expect [{:event {:source :job :kind :mine.no-shaft :message [:contains "mine uses no mineshaft"]} :within-s 100 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4]}} :within-s 180 :of-job true}]
    :after [[:block [7 -1 6] "dirt"] [:item "cobblestone" [:>= 4]]]
    :limit-s 200}

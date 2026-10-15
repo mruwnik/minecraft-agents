@@ -22,4 +22,4 @@
   ;; Card e3e88fbd: the found event lists every spot with its score and level, not only the best.
   {:name "found-event-lists-every-spot-with-score-and-level"
    :act [[:job (jobs.farm.find-spot {:range 20 :depth 7 :limit 3})]]
-   :expect [{:event {:source :job :kind :find-spot.found :data {:spots [:>= 2] :text [:contains "(level"]}} :within-s 60 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :find-spot.found :data {:spots [:>= 2]} :message [:contains "(level"]} :within-s 60 :of-job true}]}]}
