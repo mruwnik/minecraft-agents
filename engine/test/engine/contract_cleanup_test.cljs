@@ -175,6 +175,28 @@
           (is (= 1 (count (job-ev seen :cancelled))))
           (is (= [] (:list (core/state eng)))))))))
 
+(def self-cancelling
+  {:conditions []
+   :round (fn [_] (log! :round) :continue)
+   :cleanup (fn [c _]
+              (log! :cleanup)
+              (core/cancel! (:eng @world) (:job @world))
+              (ctx/end c :done nil))})
+
+(deftest a-cancel-landing-in-a-cleanup-round-that-ends-it-still-ends-the-job-cancelled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'self-cancelling self-cancelling})
+              id (core/submit! eng '(self-cancelling) {})]
+          (swap! world assoc :eng eng :job id)
+          (await (core/tick! eng))
+          (core/cancel! eng id)
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= [:round :cleanup] (:log @world)))
+          (is (= 1 (count (job-ev seen :cancelled))))
+          (is (= [] (:list (core/state eng)))))))))
+
 (deftest a-death-runs-no-cleanup
   (async done
     (tu/run-async done

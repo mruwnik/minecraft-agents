@@ -299,11 +299,10 @@ a finished job's goes to body memory `:job-report` (cap 256), with its ending's 
 **Contract jobs.** Export `conditions` and `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
 `defaults` (a settings key value reads the setting; a fn value is called with the args, the catalog shows `:from-args`), `done?`,
 `cleanup` (`(cleanup ctx ending)`, `:continue` or an ending; `engine.core.cleanup`): run once however a started job ends
-(its own limit, a parent's end or a cancel included, innermost frame first; not on a reflex cut, a death or a restart),
-before the caller sees the ending, on its own call (`cleanup-defaults`, default `{:spend {:job-time 30 :wall-time 60}}`,
-the callers' limits not checked), its use in the job's report; a done cleanup's data merges into the ending's, any
-other end or overrun adds `:cleanup {:kind :cause}` and a warn `job.cleanup_failed`. A cancelled job that owes one
-stays listed (`job.cleaning_up`) until it has run, then `job.cancelled`; a cancel meanwhile does not cut it. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A check returns a status `[kind text data]`
+(limit, parent's end or cancel; innermost first; not on a reflex cut, death or restart), before the caller sees the ending,
+on its own call (`cleanup-defaults`, default `{:spend {:job-time 30 :wall-time 60}}`); its data merges into the ending, a
+failed or overrun one adds `:cleanup {:kind :cause}` and warns `job.cleanup_failed`. A cancelled job stays listed
+(`job.cleaning_up`) until it ran; a cancel meanwhile does not cut it. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A check returns a status `[kind text data]`
 (`:ok :later :never :look`, data with `:reason`; `contract/ok|later|never|look`; an ending's cause is data plus `:text`).
 `can-start?` (until the start) and `can-run?` (every round, between steps) give one (none: `:ok`): `:later` waits (a
 called child ends `:condition-failed`; from `can-run?` it yields, bounded by the call's limits; a reflex ends

@@ -689,6 +689,26 @@
           (is (empty? (filter #(false? (:shut? %)) (map :data (mem/entries (mem/view (:store (:eng s))) :opened))))
               "no open-on-purpose entry is left"))))))
 
+(deftest a-cleanup-whose-let-go-fails-still-shuts-the-gates-and-ends-with-the-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/fake-on-floor {:floor h/flight-floor :inventory lead :entities [(cow 1 3)] :blocks gate-wall
+                                   :states {"15,64,0" {:open false :facing "east"}}})
+              now (tu/act-clock clock p call-ms)
+              failing (assoc (get registry/jobs 'jobs.animals.unleash) :round (fn [c] (ctx/end c :nothing-possible :stub)))
+              eng (core/create {:primitives p :jobs (assoc registry/jobs 'jobs.animals.unleash failing) :triggers triggers/all
+                                :dir (tu/tmp-dir) :now now :world (ew/of-data {} {} [])
+                                :events (events/make {:body "Fake" :sinks [sink] :now now})})
+              s {:eng eng :clock clock :p p :seen seen}]
+          (tu/seeing-all p)
+          (await (submit s {} 40))
+          (is (finished? s))
+          (is (false? (gate-open? s)) "the gate is shut though the let-go failed")
+          (is (= 1 (count (filter #(= :cleanup_failed (:kind %)) @seen))) "the let-go failure is the cleanup ending"))))))
+
 (deftest shut-radius-covers-every-opened-gate
   (let [e #(hash-map :cell {:x % :y 64 :z 0})]
     (is (= 16 (escort/shut-radius {:x 0 :y 64 :z 0} [(e 3)])) "never below the default")
@@ -725,7 +745,7 @@
               s {:eng eng :clock clock :p p}]
           (await (submit s {} 1))
           (is (seq @pauses) "the wait is a pause child")
-          (is (contains? (set @pauses) {:seconds (/ escort/wait-look-ms 1000) :why :waiting-for-animal})))))))
+          (is (= #{{:seconds (/ escort/wait-look-ms 1000) :why :waiting-for-animal}} (set (filter #(= :waiting-for-animal (:why %)) @pauses)))))))))
 
 (deftest a-post-that-is-no-fence-waits-the-start
   (let [c {:primitives (tu/fake {:blocks {"5,64,0" "stone"}}) :args {:mob "cow" :fence {:x 5 :y 64 :z 0}}}]

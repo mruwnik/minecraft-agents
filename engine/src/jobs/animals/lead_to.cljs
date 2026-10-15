@@ -401,17 +401,17 @@
         r))))
 
 (defn ^:async cleanup
-  "However the leading ended: an animal still on this body's lead is let go (jobs.animals.unleash; its ending when it
-  fails), then the doors and gates the legs left open are shut (escort/close-up!). Done with {:still-led false}."
+  "However the leading ended: an animal still on this body's lead is let go (jobs.animals.unleash), then the doors and
+  gates the legs left open are shut (escort/close-up!), also when the let-go failed. Done with {:still-led false}, or
+  the let-go's failing ending."
   [c _]
-  (if (:still-led (ctx/mem c))
-    (let [e (await (ctx/call c :unleash 'jobs.animals.unleash {:mob (:mob (:args c)) :animal (:animal (ctx/mem c))
+  (let [e (when (:still-led (ctx/mem c))
+            (await (ctx/call c :unleash 'jobs.animals.unleash {:mob (:mob (:args c)) :animal (:animal (ctx/mem c))
                                                                 :radius (:watch-radius (:args c))
-                                                                :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-      (cond
-        (= :continue e) :continue
-        (not= :done (:kind e)) e
-        :else (do (ctx/update-mem! c assoc :still-led false)
-                  (await (cleanup c nil)))))
-    (let [r (await (escort/close-up! c (fn [c _] (ctx/end c :done nil {:still-led false}))))]
-      (if (= :yield r) :continue r))))
+                                                                :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+    (if (= :continue e)
+      :continue
+      (do (when e (ctx/update-mem! c assoc :still-led false :unleash-failed (when-not (= :done (:kind e)) e)))
+          (let [r (await (escort/close-up! c (fn [c _] (or (:unleash-failed (ctx/mem c))
+                                                           (ctx/end c :done nil {:still-led false})))))]
+            (if (= :yield r) :continue r))))))

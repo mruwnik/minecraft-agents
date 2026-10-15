@@ -9,7 +9,7 @@
   job.cleanup_failed; a done one's data merges into the ending's."
   (:require [engine.args :as a]
             [engine.contract :as contract]
-            [engine.core.base :refer [cut-off! emit! now]]
+            [engine.core.base :refer [cut-off! emit! now owner?]]
             [engine.core.limits :as limits]
             [engine.core.tally :as tally]
             [engine.memory :as mem]
@@ -73,22 +73,24 @@
 
 (defn finish!
   "End the cleanup of the frame of c with ce (its ending, or the failure): the job's call back, the cleanup's time
-  added; the frame's ending with ce in it."
+  added; the frame's ending, with ce in it, stays in :closing (:cleaned) until step hands it on, so a cancel that cut
+  this round cannot lose it."
   [c ce]
   (let [eng (:engine c)
-        e (:closing (state-of c))]
+        e (:closing (state-of c))
+        ending (if (= :done (:kind ce))
+                 (cond-> e (seq (:data ce)) (update :data merge (:data ce)))
+                 (let [failure (select-keys ce [:kind :cause])]
+                   (emit! eng {:source :job :kind :cleanup_failed :level :warn :job (:id c) :chain (:chain c) :round (:round c)
+                               :reflex (:reflex c) :data failure
+                               :text (str "cleanup ended " (name (:kind ce)) " (" (contract/cause-key ce) "); the job's ending stands")})
+                   (assoc-in e [:data :cleanup] failure)))]
     (mem/update-job! (:store eng) (:root c) (:slots c) update :contract
                      (fn [{:keys [cleanup ran-ms] :as s}]
-                       (-> (dissoc s :cleanup :closing :limit)
-                           (assoc :call (:call cleanup) :started-ms (:started-ms cleanup)
-                                  :ran-ms (+ (:ran-ms cleanup) (or ran-ms 0))))))
-    (if (= :done (:kind ce))
-      (cond-> e (seq (:data ce)) (update :data merge (:data ce)))
-      (let [failure (select-keys ce [:kind :cause])]
-        (emit! eng {:source :job :kind :cleanup_failed :level :warn :job (:id c) :chain (:chain c) :round (:round c)
-                    :reflex (:reflex c) :data failure
-                    :text (str "cleanup ended " (name (:kind ce)) " (" (contract/cause-key ce) "); the job's ending stands")})
-        (assoc-in e [:data :cleanup] failure)))))
+                       (-> (dissoc s :cleanup :limit)
+                           (assoc :closing ending :cleaned true
+                                  :call (:call cleanup) :started-ms (:started-ms cleanup)
+                                  :ran-ms (+ (:ran-ms cleanup) (or ran-ms 0))))))))
 
 (defn ^:async run-once
   "One round of def's cleanup in the frame of c: :continue, or what it ended with. Its own call bounds it; an overrun
@@ -138,14 +140,15 @@
               (drop-frame! dc)
               (await (step eng def c ctx-below)))))
 
-      (and (:cleanup def) (get-in m [:contract :call]))
+      (and (:cleanup def) (get-in m [:contract :call]) (not (get-in m [:contract :cleaned])))
       (do (when-not (get-in m [:contract :cleanup]) (begin! def c (get-in m [:contract :closing])))
           (let [r (await (run-once def c))]
-            (if (= :continue r) :continue (finish! c r))))
+            (if (= :continue r) :continue (do (finish! c r) (await (step eng def c ctx-below))))))
 
       :else
       (let [e (get-in m [:contract :closing])]
-        (mem/update-job! (:store eng) (:root c) (:slots c) update :contract dissoc :closing)
+        (when (owner? eng (:token c))
+          (mem/update-job! (:store eng) (:root c) (:slots c) update :contract dissoc :closing :cleaned))
         e))))
 
 (defn ^:async close
