@@ -978,6 +978,48 @@
             (is (empty? (calls p "dig")) what)
             (is (empty? (events-of seen :go-to.escalated)) what)))))))
 
+(deftest a-free-body-far-from-a-walled-in-goal-walks-to-the-nearest-cell-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! (assoc-in free-by-pocket [:self :pos] {:x -15 :y 64 :z 0}) {:pos [8 64 0] :range 0}))]
+          (is (true? (:arrived @out)))
+          (is (= [8 64 0] (feet p)))
+          (is (= [:approach :clear-path] (take 2 (map :step (events-of seen :go-to.escalated)))))
+          (is (every? #(<= 5 (first %) 8) (dug-cells p)) "nothing dug on the open land of the walk there"))))))
+
+(def high-pocket
+  "The pocket of `pocket` raised to [8 67 0] in a stone block x 6..10, y 64..69, z -2..2."
+  (apply dissoc (merge (box -20 63 -20 20 63 20 "stone") (box 6 64 -2 10 69 2 "stone")) ["8,67,0" "8,68,0"]))
+
+(deftest a-free-body-stairs-or-pillars-up-into-a-higher-walled-in-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:pos {:x 0 :y 64 :z 0}} :blocks high-pocket
+                     :inventory [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 16}]}
+              {:keys [out p seen]} (await (run-job! world {:pos [8 67 0] :range 0}))]
+          (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
+          (is (= [8 67 0] (feet p)))
+          (is (some #{:stair :pillar} (map :step (events-of seen :go-to.escalated)))))))))
+
+(defn moat
+  "The goal's 1x1 stone island at [8 63 0] in an 11x11 moat of liquid one deep on the stone floor."
+  [liquid]
+  (merge (box -20 62 -20 20 62 20 "stone") (box -20 63 -20 20 63 20 "stone") (box 3 63 -5 13 63 5 liquid) {"8,63,0" "stone"}))
+
+(deftest a-goal-behind-lava-is-not-dug-toward-and-one-behind-water-is-swum-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lava (await (run-job! (assoc free-by-pocket :blocks (moat "lava")) {:pos [8 64 0] :range 0}))
+              water (await (run-job! (assoc free-by-pocket :blocks (moat "water")) {:pos [8 64 0] :range 0}))]
+          (is (false? (:arrived @(:out lava))))
+          (is (not= :goal-enclosed (:why @(:out lava))) (pr-str (select-keys @(:out lava) [:why :text])))
+          (is (empty? (events-of (:seen lava) :go-to.escalated)) "lava: no way in is made")
+          (is (empty? (calls (:p lava) "dig")) "lava: nothing dug")
+          (is (true? (:arrived @(:out water))) (pr-str (select-keys @(:out water) [:why :text]))))))))
+
 (deftest go-to-the-cut-off-deck-with-the-default-budget-is-still-cut-off
   (async done
     (tu/run-async done

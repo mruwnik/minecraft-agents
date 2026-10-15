@@ -11,6 +11,7 @@
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.pass :as pass]
             [jobs.lib.pen :as pen]
             [jobs.lib.world-files :as world]
             [jobs.movement.go-to :as go-to]
@@ -693,6 +694,24 @@
             (await (tick-out! eng clock 5))
             (is (= 1 @checks) "the second attempt of the call checks no pen")
             (is (= 1 (count (filter #(= :go-to.pen-gate-open (:kind %)) @seen))))))))))
+
+(deftest a-gate-the-call-opened-is-checked-at-its-next-attempt
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock seen]} (setup (pen-world false 3) [])
+              pos {:x 20 :y 64 :z -3}
+              cut-at-gate {:check (constantly true)
+                           :round (fn ^:async cut-at-gate-round [c]
+                                    (cut/start-attempt! c pos)
+                                    (await (pass/open-block! c gate-cell true))
+                                    (cut/start-attempt! c pos)
+                                    :done)}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'cut-at-gate cut-at-gate))]
+          (core/submit! eng '(cut-at-gate) {:range 0})
+          (await (tick-out! eng clock 5))
+          (is (= 1 (count (filter #(= :go-to.pen-gate-open (:kind %)) @seen)))
+              "opened after the first check, left open when the attempt was cut"))))))
 
 (deftest pens-are-checked-only-when-an-open-gate-is-near-the-start
   (async done
