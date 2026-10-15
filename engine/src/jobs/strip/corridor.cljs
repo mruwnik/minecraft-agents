@@ -131,6 +131,7 @@
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) :again
+      (= :bag-full (contract/cause-key e)) (stop! c :bag-full {:id id})
       :else (stop! c :cart-failed {:child (contract/cause-key e) :id id}))))
 
 (defn carts

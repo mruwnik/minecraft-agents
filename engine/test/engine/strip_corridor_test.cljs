@@ -119,6 +119,17 @@
           (is (= 3 (bd/carried p "iron_ingot")))
           (is (= 1 (bd/carried p "chest_minecart"))))))))
 
+(deftest a-cart-that-cannot-be-emptied-into-a-full-bag-stops-bag-full-for-the-trip
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :entities [(assoc (cart 50 [5 64 1]) :drops [] :items [])])
+              p (:p env)
+              _ (.override (.-world p) "inspectContainer" (fn [_ _ _] #js {:status "ok" :items #js [#js {:name "iron_ingot" :count 3}]}))
+              _ (.override (.-world p) "transfer" (fn [_ _ _] #js {:status "full" :moved 0}))
+              r (await (run! env (assoc args :want-free 0)))]
+          (is (= [:stopped :bag-full] ((juxt :status :reason) r))))))))
+
 (deftest without-shears-the-web-stops-no-tool-naming-the-tool
   (async done
     (tu/run-async done

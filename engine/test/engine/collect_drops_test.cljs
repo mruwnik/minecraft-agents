@@ -343,3 +343,11 @@
           (core/cancel! eng (first (:list (core/state eng))))
           (await (tu/run-until-empty eng 20))
           (is (empty? (held)) "the cleanup released it"))))))
+
+(deftest a-search-with-want-zero-finding-nothing-ends-done-zero
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (bd/setup {:self body})
+              result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3 :want 0} 80))]
+          (is (= [:done 0] ((juxt :status :collected) result))))))))
