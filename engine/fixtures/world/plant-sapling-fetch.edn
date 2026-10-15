@@ -11,8 +11,8 @@
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:oak_sapling\",count:2}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
-   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
-            {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 20 :of-job true}
+            {:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:block [20 0 14] "oak_sapling"]]}
   {:name "leaves-broken-for-a-sapling"
@@ -20,8 +20,8 @@
    :blocks [[:fill [14 0 19] [18 1 21] "oak_leaves[persistent=false]"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
-   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
-            {:event {:source :job :kind #{:fetch.done :fetch.failed}} :within-s 160 :of-job true}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 20 :of-job true}
+            {:event {:source :job :kind :child_ended :data {:slot :need}} :within-s 160 :of-job true}
             {:no-event {:source :job :kind :failed} :for-s 20}]}
   {:name "already-planted-spot-clears-debt"
    ;; card f3248d31: the same sapling already on the spot counts as planted (place says occupied) and the debt is forgotten
@@ -45,8 +45,8 @@
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:mangrove_propagule\",count:2}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "mangrove"})]]
-   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
-            {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 20 :of-job true}
+            {:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:block [20 0 14] "mangrove_propagule"]]}
   {:name "leaves-bound-far-leaves-stay"
@@ -55,8 +55,8 @@
    :blocks [[:fill [8 0 19] [26 3 29] "oak_leaves[persistent=true]"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
-   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
-            {:event {:source :job :kind #{:fetch.done :fetch.failed}} :within-s 190 :of-job true}]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 20 :of-job true}
+            {:event {:source :job :kind :child_ended :data {:slot :need}} :within-s 190 :of-job true}]
    :after [[:block [26 3 29] "oak_leaves"]]}
   {:name "leaves-in-foreign-plan-untouched"
    ;; card bfb29b54 should-fail: leaves inside another owner's plan footprint are not broken
@@ -76,7 +76,7 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak" :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-sapling}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 20}]
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 20}]
    :after [[:not-block [20 0 14] "oak_sapling"]]}
   {:name "harvest-wood-fetch-false-leaves-debt-owed"
    :blocks [[:fill [22 0 16] [22 3 16] "oak_log"]
@@ -88,5 +88,5 @@
          [:job (jobs.forestry.harvest-wood {:radius 16 :fetch false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:event {:source :job :kind :harvest-wood.replant-owed :data {:reason :no-sapling}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 80 :until {:source :job :kind :harvest-wood.replant-owed}}]
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 80 :until {:source :job :kind :harvest-wood.replant-owed}}]
    :after [[:not-block [22 0 16] "oak_sapling"]]}]}

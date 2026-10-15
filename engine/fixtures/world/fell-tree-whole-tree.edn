@@ -31,8 +31,8 @@
    :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]]
    :body {:inventory []}
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
-   :expect [{:event {:source :job :kind :fetch.started} :within-s 40 :of-job true}
-            {:event {:source :job :kind :fetch.done} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 80 :of-job true}
             {:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:not-block [16 9 16] "oak_log"] [:item "iron_axe" [:>= 1]]]}
   {:name "fetch-false-chops-by-hand-and-fetches-no-axe"
@@ -40,7 +40,7 @@
    :body {:inventory []}
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :fetch false})]]
    :expect [{:event {:source :job :kind #{:completed :waiting :stopped}} :within-s 150 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 40}]
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 40}]
    :after [[:item "iron_axe" 0]]
    :limit-s 170}
   {:name "own-plans-birch-is-spared-silently-and-the-oak-felled"
