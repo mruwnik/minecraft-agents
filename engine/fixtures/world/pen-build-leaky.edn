@@ -31,4 +31,17 @@
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
    :expect [{:event {:source :job :kind :pen-build.leaky :data {:reason :leak :leaks [{:why :gap}]}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :pen-build.done} :for-s 80 :until {:source :job :kind :pen-build.leaky}}]
-   :after [[:not-block [10 0 12] "oak_fence"] [:item "oak_fence" 2]]}]}
+   :after [[:not-block [10 0 12] "oak_fence"] [:item "oak_fence" 2]]}
+  ;; Card f84912c5: with the fences carried (8, the ring needs 7 and a gate) the pen is placed from the bag at once; nothing is fetched
+  ;; or searched for first (no obtain.exploring).
+  {:name "carried-fences-are-placed-before-any-fetch"
+   :body {:at [11.5 0 11.5] :inventory [["oak_fence" 8] ["oak_fence_gate" 1]]}
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "n" :box [#at [10 0 10] #at [12 0 10]] :want "oak_fence"}
+                    {:id "s" :box [#at [10 0 12] #at [12 0 12]] :want "oak_fence"}
+                    {:id "w" :box [#at [10 0 11] #at [10 0 11]] :want "oak_fence"}
+                    {:id "g" :box [#at [12 0 11] #at [12 0 11]] :want "oak_fence_gate"}]}]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring"})]]
+   :expect [{:event {:source :job :kind :pen-build.done} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :obtain.exploring} :for-s 80 :until {:source :job :kind :pen-build.done}}]
+   :after [[:block [10 0 11] "oak_fence"] [:block [12 0 11] "oak_fence_gate"]]}]}

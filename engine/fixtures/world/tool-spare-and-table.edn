@@ -49,4 +49,14 @@
    :expect [{:event {:source :job :kind :tool.broke} :within-s 150 :of-job true}
             {:event {:source :job :kind :completed} :within-s 280 :of-job true}]
    :after [[:item "raw_iron" 2]]
-   :limit-s 300}]}
+   :limit-s 300}
+  ;; Card a4cfc37a: a spare-pickaxe fetch that walks to a crafting table 18 blocks away must bring the stair back to its start: it goes on
+  ;; from the start cell (the end is 6 east and 6 down of it), not from the table.
+  {:name "stair-spare-fetch-walks-to-a-far-table-and-back"
+   :blocks [[:set [28 10 20] "crafting_table"]]
+   :body {:inventory [["stone_pickaxe[damage=125]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
+   :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind :stair.stopped} :for-s 190 :until {:source :job :kind :stair.done}}]
+   :after [[:body-near [16.5 4 16.5] 3]]}]}

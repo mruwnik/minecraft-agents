@@ -498,6 +498,12 @@
                            [{:name "home" :kind "base" :pos [20001 150 20002] :note "n"}
                             {:name "mine" :pos [1 2 3]}]))))
 
+(deftest a-zone-owner-body-names-the-probe-body
+  (is (= ["ProbeFixture" "Other"]
+         (mapv :owner (f/zone-entries "ProbeFixture"
+                                      [{:name "own" :min [1 1 1] :max [2 2 2] :owner "$body"}
+                                       {:name "far" :min [3 3 3] :max [4 4 4]}])))))
+
 (deftest zones-text-gains-and-loses-the-case-zones-and-keeps-the-rest
   (let [mine (f/zone-entries "B" [{:name "box" :min [1 1 1] :max [2 2 2]}])
         with (f/zones-with zones-text mine)]

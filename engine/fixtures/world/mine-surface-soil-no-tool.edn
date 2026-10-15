@@ -50,4 +50,16 @@
    :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :no-stone-found}} :within-s 110 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped :text [:contains "dug down"]}} :within-s 110 :of-job true}
             {:event {:source :job :kind :stopped :data {:text [:contains "found no stone"]}} :within-s 110 :of-job true}]
-   :after [[:item "cobblestone" 0] [:item "stone_pickaxe[minecraft:damage=0]" [:>= 1]] [:body-near [16.5 0 16.5] 2]]}]}
+   :after [[:item "cobblestone" 0] [:item "stone_pickaxe[minecraft:damage=0]" [:>= 1]] [:body-near [16.5 0 16.5] 2]]}
+  ;; Card 22a724ee: obtain cobblestone with no stone in sight (soil 4 deep over stone) hands it to the mine child, which stairs down
+  ;; (mine.* events), never a surface search (no obtain.exploring).
+  {:name "obtain-cobblestone-unseen-stairs-down-no-surface-search"
+   :plot {:floor "dirt"}
+   :blocks [[:fill [0 -9 0] [31 -5 31] "stone"] [:fill [0 -4 0] [31 -1 31] "dirt"] [:fill [0 -4 0] [31 6 0] "dirt"] [:fill [0 -4 31] [31 6 31] "dirt"] [:fill [0 -4 0] [0 6 31] "dirt"] [:fill [31 -4 0] [31 6 31] "dirt"]]
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 3 :explore true})]]
+   :expect [{:event {:source :job :kind :stair.done} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :obtain.exploring} :for-s 150 :until {:source :job :kind :completed}}]
+   :after [[:item "cobblestone" [:>= 3]]]
+   :limit-s 170}]}

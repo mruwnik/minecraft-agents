@@ -168,10 +168,10 @@
 (defn shared-tag [body] (str "wt-" (str/lower-case body)))
 
 (defn zone-entries
-  "A case's :zones (positions absolute) as zone-file entries named <tag>-<name>; :owner defaults to \"Other\"."
+  "A case's :zones (positions absolute) as zone-file entries named <tag>-<name>; :owner defaults to \"Other\", \"$body\" is the probe body."
   [body zones]
   (mapv #(-> (assoc % :name (str (shared-tag body) "-" (:name %)))
-             (update :owner (fnil identity "Other")))
+             (update :owner (fn [o] (cond (nil? o) "Other" (= "$body" o) body :else o))))
         zones))
 
 (defn marker-entries

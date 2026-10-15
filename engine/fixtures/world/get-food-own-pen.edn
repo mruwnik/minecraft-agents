@@ -22,4 +22,13 @@
    :plans [{:id "pen" :metadata {:by "SomeoneElse"}
             :parts [{:id "pen" :cells [#at [22 0 22] #at [27 0 27]] :want [:any "dirt"]}]}]
    :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 90}]
-   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}]}
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}
+  ;; Card 1557a519: a hand-built fenced pen with no zone or plan still spares its cows (food.none names it); wild cows in the open
+  ;; are surplus (food.killed :rule :surplus), two stay.
+  {:name "fenced-pen-without-a-plan-is-spared"
+   :blocks [[:fill [22 0 22] [27 0 27] "oak_fence" :hollow]]
+   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 90}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}
+  {:name "three-cows-in-the-open-one-killed-as-surplus"
+   :expect [{:event {:source :job :kind :food.killed :data {:rule :surplus}} :within-s 90}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}]}
