@@ -437,19 +437,25 @@
       (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz))) [[1 0] [-1 0] [0 1] [0 -1]])
       (room-from p kind-at x y z))))
 
-(defn escape-cell
-  "Where a walker at pos {:x :y :z} gets out of a room with a hole (room* nil, doors shut): the first cell the flood
-  reaches with no block seen within room-roof cells over it, {:x :y :z}; nil when the flood is closed or every cell is roofed."
+(defn unroofed-cell
+  "{:cell :closed?}: the first cell a walker flood from pos {:x :y :z} (doors shut, within room-cells) reaches with no
+  block seen within room-roof cells over it ({:x :y :z}, nil when every cell is roofed), and whether the flood closed."
   [p {:keys [x y z]}]
   (let [kind-at (fn [cx cy cz]
                   (let [b (u/seen-block p {:x cx :y cy :z cz})]
                     (if (and b (openable? (.-name b))) :solid (kind-of b))))
         roofed? (fn [cx cy cz] (some #(let [b (u/seen-block p {:x cx :y (+ cy %) :z cz})] (and b (not= :open (kind-of b))))
                                      (range 2 7)))
-        {:keys [cells closed?]} (flood-visit (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells)]
-    (when-not closed?
-      (when-let [c (.find cells (fn [c] (not (roofed? (aget c 0) (aget c 1) (aget c 2)))))]
-        {:x (aget c 0) :y (aget c 1) :z (aget c 2)}))))
+        {:keys [cells closed?]} (flood-visit (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells)
+        c (.find cells (fn [c] (not (roofed? (aget c 0) (aget c 1) (aget c 2)))))]
+    {:cell (when c {:x (aget c 0) :y (aget c 1) :z (aget c 2)}) :closed? closed?}))
+
+(defn escape-cell
+  "Where a walker at pos {:x :y :z} gets out of a room with a hole (room* nil, doors shut): unroofed-cell's cell when the
+  flood is open; nil when it is closed or every cell is roofed."
+  [p pos]
+  (let [{:keys [cell closed?]} (unroofed-cell p pos)]
+    (when-not closed? cell)))
 
 (def room-memo-ms
   "How long a room answer is reused while the body and the world stand still: the night trigger asks every 250 ms and a flood reads up to room-cells cells."

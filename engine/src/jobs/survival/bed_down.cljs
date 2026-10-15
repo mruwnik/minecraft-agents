@@ -20,7 +20,7 @@
   The bed: the :bed argument, else sh/bed-to-use (seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep, never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
   A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open (shelter.bed_open info) and ends condition-failed :bed-open.
   A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes, shelter.sleep_failed warn) and ends nothing-possible :sleep-failed.
-  A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as :bed-placed outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes, shelter.bed_place_failed warn) and ends nothing-possible :bed-place-failed.
+  A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as :bed-placed outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes, shelter.bed_place_failed warn) and ends nothing-possible :bed-place-failed.
   Walks use :at-night :go. Ends done {:slept true :bed pos} when asleep, condition-failed :not-night when the day came first or :bed-open {:slept false :bed-open true}; :continue while walking or sleeping. Quote: time by the walk to the bed, done 1 sleep.")
 
 (a/defargs args
@@ -28,6 +28,7 @@
    :roof-height {:doc "a solid block within this many blocks above counts as a roof (where a carried bed is put down)" :spec (a/int-in 0 nil) :default sh/default-roof-height}
    :bed-radius {:doc "a remembered bed farther than this is not used" :spec (a/num-in 0 nil) :default sh/default-bed-radius}
    :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :spec (a/num-in 0 nil) :default sh/urgent-bed-radius}
+   :roofed-only {:doc "put a carried bed down on roofed cells only, never in the open (a body inside a home)" :spec boolean? :default false}
    :fetch {:doc "get a bed when none is to use or carried (jobs.lib.need): true, a set of kinds or a map of limits; false makes :no-bed a start condition" :spec need/option? :default true}
    :max-days-awake {:doc "in-game days without sleep before a bed in the open is slept in and the urgent radius applies" :spec (a/num-in 0 nil) :default sh/max-days-awake}})
 
@@ -177,7 +178,7 @@
   [c]
   (let [p (:primitives c)
         item (sh/carried-bed p)
-        {:keys [stand foot] :as layout} (await (sense/decide! c ::layout #(or (bed-layout c true) (bed-layout c false))))]
+        {:keys [stand foot] :as layout} (await (sense/decide! c ::layout #(or (bed-layout c true) (when-not (:roofed-only (:args c)) (bed-layout c false)))))]
     (when foot
       (if (= stand (sh/feet p))
         (let [r (await (tidy/place! c foot item false (click-for layout)))

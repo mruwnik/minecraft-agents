@@ -861,10 +861,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home bed-world {:x 10 :y 64 :z 0}))]
+        (let [roof (into {} (for [x (range 10 14) z [-1 0 1]] [(str x ",66," z) "stone"]))
+              {:keys [eng p]} (await (night-at-home (update bed-world :blocks merge roof) {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
           (is (<= 9 (:x (st/pos-of p))) "walked into the home first")
-          (is (= [] (filterv #(< (:x (st/arg-pos %)) 9) (bed-places p))) "no bed was set down on the open ground")
+          (is (= [] (filterv #(not (contains? roof (let [{:keys [x z]} (st/arg-pos %)] (str x ",66," z)))) (bed-places p)))
+              "no bed was set down on the open ground")
           (is (seq (bed-places p)) "it was set down in the home"))))))
 
 (deftest a-home-that-cannot-be-entered-leaves-the-carried-bed-in-the-bag
@@ -877,20 +879,57 @@
           (is (= [] (st/calls p "sleep")) "and no sleep out there")
           (is (seq (st/calls p "place")) "the shelter step dug in instead"))))))
 
-(deftest a-carried-bed-in-a-home-go-to-dug-into-is-put-down-and-slept-in
+(defn ^:async dug-into-home
+  "The night with a carried bed and a natural-stone home (go-to digs into it) at x 10; a looping night is cut off at the
+  third walk in (a walk that fails ends it), so a red run ends. {:p :log}."
+  [home & carried]
+  (let [{:keys [eng p]} (await (night-at-home (-> bed-world (update :blocks merge home) (update :inventory into carried)) {:x 10 :y 64 :z 0}))
+        walks (atom 0)
+        log (await (with-child-log #(tu/run-until-empty eng 60)
+                     (fn [_ k _ _] (when (and (= :roof-walk k) (< 2 (swap! walks inc)))
+                                     {:kind :nothing-possible :data {}}))))]
+    {:p p :log log}))
+
+(def stone-room
+  "A stone room of three by two cells (x 10..12, z 0..1), roofed over those cells only, with no way in."
+  (let [inside? (fn [x z] (and (<= 10 x 12) (<= 0 z 1)))]
+    (merge (into {} (for [x (range 9 14) y [64 65] z (range -1 3) :when (not (inside? x z))] [(str x "," y "," z) "stone"]))
+           (into {} (for [x (range 10 13) z [0 1]] [(str x ",66," z) "stone"])))))
+
+(deftest a-carried-bed-in-a-home-go-to-dug-into-goes-under-the-roof-behind-a-shut-doorway
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stone-home (update-vals walled-home #(if (= "stone_bricks" %) "stone" %))
-              {:keys [eng p]} (await (night-at-home (update bed-world :blocks merge stone-home) {:x 10 :y 64 :z 0}))
-              walks (atom 0)
-              ;; a looping night is cut off at the third walk in (a walk that fails ends it), so a red run ends
-              log (await (with-child-log #(tu/run-until-empty eng 60)
-                           (fn [_ k _ _] (when (and (= :roof-walk k) (< 2 (swap! walks inc)))
-                                           {:kind :nothing-possible :data {}}))))]
+        (let [{:keys [p log]} (await (dug-into-home stone-room))
+              calls (vec (.-calls (.-world p)))
+              slept-at (first (keep-indexed #(when (= "sleep" (.-name %2)) %1) calls))
+              before-sleep (subvec calls 0 (or slept-at 0))
+              cells-of (fn [pred] (set (map st/arg-pos (filter pred before-sleep))))
+              dug (cells-of #(= "dig" (.-name %)))]
+          (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "walked into the home once")
+          (is (some? slept-at) "slept")
+          (is (= [] (filterv #(not (let [{:keys [x z]} (st/arg-pos %)] (and (<= 10 x 12) (<= 0 z 1)))) (bed-places p)))
+              "the bed went down under the roof, never outside it")
+          (is (seq dug) "go-to dug its way in")
+          (is (= dug (into #{} (filter dug) (cells-of #(and (= "place" (.-name %)) (not= "red_bed" (.-item (.-args %)))))))
+              "every cell it dug was filled again before the sleep"))))))
+
+(deftest a-carried-door-shuts-the-dug-doorway
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (dug-into-home stone-room {:name "oak_door" :count 1}))]
+          (is (seq (filter #(= "oak_door" (.-item (.-args %))) (st/calls p "place"))) "the door went in the doorway")
+          (is (seq (st/calls p "sleep"))))))))
+
+(deftest a-carried-bed-in-a-dug-into-home-with-no-room-for-it-stays-in-the-bag
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p log]} (await (dug-into-home (update-vals walled-home #(if (= "stone_bricks" %) "stone" %))))]
           (is (= 1 (count (filter #(= :roof-walk (first %)) log))) "walked into the home once, not back and forth with the bed walk")
-          (is (seq (bed-places p)) "the bed was put down")
-          (is (seq (st/calls p "sleep")) "and slept in"))))))
+          (is (= [] (bed-places p)) "no bed in the open beside the home")
+          (is (= [] (st/calls p "sleep")) "and no sleep out there"))))))
 
 ;; ------------------------------------------------------------------ flee somewhere safer
 
