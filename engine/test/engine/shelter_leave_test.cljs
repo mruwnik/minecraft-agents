@@ -116,13 +116,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup {:time st/night :blocks st/floor :inventory [{:name "bread" :count 3}]
-                                         :self {:food 4}})]
+        (let [{:keys [eng p seen]} (st/setup {:time st/night :blocks st/floor :inventory [{:name "bread" :count 3}]
+                                              :self {:food 4}})]
           (st/refuse-placing! p)
           (let [mid (st/mid-night! p 3 #(hash-map :ate (< 4 (food-of p)) :listed (count (:list (core/state eng)))))]
             (core/submit! eng '(jobs.survival.night) {})
             (await (st/tick-n eng 12))
-            (is (= {:ate true :listed 1} @mid) "exposed hold: it ate, and still holds")))))))
+            (is (= {:ate true :listed 1} @mid) "exposed hold: it ate, and still holds")
+            (is (seq (filter #(= :eat (:slot %)) (st/emitted seen :child_started))) "through the eat job")))))))
 
 (deftest a-held-body-with-enough-food-does-not-eat
   (async done

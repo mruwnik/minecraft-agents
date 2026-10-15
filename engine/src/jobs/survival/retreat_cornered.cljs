@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -241,7 +242,7 @@
   (let [block-at (block-at-fn (:primitives c))
         self (u/self-pos c)]
     (if (= "water" (block-at {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}))
-      (do (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "in water, away from the enderman"})) :again)
+      (do (await (child/pause! c (/ (flight/wait-ms) 1000) "in water, away from the enderman")) :again)
       (when-let [cell (water-cell block-at self water-reach)]
         (if (await (step! c :water {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))
           :again
@@ -280,7 +281,7 @@
         self (u/self-pos c)
         here {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}]
     (if (and (escape/passable? (block-at (update here :y inc))) (escape/solid? (block-at (update here :y + 2))))
-      (do (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "under a roof, out of the enderman's reach"})) :again)
+      (do (await (child/pause! c (/ (flight/wait-ms) 1000) "under a roof, out of the enderman's reach")) :again)
       (when-let [cell (roof-cell block-at self roof-reach)]
         (if (await (step! c :roof {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))
           :again
@@ -312,14 +313,14 @@
         (do (flight/tried! c :swim-out) nil)))))
 
 (defn ^:async blocked!
-  "Every option failed: forget them all, warn once a flight, hold a moment (wait, why cornered) and go on: the next step
+  "Every option failed: forget them all, warn once a flight, pause a moment (why cornered) and go on: the next step
   tries them again from the start (the danger still stands). The second sweep in a row ends the flight :cannot-escape."
   [c why]
   (ctx/update-mem! c #(-> % (dissoc :tried) flight/count-sweep))
   (when-not (:blocked-warned (ctx/mem c))
     (ctx/update-mem! c assoc :blocked-warned true)
     (ctx/emit! c :retreat_blocked :warn {:text (str why "; every escape failed, trying them again")}))
-  (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "cornered"}))
+  (await (child/pause! c (/ (flight/wait-ms) 1000) "cornered"))
   (if (flight/cannot-escape? (ctx/mem c)) (flight/end-flight! c :cannot-escape) :again))
 
 (defn fist-hold?

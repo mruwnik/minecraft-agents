@@ -2,7 +2,8 @@
   "jobs.food.fish against the fake world: a pond with a bank, casts that bite after some misses."
   (:require [cljs.test :refer [deftest is async]]
             [engine.library-test :as lt]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.food.fish :as fish]))
 
 (def pond (into {} (for [x (range 0 9) z (range 0 9) y [62 63]] [(str x "," y "," z) "water"])))
 (def bank (into {} (for [z (range 0 9) y [62 63]] [(str "9," y "," z) "stone"])))
@@ -49,3 +50,13 @@
       (fn ^:async t []
         (let [{:keys [waits]} (await (run {:blocks bank :inventory [rod]} {:count 1}))]
           (is (= [:no-water] waits)))))))
+
+(deftest some-fish-then-a-stop-is-done-when-the-least-was-caught
+  (let [c (fn [least] {:primitives (tu/fake {:inventory [{:name "cod" :count 2}]}) :root "j1" :slots [] :args {:count 3}
+                       :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data {:base 0}}]}}})
+                       :quote-call (when least {:least least})})
+        ending (fn [least] (select-keys (fish/stop! (c least) :nothing-possible :no-bite "no bite") [:kind :cause]))]
+    (is (= {:kind :done :cause nil} (ending nil)) "the default least is 1")
+    (is (= {:kind :done :cause nil} (ending 2)))
+    (is (= {:kind :nothing-possible :cause :no-bite} (ending 3)))
+    (is (= {:kind :nothing-possible :cause :no-bite} (ending :all)))))

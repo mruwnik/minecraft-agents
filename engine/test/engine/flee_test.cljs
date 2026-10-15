@@ -511,7 +511,7 @@
               _ (js/setTimeout #(swap! (fake/state p) assoc :entities []) 400)
               {:keys [calls out eng]} (await (run-job! s 'jobs.survival.retreat {}))]
           (is (= [:done] calls) "sealed, hid and ended in one round")
-          (is (= 1 (count (holds seen "hiding"))) "a declared hold while hidden")
+          (is (seq (holds seen "hiding")) "a declared hold (a pause child) while hidden")
           (is (= :hidden (:ended out)))
           (is (= [] (:list (core/state eng)))))))))
 

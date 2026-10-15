@@ -5,6 +5,7 @@
             [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
@@ -171,7 +172,7 @@
                                         (when (seq kept) (str ", the refuge still keeps off " kept)) ": handing back")})
                  (ctx/update-mem! c dissoc :quiet-from :hidden-since)
                  (flight/end-flight! c :hidden))
-        :else (do (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "hiding"}))
+        :else (do (await (child/pause! c (/ (flight/wait-ms) 1000) "hiding"))
                   (await (pace/pace!))
                   (recur))))))
 

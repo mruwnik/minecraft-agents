@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [jobs.lib.combat :as combat]
@@ -198,9 +199,9 @@
 
 
 (defn ^:async wait-far!
-  "Cornered with every chaser beyond :radius: hold still a moment (a :wait, why cornered) and look again."
+  "Cornered with every chaser beyond :radius: pause a moment (why cornered) and look again."
   [c]
-  (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "cornered"}))
+  (await (child/pause! c (/ (flight/wait-ms) 1000) "cornered"))
   :again)
 
 (defn ^:async run-home!

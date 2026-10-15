@@ -16,7 +16,8 @@
   to cast at instead). The body walks there (go-to), holds the rod and casts: one cast waits for a bite up to :cast-s, then reels.
   A body with no rod gets one first (jobs.lib.need, unless :fetch is false).
   Ends with the data {:got n :text}, info fish.caught per fish, and the ending:
-  - :done: :count fish (cod, salmon, tropical fish, pufferfish) came in.
+  - :done: :count fish (cod, salmon, tropical fish, pufferfish) came in, or the call's :least (default 1, :all = :count)
+    before any stop below.
   Before the first cast it waits (conditions) on :no-rod (none carried and :fetch false) and :no-water (no seen water with a bank
   within :radius).
   - :condition-failed :no-water (the water gone mid-run), or a failed rod fetch (the cause names the rod, :because the fetch's ending).
@@ -80,9 +81,14 @@
     {:uses {:time [0 (min most (* 30 (:count (:args c) 1))) most]}}))
 
 (defn stop!
-  "End the call: kind and cause, the fish got so far and text as the data."
+  "End the call with the fish got so far and text as the data: done when the call's :least (default 1, :all = :count)
+  were caught, else kind and cause."
   [c kind cause text]
-  (ctx/end c kind cause {:got (got c) :text text}))
+  (let [least (:least (ctx/frozen-call c) 1)
+        n (got c)]
+    (if (>= n (if (= :all least) (:count (:args c)) least))
+      (ctx/end c :done nil {:got n :text (str "caught " n " fish; " text)})
+      (ctx/end c kind cause {:got n :text text}))))
 
 (defn start-problem
   "At the call's start, why it cannot fish: [cause text], or nil."

@@ -3,6 +3,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.look :as look]
             [jobs.lib.vantage :as vantage]
@@ -310,7 +311,7 @@
   :again)
 
 (defn ^:async wait! [c ms]
-  (await (ctx/act c :wait #js {:ms ms}))
+  (await (child/pause! c (/ ms 1000) :fight-wait))
   :again)
 
 (defn ^:async step

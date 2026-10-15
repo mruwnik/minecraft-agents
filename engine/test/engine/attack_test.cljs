@@ -1,6 +1,7 @@
 (ns engine.attack-test
   "jobs.combat.attack and its helpers against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.hunt-test :as hunt-test]
@@ -562,3 +563,13 @@
           (is (seq opts))
           (is (every? #(and (false? (:escalate %)) (= 5 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %)) (= :shut (:doors %))) opts)
               "a moving target is chased in legs, never dug or pillared toward"))))))
+
+(deftest a-wait-in-a-fight-is-a-pause-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              c {:engine {:jobs registry/jobs}
+                 :call (fn [slot def args] (swap! calls conj [slot (:sym def) (:seconds args)]) (js/Promise.resolve (contract/ending :done nil nil)))}]
+          (is (= :again (await (attack/wait! c 500))))
+          (is (= [[:pause 'jobs.time.noop 0.5]] @calls)))))))

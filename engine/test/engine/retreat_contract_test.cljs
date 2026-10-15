@@ -9,7 +9,8 @@
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.survival.retreat :as retreat]))
 
 (defn setup
   "flee-test/setup with the canonical event sink and a contract parent 'caller that calls retreat once with ctx/call
@@ -91,3 +92,13 @@
                               (mapv #(let [{:keys [kind cause]} (:data %)] [kind (:line cause)]) (job-ev seen :stopped)))
                            (str time-s " s"))
                        (is (empty? (filter #(= :error (:level %)) @seen)) (str time-s " s: no error")))))))))))
+
+(deftest a-cornered-hold-is-a-pause-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              c {:engine {:jobs registry/jobs}
+                 :call (fn [slot def args] (swap! calls conj [slot (:sym def) (:why args)]) (js/Promise.resolve (contract/ending :done nil nil)))}]
+          (is (= :again (await (retreat/wait-far! c))))
+          (is (= [[:pause 'jobs.time.noop "cornered"]] @calls)))))))

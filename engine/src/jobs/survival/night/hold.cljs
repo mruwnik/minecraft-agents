@@ -5,7 +5,6 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.foods :as foods]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.util :as u]
             [jobs.survival.eat :as eat]
             [jobs.survival.get-food.cook :as cook]))
 
@@ -25,22 +24,18 @@
       (= :continue (await (cook/cook! c cooker))))))
 
 (defn ^:async eat-if-hungry!
-  "The hungry reflex (below night in the shipped registers) cannot reach a held body, so a hold eats one carried
-  food (jobs.survival.eat's choice) when the hungry trigger's condition holds (hungry?, or eat-now? below 7 hp),
-  after cooking raw food at a furnace within reach of the shelter (cooking-in-shelter?). A sleeping body does not eat."
+  "The hungry reflex (below night in the shipped registers) cannot reach a held body, so a hold eats one bite (a
+  jobs.survival.eat child) when the hungry trigger's condition holds (hungry?, or eat-now? below 7 hp), after cooking
+  raw food at a furnace within reach of the shelter (cooking-in-shelter?). A sleeping body does not eat."
   [c]
   (let [p (:primitives c)
         self (.self p)
-        health (.-health self)
-        hungry (and (not (sh/sleeping? p)) (or (foods/hungry? (.-food self) health {}) (foods/eat-now? self {})))
-        cooking (when hungry (await (cooking-in-shelter? c)))
-        best (when (and hungry (not cooking))
-               (eat/best-food (u/inventory p) false nil health (.-food self) (foods/reserved (ctx/view c))))]
-    (when best
-      (await (ctx/act c :equip #js {:item best}))
-      (let [r (await (ctx/act c :eat #js {:item best}))]
-        (when (= "ate" (.-status r))
-          (ctx/emit! c :shelter.ate :info {:item best :food (.-food r) :text (str "ate " best " while holding the night")}))))))
+        hungry (and (not (sh/sleeping? p)) (or (foods/hungry? (.-food self) (.-health self) {}) (foods/eat-now? self {})))
+        cooking (when hungry (await (cooking-in-shelter? c)))]
+    (when (and hungry (not cooking) (eat/carried-best (assoc c :args {:allow-bad false})))
+      (let [e (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1}))]
+        (when (pos? (:ate (:data e) 0))
+          (ctx/emit! c :shelter.ate :info {:food (.-food (.self p)) :text "ate while holding the night"}))))))
 
 (defn food-wanted?
   "A starving body with nothing to eat, no get-food give-up in the last foods/starving-rest-ms, and no danger near
