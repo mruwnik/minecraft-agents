@@ -2,7 +2,8 @@
   "go-to at night from a shelter (sh/walk-leaves-shelter?): a walk that would take the body out of it waits until day
   (a listed go-to declines :night-sheltered, a child call yields :continue), so a queued job does not lead the body
   into the dark and the night trigger does not dig it in again and again."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -278,6 +279,6 @@
           (await (tu/run-until-empty eng 10))
           (is (empty? (:list (core/state eng))) "the submit is answered, not held until day")
           (is (= inside (st/pos-of p)))
-          (let [done (first (st/emitted seen :blocks.use-on.done))]
+          (let [done (first (filter #(= :stopped (:kind %)) @seen))]
             (is (= [false :night-sheltered] ((juxt :used :reason) done)))
             (is (re-find #":at-night :go" (str (:text done))) "the text says how to override")))))))

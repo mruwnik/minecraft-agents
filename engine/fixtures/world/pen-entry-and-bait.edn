@@ -47,12 +47,12 @@
            [:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]]}
   {:name "place-deep-in-the-pen-with-enter-pens-walks-in"
    :act [[:job (jobs.blocks.place {:pos #at [23 0 16] :item "cobblestone" :enter-pens true})]]
-   :expect [{:event {:source :job :kind :blocks.place.done :data {:placed true}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:placed true}} :within-s 100 :of-job true}]
    :after [[:block [23 0 16] "cobblestone"] [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]]}
   {:name "use-on-the-gate-from-outside-does-not-enter"
    :act [[:job (jobs.blocks.use-on {:pos #at [18 0 16]})]]
-   :expect [{:event {:source :job :kind :blocks.use-on.done :data {:used true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:used true}} :within-s 60 :of-job true}]
    :after [[:block [18 0 16] "oak_fence_gate[open=true]"] [:body-far [21.5 0 16.5] 3]]}
   {:name "use-on-deep-in-the-pen-declines-naming-the-pen"
    :blocks [[:set [23 0 16] "lever[face=floor,facing=north,powered=false]"]]

@@ -1,6 +1,7 @@
 (ns engine.apiary-guard-test
   "jobs.apiary.guard against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -97,7 +98,7 @@
         (let [w (-> (fire-world {:inventory (inv "campfire" 1 "white_carpet" 1)}) (open-side "3,64,0"))
               {:keys [eng p seen]} (setup w)]
           (await (child-outcome eng job {} 60))
-          (is (= (count (calls p "dig")) (count (kinds seen :blocks.dig.done))))
+          (is (= (count (calls p "dig")) (count (ce/ends seen :dug))))
           (is (pos? (count (calls p "dig")))))))))
 
 (deftest every-sink-place-goes-through-the-place-job
@@ -108,7 +109,7 @@
               {:keys [eng p seen]} (setup w)]
           (await (child-outcome eng job {} 60))
           (is (= 2 (count (calls p "place"))))
-          (is (= (count (calls p "place")) (count (kinds seen :blocks.place.done)))))))))
+          (is (= (count (calls p "place")) (count (ce/ends seen :placed)))))))))
 
 (deftest a-covered-raised-fire-is-sunk-and-its-carpet-put-back
   (async done
@@ -349,4 +350,4 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup (fire-world {:inventory (inv "white_carpet" 1)}))]
           (await (child-outcome eng job {} 60))
-          (is (= 1 (count (kinds seen :blocks.place.done)))))))))
+          (is (= 1 (count (ce/ends seen :placed)))))))))

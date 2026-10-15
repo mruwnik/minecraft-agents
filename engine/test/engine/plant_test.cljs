@@ -1,6 +1,7 @@
 (ns engine.plant-test
   "jobs.farm.plant against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -406,8 +407,8 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start (field-world (inv "wheat_seeds" 9)))]
           (await (child-outcome eng job {:box field-box} 100))
-          (is (= (count (calls p "place")) (count (events-of seen :blocks.place.done))))
-          (is (= 9 (count (events-of seen :blocks.place.done)))))))))
+          (is (= (count (calls p "place")) (count (ce/ends seen :placed))))
+          (is (= 9 (count (ce/ends seen :placed)))))))))
 
 (defn look-then-see
   "Make p see no block until it has looked around (a look call)."

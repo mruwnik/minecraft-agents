@@ -1,6 +1,7 @@
 (ns engine.forest-prepare-test
   "jobs.forestry.prepare: a forest plan's planting spots made ready (cleared, soiled, planted), against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [clojure.string :as str]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -116,7 +117,7 @@
       (fn ^:async t []
         (let [{:keys [p seen]} (await (outcome (world {"3,64,0" "short_grass"} (item "oak_sapling" 1)) {"forest" one-cell}))]
           (is (= [[3 64 0]] (digs p)))
-          (is (= 1 (count (h/events-of seen :blocks.dig.done)))))))))
+          (is (= 1 (count (ce/ends seen :dug)))))))))
 
 (deftest a-stone-stray-or-ground-needing-a-pickaxe-is-not-dug-by-hand
   (async done
@@ -193,7 +194,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (outcome (world {"3,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1)) {"forest" one-cell}))]
-          (is (= 1 (count (filter #(and (= :blocks.place.done (:kind %)) (= "dirt" (:item %))) (h/events-of seen :blocks.place.done))))))))))
+          (is (= 1 (count (filter #(= "dirt" (:item (ce/data %))) (ce/ends seen :placed))))))))))
 
 (deftest without-dirt-the-cell-is-left-and-reported-as-no-soil
   (async done
@@ -569,7 +570,7 @@
         (let [{:keys [p seen]} (await (outcome (apply wet-world {"3,64,0" 0} sapling-and-dirt) {"forest" one-cell}))
               placed (count (h/calls p "place"))]
           (is (= 2 placed))
-          (is (= 1 (count (filter #(= "dirt" (:item %)) (h/events-of seen :blocks.place.done))))))))))
+          (is (= 1 (count (filter #(= "dirt" (:item (ce/data %))) (ce/ends seen :placed))))))))))
 
 (deftest a-source-beside-the-cell-is-dammed-and-the-flow-given-time-to-recede
   (async done

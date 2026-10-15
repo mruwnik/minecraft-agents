@@ -1,6 +1,7 @@
 (ns engine.leave-tunnel-test
   "jobs.access.leave-tunnel: the mouth as a pure function, then whole ways out after a real tunnel in the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [jobs.lib.ledger :as ledger]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -167,14 +168,14 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {})))]
           (is (pos? (count (calls-of p "dig"))) "at least one torch is dug")
-          (is (= (count (calls-of p "dig")) (count (events-of s :blocks.dig.done)))))))))
+          (is (= (count (calls-of p "dig")) (count (ce/ends s :dug)))))))))
 
 (deftest each-mouth-cell-is-filled-through-the-place-job
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (run-out! (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {})))]
-          (is (= (count mouth) (count (events-of s :blocks.place.done)))))))))
+          (is (= (count mouth) (count (ce/ends s :placed)))))))))
 
 (deftest nothing-to-fill-with-leaves-the-mouth-open-but-the-torches-taken
   (async done

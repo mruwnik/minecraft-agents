@@ -98,7 +98,7 @@
 (defn deaths [events]
   (mapv (fn [e] {:at-ms (ms e) :cause (get-in e [:data :cause])}) (filter #(= :died (:kind %)) events)))
 
-(def progress-kinds #{:picked-up :craft.done :blocks.dig.done :smelt.done :kit.progress :stair.step :completed})
+(def progress-kinds #{:picked-up :craft.done :smelt.done :kit.progress :stair.step :completed})
 
 (defn stalls
   "Gaps over stall-ms between progress events, while the goal job is listed: [{:from-ms :to-ms}] up to end-ms."

@@ -14,20 +14,20 @@
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
    :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
    :expect [{:event {:source :job :kind :blocks.dig.sealed} :within-s 100 :of-job true}
-            {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 110 :of-job true}]
+            {:event {:source :job :kind :completed :data {:dug true}} :within-s 110 :of-job true}]
    :after [[:not-block [16 8 16] "lava"] [:block [16 9 16] "air"]]}
   ;; card abf946bb: nothing carried to seal with, a cobblestone chest in view: the seal block is fetched, then the lava is covered
   {:name "dig-under-feet-fetches-seal-block-from-seen-chest"
    :blocks [[:set [18 10 16] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
    :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
    :expect [{:event {:source :job :kind :blocks.dig.sealed} :within-s 100 :of-job true}
-            {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 110 :of-job true}]
+            {:event {:source :job :kind :completed :data {:dug true}} :within-s 110 :of-job true}]
    :after [[:not-block [16 8 16] "lava"] [:block [16 9 16] "air"]]}
   ;; should fail: nothing to seal with, nothing fetched
   {:name "no-block-no-fetch-stops-lava-unsealed-and-steps-clear"
    :act [[:job (jobs.blocks.dig {:pos #at [16 9 16] :seal-fetch false})]]
-   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true :reason :lava-unsealed}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :blocks.dig.sealed} :for-s 60 :until {:source :job :kind :blocks.dig.done}}]
+   :expect [{:event {:source :job :kind :stopped :data {:dug true :reason :lava-unsealed}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :blocks.dig.sealed} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:dug [:any]}}}]
    :after [[:block [16 8 16] "lava"] [:body-far [16.5 10 16.5] 1.9]]}
   ;; card d925961b: the lava is beside the dug cell, buried in the mass (unseen until the dig opens it); the look-round sees it and the seal covers it
   {:name "dig-seals-lava-beside-the-dug-cell"
@@ -35,12 +35,12 @@
    :body {:at [16.5 9 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
    :act [[:job (jobs.blocks.dig {:pos #at [16 8 16]})]]
    :expect [{:event {:source :job :kind :blocks.dig.sealed} :within-s 100 :of-job true}
-            {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 110 :of-job true}]
+            {:event {:source :job :kind :completed :data {:dug true}} :within-s 110 :of-job true}]
    :after [[:not-block [17 8 16] "lava"] [:block [16 8 16] "air"]]}
   ;; card 41419fb6: 1-wide tunnel x 10..22 along z 16; the plug cell [16 0 16] has buried lava beside it; nothing to seal with: the body walks away down the tunnel
   {:name "tunnel-no-seal-block-steps-away-from-the-lava"
    :blocks [[:fill [10 0 16] [22 1 16] "air"] [:set [16 0 16] "stone"] [:set [16 0 17] "lava"]]
    :body {:at [13.5 0 16.5] :inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.blocks.dig {:pos #at [16 0 16] :seal-fetch false})]]
-   :expect [{:event {:source :job :kind :blocks.dig.done :data {:reason :lava-unsealed :stepped-away true}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :lava-unsealed :stepped-away true}} :within-s 100 :of-job true}]
    :after [[:body-far [16.5 0 17.5] 3]]}]}

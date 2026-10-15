@@ -12,7 +12,7 @@
   no conditions. It yields :continue only when the walk waits on the world. Zones are not consulted: a click
   changes no block by itself.
 
-  Ends with info blocks.use-on.done and {:used true|false :pos :item :face :reason}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
+  Ends with data {:used true|false :pos :item :face :reason}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
   status (:used, :unchanged, :no-item, :no-room, :missing, :cannot, :unreachable, :failed); only :used is done.
   condition-failed: :no-item, :missing, :cannot, a walk that would leave a night shelter (:night-sheltered, :at-night :go walks
   out). Impossible: a bad :pos or :face (:bad-args, with a blocks.use-on.declined warn). nothing-possible: :unreachable (a walk
@@ -46,12 +46,11 @@
     {:uses {:job-time [0.5 (+ 1 (/ walk 4)) (+ 10 walk)]}}))
 
 (defn finish!
-  "End the call with the info event and an ending: done when used, else kind with the result's :reason (and :why)."
+  "End the call: done when used, else kind with the result's :reason (and :why); the data is the result with a :text."
   [c kind {:keys [used] :as result}]
-  (ctx/emit! c :blocks.use-on.done :info
-             (update result :text #(or % (str (if used "clicked " "did not click ") (pr-str (b/cell (:pos result)))
-                                              (when-not used (str ": " (name (:reason result))))))))
-  (ctx/end c kind (when-not used (select-keys result [:reason :why])) result))
+  (let [result (update result :text #(or % (str (if used "clicked " "did not click ") (pr-str (b/cell (:pos result)))
+                                                (when-not used (str ": " (name (:reason result)))))))]
+    (ctx/end c kind (when-not used (select-keys result [:reason :why])) result)))
 
 (defn ^:async walk!
   "The walk to pos: :arrived, :continue, {:held reason} (go-to waits on a night shelter) or {:unreachable why}."

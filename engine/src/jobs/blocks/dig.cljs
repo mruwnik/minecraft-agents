@@ -46,7 +46,7 @@
   carried or fetched (:seal-fetch), or two places fail) the body steps off the cells beside the lava and the job ends
   nothing-possible :lava-unsealed with :cell, :place (:need: no block) and :stepped-away.
 
-  Returns info blocks.dig.done and an ending whose data is {:dug true|false :pos :block :collected n}, plus :left
+  Returns an ending whose data is {:dug true|false :pos :block :collected n}, plus :left
   (collect-drops' drops it could not take), :stepped-aside [x y z] (the cell it stood on) when it stepped off the column
   first. :done with :reason :dug, or :already-clear (air there, nothing done). Condition-failed: :fluid (a fluid is not dug),
   :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like), and the conditions above.
@@ -215,13 +215,13 @@
                                    (str/join ", " (distinct (map (comp name :reason) (:left result))))))))
 
 (defn finish!
-  "Tell blocks.dig.done and end the call with result {:dug :pos :block :reason ..}: :done for :dug and :already-clear,
+  "End the call with result {:dug :pos :block :reason ..} (and its :text): :done for :dug and :already-clear,
   else condition-failed (:fluid :fluid-adjacent :cannot), nothing-possible (:lava-unsealed, a refused dig) or
   limit-reached :job-time (the primitive timed out). The data is the result."
   [c result]
   (let [result (cond-> result (:stepped-aside (ctx/mem c)) (assoc :stepped-aside (:stepped-aside (ctx/mem c))))
-        {:keys [cell place stepped-aside reason]} result]
-    (ctx/emit! c :blocks.dig.done :info (assoc result :text (text-of result cell place stepped-aside)))
+        {:keys [cell place stepped-aside reason]} result
+        result (assoc result :text (text-of result cell place stepped-aside))]
     (cond
       (done-reasons reason) (ctx/end c :done nil result)
       (condition-reasons reason) (ctx/end c :condition-failed reason (dissoc result :reason))

@@ -1,6 +1,7 @@
 (ns engine.farm-tidy-test
   "jobs.farm.tidy: which blocks over a plan are strays (pure), and whole runs against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -165,7 +166,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (start tidy-spec {"field" field-plan})]
           (await (outcome eng {:plan "field"} 200))
-          (is (= 5 (count (of-kind seen :blocks.dig.done)))))))))
+          (is (= 5 (count (ce/ends seen :dug)))))))))
 
 (deftest a-dig-child-that-declines-books-its-own-reason
   (async done

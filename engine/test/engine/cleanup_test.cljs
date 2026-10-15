@@ -1,7 +1,8 @@
 (ns engine.cleanup-test
   "jobs.access.cleanup: the step decision as a plain function, the standing trigger, then whole cleanups against the
   fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [jobs.lib.ledger :as ledger]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -408,7 +409,7 @@
           (core/submit! eng '(recording-parent) {})
           (await (ticks s eng 60))
           (is (= 3 (count (filter #(= "dig" (.-name %)) (.-calls (.-world p))))))
-          (is (= 3 (count (of-kind seen :blocks.dig.done)))))))))
+          (is (= 3 (count (ce/ends seen :dug)))))))))
 
 (deftest a-removed-wall-torch-is-collected-as-the-torch-it-drops
   (async done

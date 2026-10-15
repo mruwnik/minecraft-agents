@@ -9,16 +9,16 @@
    :act [[:job (jobs.movement.go-to {:pos #at [20 0 20] :range 1 :ways #{:walk :clear-seal}})]
          [:await {:source :job :kind :result :data {:arrived true}} 40]
          [:job (jobs.blocks.dig {:pos #at [22 0 16]})]
-         [:await {:source :job :kind :blocks.dig.done :data {:dug true}} 40]
+         [:await {:source :job :kind :completed :data {:dug true}} 40]
          [:job (jobs.blocks.place {:pos #at [18 0 18] :item "cobblestone"})]
-         [:await {:source :job :kind :blocks.place.done} 40]
+         [:await {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} 40]
          [:job (jobs.storage.deposit {:chest #at [12 0 20] :items ["cobblestone"]})]
          [:await {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} 60]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:job (jobs.survival.eat {:until 20})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
-            {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :blocks.place.done} :within-s 130 :of-job true}
+            {:event {:source :job :kind :completed :data {:dug true}} :within-s 90 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} :within-s 130 :of-job true}
             {:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 190 :of-job true}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.eat"}} :within-s 200 :of-job true}]
    :after [[:block [18 0 18] "cobblestone"] [:item "cobblestone" 0] [:item "bread" [:< 4]]]

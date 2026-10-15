@@ -26,11 +26,11 @@
   The weapons are the call's :use :tools (default the best carried).
   Babies are never targets and never counted. Animals the body spares (jobs.lib.animal-spare: kinds in :off-limits, animals in
   a zone or plan of its own or a closed enclosure unless :spare-pens is false) are never targets either; when only such animals
-  are left it ends :spared (the data has :spared-by, a count per rule, and warn hunt.done names them when nothing was killed).
+  are left it ends :spared (the data has :spared-by, a count per rule, and the ending's text names them when nothing was killed).
   A hunt waits (can-run?) while the body is too hurt (:low-health, jobs.lib.body/too-hurt), also once begun, and (can-start?) at its start (one kind
   only) while :no-color (a :color and none of it in range; :seen-colors) or :too-few (:keep or fewer adults within :radius; the
   cause has :in-range, :radius, :keep and :nearest, the distance of the nearest adult of the kind in sight up to ::sight-radius).
-  The first round ends :condition-failed :unarmed (warn hunt.done) for a hostile kind and no weapon of the call's :use :tools carried.
+  The first round ends :condition-failed :unarmed for a hostile kind and no weapon of the call's :use :tools carried.
   One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
   1. With a :target, the attack child fights it. It is booked killed, or skipped when attack gave up on it or lost it.
      :max-skips skips in a row end the job :gave-up (warn hunt.gave-up).
@@ -45,7 +45,7 @@
   6. Otherwise the nearest candidate becomes the :target and is attacked in the same round.
      The target stays until killed or given up on, even when a nearer animal turns up.
   Before the first step it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
-  Ends with info hunt.done and the data {:killed n :reason r :spared s :remaining m}. The ending: :done for :count, and for
+  Ends with the data {:killed n :reason r :spared s :remaining m}. The ending: :done for :count, and for
   any other reason when the call's :least (default 1) animals were killed; else :nothing-possible with r as the cause
   (:keep, :spared, :none, :gave-up). A list of kinds ends :done :count / :partial, else with the first kind's ending.
   :spared is the kills asked for and not made because of the pair rule (0 unless :keep ended it).
@@ -165,7 +165,6 @@
   [c]
   (let [mob (:mob (:args c))
         out {:killed 0 :reason :unarmed :mob mob :text (str "hunt stopped: no weapon carried for a hostile " mob)}]
-    (ctx/emit! c :hunt.done :warn out)
     (ctx/end c :condition-failed :unarmed out)))
 
 (defn no-color
@@ -243,8 +242,7 @@
               by (assoc :spared-by by))
         text (str "hunt done: " (name reason) ", killed " killed ", spared " spared " of the ask, " remaining " adults left"
                   (when by (str "; left alone: " (str/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))]
-    (ctx/emit! c :hunt.done (if (and by (zero? killed)) :warn :info) (assoc out :text text))
-    (ending-of c reason killed out)))
+    (ending-of c reason killed (assoc out :text text))))
 
 (defn give-up!
   "Warn and end after too many skipped animals in a row."

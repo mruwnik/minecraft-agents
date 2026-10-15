@@ -1,6 +1,7 @@
 (ns engine.get-seeds-test
   "jobs.gather.get-seeds against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.ctx :as ctx]
@@ -80,7 +81,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:count 2} {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops} 40))]
-          (is (= (dig-count s) (count (events-of s :blocks.dig.done)))))))))
+          (is (= (dig-count s) (count (ce/ends s :dug)))))))))
 
 (deftest the-goal-is-relative-to-what-is-carried
   (async done

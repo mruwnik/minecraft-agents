@@ -14,7 +14,7 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 80 :of-job true}]
+            {:event {:source :job :kind :completed :data {:dug true}} :within-s 80 :of-job true}]
    :after [[:block [18 0 19] "air"] [:item "wooden_pickaxe" 1] [:item "cobblestone" 1]]}
   {:name "dig-without-fetch-waits-no-tool"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
@@ -69,5 +69,5 @@
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:5}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.blocks.place {:pos #at [16 0 19] :item "cobblestone" :fetch true})]]
-   :expect [{:event {:source :job :kind :blocks.place.done :data {:placed true}} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:placed true}} :within-s 80 :of-job true}]
    :after [[:block [16 0 19] "cobblestone"]]}]}

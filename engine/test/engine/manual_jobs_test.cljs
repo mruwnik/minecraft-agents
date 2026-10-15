@@ -1,6 +1,7 @@
 (ns engine.manual-jobs-test
   "jobs.blocks.use-on and jobs.items.interact (the jobs behind world.mjs use-on / interact) against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -47,8 +48,7 @@
                                                       {:pos {:x 2 :y 63 :z 0} :item "oak_leaves"}))]
           (is (true? (:used result)))
           (is (= :done (:status result)))
-          (is (= 1 (count (calls p "useOn"))))
-          (is (= 1 (count (kinds seen :blocks.use-on.done)))))))))
+          (is (= 1 (count (calls p "useOn")))))))))
 
 (deftest use-on-walks-into-reach-first
   (async done
@@ -67,8 +67,7 @@
                                                     {:pos [2 63 0] :item "oak_leaves"}))]
           (is (= :stopped (:status result)))
           (is (false? (:used result)))
-          (is (= :no-item (:reason result)))
-          (is (= 1 (count (kinds seen :blocks.use-on.done)))))))))
+          (is (= :no-item (:reason result))))))))
 
 (deftest use-on-refuses-bad-args-without-a-click
   (async done

@@ -12,28 +12,28 @@
             [:fill [20 3 16] [20 3 16] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
-   :expect [{:event {:kind :blocks.dig.done :data {:block "oak_log"}} :within-s 40 :of-job true}]
+   :expect [{:event {:kind :child_ended :data {:ending {:data {:block "oak_log"}}}} :within-s 40 :of-job true}]
    :after [[:not-block [20 0 16] "oak_log"]]}
  {:name "diag-west-behind"
    :blocks [[:fill [2 0 16] [2 3 16] "oak_log"] [:fill [0 3 14] [4 4 18] "oak_leaves[persistent=true]"]
             [:fill [2 3 16] [2 3 16] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
-   :expect [{:event {:kind :blocks.dig.done :data {:block "oak_log"}} :within-s 40 :of-job true}]
+   :expect [{:event {:kind :child_ended :data {:ending {:data {:block "oak_log"}}}} :within-s 40 :of-job true}]
    :after [[:not-block [2 0 16] "oak_log"]]}
  {:name "tree-in-view-felled"
    :blocks [[:fill [16 0 16] [16 3 16] "oak_log"] [:fill [14 3 14] [18 4 18] "oak_leaves[persistent=true]"]
             [:fill [16 3 16] [16 3 16] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
-   :expect [{:event {:kind :blocks.dig.done :data {:block "oak_log"}} :within-s 60 :of-job true}]
+   :expect [{:event {:kind :child_ended :data {:ending {:data {:block "oak_log"}}}} :within-s 60 :of-job true}]
    :after [[:not-block [16 0 16] "oak_log"]]}
   {:name "second-tree-in-view-felled"
    :blocks [[:fill [20 0 10] [20 3 10] "birch_log"] [:fill [18 3 8] [22 4 12] "birch_leaves[persistent=true]"]
             [:fill [20 3 10] [20 3 10] "birch_log"]]
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
-   :expect [{:event {:kind :blocks.dig.done :data {:block "birch_log"}} :within-s 60 :of-job true}]
+   :expect [{:event {:kind :child_ended :data {:ending {:data {:block "birch_log"}}}} :within-s 60 :of-job true}]
    :after [[:not-block [20 0 10] "birch_log"]]}
   {:name "tree-behind-wall-left-standing"
    :blocks [[:fill [10 0 0] [14 13 31] "stone"]
@@ -42,7 +42,7 @@
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
    :expect [{:event {:kind :waiting :data {:reason :no-tree}} :within-s 30 :of-job true}
-            {:no-event {:kind :blocks.dig.done} :for-s 30}]
+            {:no-event {:kind :child_ended :data {:ending {:data {:dug [:any]}}}} :for-s 30}]
    :after [[:block [20 0 16] "oak_log"] [:body-near [6.5 0 16.5] 12]]}
   {:name "second-tree-behind-wall-left-standing"
    :blocks [[:fill [10 0 0] [14 13 31] "stone"]
@@ -51,7 +51,7 @@
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
    :expect [{:event {:kind :waiting :data {:reason :no-tree}} :within-s 30 :of-job true}
-            {:no-event {:kind :blocks.dig.done} :for-s 30}]
+            {:no-event {:kind :child_ended :data {:ending {:data {:dug [:any]}}}} :for-s 30}]
    :after [[:block [24 0 6] "spruce_log"] [:body-near [6.5 0 16.5] 12]]}
   {:name "hive-in-view-harvested"
    :blocks [[:set [16 0 16] "campfire[lit=true]"] [:set [16 1 16] "beehive[honey_level=5]"]]

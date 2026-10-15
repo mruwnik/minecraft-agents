@@ -1,6 +1,7 @@
 (ns engine.harvest-test
   "jobs.farm.harvest against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [jobs.lib.util :as u]
@@ -112,7 +113,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start {:world wheat-world})]
           (await (child-outcome eng job {} 200))
-          (is (= (count (calls p "dig")) (count (events-of seen :blocks.dig.done)))))))))
+          (is (= (count (calls p "dig")) (count (ce/ends seen :dug)))))))))
 
 (deftest only-ripe-wanted-crops-are-cut
   (async done
@@ -511,8 +512,8 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start {:world wheat-world})]
           (await (child-outcome eng job {} 200))
-          (is (= (count (calls p "place")) (count (events-of seen :blocks.place.done))))
-          (is (= 9 (count (events-of seen :blocks.place.done)))))))))
+          (is (= (count (calls p "place")) (count (ce/ends seen :placed))))
+          (is (= 9 (count (ce/ends seen :placed)))))))))
 
 (deftest still-ripe-rereads-the-cells
   (let [p (tu/seeing-all (tu/fake {:blocks (field "wheat" 7 [1 2] [1]) :ages (merge (ages 7 [1] [1]) (ages 2 [2] [1]))}))

@@ -285,7 +285,7 @@
    ["any notice wakes" (notice "j2" :shelter.exposed "exposed: no roof") defaults :notice]
    ["a notice from a body source wakes" (assoc (event :body :job.notify {} "hi") :attention :notice) defaults :notice]
    ["a watch limits notices to the watched job" (notice "j2" :shelter.exposed "exposed") (assoc defaults :watch ["j5"]) nil]
-   ["a notice of a watched job's child wakes" (notice "j5/place" :blocks.place.done "x") (assoc defaults :watch ["j5"]) :notice]
+   ["a notice of a watched job's child wakes" (notice "j5/place" :child_ended "x") (assoc defaults :watch ["j5"]) :notice]
    ["a body notice wakes under a watch" (assoc (event :body :job.notify {} "hi") :attention :notice) (assoc defaults :watch ["j5"]) :notice]
    ["a flight that moved the body wakes under a watch" (notice "j9" :hostile.fled "fled 18 blocks") (assoc defaults :watch ["j5"]) :notice]
    ["quiet notices suppress it" (notice "j2" :shelter.exposed "exposed") (assoc defaults :quiet-notices true) nil]

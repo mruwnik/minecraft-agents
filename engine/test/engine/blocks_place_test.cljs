@@ -1,6 +1,7 @@
 (ns engine.blocks-place-test
   "jobs.blocks.place against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -36,10 +37,10 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (bd/setup {:self body :inventory cobble})
               result (await (tu/child-outcome eng job {:pos [2 64 0] :item "cobblestone"} 5))]
-          (is (= {:placed true :pos at :item "cobblestone" :reason :placed :block {:name "cobblestone" :state {}}} (dissoc result :status)))
+          (is (= {:placed true :pos at :item "cobblestone" :reason :placed :block {:name "cobblestone" :state {}}} (dissoc result :status :text)))
           (is (= "cobblestone" (bd/block-at p at)))
           (is (= 3 (bd/carried p "cobblestone")))
-          (is (= 1 (count (filter #(= :blocks.place.done (:kind %)) @seen)))))))))
+          (is (= 1 (count (ce/ends seen :placed)))))))))
 
 (deftest a-refused-place-keeps-the-primitives-reason
   (async done
@@ -49,7 +50,7 @@
               why "Server refused to place cobblestone at (2, 64, 0): the block is still air"]
           (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason why}))
           (let [result (await (tu/child-outcome eng job {:pos at :item "cobblestone"} 5))
-                done-event (first (filter #(= :blocks.place.done (:kind %)) @seen))]
+                done-event result]
             (is (= :stopped (:status result)))
             (is (= why (:why result)))
             (is (re-find #"still air" (:text done-event)))))))))
@@ -162,7 +163,7 @@
           (is (some #(= :completed (:kind %)) @(:seen env))))))))
 
 (defn done-text [seen]
-  (:text (first (filter #(= :blocks.place.done (:kind %)) @seen))))
+  (:text (ce/data (first (ce/ends seen :placed)))))
 
 (deftest done-texts-name-the-item-and-the-blocking-block
   (async done

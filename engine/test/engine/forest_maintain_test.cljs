@@ -1,6 +1,7 @@
 (ns engine.forest-maintain-test
   "jobs.forestry.maintain (a forest plan's tree cells) and fell-tree's :at, against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.events :as events]
@@ -212,7 +213,7 @@
         (let [{:keys [eng p seen]} (start oak-world {"forest" oak-cell})]
           (await (tu/child-outcome eng job {:plan "forest"} 200))
           (is (= 1 (count (places p))))
-          (is (= 1 (count (h/events-of seen :blocks.place.done)))))))))
+          (is (= 1 (count (ce/ends seen :placed)))))))))
 
 (deftest a-large-planned-tree-is-felled-and-replanted-cell-by-cell
   (async done

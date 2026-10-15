@@ -21,7 +21,7 @@
          [:wait-s 2]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
-            {:event {:source :job :kind :blocks.dig.done :data {:reason :dug}} :within-s 140 :of-job true}]
+            {:event {:source :job :kind :completed :data {:reason :dug}} :within-s 140 :of-job true}]
    :after [[:block [27 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
   {:name "dig-cut-then-finishes-b"
    :blocks [[:set [27 0 18] "stone"]]
@@ -33,7 +33,7 @@
          [:wait-s 2]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
-            {:event {:source :job :kind :blocks.dig.done :data {:reason :dug}} :within-s 140 :of-job true}]
+            {:event {:source :job :kind :completed :data {:reason :dug}} :within-s 140 :of-job true}]
    :after [[:block [27 0 18] "air"] [:item "cobblestone" [:>= 1]]]}
   {:name "place-cut-then-finishes-a"
    :body {:inventory [["cobblestone" 4]]}
@@ -44,7 +44,7 @@
          [:wait-s 2]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
-            {:event {:source :job :kind :blocks.place.done :data {:placed true :reason :placed}} :within-s 140 :of-job true}]
+            {:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 140 :of-job true}]
    :after [[:block [27 0 16] "cobblestone"] [:item "cobblestone" 3]]}
   {:name "place-cut-then-finishes-b"
    :body {:inventory [["cobblestone" 4]]}
@@ -55,5 +55,5 @@
          [:wait-s 2]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
-            {:event {:source :job :kind :blocks.place.done :data {:placed true :reason :placed}} :within-s 140 :of-job true}]
+            {:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 140 :of-job true}]
    :after [[:block [27 0 18] "cobblestone"] [:item "cobblestone" 3]]}]}

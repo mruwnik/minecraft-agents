@@ -13,24 +13,24 @@
    :body {:at [16.5 1 16.5]}
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :hazard}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :blocks.dig.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :hazard}}}]
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:dug [:any]}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :hazard}}}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "fail-ends-at-once-with-hint"
    :blocks [[:set [16 0 16] "stone"]]
    :body {:at [16.5 1 16.5]}
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :on-fluid :fail})]]
-   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug false :reason :fluid-adjacent}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:dug false :reason :fluid-adjacent}} :within-s 30 :of-job true}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "fail-with-accept-digs"
    :blocks [[:set [16 0 16] "stone"]]
    :body {:at [16.5 1 16.5]}
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :on-fluid :fail :accept #{:fluid-adjacent}})]]
-   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]}
   {:name "fail-on-dry-block-digs"
    :blocks [[:set [14 0 16] "stone"]]
    :act [[:job (jobs.blocks.dig {:pos #at [14 0 16] :on-fluid :fail})]]
-   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
    :after [[:block [14 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
   {:name "mine-only-wet-stone-says-wet-skipped"
    :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :radius 8})]]

@@ -1,6 +1,7 @@
 (ns engine.mine-test
   "jobs.gather.mine against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is async]]
             [clojure.string]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -118,7 +119,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:block "sand" :count 6} {:blocks (merge floor sand-patch)} 60))]
           (is (pos? (dig-count s)))
-          (is (= (dig-count s) (count (events-of s :blocks.dig.done)))))))))
+          (is (= (dig-count s) (count (ce/ends s :dug)))))))))
 
 ;; sand on a 5-high stone pillar (in sight, out of every stand's reach) is nearer in a line than sand on the floor (off
 ;; the pillar's line of sight)

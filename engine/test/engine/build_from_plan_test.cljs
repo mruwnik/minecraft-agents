@@ -1,6 +1,7 @@
 (ns engine.build-from-plan-test
   "jobs.build.from-plan placing what a plan wants against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.fake]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -487,7 +488,7 @@
       (fn ^:async t []
         (let [[_ p seen] (await (fence-run {} kit {} {}))]
           (is (= 9 (count (h/calls p "place"))))
-          (is (= 9 (count (filter #(= :blocks.place.done (:kind %)) @seen)))))))))
+          (is (= 9 (count (ce/ends seen :placed)))))))))
 
 (deftest every-dig-goes-through-the-dig-job
   (async done
@@ -495,7 +496,7 @@
       (fn ^:async t []
         (let [[_ p seen] (await (fence-run {"4,64,3" "dirt" "2,64,3" "oak_leaves"} kit {} {}))]
           (is (= 2 (count (h/calls p "dig"))))
-          (is (= 2 (count (filter #(= :blocks.dig.done (:kind %)) @seen)))))))))
+          (is (= 2 (count (ce/ends seen :dug)))))))))
 
 (deftest a-wrong-hand-block-outside-the-soft-names-is-dug-by-hand-not-given-up-as-no-tool
   (async done

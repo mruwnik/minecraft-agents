@@ -83,13 +83,13 @@
    :limit-s 90}
   {:name "n2-place-next-to-feet-1"
    :body {:inventory [["cobblestone" 8]]}
-   :act [[:job (jobs.blocks.place {:pos #at [17 0 16] :item "cobblestone"})] [:await {:source :job :kind :blocks.place.done} 40] [:wait-s 3]]
+   :act [[:job (jobs.blocks.place {:pos #at [17 0 16] :item "cobblestone"})] [:await {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} 40] [:wait-s 3]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 15}]
    :after [[:block [17 0 16] "cobblestone"]]
    :limit-s 60}
   {:name "n2-place-next-to-feet-2"
    :body {:inventory [["cobblestone" 8]]}
-   :act [[:job (jobs.blocks.place {:pos #at [16 0 17] :item "cobblestone"})] [:await {:source :job :kind :blocks.place.done} 40] [:wait-s 3]]
+   :act [[:job (jobs.blocks.place {:pos #at [16 0 17] :item "cobblestone"})] [:await {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} 40] [:wait-s 3]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 15}]
    :after [[:block [16 0 17] "cobblestone"]]
    :limit-s 60}

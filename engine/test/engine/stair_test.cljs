@@ -1,6 +1,7 @@
 (ns engine.stair-test
   "jobs.access.stair: step geometry, the stop rules, and whole stairs against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -397,7 +398,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (stair! {:blocks ground} east (fn [_])))]
           (is (= 6 (count (digs p))))
-          (is (= 6 (count (events-of s :blocks.dig.done)))))))))
+          (is (= 6 (count (ce/ends s :dug)))))))))
 
 (deftest a-dig-child-that-waits-three-rounds-is-one-try-and-resumes-the-same-cell
   (async done

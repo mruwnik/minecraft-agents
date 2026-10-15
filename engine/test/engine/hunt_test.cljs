@@ -62,7 +62,7 @@
 
 (defn attacked [{:keys [p]}] (mapv #(.-id (.-args %)) (h/calls p "attack")))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn done-event [s] (first (events-of s :hunt.done)))
+(defn done-event [s] (first (filterv #(#{:completed :stopped} (:kind %)) @(:seen s))))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn world-ids [{:keys [p]}] (set (map :id (fake/entities p))))
@@ -253,7 +253,7 @@
           (dotimes [_ 60]
             (swap! clock + 700)
             (await (core/tick! eng)))
-          (is (= {:killed 2 :reason :count :spared 0 :remaining 0 :status :done} @out)))))))
+          (is (= {:killed 2 :reason :count :spared 0 :remaining 0 :status :done} (dissoc @out :text))))))))
 
 (defn baby-cow [id x] (animal id "cow" x {:drops cow-drops :baby true}))
 

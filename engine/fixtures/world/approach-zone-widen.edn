@@ -20,8 +20,8 @@
                     {:id "w" :box [#at [13 -1 16] #at [15 1 16]] :want "dirt"}
                     {:id "e" :box [#at [17 -1 16] #at [19 1 16]] :want "dirt"}]}]
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
-   :expect [{:event {:source :job :kind :blocks.dig.done :data {:pos [:near #at [16 9 16] 0.5]}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :fell-tree.declined} :for-s 120 :until {:source :job :kind :blocks.dig.done}}]
+   :expect [{:event {:source :job :kind :child_ended :data {:ending {:data {:pos [:near #at [16 9 16] 0.5]}}}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :fell-tree.declined} :for-s 120 :until {:source :job :kind :child_ended :data {:ending {:data {:dug [:any]}}}}}]
    :after [[:not-block [16 9 16] "oak_log"]]
    :limit-s 150}
   {:name "ring-radius-5-refuses-the-pillar"

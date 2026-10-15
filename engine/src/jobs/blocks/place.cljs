@@ -33,7 +33,7 @@
   through jobs.lib.tidy/place!, so a block placed in another's zone with :ignore-zones? is recorded for
   jobs.survival.restore-broken.
 
-  Returns an ending and info blocks.place.done with {:placed true|false :pos :item :reason}; a placed block carries :block
+  Returns an ending with data {:placed true|false :pos :item :reason :text}; a placed block carries :block
   {:name :state} as the place act reported it. Done: :reason :placed, or :already (the cell holds the block, nothing
   done). condition-failed: :occupied (another block fills the cell), :need (the item is missing after the fetch; the fetch's ending is its :because), or a cell reason that appeared during the
   call (the conditions' causes). Impossible: :bad-args (with a blocks.place.declined warn). nothing-possible :unreachable (the walk
@@ -162,14 +162,13 @@
              (= 1 (count items)) (assoc :items {(first items) [1 1 1]}))}))
 
 (defn finish!
-  "End the call with kind and cause: the info event, then the ending with result as its data."
+  "End the call with kind and cause and result, with its text, as the data."
   [c kind cause result]
   (let [text (str (if (:placed result) "placed " "did not place ") (:item result) " at " (pr-str (b/cell (:pos result)))
                   (when-not (:placed result)
                     (str ": " (name (:reason result)) (when (:block result) (str " by " (:block result)))
                          (when (string? (:why result)) (str " (" (:why result) ")")))))]
-    (ctx/emit! c :blocks.place.done :info (assoc result :text text))
-    (ctx/end c kind cause result)))
+    (ctx/end c kind cause (assoc result :text text))))
 
 (defn stop!
   "finish! for a place that did not happen and could not: the cause is the result's :reason with what it names."

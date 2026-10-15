@@ -1,6 +1,7 @@
 (ns engine.blocks-dig-test
   "jobs.blocks.dig against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -69,11 +70,11 @@
         (let [{:keys [eng p seen]} (setup {:self body :blocks {"2,64,0" "stone"} :drops {"stone" "cobblestone"}
                                            :inventory (into [{:name "oak_log" :count 1}] pick)})
               result (await (tu/child-outcome eng job {:pos [2 64 0]} 10))]
-          (is (= {:dug true :pos at :block "stone" :reason :dug :collected 1 :status :done} result))
+          (is (= {:dug true :pos at :block "stone" :reason :dug :collected 1 :status :done} (dissoc result :text)))
           (is (= "air" (block-at p at)))
           (is (= ["wooden_pickaxe"] (mapv #(.-item (.-args %)) (calls p "equip"))))
           (is (= 1 (carried p "cobblestone")))
-          (is (= 1 (count (filter #(= :blocks.dig.done (:kind %)) @seen)))))))))
+          (is (= 1 (count (ce/ends seen :dug)))))))))
 
 (deftest a-hurt-body-digs-unless-the-caller-passes-a-health-floor
   (async done
@@ -544,7 +545,7 @@
           (digging-from p stands)
           (let [result (await (tu/child-outcome eng job {:pos under-feet} 20))
                 [sx sz] (first @stands)
-                text (:text (last (filterv #(= :blocks.dig.done (:kind %)) @seen)))]
+                text (:text result)]
             (is (= [sx 64 sz] (:stepped-aside result)) "the cell the body stood on to dig is in the result")
             (is (re-find #"stepped aside to \[-?\d+ 64 -?\d+\]" (str text)) "the done text says the body moved")))))))
 
@@ -722,7 +723,7 @@
             (is (>= (max (js/Math.abs (js/Math.floor x)) (js/Math.abs (js/Math.floor z))) 2)
                 "the body stands off the cells beside the open lava")
             (is (re-find #"lava at \[0 62 0\] not sealed: no block to seal with"
-                         (:text (last (filterv #(= :blocks.dig.done (:kind %)) @seen)))))))))))
+                         (:text result)))))))))
 
 (defn setup-seeing
   "setup with the body's sight (engine.perception) over the fake world, one sight pass done: a chest in view is a seen one."

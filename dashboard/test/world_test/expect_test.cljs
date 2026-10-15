@@ -6,7 +6,7 @@
             :data {:pos {:x 20016.5 :y 150 :z 20016.5}} :message "hostile-near → respond"})
 (def herd-done {:time-ms 9000 :source :job :kind :herd.done :context {:job-id "j7" :chain ["j7"]}
                 :data {:reason :brought :inside 1 :gate {:x 1 :y 2 :z 3}} :message "herd done"})
-(def dig-child {:time-ms 4000 :source :job :kind :blocks.dig.done :context {:job-id "j9/dig" :chain ["j9" "j9/dig"]}
+(def dig-child {:time-ms 4000 :source :job :kind :child_ended :context {:job-id "j9/dig" :chain ["j9" "j9/dig"]}
                 :data {:reason :dug :pos {:x 5 :y 150 :z 6}}})
 
 (deftest patterns-match-partially-and-by-operator
@@ -85,8 +85,8 @@
     (is (= :pass (:status (x/judge e [] (assoc opts :now-ms 101001)))) "without the until event the window is :for-s")))
 
 (deftest of-job-limits-matches-to-the-submitted-jobs-and-their-children
-  (is (= :pass (:status (x/judge {:event {:kind :blocks.dig.done} :within-s 60 :of-job true} [dig-child] (assoc opts :now-ms 5000)))))
-  (is (= :pending (:status (x/judge {:event {:kind :blocks.dig.done} :within-s 60 :of-job true} [dig-child]
+  (is (= :pass (:status (x/judge {:event {:kind :child_ended} :within-s 60 :of-job true} [dig-child] (assoc opts :now-ms 5000)))))
+  (is (= :pending (:status (x/judge {:event {:kind :child_ended} :within-s 60 :of-job true} [dig-child]
                                     (assoc opts :now-ms 5000 :job-ids #{"j1"}))))))
 
 (deftest a-run-is-decided-when-nothing-is-pending-and-passes-when-all-pass
