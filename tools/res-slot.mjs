@@ -48,7 +48,7 @@ const heldSlots = (kind, max) => [...Array(max).keys()].filter((i) => held(kind,
 export const slotArgs = (kind, i, cmd, busyCode = 213, marker = '') =>
   ['-n', '-E', String(busyCode), lockFile(kind, i), 'sh', '-c', 'printf "%s %s %s\\n" "$$" "$(date +%s)" "$1" > "$0.info"; [ -z "$2" ] || : > "$2"; shift 2; exec "$@"', lockFile(kind, i), cmd.join(' '), marker, ...cmd]
 let runSeq = 0
-const tryRun = (kind, i, cmd) => new Promise((res) => {
+const tryRun = (kind, i, cmd, onStart = () => {}) => new Promise((res) => {
   // The wrapper creates the marker only once it holds the lock, so a 213 with no marker is flock's "slot taken", and one with a marker is the command's own exit code.
   const marker = `${lockFile(kind, i)}.run.${process.pid}.${runSeq++}`
   fs.rmSync(marker, { force: true }) // a stale one from a killed parent whose pid was reused
@@ -58,6 +58,7 @@ const tryRun = (kind, i, cmd) => new Promise((res) => {
   const announce = () => {
     if (announced || !fs.existsSync(marker)) return
     announced = true
+    onStart()
     logRun({ start: true, pid: p.pid, kind, cmd: cmd.join(' ') })
   }
   const poll = setInterval(announce, 100)
@@ -160,10 +161,9 @@ const main = async () => {
     const d = gated
     if (d.action === 'run') {
       const t1 = Date.now()
-      fs.rmSync(heavyWaitFile(kind), { force: true })
       const dropGrant = () => fs.rmSync(path.join(grantDir(), `${process.pid}.json`), { force: true })
       for (const i of free) {
-        const code = await tryRun(kind, i, cmd)
+        const code = await tryRun(kind, i, cmd, () => fs.rmSync(heavyWaitFile(kind), { force: true })) // the marker stays until the command holds the slot, else a light waiter takes it in the gap
         if (code === null) continue
         logRun({ kind, needMb, waitedS: Math.round((t1 - t0) / 1000), ranS: Math.round((Date.now() - t1) / 1000), code, cmd: cmd.join(' ') })
         process.exit(code)
