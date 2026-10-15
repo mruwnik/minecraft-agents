@@ -51,6 +51,12 @@
     true 5 0 60000 false "the body stands in the gate"
     true 30 0 60000 false "beyond the radius"))
 
+(deftest the-trigger-waits-longer-for-an-entry-that-failed-before
+  (are [fails now holds] (is (= holds (boolean (dl/door-left (tu/seeing-all (tu/fake (gate-world true 9 0))) (view-with now 0 {:fails fails}) (:args (:door-left triggers/all)) nil))))
+    0 10000 true
+    2 29999 false
+    2 30000 true))
+
 (deftest the-trigger-reads-only-what-the-body-has-seen
   (let [args (:args (:door-left triggers/all))
         holds? #(boolean (dl/door-left % (view-with 60000 0) args nil))
@@ -342,8 +348,8 @@
           (is (= [:walk-interrupted] (mapv :reason (:left (first (filter #(= :shut-doors.stopped (:kind %)) @seen))))))
           (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays for a later run")
           (is (empty? (filter #(and (= :warn (:level %)) (= :job (:source %)) (not= :stopped (:kind %))) @seen)) "the job adds no warn of its own for an interrupted walk")
-          (is (= [@(:clock s)] (mapv :t (mem/entries (mem/view (:store eng)) :opened)))
-              "the entry is stamped afresh, so the trigger waits open-s again"))))))
+          (is (= [1000000] (mapv (comp :t :data) (mem/entries (mem/view (:store eng)) :opened)))
+              "the entry keeps the time the block was opened; the trigger paces the retry"))))))
 
 (deftest a-gate-left-while-standing-in-is-shut-by-the-reflex-once-the-body-steps-off
   (async done

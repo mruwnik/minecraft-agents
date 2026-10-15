@@ -50,11 +50,11 @@
   (some? (mem/latest view (mem/job-kind (first (str/split (str by) #"/"))))))
 
 (defn recorded
-  "The :opened entries' data in view at least open-ms old, minus those a :leave-open walk of a job that still lives left on purpose."
+  "The :opened entries' data in view at least open-ms old (times 1 + its :fails: the retry pace), minus those a :leave-open walk of a job that still lives left on purpose."
   [view open-ms]
   (->> (mem/entries view :opened)
-       (filter (fn [{:keys [t]}] (>= (- (:now view) t) open-ms)))
        (map :data)
+       (filter (fn [{:keys [t fails]}] (>= (- (:now view) t) (* open-ms (inc (or fails 0))))))
        (remove #(and (false? (:shut? %)) (owner-live? view (:by %))))))
 
 (defn left-open
@@ -66,9 +66,9 @@
   ([p view {:keys [radius]} open-ms read]
     (let [self (self-pos p)]
       (->> (recorded view open-ms)
-           (keep (fn [{:keys [cell by fails]}]
+           (keep (fn [{:keys [cell by fails t]}]
                    (when-let [o (read p cell)]
-                     (assoc o :by by :fails (or fails 0) :dist (distance self cell)))))
+                     (assoc o :by by :t t :fails (or fails 0) :dist (distance self cell)))))
            (filter #(<= (:dist %) radius))
            (sort-by :dist)
            (reduce (fn [acc o] (if (some #(= (:cell o) (:cell %)) acc) acc (conj acc o))) [])))))
