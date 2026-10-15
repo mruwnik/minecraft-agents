@@ -18,7 +18,8 @@
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :dig-in.sealed} 60]
          [:wait-s 5]
-         [:time-set 1000]]
+         [:time-set 1000]
+         [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
             {:event {:source :job :kind :dig-in.took-back} :within-s 150}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
@@ -28,11 +29,13 @@
   {:name "log-walls-are-named-and-taken-back-at-dawn"
    :time :night-exclusive
    :sleep-skip true
+   :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
    :body {:inventory [["oak_log" 12]]}
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :dig-in.sealed} 60]
          [:wait-s 5]
-         [:time-set 1000]]
+         [:time-set 1000]
+         [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :dig-in.sealed :message [:contains "oak_log"]} :within-s 60}
             {:event {:source :job :kind :dig-in.took-back} :within-s 150}]
    :after [[:item "oak_log" [:>= 8]]]
@@ -123,27 +126,27 @@
    :limit-s 70}
   ;; 33e6bf20: a walk inside an open cave is not held as sheltered, even with a dug-in entry left from an earlier night
   {:name "walk-in-an-open-cave-is-not-held"
-   :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 4] [28 6 28] "air"]]
-   :plot {:height 12}
+   :blocks [[:fill [2 0 2] [42 9 42] "stone"] [:fill [4 0 4] [40 6 40] "air"]]
+   :plot {:length 48 :width 48 :height 12}
    :memory [{:kind :shelter :data {:pos #xyz [6 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:at [6.5 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #xyz [26 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :go-to.night-sheltered} :for-s 90 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
+            {:no-event {:source :job :kind :waiting :data {:reason :night-sheltered}} :for-s 90 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
    :after [[:body-near [26.5 0 16.5] 2.5]]
    :limit-s 100}
   ;; 33e6bf20: buried at night in a stair tunnel, a walk to a goal further down is no walk out of the shelter
   {:name "buried-walk-down-the-tunnel-is-not-held"
    :blocks [[:fill [6 -1 12] [26 12 20] "stone"]
-            [:fill [8 9 16] [8 10 16] "air"] [:fill [9 8 16] [9 9 16] "air"] [:fill [10 7 16] [10 8 16] "air"]
-            [:fill [11 6 16] [11 7 16] "air"] [:fill [12 5 16] [12 6 16] "air"] [:fill [13 4 16] [13 5 16] "air"]
-            [:fill [14 3 16] [14 4 16] "air"] [:fill [15 2 16] [15 3 16] "air"] [:fill [16 1 16] [16 2 16] "air"]
-            [:fill [17 0 16] [17 1 16] "air"]]
+            [:fill [8 9 16] [8 11 16] "air"] [:fill [9 8 16] [9 10 16] "air"] [:fill [10 7 16] [10 9 16] "air"]
+            [:fill [11 6 16] [11 8 16] "air"] [:fill [12 5 16] [12 7 16] "air"] [:fill [13 4 16] [13 6 16] "air"]
+            [:fill [14 3 16] [14 5 16] "air"] [:fill [15 2 16] [15 4 16] "air"] [:fill [16 1 16] [16 3 16] "air"]
+            [:fill [17 0 16] [17 2 16] "air"]]
    :plot {:height 16}
    :body {:at [8.5 9 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #xyz [17 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :go-to.night-sheltered} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
+            {:no-event {:source :job :kind :waiting :data {:reason :night-sheltered}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
    :after [[:body-near [17.5 0 16.5] 2.5]]
    :limit-s 70}
   ;; 33e6bf20: the same buried body asked to walk up to open ground waits for day
@@ -152,8 +155,8 @@
    :plot {:height 14}
    :body {:at [14.5 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #xyz [20 9 16] :range 1})]]
-   :expect [{:event {:source :job :kind :go-to.night-sheltered} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 30 :until {:source :job :kind :go-to.night-sheltered}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :night-sheltered}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :night-sheltered}}}]
    :after [[:body-near [14.5 0 16.5] 1.5]]
    :limit-s 40}
   ;; 87aee1d1: a bed in a hut with no door cannot be reached; sleep says the hut is walled in, not a bare "cannot reach"
@@ -272,26 +275,25 @@
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [70 0 16]}) [:now]]
          [:time-set 12000]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :dusk-home}} :within-s 60}
-            {:event {:source :job :kind :completed :data {:name "jobs.survival.go-home"}} :within-s 120}]
+            {:event {:source :reflex :kind :ended :context {:reflex-id :dusk-home}} :within-s 120}]
    :after [[:body-near [70.5 0 16.5] 5]]
    :limit-s 130}
-  ;; 7cc76257: a roofed body held by the night reflex still runs an inventory-only job
+  ;; 7cc76257: a roofed body with the night reflex registered still runs an inventory-only job
   {:name "sheltered-body-runs-an-inventory-only-craft"
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :register [{:trigger :night}]
    :body {:at [13.5 0 13.5] :inventory [["oak_planks" 4]] :settle-s 2}
-   :act [[:await {:source :job :kind :holding :data {:reason #{:sheltered :roofed}}} 60]
-         [:job (jobs.items.craft {:item "stick"})]]
+   :act [[:job (jobs.items.craft {:item "stick"})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.craft"}} :within-s 60 :of-job true}]
    :after [[:item "stick" [:>= 4]]]
    :limit-s 80}
-  ;; fe853845: at night in a sealed shelter the night job holds sheltered; it is never "waiting :not-night"
-  {:name "night-job-in-a-sealed-hut-holds-and-is-not-waiting-not-night"
+  ;; fe853845: at night in a sealed shelter with nothing to do the night job is done at once (:already); it is never "waiting :not-night"
+  {:name "night-job-in-a-sealed-hut-is-done-and-is-not-waiting-not-night"
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :body {:at [13.5 0 13.5]}
    :act [[:job (jobs.survival.night)]]
-   :expect [{:event {:source :job :kind :holding :data {:reason #{:sheltered :roofed}}} :within-s 30 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night" :cause :already}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-night}} :for-s 30}]
    :limit-s 40}]}
