@@ -186,24 +186,30 @@
              :else {:cell start :range 1}))))
 
 (def home-ways
-  "Every way but :pillar: a pillar would spend the mined blocks the run counts and leave one in the shaft."
+  "Every way but :pillar (and its :fill-gap): a pillar spends the mined blocks the run counts and leaves one in the shaft, so it is the last resort."
   #{:walk :clear-seal :clear-path :stair :dig-out})
 
 (defn ^:async home-by-go-to!
-  "The way home through a go-to child, with its escalation, to the goal home-round! decided (mem :home-goal). :continue while the walk
-  goes on, else the job ends."
+  "The way home through a go-to child, with its escalation, to the goal home-round! decided (mem :home-goal): the ways of home-ways
+  first, then, if that walk did not arrive, every way (mem :home-pillar). :continue while the walk goes on, else the job ends."
   [c start]
   (let [{:keys [cell range y-margin]} (:home-goal (ctx/mem c))
         arrived? #(let [here (cell-of (u/self-pos c))] (if (zero? range) (= here cell) (beside? here start)))
-        r (if (arrived?)
-            :arrived
-            (await (child/call-walk* c :home
-                                   (cond-> {:pos {:x (+ (:x cell) 0.5) :y (:y cell) :z (+ (:z cell) 0.5)} :range range :ways home-ways :zone-tolls true
-                                            :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                                     y-margin (assoc :y-margin y-margin)))))]
-    (if (= :continue r)
-      :continue
-      (home-done! c (arrived?)))))
+        walk! (fn ^:async walk [slot ways]
+                (await (child/call-walk* c slot
+                                         (cond-> {:pos {:x (+ (:x cell) 0.5) :y (:y cell) :z (+ (:z cell) 0.5)} :range range :zone-tolls true
+                                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                                           ways (assoc :ways ways)
+                                           y-margin (assoc :y-margin y-margin)))))
+        r (cond
+            (arrived?) :arrived
+            (:home-pillar (ctx/mem c)) (await (walk! :home-last nil))
+            :else (await (walk! :home home-ways)))]
+    (cond
+      (= :continue r) :continue
+      (or (arrived?) (:home-pillar (ctx/mem c))) (home-done! c (arrived?))
+      :else (do (ctx/update-mem! c assoc :home-pillar true)
+                (await (home-by-go-to! c start))))))
 
 (defn ^:async home-round!
   "The last step of every normal run: back to the cell it started on through a go-to child (beside it when its floor is open or unseen),

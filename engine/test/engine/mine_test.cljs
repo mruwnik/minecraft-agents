@@ -2735,6 +2735,43 @@
                                              {:jobs {'jobs.movement.go-to no-walk} :before #(reset! setup %)}))]
           (is (= [:nothing-possible :not-home 1] [(:kind out) (contract/cause-key out) (:got (:data out))]) (pr-str out)))))))
 
+(defn ^:async home-walk-run
+  "A mine run whose body is moved off its start before the walk home; refuse? says whether a home walk (the targets with x < 2) fails; {:out :ways} the ending and the :ways of each home walk."
+  [refuse?]
+  (let [setup (atom nil)
+        ways (atom [])
+        real (get-in (start {:world {}}) [:eng :jobs 'jobs.movement.go-to])
+        spy (assoc real :round (fn ^:async go-to [c]
+                                 (if (< (:x (:pos (:args c))) 2)
+                                   (do (swap! ways conj (:ways (:args c)))
+                                       (swap! (fake/state (:p @setup)) assoc-in [:self :pos] [6.5 64 0.5])
+                                       (if (refuse? (:args c))
+                                         (ctx/end c :nothing-possible {:reason :unreachable} {})
+                                         (await ((:round real) c))))
+                                   (await ((:round real) c)))))
+        {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :tunnel-length 0}
+                                       {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} nil 300
+                                       {:jobs {'jobs.movement.go-to spy} :before #(reset! setup %)}))]
+    {:out out :ways @ways}))
+
+(deftest the-walk-home-tries-pillar-and-fill-gap-only-after-the-other-ways-fail
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out ways]} (await (home-walk-run #(= mine-end/home-ways (:ways %))))]
+          (is (= :done (:kind out)) (pr-str out))
+          (is (= 2 (count ways)))
+          (is (= mine-end/home-ways (first ways)) "stair and clear-path first")
+          (is (nil? (second ways)) "every way is allowed once they failed"))))))
+
+(deftest the-walk-home-does-not-pillar-when-the-other-ways-arrive
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out ways]} (await (home-walk-run (constantly false)))]
+          (is (= :done (:kind out)) (pr-str out))
+          (is (= [mine-end/home-ways] ways)))))))
+
 (deftest a-pickaxe-that-breaks-in-the-dig-phase-with-none-to-fetch-ends-no-tool
   (async done
     (tu/run-async done
