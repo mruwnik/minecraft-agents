@@ -6,6 +6,7 @@
             [jobs.lib.ledger :as ledger]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.expr :as expr]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
@@ -578,6 +579,21 @@
           (is (empty? (:list (core/state eng))) "ended at once: the goal already holds")
           (is (= 0 (.-length (.-calls (.-world p)))))
           (is (empty? (of-kind seen :cleanup.done))))))))
+
+(defn done-of
+  "The kind and reason of cleanup's done? for a started job with memory m over an empty ledger."
+  [m]
+  (let [{:keys [eng p]} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (floor -2 2) :entries []})
+        store (:store eng)]
+    (mem/write! store (mem/job-kind "j") m)
+    (tu/kind-reason (cleanup/done? {:primitives p :args (second (expr/leaf registry/jobs job {})) :root "j" :slots []
+                                    :id "j" :engine {:warned (atom #{})} :emit (fn [& _])
+                                    :view #(mem/view store)}))))
+
+(deftest a-started-cleanup-with-nothing-left-offered-is-done
+  (are [m expected] (= expected (done-of m))
+    {:started true} [:ok :nothing-to-do]
+    {:started true :collect true} [:later :cleaning]))
 
 (deftest held-cells-are-not-offered-again
   (async done

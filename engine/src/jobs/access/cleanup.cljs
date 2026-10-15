@@ -207,9 +207,9 @@
     s))
 
 (defn nothing-to-do?
-  "Nothing is offered, and a cell never seen has been looked at (or none is unseen): the goal already holds."
+  "Nothing is offered, no pick-up is due, and a cell never seen has been looked at (or none is unseen): the goal holds."
   [c]
-  (not (or (:started (ctx/mem c)) (seq (offered-now c)) (and (not (look/surveyed? c)) (unseen-entries? c)))))
+  (not (or (:collect (ctx/mem c)) (seq (offered-now c)) (and (not (look/surveyed? c)) (unseen-entries? c)))))
 
 (def can-start? (cond/and bad-args no-zones))
 
@@ -221,12 +221,18 @@
   (let [view (ctx/view c)]
     (ledger/select (ledger/open-entries view) view (:job (:args c)) (ledger/near-of-args c (:args c)))))
 
+(defn result-of
+  "The result of the cleanup now, with the cells left open."
+  [c open]
+  (let [m (ctx/mem c)]
+    {:removed (:removed m []) :dropped (:dropped m []) :open open :collected (:collected m 0)}))
+
 (defn done?
-  "Done at the start when nothing is offered; later progress only: the round that has nothing left to work on ends it."
+  "Ok whenever nothing is offered to clean up and no pick-up is due; else the cells removed so far."
   [c]
   (let [done (count (:removed (ctx/mem c)))]
     (if (nothing-to-do? c)
-      (contract/ok :nothing-to-do "nothing is offered to clean up" :units :cells :done done :left 0)
+      (contract/ok :nothing-to-do "nothing is offered to clean up" :units :cells :done done :left 0 :result (result-of c []))
       (contract/later :cleaning "cells are offered" :units :cells :done done :left (count (picked-entries c))))))
 
 (defn quote-of [c]
@@ -325,18 +331,29 @@
 
 (defn cell-text [{:keys [cell reason]}] (str (pr-str cell) " " (name reason)))
 
+(defn done-event!
+  "Tell cleanup.done for a result."
+  [c result]
+  (ctx/emit! c :cleanup.done :info {:removed (count (:removed result)) :dropped (count (:dropped result))
+                                    :open (count (:open result)) :collected (:collected result)
+                                    :text (str "cleanup removed " (count (:removed result)) ", dropped "
+                                               (count (:dropped result)) " not ours, " (count (:open result)) " left")}))
+
+(defn ^:async cleanup
+  "After a cleanup that did its round and ended :done: cleanup.done is told."
+  [c ending]
+  (when (and (= :done (:kind ending)) (:started (ctx/mem c)))
+    (done-event! c (:data ending)))
+  (ctx/end c :done nil {}))
+
 (defn finish! [c open]
-  (let [m (ctx/mem c)
-        result {:removed (:removed m []) :dropped (:dropped m []) :open open :collected (:collected m 0)}]
+  (let [result (result-of c open)]
     (hold-open! c open)
     (when (seq open)
       (ctx/emit! c :cleanup.left :warn {:open open
                                         :text (str "cleanup left " (count open) " blocks: "
-                                                   (apply str (interpose ", " (map cell-text open))))}))
-    (ctx/emit! c :cleanup.done :info {:removed (count (:removed result)) :dropped (count (:dropped result))
-                                      :open (count open) :collected (:collected result)
-                                      :text (str "cleanup removed " (count (:removed result)) ", dropped "
-                                                 (count (:dropped result)) " not ours, " (count open) " left")})
+                                                   (apply str (interpose ", " (map cell-text open))))})
+      (done-event! c result))
     (if (seq open)
       (ctx/end c :nothing-possible :left-open result)
       (ctx/end c :done nil result))))
