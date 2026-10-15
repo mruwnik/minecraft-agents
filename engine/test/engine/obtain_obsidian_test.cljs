@@ -3,9 +3,14 @@
   seen lava source from a side stand, mined, and the bucket scooped back; else a refusal naming what is missing."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
+            [engine.core :as core]
+            [engine.events :as events]
             [engine.farm-contract-test :refer [ending-of]]
             [engine.library-test :as lt]
-            [engine.test-util :as tu]))
+            [engine.registry :as registry]
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]
+            [jobs.lib.world-files :as ew]))
 
 (def pick {:name "diamond_pickaxe" :count 1})
 (def ground (into {} (for [x (range 0 9) z (range -2 3) y [62 63]] [(str x "," y "," z) "stone"])))
@@ -53,3 +58,20 @@
           (is (= :no-source (:reason none)))
           (is (re-find #"obsidian" (:why none)))
           (is (= :no-bucket (:reason no-bucket)) "make-obsidian's start condition is the wait reason"))))))
+
+(defn ^:async no-zone-list-outcome
+  "The outcome of make-obsidian with args on a body whose zone list was never read."
+  [args]
+  (let [[_ sink] (tu/legacy-capture-sink)
+        p (tu/seeing-all (tu/fake-on-floor (world (assoc ground "4,63,0" "obsidian") [pick])))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now (constantly 1000000)
+                          :world (ew/of-data {} {} nil)
+                          :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})]
+    (await (tu/child-outcome eng 'jobs.gather.make-obsidian args 300))))
+
+(deftest ignore-zones-reaches-the-mine-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [res (await (no-zone-list-outcome {:count 1 :ignore-zones? true}))]
+          (is (= :done (:status res)) (pr-str res)))))))

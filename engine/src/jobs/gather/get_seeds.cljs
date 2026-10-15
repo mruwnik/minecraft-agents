@@ -301,7 +301,7 @@
         (if (not= :ok judged)
           (do (if (= :refused judged) (refuse! c pos v) (skip! c pos)) :skipped)
           (let [outcome (await (blocks/dig-cell! c pos
-                                                 {:accept (into #{:fluid-adjacent :falling-block} (:accept (:args c)))
+                                                 {:accept (:accept (:args c))
                                                   :ignore-zones? (:ignore-zones? (:args c))}))]
             (case outcome
               :continue :walking
