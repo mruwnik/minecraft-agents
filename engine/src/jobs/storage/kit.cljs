@@ -351,8 +351,6 @@
         missing (cond-> (:missing m) end (merge (zipmap (map mkey kinds) (repeat end))))
         missing (into {} (keep (fn [k] (when-let [t (get missing (mkey k))] [k t]))) kinds)
         short (into {} still)]
-    (when (seq short)
-      (ctx/emit! c :kit.short :info {:short short :text (str "kit still short " (pr-str short) (when (seq missing) (str ", missing " (pr-str missing))))}))
     (when (seq missing) (ctx/remember! c :no-craft {:missing missing} no-craft-policy))
     (finish! c short (when (seq missing) {:missing missing}))))
 
@@ -366,7 +364,6 @@
 (defn finish-uncrafted!
   "Finish without a craft phase: the short, plus what the remembered failure says."
   [c short]
-  (ctx/emit! c :kit.short :info {:short short :text (str "chest lacks " (pr-str short))})
   (let [missing (remembered-missing c short)]
     (finish! c short (when missing {:missing missing}))))
 
@@ -456,8 +453,7 @@
                   (and (empty? take) (:craft a))
                   (do (ctx/update-mem! c assoc :phase :craft :chest-items (stacks-of (.-items seen)))
                       :again)
-                  (empty? take) (do (ctx/emit! c :kit.short :info {:short short :text (str "chest lacks " (pr-str short))})
-                                    (finish! c short))
+                  (empty? take) (finish! c short)
                   :else
                   (let [e (await (ctx/call c :take 'jobs.storage.withdraw
                                            (merge (select-keys a [:ignore-zones?]) {:chest chest :items take})))]

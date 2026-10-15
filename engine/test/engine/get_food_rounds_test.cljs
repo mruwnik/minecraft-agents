@@ -468,9 +468,11 @@
 
 (defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
 (defn searches
-  "The endings of the explore search child."
+  "The not-found endings of the explore search child."
   [seen]
-  (filterv #(and (= :child_ended (:kind %)) (= :explore (:slot %))) @seen))
+  (filterv #(and (= :child_ended (:kind %)) (= :explore (:slot %))
+                 (= :nothing-possible (:kind (or (:ending %) (get-in % [:data :ending])))))
+           @seen))
 
 (deftest nothing-seen-searches-for-food-before-giving-up
   (async done

@@ -82,7 +82,7 @@
         (is (= {:kind :condition-failed :cause :no-table}
                (kc (await (ending-of (assoc (stacks "iron_sword" "lapis_lazuli") :self {:experience {:level 30}}) 'jobs.items.enchant {:item "iron_sword"})))))
         (let [e (await (ending-of (assoc (stacks "iron_sword" "lapis_lazuli") :self {:experience {:level 30}}) 'jobs.items.enchant {:item "iron_sword"}))]
-          (is (= {:enchanted false :item "iron_sword" :levels-spent 0 :lapis-spent 0} (:data e))))))))
+          (is (= {:enchanted false :item "iron_sword" :levels-spent 0 :lapis-spent 0 :text "enchant gave up: no-table"} (:data e))))))))
 
 (defn ^:async waits?
   "Whether job sym with args, submitted as a root job in world, is still listed (waiting on a condition) after 12 ticks."

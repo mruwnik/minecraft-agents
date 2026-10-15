@@ -23,7 +23,7 @@
   Ends :done with {:enchanted true :item :slot :level-cost :levels-spent :lapis-spent :enchants [{:name
   :level}] :xp-level :hint {:enchant :level}|nil}, measured from what is carried and the body's level after the
   window closed, and a :text.
-  A give-up warns enchant.gave-up and ends with {:enchanted false :item :levels-spent n :lapis-spent n}.
+  A give-up ends with the :text and {:enchanted false :item :levels-spent n :lapis-spent n}.
   Impossible: :bad-args (no item name). Conditions (a listed root job waits): :no-item and :no-lapis (not carried, :fetch false), :too-few-levels
   (no level at all). A failed fetch ends as {:reason :need} with its ending as the :because. Condition-failed in the
   round: :no-table, :not-a-table, :no-item, :already-enchanted (every copy carried is enchanted), :not-enchantable,
@@ -153,8 +153,8 @@
   "Warn and end with a reason (and what was spent, when anything was)."
   [c reason extra]
   (let [reason (keyword reason)]
-    (ctx/emit! c :enchant.gave-up :warn {:reason (name reason) :text (str "enchant gave up: " (name reason))})
-    (finish! c (if (condition-reasons reason) :condition-failed :nothing-possible) reason extra)))
+    (finish! c (if (condition-reasons reason) :condition-failed :nothing-possible) reason
+             (assoc extra :text (str "enchant gave up: " (name reason))))))
 
 (defn fail-up!
   "Count a failed attempt in a row: :again until u/max-failures, then give up with the reason."

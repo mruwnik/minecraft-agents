@@ -58,7 +58,7 @@
   {:name "armour-crafted-in-order-and-worn"
    :body {:inventory [["iron_ingot" 5]]}
    :act [[:job (jobs.items.get-kit {:items ["iron_helmet"] :wear true :explore false :food false})]]
-   :expect [{:event {:source :job :kind :wear.done :data {:worn [:any]}} :within-s 100 :of-job true}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :wear :ending {:kind :done :data {:worn [:any]}}}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:item "iron_helmet" 0]]
    :limit-s 120}]}

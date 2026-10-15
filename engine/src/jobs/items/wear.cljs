@@ -12,7 +12,7 @@
   the pockets. Without it, the best carried piece goes into each slot that is empty or worn with a weaker one
   (leather < golden < turtle helmet < chainmail < iron < diamond < netherite).
   Needs nothing; done? holds when nothing carried is better than what is worn.
-  Ends :done with {:worn [{:item :slot}]}, info wear.done. A named item that is no armour piece is impossible :not-armour; one not carried is a condition (a listed call waits); a started call ends
+  Ends :done with {:worn [{:item :slot}]}. A named item that is no armour piece is impossible :not-armour; one not carried is a condition (a listed call waits); a started call ends
   condition-failed :no-item with warn wear.refused. A piece the server does not take ends
   nothing-possible :failed with the pieces worn so far and :server-status, warn wear.failed.
   Quote: time per piece to put on.")
@@ -75,8 +75,7 @@
         data {:worn (:worn r)}]
     (cond
       (:ok r)
-      (do (ctx/emit! c :wear.done :info {:worn (:worn r) :text (str "wore " (count (:worn r)) " armour piece(s)")})
-          (ctx/end c :done nil data))
+      (ctx/end c :done nil (assoc data :text (str "wore " (count (:worn r)) " armour piece(s)")))
       (= :failed (:reason r))
       (do (ctx/emit! c :wear.failed :warn {:reason "failed" :status (:status r) :item (:item r) :text (str "cannot wear " (:item r) ": failed")})
           (ctx/end c :nothing-possible :failed (assoc data :server-status (:status r))))

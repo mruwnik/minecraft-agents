@@ -51,7 +51,7 @@
   {:name "coal-only-no-wood-says-no-stock-and-crafts-no-more-than-three-times"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["coal" 4]]}
    :expect [{:event {:source :job :kind :torch.no-stock} :within-s 90 :of-job true}
-            {:count-event {:source :job :kind :craft.short} :for-s 190 :at-most 3}
+            {:count-event {:source :job :kind :child_ended :data {:slot :craft :ending {:kind :condition-failed}}} :for-s 190 :at-most 3}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 190 :of-job true}]
    :after [[:item "coal" 4]]}
   ;; card 9d839b29: no coal, logs and a furnace and table at the start cell: the charcoal is waited for (the child's own wait), torches are stocked, hung

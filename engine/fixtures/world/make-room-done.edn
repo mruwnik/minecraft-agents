@@ -28,7 +28,7 @@
   {:name "room-already-no-start"
    :body {:inventory [["cobblestone" 64] ["diamond" 2]]}
    :act [[:job (jobs.storage.make-room {:free 4})]]
-   :expect [{:no-event {:source :job :kind :completed} :for-s 8 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 8 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed} :for-s 8}
             {:no-event {:source :job :kind :stopped} :for-s 8 :of-job true}]
    :after [[:item "cobblestone" 64]]

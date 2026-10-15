@@ -78,7 +78,7 @@
    :register [{:trigger :inventory-nearly-full}]
    :blocks [[:fill [14 -1 14] [18 3 18] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
    :body {:at [16.5 0 16.5] :inventory [["gravel" 192] ["sand" 1] ["tuff" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["netherrack" 1] ["deepslate" 1] ["calcite" 1] ["coarse_dirt" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["feather" 1] ["bone" 1] ["string" 1] ["gunpowder" 1] ["rotten_flesh" 1] ["spider_eye" 1] ["leather" 1] ["paper" 1] ["sugar" 1] ["slime_ball" 1] ["ink_sac" 1] ["egg" 1] ["snowball" 1] ["glowstone_dust" 1] ["redstone" 1] ["lapis_lazuli" 1] ["dirt" 1]]}
-   :expect [{:count-event {:source :reflex :kind :ended :outcome :done} :for-s 70 :at-least 1 :at-most 1}]
+   :expect [{:count-event {:source :reflex :kind :ended :context {:reflex-id :inventory-nearly-full} :data {:outcome :done}} :for-s 70 :at-least 1 :at-most 1}]
    :limit-s 90}
   ;; card 558b7b4b: a trip's deposit keeps ores and metal: the raw iron and coal stay in the bag, the junk goes into the chest
   {:name "mine-trip-deposit-keeps-the-iron-and-coal"

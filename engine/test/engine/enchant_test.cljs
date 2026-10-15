@@ -170,8 +170,8 @@
                     (is (= reason (:reason r)) label)
                     (is (= false (:enchanted r)) label)
                     (is (= [0 0] [(:levels-spent r) (:lapis-spent r)]) label)
-                    (is (= (name reason) (:reason (first (of-kind seen :enchant.gave-up)))) label)
-                    (is (= 1 (count (of-kind seen :enchant.gave-up))) label)
+                    (is (= (str "enchant gave up: " (name reason)) (:text r)) label)
+                    (is (empty? (of-kind seen :enchant.gave-up)) label)
                     (is (not (some #{"enchant"} (ops p))) label)
                     (is (= (select-keys (merge {:self {:experience {:level 30}}} spec) [:self]) (select-keys {:self {:experience {:level (level p)}}} [:self])) label)))))))))
 
@@ -207,7 +207,7 @@
                                                                    (await (impl token args))))))))]
           (is (= :window-stalled (:reason r)))
           (is (= 1 (count (filter #{"enchant"} (ops p)))) "never tried again")
-          (is (= "window-stalled" (:reason (first (of-kind seen :enchant.gave-up))))))))))
+          (is (= "enchant gave up: window-stalled" (:text r))))))))
 
 (deftest a-failed-enchant-that-took-the-price-says-so
   (async done
