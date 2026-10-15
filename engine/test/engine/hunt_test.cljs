@@ -10,6 +10,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.combat.hunt :as hunt]
+            [jobs.lib.hunting :as hunting]
             [jobs.lib.world-files :as ew]))
 
 (defn spec [args] (list 'jobs.combat.hunt args))
@@ -128,6 +129,14 @@
           (await (run-ticks s 30 700))
           (is (= 1 (:killed (done-event s))))
           (is (finished? s) "no loop on the pickup"))))))
+
+(deftest collecting-waits-while-the-collect-child-is-held-and-ends-with-any-other-ending
+  (doseq [[e ended?] [[:continue false]
+                      [{:kind :condition-failed :cause {:floor :health :min 10}} false]
+                      [{:kind :done :data {:collected 1}} true]
+                      [{:kind :nothing-possible :cause :none-collected} true]
+                      [{:kind :cut-off :cause :cut} true]]]
+    (is (= ended? (hunting/collect-ended? e)) (pr-str e))))
 
 (deftest keep-stops-the-hunt-before-the-last-animals
   (async done

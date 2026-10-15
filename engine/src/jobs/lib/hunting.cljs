@@ -73,13 +73,20 @@
             (give-up c)
             :again)))))
 
+(defn collect-ended?
+  "Whether the collect-drops child's answer e ends the collecting: any ending but one that declines (condition-failed:
+  its call is held by a floor) waits and is tried again while the drops last."
+  [e]
+  (not (or (= :continue e) (= :condition-failed (:kind e)))))
+
 (defn ^:async collect!
-  "Call the collect-drops child; done collecting when it is, else waiting (what to return while it waits on the world)."
+  "Call the collect-drops child; done collecting when it ends, else waiting (what to return while it waits on the world
+  or its call is held by a floor)."
   [c waiting]
   (let [{:keys [mob collect-radius] :as a} (:args c)
         e (await (ctx/call c :collect 'jobs.forestry.collect-drops
                                  {:radius collect-radius :filter (or (:drops a) (get drops mob))}))]
-    (if-not (= :continue e)
+    (if (collect-ended? e)
       (do (ctx/update-mem! c dissoc :collecting) :again)
       waiting)))
 

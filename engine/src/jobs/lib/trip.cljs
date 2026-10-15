@@ -1,6 +1,7 @@
 (ns jobs.lib.trip
   "Trips start with room: a gathering job that leaves home calls ready! first. See ready!."
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -11,7 +12,6 @@
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.need :as need]
             [jobs.lib.look :as look]
-            [jobs.lib.result :as result]
             [jobs.lib.foods :as foods]
             [jobs.lib.near :as near]
             [jobs.lib.near :as near]
@@ -158,14 +158,15 @@
       (let [e (await (ctx/call c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false}))]
         (if (= :continue e)
           :continue
-          (let [res (result/of e)
-                got? (= :done (:kind e))]
+          (let [got? (= :done (:kind e))
+                reason (contract/cause-key e)
+                tried (:tried (:data e))]
             (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)
             (if got?
               (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)})
-              (ctx/emit! c :tool.no-spare :warn {:tool tool-name :durability (:uses-left need) :reason (:reason res) :status (:status res) :tried (:tried res)
+              (ctx/emit! c :tool.no-spare :warn {:tool tool-name :durability (:uses-left need) :reason reason :status :stopped :tried tried
                                                  :text (str "the last " tool-name " is worn (" (:uses-left need) " left) and no spare could be had"
-                                                            (when-let [r (:reason res)] (str ": " (name r))))}))
+                                                            ": " (name reason))}))
             nil)))))))
 
 (defn ^:async back-from-stocking!
@@ -211,17 +212,19 @@
         (let [e (await (ctx/call c :torches 'jobs.items.obtain args))]
           (if (= :continue e)
             :continue
-            (let [res (result/of e)
+            (let [reason (contract/cause-key e)
+                  tried (:tried (:data e))
+                  why (:why (:data e))
                   now (torch/torches-held (:primitives c))]
               (ctx/update-mem! c assoc :torches-tried true)
               (when (and (pos? fuel) (<= now held)) (ctx/update-mem! c assoc :craft-failed true))
               (if (> now held)
                 (ctx/emit! c :torch.stocked :info {:held now :text (str "carrying " now " torches for the dig")})
-                (ctx/emit! c :torch.no-stock :warn {:held now :reason (:reason res) :tried (:tried res)
+                (ctx/emit! c :torch.no-stock :warn {:held now :reason reason :tried tried
                                                     :text (str "carries " (if (zero? now) "no torches" (str "only " now " torches"))
                                                                (if (zero? now)
-                                                                 (str ", none made" (when (seq (:tried res)) (str " (" (str/join ", " (map (fn [[k v]] (str (name k) " " (if (keyword? v) (name v) v))) (:tried res))) ")")))
+                                                                 (str ", none made" (when (seq tried) (str " (" (str/join ", " (map (fn [[k v]] (str (name k) " " (if (keyword? v) (name v) v))) tried)) ")")))
                                                                  " and could not get more")
                                                                ": the dig goes on " (if (zero? now) "dark" "with them")
-                                                               (when-let [w (:why res)] (str " (" w ")")))}))
+                                                               (when why (str " (" why ")")))}))
               (await (back-from-stocking! c)))))))))

@@ -4,13 +4,6 @@
 
 (def permanent-why "go-to's :why of a give-up that is a verdict on the cell." #{:abilities :goal-enclosed :goal-cut-off :one-way :goal-not-standable :goal-on-magma :exhausted})
 
-(defn of
-  "A child's ending e as the map a parent reads: its data with :status (:done or :stopped) and, for a stop, :reason (the
-  cause's key); a done ending keeps the :reason its data gives."
-  [e]
-  (cond-> (assoc (:data e) :status (if (= :done (:kind e)) :done :stopped))
-    (not= :done (:kind e)) (assoc :reason (contract/cause-key e))))
-
 (defn why
   "The :why go-to's ending e names (its cause's, else its data's), nil without one."
   [e]

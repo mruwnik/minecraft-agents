@@ -2,9 +2,9 @@
   "Leaving the shelter jobs.survival.dig-in built (leave!): jobs.survival.night calls it by day."
   (:require [jobs.lib.access :as access]
             [jobs.lib.tidy :as tidy]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
-            [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -192,13 +192,15 @@
             e (await (ctx/call c slot 'jobs.access.stair
                                      (merge {:dir :up :heading (:heading attempt) :fetch false :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c)))}
                                             (if start {:y (:y start)} {:steps 1}))))
-            res (when-not (= :continue e) (result/of e))]
-        (when (and res (:ignore-zones? attempt)) (note-trespass! c (:dug res)))
+            data (:data e)]
+        (when (and (not= :continue e) (:ignore-zones? attempt)) (note-trespass! c (:dug data)))
         (cond
-          (nil? res) :continue
-          (= :done (:status res)) (do (update-leave! c update :climbed (fnil + 0) (:steps res 0)) :continue)
+          (= :continue e) :continue
+          (= :done (:kind e)) (do (update-leave! c update :climbed (fnil + 0) (:steps data 0)) :continue)
           :else (do (update-leave! c #(-> % (assoc :i (inc i))
-                                          (update :tries (fnil conj []) (select-keys res [:reason :cell :heading]))))
+                                          (update :tries (fnil conj [])
+                                                  (merge {:heading (:heading attempt)} (select-keys data [:cell :heading])
+                                                         {:reason (contract/cause-key e)}))))
                     :continue))))))
 
 (defn ^:async leave!

@@ -5,13 +5,13 @@
   stand it dug from. Picked blocks are listed in the job's memory (picked) for its result. The arg :pick-up-ores is true
   (the ::ores setting), false (none) or a coll of ore block names."
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
-            [jobs.lib.result :as result]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -79,14 +79,14 @@
   (let [p (:primitives c)
         e (await (ctx/call c :ore 'jobs.blocks.dig {:pos target :fetch false :walk false :on-lava :leave :see true :ignore-zones? (boolean (:ignore-zones? (:args c))) :for-plan (:for-plan (:args c))}))]
     (when-not (= :continue e)
-      (let [res (result/of e)
-            dug? (= :dug (:reason res))
+      (let [reason (if (= :done (:kind e)) (:reason (:data e)) (contract/cause-key e))
+            dug? (= :dug reason)
             item (blocks/item-name {:block block})]
         (book! c (fn [m] (-> (dissoc m :target)
                              (cond-> dug? (update :picked (fnil conj []) {:cell target :block block :got (- (count-of p item) before)})
                                      (not dug?) (update :skipped (fnil conj []) target)))))
         (ctx/emit! c (if dug? :ore-pick.dug :ore-pick.skipped) :info
-                   {:cell target :block block :reason (:reason res)
+                   {:cell target :block block :reason reason
                     :text (str (if dug? "picked up " "left ") block " at " (pr-str target) " on the way")})))
     (when (= :continue e) :continue)))
 
