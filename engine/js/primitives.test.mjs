@@ -2794,6 +2794,7 @@ const transferRig = ({ onClick, moveCap, items = [] }) => {
   bot.closeWindow = (...args) => { closedAt.push(Date.now()); return close(...args) }
   return { bot, p, closedAt }
 }
+const bread = count => [{ name: 'bread', count, slot: 0 }]
 const withdraw12 = { pos: at(3, 64, 0), direction: 'withdraw', item: 'bread', count: 12 }
 const emitEvery = (win, ms, times, stamps) => {
   for (let i = 1; i <= times; i++) setTimeout(() => { stamps.push(Date.now()); win.emit('updateSlot', 0) }, ms * i)
@@ -2806,17 +2807,17 @@ test('transfer does not close the window until the slot updates stop', () => vir
   assert.equal(stamps.length, 4)
   assert.equal(closedAt.length, 2)
   assert.ok(closedAt[0] - stamps.at(-1) >= 12, `closed ${closedAt[0] - stamps.at(-1)} ms after the last update`)
-  assert.deepEqual(result, { status: 'ok', moved: 12 })
+  assert.deepEqual(result, { status: 'ok', moved: 12, items: bread(20) })
 }))
 
 test('transfer measures moved from the container: a click that moves 5 of 12 reports 5', async () => {
   const { p } = transferRig({ onClick: () => {}, moveCap: 5 })
-  assert.deepEqual(await p.transfer('t1', withdraw12), { status: 'ok', moved: 5 })
+  assert.deepEqual(await p.transfer('t1', withdraw12), { status: 'ok', moved: 5, items: bread(27) })
 })
 
 test('transfer measures a deposit from the container too', async () => {
   const { p } = transferRig({ onClick: () => {}, moveCap: 3, items: [{ name: 'bread', count: 10, slot: 36 }] })
-  assert.deepEqual(await p.transfer('t1', { ...withdraw12, direction: 'deposit' }), { status: 'ok', moved: 3 })
+  assert.deepEqual(await p.transfer('t1', { ...withdraw12, direction: 'deposit' }), { status: 'ok', moved: 3, items: bread(35) })
 })
 
 test('transfer closes at the cap when updates never stop, within the 5 s bound', () => virtually(async () => {
@@ -2850,7 +2851,7 @@ test('transfer opens the container twice when it clicked, and once when there wa
 
 test('transfer measures moved from the reopened window, not the one that was clicked', async () => {
   const { p } = transferRig({ onClick: staleView })
-  assert.deepEqual(await p.transfer('t1', withdraw12), { status: 'ok', moved: 12 })
+  assert.deepEqual(await p.transfer('t1', withdraw12), { status: 'ok', moved: 12, items: bread(20) })
 })
 
 test('a cut during the reopen rejects with cut and closes the second window', async () => {
