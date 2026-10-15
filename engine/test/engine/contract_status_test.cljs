@@ -252,3 +252,57 @@
           (swap! world assoc :run false)
           (await (core/tick! eng))
           (is (= ["waiting: torches 0 < 4"] (mapv :message (job-ev seen :waiting)))))))))
+
+(deftest an-old-conditions-never-beats-a-goal-that-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'bad {:conditions [[:fn (fn [_] (contract/impossible {:reason :bad-args :text "count 0"}))]]
+                                               :done? (fn [_] {:done? true :units :items :done 0 :left 0})
+                                               :round (fn [c] (ctx/end c :done nil))}})]
+          (core/submit! eng '(bad) {})
+          (await (core/tick! eng))
+          (is (= [:impossible] (mapv #(:kind (:data %)) (job-ev seen :stopped))))
+          (is (empty? (job-ev seen :completed))))))))
+
+(def probe
+  {:can-run? (fn [c] (swap! world update :asks (fnil conj []) (:n (:args c)))
+               (if (get @world :run) (contract/ok :go "go") (contract/later :paused "paused")))
+   :round (fn [_] (swap! world update :rounds (fnil inc 0)) :continue)})
+
+(defn asker
+  "A parent whose round does what the world's :step says: ask the child's status, or call the child with args {:n n}."
+  []
+  {:can-run? ok
+   :round (fn ^:async parent [c]
+            (let [{:keys [step n]} @world]
+              (if (= :ask step)
+                (ctx/child-status c :kid 'probe {:n n})
+                (await (ctx/call c :kid 'probe {:n n})))
+              :continue))})
+
+(deftest a-child-status-answer-is-not-reused-by-a-call-in-a-later-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'asker (asker) 'probe probe})]
+          (swap! world assoc :run true :step :ask :n 1)
+          (core/submit! eng '(asker) {})
+          (await (core/tick! eng))
+          (swap! world assoc :run false :step :call)
+          (await (core/tick! eng))
+          (is (nil? (:rounds @world)) "the call asked can-run? again and found it paused"))))))
+
+(deftest a-child-status-answer-is-not-reused-by-a-call-with-other-args
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'asker (asker) 'probe probe})
+              asks (fn [] (:asks @world))]
+          (swap! world assoc :run true :step :ask :n 1)
+          (core/submit! eng '(asker) {})
+          (await (core/tick! eng))
+          (is (= [1] (asks)))
+          (swap! world assoc :step :call :n 2)
+          (await (core/tick! eng))
+          (is (= 2 (last (asks))) "the call asked can-run? under its own args"))))))

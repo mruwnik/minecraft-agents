@@ -6,6 +6,7 @@
             [engine.core.attention :refer [request-attention!]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
+            [engine.core.ending :refer [clear-asked!]]
             [engine.core.activity :refer [check-body-idle! check-idle! restart-body-idle! section-level sections]]
             [engine.core.list-edits :refer [submit!]]
             [engine.core.round :refer [check-ctx]]
@@ -190,6 +191,7 @@
   The first ready tick after a pause clears the backoff and judges the reflex
   ends deferred meanwhile."
   [eng]
+  (clear-asked! eng)
   (cond
     (paused? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) nil)
     (manual? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) (tick-manual! eng))

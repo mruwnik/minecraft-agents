@@ -30,18 +30,22 @@
 (defn asked-key "c's frame, as ctx/child-status makes a child ctx without a new :id." [c] (mem/path->id (:root c) (:slots c)))
 
 (defn remember-asked!
-  "Keep a check's statuses {:start :run} for the round that follows it, so can-run? is asked once per round."
+  "Keep a check's statuses {:start :run} with the args it was asked under for the round that follows it, so can-run? is
+  asked once per round. The scheduler drops what a pass leaves unused (clear-asked!)."
   [c asked]
-  (some-> (:engine c) :asked (swap! assoc (asked-key c) asked))
+  (some-> (:engine c) :asked (swap! assoc (asked-key c) [(:args c) asked]))
   asked)
 
 (defn take-asked!
-  "The statuses the last check of c left, once."
+  "The statuses the last check of c left, once, when it was asked under c's args."
   [c]
   (when-let [a (some-> (:engine c) :asked)]
-    (let [k (asked-key c) asked (get @a k)]
+    (let [k (asked-key c) [args asked] (get @a k)]
       (swap! a dissoc k)
-      asked)))
+      (when (= args (:args c)) asked))))
+
+(defn clear-asked! "Drop every kept check: they last for the pass that asked them." [eng]
+  (reset! (:asked eng) {}))
 
 (defn ^:async looked
   "Statuses [start run], or after one look round (the :look/around hook) when they come to :look (no :never or :later
