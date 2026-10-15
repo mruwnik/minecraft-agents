@@ -8,7 +8,6 @@
             [jobs.lib.apiary :as apiary]
             [jobs.lib.look :as look]
             [jobs.lib.checks :as checks]
-            [jobs.lib.started :as started]
             [jobs.build.from-plan :as from-plan]
             [jobs.lib.pen :as pen]
             [jobs.build.from-plan.plan :as plan]
@@ -218,7 +217,7 @@
         plan (:plan (:args c))
         answer (when-not trouble (pen/summary (read-pen c cells)))
         holds? (boolean (and (not trouble) (empty? (plan/owed cells)) (:closed? answer) (outside? c cells)
-                             (or (:built (ctx/mem c)) (not (started/running? c)))))]
+                             (or (:built (ctx/mem c)) (not (checks/running? c)))))]
     (checks/goal holds?
                  [:holds (str "pen of " plan " holds, " (:cells answer) " cells, placed " (get-in (ctx/mem c) [:built :placed] 0))]
                  [:owed (str "pen of " plan " is not finished")]

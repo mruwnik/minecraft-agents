@@ -6,7 +6,6 @@
             [engine.contract :as contract]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
-            [jobs.lib.started :as started]
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.lib.placement :as placement]
@@ -216,7 +215,7 @@
         proof (when-not trouble (rail/judge-line cells (block-at c)))
         plan (:plan (:args c))
         placed (get-in (ctx/mem c) [:built :placed] 0)]
-    (checks/goal (boolean (and proof (empty? (plan/owed cells)) (:ok? proof) (or (:built (ctx/mem c)) (not (started/running? c)))))
+    (checks/goal (boolean (and proof (empty? (plan/owed cells)) (:ok? proof) (or (:built (ctx/mem c)) (not (checks/running? c)))))
                  [:sound (str "rail line " plan " is sound, " (count (filter rail/rail-cell? cells)) " rails, placed " placed)]
                  [:owed (str "rail line " plan " is not sound")]
                  {:units :cells :done placed :left (if trouble 0 (count (plan/owed cells)))
