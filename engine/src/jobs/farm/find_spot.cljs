@@ -3,7 +3,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.surface :as surface :refer [open?]]
-            [jobs.farm.common :as common]
+            [jobs.lib.job-common :as common]
             [jobs.farm.till :as till]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]

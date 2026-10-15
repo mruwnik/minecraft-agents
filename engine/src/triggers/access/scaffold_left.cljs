@@ -5,15 +5,14 @@
     belongs to a job that is no longer live (its job memory is gone: done, cancelled, discarded)
     no cleanup held in the last 10 minutes
     within :within (32) blocks of the body (cleanup's :within), so a far scaffold never drags the body back to it
-    not deeper below the feet than cleanup's ::max-below: cleanup would only hold it :far-below again
+    not deeper below the feet than jobs.lib.ledger/max-below: cleanup would only hold it :far-below again
   It holds only by day, past the dawn grace and with no known hostile near (jobs.lib.dawn/calm?), and not within
   jobs.lib.threats/fled-memory-ms of a flight, unless ::at-night / ::with-hostile are set: the night's seal is scaffold
   too, and the body is inside it.
   Runs jobs.access.cleanup, which takes exactly those entries.
   Persistence :stop: a cleanup that leaves entries holds them, so the condition turns false.
   It fires again only for new entries or once the hold has run out."
-  (:require [jobs.access.cleanup :as cleanup]
-            [jobs.lib.body :as body]
+  (:require [jobs.lib.body :as body]
             [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.dawn :as dawn]
@@ -35,7 +34,7 @@
 (defn too-deep?
   "Whether the entry lies deeper below the feet than cleanup walks to."
   [p {[_ y _] :cell}]
-  (> (- (second (reach/standing-vec p)) y) (cleanup/max-below)))
+  (> (- (second (reach/standing-vec p)) y) (ledger/max-below)))
 
 (defn scaffold-left
   [p memory args kn]

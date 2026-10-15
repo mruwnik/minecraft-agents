@@ -10,7 +10,7 @@
             [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
-            [jobs.items.craft :as craft]
+            [jobs.lib.crafting-table :as crafting-table]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.gather :as gather]
@@ -893,7 +893,7 @@
   (let [s (start (-> (world {}) (assoc :inventory [{:name "oak_planks" :count 12} {:name "stick" :count 4}])) [own-zone])]
     (with-redefs [ctx/mem (constantly mem)
                   ctx/frozen-call (constantly nil)
-                  craft/nearest-table (constantly nil)]
+                  crafting-table/nearest (constantly nil)]
       (mapv :op (:steps (plan/craft-plan {:primitives (:p s)} ["wooden_pickaxe"] 1))))))
 
 (deftest obtain-plan-uses-the-remembered-table

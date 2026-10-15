@@ -12,7 +12,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.items.craft :as craft]
-            [jobs.lib.child :as child]))
+            [jobs.lib.child :as child]
+            [jobs.lib.crafting-table :as crafting-table]))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -115,7 +116,7 @@
           (is (some #(= :craft.short (:kind %)) @seen)))))))
 
 (deftest the-nearest-table-is-one-the-body-has-seen
-  (are [see expected] (= expected (craft/nearest-table (see (:p (setup {:blocks table-block}))) 32))
+  (are [see expected] (= expected (crafting-table/nearest (see (:p (setup {:blocks table-block}))) 32))
     identity table
     tu/blind nil))
 

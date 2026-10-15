@@ -9,6 +9,8 @@
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.child :as child]
+            [jobs.lib.crafting-table :as crafting-table]
+            [jobs.lib.look :as look]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.escape :as escape]
@@ -18,7 +20,6 @@
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
-            [jobs.lib.look :as look]
             [jobs.lib.spent :as spent]
             [jobs.lib.storage :as storage]))
 
@@ -98,17 +99,6 @@
       (seq (dissoc (:needs r) item))
       (assoc-in [:uses :items] (into {} (map (fn [[k v]] [k [0 (* v batches) (* v batches)]])) (dissoc (:needs r) item))))))
 
-(defn cell-vec [pos] (mapv #(js/Math.floor %) [(:x pos) (:y pos) (:z pos)]))
-
-(defn nearest-table
-  "The position of the nearest crafting table the body has seen within radius (not one in skip, a set of positions), or nil."
-  ([p radius] (nearest-table p radius nil))
-  ([p radius skip]
-   (->> (look/seen-blocks p {:names ["crafting_table"] :radius radius :max 8 :live? true})
-        (map :pos)
-        (remove #(contains? skip (cell-vec %)))
-        first)))
-
 (defn unreachable-tables
   "The table cells a walk gave up on during this call."
   [c]
@@ -119,7 +109,7 @@
   walk could not reach, and why a carried table was not put down."
   [c radius]
   (let [skip (unreachable-tables c)
-        far (nearest-table (:primitives c) 64 skip)
+        far (crafting-table/nearest (:primitives c) 64 skip)
         {:keys [x y z]} far
         from (u/self-pos c)
         why (:table-why (ctx/mem c))]
@@ -348,7 +338,7 @@
         handed? (some? table)
         arg? (some? (:table (:args c)))
         skip (unreachable-tables c)
-        table (or table (nearest-table p radius skip) (nearest-table p far skip))]
+        table (or table (crafting-table/nearest p radius skip) (crafting-table/nearest p far skip))]
     (cond
       (and (nil? table) (not (look/surveyed? c)))
       (do (await (look/survey! c)) :again) ; a table behind the body is not seen until it looks
@@ -365,7 +355,7 @@
                 (= :continue r) :continue
                 (:arrived (:data r)) :again
                 arg? (give-up! c made :unreachable)
-                :else (do (ctx/update-mem! c #(-> % (update :unreachable-tables (fnil conj #{}) (cell-vec table)) (dissoc :table)))
+                :else (do (ctx/update-mem! c #(-> % (update :unreachable-tables (fnil conj #{}) (crafting-table/cell-vec table)) (dissoc :table)))
                           (or (await (table-fetch! c)) :again)))))))))
 
 (defn problem

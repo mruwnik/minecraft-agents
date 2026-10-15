@@ -1,7 +1,7 @@
 (ns jobs.farm.fertilize
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.farm.common :as common]
+            [jobs.lib.job-common :as common]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]

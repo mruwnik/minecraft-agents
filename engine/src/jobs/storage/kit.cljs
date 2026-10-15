@@ -9,7 +9,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
             [jobs.lib.fetch :as fetch]
-            [jobs.items.craft :as craft]
+            [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.need :as getting]
             [jobs.lib.started :as started]
             [jobs.lib.util :as u]
@@ -413,7 +413,7 @@
             (if (nil? call)
               (finish-craft! c need nil)
               (let [t (when (and (= :craft (:slot call)) (:fetch a) (not (:table-fetched (ctx/mem c))))
-                        (await (getting/table! c (some? (craft/nearest-table (:primitives c) (:radius a))))))
+                        (await (getting/table! c (some? (crafting-table/nearest (:primitives c) (:radius a))))))
                     _ (when (= :done (:kind t)) (ctx/update-mem! c assoc :table-fetched true))
                     e (when-not t (await (ctx/call c (:slot call) (:job call) (:args call))))]
                 (cond

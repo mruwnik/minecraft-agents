@@ -3,7 +3,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
-            [jobs.farm.common :as common]
+            [jobs.lib.job-common :as common]
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]

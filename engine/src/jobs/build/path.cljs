@@ -5,7 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
-            [jobs.farm.common :as common]
+            [jobs.lib.job-common :as common]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]

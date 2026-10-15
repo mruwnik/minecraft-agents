@@ -1,7 +1,7 @@
 (ns jobs.farm.compost
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.farm.common :as common]
+            [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]

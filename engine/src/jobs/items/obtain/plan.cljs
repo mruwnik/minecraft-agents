@@ -2,7 +2,7 @@
   "The craft chain and the gather plan for the names wanted."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.craft :as craft]
+            [jobs.lib.crafting-table :as crafting-table]
             [jobs.items.obtain.base :refer [craft-radius plan-allowed? seen-radius]]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source wool-keep]]
             [jobs.items.obtain.table :refer [dirt-blocks gather-needs grass-seeds leaves-of material-blocks source-opts wool-color wool?]]
@@ -25,7 +25,7 @@
         have (storage/carried-totals (u/inventory p))
         mem (ctx/mem c)
         table? (and (not (get-in mem [:craft :table-unreachable]))
-                    (boolean (or (:table mem) (craft/nearest-table p (craft-radius)))))
+                    (boolean (or (:table mem) (crafting-table/nearest p (craft-radius)))))
         version (game/version-of p)]
     (furnace-free
      (keep (fn [name]
@@ -88,7 +88,7 @@
                               (seq (look/seen-blocks p {:names (vec seen-of-name) :radius (seen-radius) :max 1})))
                       {:steps [] :gather {name n} :item name})
                     (let [opts (merge (source-opts)
-                                      {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p (craft-radius))))
+                                      {:table? (boolean (or (:table (ctx/mem c)) (crafting-table/nearest p (craft-radius))))
                                        :gather? true :materials materials})]
                       (when-let [pl (recipes/plan version have name n opts)]
                         (when (plan-allowed? c pl)

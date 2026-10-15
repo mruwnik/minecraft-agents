@@ -65,7 +65,7 @@
   never dug, unless :spare-own-plans? is false.
 
   An unowned entry (:job nil, no :near) out of reach is walked to only when safe, else held with the reason: :unarmed / :low-health (no weapon carried,
-  or health under jobs.lib.body/risky-min-health: ::hold-unarmed?), :far-below (more than ::max-below under the feet),
+  or health under jobs.lib.body/risky-min-health: ::hold-unarmed?), :far-below (more than jobs.lib.ledger/max-below under the feet),
   :died-near (within ::died-radius of a :died entry in body memory), :roofed (a solid non-scaffold block within
   ::roof-height above it while the body is in the open). A walk leg also stops while a mob the body fled from within
   jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
@@ -108,15 +108,12 @@
 (a/defargs settings
   {::walk-range {:default 3 :doc "How near a scaffold block the body walks before it digs it." :spec (a/int-in 0 nil)}
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
-   ::max-below {:default 4 :doc "Blocks below the body a scaffold may lie to be walked to; a deeper one (a cave, a pit) is held :far-below." :spec (a/int-in 0 nil)}
    ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; a roofed one is not walked to from the open (:roofed)." :spec (a/int-in 0 nil)}
    ::died-radius {:default 24 :doc "Blocks around a place the body died within which a scaffold is not walked to (:died-near)." :spec (a/num-in 0 nil)}
    ::hold-unarmed? {:default true :doc "Whether an unarmed body, or one below jobs.lib.body/risky-min-health, walks to no scaffold (:unarmed, :low-health)." :spec boolean?}
    ::time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}
    ::max-passes {:default 200 :doc "Steps (dig, walk, collect) in one run before it stops." :spec (a/int-in 0 nil)}})
 (defn time-s [] (settings/get settings ::time-s))
-
-(defn max-below [] (settings/get settings ::max-below))
 
 (defn roof-height [] (settings/get settings ::roof-height))
 
@@ -175,7 +172,7 @@
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :spare-own-plans? (:spare-own-plans? (:args c))
             :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))
-            :max-below (max-below) :roof-height (roof-height)
+            :max-below (ledger/max-below) :roof-height (roof-height)
             :died-near? (died-near-of (ctx/view c)) :walk-hold (walk-hold-of (:primitives c))
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 

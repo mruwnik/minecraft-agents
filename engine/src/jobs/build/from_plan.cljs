@@ -5,7 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.farm.common :as common]
+            [jobs.lib.job-common :as common]
             [jobs.lib.need :as need]
             [jobs.lib.started :as started]
             [jobs.lib.access :as access]

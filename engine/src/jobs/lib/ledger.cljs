@@ -29,10 +29,17 @@
   The lifecycle functions are pure over the entry vector. open-entries reads it from a memory view, write!
   and remember! store it."
   (:require [clojure.string :as str]
+            [engine.args :as a]
+            [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.util :as u]))
+
+(a/defargs settings
+  {::max-below {:default 4 :doc "Blocks below the body a scaffold may lie to be walked to; a deeper one (a cave, a pit) is held :far-below by cleanup, and the scaffold-left trigger ignores it." :spec (a/int-in 0 nil)}})
+
+(defn max-below [] (settings/get settings ::max-below))
 
 (def kind :scaffold)
 
