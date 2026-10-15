@@ -201,7 +201,8 @@ test('integration: with the other slot held a plain run is busy, a heavy run (--
   const holder = spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '30'], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ...env }, stdio: 'ignore', detached: true })
   try {
     await new Promise((r) => setTimeout(r, 1000))
-    assert.equal(run(['t', '--', 'echo', 'ran'], env).status, 75)
+    const plain = spawnSync('node', [path.resolve('tools/res-slot.mjs'), 't', '--', 'echo', 'ran'], { cwd: dir, encoding: 'utf8', env: { ...process.env, ...env } })
+    assert.equal(plain.status, 75)
     const flag = run(['t', '--heavy', '--', 'echo', 'ran'], env)
     assert.equal(flag.status, 0); assert.match(flag.stdout, /ran/)
     const viaEnv = run(['t', '--', 'echo', 'ran'], { ...env, RES_SLOT_HEAVY: '1' })
