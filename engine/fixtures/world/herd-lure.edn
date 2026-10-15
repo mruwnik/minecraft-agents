@@ -1,0 +1,84 @@
+;; jobs.animals.herd with :method :lure and the herd range/look/gate fixes. Cards 1bd0507b (no lead: lure with the food), bdd71157 (the gate click
+;; keeps the food in hand), a997137b (looks round before counting), 921bdb37 (:radius from where the run started), 50eb2121 (a lured animal
+;; that does not follow is given up with a reason), 79a1fc22 + cba0c4ab (a planned pen's gate is not fought or looped on), 9389c097 (gate approach
+;; on rising ground). Pen: oak fence ring x 18..24, z 13..19, inside 19..23 x 14..18, gate on the west side at [18 0 16] (as herd-pen.edn).
+;; Should-succeed: cows brought; should-fail: beyond :radius from the start -> :none, a cow that never follows -> not brought.
+{:defaults
+ {:tags [:herd :animals :jobs]
+  :time :any
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+           [:fill [19 0 14] [23 0 18] "air"]
+           [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+  :body {:at [12.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "no-lead-lures-one-cow-in"
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]
+           [:item "wheat" [:>= 4]]]}
+  ;; the body faces away from the pen and the second cow stands behind it: only a look round finds it
+  {:name "cow-behind-the-body-found-by-looking-round"
+   :body {:at [13.5 0 16.5] :yaw 90 :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
+   :act [[:summon "cow" [21.5 0 16.5]]
+         [:summon "cow" [15.5 0 21.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 2})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought :inside 2}} :within-s 240 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]}
+  ;; the pen lies 17+ east of the start, so the body first walks toward it; the cow 4 from the start is inside :radius 5 of the start
+  ;; though farther than that from where the body stands after the walk
+  {:name "radius-is-measured-from-the-start"
+   :body {:at [1.5 0 16.5] :yaw 0 :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
+   :act [[:summon "cow" [1.5 0 20.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1 :radius 5})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}
+  {:name "cow-beyond-radius-from-the-start-is-none"
+   :body {:at [3.5 0 8.5] :yaw 0 :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
+   :act [[:summon "cow" [3.5 0 28.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1 :radius 8})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :none}} :within-s 120 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
+   :limit-s 150}
+  ;; should fail: a cow that does not move never follows the food; the lure is given up with a reason and the pen stays empty
+  {:name "cow-that-never-follows-is-given-up"
+   :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :herd.lure-lost :data {:reason #{:lost :lagging :animal-stalled}}} :within-s 200 :of-job true}
+            {:no-event {:source :job :kind :herd.done :data {:reason :brought}} :for-s 200 :until {:source :job :kind :herd.lure-lost}}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
+   :limit-s 260}
+  ;; the pen is planned and pen-gate is registered: the reflex must not fight the open gate, and the run must end (no toggle loop)
+  {:name "planned-pen-lure-ends-without-reflex-or-loop"
+   :register [{:trigger :pen-gate}]
+   :plans [{:id "pen" :metadata {:by "$body"}
+            :parts [{:id "fence" :outline [#at [18 0 13] #at [24 0 19]] :want [:any "oak_fence"]}
+                    {:id "gate" :cells [#at [18 0 16]] :want [:any "oak_fence_gate"]}]}]
+   :body {:at [4.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
+   :act [[:summon "cow" [3.5 0 20.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :herd.done}}
+            {:count-event {:source :job :kind :toggle.done} :for-s 240 :at-least 1 :at-most 12}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]}
+  ;; the ground outside the gate rises (x <= 15 is one higher than the pen floor): the approach cells step up away from the gate
+  {:name "gate-approach-on-rising-ground"
+   :blocks [[:fill [0 0 0] [15 0 31] "dirt"]]
+   :body {:at [12.5 1 16.5] :yaw 270 :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
+   :act [[:summon "cow" [10.5 1 18.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :herd.gave-up :data {:reason :no-gate}} :for-s 240 :until {:source :job :kind :herd.done}}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}]}

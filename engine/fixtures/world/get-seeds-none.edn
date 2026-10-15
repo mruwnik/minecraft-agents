@@ -1,0 +1,20 @@
+;; Card f3d872fe: gather.get-seeds ending :none says why: no grass within :radius, and how far the nearest seen grass is.
+;; Plot floor is plain dirt (no grass blocks drop seeds here); a short_grass patch lies 16 east of the body, outside :radius 6.
+;; Should-succeed: ends done :none with a message naming the radius and the nearest seen grass. Should-fail (reached): the same patch within :radius is dug and seeds come.
+{:defaults
+ {:tags [:gather :farm :jobs]
+  :time :any
+  :plot {:floor "dirt"}
+  :blocks [[:fill [19 0 14] [22 0 18] "short_grass"]]
+  :body {:at [3.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "grass-beyond-radius-is-named"
+   :act [[:job (jobs.gather.get-seeds {:item "wheat_seeds" :count 1 :radius 6})]]
+   :expect [{:event {:source :job :kind :get-seeds.done :data {:reason :none :got 0} :message [:contains "nearest seen"]} :within-s 40 :of-job true}]}
+  {:name "grass-within-radius-gives-seeds"
+   :blocks [[:fill [6 0 14] [9 0 18] "short_grass"]]
+   :act [[:job (jobs.gather.get-seeds {:item "wheat_seeds" :count 1 :radius 12})]]
+   :expect [{:event {:source :job :kind :get-seeds.done :data {:reason :count}} :within-s 120 :of-job true}]
+   :after [[:item "wheat_seeds" [:>= 1]]]
+   :limit-s 140}]}

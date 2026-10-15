@@ -15,6 +15,12 @@
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [22.5 0 16.5] 2]]}
+  ;; card 7cd8b957: the goal range takes in the doorway, so the walk would end standing in the door's column; it steps out and shuts it
+  {:name "goal-range-takes-in-the-doorway-door-shut"
+   :blocks [[:set [16 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "oak_door[facing=east,half=upper,open=false]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [17 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [17.5 0 16.5] 2]]}
   {:name "oak-gate-shut-behind"
    :blocks [[:set [16 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [16 1 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
