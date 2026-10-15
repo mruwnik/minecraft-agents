@@ -32,11 +32,11 @@
 
 (def target [:pos])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a drive may take before it gives up." :spec (a/num-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+  {::job-time-s {:default 120 :doc "Seconds a drive may take before it gives up." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def aligned-deg 8)
 (def forward-while-turning-deg 30)

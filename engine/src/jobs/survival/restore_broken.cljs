@@ -29,7 +29,7 @@
   back, none if none were), :done {:restored n} when every cell was settled, else (also when max-passes ran out with cells
   unvisited) nothing-possible :not-restored {:restored n :failed n}. A cut run is :continue and goes on from the entries
   left. If cells are left it also emits one warning tidy.not-restored {:cells [{:cell :was :why}]}. Spends :time
-  (default ::time-s).
+  (default ::job-time-s).
   Memory: reads :tidy. Writes :tidy-reported, the cells still waiting, which the :tidy-pending trigger reads
   to warn once per set of cells.")
 
@@ -46,7 +46,7 @@
    ::max-candidates-checked {:default 4 :doc "Waiting cells checked per pass for one whose put-back seals no other." :spec (a/int-in 1 nil)}
    ::max-search-cells {:default 6000 :doc "Cells the walk searches of one pass decision expand at most; a search that would pass it answers unknown." :spec (a/int-in 0 nil)}
    ::max-step-cells-checked {:default 3 :doc "Nearest standable cells checked for a walk when stepping clear of a cell." :spec (a/int-in 1 nil)}
-   ::time-s {:default 300 :doc "Seconds a run may take before it ends." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 300 :doc "Seconds a run may take before it ends." :spec (a/num-in 0 nil)}
    ::s-per-cell {:default 6 :doc "Seconds a quote counts for one cell: the walk and the put-back." :spec (a/num-in 0 nil)}
    ::max-passes {:default 100 :doc "Steps in one run before it stops." :spec (a/int-in 0 nil)}})
 (defn step-radius [] (settings/get settings ::step-radius))
@@ -159,7 +159,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 
 (defn done?
@@ -171,7 +171,7 @@
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-cell) (count (tidy/entries c)))]
-    {:uses {:job-time [0 t (max t (settings/get settings ::time-s))]}}))
+    {:uses {:job-time [0 t (max t (settings/get settings ::job-time-s))]}}))
 
 (defn unsafe?
   "Whether the body should not be busy with other people's blocks now."

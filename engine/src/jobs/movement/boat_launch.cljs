@@ -44,11 +44,11 @@
 
 (def target [:action :pos :id])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a launch or a recovery may take (a boat that does not break is hit until then)." :spec (a/num-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+  {::job-time-s {:default 120 :doc "Seconds a launch or a recovery may take (a boat that does not break is hit until then)." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def default-item "oak_boat")
 (def reach 3)

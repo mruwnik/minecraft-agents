@@ -48,7 +48,7 @@
    ::leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-refused {:default 3 :doc "Refusals before the job gives up on the animal." :spec (a/int-in 0 nil)}
    ::max-walks {:default 8 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
-   ::time-s {:default 120 :doc "Seconds one feeding may take." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 120 :doc "Seconds one feeding may take." :spec (a/int-in 1 nil)}
    ::watch-s {:default 4 :doc "Seconds the body watches the animal after acting." :spec (a/int-in 0 nil)}
    ::foot-height {:default 0.3 :doc "Height of an animal's feet above its position, in blocks." :spec (a/num-in 0 nil)}
    ::settle-reach {:default 4 :doc "Reach once the animal has settled, in blocks." :spec (a/int-in 0 nil)}})
@@ -83,7 +83,7 @@
 
 (def target [:villager])
 
-(def defaults {:least :all :spend {:job-time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (defn bad-args
   "Never :bad-args when no villager uuid is given or :item is not food a villager picks up."

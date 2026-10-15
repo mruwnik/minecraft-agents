@@ -46,7 +46,7 @@
   :failed [{:pos :reason}] :skipped :farthest} :why}) and the ending:
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :legs (:max-legs walked) or :stuck (three failed walks in a row).
-  - :limit-reached :job-time (the call's :spend :job-time, default ::time-s; the engine ends it, round time only, so go-to's wait for day in a shelter does not count), with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
+  - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s; the engine ends it, round time only, so go-to's wait for day in a shelter does not count), with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - :condition-failed :not-loaded (leg columns never loaded). A call with no :target waits (condition :no-target).
 
   Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
@@ -72,7 +72,7 @@
    :load-wait-s {:doc "how long to wait for unloaded leg columns to load when no loaded leg is left" :spec (a/num-in 0 nil) :default 30}})
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds from the first round before a search gives up, not counting the time go-to holds for day in a shelter." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up, not counting the time go-to holds for day in a shelter." :spec (a/num-in 0 nil)}
    ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
    ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}
@@ -80,14 +80,14 @@
    ::held-angle {:default 60 :doc "A leg lies the way a failed leg went when the angle between them, seen from the body, is under this many degrees." :spec (a/num-in 0 180)}
    ::held-near {:default 4 :doc "Blocks from where a leg failed within which its way still holds others back." :spec (a/num-in 0 nil)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))
 (defn reach [] (settings/get settings ::reach))
 (defn descent [] (settings/get settings ::descent))
 (def target [:target])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 

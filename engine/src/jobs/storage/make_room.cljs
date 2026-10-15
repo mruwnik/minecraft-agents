@@ -379,12 +379,12 @@
     (ctx/update-mem! c dissoc :swap)))
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::step-s {:default 3 :doc "Seconds a quote counts for one deposit call, swap or toss." :spec (a/num-in 0 nil)}})
 
 (def target [:free])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn can-start?
   "Nothing to check: a bag with room is already done, one with nothing to spare ends nothing-possible after looking."

@@ -41,7 +41,7 @@
 
 (a/defargs settings
   {::max-cells {:default 400 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
-   ::time-s {:default 600 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 600 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}
    ::cell-s {:default 1.5 :doc "Mean seconds one cell takes (walk, dig, pick up, pace), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
@@ -150,7 +150,7 @@
              fields)))))))
 
 (def target [:from :to])
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 (def can-start? (cond/and bad-args no-zones all-refused))
 (def can-run? no-zones)
 

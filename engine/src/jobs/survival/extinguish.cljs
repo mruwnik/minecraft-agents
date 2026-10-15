@@ -59,7 +59,7 @@
 (def extinguish-policy {:cap 20 :ttl (* 60 60 1000)})
 (def hazard-policy {:cap 50 :ttl (* 6 60 60 1000)})
 (a/defargs settings
-  {::time-s {:default 60 :doc "Seconds putting the body out may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 60 :doc "Seconds putting the body out may take." :spec (a/num-in 0 nil)}
    ::max-hazards-per-round {:default 16 :doc "Hazard cells costed per round, the nearest first." :spec (a/int-in 0 nil)}
    ::hazard-reach {:default 4 :doc "Blocks around the body in which hazards are scanned." :spec (a/int-in 0 nil)}
    ::height-bonus {:default 2 :doc "Cost credit per block a hazard cell lies above the body." :spec (a/int-in 0 nil)}
@@ -103,7 +103,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s} :use {:blocks :cover}})
+(def defaults {:spend {:job-time ::job-time-s} :use {:blocks :cover}})
 
 
 (defn done?

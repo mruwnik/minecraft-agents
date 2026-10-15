@@ -167,7 +167,7 @@
 
 (deftest it-is-a-contract-job
   (is (= [:plan :roles] maintain/target))
-  (is (= {:spend {:job-time ::maintain/time-s}} maintain/defaults))
+  (is (= {:spend {:job-time ::maintain/job-time-s}} maintain/defaults))
   (is (fn? maintain/can-start?))
   (is (fn? maintain/done?))
   (is (fn? maintain/quote-of)))

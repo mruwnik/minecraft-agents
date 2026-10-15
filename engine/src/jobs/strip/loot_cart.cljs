@@ -24,7 +24,7 @@
   Ends :done {:collected n :items {name n}} (what came into the bag, counted from the inventory at the start), with :full true
   when the bag had no room for a stack. Else condition-failed :gone (the cart vanished) or :refused (zones), nothing-possible
   :unreachable (go-near! cannot arrive, or the cart is out of reach) or :cannot-break (the attack gave up, the cart is still
-  there), with :why, :collected and :items as data. Spends :time (default ::time-s).")
+  there), with :why, :collected and :items as data. Spends :time (default ::job-time-s).")
 
 (a/defargs args
   {:id {:doc "entity id of the chest minecart; nil: the nearest one to :near" :spec number? :default nil}
@@ -33,11 +33,11 @@
    :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a loot may take before it ends." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 120 :doc "Seconds a loot may take before it ends." :spec (a/num-in 0 nil)}})
 
 (def target [:id :near])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn carts
   "The chest minecarts in sight within radius of the anchor (:near, else the body), nearest first."
@@ -84,7 +84,7 @@
                     :result result)))
 
 (defn quote-of [_c]
-  {:uses {:job-time [5 20 (settings/get settings ::time-s)]}})
+  {:uses {:job-time [5 20 (settings/get settings ::job-time-s)]}})
 
 (defn ^:async empty-cart!
   "Move every stack of the cart into the bag. A transfer that moves nothing (no room) ends it with :full."

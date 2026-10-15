@@ -41,7 +41,7 @@
   weapons carried), handed to both children as their :use :tools.
   Ends :done when the danger is gone or left heard-only; :nothing-possible with the retreat's own kind and cause (:cannot_escape)
   when the retreat ends otherwise, or :no_response after ::max-unchanged (3) calls in a row that change
-  neither the body's cell, its health, the dangers near nor the fight's hits; never :continue. Its time budget (::time-s) may end it :limit-reached; the hostile trigger fires again at once while the danger stands.
+  neither the body's cell, its health, the dangers near nor the fight's hits; never :continue. Its time budget (::job-time-s) may end it :limit-reached; the hostile trigger fires again at once while the danger stands.
   Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter,
   and says it in one hostile.decided event.
   A danger reflex: never backed off.")
@@ -56,7 +56,7 @@
    :stay-inside {:doc "at night a body shut in a closed room or its own shelter fights from there and never steps out toward a mob; under any roof it does not flee for mobs it only hears (false: it may)" :spec boolean? :default true}})
 
 (a/defargs settings
-  {::time-s {:default 480 :doc "Seconds a response to a hostile may take: above retreat's (a hide runs long)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 480 :doc "Seconds a response to a hostile may take: above retreat's (a hide runs long)." :spec (a/num-in 0 nil)}
    ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position at night." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "A flight hit twice within this long is failing: the body fights. Also how recent a hurt keeps a fight from leaving heard mobs, and makes a round look once more." :spec (a/num-in 0 nil)}
    ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no_response." :spec (a/int-in 1 nil)}
@@ -71,7 +71,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s} :use {:tools :attack}})
+(def defaults {:spend {:job-time ::job-time-s} :use {:tools :attack}})
 
 (defn weapons
   "The weapons of the call: its :use :tools, else the default substrings."

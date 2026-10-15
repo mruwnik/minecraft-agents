@@ -46,10 +46,10 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds of working, fetching included, before shearing gives up." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds of working, fetching included, before shearing gives up." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
@@ -63,7 +63,7 @@
 
 (def target [:color])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start?
   "Nothing waits: no shears with :fetch off ends the first round (finish! :no-shears), so a queued order never blocks the queue."

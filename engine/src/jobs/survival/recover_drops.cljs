@@ -77,14 +77,14 @@
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :spec (a/num-in 0 nil) :default 10}})
 
 (a/defargs settings
-  {::time-s {:default 300 :doc "Seconds of the call's time limit: the despawn window, which the job keeps itself in game ticks." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 300 :doc "Seconds of the call's time limit: the despawn window, which the job keeps itself in game ticks." :spec (a/num-in 0 nil)}
    ::collect-s {:default 10 :doc "Seconds a collect pass at the pile is reckoned to take, in the job's quote." :spec (a/num-in 0 nil)}
    ::hold-at-night {:default true :doc "At night a body that stands in a shelter (a roof, a closed room, underground) does not walk out of it for the pile: the run ends condition-failed :night and the died trigger tries again, by day if the pile is still there." :spec boolean?}
    ::open-night-radius {:default 48 :doc "At night a body under the open sky does not walk farther than this for the pile: the run ends condition-failed :night so the night reflex shelters it where it stands; the trip resumes by day while the pile lasts." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn can-run?
   "A death open to serve, else :later with the danger remembered for one, else the decision already taken."

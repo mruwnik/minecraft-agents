@@ -60,7 +60,7 @@
   own check declines (night in a shelter), that cause stands instead.
   Ends :done {:got n :item name} only with the count carried. Nothing-possible {:reason :no-source :why} or
   :table-unreachable when every allowed way was tried, data {:got n :tried {way why} :why}. Limit-reached {:line :job-time
-  :reason :timeout} after :spend :job-time seconds (default ::time-s) without a change in what is carried; it keeps its own stall check (a long chain goes on while it makes progress) and an engine end by the total budget takes the data of done? ({:got :tried}). A nested call
+  :reason :timeout} after :spend :job-time seconds (default ::job-time-s) without a change in what is carried; it keeps its own stall check (a long chain goes on while it makes progress) and an engine end by the total budget takes the data of done? ({:got :tried}). A nested call
   for the same item is the engine's :duplicate-call.
   Quote: the plan's figures; yields the count, time a guess per step, no most for a gather.")
 
@@ -73,8 +73,8 @@
    :explore {:doc "walk and look for a raw need not seen: false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}})
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds without a change in what is carried before an obtain ends (a long chain goes on while it makes progress)." :spec (a/num-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+  {::job-time-s {:default 600 :doc "Seconds without a change in what is carried before an obtain ends (a long chain goes on while it makes progress)." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:item :any-of])
 
@@ -86,7 +86,7 @@
   #{:unreachable :not-home :not-back :zone-exit :walk-failed :walk-in-failed :shut-in :exhausted :tree-unreachable
     :no-approach :out-of-reach :one-way :way-dives :detour :door-stuck :cut-again :replan-limit})
 
-(def defaults {:ways (set ways) :spend {:job-time ::time-s}})
+(def defaults {:ways (set ways) :spend {:job-time ::job-time-s}})
 
 (defn source-cause
   "nil when a way would start: a usable seen chest that might hold one of the names, a chain made from what is

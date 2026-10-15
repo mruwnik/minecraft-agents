@@ -29,15 +29,15 @@
   (:animal-in-the-way, info only) keeps its entry untouched and no failure counts, so the trigger tries again at once.
   Needs nothing. Ends :done with {:shut n :left []} when every block was shut (or none stood
   open); with any left, nothing-possible :left with warn shut-doors.stopped, data {:shut n :left [{:cell :reason}]}.
-  Spends :time (default ::time-s).")
+  Spends :time (default ::job-time-s).")
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a run may take before it ends." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds a run may take before it ends." :spec (a/num-in 0 nil)}
    ::s-per-door {:default 6 :doc "Seconds a quote counts for one door: the walk and the clicks." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 
 (a/defargs args

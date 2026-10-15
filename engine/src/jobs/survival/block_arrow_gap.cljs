@@ -47,13 +47,13 @@
    :fetch {:doc "get a missing block (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-blocks" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds stopping the arrows may take, a block fetch included." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds stopping the arrows may take, a block fetch included." :spec (a/num-in 0 nil)}
    ::max-steps {:default 12 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s} :use {:blocks :shelter}})
+(def defaults {:spend {:job-time ::job-time-s} :use {:blocks :shelter}})
 
 (defn blocks
   "The blocks it may place: the call's :use :blocks, else (nothing carried when the call began) the shelter fillers."

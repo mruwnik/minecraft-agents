@@ -21,7 +21,7 @@
    :to {:doc "whisper the text to this player instead of saying it to all" :spec a/name? :default nil}})
 
 (a/defargs settings
-  {::time-s {:default 10 :doc "Seconds one report may take." :spec (a/int-in 1 nil)}
+  {::job-time-s {:default 10 :doc "Seconds one report may take." :spec (a/int-in 1 nil)}
    ::hostile-radius {:default 16 :doc "Blocks within which a hostile mob is reported." :spec (a/int-in 0 nil)}})
 (defn hostile-radius [] (settings/get settings ::hostile-radius))
 
@@ -40,7 +40,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn done?
   "Never done before it runs: a report has no state that can hold before it."

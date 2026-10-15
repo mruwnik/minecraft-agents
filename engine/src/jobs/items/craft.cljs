@@ -57,14 +57,14 @@
    :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}})
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a craft may take: the walk, the batches and the table." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds a craft may take: the walk, the batches and the table." :spec (a/num-in 0 nil)}
    ::batch-s {:default 0.5 :doc "Mean seconds one batch of a craft takes, for the quote." :spec (a/num-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 (defn batch-s [] (settings/get settings ::batch-s))
 
 (def target [:item])
 
-(def defaults {:least :all :spend {:job-time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (defn bad-args
   "The cause when no item name is given."

@@ -53,13 +53,13 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 1800 :doc "Seconds a kitchen pass may last: the smelts, the bake and the deposit." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 1800 :doc "Seconds a kitchen pass may last: the smelts, the bake and the deposit." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds a kitchen pass may last from its start, the waits on the furnace's cook and other jobs meanwhile included." :spec (a/num-in 0 nil)}
    ::food-s {:default 10 :doc "Seconds a quote counts for each raw food carried: its time in the furnace." :spec (a/num-in 0 nil)}})
 
 (def target [:stock])
 
-(def defaults {:spend {:job-time ::time-s :wall-time ::wall-time-s}})
+(def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 (defn reached?
   "Whether the chest's stock {name n} holds every :stock entry (nil: unknown, never reached)."
@@ -197,7 +197,7 @@
   (let [f (facts c)
         n (reduce + 0 (map #(get (:carried f) % 0) (:foods (:args c))))
         t (* n (settings/get settings ::food-s))]
-    {:uses {:job-time [0 t (max t (settings/get settings ::time-s))]}}))
+    {:uses {:job-time [0 t (max t (settings/get settings ::job-time-s))]}}))
 
 (defn summary
   "What a step's child ending e books: its data's fields, and the stop's cause as :reason."

@@ -30,9 +30,9 @@
 (def target [:name])
 
 (a/defargs settings
-  {::time-s {:default 5 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}})
+  {::job-time-s {:default 5 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}})
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn standing
   "The cell the body stands in."

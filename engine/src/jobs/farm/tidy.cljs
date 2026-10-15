@@ -55,7 +55,7 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the sweep of the drops." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the sweep of the drops." :spec (a/num-in 0 nil)}})
 
 
 ;; ------------------------------------------------------------------ access
@@ -322,7 +322,7 @@
 
 (def target [:plan :part])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? plan-ok)
 
@@ -337,5 +337,5 @@
                     :result {:dug dug :collected (:collected (ctx/mem c) 0)})))
 
 (defn quote-of [_c]
-  {:uses {:job-time [1 30 (settings/get settings ::time-s)]}
+  {:uses {:job-time [1 30 (settings/get settings ::job-time-s)]}
    :done [0 1 1]})

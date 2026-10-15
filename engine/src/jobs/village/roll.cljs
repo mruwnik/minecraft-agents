@@ -59,7 +59,7 @@
 (a/defargs settings
   {::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
-   ::time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}
    ::unemploy-s {:default 20 :doc "Seconds to wait for the villager to lose its job after the break, then place anyway." :spec (a/int-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn leg-s [] (settings/get settings ::leg-s))
@@ -74,7 +74,7 @@
 
 (def target [:villager :pos])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn bad-args
   "Never :bad-args when a cell, a workstation item (or profession) and a wanted item (or trade) are not given."

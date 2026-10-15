@@ -26,7 +26,7 @@
 (defn place [c] (sh/home-target (ctx/view c)))
 
 (a/defargs settings
-  {::time-s {:default 300 :doc "Seconds the walk home may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 300 :doc "Seconds the walk home may take." :spec (a/num-in 0 nil)}
    ::speed {:default 4.3 :doc "Blocks a second the walk home covers, for the quote." :spec (a/num-in 0 nil)}})
 
 (def arrive-range "How near the place counts as home." 2)
@@ -47,7 +47,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn at-home? [c] (let [pos (place c)] (boolean (and pos (<= (u/dist (u/self-pos c) pos) arrive-range)))))
 

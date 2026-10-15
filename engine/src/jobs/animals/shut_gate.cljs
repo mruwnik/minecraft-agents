@@ -45,7 +45,7 @@
 (def quiet-ttl-ms (* 1000 (:quiet-s pg/defaults)))
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a shut-gate run may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds a shut-gate run may take." :spec (a/num-in 0 nil)}
    ::pause-ttl-ms {:default 30000 :doc "How long a gate stays paused after a failed shut, in ms." :spec (a/int-in 0 nil)}
    ::unreachable-ttl-ms {:default 120000 :doc "How long the trigger leaves a gate the walk could not reach, in ms (the body may be shut in; it tries again then)." :spec (a/int-in 0 nil)}})
 (defn unreachable-ttl-ms [] (settings/get settings ::unreachable-ttl-ms))
@@ -180,7 +180,7 @@
 
 (def target [:plan])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn can-start?
   "Later :plan-trouble while :plan is missing or unreadable."

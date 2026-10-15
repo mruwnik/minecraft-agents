@@ -28,7 +28,7 @@
    :radius {:doc "how far from the body to look for lava, obsidian and water" :spec (a/num-in 1 nil) :default 24}})
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds making obsidian may take: the walks, the pour, the wait for the conversion and the mining." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 600 :doc "Seconds making obsidian may take: the walks, the pour, the wait for the conversion and the mining." :spec (a/num-in 0 nil)}})
 
 (def mine-fetch {:what #{:tool} :how #{:chest :craft}})
 
@@ -154,7 +154,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn bucket-cause
   "Cause :no-bucket before the start (the round's own ending covers it later): no obsidian seen to mine, no water bucket carried and no bucket with water seen to fill."
@@ -187,6 +187,6 @@
 
 (defn quote-of [c]
   (let [n (or (:count (:args c)) 1)]
-    {:uses {:job-time [1 (+ 20 (* 6 n)) (max (settings/get settings ::time-s) (+ 40 (* 6 n)))]}
+    {:uses {:job-time [1 (+ 20 (* 6 n)) (max (settings/get settings ::job-time-s) (+ 40 (* 6 n)))]}
      :yields {:items {"obsidian" [0 n n]}}
      :done [0 n n]}))

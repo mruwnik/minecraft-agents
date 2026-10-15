@@ -200,7 +200,7 @@
 
 (a/defargs settings
   {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::time-s {:default 1800 :doc "Seconds a maintain pass may take: all its steps." :spec (a/num-in 0 nil)}})
+   ::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: all its steps." :spec (a/num-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async round [c]
@@ -211,7 +211,7 @@
 
 (def target [:plan :roles])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? nothing-to-do)
 
@@ -223,4 +223,4 @@
     (contract/later :steps (str ran " steps run") :units :steps :done ran :left (count (:todo (ctx/mem c))))))
 
 (defn quote-of [_c]
-  {:uses {:job-time [1 60 (settings/get settings ::time-s)]}})
+  {:uses {:job-time [1 60 (settings/get settings ::job-time-s)]}})

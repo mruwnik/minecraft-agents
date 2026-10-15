@@ -27,12 +27,12 @@
    :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
 (def target [:pos])
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 
 (def faces #{"up" "down" "north" "south" "east" "west"})
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-walks {:default 2 :doc "Failed walks of one call before it ends :unreachable." :spec (a/int-in 0 nil)}})
 (defn max-walks [] (settings/get settings ::max-walks))
 

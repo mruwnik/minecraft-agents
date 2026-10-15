@@ -124,7 +124,7 @@
 
 (a/defargs settings
   {::pace-ms {:default 100 :doc "A step that changed nothing and took less than this is followed by a pause of settle-ms." :spec (a/int-in 0 nil)}
-   ::time-s {:default 900 :doc "Seconds a herd run may take." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 900 :doc "Seconds a herd run may take." :spec (a/num-in 0 nil)}
    ::release-margin-s {:default 30 :doc "A run with an animal on the lead and less than this many seconds of its time left lets it go and ends :timeout." :spec (a/num-in 0 nil)}})
 (defn pace-ms [] (settings/get settings ::pace-ms))
 (defn release-margin-s [] (settings/get settings ::release-margin-s))
@@ -136,7 +136,7 @@
 
 (def target [:mob :box])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn box-sides
   "The box's lengths in cells along x and z that a gate's axis could run, only the :gate's when it stands beside a side."

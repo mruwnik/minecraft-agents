@@ -60,7 +60,7 @@
 ;; ------------------------------------------------------------------ the pen from the plan
 
 (a/defargs settings
-  {::time-s {:default 1800 :doc "Seconds one pen build may take." :spec (a/int-in 1 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds one pen build may take." :spec (a/int-in 1 nil)}})
 
 (defn want-blocks
   "The block names a want can place: one for a block or a state map, the choices of an :any."
@@ -187,7 +187,7 @@
                               :text (str "pen build declines plan " (:plan (:args c)) ": " why)})
              {:reason :uneven :why why})))))))
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? (cond/and plan-problem uneven-problem from-plan/no-items))
 (def can-run? plan-problem)

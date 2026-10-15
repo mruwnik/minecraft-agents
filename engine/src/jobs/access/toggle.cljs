@@ -48,14 +48,14 @@
    :reach {:doc "walk until within this many cells of the block (the click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}})
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a toggle may take: the walk, the click and the walks closer." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds a toggle may take: the walk, the click and the walks closer." :spec (a/num-in 0 nil)}
    ::max-closer {:default 2 :doc "How often a click the game answers out of reach is followed by a walk one cell closer." :spec (a/int-in 0 nil)}})
 (defn max-closer [] (settings/get settings ::max-closer))
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:pos])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def valid-states
   {:openable #{:open :closed} :lever #{:on :off} :button #{:press}})

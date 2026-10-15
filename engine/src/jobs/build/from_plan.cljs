@@ -99,10 +99,10 @@
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :spec boolean? :default false}})
 
 (def target [:plan :part])
-(def defaults {:least :all :spend {:job-time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (a/defargs settings
-  {::time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}
+  {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}
    ::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn judged-plan

@@ -42,7 +42,7 @@
    :fetch {:doc "get a missing sapling or an axe (passed to plant-sapling and fell-tree; see their :fetch): true, a set of kinds or a map of limits; false leaves the replant owed" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::time-s {:default 1800 :doc "Seconds a harvest may take: every tree's felling, collecting and planting." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 1800 :doc "Seconds a harvest may take: every tree's felling, collecting and planting." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Child calls of one round before it gives the body back with :continue." :spec (a/int-in 1 nil)}})
 
 (defn phases
@@ -183,7 +183,7 @@
 
 (def target [:species])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn with-fell-args [check] (fn [c] (check (assoc c :args (fell-args (:args c))))))
 
@@ -215,6 +215,6 @@
         trees (max 1 (min 8 (quot (or (:count (:args c)) 3) 3)))
         t (:job-time (:uses e))
         scale #(* trees (+ % 6))]
-    (cond-> {:uses {:job-time [(scale (nth t 0)) (scale (nth t 1)) (max (settings/get settings ::time-s) (scale (nth t 2)))]}
+    (cond-> {:uses {:job-time [(scale (nth t 0)) (scale (nth t 1)) (max (settings/get settings ::job-time-s) (scale (nth t 2)))]}
              :done [0 1 1]}
       (:yields e) (assoc :yields (:yields e)))))

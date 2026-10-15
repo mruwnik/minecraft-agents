@@ -37,7 +37,7 @@
   - :done (:cleared): no target within :radius for :lost-s (waiting in 1 s steps), and every target seen was killed.
   - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
   - :nothing-possible :lost: some target was neither killed nor given up on.
-  - :limit-reached: the engine's limit (default :spend :job-time ::time-s) ends it, with the same data (done?'s :data).
+  - :limit-reached: the engine's limit (default :spend :job-time ::job-time-s) ends it, with the same data (done?'s :data).
   - :condition-failed :absent: no target was present after a 2 s grace for the world's entities to arrive, a look round and, for a target heard but not seen, up to four steps toward the sound (jobs.lib.vantage).
   :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
   :absent :wait makes the call wait (can-start? :no-target) until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
@@ -55,13 +55,13 @@
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}
-   ::time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}})
+   ::job-time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:targets])
 
-(def defaults {:spend {:job-time ::time-s} :use {:tools :attack}})
+(def defaults {:spend {:job-time ::job-time-s} :use {:tools :attack}})
 
 (def absent-grace-ms
   "How long a job that has seen nothing waits for the world's entities to arrive."

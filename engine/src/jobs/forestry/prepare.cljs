@@ -67,7 +67,7 @@
   Quote: time only.")
 
 (a/defargs settings
-  {::time-s {:default 1200 :doc "Seconds a prepare run may take: the digs, soil, plants and walks." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 1200 :doc "Seconds a prepare run may take: the digs, soil, plants and walks." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Steps of one round before it gives the body back with :continue." :spec (a/int-in 1 nil)}})
 
 (a/defargs args
@@ -401,7 +401,7 @@
 
 (def target [:plan :part])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? not-ready)
 
@@ -426,5 +426,5 @@
           :else (apply contract/ok :prepared text data))))))
 
 (defn quote-of [_c]
-  {:uses {:job-time [1 60 (settings/get settings ::time-s)]}
+  {:uses {:job-time [1 60 (settings/get settings ::job-time-s)]}
    :done [0 1 1]})

@@ -53,16 +53,16 @@
 (def target [:at :box :plan])
 
 (a/defargs settings
-  {::time-s {:default 30 :doc "Seconds a pen check may take besides the look at its cells; the default time spend is this plus ::cell-s a cell the fill may visit." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 30 :doc "Seconds a pen check may take besides the look at its cells; the default time spend is this plus ::cell-s a cell the fill may visit." :spec (a/num-in 0 nil)}
    ::cell-s {:default 0.03 :doc "Seconds of the default time spend per cell the fill may visit (the :max-cells, or the footprint of a given :box when smaller)." :spec (a/num-in 0 nil)}})
 
 (defn default-time
-  "The call's default :spend :job-time: ::time-s plus ::cell-s for each cell the fill may visit."
+  "The call's default :spend :job-time: ::job-time-s plus ::cell-s for each cell the fill may visit."
   [{:keys [box max-cells]}]
   (let [max-cells (or max-cells pen/default-max-cells)
         {:keys [min max]} (when box (pen-read/norm-box box))
         area (when box (* (inc (- (:x max) (:x min))) (inc (- (:z max) (:z min)))))]
-    (+ (settings/get settings ::time-s)
+    (+ (settings/get settings ::job-time-s)
        (* (settings/get settings ::cell-s) (if area (clojure.core/min max-cells area) max-cells)))))
 
 (def defaults {:spend {:job-time default-time}})

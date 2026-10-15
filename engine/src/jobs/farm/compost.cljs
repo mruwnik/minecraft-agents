@@ -65,11 +65,11 @@
                    (when (pos? spare) [n spare])))))))
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
 
 (def target [:at])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? (checks/zones-read :compost.declined "compost"))
 

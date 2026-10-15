@@ -67,12 +67,12 @@
    :fetch {:doc "get a missing pickaxe for the escape with jobs.items.get-tool instead of ending :no-tool: a set of kinds or a map of limits counts as true; false ends :no-tool" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::time-s {:default 900 :doc "Seconds a way out may take: the torches, the escape, the seal." :spec (a/num-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+  {::job-time-s {:default 900 :doc "Seconds a way out may take: the torches, the escape, the seal." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:tunnel])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def bad-args
   "Never :bad-args unless :tunnel is the result of jobs.access.tunnel."

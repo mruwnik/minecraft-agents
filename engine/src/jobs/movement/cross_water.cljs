@@ -46,7 +46,7 @@
 (def target [:pos :goal])
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::boat-speed {:default 5 :doc "Blocks a second the boat covers, for the quote." :spec (a/num-in 0 nil)}
    ::launch-s {:default 24 :doc "Seconds the launch and the landing take besides the drive, for the quote." :spec (a/num-in 0 nil)}})
 
@@ -156,7 +156,7 @@
     (checks/unseen-later c :not-water "no water in sight to launch a boat on")
     :else (contract/ok :start "a shore to cross to")))
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? (cond/and bad-args start-fact))
 

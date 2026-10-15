@@ -55,7 +55,7 @@
    ::max-strikes {:default 3 :doc "Strikes at one target before the job gives up on it." :spec (a/int-in 0 nil)}
    ::comb-waits {:default 10 :doc "Rounds a shears harvest waits for its comb to show before it goes on without." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::time-s {:default 120 :doc "Seconds a harvest run may take." :spec (a/num-in 0 nil)}})
+   ::job-time-s {:default 120 :doc "Seconds a harvest run may take." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-strikes [] (settings/get settings ::max-strikes))
 (def tool-item {:shears "shears" :bottle "glass_bottle"})
@@ -244,7 +244,7 @@
 
 (def target [:box :center])
 
-(def defaults {:least 1 :spend {:job-time ::time-s}})
+(def defaults {:least 1 :spend {:job-time ::job-time-s}})
 
 (defn can-start?
   "Later with the cause that bars the first step: no hive can be worked (idle-reason), none of :with is carried or the

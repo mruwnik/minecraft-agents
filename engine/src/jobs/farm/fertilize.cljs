@@ -59,11 +59,11 @@
        (filter #(= "air" (u/seen-name p (update % :y inc))))))
 
 (a/defargs settings
-  {::time-s {:default 300 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 300 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
 
 (def target [:at :center :grass])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn raw-targets
   "The positions to fertilize (unripe crops, or open grass with :grass), before the zone rules and the refused ones."

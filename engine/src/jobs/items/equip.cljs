@@ -22,7 +22,7 @@
    :fetch {:doc "get a missing item (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-item instead" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::time-s {:default 10 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 10 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::equip-s {:default 0.5 :doc "Seconds to put one item in hand (the quote)." :spec (a/num-in 0 nil)}})
 
 (def dests {"main" "hand" "off" "off-hand"})
@@ -38,7 +38,7 @@
 
 (def target [:item :hand])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn problem
   "The cause when no item is given."

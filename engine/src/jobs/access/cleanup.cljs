@@ -113,9 +113,9 @@
    ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; a roofed one is not walked to from the open (:roofed)." :spec (a/int-in 0 nil)}
    ::died-radius {:default 24 :doc "Blocks around a place the body died within which a scaffold is not walked to (:died-near)." :spec (a/num-in 0 nil)}
    ::hold-unarmed? {:default true :doc "Whether an unarmed body, or one below jobs.lib.body/risky-min-health, walks to no scaffold (:unarmed, :low-health)." :spec boolean?}
-   ::time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}
    ::max-passes {:default 200 :doc "Steps (dig, walk, collect) in one run before it stops." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (defn roof-height [] (settings/get settings ::roof-height))
 
@@ -215,7 +215,7 @@
 
 (def target [:job :near])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn picked-entries [c]
   (let [view (ctx/view c)]

@@ -51,13 +51,13 @@
 (a/defargs settings
   {::minutes {:default 45 :doc "Time budget of each obtain child of the kit." :spec (a/num-in 0 nil)}
    ::no-food-wait-ms {:default 300000 :doc "After a food search fails while the body is not starving, how long the kit goes on without asking get-food again." :spec (a/num-in 0 nil)}
-   ::time-s {:default 10800 :doc "Seconds a kit may last: every child of every piece." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 10800 :doc "Seconds a kit may last: every child of every piece." :spec (a/num-in 0 nil)}
    ::item-s {:default 120 :doc "Seconds a quote counts for each missing item of the kit." :spec (a/num-in 0 nil)}
    ::min-food {:default 20 :doc "Food points carried before the kit job starts work or a new piece." :spec (a/int-in 0 nil)}})
 
 (def target [:items])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn furnace-short
   "{material n}: the furnace products (iron_ingot ..) that the first recipes of items need together, beyond carried

@@ -17,11 +17,11 @@
    :properties? {:doc "include nearby block state properties" :spec boolean? :default false}
    :at {:doc "optional exact block position [x y z] or {:x :y :z}" :spec ::a/pos :default nil}})
 (a/defargs settings
-  {::time-s {:default 10 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 10 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
 
 (def target [:at])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 (defn done? "An act with no goal state: a look is never done before it is made." [_c]
   (contract/later :looking "the look is not made yet" :units :looks :done 0 :left 1))
 (defn quote-of [_c] {:uses {:job-time [0 0 1]}})

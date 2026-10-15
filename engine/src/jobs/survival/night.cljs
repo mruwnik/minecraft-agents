@@ -102,7 +102,7 @@
    :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :spec (a/num-in 0 nil) :default 64}})
 
 (a/defargs settings
-  {::time-s {:default 2400 :doc "Seconds the night may take, the morning included: a bound against a runaway night (the night itself ends it in about 10 minutes)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 2400 :doc "Seconds the night may take, the morning included: a bound against a runaway night (the night itself ends it in about 10 minutes)." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds the night may last from its start, its yields to other jobs included." :spec (a/num-in 0 nil)}
    ::morning-s {:default 60 :doc "Seconds the morning (out of the shelter, a put-down bed picked up) is reckoned to take at most, in the quote." :spec (a/num-in 0 nil)}})
 
@@ -110,7 +110,7 @@
 
 (def ways [:bed :shelter :flee])
 
-(def defaults {:spend {:job-time ::time-s :wall-time ::wall-time-s} :ways (set ways)})
+(def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s} :ways (set ways)})
 
 (defn quiet-night
   "While the night trigger's condition fails: {:shelter} with the shelter the body is in (nil when none), else nil."

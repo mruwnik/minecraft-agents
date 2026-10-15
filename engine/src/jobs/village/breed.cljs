@@ -39,7 +39,7 @@
 (a/defargs settings
   {::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}
    ::wait-range {:default 6 :doc "Blocks within which the body waits for a pair to breed." :spec (a/int-in 0 nil)}
-   ::time-s {:default 3600 :doc "Seconds one breeding may take." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 3600 :doc "Seconds one breeding may take." :spec (a/int-in 1 nil)}
    ::feed-s {:default 30 :doc "Seconds one pair's feeding takes, for the quote." :spec (a/num-in 0 nil)}})
 (defn max-fruitless [] (settings/get settings ::max-fruitless))
 (defn wait-range [] (settings/get settings ::wait-range))
@@ -72,7 +72,7 @@
 
 (def target [:target])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn bad-args
   "Never :bad-args: no :target of at least 2."

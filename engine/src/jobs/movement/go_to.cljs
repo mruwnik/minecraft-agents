@@ -233,9 +233,9 @@
 (def ways ways/ways)
 
 (a/defargs settings
-  {::time-s {:default 1800 :doc "Seconds one go-to call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds one go-to call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:least :all :spend {:job-time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (defn limits-refusal
   "The refusal {:reason :bad-args :message} of the call's given :floor :health or :spend :job-time, nil when in range."

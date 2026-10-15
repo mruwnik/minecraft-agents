@@ -22,7 +22,7 @@
   Memory: writes :fed {:item :food} for each meal.")
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a meal may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds a meal may take." :spec (a/num-in 0 nil)}
    ::bite-s {:default 1.9 :doc "Seconds a bite takes, equip included (the quote)." :spec (a/num-in 0 nil)}})
 
 (a/defargs args
@@ -31,7 +31,7 @@
    :max-bites {:doc "eat at most this many bites; unlimited when nil" :spec (a/int-in 1 nil) :default nil}
    :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :spec boolean? :default false}})
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def target [:item])
 

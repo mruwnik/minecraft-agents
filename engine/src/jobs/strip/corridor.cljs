@@ -19,7 +19,7 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::time-s {:default 1800 :doc "Seconds one corridor trip may take: the digs, torches and walks." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds one corridor trip may take: the digs, torches and walks." :spec (a/num-in 0 nil)}})
 
 (def max-steps "Pieces of work of one round before it gives the round back with :continue (danger is weighed again in between)." 6)
 (def lit "Light at the feet from which no torch is hung." 8)
@@ -267,7 +267,7 @@
 
 (def target [:segment])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? (cond/and bad-segment not-now))
 
@@ -281,4 +281,4 @@
 
 (defn quote-of [c]
   (let [{:keys [from to]} (seg-of (:segment (:args c)))]
-    {:uses {:job-time [1 (max 1 (- (or to 0) (or from 0))) (settings/get settings ::time-s)]}}))
+    {:uses {:job-time [1 (max 1 (- (or to 0) (or from 0))) (settings/get settings ::job-time-s)]}}))

@@ -48,14 +48,14 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
-  {::time-s {:default 60 :doc "Seconds from the start of the call before unleashing gives up; a walk to the animal and the collect of the lead (10 s at most) fit." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 60 :doc "Seconds from the start of the call before unleashing gives up; a walk to the animal and the collect of the lead (10 s at most) fit." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}
    ::knot-margin {:default 12 :doc "Blocks around the knot searched for the animal." :spec (a/int-in 0 nil)}
    ::settle-ms {:default 250 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
    ::settle-tries {:default 6 :doc "Looks at the animal before it counts as settled." :spec (a/int-in 0 nil)}
    ::drop-wait-ms {:default 800 :doc "How long the body waits for a dropped item, in ms." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 (def knot-name "leash_knot")
@@ -66,7 +66,7 @@
 
 (def target [:mob :animal])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start?
   "Nothing waits: an order with nobody on a lead ends the first round."

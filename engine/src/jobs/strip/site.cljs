@@ -70,7 +70,7 @@
    :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 7200 :doc "Seconds a strip of one site may take: base, descent, every segment, trips and the haul." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 7200 :doc "Seconds a strip of one site may take: base, descent, every segment, trips and the haul." :spec (a/num-in 0 nil)}
    ::max-sites {:default 4 :doc "Sites kept in memory; finished ones go first once there are more." :spec (a/int-in 1 nil)}})
 
 (def kind :strip/sites)
@@ -447,7 +447,7 @@
 
 (def target [:site])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn bad-args
   "Never :bad-args: no :site or :base, and a new site without :at (the site is saved after the start)."
@@ -471,4 +471,4 @@
                     :result {:taken (:taken s {}) :hauled (:hauled s {}) :smelted (:smelted s {})})))
 
 (defn quote-of [c]
-  {:uses {:job-time [1 (* 120 (max 1 (count (:segments (site c))))) (settings/get settings ::time-s)]}})
+  {:uses {:job-time [1 (* 120 (max 1 (count (:segments (site c))))) (settings/get settings ::job-time-s)]}})

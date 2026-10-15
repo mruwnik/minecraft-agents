@@ -208,7 +208,7 @@
           (is (< (fake/dist (body-pos p) (mob-pos p 7)) 35) "lost before the follow range"))))))
 
 (deftest the-flight-time-spend-outlasts-the-longest-hide
-  (is (> (settings/get retreat/settings ::retreat/time-s) (refuge/hide-max-s))))
+  (is (> (settings/get retreat/settings ::retreat/job-time-s) (refuge/hide-max-s))))
 
 (deftest a-flight-runs-past-the-old-180-s-bound-until-the-zombie-leaves
   (async done

@@ -77,7 +77,7 @@
 (a/defargs settings
   {::hold-s {:default 120 :doc "Seconds the call holds for an occupied bed or the night in a shelter, then ends." :spec (a/num-in 0 nil)}
    ::pause-s {:default 5 :doc "Seconds one hold pauses (jobs.time.noop) before the call looks again." :spec (a/num-in 0 nil)}
-   ::time-s {:default 300 :doc "Seconds the walk to the bed and the sleep may take." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 300 :doc "Seconds the walk to the bed and the sleep may take." :spec (a/num-in 0 nil)}
    ::speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn bed-block? [c bed]
@@ -124,7 +124,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn done? [c]
   (let [d (and (not (checks/running? c)) (sh/sleeping? (:primitives c)))]

@@ -14,9 +14,9 @@
 (def target [])
 
 (a/defargs settings
-  {::time-s {:default 1800 :doc "Seconds the wait for day may take." :spec (a/int-in 1 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds the wait for day may take." :spec (a/int-in 1 nil)}})
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? (cond/because :day-not-come (cond/daytime)))
 

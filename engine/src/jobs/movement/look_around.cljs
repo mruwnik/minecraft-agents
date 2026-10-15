@@ -22,9 +22,9 @@
 (def target [])
 
 (a/defargs settings
-  {::time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn quote-of
   "The quotes of its two acts, the look and the wait, added."

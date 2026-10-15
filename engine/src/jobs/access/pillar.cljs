@@ -69,7 +69,7 @@
    :mob-wait-ms {:doc "how long to wait for a mob to leave the cell; nil: ::mob-wait-ms (an escape from danger passes 0)" :spec (a/int-in 0 nil) :default nil}})
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-height {:default 64 :doc "Tallest pillar a call may ask for, in blocks." :spec (a/int-in 0 nil)}
    ::max-failures {:default 3 :doc "Failed placements before the pillar gives up." :spec (a/int-in 0 nil)}
    ::mob-wait-ms {:default 10000 :doc "How long a pillar waits for a mob to leave the cell it places into before it gives up :mob-in-cell, in ms." :spec (a/int-in 0 nil)}
@@ -83,7 +83,7 @@
 
 (def target [])
 
-(def defaults {:use {:blocks :pillar} :spend {:job-time ::time-s}})
+(def defaults {:use {:blocks :pillar} :spend {:job-time ::job-time-s}})
 
 (defn max-failures [] (settings/get settings ::max-failures))
 

@@ -34,7 +34,7 @@
    :max-days-awake {:doc "in-game days without sleep before a bed in the open is slept in and the urgent radius applies" :spec (a/num-in 0 nil) :default sh/max-days-awake}})
 
 (a/defargs settings
-  {::time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched (an obtain may take its own 600 without a change), the sleep." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched (an obtain may take its own 600 without a change), the sleep." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 1800 :doc "Seconds a bed-down may last from its start, the jobs that run between its rounds included." :spec (a/num-in 0 nil)}
    ::walk-speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
 
@@ -55,7 +55,7 @@
   (or (some-> (:bed (:args c)) places/parse-pos :pos)
       (sh/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c))))
 
-(def defaults {:spend {:job-time ::time-s :wall-time ::wall-time-s}})
+(def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 (def target [])
 

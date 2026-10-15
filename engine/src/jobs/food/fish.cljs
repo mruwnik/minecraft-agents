@@ -22,7 +22,7 @@
   within :radius).
   - :condition-failed :no-water (the water gone mid-run), or a failed rod fetch (the cause names the rod, :because the fetch's ending).
   - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (:max-misses casts in a row caught nothing).
-  - :limit-reached: the call's :spend :job-time (default ::time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
+  - :limit-reached: the call's :spend :job-time (default ::job-time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
   Resumes from the carried fish: the goal is the count carried at the first round plus :count.")
 
 (a/defargs args
@@ -34,12 +34,12 @@
    :fetch {:doc "get a rod when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-rod" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds from the first round before fishing gives up." :spec (a/num-in 1 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+  {::job-time-s {:default 600 :doc "Seconds from the first round before fishing gives up." :spec (a/num-in 1 nil)}})
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:pos])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def fish-items #{"cod" "salmon" "tropical_fish" "pufferfish"})
 

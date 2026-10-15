@@ -31,13 +31,13 @@
    :ignore-zones? {:doc "judge as a job that acts regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 10 :doc "Seconds one check may take." :spec (a/int-in 1 nil)}
+  {::job-time-s {:default 10 :doc "Seconds one check may take." :spec (a/int-in 1 nil)}
    ::max-cells {:default 400 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn span [a b] (range (min a b) (inc (max a b))))
 

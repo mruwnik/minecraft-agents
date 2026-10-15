@@ -99,11 +99,11 @@
 
 (a/defargs settings
   {::futile-radius {:default 8 :doc "Blocks around a failed dig-in site that count as the same site." :spec (a/int-in 0 nil)}
-   ::time-s {:default 300 :doc "Seconds a shelter may take: the placements, or the pit and its roof." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 300 :doc "Seconds a shelter may take: the placements, or the pit and its roof." :spec (a/num-in 0 nil)}
    ::cell-s {:default 1.5 :doc "Seconds one placement takes, for the quote." :spec (a/num-in 0 nil)}
    ::pit-s {:default 8 :doc "Seconds a pit takes to dig, for the quote." :spec (a/num-in 0 nil)}})
 (defn futile-radius [] (settings/get settings ::futile-radius))
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (defn futile-entry-here?
   "Whether any :dig-in-futile entry, whatever its reason, lies within futile-radius of the body."
@@ -156,7 +156,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 
 (defn done?

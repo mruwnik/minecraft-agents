@@ -59,9 +59,9 @@
 (def target [:mob :box :centre])
 
 (a/defargs settings
-  {::time-s {:default 300 :doc "Seconds a cull may take." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 300 :doc "Seconds a cull may take." :spec (a/num-in 0 nil)}})
 
-(def defaults {:least 1 :spend {:job-time ::time-s} :use {:tools :attack}})
+(def defaults {:least 1 :spend {:job-time ::job-time-s} :use {:tools :attack}})
 
 (defn corners
   "The eight corners of a box of cells: the far corners are the outer edges of the max cells."

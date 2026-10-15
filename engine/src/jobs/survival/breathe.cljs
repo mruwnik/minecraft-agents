@@ -73,7 +73,7 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds getting air and out of the water may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds getting air and out of the water may take." :spec (a/num-in 0 nil)}
    ::land-tries {:default 3 :doc "Go-to targets one spot tries before it swims a leg." :spec (a/int-in 0 nil)}
    ::min-leg {:default 8 :doc "Blocks a swim leg must move to count as moved." :spec (a/int-in 0 nil)}
    ::max-passes {:default 120 :doc "Passes one run makes before it stops :no_way_out, a safety net against a world that never changes." :spec (a/int-in 0 nil)}
@@ -120,7 +120,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 
 (defn done?

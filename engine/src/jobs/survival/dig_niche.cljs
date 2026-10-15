@@ -55,14 +55,14 @@
 (a/defargs settings
   {::max-steps {:default 40 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}
    ::dig-reach {:default 4 :doc "How far from a cell the body digs it without walking closer." :spec (a/int-in 0 nil)}
-   ::time-s {:default 120 :doc "Seconds a niche may take." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 120 :doc "Seconds a niche may take." :spec (a/num-in 0 nil)}
    ::cell-s {:default 2 :doc "Seconds one cell takes to dig or plug, for the quote." :spec (a/num-in 0 nil)}
    ::niche-cells {:default 6 :doc "Cells one niche takes to dig and plug, for the quote." :spec (a/int-in 0 nil)}
    ::quote-spread {:default 3 :doc "How many times the mean the quote's upper time bound is, at least." :spec (a/num-in 1 nil)}
    ::walk-s {:default 5 :doc "Seconds the walk to the face takes, for the quote." :spec (a/num-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 
 (defn done?

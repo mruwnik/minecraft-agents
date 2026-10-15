@@ -80,9 +80,9 @@
   3)
 
 (a/defargs settings
-  {::time-s {:default 900 :doc "Seconds a felling may take: the search, a fetch, the walk, the digs and a pillar." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 900 :doc "Seconds a felling may take: the search, a fetch, the walk, the digs and a pillar." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 (defn max-steps [] (settings/get settings ::max-steps))
 
 (def job 'jobs.forestry.fell-tree)
@@ -384,7 +384,7 @@
 
 (def target [:at])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def sheltered
   "Later :night-sheltered at night in a shelter: the trees are outside, and a search from inside proves none reachable."

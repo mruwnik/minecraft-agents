@@ -32,13 +32,13 @@
    :max-failures {:doc "failed steps in a row before the job ends nothing-possible" :spec (a/int-in 1 nil) :default 6}})
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-steps {:default 40 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 1 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
 (def target [:cells])
 
-(def defaults {:use {:blocks :build} :least :all :spend {:job-time ::time-s}})
+(def defaults {:use {:blocks :build} :least :all :spend {:job-time ::job-time-s}})
 
 (defn wanted
   "The block names the call fills with: its :use {:blocks}, else (before the call starts) the carried building blocks."

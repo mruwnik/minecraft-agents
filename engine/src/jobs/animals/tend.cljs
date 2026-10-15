@@ -60,9 +60,9 @@
 (def target [:plan :part :box])
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds a tend pass may take." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 600 :doc "Seconds a tend pass may take." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def steps [:breed :cull :shear :collect :deposit])
 

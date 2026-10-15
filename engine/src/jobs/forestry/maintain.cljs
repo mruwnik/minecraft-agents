@@ -444,7 +444,7 @@
 
 (a/defargs settings
   {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::time-s {:default 1800 :doc "Seconds a maintain run may take: the fellings, collecting, plantings and walks." :spec (a/num-in 0 nil)}})
+   ::job-time-s {:default 1800 :doc "Seconds a maintain run may take: the fellings, collecting, plantings and walks." :spec (a/num-in 0 nil)}})
 
 (defn ^:async round [c]
   (let [n (atom 0)]
@@ -454,7 +454,7 @@
 
 (def target [:plan :part])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? not-ready)
 
@@ -466,4 +466,4 @@
                     :done (+ (:felled m 0) (:planted m 0)) :result {:felled (:felled m 0) :planted (:planted m 0)})))
 
 (defn quote-of [_c]
-  {:uses {:job-time [1 60 (settings/get settings ::time-s)]}})
+  {:uses {:job-time [1 60 (settings/get settings ::job-time-s)]}})

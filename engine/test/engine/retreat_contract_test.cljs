@@ -38,7 +38,7 @@
         (let [def (get registry/jobs 'jobs.survival.retreat)
               c {:primitives (tu/fake {}) :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}}]
           (is (nil? (:check def)))
-          (is (= {:spend {:job-time :jobs.survival.retreat/time-s}} (:defaults def)))
+          (is (= {:spend {:job-time :jobs.survival.retreat/job-time-s}} (:defaults def)))
           (is (= [:later :fleeing] (tu/kind-reason ((:done? def) c))))
           (is (= {:units :hostiles :done 0 :left 0} (select-keys (nth ((:done? def) c) 2) [:units :done :left])))
           (is (nil? (contract/quote-problem (await ((:quote-of def) c))))))))))
@@ -58,7 +58,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (settings/with-settings {:jobs.survival.retreat/time-s 3}
+        (await (settings/with-settings {:jobs.survival.retreat/job-time-s 3}
                  (fn ^:async spend []
                    (let [{:keys [eng seen]} (setup {:entities chaser} (atom nil))]
                      (core/submit! eng '(jobs.survival.retreat {}) {})
@@ -71,7 +71,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [time-s [1.3 2.2 2.6 3.4 4.9]]
-          (await (settings/with-settings {:jobs.survival.retreat/time-s time-s}
+          (await (settings/with-settings {:jobs.survival.retreat/job-time-s time-s}
                    (fn ^:async near-budget []
                      (let [{:keys [eng seen]} (setup {:entities chaser} (atom nil))]
                        (core/submit! eng '(jobs.survival.retreat {}) {})

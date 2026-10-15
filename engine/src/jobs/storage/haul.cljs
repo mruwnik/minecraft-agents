@@ -35,12 +35,12 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 900 :doc "Seconds a haul may last: every walk, bag load and deposit." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 900 :doc "Seconds a haul may last: every walk, bag load and deposit." :spec (a/num-in 0 nil)}
    ::chest-s {:default 20 :doc "Seconds a quote counts for one source chest: the walk, the load and its share of the deposits." :spec (a/num-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:from])
-(def defaults {:least :all :spend {:job-time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (defn no-source [c]
   (when (empty? (:from (:args c))) {:reason :no-source}))

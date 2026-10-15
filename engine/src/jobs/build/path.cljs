@@ -47,7 +47,7 @@
 
 (a/defargs settings
   {::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
-   ::time-s {:default 600 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 600 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
 (def pathable #{"grass_block" "dirt" "coarse_dirt" "podzol" "mycelium" "rooted_dirt"})
@@ -56,7 +56,7 @@
 (defn max-tries [] (settings/get settings ::max-tries))
 (def no-shovel {:reason :no-tool :kind "shovel"})
 (def target [:from :to :center :radius])
-(def defaults {:use {:tools :shovel} :spend {:job-time ::time-s}})
+(def defaults {:use {:tools :shovel} :spend {:job-time ::job-time-s}})
 
 (defn span [a b] (range (min a b) (inc (max a b))))
 (defn span-size [a b] (inc (js/Math.abs (- a b))))

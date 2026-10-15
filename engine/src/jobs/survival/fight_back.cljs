@@ -37,12 +37,12 @@
    :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach (night, with more hostiles about than the body sees)" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a fight may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds a fight may take." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the target the body stands to hit, in blocks." :spec (a/int-in 0 nil)}
    ::ranged-chase {:default 6 :doc "Farthest a ranged mob may be for the body to cross open ground to it while another hostile is in range; beyond it the fight declines." :spec (a/num-in 0 nil)}})
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s} :use {:tools :attack}})
+(def defaults {:spend {:job-time ::job-time-s} :use {:tools :attack}})
 
 (defn reach [] (settings/get settings ::reach))
 (defn ranged-chase [] (settings/get settings ::ranged-chase))

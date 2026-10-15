@@ -36,7 +36,7 @@
 
 (a/defargs settings
   {::search-radius {:default 48 :doc "Blocks within which a trader is looked for." :spec (a/int-in 0 nil)}
-   ::time-s {:default 120 :doc "Seconds one purchase may take." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 120 :doc "Seconds one purchase may take." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}})
 (defn search-radius [] (settings/get settings ::search-radius))
 (defn reach [] (settings/get settings ::reach))
@@ -47,7 +47,7 @@
 
 (def target [:villager :buy])
 
-(def defaults {:least :all :spend {:job-time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (defn bad-args
   "Never :bad-args when no villager uuid or no item name is given."

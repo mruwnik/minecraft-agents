@@ -192,7 +192,7 @@
         (is (= [:condition-failed :no-bed]
                (ending-of (await (call! (spawn-world {}) 'jobs.survival.bed-down {:fetch false} (constantly nil))))))))))
 (deftest bed-down-time-budget-covers-a-whole-bed-fetch-and-the-sleep
-  (is (>= (settings/get bed-down/settings ::bed-down/time-s) (+ (obtain/time-s) 300))))
+  (is (>= (settings/get bed-down/settings ::bed-down/job-time-s) (+ (obtain/time-s) 300))))
 
 (deftest bed-down-fetch-false-starts-no-fetch
   (async done

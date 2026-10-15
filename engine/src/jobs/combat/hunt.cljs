@@ -65,12 +65,12 @@
    :max-skips {:doc "animals skipped in a row before the hunt gives up" :spec (a/int-in 1 nil) :default 3}})
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds a hunt may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 600 :doc "Seconds a hunt may take." :spec (a/num-in 0 nil)}
    ::sight-radius {:default 64 :doc "How far the :too-few wait looks for the nearest adult of the kind, in blocks." :spec (a/num-in 0 nil)}})
 
 (def target [:mob])
 
-(def defaults {:spend {:job-time ::time-s} :least 1 :use {:tools :attack}})
+(def defaults {:spend {:job-time ::job-time-s} :least 1 :use {:tools :attack}})
 
 (defn adults-within
   "The adult entities named :mob within radius blocks, nearest first, never players, items or babies

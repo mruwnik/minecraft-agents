@@ -60,15 +60,15 @@
    :fetch {:doc "get missing blocks with jobs.items.obtain instead of ending :too-few-blocks (false: end); a set of kinds or a map of limits counts as true" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds a bridge may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 600 :doc "Seconds a bridge may take." :spec (a/num-in 0 nil)}
    ::max-length {:default 64 :doc "Longest bridge a call may ask for, in blocks." :spec (a/int-in 0 nil)}
    ::max-failures {:default 3 :doc "Failed moves or recoveries before the bridge gives up." :spec (a/int-in 0 nil)}})
 (defn max-length [] (settings/get settings ::max-length))
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:heading])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def purpose :bridge)
 

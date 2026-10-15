@@ -60,9 +60,9 @@
 (def ways [:chest :craft :gather])
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds a tool may take to get (the obtain it runs has its own cut)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 600 :doc "Seconds a tool may take to get (the obtain it runs has its own cut)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:ways (set ways) :spend {:job-time ::time-s}})
+(def defaults {:ways (set ways) :spend {:job-time ::job-time-s}})
 
 (defn ways-of [c] (set (or (:ways (ctx/frozen-call c)) (:ways (:args c)) (:ways defaults))))
 

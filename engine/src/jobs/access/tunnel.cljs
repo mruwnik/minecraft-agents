@@ -110,8 +110,8 @@
   not tools.")
 
 (a/defargs settings
-  {::time-s {:default 1800 :doc "Seconds a tunnel may take, in and (a dead end) out." :spec (a/num-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+  {::job-time-s {:default 1800 :doc "Seconds a tunnel may take, in and (a dead end) out." :spec (a/num-in 0 nil)}})
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (a/defargs args
   {:target {:doc "the buried block [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
@@ -128,7 +128,7 @@
 
 (def target [:target])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn target-of
   "The :target arg as [x y z], or nil when unset."

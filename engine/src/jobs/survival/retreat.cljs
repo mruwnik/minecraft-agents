@@ -110,7 +110,7 @@
   after a few seconds); then the flight ends :hidden. After :hide-s in the refuge with no real danger on the body as it
   stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays
   (info retreat.hide-ended): the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup).
-  A chase is bounded by the call's time spend (default ::time-s): past it the flight ends limit-reached :job-time where it
+  A chase is bounded by the call's time spend (default ::job-time-s): past it the flight ends limit-reached :job-time where it
   stands (refuge included) and the hostile trigger fires again while the danger stays. With no new best gap to the
   nearest chaser in :no-gain-steps steps it takes the cornered options instead of walking on; it ends nothing-possible
   :cannot_escape only once every option failed in two sweeps in a row with no gain between.
@@ -149,12 +149,12 @@
 
 
 (a/defargs settings
-  {::time-s {:default 420 :doc "Seconds of a flight's time spend, a hide up to retreat-refuge ::hide-max-s included: past it the flight ends limit-reached and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 420 :doc "Seconds of a flight's time spend, a hide up to retreat-refuge ::hide-max-s included: past it the flight ends limit-reached and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
    ::mean-s {:default 20 :doc "Seconds a flight is guessed to take, the mean of its quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 
 (defn done?

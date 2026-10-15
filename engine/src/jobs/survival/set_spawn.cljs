@@ -41,7 +41,7 @@
         (sh/seen-bed (:primitives c)))))
 
 (a/defargs settings
-  {::time-s {:default 60 :doc "Seconds the walk to the bed and the click may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 60 :doc "Seconds the walk to the bed and the click may take." :spec (a/num-in 0 nil)}
    ::click-s {:default 10 :doc "Seconds the walk to the bed and the click take, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn has-bed [c] (if (bed-of c) (contract/ok :bed "a bed") (contract/later :no-bed "no bed given, remembered or seen")))
@@ -50,7 +50,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn spawn-here? [c]
   (let [bed (bed-of c)]

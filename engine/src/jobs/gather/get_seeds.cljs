@@ -72,14 +72,14 @@
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
-   ::time-s {:default 600 :doc "Seconds a gathering may take: the walks, digs, drops and the chest." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 600 :doc "Seconds a gathering may take: the walks, digs, drops and the chest." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:item :chest :plan])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def materials
   {"wheat_seeds" {:from :grass :sources ["short_grass" "tall_grass"]}

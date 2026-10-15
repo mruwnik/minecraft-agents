@@ -37,9 +37,9 @@
                    (fn [c] (let [{:keys [pos wait-s]} (:args c)] (and (some? pos) (number? wait-s) (pos? wait-s))))))
 
 (a/defargs settings
-  {::time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? bad-args)
 

@@ -50,13 +50,13 @@
        vec))
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds a take may last: the walk and the transfers." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds a take may last: the walk and the transfers." :spec (a/num-in 0 nil)}
    ::take-s {:default 1 :doc "Seconds a quote counts for one transfer." :spec (a/num-in 0 nil)}
    ::walk-speed {:default 4 :doc "Blocks a second a quote counts for the walk to the chest." :spec (a/num-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:chest])
-(def defaults {:least :all :spend {:job-time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (def can-start? checks/chest-known)
 (def can-run? checks/chest-known)

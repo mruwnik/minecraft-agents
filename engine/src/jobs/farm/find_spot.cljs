@@ -36,7 +36,7 @@
    :walk {:doc "walk to the best spot (finding and walking are separate; a parent can walk)" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 30 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 30 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::water-reach {:default 4 :doc "Blocks from water within which farmland is hydrated." :spec (a/int-in 0 nil)}
    ::sky-extra {:default 8 :doc "Extra blocks of sky checked above a spot." :spec (a/int-in 0 nil)}})
 (defn water-reach [] (settings/get settings ::water-reach))
@@ -178,7 +178,7 @@
 
 (def target [:center :w :h])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn done?
   "An act with no goal state: :later, the round ends the search (and the walk) with the spots it found."

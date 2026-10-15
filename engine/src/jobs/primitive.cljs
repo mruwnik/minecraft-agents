@@ -24,7 +24,7 @@
         (contract/ok :args "args given")))))
 
 (a/defargs settings
-  {::time-s {:default 300 :doc "Seconds one primitive act may take before it gives up (:limit-reached); an offline act is the longest." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 300 :doc "Seconds one primitive act may take before it gives up (:limit-reached); an offline act is the longest." :spec (a/num-in 0 nil)}})
 
 (def precondition-statuses
   "Statuses that say a precondition was false before the act ran (a failed condition); any other status the table
@@ -63,7 +63,7 @@
      :doc (str "The primitive " k " as a job: one act, which cannot be stopped midway. Takes the act's args (engine/README,"
                " Acting). Ends done when the act's status is a success, else with the ending its status maps to; the result"
                " fields are the ending's data.")
-     :defaults {:spend {:job-time ::time-s}} :settings settings
+     :defaults {:spend {:job-time ::job-time-s}} :settings settings
      :quote-of (fn [c] (quote-of (:primitives c) (:args c)))
      :round (fn ^:async primitive-round [c]
               (let [r (try (await (ctx/act c k (act-args (:args c))))

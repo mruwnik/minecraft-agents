@@ -196,7 +196,7 @@
        (when-not (or trouble (sound? c cells))
          (check-cache/cached c :ready #(not-ready c cells)))))))
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? (cond/and plan-problem ready-problem))
 (def can-run? plan-problem)
@@ -268,7 +268,7 @@
 (defn break-text [{:keys [pos why]}] (str (name why) " " (pr-str pos)))
 
 (a/defargs settings
-  {::time-s {:default 1800 :doc "Seconds one rail line may take." :spec (a/int-in 1 nil)}
+  {::job-time-s {:default 1800 :doc "Seconds one rail line may take." :spec (a/int-in 1 nil)}
    ::max-breaks {:default 12 :doc "Blocks broken for one rail line before it gives up." :spec (a/int-in 0 nil)}})
 (defn max-breaks [] (settings/get settings ::max-breaks))
 

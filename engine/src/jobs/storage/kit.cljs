@@ -63,12 +63,12 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 300 :doc "Seconds a kit may last: the walks, the chest visits and the crafts." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 300 :doc "Seconds a kit may last: the walks, the chest visits and the crafts." :spec (a/num-in 0 nil)}
    ::kind-s {:default 20 :doc "Seconds a quote counts for each kind of the kit." :spec (a/num-in 0 nil)}})
 
 (def target [:chest])
 
-(def defaults {:least :all :spend {:job-time ::time-s}})
+(def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (defn kind-of?
   "Does item name belong to tool kind: equal to it or ending in _kind."
@@ -174,7 +174,7 @@
   [c]
   (let [kinds (inc (count (:tools (:args c))))
         t (* kinds (settings/get settings ::kind-s))]
-    {:uses {:job-time [0 t (max t (settings/get settings ::time-s))]}}))
+    {:uses {:job-time [0 t (max t (settings/get settings ::job-time-s))]}}))
 
 (defn end!
   "ctx/end, but done when the units of done? meet the call's :least."

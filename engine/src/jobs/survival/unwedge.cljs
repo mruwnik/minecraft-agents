@@ -31,7 +31,7 @@
 
 (def target [])
 (def ways [:step :dig])
-(def defaults {:spend {:job-time ::time-s} :ways #{:step :dig}})
+(def defaults {:spend {:job-time ::job-time-s} :ways #{:step :dig}})
 
 
 (defn done? [c]
@@ -74,7 +74,7 @@
           :else (await (fail! c cell status)))))))
 
 (a/defargs settings
-  {::time-s {:default 30 :doc "Seconds getting out of a block may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 30 :doc "Seconds getting out of a block may take." :spec (a/num-in 0 nil)}
    ::max-passes {:default 8 :doc "Tries (a step or a dig) in one run before it stops." :spec (a/int-in 0 nil)}
    ::pass-s {:default 1.5 :doc "Seconds one try (a step or a dig) takes, the quote's unit." :spec (a/num-in 0 nil)}})
 (defn max-passes [] (settings/get settings ::max-passes))

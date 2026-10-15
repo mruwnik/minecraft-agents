@@ -55,7 +55,7 @@
    :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default true}})
 
 (def target [:pos])
-(def defaults {:use {:blocks :build} :spend {:job-time ::time-s}})
+(def defaults {:use {:blocks :build} :spend {:job-time ::job-time-s}})
 
 (defn wanted
   "The block names the call places: :item, else the call's :use {:blocks}, else (before the call starts) the carried
@@ -211,7 +211,7 @@
       (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed :primitive status :why (refusal-why r)}))))
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-walks {:default 2 :doc "Failed walks of one call before it ends :unreachable." :spec (a/int-in 0 nil)}
    ::max-steps {:default 12 :doc "Walks, clears and fetches of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
 (defn max-walks [] (settings/get settings ::max-walks))

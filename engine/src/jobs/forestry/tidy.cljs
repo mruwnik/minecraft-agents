@@ -29,7 +29,7 @@
 
 (a/defargs settings
   {::max-trees {:default 8 :doc "The most trunks one tidy run fells." :spec (a/int-in 1 nil)}
-   ::time-s {:default 1200 :doc "Seconds a tidy run may take: the trunks, their drops and replants." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 1200 :doc "Seconds a tidy run may take: the trunks, their drops and replants." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Child calls of one round before it gives the body back with :continue." :spec (a/int-in 1 nil)}
    ::ground-depth {:default 24 :doc "Blocks under a raised log looked down for the ground to replant on." :spec (a/int-in 1 nil)}})
 
@@ -186,7 +186,7 @@
 
 (def target [:species])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn done?
   "No trunk is chosen or in sight, the body has looked round and no child is under way; the trunks tidied and the
@@ -203,5 +203,5 @@
 
 (defn quote-of [c]
   (let [k (or (:max-trees (:args c)) (settings/get settings ::max-trees))]
-    {:uses {:job-time [2 (* 15 (min k 2)) (max (settings/get settings ::time-s) (* 30 k))]}
+    {:uses {:job-time [2 (* 15 (min k 2)) (max (settings/get settings ::job-time-s) (* 30 k))]}
      :done [0 1 k]}))

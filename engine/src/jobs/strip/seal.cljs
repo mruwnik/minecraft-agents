@@ -31,15 +31,15 @@
   already shut). Else strip.seal.stopped (warn) with data {:placed n
   :cell [x y z] :short n :why}: impossible :bad-args; condition-failed :refused (zones, claims, plans), :blocked (a container in
   the section); nothing-possible :no-blocks (:short names the cells still open), :unreachable, :wrong-side. Spends
-  :time (default ::time-s).")
+  :time (default ::job-time-s).")
 
 (a/defargs settings
-  {::time-s {:default 600 :doc "Seconds a seal may take before it ends." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 600 :doc "Seconds a seal may take before it ends." :spec (a/num-in 0 nil)}
    ::s-per-cell {:default 4 :doc "Seconds a quote counts for one open cell of the section." :spec (a/num-in 0 nil)}})
 
 (def target [:at :axis :side])
 
-(def defaults {:spend {:job-time ::time-s} :use {:blocks :seal}})
+(def defaults {:spend {:job-time ::job-time-s} :use {:blocks :seal}})
 
 (a/defargs args
   {:at {:doc "the bottom centre cell of the section, [x y z]" :spec ::a/pos :default nil}
@@ -189,7 +189,7 @@
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-cell) (if (= :ok (first (bad-args c))) (count (open-cells c)) 0))]
-    {:uses {:job-time [0 t (max t (settings/get settings ::time-s))]}}))
+    {:uses {:job-time [0 t (max t (settings/get settings ::job-time-s))]}}))
 
 (defn ^:async round [c]
   (let [n (atom 0)]

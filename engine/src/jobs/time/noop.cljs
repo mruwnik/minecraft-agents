@@ -20,9 +20,9 @@
 (def target [])
 
 (a/defargs settings
-  {::time-s {:default 3600 :doc "Seconds one pause may take." :spec (a/int-in 1 nil)}})
+  {::job-time-s {:default 3600 :doc "Seconds one pause may take." :spec (a/int-in 1 nil)}})
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn total-ms [c] (* 1000 (:seconds (:args c) 0)))
 

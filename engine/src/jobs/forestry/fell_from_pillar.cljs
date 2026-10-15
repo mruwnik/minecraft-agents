@@ -49,14 +49,14 @@
 
 (a/defargs settings
   {::drop-radius {:default 6 :doc "Blocks round the base the cut logs are picked up from before a pillar is built." :spec (a/num-in 0 nil)}
-   ::time-s {:default 600 :doc "Seconds a pillar felling may take." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 600 :doc "Seconds a pillar felling may take." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::time-s))
+(defn time-s [] (settings/get settings ::job-time-s))
 (defn max-steps [] (settings/get settings ::max-steps))
 
 (def target [:base])
 
-(def defaults {:spend {:job-time ::time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def pillar-items (choose/fillers :pillar))
 
