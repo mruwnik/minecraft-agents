@@ -47,6 +47,8 @@
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
    :after [[:block [17 9 16] "air"] [:item "diamond" 1]]}
   {:name "stair-off-stair-detail"
+   ;; no walks back onto the line (they would take the body back and finish the stair), so it stops at once
+   :settings {:jobs.access.stair/max-returns 0}
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
          [:await {:source :job :kind :stair.step} 30]
