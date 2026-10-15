@@ -53,4 +53,13 @@
    :expect [{:event {:source :job :kind :torch.no-stock} :within-s 90 :of-job true}
             {:count-event {:source :job :kind :craft.short} :for-s 190 :at-most 3}
             {:event {:source :job :kind :mine.done} :within-s 190 :of-job true}]
-   :after [[:item "coal" 4]]}]}
+   :after [[:item "coal" 4]]}
+  ;; card 9d839b29: no coal, logs and a furnace and table at the start cell: the charcoal is waited for (the child's own wait), torches are stocked, hung
+  {:name "logs-and-a-furnace-charcoal-is-waited-for-then-torches-hang"
+   :blocks [[:set [2 0 15] "furnace[facing=south]"] [:set [3 0 15] "crafting_table"]]
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["oak_log" 11]]}
+   :expect [{:event {:source :job :kind :torch.stocked} :within-s 150 :of-job true}
+            {:event {:source :job :kind :mine.done} :within-s 195 :of-job true}
+            {:no-event {:source :job :kind :torch.no-stock} :for-s 190 :until {:source :job :kind :mine.done}}]
+   :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"]]
+   :limit-s 210}]}

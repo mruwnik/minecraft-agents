@@ -1,0 +1,19 @@
+;; The needs-weapon trigger (card eba9f703): by day a body carrying no weapon crafts the best sword it can (stone, else wooden).
+;; Body with 4 cobblestone, 2 sticks and a table in the bag. Should-succeed: no sword -> a stone sword. Should-fail: an iron sword carried -> nothing made.
+{:defaults
+ {:tags [:survival :needs-weapon :items]
+  :time :day
+  :plot {:height 8}
+  :register [{:trigger :needs-weapon}]
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "swordless-body-by-day-crafts-a-stone-sword"
+   :body {:inventory [["cobblestone" 4] ["stick" 2] ["crafting_table" 1]]}
+   :expect [{:event {:source :job :kind :completed} :within-s 90}]
+   :after [[:item "stone_sword" 1]]}
+  {:name "body-with-a-sword-makes-none"
+   :body {:inventory [["iron_sword" 1] ["cobblestone" 4] ["stick" 2] ["crafting_table" 1]]}
+   :expect [{:no-event {:source :job :kind :completed} :for-s 25}]
+   :after [[:item "stone_sword" 0] [:item "cobblestone" 4]]
+   :limit-s 40}]}

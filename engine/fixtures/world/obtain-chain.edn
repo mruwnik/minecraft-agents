@@ -72,4 +72,52 @@
    :body {:inventory [["stone_pickaxe[minecraft:damage=129]" 1] ["cobblestone" 64]]}
    :act [[:job (jobs.gather.mine {:block "iron_ore" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :no-tool}} :within-s 100 :of-job true}]
-   :after [[:block [20 0 16] "iron_ore"] [:item "stone_pickaxe" 1]]}]}
+   :after [[:block [20 0 16] "iron_ore"] [:item "stone_pickaxe" 1]]}
+  ;; card 90468b67: the pickaxe is a copper one whose ingots are still being smelted: the obtain waits, it does not stop no-source
+  {:name "copper-pickaxe-smelt-cooking-does-not-stop-the-mine-no-source"
+   :blocks [[:set [16 0 20] "crafting_table"] [:set [20 0 14] "furnace[facing=west]"] [:fill [24 0 15] [28 2 19] "stone"]]
+   :body {:inventory [["raw_copper" 3] ["stick" 2] ["coal" 2]]}
+   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 3 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 230 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 220 :until {:source :job :kind :completed}}]
+   :after [[:item "cobblestone" [:>= 3]]]
+   :limit-s 250}
+  ;; card 444d1240: planks need not be oak; the only tree seen is birch
+  {:name "stone-axe-from-cobble-and-a-seen-birch"
+   :blocks [[:fill [21 4 21] [23 5 23] "birch_leaves[persistent=true]"] [:fill [22 0 22] [22 4 22] "birch_log"]]
+   :body {:inventory [["cobblestone" 3]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+         [:job (jobs.items.obtain {:item "stone_axe" :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
+   :after [[:item "stone_axe" 1]]
+   :limit-s 170}
+  {:name "oak-log-with-only-birch-seen-stops-no-source-naming-birch"
+   :blocks [[:fill [21 4 21] [23 5 23] "birch_leaves[persistent=true]"] [:fill [22 0 22] [22 4 22] "birch_log"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+         [:job (jobs.items.obtain {:item "oak_log" :count 2 :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "birch_log"]}} :within-s 50 :of-job true}]
+   :after [[:item "oak_log" 0] [:block [22 0 22] "birch_log"]]
+   :limit-s 70}
+  ;; card ff7ec4e1: obsidian is mined when seen, or made with a water bucket on a seen lava source; a diamond pickaxe is needed
+  {:name "seen-obsidian-is-mined-with-a-diamond-pickaxe"
+   :blocks [[:fill [22 0 14] [26 2 18] "stone"] [:set [22 0 16] "obsidian"]]
+   :body {:inventory [["diamond_pickaxe" 1]]}
+   :act [[:job (jobs.items.obtain {:item "obsidian" :count 1 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
+   :after [[:item "obsidian" [:>= 1]]]
+   :limit-s 130}
+  {:name "water-on-a-seen-lava-source-makes-obsidian"
+   :blocks [[:fill [22 0 14] [26 0 18] "stone"] [:set [24 0 16] "lava"]]
+   :body {:inventory [["diamond_pickaxe" 1] ["water_bucket" 1]]}
+   :act [[:job (jobs.items.obtain {:item "obsidian" :count 1 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
+   :after [[:item "obsidian" [:>= 1]]]
+   :limit-s 130}
+  ;; card 6bbfb29c: a pick of ores on the way never walks to an ore it merely sees: the iron ore 26 blocks off stays, the body stays by its stone
+  {:name "mine-stone-does-not-wander-to-a-far-exposed-ore"
+   :blocks [[:fill [22 0 15] [28 2 19] "stone"] [:set [4 0 28] "iron_ore"]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.gather.mine {:block "stone" :count 2 :radius 10})]]
+   :expect [{:event {:source :job :kind :mine.done} :within-s 100 :of-job true}]
+   :after [[:block [4 0 28] "iron_ore"] [:item "raw_iron" 0] [:body-near [22 0 17] 14]]
+   :limit-s 120}]}
