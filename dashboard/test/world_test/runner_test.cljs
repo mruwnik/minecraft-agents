@@ -81,13 +81,15 @@
           (.then #(run [spawn at]))
           (.then (fn [{:keys [res sent]}]
                    (is (nil? res))
-                   (is (= 1 (count (filter #(re-find #"^tp " %) sent))) "one retry tp")))
+                   (is (= 1 (count (filter #(re-find #"^tp " %) sent))) "one retry tp")
+                   (is (= "gamemode survival B" (last sent)) "survival only once the body stands at its start")))
           (.then #(run (concat (repeat 12 spawn) [at])))
           (.then (fn [{:keys [res]}]
                    (is (nil? res) "entity data that lags after login is polled for about 5 s")))
           (.then #(run (repeat 30 spawn)))
-          (.then (fn [{:keys [res]}]
+          (.then (fn [{:keys [res sent]}]
                    (is (re-find #"not at its start" res))
+                   (is (not-any? #(re-find #"^gamemode" %) sent) "a body not at its start stays a spectator")
                    (done)))))))
 
 (deftest a-register-case-counts-events-from-before-the-register-was-put

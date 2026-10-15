@@ -21,11 +21,22 @@
   {:z0 20704 :stride 96 :count 16 :max-length 1024 :max-width 64 :min-length 16})
 
 (def mob-rows
-  "Grid rows 0..mob-rows-1 hold the mob plots (every second row and column, so a mob plot has an empty plot on each
-  side, 32 blocks, beyond the body's 16 block hearing); plain cases use the rows from mob-rows + 1 on."
+  "Grid rows 0..mob-rows-1 hold the mob plots; plain cases use the rows from mob-rows + 1 on."
   9)
 
-(defn mob-plot-count [{:keys [cols]}] (* (quot (inc mob-rows) 2) (quot cols 2)))
+(def mob-stride
+  "A mob plot lies on every mob-stride-th row and column: 64 blocks of air between two, beyond the body's sight (about
+  48) and a zombie's follow range (35)."
+  3)
+
+(def mob-margin
+  "Blocks of air a mob plot's setup clears on every side (half the gap to the next one): no floor joins it to another
+  plot, so no mob walks over and none spawns near."
+  32)
+
+(defn mob-cols [{:keys [cols]}] (quot (+ cols (dec mob-stride)) mob-stride))
+
+(defn mob-plot-count [grid] (* (quot (+ mob-rows (dec mob-stride)) mob-stride) (mob-cols grid)))
 
 (defn plot-origin
   "The origin [x y z] of plot i: its north-west corner at body level. Plots n + lanes and up are the mob plots."
@@ -34,7 +45,8 @@
         k (- i n count)]
     (cond
       (< -1 (- i n) count) [x0 y (+ lz (* stride (- i n)))]
-      (< -1 k (mob-plot-count grid)) [(+ x0 (* size 2 (mod k (quot cols 2)))) y (+ z0 (* size 2 (quot k (quot cols 2))))]
+      (< -1 k (mob-plot-count grid)) [(+ x0 (* size mob-stride (mod k (mob-cols grid)))) y
+                                      (+ z0 (* size mob-stride (quot k (mob-cols grid))))]
       (>= i n) (throw (js/Error. (str "plot " i " is outside the grid (" n " plots, " count " large lanes, " (mob-plot-count grid) " mob plots)")))
       :else [(+ x0 (* size (mod i cols))) y (+ z0 (* size (quot i cols)))])))
 
@@ -395,10 +407,24 @@
   (let [[sx sz] (dims grid)]
     (if (or (> sx 32) (> sz 32)) (assoc grid :size-z (:max-width large-lanes)) grid)))
 
+(defn island
+  "[grid origin height] of the box a mob plot's setup clears to air: mob-margin round the plot and 8 below its floor."
+  [grid [ox oy oz] height]
+  (let [[sx sz] (dims grid) m mob-margin]
+    [(assoc grid :size-x (+ sx m m) :size-z (+ sz m m)) [(- ox m) (- oy 7) (- oz m)] (+ height 7)]))
+
+(defn load-box
+  "[grid origin] of the area a plot loads: a large plot its lane's width, a mob plot its island."
+  [grid origin]
+  (if (:mob-plots? grid)
+    (take 2 (island grid origin 0))
+    [(lane-grid grid) origin]))
+
 (defn forceload-commands
-  "One forceload per 128-block slice of the plot (a command takes at most 256 chunks); a large plot loads its lane's width."
-  [op grid [ox _ oz]]
-  (let [[sx sz] (dims (lane-grid grid))]
+  "One forceload per 128-block slice of the plot's load-box (a command takes at most 256 chunks)."
+  [op grid origin]
+  (let [[grid [ox _ oz]] (load-box grid origin)
+        [sx sz] (dims grid)]
     (for [[x0 x1] (segments ox sx 128)]
       (str "forceload " op " " x0 " " oz " " x1 " " (+ oz (dec sz))))))
 
@@ -458,11 +484,13 @@
 
 (defn setup-commands
   "Forceload the plot, kill every non-player entity in it, clear it to air and lay the floor (a large plot first drops
-  the floor of its whole lane width)."
+  the floor of its whole lane width, a mob plot first clears its island)."
   [grid origin c]
   (let [{:keys [height floor]} (:plot c)
-        lane (lane-grid grid)]
+        lane (lane-grid grid)
+        [ig io ih] (island grid origin height)]
     (-> (vec (forceload-commands "add" grid origin))
+        (cond-> (:mob-plots? grid) (-> (conj (kill-command ig io ih)) (into (clear-commands ig io ih "air"))))
         (conj (kill-command grid origin height))
         (cond-> (not= lane grid) (into (clear-commands lane origin 0 "air")))
         (into (clear-commands grid origin height floor)))))
@@ -521,7 +549,7 @@
         (resolve-tags register origin)))
 
 (defn park-commands
-  "Before the plot is built: the body (still wherever the last case left it, maybe inside this plot) becomes a spectator, so stone filled over it does not hurt it; body-commands puts it back in survival."
+  "Before the plot is built: the body (still wherever the last case left it, maybe inside this plot) becomes a spectator, so stone filled over it does not hurt it; ensure-at-start! puts it back in survival."
   [body]
   [(str "gamemode spectator " body)])
 
@@ -530,14 +558,14 @@
   ["armor.head" "armor.chest" "armor.legs" "armor.feet" "weapon.offhand"])
 
 (defn body-commands
-  "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down): on the plot (tp first, while still a spectator, then survival), healed and fed, its inventory and effects as the case says."
+  "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down), still a spectator
+  (ensure-at-start! makes it survival once it stands there), healed and fed, its inventory and effects as the case says."
   [origin body c]
   (let [{:keys [at yaw pitch inventory effects spawnpoint]} (:body c)]
     (-> [(str "clear " body)
          (str "effect clear " body)]
         (into (for [slot worn-slots] (str "item replace entity " body " " slot " with minecraft:air")))
         (into [(str "tp " body " " (xyz-str (abs-pos origin at)) " " (or yaw 0) " " (or pitch 0))
-               (str "gamemode survival " body)
                (str "effect give " body " minecraft:instant_health 1 10 true")
                (str "effect give " body " minecraft:saturation 1 10 true")])
         (into (for [[item n] inventory] (str "give " body " " item " " (or n 1))))
@@ -552,6 +580,8 @@
   [events]
   (when-let [e (some #(when (and (= :hurt (:kind %)) (some #{"suffocation"} (get-in % [:data :causes]))) %) events)]
     (str "the body was hurt by suffocation at the start (" (get-in e [:data :amount]) " damage): it stood inside a block")))
+
+(defn survival-commands [body] [(str "gamemode survival " body)])
 
 (defn start-check-command [body] (str "data get entity " body " Pos"))
 

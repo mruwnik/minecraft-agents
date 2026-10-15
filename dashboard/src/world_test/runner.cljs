@@ -1387,8 +1387,9 @@
 
 (defn ensure-at-start!
   "Checks the body stands at the case's start after body-commands; when it does not (a tp that did not take), repeats
-  the tp and polls up to 16 times, 300 ms apart (about 5 s). Resolves to nil when it stands there, else to the failure message. io: {:send cmds->promise of
-  replies, :sleep ms->promise}."
+  the tp and polls up to 16 times, 300 ms apart (about 5 s). Once it stands there it becomes survival (a spectator
+  switched where the tp did not take suffocates in the blocks built there) and this resolves to nil, else to the
+  failure message. io: {:send cmds->promise of replies, :sleep ms->promise}."
   [{:keys [send sleep]} origin body c]
   (let [{:keys [at yaw]} (:body c)
         tp (str "tp " body " " (f/xyz-str (f/abs-pos origin at)) " " (or yaw 0) " 0")]
@@ -1397,7 +1398,7 @@
                      (fn [[reply]]
                        (let [{:keys [pass? why]} (f/judge-start origin c (or reply ""))]
                          (cond
-                           pass? nil
+                           pass? (.then (send (f/survival-commands body)) (constantly nil))
                            (zero? retries) (str why " (tp repeated 16 times over 5 s)")
                            :else (.then (send [tp]) (fn [_] (.then (sleep 300) #(check (dec retries))))))))))]
       (check 16))))

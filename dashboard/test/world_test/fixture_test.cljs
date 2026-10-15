@@ -42,20 +42,46 @@
 
 (def mob-case {:plot {} :act [[:wait-s 1] [:summon "skeleton" [3.5 0 3.5] "{NoAI:1b}"]]})
 
-(deftest mob-cases-lie-two-plots-apart-and-away-from-the-others
+(defn widen [[x z x2 z2] m] [(- x m) (- z m) (+ x2 m) (+ z2 m)])
+
+(deftest mob-cases-lie-three-plots-apart-beyond-sight-of-the-others
   (let [g (f/case-grid mob-case)
         [from end] (f/plot-range g)
         rects (map #(rect g %) (range from end))
-        plain (map #(rect (f/case-grid {:plot {}}) %) (range 200 400))
-        gap 16]
-    (is (= [416 466] [from end]))
+        others (concat (map #(rect (f/case-grid {:plot {}}) %) (range 200 400))
+                       (map #(rect (f/case-grid {:plot {:length 1024 :width 64}}) %) (range 400 416)))
+        sight 48]
+    (is (= [416 437] [from end]))
     (is (= [20000 150 20000] (f/plot-origin g 416)))
-    (is (= [20064 150 20000] (f/plot-origin g 417)))
-    (is (= [20000 150 20064] (f/plot-origin g 426)))
-    (is (thrown? js/Error (f/plot-origin g 466)))
-    (is (not-any? (fn [[a b]] (overlap? (let [[x z x2 z2] a] [(- x gap) (- z gap) (+ x2 gap) (+ z2 gap)]) b))
-                  (for [a rects b (concat plain (remove #{a} rects))] [a b]))
-        "no other leased plot lies within hearing (16 blocks) of a mob plot")))
+    (is (= [20096 150 20000] (f/plot-origin g 417)))
+    (is (= [20000 150 20096] (f/plot-origin g 423)))
+    (is (thrown? js/Error (f/plot-origin g 437)))
+    (is (not-any? (fn [[a b]] (overlap? (widen a sight) b)) (for [a rects b (concat others (remove #{a} rects))] [a b]))
+        "no other leased plot lies within sight (about 48 blocks) of a mob plot")))
+
+(deftest mob-plot-setup-clears-an-island-round-it
+  (let [g (f/case-grid mob-case)
+        origin (f/plot-origin g 417)
+        c {:plot {:height 16 :floor "stone"}}
+        cmds (f/setup-commands g origin c)
+        nums (fn [re] (for [c cmds :when (re-find re c)] (mapv js/Number (re-seq #"-?\d+" c))))
+        air (nums #"^fill .* air$")
+        idx (fn [re] (first (keep-indexed #(when (re-find re %2) %1) cmds)))
+        island (widen (rect g 417) 32)
+        others (concat (map #(rect g %) (remove #{417} (range 416 437)))
+                       (map #(rect (f/case-grid {:plot {}}) %) (range 200 400))
+                       (map #(rect (f/case-grid {:plot {:length 1024 :width 64}}) %) (range 400 416)))]
+    (is (= "forceload add 20064 19968 20159 20063" (first cmds)))
+    (is (some #{"kill @e[type=!player,x=20064,y=142,z=19968,dx=95,dy=24,dz=95]"} cmds))
+    (is (every? (fn [[x y z x2 y2 z2]] (<= (* (inc (- x2 x)) (inc (- y2 y)) (inc (- z2 z))) 32768)) air))
+    (is (= [20064 142 19968 20159 166 20063]
+           [(apply min (map #(% 0) air)) (apply min (map #(% 1) air)) (apply min (map #(% 2) air))
+            (apply max (map #(% 3) air)) (apply max (map #(% 4) air)) (apply max (map #(% 5) air))])
+        "air all round the plot and 8 below its floor: no floor joins it to another plot, so no mob walks over or spawns near")
+    (is (< (idx #"^fill 20064 142 19968") (idx #"149 20031 stone$")) "the plot's floor is laid after the island is cleared")
+    (is (not-any? #(overlap? island %) others) "an island never reaches another plot")
+    (is (= ["forceload remove 20064 19968 20159 20063"]
+           (filter #(re-find #"^forceload remove" %) (f/cleanup-commands g origin "B" c))))))
 
 (deftest hostile-summons-make-a-mob-case
   (is (f/mob-case? mob-case))
@@ -187,8 +213,8 @@
       (is (some #{"tp ProbeFixture 20016.5 150 20016.5 0 0"} body))
       (is (some #{"give ProbeFixture bread 3"} body))
       (is (some #{"effect give ProbeFixture resistance 3600 4 true"} body))
-      (is (< (.indexOf body "tp ProbeFixture 20016.5 150 20016.5 0 0") (.indexOf body "gamemode survival ProbeFixture"))
-          "survival comes after the tp: a body switched while still inside the built plot suffocates")
+      (is (not-any? #(re-find #"^gamemode" %) body)
+          "the body stays a spectator until it stands at its start (ensure-at-start!): one switched inside the built plot suffocates")
       (is (= "clear ProbeFixture" (first body)))
       (is (every? (set body) ["item replace entity ProbeFixture armor.head with minecraft:air"
                               "item replace entity ProbeFixture armor.chest with minecraft:air"
