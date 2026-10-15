@@ -1,5 +1,6 @@
 (ns jobs.survival.unwedge
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.checks :as checks]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]

@@ -1,5 +1,6 @@
 (ns jobs.survival.breathe
-  (:require [engine.args :as a]
+  (:require [jobs.lib.checks :as checks]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]

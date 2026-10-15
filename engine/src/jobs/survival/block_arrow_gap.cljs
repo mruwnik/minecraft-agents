@@ -1,5 +1,6 @@
 (ns jobs.survival.block-arrow-gap
-  (:require [jobs.lib.choose :as choose]
+  (:require [jobs.lib.checks :as checks]
+            [jobs.lib.choose :as choose]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.game :as game]
