@@ -22,6 +22,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.survival.retreat :as retreat]
+            [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-cornered :as cornered]
             [jobs.survival.retreat-cover :as cover]
             [jobs.survival.retreat-flight :as retreat-flight]
@@ -206,20 +207,23 @@
           (is (= :lost (:ended out)))
           (is (< (fake/dist (body-pos p) (mob-pos p 7)) 35) "lost before the follow range"))))))
 
+(deftest the-flight-time-spend-outlasts-the-longest-hide
+  (is (> (settings/get retreat/settings ::retreat/time-s) (refuge/hide-max-s))))
+
 (deftest a-flight-runs-past-the-old-180-s-bound-until-the-zombie-leaves
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 5 {:chase {:speed 1}})]})
-              {:keys [p clock]} s
+              {:keys [p]} s
               world (.-world p)
-              calls #(.-length (.-calls world))]
+              elapsed-s #(/ (* ms-per-call (.-length (.-calls world))) 1000)]
           (doseq [name ["steer" "moveTo" "wait" "attack" "place" "dig" "equip" "eat"]]
             (.override world name (fn ^:async f [token a impl]
-                                    (when (> (calls) 300) (swap! (fake/state p) assoc :entities []))
+                                    (when (> (elapsed-s) 180) (swap! (fake/state p) assoc :entities []))
                                     (await (impl token a)))))
           (let [{:keys [out]} (await (run-job! s 'jobs.survival.retreat {:no-gain-steps 3}))]
-            (is (> (calls) 300) "the chase went on past the old 180 s bound, until the zombie left")
+            (is (> (elapsed-s) 180) "the chase went on past the old 180 s bound, until the zombie left")
             (is (not= :still-chased (:reason out)))))))))
 
 (deftest a-flight-that-keeps-taking-hits-from-a-melee-mob-turns-and-fights-an-armed-body

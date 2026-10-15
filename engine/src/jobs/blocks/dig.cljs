@@ -72,8 +72,7 @@
   {::collect-radius {:default 8 :doc "Blocks within which dropped items are collected after a dig." :spec (a/int-in 0 nil)}
    ::max-walks {:default 2 :doc "Failed walks of one call before it declines :unreachable." :spec (a/int-in 0 nil)}
    ::max-steps {:default 12 :doc "Walks, digs and fetches of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::time-s {:default 300 :doc "Seconds one call may spend (walk, tool fetch, dig, drops) when the caller sets no :spend :time." :spec (a/num-in 0 nil)}
-   ::min-health {:default 6 :doc "Health below which a call stops, when the caller sets no :floor :health." :spec (a/num-in 0 nil)}})
+   ::time-s {:default 300 :doc "Seconds one call may spend (walk, tool fetch, dig, drops) when the caller sets no :spend :time." :spec (a/num-in 0 nil)}})
 (defn collect-radius [] (settings/get settings ::collect-radius))
 
 (defn use-tools
@@ -172,7 +171,7 @@
 
 (def target [:pos])
 
-(def defaults {:spend {:time ::time-s} :floor {:health ::min-health} :least 1 :use {:tools :dig}})
+(def defaults {:spend {:time ::time-s} :least 1 :use {:tools :dig}})
 
 (def conditions [[:fn bad-args] [:fn not-loaded] [:fn refused] [:fn no-tool-unfetched]])
 

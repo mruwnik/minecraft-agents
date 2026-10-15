@@ -87,6 +87,19 @@
           (is (= 1 (carried p "cobblestone")))
           (is (= 1 (count (filter #(= :blocks.dig.done (:kind %)) @seen)))))))))
 
+(deftest a-hurt-body-digs-unless-the-caller-passes-a-health-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self (assoc body :health 4) :blocks {"2,64,0" "stone"} :drops {"stone" "cobblestone"} :inventory pick}
+              {:keys [eng p]} (setup world)
+              dug (await (child-outcome eng job {:pos [2 64 0]} 10))
+              {eng2 :eng p2 :p} (setup world)
+              _ (await (child-outcome eng2 job {:pos [2 64 0] :floor {:health 6}} 10))]
+          (is (= :dug (:reason dug)))
+          (is (= "air" (block-at p at)))
+          (is (= "stone" (block-at p2 at))))))))
+
 (deftest a-call-given-use-list-picks-the-tool-the-default-would-not
   (async done
     (tu/run-async done
