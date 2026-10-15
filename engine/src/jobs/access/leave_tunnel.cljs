@@ -80,11 +80,6 @@
 
 (def can-start? (cond/and bad-args checks/zones-read))
 
-(defn done?
-  "Progress only: the job is done by the round that has sealed the mouth."
-  [c]
-  (contract/later :sealing "the mouth is to be sealed" :units :torches :done (count (:taken (ctx/mem c)))))
-
 (defn quote-of [c]
   (let [n (count (:torches (:tunnel (:args c))))]
     {:uses {:job-time [1 (+ 3 (* 4 n)) (max (+ 3 (* 4 n)) (time-s))]}}))
@@ -149,29 +144,71 @@
 
 (def condition-reasons "Stop reasons that read as a failed condition; any other stop is nothing possible." #{:no-tool})
 
+(defn result-of
+  "The result of the way out now: {:reason :at :taken :left :filled :open} plus detail; on a stop the torches still
+  standing are left too."
+  [c reason detail still]
+  (let [m (ctx/mem c)]
+    (merge {:reason reason :at (reach/standing-vec (:primitives c)) :taken (:taken m []) :left (into (:left m []) still)
+            :filled (:filled m []) :open (:open m [])}
+           detail)))
+
+(defn result-text [reason result]
+  (str "leave-tunnel " (name reason) ": took " (count (:taken result)) " torches, filled "
+       (count (:filled result)) ", left " (count (:left result)) " torches and " (count (:open result)) " cells"))
+
+(defn reached
+  "Why the way out is complete (:sealed, or :open with mouth cells booked open), or nil: every torch of the tunnel is
+  taken, left or seen gone, the entry is seen and no mouth cell is open but those booked. A cell not seen is not known."
+  [block-at tunnel m]
+  (let [dealt (set (concat (:taken m) (map :cell (:left m))))
+        booked (set (map :cell (:open m)))
+        entry (first (ln/line-cells (:line tunnel)))
+        gone? #(or (dealt %) (some-> (block-at %) (as-> n (not (torch/torch-blocks n)))))]
+    (when (and (:line tunnel) (block-at entry) (every? gone? (map :cell (:torches tunnel)))
+               (empty? (remove booked (mouth (:dug tunnel) entry block-at))))
+      (if (empty? (:open m)) :sealed :open))))
+
+(defn done?
+  "Ok once no torch of the tunnel stands and its mouth is shut but for the cells booked open (already, before the
+  start); else the torches taken."
+  [c]
+  (let [{:keys [tunnel]} (:args c)
+        m (ctx/mem c)
+        reason (when-not (:collect m) (reached (access/seen-at (:primitives c)) tunnel m))]
+    (if reason
+      (contract/ok reason "the tunnel is left" :units :torches :done (count (:taken m)) :left 0 :result (result-of c reason {} nil))
+      (contract/later :sealing "the mouth is to be sealed" :units :torches :done (count (:taken m))))))
+
+(defn ^:async cleanup
+  "After a way out that ended :done: the ledger entries of torches the stair or the fill destroyed are dropped, and
+  its event is told."
+  [c ending]
+  (when (= :done (:kind ending))
+    (forget-gone! c (:tunnel (:args c)) (access/sensed-at (:primitives c) nil))
+    (let [result (:data ending)
+          reason (:reason result)
+          text (result-text reason result)]
+      (if (= :open reason)
+        (ctx/emit! c :leave-tunnel.open :warn (assoc result :status :done :text text))
+        (ctx/emit! c :leave-tunnel.done :info (assoc result :status :done :text text)))))
+  (ctx/end c :done nil {}))
+
 (defn finish!
-  "Hand the ending over, with the event of its reason; on a stop the torches still standing are left too. reason is
-  a keyword, or a cause map with :reason."
+  "Hand the ending over; on a stop its event, with the torches still standing left too. reason is a keyword, or a cause
+  map with :reason. A :done ending's ledger tidy and event are cleanup's."
   [c status cause detail]
   (let [{:keys [tunnel]} (:args c)
         reason (if (map? cause) (:reason cause) cause)
-        m (ctx/mem c)
-        block-at (access/sensed-at (:primitives c) nil)
         stopped? (= :stopped status)
-        _ (forget-gone! c tunnel block-at)
+        block-at (access/sensed-at (:primitives c) nil)
         still (when stopped?
-                (map (fn [{:keys [cell site]}] {:cell cell :site site :reason reason}) (standing block-at tunnel m)))
-        result (merge {:reason reason :at (reach/standing-vec (:primitives c)) :taken (:taken m []) :left (into (:left m []) still)
-                       :filled (:filled m []) :open (:open m [])}
-                      detail)
-        text (str "leave-tunnel " (name reason) ": took " (count (:taken result)) " torches, filled "
-                  (count (:filled result)) ", left " (count (:left result)) " torches and " (count (:open result)) " cells")]
-    (case reason
-      :sealed (ctx/emit! c :leave-tunnel.done :info (assoc result :status status :text text))
-      :open (ctx/emit! c :leave-tunnel.open :warn (assoc result :status status :text text))
-      (ctx/emit! c :leave-tunnel.stopped :warn (assoc result :status status :text text)))
+                (map (fn [{:keys [cell site]}] {:cell cell :site site :reason reason}) (standing block-at tunnel (ctx/mem c))))
+        result (result-of c reason detail still)]
     (if stopped?
-      (ctx/end c (cond (= :bad-args reason) :impossible (condition-reasons reason) :condition-failed :else :nothing-possible) cause result)
+      (do (forget-gone! c tunnel block-at)
+          (ctx/emit! c :leave-tunnel.stopped :warn (assoc result :status status :text (result-text reason result)))
+          (ctx/end c (cond (= :bad-args reason) :impossible (condition-reasons reason) :condition-failed :else :nothing-possible) cause result))
       (ctx/end c :done nil result))))
 
 (defn ^:async walk-to!

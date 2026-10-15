@@ -46,6 +46,20 @@
         block-at (fn [cell] (if (some #{cell} cells) "air" (cliff cell)))]
     (is (= #{[0 61 -1] [0 62 -1] [0 63 -1]} (set (leave-tunnel/mouth (dug-of cells) [0 60 0] block-at))))))
 
+(deftest the-way-out-is-complete-when-no-torch-stands-and-the-mouth-is-shut
+  (let [line {:entry [0 65 0] :heading :north :dir :down :steps 2 :run 0 :stand [0 63 -2] :target [0 63 -3]}
+        tunnel {:line line :dug (dug-of [[0 64 -1] [0 63 -2]]) :torches [{:cell [0 64 -1] :site 0}]}
+        world (fn [named] (fn [[_ y _ :as cell]] (get named cell (if (> y 64) "air" "stone"))))
+        shut (world {[0 64 -1] "cobblestone" [0 63 -2] "air"})]
+    (is (= :sealed (leave-tunnel/reached shut tunnel {})) "torch cell filled, mouth shut")
+    (is (nil? (leave-tunnel/reached (world {[0 64 -1] "wall_torch"}) tunnel {})) "a torch stands")
+    (is (nil? (leave-tunnel/reached (world {[0 64 -1] "air"}) tunnel {})) "the mouth is open")
+    (is (= :open (leave-tunnel/reached (world {[0 64 -1] "air"}) tunnel {:open [{:cell [0 64 -1] :reason :no-blocks}]}))
+        "an open cell booked with its reason")
+    (is (nil? (leave-tunnel/reached (fn [cell] (when (not= cell [0 65 0]) "stone")) tunnel {})) "the entry is not seen")
+    (is (nil? (leave-tunnel/reached (fn [cell] (when (not= cell [0 64 -1]) "stone")) tunnel {})) "a torch cell not seen is not known")
+    (is (= :sealed (leave-tunnel/reached (fn [cell] (when (not= cell [0 64 -1]) "stone")) tunnel {:taken [[0 64 -1]]})) "but one taken is")))
+
 ;; ---------------------------------------------------------------- the escape, pure
 
 (deftest escape-attempts-go-back-along-the-heading-then-the-others-and-override-zones-only-when-asked
