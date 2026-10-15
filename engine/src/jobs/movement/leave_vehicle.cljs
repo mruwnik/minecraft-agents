@@ -1,6 +1,7 @@
 (ns jobs.movement.leave-vehicle
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
@@ -23,9 +24,9 @@
 (defn not-mounted
   "At the call's start: the cause :not-mounted when the body is on foot."
   [c]
-  (when-not (or (ctx/frozen-call c) (vehicle/mounted? (:primitives c))) :not-mounted))
+  (when-not (vehicle/mounted? (:primitives c)) :not-mounted))
 
-(def conditions [[:fn not-mounted]])
+(def conditions [[:fn (started/at-start not-mounted)]])
 
 (defn done?
   "Done once the body is off."

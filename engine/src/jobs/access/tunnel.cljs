@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [engine.settings :as settings]
             [jobs.access.stair :as stair]
             [jobs.access.stair.cells :as geo]
@@ -165,8 +166,7 @@
 
 (def conditions
   [[:fn no-zones]
-   [:fn (fn [c] (when-not (ctx/frozen-call c)
-                  (when-let [a (refusal c)] (assoc (access/refusal-fields [a]) :reason :refused))))]])
+   [:fn (started/at-start (fn [c] (when-let [a (refusal c)] (assoc (access/refusal-fields [a]) :reason :refused))))]])
 
 (defn quote-of [c]
   (let [feet (reach/standing-vec (:primitives c))

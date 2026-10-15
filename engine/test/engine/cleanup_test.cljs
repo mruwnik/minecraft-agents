@@ -21,6 +21,7 @@
             [engine.dig-to-see-test :as d]
             [jobs.lib.dig-look :as look]
             [jobs.access.cleanup :as cleanup]
+            [jobs.access.cleanup.step :as cleanup-step]
             [jobs.lib.result :as result]))
 
 ;; ------------------------------------------------------------------ the step
@@ -41,7 +42,7 @@
 (defn step [& {:as in}]
   (let [entries (:entries in)
         feet (:feet in [3 64 0])]
-    (cleanup/next-step (merge {:feet feet :eye (eye feet) :block-at (lookup) :entries entries
+    (cleanup-step/next-step (merge {:feet feet :eye (eye feet) :block-at (lookup) :entries entries
                                :ledger (set (map :cell entries)) :zones [] :footprints {} :accept #{:fluid-adjacent}
                                :reach 4.5 :held {} :guard-walks? true :max-below 4 :roof-height 4}
                               (dissoc in :feet)))))
@@ -127,7 +128,7 @@
 (deftest ledger-entries-in-an-own-plan-are-the-plans-not-scaffold
   (let [l [(entry [1 64 0]) (entry [5 64 0]) (entry [9 64 0])]
         footprints {[1 64 0] "hut" [5 64 0] "farm" [9 64 0] "hut"}]
-    (are [spare? own cells] (= cells (cleanup/plan-cells l footprints own spare?))
+    (are [spare? own cells] (= cells (cleanup-step/plan-cells l footprints own spare?))
       true #{"hut"} #{[1 64 0] [9 64 0]}
       true #{} #{}
       false #{"hut"} #{})))
@@ -727,10 +728,14 @@
     {:arrived true} false))
 
 (defn stub-go-to
-  "A go-to that records its args in calls and ends with result."
+  "A go-to that records its args and the call's :ways in calls and ends with result."
   [calls result]
-  {:check (constantly true)
-   :round (fn [c] (swap! calls conj (:args c)) (ctx/result! c result) :done)})
+  {:conditions [] :target [] :ways #{:walk :clear-seal}
+   :round (fn [c]
+            (swap! calls conj (merge (:args c) (select-keys (ctx/frozen-call c) [:ways])))
+            (if (= :stopped (:status result))
+              (ctx/end c :nothing-possible {:reason (:reason result) :why (:why result)} (dissoc result :status :reason))
+              (ctx/end c :done nil result)))})
 
 (defn ^:async walk-run
   "Cleanup of one entry 9 cells away with go-to stubbed to end with result: {:calls go-to's args :open reasons}."
@@ -749,7 +754,7 @@
       (fn ^:async t []
         (let [{:keys [calls]} (await (walk-run {:status :stopped :arrived false :reason :unreachable :why :door-stuck}))]
           (is (seq calls))
-          (is (every? #(= {:pos [9 64 0] :range 3 :escalate false} (select-keys % [:pos :range :escalate])) calls)))))))
+          (is (every? #(= {:pos [9 64 0] :range 3 :ways #{:walk}} (select-keys % [:pos :range :ways])) calls)))))))
 
 (deftest a-permanent-go-to-failure-holds-the-cell-unreachable-after-one-walk
   (async done

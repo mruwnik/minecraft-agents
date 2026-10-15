@@ -11,7 +11,7 @@
   "Stay within :range of :pos for :wait-s seconds, for a wait that needs the body near (leaf decay before the drops
   despawn, crop growth, a birth). Needs :pos and a positive :wait-s (else declined at submit).
   Each round: within range it pauses (a noop child holding :lingering) for 500 ms and yields :continue; out of range
-  (pushed away, or at the start) it walks back with a go-to child (:escalate false).
+  (pushed away, or at the start) it walks back with a go-to child (:ways #{:walk :clear-seal}).
   Ends with a result:
   - {:lingered true :reason \"waited\"} when :wait-s of time in range has been waited, with the body in range.
   - {:status :stopped :lingered false :reason :unreachable :why <go-to's reason>} (warn linger.unreachable) when go-to
@@ -59,7 +59,7 @@
   "Walk within range of pos: :continue while the child waits or after an arrival or one failure, else the third
   failure in a row ends the job stopped."
   [c pos range]
-  (let [r (await (child/call-walk* c :walk {:pos pos :range range :escalate false}))
+  (let [r (await (child/call-walk* c :walk {:pos pos :range range :ways #{:walk :clear-seal}}))
         res (:data r)]
     (cond
       (= :continue r) :continue

@@ -85,15 +85,16 @@
   does not arrive."
   [results]
   (let [left (atom results)]
-    {:check (constantly true)
+    {:conditions [] :target [] :ways #{:walk :clear-seal}
      :round (fn ^:async stub-round [c]
               (let [r (first @left)]
                 (swap! left rest)
                 (when (= :arrive r)
                   (let [{:keys [x y z]} (:pos (:args c))]
                     (fake/swap-self! (:p (:s c)) assoc :pos [x y z])))
-                (ctx/result! c (if (= :arrive r) {:arrived true} {:arrived false :reason :no_path}))
-                :done))}))
+                (if (= :arrive r)
+                  (ctx/end c :done nil {:arrived true})
+                  (ctx/end c :nothing-possible :no_path {:arrived false}))))}))
 
 (defn of-kind [seen kind] (filterv #(= kind (:kind %)) @seen))
 

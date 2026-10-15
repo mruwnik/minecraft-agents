@@ -6,6 +6,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.need :as need]
@@ -247,14 +248,14 @@
   "At the call's start without :fetch: the cause when no listed block is carried (:short blocks missing), else nil. Run
   short part way, the round gives up with its pillar and ledger settled."
   [c]
-  (when-not (or (ctx/frozen-call c) (:fetch (:args c)))
+  (when-not (:fetch (:args c))
     (let [items (blocks-of c)]
       (when-let [short (blocks-short (pl/carried (:primitives c)) items (:height (:args c)))]
         {:reason :too-few-blocks :short short :items items}))))
 
-(defn moved-since-submit [c] (when-not (ctx/frozen-call c) (away c)))
+(defn moved-since-submit [c] (away c))
 
-(def conditions [[:fn moved-since-submit] [:fn too-few-blocks]])
+(def conditions [[:fn (started/at-start moved-since-submit)] [:fn (started/at-start too-few-blocks)]])
 
 (defn done?
   "The blocks of this job in the ledger against :height. Never :done? itself: the round ends the pillar with its
@@ -305,7 +306,7 @@
     (let [{sx :x sz :z} (reach/standing-cell (:primitives c))
           on-column? (= [x z] [sx sz])
           r (when-not on-column?
-              (await (child/call-walk* c :recentre {:pos {:x hx :y y :z hz} :range 0 :escalate false})))]
+              (await (child/call-walk* c :recentre {:pos {:x hx :y y :z hz} :range 0 :ways #{:walk :clear-seal}})))]
       (if (= :continue r)
         :continue
         (do (await (walk/centre! c hx hz))

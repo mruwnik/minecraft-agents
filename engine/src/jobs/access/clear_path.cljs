@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
@@ -65,11 +66,11 @@
   [c]
   (let [{:keys [heading max-thick]} (:args c)
         p (:primitives c)]
-    (when (and (not (ctx/frozen-call c)) (headings heading) (pos-int? max-thick)
+    (when (and (headings heading) (pos-int? max-thick)
                (nil? (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) max-thick)))
       {:reason :no-door :why (no-door-why heading max-thick p)})))
 
-(def conditions [[:fn bad-args] [:fn no-door]])
+(def conditions [[:fn bad-args] [:fn (started/at-start no-door)]])
 
 (defn quote-of [c]
   (let [{:keys [heading max-thick]} (:args c)

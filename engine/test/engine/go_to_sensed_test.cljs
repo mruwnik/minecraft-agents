@@ -24,6 +24,7 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.vehicle :as vehicle]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.torch :as torch]
             [jobs.survival.retreat-cornered :as cornered]
             [jobs.survival.retreat-walk :as walk]))
@@ -164,9 +165,9 @@
 (deftest escalation-hole-changed-only-when-seen-filled
   (let [{:keys [p w]} (sensed-only (wall-east 1 {"3,64,0" "stone"}))]
     (fake/remove-block! p [1 64 0])
-    (is (false? (esc/changed? w [1 64 0])) "seen air")
-    (is (false? (esc/changed? w [3 64 0])) "unknown: not known to be filled")
-    (is (true? (esc/changed? w [1 65 0])) "seen stone")))
+    (is (false? (restore/changed? w [1 64 0])) "seen air")
+    (is (false? (restore/changed? w [3 64 0])) "unknown: not known to be filled")
+    (is (true? (restore/changed? w [1 65 0])) "seen stone")))
 
 (def room
   "A sealed 5x5 dirt room (inside x -2..2, z -2..2, feet y 64; walls one thick at x/z +-3, y 64..65; roof y 66) on a

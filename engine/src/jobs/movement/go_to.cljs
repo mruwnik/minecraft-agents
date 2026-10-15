@@ -14,6 +14,7 @@
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.cut :refer [approaches cut-loop? nearest-hostile note-restart! start-attempt! way-hostiles]]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.holds :refer [night-wait plug-since plug-wait wait-reason]]
             [jobs.movement.go-to.preview :as preview]
             [jobs.movement.go-to.result :as end]
@@ -210,7 +211,7 @@
   (let [c (with-body-food c0)
         m (ctx/mem c)]
     (cond
-      (:restore-now m) (await (esc/restore-round! c))
+      (:restore-now m) (await (restore/restore-round! c))
       (:escalation m) (await (esc/escalation-round! c pos))
       (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
                             (await (esc/escalate! c pos nil)))

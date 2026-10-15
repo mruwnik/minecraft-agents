@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [engine.settings :as settings]
             [jobs.movement.boat-launch :as launch]
             [jobs.lib.blocks :as b]
@@ -147,13 +148,13 @@
   "At the start of a crossing not yet under way: the cause :no-far-shore with no spot to cross to, :not-water with no
   water in sight to launch on from the shore (the engine looks round once first)."
   [c]
-  (when-not (or (ctx/frozen-call c) (crossing c))
+  (when-not (crossing c)
     (let [cause (cond
                   (nil? (spot-of c)) {:reason :no-far-shore :text (if (given-pos c) "the given cell is no seen shore" "no far shore in sight")}
                   (and (not (vehicle/mounted? (:primitives c))) (not (water-in-sight? c))) {:reason :not-water :text "no water in sight to launch a boat on"})]
       (cond-> cause (and cause (not (look/surveyed? c))) contract/look-first))))
 
-(def conditions [[:fn bad-args] [:fn start-fact]])
+(def conditions [[:fn bad-args] [:fn (started/at-start start-fact)]])
 
 (defn done?
   "Done once the body stands on the far shore of the crossing under way."

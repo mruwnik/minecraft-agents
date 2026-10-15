@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
@@ -50,11 +51,10 @@
   [c]
   (let [{:keys [id name]} (:args c)
         p (:primitives c)]
-    (when-not (ctx/frozen-call c)
-      (when-not (if (and (nil? id) (string? name))
-                  (some #(= name (.-name %)) (sensed p))
-                  (some? (entity-of p id)))
-        :no-vehicle))))
+    (when-not (if (and (nil? id) (string? name))
+                (some #(= name (.-name %)) (sensed p))
+                (some? (entity-of p id)))
+      :no-vehicle)))
 
 
 (defn done?
@@ -75,14 +75,13 @@
 (defn aboard-other
   "At the call's start: the cause :aboard-other while the body sits in a vehicle other than the wanted one."
   [c]
-  (when-not (ctx/frozen-call c)
-    (let [{:keys [id name]} (:args c)
-          v (vehicle/vehicle-of (.self (:primitives c)))
-          wanted (if (and (nil? id) (string? name)) (nearest-named c name) id)]
-      (when (and v (not= wanted (:id v)))
-        {:reason :aboard-other :vehicle (:name v)}))))
+  (let [{:keys [id name]} (:args c)
+        v (vehicle/vehicle-of (.self (:primitives c)))
+        wanted (if (and (nil? id) (string? name)) (nearest-named c name) id)]
+    (when (and v (not= wanted (:id v)))
+      {:reason :aboard-other :vehicle (:name v)})))
 
-(def conditions [[:fn bad-args] [:fn no-vehicle] [:fn aboard-other]])
+(def conditions [[:fn bad-args] [:fn (started/at-start no-vehicle)] [:fn (started/at-start aboard-other)]])
 
 (defn quote-of [c]
   (let [p (:primitives c)
@@ -120,7 +119,7 @@
           (cond
             (nil? e) (stop! c id :condition-failed :gone)
             (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) reach)
-            (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :escalate false}))]
+            (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :clear-seal}}))]
               (cond
                 (= :continue r) :continue
                 (>= (inc fails) max-walks) (stop! c id :nothing-possible :unreachable {:why (contract/cause-key r)})

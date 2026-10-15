@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
@@ -58,16 +59,16 @@
 (defn not-aboard
   "At the start: the cause :not-aboard while the body is on foot and has no landing of this job to finish."
   [c]
-  (when-not (or (ctx/frozen-call c) (vehicle/mounted? (:primitives c)) (landed-boat c))
+  (when-not (or (vehicle/mounted? (:primitives c)) (landed-boat c))
     {:reason :not-aboard :hint "the body is not in a boat; board one first, e.g. boat-launch"}))
 
 (defn no-shore
   "At the start: the cause :no-shore while no :pos is given and no shore is in sight; a look first while the body has not looked round."
   [c]
-  (when (and (nil? (:pos (:args c))) (not (ctx/frozen-call c)) (vehicle/mounted? (:primitives c)) (empty? (candidates c)))
+  (when (and (nil? (:pos (:args c))) (vehicle/mounted? (:primitives c)) (empty? (candidates c)))
     (cond-> {:reason :no-shore :hint "no seen shore to land on"} (not (look/surveyed? c)) contract/look-first)))
 
-(def conditions [[:fn bad-args] [:fn not-aboard] [:fn no-shore]])
+(def conditions [[:fn bad-args] [:fn (started/at-start not-aboard)] [:fn (started/at-start no-shore)]])
 
 (defn done?
   "Done once the body is off the boat."

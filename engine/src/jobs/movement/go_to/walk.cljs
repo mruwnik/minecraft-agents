@@ -17,6 +17,7 @@
             [jobs.movement.go-to.aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! sight-end see-cell]]
             [jobs.movement.go-to.cut :refer [approach-recorder approaches explore-spent?]]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.faults :refer [note-fault! refused-hang shut-foreign]]
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.own-way :refer [dive-end dive-floor! own-way own-way-left! plan-check straight-from! walk-own-way!]]
@@ -150,7 +151,7 @@
         wet? (and (or (not= :guess (:column-open m)) (:column-near m)) (breath/in-water? p))
         hang (refused-hang c pos)]
     (cond
-      (:restore-pending m) (esc/restore-next! c)
+      (:restore-pending m) (restore/restore-next! c)
       hang (do (ctx/update-mem! c update :hang-walks (fnil inc 0))
                (await (leave-hang! c pos hang)))
       wet? (await (leave-water! c pos))
@@ -315,7 +316,7 @@
                              :closest (min left (:closest (ctx/mem c) left)) :last-dist left
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
-            (when (and progress? (:restore-pending (ctx/mem c))) (esc/restore-next! c))
+            (when (and progress? (:restore-pending (ctx/mem c))) (restore/restore-next! c))
             (if (or unstuck?
                     (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
               (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))

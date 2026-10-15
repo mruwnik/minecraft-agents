@@ -13,6 +13,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]))
 
@@ -192,12 +193,11 @@
 (defn start-fact
   "At the call's start only: the first step's give-up as a cause when it is one of start-facts, else nil."
   [c]
-  (when-not (ctx/frozen-call c)
-    (let [step (next-step (inputs c (ledger/open-entries (ctx/view c)) (pl/feet-cell c)))]
-      (when (and (= :give-up (:step step)) (start-facts (:reason step)))
-        (answer (dissoc step :step))))))
+  (let [step (next-step (inputs c (ledger/open-entries (ctx/view c)) (pl/feet-cell c)))]
+    (when (and (= :give-up (:step step)) (start-facts (:reason step)))
+      (answer (dissoc step :step)))))
 
-(def conditions [[:fn away] [:fn start-fact]])
+(def conditions [[:fn away] [:fn (started/at-start start-fact)]])
 
 (defn done?
   "Progress only: the row is finished by a round that sees the body at its end."
@@ -234,7 +234,7 @@
 (defn ^:async walk-to!
   "A go-to child to the cell [x y z] (range 0, no escalation). :continue while it waits; :ok on arrival, else :failed."
   [c [x y z]]
-  (let [r (await (child/call-walk* c :step {:pos {:x x :y y :z z} :range 0 :escalate false
+  (let [r (await (child/call-walk* c :step {:pos {:x x :y y :z z} :range 0 :ways #{:walk}
                                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue r) :continue

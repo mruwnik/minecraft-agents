@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.started :as started]
             [engine.settings :as settings]
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
@@ -126,7 +127,7 @@
 (defn aboard
   "At the start of a launch: the cause :aboard while the body is on a vehicle."
   [c]
-  (when (and (launching? c) (not (ctx/frozen-call c)) (vehicle/mounted? (:primitives c)))
+  (when (and (launching? c) (vehicle/mounted? (:primitives c)))
     {:reason :aboard :hint "get off the vehicle first"}))
 
 (defn no-water-cause [c]
@@ -136,7 +137,7 @@
 (defn no-water
   "At the start of a launch: the cause :no-water or :no-room while no cell has room for a boat; a look first while the body has not looked round."
   [c]
-  (when (and (launching? c) (not (ctx/frozen-call c)) (nil? (launch-pos c)))
+  (when (and (launching? c) (nil? (launch-pos c)))
     (cond-> (no-water-cause c) (not (look/surveyed? c)) contract/look-first)))
 
 (defn pick-boat [c]
@@ -147,10 +148,10 @@
 (defn no-boat
   "At the start of a recovery: the cause :no-boat while none is in sight."
   [c]
-  (when (and (not (launching? c)) (not (ctx/frozen-call c)) (nil? (pick-boat c)))
+  (when (and (not (launching? c)) (nil? (pick-boat c)))
     {:reason :no-boat :hint "no boat in sight"}))
 
-(def conditions [[:fn bad-args] [:fn aboard] [:fn no-water] [:fn no-boat]])
+(def conditions [[:fn bad-args] [:fn (started/at-start aboard)] [:fn (started/at-start no-water)] [:fn (started/at-start no-boat)]])
 
 (defn done?
   "A launch is done once its boat is down; a recovery's end is its event."
@@ -230,7 +231,7 @@
             (nil? boat) (ctx/end c :condition-failed :gone {:id id})
             (out-of-time? c) (ctx/end c :limit-reached {:line :time :reason :not-broken} {:id (:id boat) :hits hits})
             (> (u/dist (u/self-pos c) (:pos boat)) reach)
-            (let [w (await (child/call-walk* c :walk {:pos (:pos boat) :range 2 :escalate false}))]
+            (let [w (await (child/call-walk* c :walk {:pos (:pos boat) :range 2 :ways #{:walk :clear-seal}}))]
               (cond
                 (= :continue w) :continue
                 (= :done (:kind w)) (recur hits failed)
