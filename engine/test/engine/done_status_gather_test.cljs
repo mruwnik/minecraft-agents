@@ -122,3 +122,17 @@
     'jobs.farm.fertilize {:max 3} {:used 1} [:later :fertilizing]
     'jobs.farm.compost {:times 3} {:taken 3} [:ok :composted]
     'jobs.farm.compost {:times 3} {:taken 1} [:later :composting]))
+
+(def corridor-seg {:y 64 :axis :x :line 0 :from 0 :to 4 :open-ends #{}})
+
+(deftest corridor-is-done-when-nothing-is-left-to-take-and-the-far-end-was-looked-at
+  (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.strip.corridor {:blocks world} {:segment corridor-seg} m)))
+    {} {:looked true} [:ok :stripped]
+    {} {} [:later :digging]
+    {"2,64,0" "rail"} {:looked true} [:later :digging]))
+
+(deftest loot-cart-is-done-once-the-cart-is-broken-and-its-drops-collected
+  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.strip.loot-cart {} {} m)))
+    {:before {} :looted true} [:ok :looted]
+    {:before {} :broken true} [:later :looting]
+    {} [:later :looting]))

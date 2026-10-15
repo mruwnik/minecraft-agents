@@ -63,7 +63,11 @@
   (let [items (gained c)]
     (merge {:collected (reduce + 0 (vals items)) :items items} (when (:full (ctx/mem c)) {:full true}) extra)))
 
-(defn finish! [c] (ctx/end c :done nil (items-data c nil)))
+(defn looted!
+  "The cart is broken and its drops collected: done? holds, so the engine ends the call."
+  [c]
+  (ctx/update-mem! c assoc :looted true)
+  (or (ctx/done c) :continue))
 
 (defn stop!
   "End with the kind of reason and a :why in words."
@@ -77,11 +81,13 @@
             (checks/refusing :cart "a cart in sight" (fn [c] (when (empty? (carts c)) :gone)))))
 
 (defn done?
-  "Never done before the round has run: the items counted are the gain since the first round."
+  "The cart is broken and its drops collected; the items counted are the gain since the first round."
   [c]
   (let [{:keys [collected] :as result} (if (:before (ctx/mem c)) (items-data c nil) {:collected 0 :items {}})]
-    (contract/later :looting (str "loot-cart: " collected " items, the round ends the call") :units :items :done collected
-                    :result result)))
+    (if (:looted (ctx/mem c))
+      (contract/ok :looted (str "loot-cart: " collected " items") :units :items :done collected :result result)
+      (contract/later :looting (str "loot-cart: " collected " items, cart still to loot") :units :items :done collected
+                      :result result))))
 
 (defn quote-of [_c]
   {:uses {:job-time [5 20 (settings/get settings ::job-time-s)]}})
@@ -125,7 +131,7 @@
         cart (first (carts c))
         pos (or (:pos mem) (:pos cart))]
     (cond
-      (:broken mem) (let [r (await (collect! c pos))] (if (= :continue r) :continue (finish! c)))
+      (:broken mem) (let [r (await (collect! c pos))] (if (= :continue r) :continue (looted! c)))
       (nil? cart) (stop! c :gone "no chest minecart in sight")
       :else
       (let [id (:id cart)
@@ -150,4 +156,4 @@
                           (= :continue b) :continue
                           (= :cannot-break b) (stop! c :cannot-break "the cart did not break")
                           :else (do (ctx/update-mem! c assoc :broken true)
-                                    (let [r (await (collect! c pos))] (if (= :continue r) :continue (finish! c))))))))))))))))
+                                    (let [r (await (collect! c pos))] (if (= :continue r) :continue (looted! c))))))))))))))))

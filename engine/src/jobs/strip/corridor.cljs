@@ -86,11 +86,6 @@
 (def failed-conditions "Stop reasons that end condition-failed: a fact of the body or the world. The rest are nothing-possible."
   #{:bag-full :food-short :no-torches :no-tool :spawner :refused})
 
-(defn finish!
-  [c extra]
-  (let [res (merge {:taken (:taken (ctx/mem c) {})} extra)]
-    (ctx/end c :done nil (assoc res :text (str "corridor done: took " (pr-str (:taken res)))))))
-
 (defn stop! [c reason extra]
   (let [res (merge {:taken (:taken (ctx/mem c) {})} extra)]
     (ctx/emit! c :strip.corridor.stopped :warn (assoc res :reason reason :text (str "corridor " (name reason) ": took " (pr-str (:taken res)))))
@@ -221,29 +216,40 @@
       (do (await (look/look-around! c))
           :again))))
 
-(defn done! [c seg]
+(defn result-of
+  "What the segment leaves behind: what was taken, the cells kept (bridge planks, spawners), the segments seen beyond."
+  [c seg]
   (let [p (:primitives c)
         blocks (look/seen-blocks p {:match #(or (strip/fence? %) (strip/planks? %) (strip/rail? %)) :radius 24 :max 512})
         news (remove #(strip/overlaps? seg %) (strip/segments blocks {:block-at (access/seen-at p)}))]
-    (finish! c {:kept (into (:kept (strip/targets [] seg {:block-at (access/seen-at p)}))
-                                  (map (fn [t] (cond-> {:pos (:pos t) :why :spawner} (= :light (:spawner (:args c))) (assoc :lit true))))
-                                  (when (not= :break (:spawner (:args c))) (spawners c seg)))
-                      :new-segments (vec news)})))
+    {:taken (:taken (ctx/mem c) {})
+     :kept (into (:kept (strip/targets [] seg {:block-at (access/seen-at p)}))
+                 (map (fn [t] (cond-> {:pos (:pos t) :why :spawner} (= :light (:spawner (:args c))) (assoc :lit true))))
+                 (when (not= :break (:spawner (:args c))) (spawners c seg)))
+     :new-segments (vec news)}))
+
+(defn owed
+  "What the segment still asks for: {:target :cart :torch :dark :sealed-spawner}, each nil when nothing is."
+  [c seg]
+  (let [p (:primitives c)
+        {:keys [entry take spawner]} (:args c)
+        found (strip/targets [] seg {:entry (some-> entry a/cell ((juxt :x :y :z))) :take (cond-> (set take) (= :break spawner) (conj :spawner)) :block-at (access/seen-at p)})
+        dug (set (:dug (ctx/mem c)))
+        fresh (fn [xs] (first (remove #(dug [(:x (:pos %)) (:y (:pos %)) (:z (:pos %))]) xs)))
+        target (fresh (:targets found))]
+    {:target target
+     :sealed-spawner (when (= :seal spawner) (first (spawners c seg)))
+     :cart (first (carts c seg))
+     :torch (fresh (torch-cells c seg))
+     :dark (if (= :light spawner)
+             (some #(dark-near c seg (:pos %)) (spawners c seg))
+             (when (= :spawner (:class target)) (dark-near c seg (:pos target))))}))
 
 (defn ^:async step! [c seg]
   (let [p (:primitives c)
-        {:keys [entry take want-free spawner]} (:args c)
-        found (strip/targets [] seg {:entry (some-> entry a/cell ((juxt :x :y :z))) :take (cond-> (set take) (= :break spawner) (conj :spawner)) :block-at (access/seen-at p)})
-        sealed-spawner (when (= :seal spawner) (first (spawners c seg)))
-        dug (set (:dug (ctx/mem c)))
-        fresh (fn [xs] (first (remove #(dug [(:x (:pos %)) (:y (:pos %)) (:z (:pos %))]) xs)))
-        target (fresh (:targets found))
-        cart (first (carts c seg))
+        {:keys [want-free]} (:args c)
+        {:keys [target cart torch dark sealed-spawner]} (owed c seg)
         feet (assoc (b/feet-cell c) 1 (:y seg))
-        torch (fresh (torch-cells c seg))
-        dark (if (= :light spawner)
-               (some #(dark-near c seg (:pos %)) (spawners c seg))
-               (when (= :spawner (:class target)) (dark-near c seg (:pos target))))
         work? (or target cart)]
     (when (and target (:looked (ctx/mem c))) (ctx/update-mem! c dissoc :looked))
     (cond
@@ -256,7 +262,7 @@
       target (await (dig! c target))
       (not (:looked (ctx/mem c))) (await (look-end! c seg))
       torch (await (dig! c torch))
-      :else (done! c seg))))
+      :else (or (ctx/done c) :continue))))
 
 (defn ^:async round [c]
   (let [seg (seg-of (:segment (:args c)))
@@ -272,12 +278,16 @@
 (def can-start? (cond/and bad-segment not-now))
 
 (defn done?
-  "Counts only: the end of the segment is the round's, which looks at its end and reports what it kept.
-  The cells dug."
+  "The segment is stripped: nothing left to take or light, the far end looked at. The result is what it leaves behind."
   [c]
-  (let [dug (count (:dug (ctx/mem c)))]
-    (contract/later :digging (str "corridor: " dug " cells dug, the round ends the segment") :units :cells :done dug
-                    :result {:taken (:taken (ctx/mem c) {})})))
+  (let [seg (seg-of (:segment (:args c)))
+        dug (count (:dug (ctx/mem c)))
+        left (when seg (owed c seg))
+        stripped? (and seg (:looked (ctx/mem c)) (not-any? left [:target :cart :torch :dark :sealed-spawner]))]
+    (if stripped?
+      (contract/ok :stripped (str "corridor done: took " (pr-str (:taken (ctx/mem c) {}))) :units :cells :done dug :result (result-of c seg))
+      (contract/later :digging (str "corridor: " dug " cells dug") :units :cells :done dug
+                      :result {:taken (:taken (ctx/mem c) {})}))))
 
 (defn quote-of [c]
   (let [{:keys [from to]} (seg-of (:segment (:args c)))]

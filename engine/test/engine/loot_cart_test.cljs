@@ -38,7 +38,7 @@
               result (await (child-outcome eng job {:id 50} 12))]
           (is (= {"iron_ingot" 3 "rail" 16 "bread" 2 "chest_minecart" 1} (inv p)))
           (is (empty? (cart-ids p)))
-          (is (= {:status :done :collected 22 :items {"iron_ingot" 3 "rail" 16 "bread" 2 "chest_minecart" 1}} result)))))))
+          (is (= {:status :done :collected 22 :items {"iron_ingot" 3 "rail" 16 "bread" 2 "chest_minecart" 1}} (select-keys result [:status :collected :items]))))))))
 
 (deftest a-cart-by-near-takes-the-nearest-only
   (async done
