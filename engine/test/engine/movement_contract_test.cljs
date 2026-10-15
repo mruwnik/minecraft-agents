@@ -42,7 +42,7 @@
 
 (deftest go-to-s-time-line-default-is-a-setting
   (let [{:keys [defaults] :as def} (job 'jobs.movement.go-to)
-        resolve #(contract/resolve-settings defaults (fn [k] (settings/get (:settings def) k)))]
+        resolve #(contract/resolve-settings defaults (fn [k] (settings/get (:settings def) k)) {})]
     (is (= 1800 (get-in (resolve) [:spend :time])))
     (is (= 60 (settings/with-settings {:jobs.movement.go-to/time-s 60} #(get-in (resolve) [:spend :time]))))))
 
