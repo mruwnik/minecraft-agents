@@ -135,7 +135,10 @@
     (case walk
       :partial :continue
       :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)
-      (let [rows (animals/in-pen-rows (:primitives c) checked animal-radius)
+      (let [checked (if (= :unloaded (:reason checked))
+                      (pen-read/read (:primitives c) {:at at :box box :max-cells max-cells :final? true})
+                      checked)
+            rows (animals/in-pen-rows (:primitives c) checked animal-radius)
             result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)} (animal-coverage checked))
             result (assoc result :text (if (:closed? result)
                                          (str "pen closed, " (:cells result) " cells" (gate-drop-text result))

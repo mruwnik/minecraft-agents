@@ -463,7 +463,7 @@
 (defn analyse
   "One fill: {:world :fill :leaks} with the leaks found (the unloaded cells too); nil when there is no start and no
   unloaded cell was read looking for one."
-  [{:keys [block-at at box max-cells sealed near blocks]}]
+  [{:keys [block-at at box max-cells sealed near blocks final?]}]
   (let [scan (make-world block-at sealed blocks)
         seeds (cond
                 at (seeds-at scan at)
@@ -475,7 +475,9 @@
             found (cond
                     (seq exits) (keep #(leak-at world (conj (path-to seen (:from %)) {:key (:to %) :s (:top %) :perch? (:perch? %)}) true) exits)
                     (and truncated? (not box)) (keep identity [(leak-at world (path-to seen end) false)])
-                    (and (not box) (seq @(:unloaded world))) (keep identity [(climb-at (path-to seen (last (:order fill))))])
+                    (and (not box) (seq @(:unloaded world)))
+                    (let [path (path-to seen (last (:order fill)))]
+                      (keep identity [(if final? (leak-at world path false) (climb-at path))]))
                     :else (perch-ins (make-world block-at sealed blocks) seen))]
         {:world world
          :fill fill
@@ -498,7 +500,8 @@
   "The pen check.
   opts: :block-at (required), :at {:x :y :z} (feet cell to start from) and/or :box {:min :max} (every surface in it
   starts the fill and a step out of it is a leak), :max-cells (default 2000), :near [x y z] (the unloaded leaks
-  listed are the nearest to it, else the first by coordinate).
+  listed are the nearest to it, else the first by coordinate), :final? (no look is left: a fill that ran into unseen
+  cells names the gap, open gate or wall top on its way out as a leak instead of waiting for a look).
   Returns {:closed? :reason :inside :leaks :gates :gate-drops}.
   :reason is nil when closed, else :leak, :unbounded (more than :max-cells reached and no way out pinned down; give
   a :box for exact crossings), :unloaded (a needed cell was not loaded or seen, the start's floor too) or :no-start (the start is no floor).

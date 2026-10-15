@@ -287,3 +287,29 @@
     (is (< (time-of {:box (box 20)}) (time-of {:box (box 200)})) "a big box is capped by :max-cells")
     (is (< (time-of {:at [1 0 1] :max-cells 50}) (time-of {:at [1 0 1]})))
     (is (= 5 (time-of {:at [1 0 1] :spend {:job-time 5}})) "a given time stays")))
+
+(defn walled-water
+  "A 7 x 7 two-high stone wall (x, z 2..8) with water depth deep inside and a stone pillar at 5 64 5 for the body to stand on."
+  [deep]
+  (merge (into {} (for [x (range 2 9) z (range 2 9) y [64 65] :when (or (#{2 8} x) (#{2 8} z))] [(str x "," y "," z) "stone"]))
+         (into {} (for [x (range 3 8) z (range 3 8) y (range 64 (+ 64 deep))] [(str x "," y "," z) "water"]))
+         {"5,64,5" "stone"}))
+
+(deftest a-body-on-a-pillar-in-a-walled-pool-reads-the-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [at-pillar (fn [more] (-> (world more) (assoc :blocks (merge ground more)) (assoc-in [:self :pos] {:x 5 :y 65 :z 5})))]
+          (is (true? (:closed? (await (run-seeing {:at [5 65 5]} (at-pillar (walled-water 1)) 0))))
+              "one deep: the wall holds")
+          (is (= {:closed? false :reason :leak}
+                 (select-keys (await (run-seeing {:at [5 65 5]} (at-pillar (assoc (walled-water 2) "5,65,5" "air")) 0)) [:closed? :reason]))
+              "two deep lifts an animal over the wall"))))))
+
+(deftest a-gap-in-the-fence-is-a-leak-though-the-ground-beyond-stays-unseen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [event (await (run-seeing {:at [2 64 2]} (world {"2,64,-1" "air"}) 0))]
+          (is (= :leak (:reason event)))
+          (is (some #{{:x 2 :y 64 :z -1}} (map :pos (:leaks event)))))))))

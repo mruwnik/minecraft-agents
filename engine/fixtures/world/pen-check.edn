@@ -67,15 +67,15 @@
   {:name "start-in-the-air-is-no-start"
    :act [[:job (jobs.animals.pen-check {:at #at [5 9 5]})]]
    :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :no-start}} :within-s 20 :of-job true}]}
-  ;; a 50 x 50 ring: the body sees only part of it, so the answer is :unloaded (the cells it has not seen), not a guess
-  {:name "big-pen-mostly-unseen-is-unloaded"
+  ;; a 50 x 50 ring holds 2500 cells, more than the 2000 the fill may visit: the body walks to see it all and the answer is :unbounded
+  {:name "big-pen-beyond-the-bound-is-unbounded"
    :plot {:length 64 :width 64}
    :body {:at [16.5 0 18.5]}
    :blocks [[:fill [2 0 2] [8 0 8] "air"]
             [:fill [2 0 2] [53 0 2] "oak_fence"] [:fill [2 0 53] [53 0 53] "oak_fence"]
             [:fill [2 0 2] [2 0 53] "oak_fence"] [:fill [53 0 2] [53 0 53] "oak_fence"]]
    :act [[:job (jobs.animals.pen-check {:at #at [16 0 18]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :unloaded}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :unbounded}} :within-s 20 :of-job true}]}
   ;; card 3148f78d: a long closed ring (88 x 11 inside) with an inner divider fence whose gate stands open. The start is beside the
   ;; divider, so the fill crosses the gate on its way to the far, unseen end. An inner chokepoint is no leak evidence: the check
   ;; looks at the unseen cells and fills again, so it reads :closed? true (never :reason :leak).
@@ -117,12 +117,13 @@
    :body {:at [5.5 1 5.5] :yaw 0}
    :act [[:job (jobs.animals.pen-check {:at #at [5 1 5]})]]
    :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
-  ;; card cbc7deea: the pen floor 2 above the ground outside the gate: animals will not step down 2, so the gate is a :gate-drops entry
-  {:name "gate-with-a-two-block-drop-outside"
-   :blocks [[:fill [2 0 2] [8 1 8] "stone"] [:fill [2 2 2] [8 2 8] "oak_fence" :hollow] [:fill [3 2 3] [7 2 7] "air"]
+  ;; card cbc7deea: the pen floor drops 2 just inside the gate (one row of 5 cells beside it, the rest 2 lower): animals will not step down 2, so the gate is a :gate-drops entry
+  {:name "gate-with-a-two-block-drop-inside"
+   :blocks [[:fill [2 0 2] [8 1 8] "stone"] [:fill [2 2 2] [8 2 8] "oak_fence" :hollow] [:fill [3 2 3] [7 2 3] "air"]
+            [:fill [3 0 4] [7 1 7] "air"] [:fill [3 2 4] [7 2 7] "air"]
             [:set [5 2 2] "oak_fence_gate[facing=south,open=false]"]]
-   :body {:at [5.5 2 5.5] :yaw 0}
-   :act [[:job (jobs.animals.pen-check {:at #at [5 2 5]})]]
+   :body {:at [5.5 2 3.5] :yaw 0}
+   :act [[:job (jobs.animals.pen-check {:at #at [5 2 3]})]]
    :expect [{:event {:source :job :kind :completed :data {:gate-drops [[:any]]}} :within-s 20 :of-job true}]}
   ;; cards fc15d57c, c0097f43: the pen given as a plan, leaks listed by cell, animals seen on the pen cells recorded
   {:name "plan-form-closed-lists-the-cow-inside"
