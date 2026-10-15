@@ -14,6 +14,7 @@
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]))
 
 (def far-bed {:x 40 :y 64 :z 0})
@@ -195,3 +196,30 @@
             (core/submit! eng '(jobs.survival.night) {})
             (await (st/tick-n eng 12))
             (is (= looks (count (st/calls raw "look"))) "no second look pass")))))))
+
+(def seven-hut
+  "A stone hut, walls x and z 8..16, y 63..67 (floor y 63, roof y 67), lit by two torches, a red bed at 10..11 64 12."
+  (let [inside? (fn [k] (let [[x y z] (map js/Number (.split k ","))] (and (<= 9 x 15) (<= 64 y 66) (<= 9 z 15))))]
+    (merge (into {} (remove (comp inside? key)) (tu/box 8 63 8 16 67 16 "stone"))
+           {"9,65,9" "torch" "15,65,15" "torch" "10,64,12" "red_bed" "11,64,12" "red_bed"})))
+
+(def seen-from-the-start
+  "What a body set down at 13 64 13 facing west had seen live (hut-bed-review fixture): the room's air cells at feet and
+  head height, but the floor and roof only at x 9..11 (a level look never shows the floor beside the feet)."
+  (set (concat
+        (for [[z xs] {8 [9] 9 [8 9 10] 10 (range 8 12) 11 (range 8 13) 12 (range 8 13) 13 (range 8 14) 14 (range 8 13) 15 (range 8 13) 16 [9 10 11]}
+              x xs] [x 64 z])
+        (for [[z xs] {8 [9] 9 [8 9 10] 10 (range 8 12) 11 (range 8 13) 12 (range 8 14) 13 (range 8 14) 14 (range 8 14) 15 (range 8 13) 16 [9 10 11]}
+              x xs] [x 65 z])
+        (for [z (range 9 16) x [9 10 11] y [63 67]] [x y z]))))
+
+(deftest a-seen-bed-in-a-hut-whose-floor-beside-the-body-is-unseen-is-used
+  (let [{:keys [eng p]} (setup {:floor [0 0 20 20] :self {:pos {:x 13.5 :y 64 :z 13.5}} :time st/night :sees-all true
+                                :blocks seven-hut :light {[13 64 13] [0 0] [13 65 13] [0 0]}})
+        _ (mem/forget-where! (:store eng) :bed (constantly true))
+        seen (.-sensedAt p)
+        _ (aset p "sensedAt" (fn [a] (if (seen-from-the-start [(.-x a) (.-y a) (.-z a)]) (.call seen p a) #js {:unknown true})))
+        v (mem/view (:store eng))]
+    (is (contains? (:cells (reach/room* p {:x 13 :y 64 :z 13})) [11 64 11]) "a seen-free cell beside the feet over an unseen floor is a room cell, and the room goes on from it")
+    (is (= {:x 11 :y 64 :z 12} (sh/bed-to-use p v 48 (constantly true))))
+    (is (true? (sh/night-holds? p v {} (constantly true))))))
