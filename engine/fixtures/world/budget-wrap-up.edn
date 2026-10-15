@@ -1,7 +1,7 @@
 ;; A time budget (:spend :job-time) ends a job with its wrap-up done and its data kept: lead-to lets the cow go and ends :timeout when
 ;; less than 30 s (at most a quarter of the time) is left; attack ends itself :timeout below 6 s (at most a quarter) left and
 ;; reports :killed so far.
-;; Should-succeed (the wrap-up): lead-to a spot 80 blocks off under :spend {:job-time 60} ends gave-up :timeout with the cow let go and
+;; Should-succeed (the wrap-up): lead-to a spot 80 blocks off under :spend {:job-time 25} (the walk takes ~27 s) ends gave-up :timeout with the cow let go and
 ;; the lead back; attack on an invulnerable zombie under :spend {:job-time 8} emits attack.timeout and attack.done :timeout.
 ;; Should-fail (control): lead-to a near spot with ample time (180) is done :unleashed with no timeout.
 {:defaults
@@ -14,7 +14,7 @@
  [{:name "lead-to-far-spot-short-budget-lets-the-cow-go-and-times-out"
    :act [[:summon "cow" [8.5 0 16.5]]
          [:wait-s 3]
-         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [90 0 16] :radius 20 :spend {:job-time 60}})]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [90 0 16] :radius 20 :spend {:job-time 25}})]]
    :expect [{:event {:source :job :kind :lead-to.gave-up :data {:reason :timeout}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :lead-to.done :data {:reason :unleashed}} :for-s 90 :until {:source :job :kind :lead-to.gave-up}}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [99 3 31]] 1] [:item "lead" [:>= 1]]]}
