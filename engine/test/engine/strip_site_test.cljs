@@ -207,6 +207,16 @@
           (is (= {:stripped 1 :sealed 1 :skipped 1} (:segments r)))
           (is (= 3 (count (filter #(= "x-27-20:0..20" (:id (:segment %))) (called env 'jobs.strip.corridor))))))))))
 
+(deftest a-site-whose-every-segment-was-skipped-ends-all-skipped-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :results {'jobs.strip.corridor {:status :stopped :reason :refused}
+                                   'jobs.strip.seal {:status :stopped :reason :refused}})
+              r (await (start! env args))]
+          (is (= [:stopped :all-skipped] ((juxt :status :reason) r)))
+          (is (= {:refused 3} (:skipped r))))))))
+
 (deftest a-full-bag-sends-the-body-to-the-base-chest-and-back-to-the-same-segment
   (async done
     (tu/run-async done

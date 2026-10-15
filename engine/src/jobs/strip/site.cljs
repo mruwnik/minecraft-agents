@@ -48,7 +48,8 @@
   waits (:danger), and a running strip phase yields while one is near.
   Ends :done with data {:segments {state n} :taken {class n} :hauled {item n} :smelted {raw-item n} :smelt-failed [{:furnace :reason}]},
   or condition-failed (:bad-plan :no-site :no-shears :no-torches :food-short :base-full, or :child-failed), nothing-possible
-  (:unreachable when the walk down found no way, :trips-exhausted, :child-failed), or :child-failed ending with the kind of a
+  (:unreachable when the walk down found no way, :trips-exhausted, :all-skipped with :skipped {reason n} when no segment was
+  stripped or sealed, :child-failed), or :child-failed ending with the kind of a
   child that ended condition-failed, limit-reached or impossible, with the same data and
   :phase, :child and :because (the child's reason) for a child. Event: strip.site.stopped (warn).")
 
@@ -358,6 +359,14 @@
                             (trip-reasons why) (assoc :trip {:reason why :tool (:tool res)})))
                 :again))))
 
+(defn all-skipped
+  "{why n} when the segments are all skipped for a failing stop (none stripped or sealed, none left on purpose by a
+  spawner policy), else nil."
+  [s]
+  (let [segs (vals (:segments s))]
+    (when (and (seq segs) (every? #(and (= :skipped (:state %)) (not= :spawner (:why %))) segs))
+      (frequencies (map :why segs)))))
+
 (defn ^:async strip-step! [c s]
   (let [t (tree s)
         ready (seal-ready s t)
@@ -368,6 +377,7 @@
       (trip-due? c s) (await (trip! c s))
       ready (await (seal! c s t ready))
       seg (await (corridor! c s t seg))
+      (all-skipped s) (stop! c :all-skipped {:skipped (all-skipped s)})
       :else (do (save! c assoc :phase (if (:haul (:args c)) :haul :done)) :again))))
 
 (defn ^:async haul-chests! [c s]
