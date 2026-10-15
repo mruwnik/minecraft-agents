@@ -1,0 +1,32 @@
+;; Cards 094af74a, 69be7630: a buried body is not walked out by hunger, and a badly hurt one does not mine on.
+;; buried: sealed in a stone room (no sky light), food 8 (hunger 5 s amp 255), hp 10, nothing carried: get-food ends food.none
+;; "not searched underground" and takes no walk. low-health: food 8 (no regeneration) and hp 3: gather.mine waits :low-health and digs
+;; nothing; instant health lets it mine.
+{:defaults
+ {:tags [:survival :hungry] :time :day
+  :plot {:height 8}
+  :body {:at [16.5 1 16.5] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "buried-hungry-body-does-not-explore"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
+   :blocks [[:fill [12 0 12] [20 4 20] "stone" :hollow]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 7]
+         [:rcon "damage $BODY 10 minecraft:generic"] [:wait-s 5]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:event {:source :job :kind :food.none :data {:text [:contains "not searched underground"]}} :within-s 40}
+            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 40 :until {:source :job :kind :food.none}}]
+   :after [[:body-near [16.5 1 16.5] 3]]}
+  {:name "hurt-body-waits-low-health-then-mines-when-healed"
+   :time :any
+   :blocks [[:fill [2 0 8] [30 6 30] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [16 0 17] "iron_ore"]]
+   :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 7]
+         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]
+         [:await {:source :job :kind :waiting :data {:reason :low-health}} 30]
+         [:rcon "effect give $BODY minecraft:instant_health 1 2 true"]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :mine.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :low-health}}}
+            {:event {:source :job :kind :mine.done :data {:got 1}} :within-s 90 :of-job true}]
+   :after [[:item "raw_iron" 1]]}]}

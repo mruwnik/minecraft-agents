@@ -1,0 +1,21 @@
+;; Card f96865f7: a second death does not abandon an older open pile. The body dies at [26 0 26] with 24 raw_iron, respawns, is given
+;; 3 dirt and dies again at [14 0 14] (an RCON tp between); recover-drops serves the best open pile (the iron), not only the latest :died.
+{:defaults
+ {:tags [:survival :death :jobs]
+  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
+  :act [[:wait-s 1]
+        [:kill-body]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
+        [:wait-s 5]
+        [:rcon "give $BODY minecraft:dirt 3"]
+        [:rcon "execute positioned $X $Y $Z run tp $BODY ~14.5 ~ ~14.5"]
+        [:wait-s 1]
+        [:kill-body]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}} {:data {:pos [:any]}}]}}] 15]
+        [:wait-s 5]
+        [:job (jobs.survival.recover-drops)]]
+  :limit-s 200}
+ :cases
+ [{:name "older-valuable-pile-fetched-after-a-second-death"
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 160 :of-job true}]
+   :after [[:item "raw_iron" 24]]}]}

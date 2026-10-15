@@ -1,0 +1,24 @@
+;; Card 55c62ff3: a pile far below the surface. A dirt mass 20 high (the surface at y 19), a sealed chamber at [24 0 24]..[28 2 28]
+;; where the body dies with 24 raw_iron; it respawns on the surface at [20 20 20], 20 down and about 7 aside.
+;; Should-succeed: legs that get no nearer count as blocked, a stair is dug down by hand through the dirt and the pile collected.
+;; Should-fail: the same chamber in bedrock: no way down, the trip ends :abandoned instead of bouncing till the pile despawns.
+{:defaults
+ {:tags [:survival :death :jobs]
+  :plot {:height 24}
+  :body {:at [26.5 0 26.5] :spawnpoint [20 20 20] :effects [["resistance" 600 4]]
+         :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
+  :act [[:wait-s 1]
+        [:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:wait-s 4]
+        [:job (jobs.survival.recover-drops)]]
+  :limit-s 330}
+ :cases
+ [{:name "deep-pile-stair-down-collects"
+   :blocks [[:fill [0 0 0] [31 19 31] "dirt"] [:fill [24 0 24] [28 2 28] "air"]]
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 300 :of-job true}]
+   :after [[:item "raw_iron" 24]]}
+  {:name "sealed-bedrock-pile-ends-abandoned"
+   :blocks [[:fill [0 0 0] [31 19 31] "bedrock"] [:fill [24 0 24] [28 2 28] "air"]]
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :abandoned}} :within-s 300 :of-job true}]
+   :after [[:item "raw_iron" 0]]}]}
