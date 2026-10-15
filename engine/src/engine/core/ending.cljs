@@ -126,10 +126,12 @@
          (if (contract/passes-through? e) (throw e) [nil e]))))
 
 (defn with-progress
-  "Limit ending e (or nil) with done?'s count in its report; a done? that throws leaves e as it is."
+  "Limit ending e (or nil) with done?'s count in its report, and done?'s :data (the job's result so far) as the data of
+  a :limit-reached ending without its own; a done? that throws leaves e as it is."
   [def c e]
   (if-let [d (when e (try (done-now def c) (catch :default _ nil)))]
-    (update e :report merge (contract/progress d))
+    (cond-> (update e :report merge (contract/progress d))
+      (and (= :limit-reached (:kind e)) (not (:data e)) (seq (:data d))) (assoc :data (:data d)))
     e))
 
 (defn finish

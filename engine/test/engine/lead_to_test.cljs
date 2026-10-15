@@ -729,3 +729,18 @@
         c {:primitives (tu/fake {:blocks {"5,64,0" "stone"}}) :args {:mob "cow" :fence {:x 5 :y 64 :z 0}}}]
     (is (= :no-fence (:reason (lead-to/start-fact c))) "the fact refuses")
     (is (nil? (f (assoc c :quote-call {}))) "started: step ends it through finish!")))
+
+(deftest a-leading-short-of-time-lets-the-cow-go-and-ends-on-its-timeout
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p clock] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})]
+          (.override (.-world p) "steer" (fn [token args impl] (swap! clock + 10000) (impl token args)))
+          (await (submit s {:spend {:time 120}} 30))
+          (is (finished? s))
+          (is (= :timeout (:reason (done-event s))))
+          (is (false? (:still-led (done-event s))))
+          (is (not (true? (:leashed (cow-of s 1)))) "the cow is let go before the budget runs out")
+          (is (= 1 (count-of s "lead")))
+          (is (= [:timeout] (mapv :reason (events-of s :lead-to.gave-up))))
+          (is (= [:timeout] (mapv :reason (events-of s :stopped))) "the job's own ending, not the engine's"))))))

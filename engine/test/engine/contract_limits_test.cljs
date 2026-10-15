@@ -74,9 +74,9 @@
           (is (= {:kind :limit-reached :cause {:line :time :spend 4}} (stopped seen))))))))
 
 (def counted
-  (assoc slow :done? (fn [_] (if (when-let [n (:done-throws @world)] (>= (:slow-rounds @world 0) n)) (throw (js/Error. "boom")) {:done? false :units :cells :done 5 :left 3}))))
+  (assoc slow :done? (fn [_] (if (when-let [n (:done-throws @world)] (>= (:slow-rounds @world 0) n)) (throw (js/Error. "boom")) {:done? false :units :cells :done 5 :left 3 :data {:dug [1 2]}}))))
 
-(deftest a-limit-ending-reports-the-units-done-and-left
+(deftest a-limit-ending-reports-the-units-done-and-left-and-the-jobs-data
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -92,11 +92,13 @@
           (is (= :limit-reached (:kind (stopped seen))))
           (is (= {:units :cells :done 5 :left 3}
                  (select-keys (:report (:data (first (job-ev seen :stopped)))) [:units :done :left])))
+          (is (= [1 2] (:dug (:data (first (job-ev seen :stopped))))) "done?'s :data is the ending's")
           (core/submit! eng '(top) {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= :limit-reached (:kind (:kid-ending @world))))
           (is (= {:units :cells :done 5 :left 3} (select-keys (:report (:kid-ending @world)) [:units :done :left]))
               "a child's too")
+          (is (= {:dug [1 2]} (:data (:kid-ending @world))))
           (swap! world assoc :done-throws 3)
           (core/submit! eng '(counted) {})
           (dotimes [_ 2] (await (core/tick! eng)))

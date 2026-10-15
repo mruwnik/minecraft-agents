@@ -34,7 +34,8 @@
   - :done (:cleared): no target within :radius for :lost-s (waiting in 1 s steps), and every target seen was killed.
   - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
   - :nothing-possible :lost: some target was neither killed nor given up on.
-  - :limit-reached: the call's :spend :time (default ::time-s) is used up.
+  - :limit-reached :timeout (warn attack.timeout): less than ::wrap-up-s (at most a quarter of the call's :spend :time,
+    default ::time-s) is left. An end by the engine's limit carries the same data (done?'s :data).
   - :condition-failed :absent: no target was present after a 2 s grace for the world's entities to arrive, a look round and, for a target heard but not seen, up to four steps toward the sound (jobs.lib.vantage).
   :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
   :absent :wait makes the call wait (condition :no-target) until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
@@ -52,9 +53,16 @@
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}
-   ::time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}})
+   ::time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}
+   ::wrap-up-s {:default 6 :doc "A fight with less time left than this (at most a quarter of its time) ends itself :timeout: more than a walk leg." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn time-s [] (settings/get settings ::time-s))
+
+(defn time-up?
+  "Whether the call has less time left (ctx/left) than its wrap-up margin."
+  [c]
+  (some-> (get-in (ctx/left c) [:spend :time])
+          (< (min (settings/get settings ::wrap-up-s) (/ (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)) 4)))))
 
 (def target [:targets])
 
@@ -133,11 +141,17 @@
 
 (def conditions [[:fn no-target]])
 
+(defn fight-data
+  "The fight's data so far."
+  [c reason]
+  (let [m (ctx/mem c)]
+    {:reason reason :killed (vec (:killed m)) :given-up (:given-up m {})}))
+
 (defn done?
-  "The targets killed against those seen. Never :done? itself: the fight ends with its event and data."
+  "The targets killed against those seen, and the data so far. Never :done? itself: the fight ends with its event and data."
   [c]
   (let [{:keys [killed seen]} (ctx/mem c)]
-    {:done? false :units :targets :done (count killed) :left (count (remove (set killed) seen))}))
+    {:done? false :units :targets :done (count killed) :left (count (remove (set killed) seen)) :data (fight-data c :timeout)}))
 
 (defn quote-of [c]
   (let [most (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))]
@@ -243,7 +257,7 @@
   "Emit the outcome and end the call: done when cleared, else the ending of reason."
   [c reason]
   (let [m (ctx/mem c)
-        result {:reason reason :killed (vec (:killed m)) :given-up (:given-up m {})}]
+        result (fight-data c reason)]
     (when (= :timeout reason)
       (ctx/emit! c :attack.timeout :warn (assoc result :text "attack timed out")))
     (ctx/emit! c :attack.done :info (assoc result :text (str "attack done: " (name reason) ", killed " (count (:killed m)))))
@@ -303,13 +317,12 @@
   "One step of the fight: end, wait, wait out the swing gap, or walk and swing once. :again or the ending."
   [c]
   (let [now (ctx/now c)
-        {:keys [lost-s]} (:args c)
-        time-limit (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))]
+        {:keys [lost-s]} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
     (let [{:keys [started seen last-seen]} (ctx/mem c)
           targets (candidates c)]
       (cond
-        (>= (- now started) (* 1000 time-limit)) (finish! c :timeout)
+        (time-up? c) (finish! c :timeout)
         (and (empty? targets) (seq (present c))) (finish! c :gave-up)
         (and (empty? targets) (empty? seen)) (cond
                                                (< (- now started) absent-grace-ms) (await (wait! c 500))

@@ -59,6 +59,9 @@
   - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :all-leashed) when no animal got on the lead, or
     of jobs.animals.unleash (:unreachable, :none) when the lead would not come off; :refused and :no-zones are
     condition-failed.
+  - :timeout: less than ::wrap-up-s (at most a quarter of the call's :spend :time) is left: an animal on the lead is let
+    go (jobs.animals.unleash) and the gates shut before the job ends :limit-reached. An end by the engine's limit
+    carries {:animal :still-led} (done?'s :data).
   All but done, condition-failed and the timeout end nothing-possible with the reason as the cause.
 
   Zones: the leash child refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
@@ -77,6 +80,7 @@
 
 (a/defargs settings
   {::timeout-s {:default 180 :doc "Seconds from the first round before the leading gives up." :spec (a/num-in 0 nil)}
+   ::wrap-up-s {:default 30 :doc "A leading with less time left than this (at most a quarter of its time) lets the animal go, shuts the gates and ends :timeout." :spec (a/num-in 0 nil)}
    ::max-ties {:default 2 :doc "Ties tried before the job gives up." :spec (a/int-in 0 nil)}
    ::tie-settle-ms {:default 250 :doc "How long to wait between looks at the animal after the click on the post." :spec (a/int-in 0 nil)}
    ::tie-settle-tries {:default 6 :doc "How often the animal is looked at again after the click before the tie counts as not taken." :spec (a/int-in 0 nil)}})
@@ -98,7 +102,8 @@
    :unleashed [:done nil]
    :no-fence [:condition-failed :no-fence]
    :refused [:condition-failed :refused]
-   :no-zones [:condition-failed :no-zones]})
+   :no-zones [:condition-failed :no-zones]
+   :timeout [:limit-reached {:line :time :reason :timeout}]})
 
 (defn end!
   "End the call with the ending of reason (ending-of) and data; a failed child's ending kept in :because is attached."
@@ -172,14 +177,22 @@
 (defn time-limit "Seconds the leading may take." [c]
   (or (get-in (ctx/frozen-call c) [:spend :time]) (timeout-s)))
 
+(defn time-up?
+  "Whether the call has less time left (ctx/left) than its wrap-up margin."
+  [c]
+  (some-> (get-in (ctx/left c) [:spend :time])
+          (< (min (settings/get settings ::wrap-up-s) (/ (time-limit c) 4)))))
+
 (defn quote-of [c]
   (let [most (time-limit c)]
     {:uses {:time [0 (min most 60) most]}}))
 
 (defn done?
-  "Whether the animal is tied or let go. Never :done? itself: the run ends with its event and data."
+  "Whether the animal is tied or let go, and the data so far. Never :done? itself: the run ends with its event and data."
   [c]
-  {:done? false :units :animals :done (if (#{:tied :unleashed} (:ending (ctx/mem c))) 1 0) :left 1})
+  (let [m (ctx/mem c)]
+    {:done? false :units :animals :done (if (#{:tied :unleashed} (:ending m)) 1 0) :left 1
+     :data {:animal (:animal m) :still-led (boolean (:still-led m))}}))
 
 (defn set-phase! [c phase]
   (ctx/update-mem! c assoc :phase phase))
@@ -255,10 +268,10 @@
            (:steps plan)))))
 
 (defn ^:async walk! [c]
-  (let [r (await (escort/walk-legs! c :walk (destination c) (:range (:args c)) escort/safe-gap))]
+  (let [r (await (escort/walk-legs! c :walk (destination c) (:range (:args c)) escort/safe-gap time-up?))]
     (cond
       (= :waiting r) :yield
-      (= :searching r) :again
+      (#{:searching :stopped} r) :again
       (= :catching-up r) (await (escort/wait-for-animal! c))
       (= :arrived r) (do (set-phase! c (if (:fence (:args c)) :arrive :gather)) :again)
       (= :failed r) (finish! c :unreachable)
@@ -278,10 +291,10 @@
   (let [d (u/flat-dist animal-pos (:pos (:args c)))]
     (if (await (path-leaves-reach? c target animal-pos))
       (stop-gathering! c d)
-      (let [r (await (escort/walk-legs! c :pull target pull-range escort/follow-reach))]
+      (let [r (await (escort/walk-legs! c :pull target pull-range escort/follow-reach time-up?))]
         (cond
           (= :waiting r) :yield
-          (= :searching r) :again
+          (#{:searching :stopped} r) :again
           (= :catching-up r) (await (escort/wait-for-animal! c))
           (map? r) (do (ctx/update-mem! c assoc :still-led (= :animal-stalled (:problem r)))
                        (finish! c (:problem r)))
@@ -321,7 +334,16 @@
       (= :continue e) :yield
       (not= :done (:kind e)) (fail-with! c (child-reason e) e)
       :else (do (ctx/update-mem! c assoc :still-led false)
-                (finish! c (child-reason e))))))
+                (finish! c (if (:timed-out (ctx/mem c)) :timeout (child-reason e)))))))
+
+(defn time-up!
+  "Out of time: an animal on the lead is let go first (phase :release), then the job ends :timeout."
+  [c]
+  (let [{:keys [still-led phase]} (ctx/mem c)]
+    (ctx/update-mem! c assoc :timed-out true)
+    (if (and still-led (#{:walk :gather :arrive} phase))
+      (do (set-phase! c :release) :again)
+      (finish! c :timeout))))
 
 (defn tied?
   "True when the animal is held by something else than this body."
@@ -375,6 +397,7 @@
       (when a (ctx/update-mem! c dissoc :unseen-since))
       (cond
         (:ending (ctx/mem c)) (await (escort/close-up! c conclude!))
+        (and (not (:timed-out (ctx/mem c))) (time-up? c)) (time-up! c)
         (and fence (contains? #{nil :arrive} phase) (not-fence? c)) (finish! c :no-fence)
         (nil? phase) (do (ctx/update-mem! c assoc :origin (u/self-pos c))
                          (set-phase! c (if (animals/lead-carried? c) :leash :get-lead)) :again)
