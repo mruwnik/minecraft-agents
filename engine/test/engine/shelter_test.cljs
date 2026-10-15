@@ -499,9 +499,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[unsupported? spec] [[true '(jobs.survival.log-out)] [false '(jobs.survival.log-out {:offline-allowed false})]]]
+        (doseq [[seed! spec] [[#(mem/write! (:store %) :log-out {:ms 0 :status "unsupported"} {:cap 10 :ttl day-ms}) '(jobs.survival.log-out)]
+                              [identity '(jobs.survival.log-out {:offline-allowed false})]]]
           (let [{:keys [eng p]} (setup {:time night})]
-            (when unsupported? (mem/write! (:store eng) :log-out {:ms 0 :status "unsupported"} {:cap 10 :ttl day-ms}))
+            (seed! eng)
             (core/submit! eng spec {})
             (await (core/tick! eng))
             (is (= [] (:list (core/state eng))) (pr-str spec))

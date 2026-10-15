@@ -130,7 +130,6 @@
              (:data %))
           (ctx/entries c :dig-in-futile))))
 
-
 (defn sheltered?
   "Whether the world shows the body shut in: walls round it under a roof, or (not :enclose) a roof over a closed room."
   [c]
@@ -159,13 +158,7 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(defn legacy-args
-  "An old caller's :blocks as the call's :use {:blocks [...]}."
-  [{:keys [blocks] :as args}]
-  (cond-> args
-    (sequential? blocks) (dissoc :blocks)
-    (and (sequential? blocks) (nil? (get-in args [:use :blocks]))) (assoc-in [:use :blocks] (vec blocks))))
-
+(def legacy-args mode/legacy-args)
 
 (defn done?
   "Shut in already, before this call placed anything, or once it ended (a call that placed blocks reports its own end)."

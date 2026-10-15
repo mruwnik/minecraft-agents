@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.items.smelt :as smelt]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
@@ -112,16 +113,16 @@
   wait yields the round (once the furnace holds the load, the world must move on before the next look). :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
   ([c] (await (cook! c nil)))
   ([c cooker]
-  (let [{:keys [name] :as cooking}
+  (let [{:keys [item] :as cooking}
         (or (:cooking (ctx/mem c))
             (let [{:keys [name count]} (first (raw-carried c))
                   furnace (or cooker (nearest-cooker c))]
-              {:name name :args (cond-> {:item name :count count} furnace (assoc :furnace furnace))}))
+              {:item name :args (cond-> {:item name :count count} furnace (assoc :furnace furnace))}))
         args (:args cooking)
         _ (ctx/update-mem! c assoc :cooking cooking)]
     (loop [n 1]
       (let [e (await (child/run!* c :cook 'jobs.items.smelt args {:max-calls 1}))
-            loaded? (some? (get-in (ctx/mem c) [:children :cook :owed]))]
+            loaded? (smelt/loaded? (get-in (ctx/mem c) [:children :cook]))]
         (cond
           (not (ctx/alive? c)) :continue
           (and (= :continue e) (not loaded?) (< n (child/default-max-calls))) (do (await (child/pace!)) (recur (inc n)))
@@ -129,7 +130,7 @@
           :else (do (ctx/update-mem! c dissoc :cooking)
                     (if (pos? (:smelted (:data e) 0))
                       :again
-                      (let [reason (if (= :done (:kind e)) "short" (clojure.core/name (contract/cause-key e)))]
+                      (let [reason (if (= :done (:kind e)) "short" (name (contract/cause-key e)))]
                         (ctx/remember! c :no-cook {:reason reason} no-bake-policy)
-                        (ctx/emit! c :food.no-cook :info {:text (str "cannot cook " name ": " reason)})
+                        (ctx/emit! c :food.no-cook :info {:text (str "cannot cook " item ": " reason)})
                         nil)))))))))

@@ -1,6 +1,5 @@
 (ns jobs.survival.dig-niche
-  (:require [jobs.lib.choose :as choose]
-            [engine.settings :as settings]
+  (:require [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string]
             [jobs.lib.blocks :as lb]
@@ -20,7 +19,8 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.survival.dig-in-cells :as dig-cells]))
+            [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.dig-in.mode :as mode]))
 
 (def doc
   "Shut the body in for the night in a hillside or wall where no pit can be dug: a niche two blocks deep, one wide and
@@ -69,19 +69,7 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(defn legacy-args
-  "An old caller's :blocks as the call's :use {:blocks [...]}."
-  [{:keys [blocks] :as args}]
-  (cond-> args
-    (sequential? blocks) (dissoc :blocks)
-    (and (sequential? blocks) (nil? (get-in args [:use :blocks]))) (assoc-in [:use :blocks] (vec blocks))))
-
-(defn blocks
-  "The blocks it may place: the call's :use :blocks, else the shelter fillers (not a list frozen at the start: a pit
-  places the dirt it dug)."
-  [c]
-  (let [used (ctx/use c :blocks)]
-    (if (seq used) used (choose/fillers :shelter))))
+(def legacy-args mode/legacy-args)
 
 (defn done?
   "Shut in a closed room under a roof before this call cut anything, or once the niche is plugged."
@@ -241,12 +229,12 @@
       (do (ctx/update-mem! c assoc :dug-at (ctx/now c))
           (await (dl/see-round! c [(:x cell) (:y cell) (:z cell)]))
           (await (dl/wait-settled! c [[(:x cell) (:y cell) (:z cell)]]))
-          (await (dig-cells/collect-drops! c (blocks c) (.-drops r)))
+          (await (dig-cells/collect-drops! c (mode/blocks c) (.-drops r)))
           :again)
       (fail! c :dig-failed (str "cannot dig the niche: " (.-status r))))))
 
 (defn ^:async plug-step! [c cell]
-  (let [item (lb/pick c (blocks c))]
+  (let [item (lb/pick c (mode/blocks c))]
     (if (nil? item)
       (fail! c :no-blocks "nothing to plug the niche with")
       (let [r (await (tidy/place! c cell item))]
