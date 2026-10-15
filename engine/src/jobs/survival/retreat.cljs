@@ -294,7 +294,9 @@
                         (flight/end-flight! c :keeps-off)
                         (await (wait-far! c))))))]
     (cond
-      (nil? threat) (or (await (flight/look-back! c)) (flight/end-flight! c nil))
+      (nil? threat) (or (await (flight/look-back! c))
+                        (when (seal/sealing-here? c) (await (refuge/hide! c)))
+                        (flight/end-flight! c nil))
       (some? early) early
       (flight/no-gain? (ctx/mem c) no-gain-steps)
       (do (when (seq (cornered/near-hostiles c)) (ctx/update-mem! c assoc :since-gain 0))

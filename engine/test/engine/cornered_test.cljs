@@ -174,6 +174,19 @@
             (is (= [{:name "skeleton" :pos [4 64 0]}] (:hostiles e)) "and carries them"))
           (is (= [] (:list (core/state eng))) "done once the skeleton is gone"))))))
 
+(deftest a-seal-begun-is-finished-when-the-mob-drops-out-of-sense
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(skeleton 4 64 0)]})
+              _ (add-watch (fake/state p) :mob-out
+                           (fn [_ _ _ w] (when (and (seq (:entities w)) (get-in w [:blocks [1 64 0]])) (swap! (fake/state p) assoc :entities []))))
+              round (do (core/submit! eng '(jobs.survival.retreat {:max-places 1}) {})
+                        (core/tick! eng))]
+          (await round)
+          (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the seal is finished though the skeleton is out of sense")
+          (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen)))))))))
+
 (defn unseen-ceiling!
   "p senses no cell at height y until a look aims within a block of it (a look shows the cell and its neighbours)."
   [p y]
