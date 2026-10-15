@@ -3,7 +3,8 @@
   no seen solid over it (trees skipped), why :surface; else (the column seen only under cover) the stand nearest the body's
   feet, why :nearest-level; over the whole build height. A column with no ground seen aims provisionally at an
   estimate (estimate: the seen ground of the nearest column around it within estimate-reach of the feet, else the feet
-  y), or, when the column is seen there and does not stand, keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from
+  y; seen open there down to an unseen cell: the lowest open cell over it, unseen-under), or, when the column is seen there
+  and has no floor, keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from
   seen cells on approach; a provisional one it first walks to within approach-range of. A y with no standable cell within the
   range is re-aimed to its column's standable cell nearest it, at most :y-slack blocks off, never past a solid (leads-to?;
   seen cells, an unseen one from the world the plans read)."
@@ -139,6 +140,15 @@
             (for [d (range 1 (inc approach-range)) [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [d dx dz]))
       body-y))
 
+(defn unseen-under
+  "The guess y of column x z at y: y when unseen, else, seen open down to an unseen cell (its ground not seen yet), the
+  lowest open cell over it; nil on a seen floor or none."
+  [kind-at x z y]
+  (loop [g y]
+    (let [k (kind-at x g z)]
+      (cond (keyword-identical? :unknown k) (min y (inc g))
+            (and (free? k) (> g places/min-y)) (recur (dec g))))))
+
 (def off-line-radius "Blocks round the body an off-line waypoint is looked for (about what a body sees of the land)." 16)
 
 (def off-line-cone "The most an off-line waypoint's bearing may turn from the column's, in degrees." 60)
@@ -179,10 +189,9 @@
     (let [seen (cached (surface-kind-at p))]
       (if-let [[g why] (pick seen x z body-y)]
         {:pos {:x x :y g :z z} :resolved true :why why}
-        (let [e (estimate seen x z body-y)]
-          (if (or (keyword-identical? :unknown (seen x e z)) (keyword-identical? :unknown (seen x (dec e) z)))
-            {:pos {:x x :y e :z z} :resolved true :provisional true}
-            {:pos {:x x :y body-y :z z}}))))
+        (if-let [g (unseen-under seen x z (estimate seen x z body-y))]
+          {:pos {:x x :y g :z z} :resolved true :provisional true}
+          {:pos {:x x :y body-y :z z}})))
     (if-let [g (when (pos? slack) (let [ka (kind-at p raw?)] (ground ka x z y (- y slack) (+ y slack) #(leads-to? ka x z y %))))]
       {:pos (assoc goal :y g) :resolved true :why :explicit}
       {:pos goal})))

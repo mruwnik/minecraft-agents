@@ -276,6 +276,24 @@
           (is (some #(< 2 (js/Math.hypot (- 30 (:x (:to %))) (:z (:to %))) (inc column/approach-range)) walks)
               (str "a walk stopped near the guess first: " (pr-str (mapv :to walks)))))))))
 
+(deftest a-column-seen-open-at-the-feet-with-its-ground-unseen-is-walked-toward-and-arrived-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the body on a plateau (feet 72) with steps down to the floor (feet 64); round the column x 25 nothing below 66
+        ;; is seen until the body is down the steps, so no ground is known there or beside it at the start, while its
+        ;; cells at the feet y are seen open
+        (let [steps (into {} (mapcat (fn [i] (box (+ 5 i) 64 -3 (+ 5 i) (- 70 i) 3 "stone")) (range 7)))
+              world {:blocks (merge flat (box -2 64 -3 4 71 3 "stone") steps) :self {:pos {:x 0.5 :y 72 :z 0.5}}}
+              {:keys [eng p]} (gt/setup world)
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos [25 0] :range 1})))]
+          (aset p "sensedAt" (fn [pos] (if (and (< (first (at p)) 12) (>= (.-x pos) 17) (< (.-y pos) 66)) #js {:unknown true} (.blockAt p pos))))
+          (core/submit! eng '(recording-parent) {})
+          (await (gt/tick-out! eng 30))
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (> 2 (js/Math.abs (- 25 (first (at p))))) (str "at " (at p))))))))
+
 ;; ---------------------------------------------------------------- :range, seen cells only, look order, fetch
 
 (deftest a-seen-block-goal-with-range-is-reached-beside-it-under-unknown
