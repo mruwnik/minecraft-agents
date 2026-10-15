@@ -12,10 +12,10 @@
 
 (def doc
   "Toss :count food to the villager with uuid :villager and confirm that villager took it. One call is the whole
-  feeding: find the villager within :radius, walk within 2 of it (jobs.movement.go-to legs of 5 s, it wanders),
-  look at its feet and toss with a pickup receipt (the toss primitive's :watchS reports who collected the drop, by
-  uuid). Only what that villager collected counts as fed; the rest of the drop lying near the toss is collected back,
-  never left as litter.
+  feeding: find the villager within :radius, walk to a cell 2 to 3 blocks from it (jobs.movement.go-to legs of 5 s, it
+  wanders; nearer, the body's own pickup reach takes the drop back before the villager's does), look at its feet and
+  toss with a pickup receipt (the toss primitive's :watchS reports who collected the drop, by uuid). Only what that
+  villager collected counts as fed; the rest of the drop lying near the toss is collected back, never left as litter.
   :item is the food to give (carried), nil for the first carried of bread, carrot, potato, beetroot. Villagers pick
   up only bread, potato, carrot, wheat, beetroot and seeds: any other :item is impossible (:bad-args).
   When none is carried it is fetched (jobs.lib.need, :fetch true; condition-failed :no-food when :fetch is off or the fetch ended).
@@ -43,7 +43,8 @@
 (def foods ["bread" "carrot" "potato" "beetroot"])
 (def wanted (into (set foods) ["wheat" "wheat_seeds" "beetroot_seeds" "torchflower_seeds" "pitcher_pod"]))
 (a/defargs settings
-  {::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+  {::min-gap {:default 2 :doc "Fewest blocks along x or z between body and villager at a toss: nearer, the drop at the villager's feet is in the body's own pickup reach." :spec (a/num-in 0 nil)}
+   ::max-gap {:default 3 :doc "Most blocks along x and z between body and villager at a toss." :spec (a/num-in 0 nil)}
    ::leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-refused {:default 3 :doc "Refusals before the job gives up on the animal." :spec (a/int-in 0 nil)}
    ::max-walks {:default 8 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
@@ -51,7 +52,8 @@
    ::watch-s {:default 4 :doc "Seconds the body watches the animal after acting." :spec (a/int-in 0 nil)}
    ::foot-height {:default 0.3 :doc "Height of an animal's feet above its position, in blocks." :spec (a/num-in 0 nil)}
    ::settle-reach {:default 4 :doc "Reach once the animal has settled, in blocks." :spec (a/int-in 0 nil)}})
-(defn reach [] (settings/get settings ::reach))
+(defn min-gap [] (settings/get settings ::min-gap))
+(defn max-gap [] (settings/get settings ::max-gap))
 (defn leg-s [] (settings/get settings ::leg-s))
 (defn max-refused [] (settings/get settings ::max-refused))
 (defn max-walks [] (settings/get settings ::max-walks))
@@ -156,11 +158,32 @@
           (and (= :done (:kind e)) (not (problem c))) :again
           :else (stop! c :no-food "no food to give"))))))
 
+(defn gap
+  "Blocks between a and b along x or z, whichever is more: a drop is in a body's pickup reach while it is within about
+  1.4 along both."
+  [a b]
+  (max (js/Math.abs (- (:x a) (:x b))) (js/Math.abs (- (:z a) (:z b)))))
+
+(defn tossing-gap? [me v] (<= (min-gap) (gap me v) (max-gap)))
+
+(defn stand
+  "The cell to toss from at the villager at v: on the body's side of it along the axis the body is farther along (x on a
+  tie), its centre min-gap to max-gap out; each blocked walk in a row turns it a quarter round the villager."
+  [me v blocked]
+  (let [sign #(if (neg? %) -1 1)
+        dx (- (:x me) (:x v)) dz (- (:z me) (:z v))
+        sides (if (>= (js/Math.abs dx) (js/Math.abs dz))
+                [[(sign dx) 0] [0 (sign dz)] [(- (sign dx)) 0] [0 (- (sign dz))]]
+                [[0 (sign dz)] [(sign dx) 0] [0 (- (sign dz))] [(- (sign dx)) 0]])
+        [sx sz] (nth sides (mod blocked 4))
+        out (/ (+ (min-gap) (max-gap)) 2)]
+    {:x (js/Math.floor (+ (:x v) (* sx out))) :y (js/Math.floor (:y v)) :z (js/Math.floor (+ (:z v) (* sz out)))}))
+
 (defn ^:async walk!
-  "One go-to leg to the villager at pos. A leg or arrival resets the blocked count, anything else counts (the third in a
+  "One go-to leg to within range of pos. A leg or arrival resets the blocked count, anything else counts (the third in a
   row ends unreachable); the legs since the last toss are bounded by max-walks. :again, :continue or :done."
-  [c pos]
-  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach) :spend {:job-time (leg-s)} :doors :shut
+  [c pos range]
+  (let [r (await (child/call-walk* c :walk {:pos pos :range range :spend {:job-time (leg-s)} :doors :shut
                                             :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true}))]
     (if (= :continue r)
       :continue
@@ -271,14 +294,14 @@
     (cond
       (:tossing m) (if (u/within? (u/self-pos c) (:at (:tossing m)) (settle-reach))
                      (settle! c (:tossing m))
-                     (await (walk! c (:at (:tossing m)))))
+                     (await (walk! c (:at (:tossing m)) (settle-reach))))
       (:cleanup m) (await (clean-up! c (:cleanup m)))
       (>= (fed c) count) (done! c)
       (>= (:refused m 0) (max-refused)) (stop! c :not-taken "the villager does not take the food")
       (nil? e) (stop! c :gone "the villager is not here")
       (nil? item) (await (fetch-food! c))
-      (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach)) (await (toss! c e item))
-      :else (await (walk! c (u/pos-of (.-pos e)))))))
+      (tossing-gap? (u/self-pos c) (u/pos-of (.-pos e))) (await (toss! c e item))
+      :else (await (walk! c (stand (u/self-pos c) (u/pos-of (.-pos e)) (:blocked m 0)) 0)))))
 
 (defn ^:async round
   "The whole attempt: steps (a pace between) until fed or stopped; it yields only while a walk or fetch waits."

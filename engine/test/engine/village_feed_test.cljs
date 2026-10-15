@@ -81,6 +81,22 @@
           (is (= 1 (count (tosses p))))
           (is (gave? s :feed.done)))))))
 
+(deftest it-tosses-from-out-of-its-own-pickup-reach
+  ;; Live, a toss from 1.5 away was collected back by the body itself when the pickup delay ran out.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [gaps (atom [])
+              {:keys [out]} (await (feed {:entities [(villager 1)] :inventory bread} {:villager "v-1"} 40
+                                         (fn [p]
+                                           (taking p (fn [n]
+                                                       (let [b (.-pos (.self p))]
+                                                         (swap! gaps conj (max (js/Math.abs (- 1 (.-x b))) (js/Math.abs (.-z b)))))
+                                                       {"v-1" n})))))]
+          (is (= {:fed 1 :status :done} (select-keys @out [:fed :status])))
+          (is (= 1 (count @gaps)))
+          (is (<= 2 (first @gaps) 3) "out of its own pickup reach, within the villager's"))))))
+
 (deftest the-receipt-is-asked-for-with-the-toss
   (async done
     (tu/run-async done

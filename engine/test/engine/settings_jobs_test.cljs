@@ -22,7 +22,7 @@
     interact/max-walks 2
     smelt/slack-ms 2000
     smelt/seen-radius 32
-    feed/reach 2
+    feed/min-gap 2
     feed/foot-height 0.3
     leash/max-in-row 3
     unleash/knot-margin 12
