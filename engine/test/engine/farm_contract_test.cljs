@@ -97,7 +97,7 @@
       (fn ^:async t []
         (let [env (tt/setup {:inventory tt/hoe :blocks (zipmap (keys tt/four) (repeat "farmland"))})
               e (await (ending-of env till tt/box 20))]
-          (is (= {:kind :done :cause nil} (kc e)))
+          (is (= {:kind :done :cause :already} (kc e)))
           (is (empty? (tt/calls (:p env) "useOn"))))))))
 
 (deftest till-partial-run-is-done-only-when-it-meets-least

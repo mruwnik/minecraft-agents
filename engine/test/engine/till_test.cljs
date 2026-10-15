@@ -102,7 +102,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks (zipmap (keys four) (repeat "farmland"))})
               result (await (child-outcome eng job box 6))]
-          (is (= {} result) "already farmland: done at once (done?), no round data")
+          (is (= {:already? true} result) "already farmland: done at once (done?), no round data")
           (is (empty? (calls p "useOn"))))))))
 
 (deftest till-skips-what-is-not-tillable

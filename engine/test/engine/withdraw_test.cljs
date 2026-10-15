@@ -67,7 +67,7 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "bread" :count 20}] :containers {"10,64,0" [{:name "bread" :count 32}]}})
               result (await (ending-of eng job {:chest chest :items {"bread" 16}} 4))]
           (is (zero? (count (calls p "transfer"))))
-          (is (= {:kind :done} result)))))))
+          (is (= {:kind :done :cause :already} result)))))))
 
 (deftest withdraw-reports-what-the-chest-lacks
   (async done
