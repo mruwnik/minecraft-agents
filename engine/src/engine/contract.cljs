@@ -205,9 +205,7 @@
 ;; ------------------------------------------------------------------ limits
 
 (a/defargs settings
-  {::enforce-limits {:default false :spec boolean?
-                     :doc "Whether a crossed limit ends the job :limit-reached; off, job.limit_would_end is told instead."}
-   ::default-time-s {:default 30 :spec (a/num-in 0 nil)
+  {::default-time-s {:default 30 :spec (a/num-in 0 nil)
                      :doc "The mean time a job with no quote-of and no reports quotes."}
    ::quote-s {:default 2 :spec (a/num-in 0 nil)
               :doc "The wall-clock budget of a quote asked with no quote deadline; past it the quote's time is ##Inf."}})

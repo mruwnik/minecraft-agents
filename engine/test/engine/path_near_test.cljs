@@ -125,7 +125,7 @@
           (let [{:keys [out p]} (await (walk! {:blocks flat} [{:x 10 :y 64 :z 0} 0 opts]))]
             (is (= :there @out) (str opts))
             (is (seq (steer-timeouts p)) (str opts))
-            (is (every? #(= limit %) (steer-timeouts p)) (str opts))))))))
+            (is (every? #(<= (- limit 0.1) % limit) (steer-timeouts p)) (str opts " held under what is left, less a margin"))))))))
 
 ;; ---------------------------------------------------------------- walks and the backoff
 

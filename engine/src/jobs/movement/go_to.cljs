@@ -1,6 +1,7 @@
 (ns jobs.movement.go-to
   (:require [engine.args :as a]
             [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as cost-health]
@@ -282,8 +283,10 @@
     (preview/quote-of-route (await (preview/route! c)) (ways/escalating? c))))
 
 (def conditions
-  "A listed go-to not yet started waits while wait-reason holds; a started call, or a child, yields instead (attempt)."
-  [[:fn (fn [c] (when (and (empty? (:slots c)) (nil? (ctx/frozen-call c))) (wait-reason c)))]])
+  "A floor or leg out of range is impossible, before the engine's floor check could hold the call. A listed go-to not
+  yet started waits while wait-reason holds; a started call, or a child, yields instead (attempt)."
+  [[:fn (fn [c] (some-> (limits-refusal (:args c)) contract/impossible))]
+   [:fn (fn [c] (when (and (empty? (:slots c)) (nil? (ctx/frozen-call c))) (wait-reason c)))]])
 
 (defn hold!
   "Keep in memory what the call waits on (:hold, nil when it walks), for a parent's jobs.lib.child walk to read."
@@ -309,7 +312,7 @@
   [c0]
   (let [u (:unknown (:args c0))
         c (cond-> c0 u (assoc :unknown (wworld/unknown-spec (when (map? u) u))))
-        refusal (or (limits-refusal (:args c)) (args-refusal c))
+        refusal (args-refusal c)
         night (when-not refusal (night-wait c))
         plug (when-not (or refusal night) (plug-wait c))
         goal (when-not (or refusal night plug) (:pos (aim/target c)))

@@ -154,7 +154,7 @@
                                         {:action :recover :id 9}))]
           (is (= {:status :done :id 9 :item "birch_boat"} (select-keys res [:status :id :item]))))))))
 
-(deftest recover-a-boat-that-never-breaks-is-not-broken
+(deftest recover-a-boat-that-never-breaks-ends-at-the-time-spend
   (async done
     (tu/run-async done
       (fn ^:async t []

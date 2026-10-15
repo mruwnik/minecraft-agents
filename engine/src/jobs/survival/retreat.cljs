@@ -148,7 +148,7 @@
 
 
 (a/defargs settings
-  {::time-s {:default 120 :doc "Seconds of a flight's time spend: past it the flight ends limit-reached (once limits are enforced) and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
+  {::time-s {:default 420 :doc "Seconds of a flight's time spend, a hide up to retreat-refuge ::hide-max-s included: past it the flight ends limit-reached and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
    ::mean-s {:default 20 :doc "Seconds a flight is guessed to take, the mean of its quote." :spec (a/num-in 0 nil)}})
 
 (def target [])

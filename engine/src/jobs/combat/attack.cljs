@@ -34,7 +34,7 @@
   - :done (:cleared): no target within :radius for :lost-s (waiting in 1 s steps), and every target seen was killed.
   - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
   - :nothing-possible :lost: some target was neither killed nor given up on.
-  - :limit-reached :timeout (the call's :spend :time, default ::time-s, from the first round; attack.timeout warning).
+  - :limit-reached: the call's :spend :time (default ::time-s) is used up.
   - :condition-failed :absent: no target was present after a 2 s grace for the world's entities to arrive, a look round and, for a target heard but not seen, up to four steps toward the sound (jobs.lib.vantage).
   :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
   :absent :wait makes the call wait (condition :no-target) until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.

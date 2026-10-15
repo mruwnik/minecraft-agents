@@ -64,26 +64,30 @@
           (is (= :done (:kind @out)))
           (is (= {:fled [7] :ended :far} (:data @out))))))))
 
-(deftest the-time-spend-ends-a-flight-when-limits-are-enforced
+(deftest the-time-spend-ends-a-flight
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (settings/with-settings {:engine.contract/enforce-limits true :jobs.survival.retreat/time-s 3}
-                 (fn ^:async enforced []
+        (await (settings/with-settings {:jobs.survival.retreat/time-s 3}
+                 (fn ^:async spend []
                    (let [{:keys [eng seen]} (setup {:entities chaser} (atom nil))]
                      (core/submit! eng '(jobs.survival.retreat {}) {})
                      (await (tu/run-until-empty eng 5))
                      (let [{:keys [kind cause]} (:data (first (job-ev seen :stopped)))]
                        (is (= [:limit-reached {:line :time :spend 3}] [kind (select-keys cause [:line :spend])])))))))))))
 
-(deftest in-shadow-mode-the-time-spend-only-tells
+(deftest a-flight-with-under-a-steer-left-ends-limit-reached-cleanly
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (settings/with-settings {:jobs.survival.retreat/time-s 3}
-                 (fn ^:async shadow []
-                   (let [{:keys [eng seen]} (setup {:entities chaser} (atom nil))]
-                     (core/submit! eng '(jobs.survival.retreat {}) {})
-                     (await (tu/run-until-empty eng 5))
-                     (is (= {:line :time :spend 3} (select-keys (:cause (:data (first (job-ev seen :limit_would_end)))) [:line :spend])))
-                     (is (= 1 (count (job-ev seen :completed))) "the flight runs to its end")))))))))
+        (doseq [time-s [1.3 2.2 2.6 3.4 4.9]]
+          (await (settings/with-settings {:jobs.survival.retreat/time-s time-s}
+                   (fn ^:async near-budget []
+                     (let [{:keys [eng seen]} (setup {:entities chaser} (atom nil))]
+                       (core/submit! eng '(jobs.survival.retreat {}) {})
+                       (await (tu/run-until-empty eng 10))
+                       (is (empty? (:list (core/state eng))) (str time-s " s: the flight left the list"))
+                       (is (= [[:limit-reached :time]]
+                              (mapv #(let [{:keys [kind cause]} (:data %)] [kind (:line cause)]) (job-ev seen :stopped)))
+                           (str time-s " s"))
+                       (is (empty? (filter #(= :error (:level %)) @seen)) (str time-s " s: no error")))))))))))

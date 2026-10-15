@@ -3,7 +3,6 @@
   kind and a cause (0 of N is never done)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
-            [engine.contract-limits-test :as limits]
             [engine.core :as core]
             [engine.events :as events]
             [engine.hostile-test :as h]
@@ -73,7 +72,7 @@
                (await (angle {:count 1} {:inventory rod :blocks bank}))))
         (is (= {:event :stopped :kind :nothing-possible :reason :no-bite}
                (await (angle {:count 2 :max-misses 3} {:inventory rod :fish {:misses 100}}))))
-        (is (= {:event :stopped :kind :limit-reached :reason :timeout}
+        (is (= {:event :stopped :kind :limit-reached :reason :time}
                (await (angle {:count 2 :spend {:time 0} :max-misses 1000} {:inventory rod :fish {:misses 100}}))))))))
 
 ;; ------------------------------------------------------------------ shear
@@ -102,9 +101,7 @@
             "one shorn meets the default :least 1")
         (is (= {:event :stopped :kind :nothing-possible :reason :all-sheared}
                (await (shearing {:count 3 :least 2} {:inventory shears :entities [(sheep 1 2)]})))
-            "the sheep ran out below :least")
-        (is (= {:event :completed} (select-keys (await (shearing {:spend {:time 0}} {:inventory shears :entities [(sheep 1 2)]})) [:event]))
-            "shadow mode: the job does not end itself on the wall clock")))))
+            "the sheep ran out below :least")))))
 
 ;; ------------------------------------------------------------------ hunt
 
@@ -173,24 +170,15 @@
                  [{} {:inventory lead :entities [(cow-at 1 2 {:leashed true :leashHolder 99})]} :nothing-possible :all-leashed]]]
           (is (= {:event :stopped :kind kind :reason reason} (await (ending (list 'jobs.animals.leash (merge {:mob "cow"} args)) world)))))))))
 
-(deftest leashing-does-not-time-itself
+(deftest the-engine-ends-a-job-past-its-time
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.leash {:mob "cow" :spend {:time 0}}) {:inventory lead :entities [(cow-at 1 2)]})) [:event]))
-            "shadow mode: the job does not end itself on the wall clock")))))
-
-(deftest the-engine-ends-a-job-past-its-time-when-limits-are-enforced
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (await (limits/enforced
-                (fn ^:async enforced []
-                  (doseq [[spec world] [['(jobs.animals.leash {:mob "cow" :spend {:time 0}}) {:inventory lead :entities [(cow-at 1 2)]}]
-                                        ['(jobs.animals.unleash {:spend {:time 0}}) {:entities [(cow-at 1 2 {:leashed true :leashedToMe true})]}]
-                                        ['(jobs.animals.breed {:mob "cow" :spend {:time 0}}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]}]
-                                        ['(jobs.animals.shear {:spend {:time 0}}) {:inventory shears :entities [(sheep 1 2)]}]]]
-                    (is (= {:event :stopped :kind :limit-reached} (select-keys (await (ending spec world)) [:event :kind])) (str spec))))))))))
+        (doseq [[spec world] [['(jobs.animals.leash {:mob "cow" :spend {:time 0}}) {:inventory lead :entities [(cow-at 1 2)]}]
+                              ['(jobs.animals.unleash {:spend {:time 0}}) {:entities [(cow-at 1 2 {:leashed true :leashedToMe true})]}]
+                              ['(jobs.animals.breed {:mob "cow" :spend {:time 0}}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]}]
+                              ['(jobs.animals.shear {:spend {:time 0}}) {:inventory shears :entities [(sheep 1 2)]}]]]
+          (is (= {:event :stopped :kind :limit-reached} (select-keys (await (ending spec world)) [:event :kind])) (str spec)))))))
 
 (deftest unleashing-ends-with-a-kind-and-a-cause
   (async done
@@ -198,9 +186,7 @@
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.unleash {}) {:entities [(cow-at 1 2 {:leashed true :leashedToMe true})]})) [:event])))
         (is (= {:event :stopped :kind :nothing-possible :reason :none}
-               (await (ending '(jobs.animals.unleash {}) {:entities [(cow-at 1 2)]}))) "nobody on a lead: 0 freed is not done")
-        (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.unleash {:spend {:time 0}}) {:entities [(cow-at 1 2 {:leashed true :leashedToMe true})]})) [:event]))
-            "shadow mode: the job does not end itself on the wall clock")))))
+               (await (ending '(jobs.animals.unleash {}) {:entities [(cow-at 1 2)]}))) "nobody on a lead: 0 freed is not done")))))
 
 (deftest breeding-ends-with-a-kind-and-a-cause
   (async done
@@ -278,10 +264,7 @@
           (is (= {:event :stopped :kind :nothing-possible :reason :none}
                  (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos}) (assoc world :entities [])))))
           (is (= {:event :stopped :kind :nothing-possible :reason :animal-stalled}
-                 (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos}) (assoc world :entities [(cow-at 1 3 {:trail 9})])))))
-          (is (= {:event :completed}
-                 (select-keys (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos :spend {:time 0}}) world)) [:event]))
-              "shadow mode: the job does not end itself on the wall clock"))))))
+                 (await (ending (list 'jobs.animals.lead-to {:mob "cow" :pos far-pos}) (assoc world :entities [(cow-at 1 3 {:trail 9})]))))))))))
 
 (deftest lure-to-ends-with-a-kind-and-a-cause
   (async done

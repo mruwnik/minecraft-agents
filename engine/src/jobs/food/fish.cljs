@@ -21,7 +21,7 @@
   within :radius).
   - :condition-failed :no-water (the water gone mid-run), or a failed rod fetch (the cause names the rod, :because the fetch's ending).
   - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (:max-misses casts in a row caught nothing).
-  - :limit-reached :timeout (the call's :spend :time, default ::time-s, from the first round).
+  - :limit-reached: the call's :spend :time (default ::time-s) is used up.
   Resumes from the carried fish: the goal is the count carried at the first round plus :count.")
 
 (a/defargs args

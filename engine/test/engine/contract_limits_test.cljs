@@ -1,6 +1,6 @@
 (ns engine.contract-limits-test
   "A call's limits (engine.contract, engine.core.limits): clamped to the caller's, checked at acts and call boundaries,
-  the outermost crossed frame ends :limit-reached when enforced, job.limit_would_end only in shadow mode."
+  the outermost crossed frame ends :limit-reached and job.limit_reached tells the line, its amount and the report."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -8,7 +8,6 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
-            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.apiary.maintain :as apiary-maintain]
             [jobs.village.maintain :as village-maintain]))
@@ -30,8 +29,6 @@
 (defn raw-mem [eng root slots] (mem/job-mem (mem/view (:store eng)) root slots))
 (defn looks [p] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
 
-(defn enforced [f] (settings/with-settings {:engine.contract/enforce-limits true} f))
-
 (defn look! [c] (ctx/act c :look #js {:yaw 0 :pitch 0}))
 
 (defn hurt! [c health] (fake/swap-self! (:primitives c) assoc :health health))
@@ -44,29 +41,26 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-time []
-                  (let [{:keys [eng seen]} (setup {'slow slow})]
-                    (core/submit! eng '(slow) {})
-                    (await (core/tick! eng))
-                    (await (core/tick! eng))
-                    (is (= 1 (:slow-rounds @world)) "the round after the crossing does not run")
-                    (is (= {:kind :limit-reached :cause {:line :time :spend 5}} (stopped seen)))))))))))
+        (let [{:keys [eng seen]} (setup {'slow slow})]
+          (core/submit! eng '(slow) {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (= 1 (:slow-rounds @world)) "the round after the crossing does not run")
+          (is (= {:kind :limit-reached :cause {:line :time :spend 5}} (stopped seen))))))))
 
-(deftest shadow-mode-tells-once-and-ends-nothing
+(deftest the-limit-that-ends-a-job-is-told-with-its-amount-and-report
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'slow slow})
               id (core/submit! eng '(slow) {})]
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= 3 (:slow-rounds @world)))
-          (is (= [id] (:list (core/state eng))))
-          (let [told (job-ev seen :limit_would_end)
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (let [told (job-ev seen :limit_reached)
                 data (:data (first told))]
-            (is (= 1 (count told)) "once per frame and line")
-            (is (= {:line :time :spend 5} (:cause data)))
-            (is (= {:spend {:time 5} :least 1} (:call data)))
+            (is (= [id] (mapv #(get-in % [:context :job-id]) told)))
+            (is (= {:name 'slow :cause {:line :time :spend 5} :used 6 :call {:spend {:time 5} :least 1}}
+                   (select-keys data [:name :cause :used :call])))
             (is (= 6 (get-in data [:report :uses :time])))))))))
 
 (def counted
@@ -76,30 +70,28 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-units []
-                  (let [{:keys [eng seen]} (setup {'counted counted
-                                                   'top {:conditions []
-                                                         :round (fn ^:async top [c]
-                                                                  (let [e (await (ctx/call c :kid 'counted {}))]
-                                                                    (if (= :continue e)
-                                                                      :continue
-                                                                      (do (swap! world assoc :kid-ending e) (ctx/end c :done nil)))))}})]
-                    (core/submit! eng '(counted) {})
-                    (dotimes [_ 2] (await (core/tick! eng)))
-                    (is (= :limit-reached (:kind (stopped seen))))
-                    (is (= {:units :cells :done 5 :left 3}
-                           (select-keys (:report (:data (first (job-ev seen :stopped)))) [:units :done :left])))
-                    (core/submit! eng '(top) {})
-                    (dotimes [_ 2] (await (core/tick! eng)))
-                    (is (= :limit-reached (:kind (:kid-ending @world))))
-                    (is (= {:units :cells :done 5 :left 3} (select-keys (:report (:kid-ending @world)) [:units :done :left]))
-                        "a child's too")
-                    (swap! world assoc :done-throws 3)
-                    (core/submit! eng '(counted) {})
-                    (dotimes [_ 2] (await (core/tick! eng)))
-                    (is (= :limit-reached (:kind (:data (second (job-ev seen :stopped)))))
-                        "a done? that throws does not hide the limit")))))))))
+        (let [{:keys [eng seen]} (setup {'counted counted
+                                         'top {:conditions []
+                                               :round (fn ^:async top [c]
+                                                        (let [e (await (ctx/call c :kid 'counted {}))]
+                                                          (if (= :continue e)
+                                                            :continue
+                                                            (do (swap! world assoc :kid-ending e) (ctx/end c :done nil)))))}})]
+          (core/submit! eng '(counted) {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= :limit-reached (:kind (stopped seen))))
+          (is (= {:units :cells :done 5 :left 3}
+                 (select-keys (:report (:data (first (job-ev seen :stopped)))) [:units :done :left])))
+          (core/submit! eng '(top) {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= :limit-reached (:kind (:kid-ending @world))))
+          (is (= {:units :cells :done 5 :left 3} (select-keys (:report (:kid-ending @world)) [:units :done :left]))
+              "a child's too")
+          (swap! world assoc :done-throws 3)
+          (core/submit! eng '(counted) {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= :limit-reached (:kind (:data (second (job-ev seen :stopped)))))
+              "a done? that throws does not hide the limit"))))))
 
 ;; ---------------------------------------------------------------- handed down
 
@@ -123,33 +115,29 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-deadline []
-                  (let [jobs {'top (caller (kid (fn [_] (swap! clock + 5000))) {:deadline 9000000})}
-                        {:keys [eng seen]} (setup jobs)
-                        id (core/submit! eng '(top {:deadline 1002000}) {})]
-                    (await (core/tick! eng))
-                    (is (= 1002000 (:deadline (:kid-call @world))) "clamped to the caller's")
-                    (is (= [[:deadline]] (:lines (:data (first (job-ev seen :budget_clamped))))))
-                    (is (nil? (:kid-acts @world)) "the act past the deadline did not run")
-                    (is (nil? (:kid-ending @world)) "the child's boundary passed it on")
-                    (is (= {:kind :limit-reached :cause {:line :deadline :deadline 1002000}} (stopped seen)))
-                    (is (empty? (raw-mem eng id [])))))))))))
+        (let [jobs {'top (caller (kid (fn [_] (swap! clock + 5000))) {:deadline 9000000})}
+              {:keys [eng seen]} (setup jobs)
+              id (core/submit! eng '(top {:deadline 1002000}) {})]
+          (await (core/tick! eng))
+          (is (= 1002000 (:deadline (:kid-call @world))) "clamped to the caller's")
+          (is (= [[:deadline]] (:lines (:data (first (job-ev seen :budget_clamped))))))
+          (is (nil? (:kid-acts @world)) "the act past the deadline did not run")
+          (is (nil? (:kid-ending @world)) "the child's boundary passed it on")
+          (is (= {:kind :limit-reached :cause {:line :deadline :deadline 1002000}} (stopped seen)))
+          (is (empty? (raw-mem eng id []))))))))
 
 (deftest a-clamped-child-and-its-caller-cross-together-and-the-caller-ends
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-clamp []
-                  (let [jobs {'top (merge (caller (kid (fn [_] (swap! clock + 11000))) {:spend {:time 60 :health 4}})
-                                          {:defaults {:spend {:time 10}}})}
-                        {:keys [eng seen]} (setup jobs)]
-                    (core/submit! eng '(top) {})
-                    (await (core/tick! eng))
-                    (is (= {:time 10 :health 4} (:spend (:kid-call @world))) "time held to the caller's; health the caller has no line for")
-                    (is (= [[:spend :time]] (:lines (:data (first (job-ev seen :budget_clamped))))))
-                    (is (= {:kind :limit-reached :cause {:line :time :spend 10}} (stopped seen)))))))))))
+        (let [jobs {'top (merge (caller (kid (fn [_] (swap! clock + 11000))) {:spend {:time 60 :health 4}})
+                                {:defaults {:spend {:time 10}}})}
+              {:keys [eng seen]} (setup jobs)]
+          (core/submit! eng '(top) {})
+          (await (core/tick! eng))
+          (is (= {:time 10 :health 4} (:spend (:kid-call @world))) "time held to the caller's; health the caller has no line for")
+          (is (= [[:spend :time]] (:lines (:data (first (job-ev seen :budget_clamped))))))
+          (is (= {:kind :limit-reached :cause {:line :time :spend 10}} (stopped seen))))))))
 
 (deftest a-childs-left-is-the-least-its-chain-has-left
   (async done
@@ -168,65 +156,57 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-hit []
-                  (let [jobs {'top (merge (caller (kid #(hurt! % 12)) {:floor {:health 15}}) {:defaults {:floor {:health 5}}})}
-                        {:keys [eng seen]} (setup jobs)
-                        id (core/submit! eng '(top) {})]
-                    (await (core/tick! eng))
-                    (is (= {:kind :limit-reached :cause {:line :health :floor 15}} (dissoc (:kid-ending @world) :report)))
-                    (is (= [id] (:list (core/state eng))) "the caller goes on")
-                    (is (empty? (job-ev seen :stopped)))))))))))
+        (let [jobs {'top (merge (caller (kid #(hurt! % 12)) {:floor {:health 15}}) {:defaults {:floor {:health 5}}})}
+              {:keys [eng seen]} (setup jobs)
+              id (core/submit! eng '(top) {})]
+          (await (core/tick! eng))
+          (is (= {:kind :limit-reached :cause {:line :health :floor 15}} (dissoc (:kid-ending @world) :report)))
+          (is (= [id] (:list (core/state eng))) "the caller goes on")
+          (is (empty? (job-ev seen :stopped))))))))
 
 (deftest a-callers-floor-ends-the-caller-from-a-grandchild
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-grandchild []
-                  (let [grandchild (kid #(hurt! % 11))
-                        jobs {'top (merge (caller (caller grandchild {}) {}) {:defaults {:floor {:health 12}}})}
-                        {:keys [eng seen]} (setup jobs)]
-                    (core/submit! eng '(top) {})
-                    (await (core/tick! eng))
-                    (is (= {:health 12} (:floor (:kid-call @world))) "the floor is handed down")
-                    (is (nil? (:kid-ending @world)) "neither boundary below the caller's ends it")
-                    (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen)))))))))))
+        (let [grandchild (kid #(hurt! % 11))
+              jobs {'top (merge (caller (caller grandchild {}) {}) {:defaults {:floor {:health 12}}})}
+              {:keys [eng seen]} (setup jobs)]
+          (core/submit! eng '(top) {})
+          (await (core/tick! eng))
+          (is (= {:health 12} (:floor (:kid-call @world))) "the floor is handed down")
+          (is (nil? (:kid-ending @world)) "neither boundary below the caller's ends it")
+          (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))
 
 (deftest a-child-called-below-its-floor-fails-its-conditions
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-below []
-                  (let [{:keys [eng p]} (setup {'top (caller (kid (fn [_] nil)) {:floor {:health 15}})})]
-                    (fake/swap-self! p assoc :health 12)
-                    (core/submit! eng '(top) {})
-                    (await (core/tick! eng))
-                    (is (= {:kind :condition-failed :cause {:floor :health :min 15}} (dissoc (:kid-ending @world) :report)))
-                    (is (nil? (:kid-acts @world)))))))))))
+        (let [{:keys [eng p]} (setup {'top (caller (kid (fn [_] nil)) {:floor {:health 15}})})]
+          (fake/swap-self! p assoc :health 12)
+          (core/submit! eng '(top) {})
+          (await (core/tick! eng))
+          (is (= {:kind :condition-failed :cause {:floor :health :min 15}} (dissoc (:kid-ending @world) :report)))
+          (is (nil? (:kid-acts @world))))))))
 
 (deftest a-listed-job-below-its-floor-from-settings-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-wait []
-                  (let [careful {:conditions [] :defaults {:floor {:health ::min-health}} :settings {::min-health {:default 10}}
-                                 :round (fn [_] (swap! world update :careful-rounds (fnil inc 0)) :continue)}
-                        {:keys [eng seen p]} (setup {'careful careful})]
-                    (fake/swap-self! p assoc :health 8)
-                    (core/submit! eng '(careful) {})
-                    (await (core/tick! eng))
-                    (is (nil? (:careful-rounds @world)))
-                    (is (= {:reason :health :cause {:floor :health :min 10}}
-                           (select-keys (:data (first (job-ev seen :waiting))) [:reason :cause])))
-                    (fake/swap-self! p assoc :health 20)
-                    (await (core/tick! eng))
-                    (is (= 1 (:careful-rounds @world)))
-                    (fake/swap-self! p assoc :health 8)
-                    (await (core/tick! eng))
-                    (is (= 1 (:careful-rounds @world)) "a started job waits too, as after a reflex cut")))))))))
+        (let [careful {:conditions [] :defaults {:floor {:health ::min-health}} :settings {::min-health {:default 10}}
+                       :round (fn [_] (swap! world update :careful-rounds (fnil inc 0)) :continue)}
+              {:keys [eng seen p]} (setup {'careful careful})]
+          (fake/swap-self! p assoc :health 8)
+          (core/submit! eng '(careful) {})
+          (await (core/tick! eng))
+          (is (nil? (:careful-rounds @world)))
+          (is (= {:reason :health :cause {:floor :health :min 10}}
+                 (select-keys (:data (first (job-ev seen :waiting))) [:reason :cause])))
+          (fake/swap-self! p assoc :health 20)
+          (await (core/tick! eng))
+          (is (= 1 (:careful-rounds @world)))
+          (fake/swap-self! p assoc :health 8)
+          (await (core/tick! eng))
+          (is (= 1 (:careful-rounds @world)) "a started job waits too, as after a reflex cut"))))))
 
 ;; ---------------------------------------------------------------- unwinding
 
@@ -249,17 +229,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-unwind []
-                  (let [{:keys [eng seen p]} (setup {'cleans-up cleans-up})]
-                    (core/submit! eng '(cleans-up) {})
-                    (await (core/tick! eng))
-                    (is (true? (:caught @world)))
-                    (is (nil? (:went-on @world)))
-                    (is (= 1 (looks p)) "the cleanup act ran; the first one was stopped before it")
-                    (is (true? (:call-refused @world)))
-                    (is (nil? (:kid-call @world)))
-                    (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen)))))))))))
+        (let [{:keys [eng seen p]} (setup {'cleans-up cleans-up})]
+          (core/submit! eng '(cleans-up) {})
+          (await (core/tick! eng))
+          (is (true? (:caught @world)))
+          (is (nil? (:went-on @world)))
+          (is (= 1 (looks p)) "the cleanup act ran; the first one was stopped before it")
+          (is (true? (:call-refused @world)))
+          (is (nil? (:kid-call @world)))
+          (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))
 
 (def shuts-the-door
   {:conditions [] :defaults {:floor {:health 12}}
@@ -273,14 +251,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-atomic []
-                  (let [{:keys [eng seen p]} (setup {'door shuts-the-door})]
-                    (core/submit! eng '(door) {})
-                    (await (core/tick! eng))
-                    (is (= 2 (looks p)) "both acts of the section ran")
-                    (is (nil? (:after-section @world)))
-                    (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen)))))))))))
+        (let [{:keys [eng seen p]} (setup {'door shuts-the-door})]
+          (core/submit! eng '(door) {})
+          (await (core/tick! eng))
+          (is (= 2 (looks p)) "both acts of the section ran")
+          (is (nil? (:after-section @world)))
+          (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))
 
 (defn rejected [p] (-> p (.then (constantly nil)) (.catch identity)))
 
@@ -302,45 +278,6 @@
             (is (every? #(identical? e %) thrown))
             (is (nil? (:booked @world)) "not booked as a failed step")))))))
 
-(defn told [seen]
-  (mapv #(select-keys (:data %) [:name :cause :used :health]) (job-ev seen :limit_would_end)))
-
-(deftest shadow-mode-tells-every-crossed-frame-and-line-with-its-amount
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [jobs {'top (merge (caller (kid (fn [c] (swap! clock + 6000) (hurt! c 12))) {:spend {:time 5}})
-                                {:defaults {:spend {:time 10} :floor {:health 15}}})}
-              {:keys [eng seen]} (setup jobs)]
-          (core/submit! eng '(top) {})
-          (await (core/tick! eng))
-          (is (= [{:name 'top :cause {:line :health :floor 15} :health 12}
-                  {:cause {:line :health :floor 15} :health 12}
-                  {:cause {:line :time :spend 5} :used 6}]
-                 (told seen))
-              "the caller's floor, the child's floor and its time, the round in flight counted")
-          (is (= 6 (get-in (:data (last (job-ev seen :limit_would_end))) [:report :uses :time])))
-          (await (core/tick! eng))
-          (is (= {:name 'top :cause {:line :time :spend 10} :used 12} (last (told seen))))
-          (is (= 4 (count (told seen))) "each frame and line once"))))))
-
-(deftest shadow-mode-holds-no-floor
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [careful {:conditions [] :defaults {:floor {:health 10}}
-                       :round (fn [_] (swap! world update :careful-rounds (fnil inc 0)) :continue)}
-              {:keys [eng seen p]} (setup {'top (caller (kid (fn [_] nil)) {:floor {:health 15}}) 'careful careful})]
-          (fake/swap-self! p assoc :health 8)
-          (core/submit! eng '(top) {})
-          (core/submit! eng '(careful) {})
-          (await (core/tick! eng))
-          (await (core/tick! eng))
-          (is (pos? (:kid-acts @world 0)) "a child called below its floor runs")
-          (is (= :continue (:kid-ending @world)))
-          (is (pos? (:careful-rounds @world 0)) "a listed job below its floor runs")
-          (is (empty? (job-ev seen :waiting))))))))
-
 (def cleans-up-old-call
   {:conditions [] :defaults {:floor {:health 12}}
    :round (fn ^:async cleans-up-old-round [c]
@@ -358,11 +295,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-old-call []
-                  (let [{:keys [eng seen]} (setup {'cleans-up cleans-up-old-call})]
-                    (core/submit! eng '(cleans-up) {})
-                    (await (core/tick! eng))
-                    (is (true? (:call-refused @world)))
-                    (is (nil? (:old-kid-ran @world)))
-                    (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen)))))))))))
+        (let [{:keys [eng seen]} (setup {'cleans-up cleans-up-old-call})]
+          (core/submit! eng '(cleans-up) {})
+          (await (core/tick! eng))
+          (is (true? (:call-refused @world)))
+          (is (nil? (:old-kid-ran @world)))
+          (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))

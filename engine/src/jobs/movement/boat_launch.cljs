@@ -29,7 +29,7 @@
   Condition at the start: :no-boat (none in sight). Ends done (data {:id :item name :collected n}), info boat.recovered, or
   condition-failed :gone (the boat is no longer in sight), or
   nothing-possible: :leave-failed, :unreachable (the walk failed twice), :not-collected (the item was not picked up), or
-  limit-reached :time with reason :not-broken (still there when the call's :spend :time ran out).
+  limit-reached :time (still there when the call's :spend :time ran out).
 
   Never :continue except when a child waits on the world.")
 

@@ -66,6 +66,11 @@
     (+ (* tries (+ spawn-s (/ (js-setting "prim/world-timeout-ms" 10000) 1000)))
        (* (dec tries) (/ (js-setting "prim/reconnect-retry-ms" 5000) 1000)))))
 
+(defn use-on-s
+  "The most a useOn takes (use-on.mjs): a second for the click, then its waits for the block change and the count."
+  []
+  (+ 1 (/ (+ (js-setting "use-on/wait-ms" 1000) (js-setting "use-on/consume-wait-ms" 300)) 1000)))
+
 (defn entry [args target done quote-of] {:args args :target target :quote-of quote-of :ending (ending-of done)})
 
 (defn fixed [args target done most] (entry args target done (fn [_ _] (timed most))))
@@ -119,7 +124,7 @@
                 (fn [_ {:keys [ms]}]
                   (timed (/ (min (or ms (js-setting "prim/swim-default-ms" 3000)) (js-setting "prim/swim-max-ms" 10000))
                             1000))))
-   :useOn (entry [:pos :item :face] [:pos] #{"used"} (fn [_ {:keys [item]}] (use-items (timed 5) (when (not= "none" item) item) 1)))
+   :useOn (entry [:pos :item :face] [:pos] #{"used"} (fn [_ {:keys [item]}] (use-items (timed (use-on-s)) (when (not= "none" item) item) 1)))
    :steer (entry [:decide :timeoutS] [] #{"done"} (fn [_ {:keys [timeoutS]}] (timed (or timeoutS (js-setting "steer/default-timeout-s" 60)))))
    :mount (fixed [:id] [:id] #{"mounted" "already-mounted"} 2)
    :dismount (fixed [:yaw :pitch] [] #{"dismounted"} 2)

@@ -1,11 +1,10 @@
 (ns engine.walk-room-test
-  "A walk's steer asks no more time than its call chain has left, so enforced limits never refuse it."
+  "A walk's steer asks no more time than its call chain has left, so limits never refuse it."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
-            [engine.settings :as settings]
             [engine.test-util :as tu :refer [floor]]
             [engine.triggers :as triggers]))
 
@@ -46,32 +45,22 @@
 
 (defn steer-timeouts [p] (keep #(when (= "steer" (.-name %)) (.-timeoutS (.-args %))) (.-calls (.-world p))))
 
-(defn would-end [seen] (filter #(= [:job :limit_would_end] [(:source %) (:kind %)]) @seen))
-
 (defn stopped [seen] (keep #(when (= [:job :stopped] [(:source %) (:kind %)]) (select-keys (:data %) [:kind :cause])) @seen))
-
-(defn enforced [f] (settings/with-settings {:engine.contract/enforce-limits true} f))
 
 (deftest a-leg-steers-what-is-left-of-the-leg
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async leg []
-                  (let [{:keys [p seen] e :ending} (await (go! nil 0 {:pos [10 64 0] :range 0 :spend {:time 5}}))]
-                    (is (= :done (:kind e)) (pr-str (:cause e) (stopped seen)))
-                    (is (seq (steer-timeouts p)))
-                    (is (every? #(< % 5) (steer-timeouts p)) (pr-str (steer-timeouts p)))
-                    (is (empty? (would-end seen)))))))))))
+        (let [{:keys [p seen] e :ending} (await (go! nil 0 {:pos [10 64 0] :range 0 :spend {:time 5}}))]
+          (is (= :done (:kind e)) (pr-str (:cause e) (stopped seen)))
+          (is (seq (steer-timeouts p)))
+          (is (every? #(< % 5) (steer-timeouts p)) (pr-str (steer-timeouts p))))))))
 
 (deftest a-walk-with-no-time-line-steers-what-its-caller-has-left
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async caller-time []
-                  (let [{:keys [p seen] e :ending} (await (go! {:spend {:time 10}} 4000 {:pos [10 64 0] :range 0}))]
-                    (is (= :done (:kind e)) (pr-str (:cause e) (stopped seen)))
-                    (is (seq (steer-timeouts p)))
-                    (is (every? #(< % 6) (steer-timeouts p)) (pr-str (steer-timeouts p)))
-                    (is (empty? (would-end seen)))))))))))
+        (let [{:keys [p seen] e :ending} (await (go! {:spend {:time 10}} 4000 {:pos [10 64 0] :range 0}))]
+          (is (= :done (:kind e)) (pr-str (:cause e) (stopped seen)))
+          (is (seq (steer-timeouts p)))
+          (is (every? #(< % 6) (steer-timeouts p)) (pr-str (steer-timeouts p))))))))

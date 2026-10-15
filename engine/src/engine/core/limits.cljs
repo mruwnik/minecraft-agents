@@ -1,19 +1,15 @@
 (ns engine.core.limits
   "A call's limits (engine.contract) as the engine checks them: before every act and at each ctx/call and root round
-  boundary, over the started contract frames of the chain. The outermost crossed frame is the one a crossing ends.
-  With :engine.contract/enforce-limits on it is tagged (its :contract :limit) and a limit error unwinds to its call
-  boundary, which ends it :limit-reached; on the way frames may act unchecked but not call (frames further out are
-  still checked), and a crossing inside ctx/atomic is held until the section closes. Before an act, its most (engine.primitive) is checked against what each frame has left:
-  enforced, a crossing refuses the act at once. Off, job.limit_would_end is told once per crossed frame and line, and
-  the job goes on."
+  boundary, over the started contract frames of the chain. The outermost crossed frame is the one a crossing ends: it
+  is tagged (its :contract :limit), job.limit_reached tells the line and its amount, and a limit error unwinds to its
+  call boundary, which ends it :limit-reached; on the way frames may act unchecked but not call (frames further out
+  are still checked), and a crossing inside ctx/atomic is held until the section closes. Before an act, its most
+  (engine.primitive) is checked against what each frame has left: a crossing refuses the act at once."
   (:require [engine.contract :as contract]
             [engine.core.base :refer [emit! now]]
             [engine.expr :as expr]
             [engine.memory :as mem]
-            [engine.settings :as settings]
             [engine.primitive :as primitive]))
-
-(defn enforce? [] (settings/get contract/settings ::contract/enforce-limits))
 
 (defn levels
   "The body's {:health :food}."
@@ -42,34 +38,26 @@
           [cause amount] (contract/crossings state lv t extra-ms)]
       {:slots s :cause cause :amount amount :state state :extra-ms extra-ms})))
 
-(defn tag!
-  "Tag the frame at slots of root with cause; the limit error that ends it."
-  [eng root {:keys [slots cause]}]
-  (let [id (mem/path->id root slots)]
-    (mem/update-job! (:store eng) root slots assoc-in [:contract :limit] {:frame id :cause cause})
-    (contract/limit-error id cause)))
-
 (defn chain-of [root slots] (mapv #(mem/path->id root (subvec slots 0 %)) (range (inc (count slots)))))
 
-(defn would-end!
-  "Tell job.limit_would_end for the crossing x, once per frame and line."
+(defn tag!
+  "Tag the frame the crossing x ends, tell job.limit_reached (the line, its amount and the frame's report); the limit
+  error that ends it."
   [eng root {:keys [slots cause amount state extra-ms]}]
-  (when-not (contains? (:would-end state) cause)
-    (mem/update-job! (:store eng) root slots update-in [:contract :would-end] (fnil conj #{}) cause)
-    (emit! eng (merge {:source :job :kind :limit_would_end :level :info :job (mem/path->id root slots)
-                       :chain (chain-of root slots)
+  (let [id (mem/path->id root slots)]
+    (mem/update-job! (:store eng) root slots assoc-in [:contract :limit] {:frame id :cause cause})
+    (emit! eng (merge {:source :job :kind :limit_reached :level :info :job id :chain (chain-of root slots)
                        :name (or (:job state)
                                  (when (empty? slots) (some-> (get-in @(:state eng) [:instances root :spec]) expr/label)))
                        :cause cause :call (:call state) :report (contract/report state extra-ms)}
-                      amount))))
+                      amount))
+    (contract/limit-error id cause)))
 
 (defn refuse!
-  "Throw the limit error of the frame of base's chain that is unwinding, when enforced: no new call in an unwinding
-  chain."
+  "Throw the limit error of the frame of base's chain that is unwinding: no new call in an unwinding chain."
   [eng {:keys [root slots]}]
-  (when (enforce?)
-    (when-let [{:keys [frame cause]} (some (comp :limit second) (frames eng root slots))]
-      (throw (contract/limit-error frame cause)))))
+  (when-let [{:keys [frame cause]} (some (comp :limit second) (frames eng root slots))]
+    (throw (contract/limit-error frame cause))))
 
 (defn outside-unwinding
   "The frames of fs (root first) outside the outermost one unwinding (tagged): an unwinding frame and those within it
@@ -80,13 +68,10 @@
 (defn check-frames!
   "check! over fs, the chain's started frames."
   [eng {:keys [root t0s section-depth held]} fs]
-  (cond
-    (empty? fs) nil
-    (not (enforce?)) (run! #(would-end! eng root %) (crossings eng fs t0s))
-    :else (when-let [x (first (crossings eng (outside-unwinding fs) t0s))]
-            (if (and section-depth (pos? @section-depth))
-              (swap! held #(or % x))
-              (throw (tag! eng root x)))))
+  (when-let [x (first (crossings eng (outside-unwinding fs) t0s))]
+    (if (and section-depth (pos? @section-depth))
+      (swap! held #(or % x))
+      (throw (tag! eng root x))))
   nil)
 
 (defn check!
@@ -110,16 +95,13 @@
         {:slots s :cause (assoc cause :act k) :amount amount :state state :extra-ms extra-ms}))))
 
 (defn check-act!
-  "check! before act k with args, then the act's most against what every frame has left. Enforced, a crossing refuses
-  the act, inside ctx/atomic too, and ends the outermost frame it crosses; frames unwinding are not checked (cleanup
-  acts). Off, job.limit_would_end is told once per frame, line and act."
+  "check! before act k with args, then the act's most against what every frame has left. A crossing refuses the act,
+  inside ctx/atomic too, and ends the outermost frame it crosses; frames unwinding are not checked (cleanup acts)."
   [eng {:keys [root slots t0s] :as base} k args]
   (let [fs (frames eng root slots)]
     (check-frames! eng base fs)
-    (if (enforce?)
-      (when-let [x (first (refusals eng (outside-unwinding fs) t0s k args))]
-        (throw (tag! eng root x)))
-      (run! #(would-end! eng root %) (refusals eng fs t0s k args)))))
+    (when-let [x (first (refusals eng (outside-unwinding fs) t0s k args))]
+      (throw (tag! eng root x)))))
 
 (defn section-closed!
   "After a ctx/atomic section of base's round closed: throw the crossing it held, once no section is open."
@@ -139,6 +121,6 @@
       (contract/ending :limit-reached (:cause l) nil))))
 
 (defn floor-cause
-  "Why the call of contract ctx c, (call-fn), may not start or go on now, when enforced: {:floor :min}."
+  "Why the call of contract ctx c, (call-fn), may not start or go on now: {:floor :min}."
   [c call-fn]
-  (when (enforce?) (contract/below-floor (call-fn) (levels (:primitives c)))))
+  (contract/below-floor (call-fn) (levels (:primitives c))))

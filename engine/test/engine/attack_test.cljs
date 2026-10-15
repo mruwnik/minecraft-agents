@@ -239,8 +239,7 @@
         (let [s (await (scenario {:targets [7] :timeout-s 3 :no-damage-hits 100 :max-hits 1000}
                                  {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 7))]
           (is (finished? s))
-          (is (= :timeout (:reason (done-event s))))
-          (is (= 1 (count (events-of s :attack.timeout)))))))))
+          (is (= [:time] (mapv :reason (events-of s :stopped))) "the engine's time limit ends it"))))))
 
 (deftest equips-the-weapon-once
   (async done

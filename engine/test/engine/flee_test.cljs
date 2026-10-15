@@ -206,7 +206,7 @@
           (is (= :lost (:ended out)))
           (is (< (fake/dist (body-pos p) (mob-pos p 7)) 35) "lost before the follow range"))))))
 
-(deftest a-flight-has-no-time-limit
+(deftest a-flight-runs-past-the-old-180-s-bound-until-the-zombie-leaves
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -216,10 +216,10 @@
               calls #(.-length (.-calls world))]
           (doseq [name ["steer" "moveTo" "wait" "attack" "place" "dig" "equip" "eat"]]
             (.override world name (fn ^:async f [token a impl]
-                                    (when (> (calls) 400) (swap! (fake/state p) assoc :entities []))
+                                    (when (> (calls) 300) (swap! (fake/state p) assoc :entities []))
                                     (await (impl token a)))))
           (let [{:keys [out]} (await (run-job! s 'jobs.survival.retreat {:no-gain-steps 3}))]
-            (is (> (calls) 400) "the chase went on past the old 180 s bound, until the zombie left")
+            (is (> (calls) 300) "the chase went on past the old 180 s bound, until the zombie left")
             (is (not= :still-chased (:reason out)))))))))
 
 (deftest a-flight-that-keeps-taking-hits-from-a-melee-mob-turns-and-fights-an-armed-body

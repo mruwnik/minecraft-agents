@@ -175,14 +175,14 @@
               (await (started-round def c d))))))
 
 (defn check
-  "A contract job waits while the body is below a floor of its call (enforced limits); a started one runs on (any
-  ending ends it); one not started waits while a condition fails. An impossible condition, one that asks for a
-  look, or a goal that holds before the start passes: the round ends the job, or looks."
+  "A contract job not started waits while a condition fails; then, started or not, while the body is below a floor of
+  its call (a started one otherwise runs on: any ending ends it). An impossible condition, one that asks for a look,
+  or a goal that holds before the start passes: the round ends the job, or looks."
   [def c]
   (let [[k cause] (when-not (started? c) (verdict c (:conditions def)))]
     (if-let [cause (when-not (= :impossible k)
-                     (or (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def))))
-                         (when (= :skip k) cause)))]
+                     (or (when (= :skip k) cause)
+                         (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def))))))]
       (or (and (not (started? c)) (boolean (:done? (first (done-or-error def c))))) (ctx/wait c (wait-reason cause)))
       true)))
 

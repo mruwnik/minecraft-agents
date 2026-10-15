@@ -1,7 +1,6 @@
 (ns engine.primitive-jobs-test
   "The primitive table (jobs.primitive) and the act check: before an act runs its most is checked against what is left
-  of every frame of the chain; enforced, a crossing act is refused and ends the outermost crossed frame :limit-reached,
-  in shadow mode job.limit_would_end is told and the act runs."
+  of every frame of the chain; a crossing act is refused and ends the outermost crossed frame :limit-reached."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -9,7 +8,6 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.registry :as registry]
-            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.primitive :as primitive]
             [jobs.primitive :as primitive-job]))
@@ -29,8 +27,6 @@
 (defn job-ev [seen kind] (filterv #(= [:job kind] [(:source %) (:kind %)]) @seen))
 (defn stopped [seen] (select-keys (:data (first (job-ev seen :stopped))) [:kind :cause]))
 (defn calls [p method] (count (filter #(= method (.-name %)) (.-calls (.-world p)))))
-(defn enforced [f] (settings/with-settings {:engine.contract/enforce-limits true} f))
-
 (defn quote-of [k p args] ((get-in primitive/table [k :quote-of]) p args))
 
 (deftest every-primitive-has-a-target-a-quote-and-an-ending
@@ -104,33 +100,7 @@
 (defn high-up [p]
   (fake/swap-self! p assoc :pos [0 70 0] :health 17))
 
-(deftest enforced-a-drop-past-the-floor-is-refused-before-it-runs
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-drop []
-                  (let [{:keys [eng seen p]} (setup {'down (drops-to 64)})]
-                    (high-up p)
-                    (core/submit! eng '(down) {})
-                    (await (core/tick! eng))
-                    (is (zero? (calls p "moveTo")) "the act did not run")
-                    (is (= {:kind :limit-reached :cause {:line :health :floor 15 :act :moveTo}} (stopped seen)))))))))))
-
-(deftest enforced-a-drop-within-the-floor-runs
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-small-drop []
-                  (let [{:keys [eng seen p]} (setup {'down (drops-to 66)})]
-                    (high-up p)
-                    (core/submit! eng '(down) {})
-                    (await (core/tick! eng))
-                    (is (= 1 (calls p "moveTo")))
-                    (is (empty? (job-ev seen :stopped)))))))))))
-
-(deftest shadow-mode-tells-the-refusal-and-runs-the-act
+(deftest a-drop-past-the-floor-is-refused-before-it-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -138,11 +108,30 @@
           (high-up p)
           (core/submit! eng '(down) {})
           (await (core/tick! eng))
-          (is (= 1 (calls p "moveTo")))
-          (is (= [{:cause {:line :health :floor 15 :act :moveTo} :most 3 :left 2}]
-                 (mapv #(select-keys (:data %) [:cause :most :left]) (job-ev seen :limit_would_end))))
+          (is (zero? (calls p "moveTo")) "the act did not run")
+          (is (= {:kind :limit-reached :cause {:line :health :floor 15 :act :moveTo}} (stopped seen))))))))
+
+(deftest a-drop-within-the-floor-runs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {'down (drops-to 66)})]
+          (high-up p)
+          (core/submit! eng '(down) {})
           (await (core/tick! eng))
-          (is (= 1 (count (job-ev seen :limit_would_end))) "once per frame, line and act"))))))
+          (is (= 1 (calls p "moveTo")))
+          (is (empty? (job-ev seen :stopped))))))))
+
+(deftest a-refusal-tells-the-acts-most-and-what-was-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {'down (drops-to 64)})]
+          (high-up p)
+          (core/submit! eng '(down) {})
+          (await (core/tick! eng))
+          (is (= [{:cause {:line :health :floor 15 :act :moveTo} :most 3 :left 2}]
+                 (mapv #(select-keys (:data %) [:cause :most :left]) (job-ev seen :limit_reached)))))))))
 
 (defn places-in-a-section [n]
   {:conditions [] :defaults {:spend {:items {"cobblestone" 1}}}
@@ -153,20 +142,18 @@
                                    (await (ctx/act c :place #js {:pos #js {:x i :y 64 :z 2} :item "cobblestone"}))))))
             :continue)})
 
-(deftest enforced-the-refusal-is-not-held-by-an-atomic-section
+(deftest the-refusal-is-not-held-by-an-atomic-section
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-section []
-                  (let [{:keys [eng seen p]} (setup {'wall (places-in-a-section 2)})]
-                    (fake/swap-self! p assoc :pos [0 64 0])
-                    (swap! (fake/state p) assoc :inventory [{:name "cobblestone" :count 5 :slot 36}])
-                    (core/submit! eng '(wall) {})
-                    (await (core/tick! eng))
-                    (is (= 1 (calls p "place")) "the second place would use a second cobblestone")
-                    (is (= {:kind :limit-reached :cause {:line :items :item "cobblestone" :spend 1 :act :place}}
-                           (stopped seen)))))))))))
+        (let [{:keys [eng seen p]} (setup {'wall (places-in-a-section 2)})]
+          (fake/swap-self! p assoc :pos [0 64 0])
+          (swap! (fake/state p) assoc :inventory [{:name "cobblestone" :count 5 :slot 36}])
+          (core/submit! eng '(wall) {})
+          (await (core/tick! eng))
+          (is (= 1 (calls p "place")) "the second place would use a second cobblestone")
+          (is (= {:kind :limit-reached :cause {:line :items :item "cobblestone" :spend 1 :act :place}}
+                 (stopped seen))))))))
 
 (defn completed [seen] (job-ev seen :completed))
 
@@ -230,51 +217,47 @@
             (swap! world update :waited (fnil inc 0))
             :continue)})
 
-(defn enforced-run [jobs form check]
-  (enforced
-   (fn ^:async enforced-run []
-     (let [{:keys [eng seen p]} (setup jobs)]
-       (fake/swap-self! p assoc :pos [0 64 0])
-       (core/submit! eng form {})
-       (await (core/tick! eng))
-       (check seen p)))))
+(defn ^:async run-one [jobs form check]
+  (let [{:keys [eng seen p]} (setup jobs)]
+    (fake/swap-self! p assoc :pos [0 64 0])
+    (core/submit! eng form {})
+    (await (core/tick! eng))
+    (check seen p)))
 
-(deftest enforced-an-act-past-the-time-left-is-refused
+(deftest an-act-past-the-time-left-is-refused
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced-run {'waits (assoc (waits-for 5000) :defaults {:spend {:time 3}})} '(waits)
-                             (fn [seen p]
-                               (is (zero? (calls p "wait")))
-                               (is (= {:kind :limit-reached :cause {:line :time :spend 3 :act :wait}} (stopped seen))))))))))
+        (await (run-one {'waits (assoc (waits-for 5000) :defaults {:spend {:time 3}})} '(waits)
+                        (fn [seen p]
+                          (is (zero? (calls p "wait")))
+                          (is (= {:kind :limit-reached :cause {:line :time :spend 3 :act :wait}} (stopped seen))))))))))
 
-(deftest enforced-an-act-past-the-deadline-is-refused
+(deftest an-act-past-the-deadline-is-refused
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced-run {'waits (waits-for 5000)} '(waits {:deadline 1002000})
-                             (fn [seen p]
-                               (is (zero? (calls p "wait")))
-                               (is (= {:kind :limit-reached :cause {:line :deadline :deadline 1002000 :act :wait}}
-                                      (stopped seen))))))))))
+        (await (run-one {'waits (waits-for 5000)} '(waits {:deadline 1002000})
+                        (fn [seen p]
+                          (is (zero? (calls p "wait")))
+                          (is (= {:kind :limit-reached :cause {:line :deadline :deadline 1002000 :act :wait}}
+                                 (stopped seen))))))))))
 
 (def digs
   {:conditions [] :defaults {:spend {:wear {"iron_pickaxe" 0}}}
    :round (fn ^:async dig-round [c] (await (ctx/act c :dig #js {:pos #js {:x 0 :y 63 :z 0}})) :continue)})
 
-(deftest enforced-a-dig-past-the-tool-wear-left-is-refused
+(deftest a-dig-past-the-tool-wear-left-is-refused
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced
-                (fn ^:async enforced-wear []
-                  (let [{:keys [eng seen p]} (setup {'digs digs})]
-                    (fake/swap-self! p assoc :pos [0 64 0] :held "iron_pickaxe")
-                    (core/submit! eng '(digs) {})
-                    (await (core/tick! eng))
-                    (is (zero? (calls p "dig")))
-                    (is (= {:kind :limit-reached :cause {:line :wear :tool "iron_pickaxe" :spend 0 :act :dig}}
-                           (stopped seen)))))))))))
+        (let [{:keys [eng seen p]} (setup {'digs digs})]
+          (fake/swap-self! p assoc :pos [0 64 0] :held "iron_pickaxe")
+          (core/submit! eng '(digs) {})
+          (await (core/tick! eng))
+          (is (zero? (calls p "dig")))
+          (is (= {:kind :limit-reached :cause {:line :wear :tool "iron_pickaxe" :spend 0 :act :dig}}
+                 (stopped seen))))))))
 
 (defn calls-kid [kid defaults]
   {:conditions [] :defaults defaults
@@ -283,16 +266,16 @@
             (swap! world assoc :parent-went-on true)
             :continue)})
 
-(deftest enforced-a-clamped-chain-ends-its-outermost-crossed-frame
+(deftest a-clamped-chain-ends-its-outermost-crossed-frame
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced-run {'top (calls-kid (waits-for 5000) {:spend {:time 4}})} '(top)
-                             (fn [seen p]
-                               (is (zero? (calls p "wait")))
-                               (is (nil? (:parent-went-on @world)))
-                               (is (= {:kind :limit-reached :cause {:line :time :spend 4 :act :wait}}
-                                      (stopped seen))))))))))
+        (await (run-one {'top (calls-kid (waits-for 5000) {:spend {:time 4}})} '(top)
+                        (fn [seen p]
+                          (is (zero? (calls p "wait")))
+                          (is (nil? (:parent-went-on @world)))
+                          (is (= {:kind :limit-reached :cause {:line :time :spend 4 :act :wait}}
+                                 (stopped seen))))))))))
 
 (defn cleans-up-with [defaults]
   {:conditions [] :defaults defaults
@@ -306,24 +289,24 @@
                 (throw e)))
             :continue)})
 
-(deftest enforced-an-unwinding-frame-may-act-past-its-own-lines
+(deftest an-unwinding-frame-may-act-past-its-own-lines
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced-run {'job (cleans-up-with {:floor {:health 12} :spend {:time 3}})} '(job)
-                             (fn [seen p]
-                               (is (= 1 (calls p "wait")) "the cleanup act ran")
-                               (is (true? (:cleaned-up @world)))
-                               (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))))
+        (await (run-one {'job (cleans-up-with {:floor {:health 12} :spend {:time 3}})} '(job)
+                        (fn [seen p]
+                          (is (= 1 (calls p "wait")) "the cleanup act ran")
+                          (is (true? (:cleaned-up @world)))
+                          (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))))
 
-(deftest enforced-a-cleanup-act-past-an-outer-frames-line-ends-that-frame
+(deftest a-cleanup-act-past-an-outer-frames-line-ends-that-frame
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (enforced-run {'top (calls-kid (cleans-up-with {:floor {:health 12}}) {:spend {:time 4}})} '(top)
-                             (fn [seen p]
-                               (is (zero? (calls p "wait")) "refused: the outer frame has 4 s left")
-                               (is (nil? (:cleaned-up @world)))
-                               (is (nil? (:parent-went-on @world)))
-                               (is (= {:kind :limit-reached :cause {:line :time :spend 4 :act :wait}}
-                                      (stopped seen))))))))))
+        (await (run-one {'top (calls-kid (cleans-up-with {:floor {:health 12}}) {:spend {:time 4}})} '(top)
+                        (fn [seen p]
+                          (is (zero? (calls p "wait")) "refused: the outer frame has 4 s left")
+                          (is (nil? (:cleaned-up @world)))
+                          (is (nil? (:parent-went-on @world)))
+                          (is (= {:kind :limit-reached :cause {:line :time :spend 4 :act :wait}}
+                                 (stopped seen))))))))))

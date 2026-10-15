@@ -190,37 +190,21 @@
 
 (def slow {:line :time :least 20 :left 10})
 
-(deftest next-way-drops-the-ways-not-allowed-failed-or-over-a-remainder-when-enforced
+(deftest next-way-drops-the-ways-not-allowed-failed-or-over-a-remainder
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (settings/with-settings {:engine.contract/enforce-limits true}
-                 (fn ^:async enforced []
-                   (let [{:keys [eng]} (setup {'chooser chooser 'failer failer})]
-                     (core/submit! eng '(chooser) {})
-                     (await (core/tick! eng))
-                     (let [[w1 w2 w3 w4] (:ways @world)]
-                       (is (= {:way :c :dropped {:a :not-allowed :b slow}} w1))
-                       (is (= {:way :e :dropped {:a :not-allowed :b slow :c {:failed :empty} :d :ending}} w2)
-                           "failed on :x for :empty; a nil cause is dropped as :ending")
-                       (is (= :c (:way w3)) "another thing")
-                       (is (= (let [inf {:line :time :least ##Inf :left 10}]
-                                {:way nil :dropped {:a :not-allowed :b inf :c {:failed :empty} :d inf :e inf}})
-                              w4)))))))))))
-
-(deftest next-way-keeps-a-way-over-a-remainder-in-shadow-mode-and-tells-it
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'chooser chooser 'failer failer})]
+        (let [{:keys [eng]} (setup {'chooser chooser 'failer failer})]
           (core/submit! eng '(chooser) {})
           (await (core/tick! eng))
-          (let [[w1 _ _ w4] (:ways @world)]
-            (is (= {:way :b :dropped {:a :not-allowed}} w1))
-            (is (= :not-allowed (get-in w4 [:dropped :a])))
-            (is (= {:way nil} (select-keys w4 [:way])) "a least of ##Inf still drops")
-            (is (some #(and (= :way_would_drop (:kind %)) (= :b (get-in % [:data :way])) (= :time (get-in % [:data :line])))
-                      @seen))))))))
+          (let [[w1 w2 w3 w4] (:ways @world)]
+            (is (= {:way :c :dropped {:a :not-allowed :b slow}} w1))
+            (is (= {:way :e :dropped {:a :not-allowed :b slow :c {:failed :empty} :d :ending}} w2)
+                "failed on :x for :empty; a nil cause is dropped as :ending")
+            (is (= :c (:way w3)) "another thing")
+            (is (= (let [inf {:line :time :least ##Inf :left 10}]
+                     {:way nil :dropped {:a :not-allowed :b inf :c {:failed :empty} :d inf :e inf}})
+                   w4))))))))
 
 (def booker
   {:conditions [] :ways [:a :b :c] :defaults {:ways #{:c}} :args no-args

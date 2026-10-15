@@ -220,7 +220,7 @@
                                                    (swap! clock + 1000)
                                                    (await (impl token args)))))))]
           (is (= [:legs 2] ((juxt :why #(get-in % [:coverage :legs])) (event-of legs :search.not-found))))
-          (is (= :time (:why (event-of timed :search.not-found)))))))))
+          (is (= :time (:reason (event-of timed :stopped))) "the engine's time limit ends it"))))))
 
 (deftest ground-another-body-searched-for-these-targets-is-skipped
   (async done
