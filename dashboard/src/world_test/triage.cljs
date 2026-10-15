@@ -30,11 +30,16 @@
   "Result vectors in order (later wins) -> id -> [status sig] for the ids whose last result failed or errored."
   [previous]
   (let [last-of (reduce (fn [m c] (assoc m (:id c) c)) {} (apply concat previous))]
-    (into {} (keep (fn [[id c]] (when (#{:fail :error} (:status c)) [id [(:status c) (fail-sig c)]]))) last-of)))
+    (into {} (keep (fn [[id c]]
+                     (case (:status c)
+                       (:fail :error) [id [(:status c) (fail-sig c)]]
+                       :skipped-known [id [(:previous-status c) (:previous-failure c)]] ; a skipped case keeps the failure it was skipped for
+                       nil)))
+          last-of)))
 
 (defn classify
   "Cases + previous result vectors -> the cases with :class (:pass :flaky :known :new :inconclusive) and :sig.
-  Known = the last previous result failed (or errored) on the same check; with no previous result at all the pool's :known-failure flag decides."
+  Skipped-known = the pool did not run it (its failure is known and its bug card still open). Known = the last previous result failed (or errored) on the same check; with no previous result at all the pool's :known-failure flag decides."
   [cases previous]
   (let [prev (last-results previous)
         seen-before? (set (map :id (apply concat previous)))]
@@ -44,6 +49,7 @@
                         :pass :pass
                         :flaky :flaky
                         :inconclusive :inconclusive
+                        :skipped-known :skipped-known
                         (cond
                           (= [(:status c) sig] (prev (:id c))) :known
                           (and (:known-failure c) (not (seen-before? (:id c)))) :known
@@ -83,13 +89,13 @@
     (vec (mapcat (fn [file] (let [sp (specific file)] (if (seq sp) sp (by-file file)))) (sort files)))))
 
 (defn verdict
-  "A named case that failed on a check -> :pending; no failure but an error, an inconclusive or a failure with no reason -> :hold; else :tick."
+  "A named case that failed on a check -> :pending; no failure but an error, an inconclusive, a skipped known failure or a failure with no reason -> :hold; else :tick."
   [named]
   (let [real-fail? #(and (= :fail (:status %)) (not= "" (:sig %)))]
     (cond
       (empty? named) :no-plan
       (some real-fail? named) :pending
-      (some #(or (#{:inconclusive} (:class %)) (#{:error :fail} (:status %))) named) :hold
+      (some #(or (#{:inconclusive} (:class %)) (#{:error :fail :skipped-known} (:status %))) named) :hold
       :else :tick)))
 
 (defn bug-matches [bugs {:keys [id file]}]
@@ -128,7 +134,7 @@
   (let [n #(get counts % 0)
         nplan (count (filter #(= :no-plan (:verdict %)) cards))]
     (str/join "\n"
-              [(str "cases: pass " (n :pass) ", flaky " (n :flaky) ", known " (n :known) ", new " (n :new) ", inconclusive " (n :inconclusive))
+              [(str "cases: pass " (n :pass) ", flaky " (n :flaky) ", known " (n :known) ", new " (n :new) ", inconclusive " (n :inconclusive) ", skipped-known " (n :skipped-known))
                (str "cards: " (count cards) " checked; tick " (count tick) ", to pending " (count pending) ", hold " (count hold) ", no plan " nplan)
                (str "tick: " (str/join " " (map #(subs % 0 8) tick)))
                "pending (card: failing cases [existing bug cards]):"

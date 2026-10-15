@@ -5,7 +5,7 @@ import net from 'node:net'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main, parseMspt, gateLoad, SWEEP_MIN_BODIES, markSweep } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main, parseMspt, gateLoad, SWEEP_MIN_BODIES, markSweep, skipKnown } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -818,4 +818,42 @@ test('markSweep: a pool of SWEEP_MIN_BODIES or more bodies writes its pid to the
   clear()
   assert.equal(fs.existsSync(file), false)
   fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('parsePoolArgs: --run-known is a pool flag and not passed to the children', () => {
+  assert.equal(parsePoolArgs(['dir']).runKnown, false)
+  const p = parsePoolArgs(['dir', '--run-known', '--phase', 'day'])
+  assert.equal(p.runKnown, true)
+  assert.deepEqual(p.passthrough, ['--phase', 'day'])
+})
+test('skipKnown: the ids with a known failure are not run; each gets a :skipped-known form per run carrying the previous failure', () => {
+  const known = new Map([['a/c1', '{:event {:kind :x}}'], ['a/c3', '']])
+  const r = skipKnown(['a/c1', 'a/c2', 'a/c3'], known, 2)
+  assert.deepEqual(r.keep, ['a/c2'])
+  assert.deepEqual(r.forms.map(summarize).map((s) => [s.id, s.run, s.status, s.file]), [['a/c1', 1, 'skipped-known', 'a'], ['a/c1', 2, 'skipped-known', 'a'], ['a/c3', 1, 'skipped-known', 'a'], ['a/c3', 2, 'skipped-known', 'a']])
+  assert.match(r.forms[0], /:previous-failure \{:event \{:kind :x\}\}/)
+})
+test('knownFailures: a :skipped-known result keeps the failure it carries, so the next sweep still skips it', () => {
+  const skipped = skipKnown(['a/c1', 'a/c3'], new Map([['a/c1', '{:event {:kind :x}}'], ['a/c3', '']])).forms
+  assert.deepEqual([...knownFailures([vec(...skipped)])], [['a/c1', '{:event {:kind :x}}'], ['a/c3', '']])
+  assert.deepEqual([...knownFailures([vec(...skipped), vec(form('a/c1', 'pass'))])], [['a/c3', '']])
+})
+test('runPool: preSettled results are in the text and the events, count as skipped, and no child runs them', { timeout: 10000 }, async () => {
+  const log = []
+  const ev = []
+  const pre = skipKnown(['a/c1'], new Map([['a/c1', '']])).forms
+  const run = fakeRunner(() => ({ code: 0, text: vec(form('a/c2', 'pass')) }), log)
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: run, preSettled: pre, total: 2, emit: (e) => ev.push(e) })
+  assert.equal(r.skipped, 1)
+  assert.deepEqual(splitForms(r.text).map(summarize).map((s) => [s.id, s.status]), [['a/c1', 'skipped-known'], ['a/c2', 'pass']])
+  assert.deepEqual(resultsOf(ev).map((e) => [e.name, e.outcome]), [['a/c1#1', 'skipped'], ['a/c2#1', 'passed']])
+  assert.deepEqual(ev.filter((e) => e.event === 'progress').map((e) => [e.done, e.total]), [[1, 2], [2, 2]])
+})
+test('runNightBatches: preSettled results are in the text and the events, and the code stays 1 (not passing)', { timeout: 10000 }, async () => {
+  const ev = []
+  const pre = skipKnown(['a/1'], new Map([['a/1', '']])).forms
+  const r = await runNightBatches({ batches: [{ kind: 'natural', ids: ['a/2'] }], workers: workerSpecs(1, 19, 'P', 0), runUnit: batchRunner([], (id) => ({ code: 0, text: vec(form(id, 'pass')) })), preSettled: pre, total: 2, emit: (e) => ev.push(e) })
+  assert.deepEqual(splitForms(r.text).map(summarize).map((s) => [s.id, s.status]), [['a/1', 'skipped-known'], ['a/2', 'pass']])
+  assert.deepEqual(resultsOf(ev).map((e) => e.outcome), ['skipped', 'passed'])
+  assert.equal(r.code, 1)
 })

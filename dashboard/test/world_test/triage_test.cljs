@@ -93,3 +93,21 @@
   (is (= ["a52ca0e4" "c04521b0" "d86c8544" "c1c072f8"] (map #(subs % 0 8) (:tick real))))
   (is (= ["fb4f9725"] (map #(subs % 0 8) (:pending real))))
   (is (= ["afdc32d0" "b812e8f8" "1436e972" "74665b91"] (map #(subs % 0 8) (:no-plan real)))))
+
+(defn skipped [id check] {:id id :file (first (.split id "/")) :status :skipped-known :previous-status :fail :previous-failure check})
+
+(deftest a-skipped-known-failure-is-its-own-class-and-keeps-its-failure-for-the-next-sweep
+  (is (= {"a/x" :skipped-known "a/y" :new "a/z" :pass}
+         (classes [(skipped "a/x" {:event 1}) (fail "a/y" {:event 2}) (ok "a/z")] [prev])))
+  (is (= :known (:class (first (t/classify [(fail "a/x" {:event 1})] [[(skipped "a/x" {:event 1})]]))))
+      "a later sweep that runs the case again compares with the failure the skip carried")
+  (is (= :new (:class (first (t/classify [(fail "a/x" {:event 2})] [[(skipped "a/x" {:event 1})]]))))))
+
+(deftest a-card-whose-case-was-skipped-is-held-never-ticked-and-adds-no-bug-card
+  (let [r (t/triage {:results [(skipped "a/x" {:event 1}) (ok "b/w")] :previous [prev]
+                     :cards [{:id "c1" :column "live" :title "one" :commits ["aaa"] :description "live: a/x"}
+                             {:id "c2" :column "live" :title "two" :commits ["aaa"] :description "live: a/x and b/w"}]
+                     :bugs [] :ancestor? (constantly true)})]
+    (is (= ["c1" "c2"] (:hold r)))
+    (is (= [] (:tick r)))
+    (is (= [] (:new-bugs r)))))

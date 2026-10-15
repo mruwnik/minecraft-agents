@@ -16,7 +16,8 @@
 //   --night-batches  (with --phase night-exclusive --allow-time) runs the cases in night batches instead of one file per body: cases that only need a night run together, at most --bodies at once,
 //                     packed longest first so a batch fits one night; the case that needs the vanilla night skip (:sleep-skip) runs in its own batch; every case that sets the time itself runs alone.
 //                     Each batch has one `time set 14000`, made by its first case, and the next batch waits for all of it. A failed case reruns alone in a batch of its own (--retry-failed); no --repeat above 1.
-// A failed case whose last result in the --durations files was a fail on the same first failing check is a known failure: no rerun, :known-failure true in its result (and knownFailure in its event).
+// A case whose last result in the --durations files was a fail is a known failure and is not run (--run-known runs it; so does naming it with --match-id/--match-ids): its result is :status :skipped-known
+// with :previous-failure (the check it failed), carried on by the next sweep. A known failure that does run and fails on the same first failing check again is not rerun, :known-failure true in its result (and knownFailure in its event).
 //   --retry-failed N the pool owns retries (children never get it): a failed case (not an error or inconclusive one, as in the single-body runner)
 //                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
 //   --match-id ID    (repeatable) and --match-ids FILE (one id per line, or a --results .edn: its ids that did not pass) run exactly those cases; --list counts only them.
@@ -118,7 +119,7 @@ export const failSig = (formText) => {
   return valueOf(formText, ':why') ?? ''
 }
 const withExtra = (formText, extra) => `${formText.slice(0, -1)} ${extra}}`
-const OUTCOMES = { pass: 'passed', fail: 'failed', error: 'error', skipped: 'skipped', flaky: 'flaky', inconclusive: 'inconclusive' }
+const OUTCOMES = { 'skipped-known': 'skipped', pass: 'passed', fail: 'failed', error: 'error', skipped: 'skipped', flaky: 'flaky', inconclusive: 'inconclusive' }
 const resultEvent = (formText) => {
   const s = summarize(formText)
   const why = valueOf(formText, ':why') ?? valueOf(formText, ':evidence')
@@ -186,12 +187,13 @@ export const unitOrder = (files, previousTexts) => {
 }
 
 export const parsePoolArgs = (args) => {
-  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, serverSettleS: 10, minBodies: 0, minBodiesWaitS: 1800, paths: [], passthrough: [], matchIds: [], matchIdsFile: null, nightBatches: false }
+  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, serverSettleS: 10, minBodies: 0, minBodiesWaitS: 1800, paths: [], passthrough: [], matchIds: [], matchIdsFile: null, nightBatches: false, runKnown: false }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (!a.startsWith('--')) { p.paths.push(a); continue }
     const v = args[i + 1]
     if (a === '--night-batches') { p.nightBatches = true; continue }
+    if (a === '--run-known') { p.runKnown = true; continue }
     if (!POOL_VALUE_FLAGS.includes(a)) { p.passthrough.push(a); if (VALUE_FLAGS.includes(a)) p.passthrough.push(args[++i]); continue }
     i++
     if (a === '--durations') { p.durations.push(v); while (args[i + 1] !== undefined && !args[i + 1].startsWith('--')) p.durations.push(args[++i]); continue }
@@ -260,9 +262,21 @@ const overran = (formText) => summarize(formText).status === 'inconclusive' && v
 // id -> failSig for the ids whose last recorded result (the texts in order, later ones win) is a fail: a rerun that fails on the same check tells nothing new
 export const knownFailures = (previousTexts) => {
   const last = new Map()
-  for (const text of previousTexts) for (const f of splitForms(text)) { const s = summarize(f); last.set(s.id, s.status === 'fail' ? failSig(f) : null) }
+  for (const text of previousTexts) {
+    for (const f of splitForms(text)) {
+      const s = summarize(f)
+      const carried = s.status === 'skipped-known' ? valueOf(f, ':previous-failure') : null // a skipped case keeps the failure it was skipped for
+      last.set(s.id, s.status === 'fail' ? failSig(f) : carried === null ? null : carried === '""' ? '' : carried)
+    }
+  }
   return new Map([...last].filter(([, sig]) => sig !== null))
 }
+// the ids that have a known failure are not run; each gets a :skipped-known form per run that carries the failure -> {keep: ids to run, forms}
+export const skipKnown = (ids, known, repeat = 1) => ({
+  keep: ids.filter((id) => !known.has(id)),
+  forms: ids.filter((id) => known.has(id)).flatMap((id) => Array.from({ length: repeat }, (_, i) =>
+    `{:id ${JSON.stringify(id)}, :file ${JSON.stringify(id.split('/')[0])}, :run ${i + 1}, :status :skipped-known, :previous-status :fail, :previous-failure ${known.get(id) || '""'}}`)),
+})
 const errorForm = (file, why, id = file) => `{:id ${JSON.stringify(id)}, :file ${JSON.stringify(file)}, :status :error, :evidence ${JSON.stringify(why)}}`
 
 // units: file stems; runUnit({file, match, worker}) -> promise of {code, text|null} (text = the child's results vector).
@@ -276,7 +290,7 @@ const FAULT_RERUNS = 2 // a case that still faults after this many free reruns s
 const BOOT_FAULT = /did not start within/
 const bootFault = (form) => summarize(form).status === 'error' && [':error', ':why', ':evidence'].some((k) => BOOT_FAULT.test(valueOf(form, k) ?? ''))
 const connFault = (form) => summarize(form).status === 'error' && [':error', ':why', ':evidence'].some((k) => CONN_FAULT.test(valueOf(form, k) ?? ''))
-export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, known = new Map(), listed = null, repeat = 1, emit = () => {}, log = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, known = new Map(), preSettled = [], listed = null, repeat = 1, emit = () => {}, log = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   probe = async () => true, now = Date.now, serverWaitMs = 300000, serverPollMs = 3000, settleMs = 10000 }) => {
   const queue = units.map((file) => ({ file, match: null, avoid: null }))
   const done = new Map() // `id#run` (or file when the unit died) -> form text, in first-seen order
@@ -372,6 +386,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
     }
     settleMissing(job.file, `the run exited ${res.code} before this case ran`)
   }
+  preSettled.forEach((form) => { skipped++; settle(key(summarize(form)), form) })
   const loop = async (worker) => {
     for (;;) {
       if (holding) await holding
@@ -438,7 +453,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
 
 // Runs the batches one after the other (a batch's cases together, one per worker, each with the batch id in its unit); a failed case reruns alone
 // (own batch, up to retries times; a pass is :flaky); a known failure is not rerun. runUnit({id, batch, worker}) -> {code, text}. -> {text, code} like runPool.
-export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, known = new Map(), total = null, emit = () => {}, onBatchEnd = () => {} }) => {
+export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, known = new Map(), preSettled = [], total = null, emit = () => {}, onBatchEnd = () => {} }) => {
   const done = new Map()
   let finals = 0
   let reruns = 0
@@ -480,6 +495,7 @@ export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, 
     }
     return cur
   }
+  preSettled.forEach((form) => settle(summarize(form).id, form))
   const failing = []
   for (const batch of batches) {
     if (batch.barrier && live().length < batch.ids.length) { bootDead = true; break } // the cases of a barrier meet: they need a body each
@@ -506,7 +522,7 @@ export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, 
     }
     settle(id, flaky ? withStatus(last, 'flaky', `:first-failure ${first}`) : last)
   }
-  const forms = batches.flatMap((b) => b.ids).map((id) => done.get(id))
+  const forms = [...preSettled.map((f) => summarize(f).id), ...batches.flatMap((b) => b.ids)].map((id) => done.get(id))
   return { text: mergeText(forms), code: !forms.length ? 2 : forms.every((f) => ['pass', 'flaky'].includes(summarize(f).status)) ? 0 : 1 }
 }
 
@@ -639,7 +655,10 @@ const nightMain = async (p, byStem, previous, script) => {
   const workers = workerSpecs(cap, bodyCap(), p.prefix, p.firstPlot)
   if (!refreshBuild(script)) return 2
   stopStaleBodies(script, p.prefix)
-  const batches = nightBatches(cases, durationsById(previous), { bodies: workers.length })
+  const known = knownFailures(previous)
+  const skip = p.runKnown || p.matchIds.length ? { keep: cases.map((c) => c.id), forms: [] } : skipKnown(cases.map((c) => c.id), known)
+  const batches = nightBatches(cases.filter((c) => skip.keep.includes(c.id)), durationsById(previous), { bodies: workers.length })
+  if (skip.forms.length) console.error(`world-test pool: ${skip.forms.length} known failures skipped (--run-known runs them)`)
   console.error(`world-test pool: ${cases.length} night cases in ${batches.length} batches on up to ${workers.length} bodies (${batches.map((b) => `${b.kind}:${b.ids.length}`).join(' ')}; ${cores} cores)`)
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
   restoreSleepRule(script, pass, workers[0].body, true)
@@ -659,7 +678,7 @@ const nightMain = async (p, byStem, previous, script) => {
     return { code, text }
   }
   emitLine({ event: 'plan', total: cases.length })
-  const res = await runNightBatches({ batches, workers, runUnit, retries: p.retries, total: cases.length, known: knownFailures(previous), emit: emitLine, onBatchEnd: (batch) => endNightBatch(script, pass, workers[0].body, batch) })
+  const res = await runNightBatches({ batches, workers, runUnit, retries: p.retries, total: cases.length, known, preSettled: skip.forms, emit: emitLine, onBatchEnd: (batch) => endNightBatch(script, pass, workers[0].body, batch) })
   if (res.precheck) console.error('world-test pool: a precheck refused every case (see the line above); pass stopped, no case recorded')
   if (res.bootDead) console.error('world-test pool: every body died at boot (see the child log, e.g. a heap OOM); pass stopped, the cases not run are not recorded')
   if (p.results) fs.writeFileSync(p.results, res.text)
@@ -680,6 +699,8 @@ export const main = async (args) => {
   if (p.nightBatches) return nightMain(p, byStem, previous, script)
   const listing = listCases(script, p)
   const listed = listing === null ? null : parseListed(listing)
+  const known = knownFailures(previous)
+  const skip = listed === null || p.runKnown || p.matchIds.length ? { keep: null, forms: [] } : skipKnown([...listed.values()].flat(), known, repeatOf(p))
   const units = unitsWithCases(unitOrder([...byStem.keys()], previous), listed)
   if (noCasesSelected(units, listed)) {
     console.error('world-test pool: no cases selected (none match the paths and flags, or all are unchanged under --changed-since-pass)')
@@ -696,6 +717,13 @@ export const main = async (args) => {
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
   process.on('exit', reaper.reap)
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { reaper.reap(); process.exit(code) })
+  if (skip.forms.length) {
+    const keep = new Set(skip.keep)
+    for (const [stem, ids] of listed) { const left = ids.filter((id) => keep.has(id)); if (left.length) listed.set(stem, left); else listed.delete(stem) }
+    p.matchIds = skip.keep
+    units.splice(0, units.length, ...unitsWithCases(units, listed))
+    console.error(`world-test pool: ${skip.forms.length} known failures skipped (--run-known runs them)`)
+  }
   console.error(`world-test pool: ${units.length} fixture files on ${workers.length} bodies (${workers.map((w) => w.body).join(' ')})`)
   const runUnit = async (unit) => {
     const tmp = `${p.results ?? path.join(process.env.TMPDIR ?? '/tmp', 'world-test-pool')}.${process.pid}.${unit.worker.body}.edn`
@@ -715,7 +743,7 @@ export const main = async (args) => {
   const mspt = rconMspt()
   const clearSweep = markSweep(slotDir(), workers.length)
   if (clearSweep) process.on('exit', clearSweep)
-  const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => gateLoad({ mspt, loadavg: () => os.loadavg()[0], cores, limit: MSPT_LIMIT }), cores: MSPT_LIMIT, log: (m) => console.error(m), probe: serverProbe([rconPort(), gamePort()]), serverWaitMs: p.serverWaitS * 1000, settleMs: p.serverSettleS * 1000 })
+  const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known, preSettled: skip.forms, emit: emitLine, load: () => gateLoad({ mspt, loadavg: () => os.loadavg()[0], cores, limit: MSPT_LIMIT }), cores: MSPT_LIMIT, log: (m) => console.error(m), probe: serverProbe([rconPort(), gamePort()]), serverWaitMs: p.serverWaitS * 1000, settleMs: p.serverSettleS * 1000 })
   clearSweep?.()
   if (r.precheck) console.error('world-test pool: a precheck refused every case (see the line above); pass stopped, no case recorded')
   if (r.bootDead) console.error('world-test pool: every body died at boot (see the child log, e.g. a heap OOM); pass stopped, the cases not run are not recorded')
@@ -723,6 +751,6 @@ export const main = async (args) => {
   if (p.results) fs.writeFileSync(p.results, r.text)
   const sums = splitForms(r.text).map(summarize)
   const count = (st) => sums.filter((s) => s.status === st).length
-  console.error(`world-test pool: ${sums.length} cases, ${count('pass')} pass, ${count('flaky')} flaky, ${sums.length - count('pass') - count('flaky')} not passing${r.skipped ? `; ${r.skipped} known failures not rerun (same failed check in the --durations results)` : ''}`)
+  console.error(`world-test pool: ${sums.length} cases, ${count('pass')} pass, ${count('flaky')} flaky, ${sums.length - count('pass') - count('flaky')} not passing${r.skipped ? `; ${r.skipped} known failures not rerun or skipped (same failed check in the --durations results)` : ''}`)
   return r.code
 }

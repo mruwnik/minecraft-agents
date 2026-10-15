@@ -197,3 +197,7 @@
                        {:event "result" :name "sweep:night" :outcome "failed"}]
                       (mapv #(select-keys % [:event :name :outcome]) (filter #(= "result" (:event %)) @evs))))
                (done))))))
+
+(deftest run-known-reaches-every-pass
+  (is (every? #(some #{"--run-known"} (:argv %)) (s/passes (s/parse-args ["--run-known"]))))
+  (is (not-any? #(some #{"--run-known"} (:argv %)) (s/passes (s/parse-args [])))))
