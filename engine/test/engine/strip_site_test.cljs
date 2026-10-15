@@ -376,3 +376,15 @@
               r (await (start! env args))]
           (is (= :not-done r) "the job yields every round")
           (is (= ["from-plan" "set-spawn" "set-place" "get-tool"] (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))) "the base phases ran, no corridor"))))))
+
+(deftest a-cut-site-puts-home-and-spawn-back-in-its-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [eng-at (atom nil)
+              env (setup :results {'jobs.strip.corridor (fn [_] (core/cancel! @eng-at (first (:list (core/state @eng-at)))) {:status :done :taken {} :new-segments []})})
+              _ (reset! eng-at (:eng env))]
+          (core/submit! (:eng env) (list job args) {})
+          (await (tu/run-until-empty (:eng env) 600))
+          (is (= ["set-place" "set-spawn"] (mapv #(last (re-find #"\.([a-z-]+)$" %)) (take-last 2 (names env)))) "restored on the cut")
+          (is (= [(xyz bed) old-bed] (mapv :bed (called env 'jobs.survival.set-spawn)))))))))

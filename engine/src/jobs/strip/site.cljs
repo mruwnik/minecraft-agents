@@ -42,8 +42,8 @@
           :smelt-failed and the ore stays raw (not with :smelt false).
   :haul   first collects the output still in the furnaces (waits while it cooks) and banks it in the first base chest, then
           storage.haul from the base chests to the main storage (not with :haul false).
-  :restore  :home and the respawn bed back to :was (also on any stop). The torches the corridor took back are
-          carried.
+  The cleanup export puts :home and the respawn bed back to :was however the call ends (a cut included). The torches the
+  corridor took back are carried.
   Needs :site and :base (a new site also :at), else impossible :bad-args. A start in the strip phase with a real danger near
   waits (:danger), and a running strip phase yields while one is near.
   Ends :done with data {:segments {state n} :taken {class n} :hauled {item n} :smelted {raw-item n} :smelt-failed [{:furnace :reason}]},
@@ -148,7 +148,7 @@
     (some pos? (vals (:smelted r))) (assoc :bank true)))
 
 (defn stop!
-  "Stop with reason and fields. The home and respawn are put back first (a restore pass of its own, as the restore phase does)."
+  "Stop with reason and fields."
   [c reason fields]
   (let [s (site c)]
     (ctx/update-mem! c assoc :stopping (merge {:reason reason :phase (:phase s)} fields))
@@ -368,13 +368,13 @@
       (trip-due? c s) (await (trip! c s))
       ready (await (seal! c s t ready))
       seg (await (corridor! c s t seg))
-      :else (do (save! c assoc :phase (if (:haul (:args c)) :haul :restore)) :again))))
+      :else (do (save! c assoc :phase (if (:haul (:args c)) :haul :done)) :again))))
 
 (defn ^:async haul-chests! [c s]
   (let [res (await (call! c :haul 'jobs.storage.haul (merge {:from (chests c s)} (select-keys (:args c) [:ignore-zones?]))))]
     (cond (= :continue res) :continue
           (failed? res) (child-stop! c (assoc res :child "jobs.storage.haul"))
-          :else (do (save! c assoc :phase :restore :hauled (:moved res {})) :again))))
+          :else (do (save! c assoc :phase :done :hauled (:moved res {})) :again))))
 
 (defn ^:async haul! [c s]
   (cond
@@ -412,29 +412,25 @@
                      :else :nothing-possible)
           reason data)))
 
-(defn ^:async restore! [c s]
-  (let [f (when (:was s) (await (run-all! c (restore-steps (:was s)))))]
-    (cond (= :continue f) :continue
-          f (child-stop! c f)
-          :else (do (save! c assoc :phase :done) :again))))
-
-(defn ^:async stopping! [c {:keys [reason] :as why}]
+(defn ^:async cleanup
+  "However the call ends: :home and the respawn bed go back to :was. Done, or nothing-possible with the failed child's
+  reason."
+  [c _]
   (let [s (site c)
-        f (when (and (:was s) (not= :restore (:phase why))) (await (run-all! c (restore-steps (:was s)))))]
-    (if (= :continue f)
-      :continue
-      (stop-with! c (assoc why :restore-failed (some-> f :reason))))))
+        f (when (:was s) (await (run-all! c (restore-steps (:was s)))))]
+    (cond (= :continue f) :continue
+          f (ctx/end c :nothing-possible (:reason f) (select-keys f [:child]))
+          :else (ctx/end c :done nil))))
 
 (defn ^:async step! [c]
   (let [s (site c)]
     (if-let [why (:stopping (ctx/mem c))]
-      (await (stopping! c why))
+      (stop-with! c why)
       (case (:phase s)
         :base (await (base! c s))
         :shears (await (shears! c s))
         :strip (await (strip-step! c s))
         :haul (await (haul! c s))
-        :restore (await (restore! c s))
         :done (or (ctx/done c) :continue)))))
 
 (defn ^:async round [c]
@@ -461,14 +457,14 @@
   (cond/and bad-args (checks/refusing :no-danger "no danger to wait for" (fn [c] (when (danger-wait? c) :danger)))))
 
 (defn done?
-  "The strip is over and the home and respawn are restored (phase :done); the segments settled so far are the progress."
+  "The strip is over (phase :done); the segments settled so far are the progress."
   [c]
   (let [s (site c)
         states (map :state (vals (:segments s)))
         data [:units :segments :done (count (filter settled states)) :left (count (remove settled states)) :result (result-of s)]]
     (if (= :done (:phase s))
       (apply contract/ok :stripped (str "strip site " (:site (:args c)) " done " (pr-str (:segments (result-of s)))) data)
-      (apply contract/later :stripping "strip site: segments left to strip, the base to restore" data))))
+      (apply contract/later :stripping "strip site: segments left to strip" data))))
 
 (defn quote-of [c]
   {:uses {:job-time [1 (* 120 (max 1 (count (:segments (site c))))) (settings/get settings ::job-time-s)]}})
