@@ -149,6 +149,23 @@
           (is (= [] (opened eng)))
           (is (= 1 (:shut (first (filter #(= :shut-doors.done (:kind %)) @seen))))))))))
 
+(deftest a-gate-shut-out-of-sight-is-walked-to-and-looked-at-not-ended-already
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup (gate-world false 14 0))
+              live (.-seenBlockAt p)]
+          (aset p "seenBlockAt" (fn [pos] (if (< (.-x (.-pos (.self p))) 9)
+                                            (live pos)
+                                            #js {:name "oak_fence_gate" :properties #js {:open "true"} :pos pos :age-ms 5000})))
+          (remember-opened! s)
+          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (await (tick-until s #(empty? (:list (core/state eng))) 20))
+          (is (seq (tu/walked-to eng)) "it walked to the gate the body last saw open")
+          (is (= [] (opened eng)) "the entry dropped once it saw the gate shut")
+          (is (not (open? p gate-cell)))
+          (is (empty? (filter #(= :shut-doors.gave-up (:kind %)) @seen))))))))
+
 (deftest a-gate-the-walker-did-not-open-is-left-alone
   (async done
     (tu/run-async done

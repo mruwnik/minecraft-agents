@@ -59,11 +59,11 @@
                  (and home (<= (doors/distance {:x (:x home) :y (:y home) :z (:z home)} cell) (:home-radius (:args c))))))))
 
 (defn targets
-  "The left-open blocks (doors/left-open, any age; then doors/unrecorded-open) within :radius, minus the cells in left ({:cell [x y z]})."
+  "The left-open blocks (doors/left-open as the body last saw them, any age; then doors/unrecorded-open) within :radius, minus the cells in left ({:cell [x y z]})."
   [c left]
   (let [given-up (set (map :cell left))]
     (remove #(given-up (cell-key (:cell %)))
-            (concat (doors/left-open (:primitives c) (ctx/view c) (:args c) 0)
+            (concat (doors/left-open (:primitives c) (ctx/view c) (:args c) 0 doors/seen-open-block)
                     (when (:unrecorded? (:args c)) (doors/unrecorded-open (:primitives c) (ctx/view c) (assoc (:args c) :own? #(own-door? c %))))))))
 
 (defn ^:async walk!
@@ -121,7 +121,7 @@
         (ctx/end c :nothing-possible :left (assoc result :text text))))))
 
 (defn done?
-  "Done when no left-open block stands within :radius; else the doors shut so far."
+  "Done when no block seen left open stands within :radius; else the doors shut so far."
   [c]
   {:done? (empty? (targets c [])) :units :doors :done (:shut (ctx/mem c) 0)})
 

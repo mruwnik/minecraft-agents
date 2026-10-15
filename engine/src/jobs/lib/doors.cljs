@@ -29,7 +29,7 @@
 
 (defn open-block
   "{:cell :column} of the block at cell when it is an openable block standing open now, else nil (shut, gone, unloaded).
-  For the job, which stands beside the block."
+  For the job, once it stands beside the block."
   [p cell]
   (let [b (.blockAt p (clj->js cell))
         props (click/props-of b)]
