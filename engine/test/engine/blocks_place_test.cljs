@@ -10,6 +10,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [box]]
             [jobs.blocks.place :as place]
+            [jobs.lib.util :as u]
             [plan.shape :as shape]))
 
 (def job 'jobs.blocks.place)
@@ -382,3 +383,23 @@
             (is (= {"cobblestone" [1 1 1]} (get-in near [:uses :items])))
             (is (< (second (get-in near [:uses :job-time])) (second (get-in far [:uses :job-time]))))
             (is (< (second (get-in near [:uses :job-time])) (second (get-in use [:uses :job-time]))))))))))
+
+(deftest a-use-on-with-a-bucket-pours-and-scoops-the-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory [{:name "water_bucket" :count 1}]})
+              poured (await (tu/child-outcome (:eng env) use-on {:pos at :item "water_bucket"} 40))]
+          (is (= [true :used] ((juxt :used :reason) poured)))
+          (is (= "water" (.-name (.blockAt (:p env) (clj->js at)))))
+          (let [scooped (await (tu/child-outcome (:eng env) use-on {:pos at :item "bucket"} 40))]
+            (is (= [true "water_bucket"] [(:used scooped) (some #(when (= "water_bucket" (:name %)) (:name %)) (u/inventory (:p env)))]))
+            (is (not= "water" (.-name (.blockAt (:p env) (clj->js at)))))))))))
+
+(deftest a-use-on-with-a-bucket-ends-by-the-place-status
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory [{:name "bucket" :count 1}]})
+              scooped (await (tu/child-outcome (:eng env) use-on {:pos at :item "bucket"} 40))]
+          (is (= [:stopped :missing] [(:status scooped) (:reason scooped)])))))))

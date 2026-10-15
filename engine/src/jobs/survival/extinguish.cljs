@@ -18,7 +18,7 @@
   "Put the body out when it is on fire or in lava. One run, re-reading the world before each pass, until the body is
   neither burning nor in lava (:done). Done at once when it is not burning and no poured water is left to scoop. Each pass, in this order:
   1. With a water bucket carried and the body not in lava, pours water at the feet and notes the cell in body memory
-     (:extinguish-pour, ten minutes), so a run cut before the scoop leaves it for the next run.
+     (:extinguish-pour, ten minutes; a jobs.blocks.use-on child), so a run cut before the scoop leaves it for the next run.
      A cell in another's zone or claim is skipped while another way exists. As a last resort it pours there anyway,
      with one extinguish.trespass-last-resort warning.
   2. Once the fire is out, scoops the water back up with the empty bucket so no source block stays.
@@ -245,7 +245,7 @@
   "Pour a carried water bucket at the feet. True when the water was placed (then noted in body memory)."
   [c pos]
   (ctx/hold-still! c nil)
-  (let [placed (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos pos :item "water_bucket"})))))]
+  (let [placed (= :done (:kind (await (child/run!* c :bucket 'jobs.blocks.use-on {:pos pos :item "water_bucket"}))))]
     (when placed (ctx/remember! c :extinguish-pour {:pos pos} pour-policy))
     placed))
 
@@ -297,9 +297,10 @@
 
       :else
       (do (ctx/hold-still! c nil)
-          (let [status (.-status (await (ctx/act c :place (clj->js {:pos cell :item "bucket"}))))]
+          (let [r (await (child/run!* c :bucket 'jobs.blocks.use-on {:pos cell :item "bucket"}))
+                status (if (= :continue r) "continue" (name (or (get-in r [:data :reason]) :failed)))]
             (clear-pour! c)
-            (when-not (= "placed" status)
+            (when-not (= :done (:kind r))
               (ctx/emit! c :extinguish.scoop_failed :warn
                          {:text (str "could not scoop the poured water at " (pr-str cell) ": " status)
                           :pos cell :status status}))

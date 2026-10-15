@@ -8,13 +8,15 @@
 
 (def doc
   "Right-click the block at :pos ([x y z] or {:x :y :z}) once, with :item in hand (nil: whatever is held stays in hand; none: the empty hand), on :face.
+  A bucket :item (water_bucket pours, lava_bucket pours lava, bucket scoops) is used on the cell :pos itself, through the
+  place act: the liquid goes there, or is taken from there; :face is ignored.
   One call is the whole attempt: walk into reach (one jobs.movement.go-to call, range 3, no escalation), click. It has
   no conditions. It yields :continue only when the walk waits on the world. Zones are not consulted: a click
   changes no block by itself.
 
   Ends with data {:used true|false :pos :item :face :reason}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
-  status (:used, :unchanged, :no-item, :no-room, :missing, :cannot, :unreachable, :failed); only :used is done.
-  condition-failed: :no-item, :missing, :cannot, a walk that would leave a night shelter (:night-sheltered, :at-night :go walks
+  status (:used, :unchanged, :no-item, :no-room, :missing, :cannot, :occupied, :unreachable, :failed); only :used is done.
+  condition-failed: :no-item, :missing, :cannot, :occupied (a bucket's cell is filled), a walk that would leave a night shelter (:night-sheltered, :at-night :go walks
   out). Impossible: a bad :pos or :face (:bad-args, with a blocks.use-on.declined warn). nothing-possible: :unreachable (a walk
   that failed twice, :why), :unchanged, :no-room, :failed.")
 
@@ -38,7 +40,7 @@
 
 (def condition-reasons
   "The click statuses that name a missing target or item; any other failed status is nothing-possible."
-  #{:no-item :missing :cannot})
+  #{:no-item :missing :cannot :occupied})
 
 (defn quote-of [c]
   (let [{:keys [pos error]} (b/parse (:args c))
@@ -66,6 +68,17 @@
                                     arrived? :out-of-reach
                                     :else (get-in r [:data :why] :unreachable))}))))
 
+(defn bucket? [item] (and (string? item) (boolean (re-find #"bucket$" item))))
+
+(defn ^:async click!
+  "The click or bucket use at pos once in reach: the act's status keyword and its reply."
+  [c {:keys [pos item face]}]
+  (let [r (await (if (bucket? item)
+                   (ctx/act c :place (clj->js {:pos pos :item item}))
+                   (ctx/act c :useOn (clj->js (cond-> {:pos pos :face face} item (assoc :item item))))))
+        status (keyword (.-status r))]
+    [(if (and (bucket? item) (= :placed status)) :used status) r]))
+
 (defn ^:async round [c]
   (let [{:keys [item face see at-night] :or {face "up"}} (:args c)
         {:keys [pos error]} (b/parse (:args c))
@@ -83,8 +96,7 @@
                        (finish! c :nothing-possible {:used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
                        (recur (inc fails)))
             :else
-            (let [r (await (ctx/act c :useOn (clj->js (cond-> {:pos pos :face face} item (assoc :item item)))))
-                  status (keyword (.-status r))]
+            (let [[status r] (await (click! c {:pos pos :item item :face face}))]
               (finish! c (cond (= :used status) :done (condition-reasons status) :condition-failed :else :nothing-possible)
                        (cond-> {:used (= :used status) :pos pos :item item :face face :reason status}
                          (.-spawnSet r) (assoc :spawn-set true))))))))))
