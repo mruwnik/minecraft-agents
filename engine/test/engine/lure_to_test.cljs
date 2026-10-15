@@ -311,6 +311,7 @@
           (is (finished? s))
           (is (= :lost (:reason (done-event s))) (pr-str (done-event s)))
           (is (some? (:last-seen (:lost (done-event s)))))
+          (is (re-find #"last seen at .* blocks from the body" (:text (first (stopped s)))) (pr-str (:text (first (stopped s)))))
           (is (number? (:distance (done-event s))) "the distance of the last sighting from :pos")
           (is (= 1 (count (stopped s)))))))))
 

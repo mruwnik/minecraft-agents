@@ -151,24 +151,6 @@
       (let [ground (some #(when (stand? %) %) (interleave (range (dec y) (- y ground-search) -1) (range (inc y) (+ y ground-search))))]
         (str " (no standable cell at y" y (if ground (str "; ground at y" ground) " within 16 blocks") ")")))))
 
-(defn stop-text [c reason]
-  (let [{:keys [mob radius]} (:args c)]
-    (case reason
-      :no-animal (if-let [uuid (:uuid (:args c))]
-              (str "the " mob " " uuid " is not in sight to lure")
-              (str "no adult " mob " free to lure within " radius " blocks" (skipped-text c)))
-      :animal-outside (str "the body is at the spot but the " mob " stands outside the destination, "
-                           (some-> (escort/animal-now c) .-pos u/pos-of (u/flat-dist (:pos (:args c))) js/Math.round) " blocks from it")
-      :no-food (str "no food for " mob " carried and none could be got")
-      :lost (str "lost sight of the " mob (some->> (:uuid (:args c)) (str " ")))
-      :animal-stalled (let [{:keys [animal body distance]} (stalled-detail c)]
-                        (str "the " mob " stopped following at " (pr-str (select-keys animal [:x :z])) ", "
-                             (js/Math.round distance) " blocks from the body at " (pr-str (select-keys body [:x :z]))))
-      :unreachable (if (spare/enclosed? c (atom #{}) #js {:pos (clj->js (:pos (:args c)))})
-                     "the spot is inside a closed pen; no way in found"
-                     (str "luring stopped: unreachable" (ground-note c)))
-      (str "luring stopped: " (name reason)))))
-
 (defn lost-detail
   "Why :lost, for the next live look: the tracked animal's key, where it was last seen and how far that is from the body,
   and the nearest adult of the kind the sensing shows now (key, flat distance, leashed)."
@@ -180,6 +162,26 @@
      :last-seen last-seen
      :last-seen-dist (some->> last-seen (u/flat-dist me))
      :nearest (when near {:key (animals/key-of near) :dist (u/flat-dist me (u/pos-of (.-pos near))) :leashed (animals/leashed? near)})}))
+
+(defn stop-text [c reason]
+  (let [{:keys [mob radius]} (:args c)]
+    (case reason
+      :no-animal (if-let [uuid (:uuid (:args c))]
+              (str "the " mob " " uuid " is not in sight to lure")
+              (str "no adult " mob " free to lure within " radius " blocks" (skipped-text c)))
+      :animal-outside (str "the body is at the spot but the " mob " stands outside the destination, "
+                           (some-> (escort/animal-now c) .-pos u/pos-of (u/flat-dist (:pos (:args c))) js/Math.round) " blocks from it")
+      :no-food (str "no food for " mob " carried and none could be got")
+      :lost (let [{:keys [last-seen last-seen-dist]} (lost-detail c)]
+              (str "lost sight of the " mob (some->> (:uuid (:args c)) (str " "))
+                   (when last-seen (str ", last seen at " (pr-str (select-keys last-seen [:x :z])) ", " (js/Math.round last-seen-dist) " blocks from the body"))))
+      :animal-stalled (let [{:keys [animal body distance]} (stalled-detail c)]
+                        (str "the " mob " stopped following at " (pr-str (select-keys animal [:x :z])) ", "
+                             (js/Math.round distance) " blocks from the body at " (pr-str (select-keys body [:x :z]))))
+      :unreachable (if (spare/enclosed? c (atom #{}) #js {:pos (clj->js (:pos (:args c)))})
+                     "the spot is inside a closed pen; no way in found"
+                     (str "luring stopped: unreachable" (ground-note c)))
+      (str "luring stopped: " (name reason)))))
 
 (def ending-of
   "The kind and cause of a lure that ended for reason, else nothing-possible with the reason as the cause."
