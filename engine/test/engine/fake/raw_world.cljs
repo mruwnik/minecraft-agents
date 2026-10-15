@@ -37,22 +37,31 @@
 (def coord-limit 1048576)
 
 (defn packed-key
-  "x, y, z as one number (21 + 9 + 21 bits), or nil outside that range: numbers hash far faster than vector keys."
+  "x, y, z as one number, or nil outside the range: numbers hash far faster than vector keys. Near the origin
+  (x, z in [-1024, 1024)) the key is an int32 (11 + 11 + 9 bits), which the js/Map hashes much faster than the
+  wide key (21 + 9 + 21 bits) used elsewhere."
   [x y z]
-  (when (and (< -1 (+ x coord-limit) (* 2 coord-limit)) (< -1 (+ z coord-limit) (* 2 coord-limit))
-             (<= min-y y max-y))
-    (+ (* (+ x coord-limit) 1073741824) (* (+ z coord-limit) 512) (- y min-y))))
+  (let [ux (+ x 1024) uz (+ z 1024) uy (- y min-y)]
+    (if (and (<= 0 ux 2047) (<= 0 uz 2047) (<= 0 uy 384))
+      (bit-or (bit-shift-left ux 20) (bit-shift-left uz 9) uy)
+      (when (and (< -1 (+ x coord-limit) (* 2 coord-limit)) (< -1 (+ z coord-limit) (* 2 coord-limit))
+                 (<= min-y y max-y))
+        (+ (* (+ x coord-limit) 1073741824) (* (+ z coord-limit) 512) uy 0.5)))))  ; .5: never equals an int32 key
 
 (defn lookup-cache
-  "A lazy per-key cache for fn slow over the world values under keys; reset when any of them changes."
+  "A lazy per-key cache for fn slow over the world values under ks (two or three keys); reset when any of them changes.
+  The hot path is one identity test on the world, then one packed number into a js/Map."
   [ks slow]
-  (let [seen (volatile! nil) cache (volatile! (js/Map.))]
+  (let [k0 (nth ks 0) k1 (nth ks 1) k2 (get ks 2)
+        last-w (volatile! nil) v0 (volatile! nil) v1 (volatile! nil) v2 (volatile! nil)
+        cache (volatile! (js/Map.))]
     (fn [w x y z]
-      (when-not (and @seen (loop [i 0 ks ks]
-                             (or (empty? ks)
-                                 (and (identical? (aget ^js @seen i) (get w (first ks))) (recur (inc i) (rest ks))))))
-        (vreset! seen (to-array (map #(get w %) ks)))
-        (vreset! cache (js/Map.)))
+      (when-not (identical? w @last-w)
+        (let [a (get w k0) b (get w k1) c (when k2 (get w k2))]
+          (when-not (and @last-w (identical? a @v0) (identical? b @v1) (identical? c @v2))
+            (vreset! v0 a) (vreset! v1 b) (vreset! v2 c)
+            (vreset! cache (js/Map.)))
+          (vreset! last-w w)))
       (if-let [k (packed-key x y z)]
         (let [^js m @cache v (.get m k)]
           (if (undefined? v)
