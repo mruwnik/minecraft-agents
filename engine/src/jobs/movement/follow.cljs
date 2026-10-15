@@ -27,12 +27,6 @@
 
 (def target [:player])
 
-(defn legacy-args
-  "An old caller's :timeout-s as the call's :spend {:time}."
-  [{:keys [timeout-s] :as args}]
-  (cond-> (dissoc args :timeout-s)
-    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
-
 (def absent-grace-ms 2000)
 (def idle-ms 500)
 (def walk-leg-s 5)

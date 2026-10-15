@@ -44,16 +44,6 @@
           (is (= {:done? false :units :hostiles :done 0 :left 0} ((:done? def) c)))
           (is (nil? (contract/quote-problem (await ((:quote-of def) c))))))))))
 
-(deftest old-weapons-become-the-calls-tools
-  (let [legacy (:legacy-args (get registry/jobs 'jobs.survival.retreat))]
-    (is (= {:radius 8 :use {:tools ["sword" "axe"]}} (legacy {:radius 8 :weapons ["sword" :axe]})))
-    (is (= {:use {:tools ["trident"]}} (legacy {:weapons ["sword"] :use {:tools ["trident"]}})) "a given :use wins")))
-
-(deftest old-blocks-become-the-calls-blocks
-  (let [legacy (:legacy-args (get registry/jobs 'jobs.survival.retreat))]
-    (is (= {:use {:blocks ["dirt" "stone"]}} (legacy {:blocks ["dirt" :stone]})))
-    (is (= {:use {:blocks ["sand"]}} (legacy {:blocks ["dirt"] :use {:blocks ["sand"]}})) "a given :use wins")))
-
 (deftest a-whole-flight-ends-done-with-who-it-fled
   (async done
     (tu/run-async done

@@ -9,7 +9,7 @@
                 '(jobs.blocks.dig {:pos [1 64 1] :accept [1 2]})
                 '(jobs.combat.attack {:targets false})
                 '(jobs.combat.attack {:targets {:x "a"}})
-                '(jobs.combat.attack {:targets [true] :weapons "sword"})
+                '(jobs.combat.attack {:targets [true] :use {:tools "sword"}})
                 '(jobs.farm.tend {:box {:min {:x 0 :y 63 :z 0} :max {:x 1 :y 64 :z 1}} :keep [1 2]})
                 '(jobs.farm.tend {:box {:x "a"}})
                 '(jobs.items.obtain {:any-of true})
@@ -20,13 +20,13 @@
                 '(jobs.storage.withdraw {:items ["a"]})
                 '(jobs.storage.kit {:tools false})
                 '(jobs.storage.kit {:craft-tiers {:x "a"}})
-                '(jobs.survival.dig-in {:blocks false})
-                '(jobs.survival.retreat {:weapons true})
-                '(jobs.survival.retreat {:blocks {:x "a"}})]]
+                '(jobs.survival.dig-in {:use {:blocks false}})
+                '(jobs.survival.retreat {:use {:tools true}})
+                '(jobs.survival.retreat {:use {:blocks {:x "a"}}})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form))))
 
 (deftest well-formed-list-args-pass
-  (doseq [form ['(jobs.combat.attack {:targets ["zombie"] :weapons ["sword"]})
+  (doseq [form ['(jobs.combat.attack {:targets ["zombie"] :use {:tools ["sword"]}})
                 '(jobs.items.obtain {:item "stick" :ways #{:chest :craft :smelt}})
                 '(jobs.storage.deposit {:items ["stick"] :keep {"bread" 3}})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
@@ -41,7 +41,7 @@
                 '(jobs.movement.boat-drive {:pos [1 63 1] :range "text"})
                 '(jobs.movement.boat-drive {:pos [1 63 1] :max-strokes "text"})
                 '(jobs.movement.boat-drive {:pos [1 63 1] :max-strokes 0})
-                '(jobs.movement.boat-drive {:pos [1 63 1] :max-s "120"})
+                '(jobs.movement.boat-drive {:pos [1 63 1] :spend {:time "120"}})
                 '(jobs.movement.boat-land {:radius "far"})
                 '(jobs.movement.boat-land {:max-spots 0})
                 '(jobs.items.obtain {:item 3})
@@ -58,7 +58,7 @@
     (is (string? (expr/problem registry/jobs form)) (pr-str form)))
   (doseq [form ['(jobs.blocks.dig {:pos [1 64 1] :on-fluid :fail})
                 '(jobs.combat.attack {:radius 16 :absent :wait})
-                '(jobs.movement.boat-drive {:pos [1 63 1] :range 2 :max-strokes 10 :max-s 30})
+                '(jobs.movement.boat-drive {:pos [1 63 1] :range 2 :max-strokes 10 :spend {:time 30}})
                 '(jobs.items.obtain {:item "stick" :count 64})
                 '(jobs.items.obtain {:item "stick" :count 100})
                 '(jobs.storage.deposit {:free 2})

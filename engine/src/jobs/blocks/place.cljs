@@ -41,7 +41,7 @@
   :why its reason text, else one from its status). The caller decides whether to try again.
 
   :fetch (default true; jobs.lib.need limits): a missing item is fetched with jobs.items.obtain (one of it); false
-  waits :need. :any-of is the old spelling of :use {:blocks}.")
+  waits :need.")
 
 (a/defargs args
   {:pos {:doc "the cell to fill, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
@@ -55,12 +55,6 @@
 
 (def target [:pos])
 (def defaults {:use {:blocks :build} :spend {:time ::time-s}})
-
-(defn legacy-args
-  "An old caller's :any-of names as the call's :use {:blocks}."
-  [{:keys [any-of] :as args}]
-  (cond-> (dissoc args :any-of)
-    (seq any-of) (update :use #(merge {:blocks (vec any-of)} %))))
 
 (defn wanted
   "The block names the call places: :item, else the call's :use {:blocks}, else (before the call starts) the carried

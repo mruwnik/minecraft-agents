@@ -237,7 +237,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:targets [7] :timeout-s 3 :no-damage-hits 100 :max-hits 1000}
+        (let [s (await (scenario {:targets [7] :spend {:time 3} :no-damage-hits 100 :max-hits 1000}
                                  {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 7))]
           (is (finished? s))
           (is (= [:timeout] (mapv :reason (events-of s :stopped))) "it ends itself before the engine's limit")
@@ -448,7 +448,7 @@
                  (let [st (nth statuses (min @i (dec (count statuses))))]
                    (swap! i inc)
                    (js/Promise.resolve #js {:status st :hurt true}))))
-    (core/submit! eng (spec {:targets [7] :timeout-s 1000}) {})
+    (core/submit! eng (spec {:targets [7] :spend {:time 1000}}) {})
     (await (run-ticks s n 700))
     s))
 
@@ -478,7 +478,7 @@
                                             (let [n (swap! i inc)]
                                               (swap! (fake/state p) assoc-in [:entities 0 :pos] [(if (even? n) 10 -4) 64 0])
                                               (js/Promise.resolve #js {:status (if (< n 8) "out-of-reach" "killed")}))))
-          (core/submit! eng (spec {:targets [7] :timeout-s 1000}) {})
+          (core/submit! eng (spec {:targets [7] :spend {:time 1000}}) {})
           (await (core/tick! eng))
           (is (>= (count (attacked s)) 5) "swung well past three times")
           (is (empty? (events-of s :attack.gave-up))))))))

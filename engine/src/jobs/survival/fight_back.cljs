@@ -20,7 +20,7 @@
   Ends :done when no hostile is within :range, with the data {:killed [ids]}.
   Every other ending is a decline, so the retreat takes over: :nothing-possible with the cause :hold-timeout (the :hold wait ran out), :too-far, :heard-only, :given-up or :no-target;
   its data are {:killed :struck :memory}, the job memory as it ended.
-  The weapons are the call's :use :tools (default the weapons carried; the old :weapons substrings map in legacy-args).
+  The weapons are the call's :use :tools (default the weapons carried).
   A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts,
   unless the body lost health since the last blocked walk (the count then starts over).
   So is one that three swings in a row did no damage to (the attack result says hurt false), with a fight_no_damage warning.
@@ -43,12 +43,6 @@
 (def target [])
 
 (def defaults {:spend {:time ::time-s} :use {:tools :attack}})
-
-(defn legacy-args
-  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}."
-  [{:keys [weapons] :as args}]
-  (cond-> (dissoc args :weapons)
-    (and (some? weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))))
 
 (defn reach [] (settings/get settings ::reach))
 (defn ranged-chase [] (settings/get settings ::ranged-chase))

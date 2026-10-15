@@ -68,12 +68,6 @@
   "None wait: no shears with :fetch off ends the first round (finish! :no-shears), so a queued order never blocks the queue."
   [])
 
-(defn legacy-args
-  "An old caller's :timeout-s as the call's :spend {:time}."
-  [{:keys [timeout-s] :as args}]
-  (cond-> (dissoc args :timeout-s)
-    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
-
 (defn time-limit "Seconds the call may work." [c]
   (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s)))
 

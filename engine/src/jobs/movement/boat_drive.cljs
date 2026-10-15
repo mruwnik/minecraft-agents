@@ -37,12 +37,6 @@
   {::time-s {:default 120 :doc "Seconds a drive may take before it gives up." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::time-s))
 
-(defn legacy-args
-  "An old caller's :max-s as the call's :spend {:time}."
-  [{:keys [max-s] :as args}]
-  (cond-> (dissoc args :max-s)
-    (and max-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] max-s)))
-
 (def aligned-deg 8)
 (def forward-while-turning-deg 30)
 (def max-turn-ticks 10)

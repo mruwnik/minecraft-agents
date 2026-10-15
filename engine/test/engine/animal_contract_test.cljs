@@ -39,17 +39,6 @@
     (is (some? (:done? (job sym))) (str sym " has done?"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:time 60}}}))) (str sym))))
 
-(deftest old-options-map-to-the-call
-  (is (= {:mob "cow" :use {:tools ["_sword"]}} (hunt/legacy-args {:mob "cow" :weapons ["_sword"]})))
-  (is (= {:mob "cow" :use {:tools []}} (hunt/legacy-args {:mob "cow" :weapons []})) "no weapons stays no weapons")
-  (is (= {:mob "cow" :use {:tools ["iron_sword"]}} (hunt/legacy-args {:mob "cow" :use {:tools ["iron_sword"]} :weapons ["_axe"]})))
-  (is (= {:count 1 :spend {:time 9}} (fish/legacy-args {:count 1 :timeout-s 9})))
-  (is (= {:count 1 :spend {:time 9}} (shear/legacy-args {:count 1 :timeout-s 9})))
-  (is (= {:count 1 :spend {:time 4}} (shear/legacy-args {:count 1 :timeout-s 9 :spend {:time 4}})))
-  (is (= {:mob "cow" :spend {:time 9}} (leash/legacy-args {:mob "cow" :timeout-s 9})))
-  (is (= {:spend {:time 9}} (unleash/legacy-args {:timeout-s 9})))
-  (is (= {:mob "cow" :spend {:time 9}} (breed/legacy-args {:mob "cow" :timeout-s 9}))))
-
 ;; ------------------------------------------------------------------ fish
 
 (def pond (into {} (for [x (range 0 9) z (range 0 9) y [62 63]] [(str x "," y "," z) "water"])))
@@ -137,7 +126,7 @@
       (fn ^:async t []
         (doseq [[args want] [[{:count 1 :keep 0} "diamond_sword"]
                              [{:count 1 :keep 0 :use {:tools ["iron_sword"]}} "iron_sword"]
-                             [{:count 1 :keep 0 :weapons ["iron_"]} "iron_sword"]]]
+                             [{:count 1 :keep 0 :use {:tools ["iron_"]}} "iron_sword"]]]
           (let [p (tu/fake-on-floor {:floor h/flight-floor :inventory seek/two-swords :entities [(cow 1 3)]})
                 clock (atom 1000000)
                 now (tu/act-clock clock p 20)

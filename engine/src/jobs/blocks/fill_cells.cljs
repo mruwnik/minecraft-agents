@@ -40,12 +40,6 @@
 
 (def defaults {:use {:blocks :build} :least :all :spend {:time ::time-s}})
 
-(defn legacy-args
-  "An old caller's :any-of names as the call's :use {:blocks}."
-  [{:keys [any-of] :as args}]
-  (cond-> (dissoc args :any-of)
-    (seq any-of) (update :use #(merge {:blocks (vec any-of)} %))))
-
 (defn wanted
   "The block names the call fills with: its :use {:blocks}, else (before the call starts) the carried building blocks."
   [c]

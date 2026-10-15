@@ -105,7 +105,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen] :as s} (setup [] {:drops {}})]
-          (await (run! s {:blocks ["dirt"]}))
+          (await (run! s {:use {:blocks ["dirt"]}}))
           (is (= :no-blocks (:reason (failed seen)))))))))
 
 (deftest a-face-in-another-zone-is-skipped-and-another-face-used

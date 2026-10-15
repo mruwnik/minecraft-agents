@@ -33,15 +33,6 @@
     (is (vector? (:target def)) (str sym " has a target"))
     (is (some? (get-in def [:defaults :spend :time])) (str sym " has a default :spend :time"))))
 
-(deftest old-options-map-to-the-call
-  (is (= {:range 4 :use {:tools ["_sword"]}} (fight-back/legacy-args {:range 4 :weapons ["_sword"]})))
-  (is (= {:range 4 :use {:tools ["iron_sword"]}} (fight-back/legacy-args {:range 4 :use {:tools ["iron_sword"]}})))
-  (is (= {:radius 8 :use {:blocks ["dirt"]}} (gap/legacy-args {:radius 8 :blocks ["dirt"]})))
-  (is (= {:radius 8 :use {:tools ["_sword"]}} (respond/legacy-args {:radius 8 :weapons ["_sword"]}))))
-
-(deftest an-empty-weapons-list-means-no-weapons
-  (is (= {:use {:tools []}} (fight-back/legacy-args {:weapons []}))))
-
 (defn hold-ctx
   "A ctx over an empty fake whose job memory says it has held since 0, the clock past every hold cap."
   [args mem]

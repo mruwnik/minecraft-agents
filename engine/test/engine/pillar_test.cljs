@@ -578,13 +578,11 @@
           (is (= {:event :stopped :kind :nothing-possible :reason :place-failed}
                  (await (ending (list job {:height 6}) {:before refuse})))))))))
 
-(deftest the-blocks-come-from-the-call-or-the-old-item-args
+(deftest the-blocks-come-from-the-call
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [both [{:name "dirt" :count 9} {:name "cobblestone" :count 9}]
               top (fn ^:async top* [spec] (let [{:keys [p]} (await (root-ending spec {:inventory both}))] (blocks-at p [[0 64 0] [0 65 0]])))]
           (is (= ["dirt" "dirt"] (await (top (list job {:height 2})))) "the chooser lists dirt first")
-          (is (= ["cobblestone" "cobblestone"] (await (top (list job {:height 2 :use {:blocks ["cobblestone"]}})))))
-          (is (= ["cobblestone" "cobblestone"] (await (top (list job {:height 2 :item "cobblestone"})))))
-          (is (= ["cobblestone" "cobblestone"] (await (top (list job {:height 2 :item nil :items ["cobblestone" "dirt"]}))))))))))
+          (is (= ["cobblestone" "cobblestone"] (await (top (list job {:height 2 :use {:blocks ["cobblestone"]}}))))))))))

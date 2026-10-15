@@ -68,7 +68,6 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(def legacy-args mode/legacy-args)
 
 (defn done?
   "Shut in a closed room under a roof before this call cut anything, or once the niche is plugged."

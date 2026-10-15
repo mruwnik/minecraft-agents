@@ -27,7 +27,7 @@
   taken at the rough spot its direction and band give (jobs.lib.danger/mob-pos). A door, gate or trapdoor standing
   open in the way is shut, not walled over (jobs.survival.dig-in-cells/place-all!).
   Done at once when no ranged mob within :radius has a line of fire.
-  The blocks are the call's :use :blocks (default the carried shelter fillers, jobs.lib.choose/fillers; the old :blocks arg maps in legacy-args).
+  The blocks are the call's :use :blocks (default the carried shelter fillers, jobs.lib.choose/fillers).
   With none of them carried it fetches one (:fetch, default true; jobs.lib.need, jobs.items.obtain) before it ends :condition-failed :no-blocks.
   Ends :done with the data {:placed [cells]} once none has a line of fire (also when the mob moved away meanwhile), else
   :condition-failed :no-blocks (none carried, nothing fetched) or :refused (every cell that would help is another's zone,
@@ -53,12 +53,6 @@
 (def target [])
 
 (def defaults {:spend {:time ::time-s} :use {:blocks :shelter}})
-
-(defn legacy-args
-  "An old caller's :blocks as the call's :use {:blocks [...]}."
-  [{:keys [blocks] :as args}]
-  (cond-> (dissoc args :blocks)
-    (and (seq blocks) (nil? (get-in args [:use :blocks]))) (assoc-in [:use :blocks] (vec blocks))))
 
 (defn blocks
   "The blocks it may place: the call's :use :blocks, else (nothing carried when the call began) the shelter fillers."

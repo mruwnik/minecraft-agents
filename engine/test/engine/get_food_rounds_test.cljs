@@ -962,7 +962,7 @@
     (is (get-food/starving? c) "health below 7 and hungry")))
 
 (deftest the-widened-search-stays-within-what-explore-search-accepts
-  (let [opts (get-food/widen-explore {:max-distance 64 :max-legs 12 :timeout-s 120} get-food/widen-max)]
+  (let [opts (get-food/widen-explore {:max-distance 64 :max-legs 12 :spend {:time 120}} get-food/widen-max)]
     (is (= 128 (:max-distance opts)))
     (is (= 36 (:max-legs opts)))))
 

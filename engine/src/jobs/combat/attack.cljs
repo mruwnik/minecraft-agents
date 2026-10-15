@@ -69,12 +69,6 @@
 
 (def defaults {:spend {:time ::time-s} :use {:tools :attack}})
 
-(defn legacy-args
-  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}, and :timeout-s as :spend {:time}."
-  [{:keys [weapons timeout-s] :as args}]
-  (cond-> (dissoc args :weapons :timeout-s)
-    (and (seq weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))
-    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
 (def absent-grace-ms
   "How long a job that has seen nothing waits for the world's entities to arrive."
   2000)

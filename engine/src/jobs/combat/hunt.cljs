@@ -24,7 +24,7 @@
   when every kind reached its count, else :partial; no kill at all ends stopped with the first kind's reason.
   Never takes the last :keep adults of the kind, so they can breed. :keep nil means 2 for animals and 0 for hostile mobs
   (by the kind's name, else a kind any of whose entities in range reports kind hostile). 0 turns the rule off.
-  The weapons are the call's :use :tools (default the best carried; the old :weapons substrings map in legacy-args).
+  The weapons are the call's :use :tools (default the best carried).
   Babies are never targets and never counted. Animals the body spares (jobs.lib.animal-spare: kinds in :off-limits, animals in
   a zone or plan of its own or a closed enclosure unless :spare-pens is false) are never targets either; when only such animals
   are left it ends :spared (the data has :spared-by, a count per rule, and warn hunt.done names them when nothing was killed).
@@ -72,12 +72,6 @@
 (def target [:mob])
 
 (def defaults {:spend {:time ::time-s} :least 1 :use {:tools :attack}})
-
-(defn legacy-args
-  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}; [] means no weapons."
-  [{:keys [weapons] :as args}]
-  (cond-> (dissoc args :weapons)
-    (and (some? weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))))
 
 (defn adults-within
   "The adult entities named :mob within radius blocks, nearest first, never players, items or babies

@@ -213,7 +213,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [legs (await (search! {:target "diamond_block" :max-legs 2} {}))
-              timed (await (search! {:target "diamond_block" :timeout-s 2} {} nil
+              timed (await (search! {:target "diamond_block" :spend {:time 2}} {} nil
                                     (fn [{:keys [p clock]}]
                                       (.override (.-world p) "look"
                                                  (fn ^:async f [token args impl]
@@ -390,7 +390,7 @@
                         [:continue :night-sheltered]
                         (await (real c slot args))))
               s (with-redefs [child/call-walk-reason* night]
-                  (await (search! {:target "diamond_block" :max-distance 20 :timeout-s 60} {} 400)))
+                  (await (search! {:target "diamond_block" :max-distance 20 :spend {:time 60}} {} 400)))
               e (event-of s :search.not-found)]
           (is (finished? s))
           (is (not= :time (:why e)) (:text e)))))))
@@ -401,7 +401,7 @@
       (fn ^:async t []
         (let [clock (atom nil)
               s (with-redefs [child/call-walk-reason* (fn [_ _ _] (swap! @clock + 5000) (js/Promise.resolve [:continue nil]))]
-                  (await (search! {:target "diamond_block" :max-distance 20 :timeout-s 60} {} 400 #(reset! clock (:clock %)))))
+                  (await (search! {:target "diamond_block" :max-distance 20 :spend {:time 60}} {} 400 #(reset! clock (:clock %)))))
               e (event-of s :limit_reached)]
           (is (finished? s))
           (is (= :time (:line (:cause e)))))))))
@@ -542,7 +542,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :spacing 4 :scan-radius 16 :timeout-s 40}
+        (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :spacing 4 :scan-radius 16 :spend {:time 40}}
                                 {:blocks sealed-room :cone? true :self {:pos {:x 16.5 :y 64 :z 16.5}}} 60))]
           (is (nil? (event-of s :search.done)) (pr-str (:found (event-of s :search.done)))))))))
 

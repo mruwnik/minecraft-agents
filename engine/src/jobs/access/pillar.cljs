@@ -29,7 +29,7 @@
   restart. A restart between intent and placement is decided from the cell.
 
   Needs: blocks for the :use {:blocks [...]} list of the call (default: the carried fillers for a pillar, dirt then
-  cobblestone, jobs.lib.choose); an old caller's :item / :items become that list. A call starts only with some of them
+  cobblestone, jobs.lib.choose). A call starts only with some of them
   carried unless :fetch is false (then condition :too-few-blocks, with :short; a fetch that fails ends the same, the
   fetch's ending its :because) and, when it was submitted with a :from, with the body near it
   (:moved-since-submit); both are checked at the call's start only. Quote: height x the time of a block, that many
@@ -82,13 +82,6 @@
 (def target [])
 
 (def defaults {:use {:blocks :pillar} :spend {:time ::time-s}})
-
-(defn legacy-args
-  "An old caller's :item / :items as the call's :use {:blocks [...]} (nil ones dropped)."
-  [{:keys [item items] :as args}]
-  (let [blocks (cond item [item] (seq items) (vec items))]
-    (cond-> (dissoc args :item :items)
-      (and blocks (not (get-in args [:use :blocks]))) (assoc-in [:use :blocks] blocks))))
 
 (defn max-failures [] (settings/get settings ::max-failures))
 

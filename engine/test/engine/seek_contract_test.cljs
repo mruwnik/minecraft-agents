@@ -24,12 +24,6 @@
     (is (some? (:done? (job sym))) (str sym " has done?"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:time 60}}}))) (str sym))))
 
-(deftest an-attack-takes-its-weapons-from-the-call-and-the-clock-from-the-spend
-  (is (= {:targets [7] :use {:tools ["_sword" "_axe"]} :spend {:time 3}}
-         (attack/legacy-args {:targets [7] :weapons ["_sword" :_axe] :timeout-s 3})))
-  (is (= {:targets [7] :use {:tools ["iron_sword"]}} (attack/legacy-args {:targets [7] :use {:tools ["iron_sword"]}})))
-  (is (= {:target "x" :spend {:time 60} :count 2} (search/legacy-args {:target "x" :timeout-s 60 :count 2}))))
-
 (def flight-world {:floor h/flight-floor})
 
 (defn ^:async ending-of
@@ -88,7 +82,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :stopped :kind :limit-reached :reason :timeout}
-               (await (fight {:targets [7] :timeout-s 3 :no-damage-hits 100 :max-hits 1000}
+               (await (fight {:targets [7] :spend {:time 3} :no-damage-hits 100 :max-hits 1000}
                              {:inventory h/sword :entities [(zed 7 2 {:invulnerable true})]}))))))))
 
 (defn ^:async equipped
@@ -112,7 +106,7 @@
       (fn ^:async t []
         (is (= "diamond_sword" (await (equipped {:targets [7]} two-swords))))
         (is (= "iron_sword" (await (equipped {:targets [7] :use {:tools ["iron_sword"]}} two-swords))))
-        (is (= "iron_sword" (await (equipped {:targets [7] :weapons ["iron_"]} two-swords))))))))
+        (is (= "iron_sword" (await (equipped {:targets [7] :use {:tools ["iron_"]}} two-swords))))))))
 
 ;; ------------------------------------------------------------------ explore.search
 

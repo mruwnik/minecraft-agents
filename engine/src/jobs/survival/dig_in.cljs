@@ -158,7 +158,6 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(def legacy-args mode/legacy-args)
 
 (defn done?
   "Shut in already, before this call placed anything, or once it ended (a call that placed blocks reports its own end)."

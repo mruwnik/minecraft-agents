@@ -40,12 +40,6 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(defn legacy-args
-  "An old caller's :timeout-s as the call's :spend {:time}."
-  [{:keys [timeout-s] :as args}]
-  (cond-> (dissoc args :timeout-s)
-    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
-
 (def fish-items #{"cod" "salmon" "tropical_fish" "pufferfish"})
 
 (defn fish-carried [c]

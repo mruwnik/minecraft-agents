@@ -90,12 +90,6 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(defn legacy-args
-  "An old caller's :timeout-s as the call's :spend {:time}."
-  [{:keys [timeout-s] :as args}]
-  (cond-> (dissoc args :timeout-s)
-    (and timeout-s (nil? (get-in args [:spend :time]))) (assoc-in [:spend :time] timeout-s)))
-
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 
 ;; ------------------------------------------------------------------ pure

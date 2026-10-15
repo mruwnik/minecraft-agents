@@ -65,12 +65,8 @@
       (fn ^:async t []
         (let [p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :time 14000 :blocks (merge niche/ground niche/hill)
                                          :inventory [{:name "iron_pickaxe" :count 1}]}))
-              e (await (call! p 'jobs.survival.dig-niche {:blocks ["dirt"]} (constantly nil)))]
+              e (await (call! p 'jobs.survival.dig-niche {:use {:blocks ["dirt"]}} (constantly nil)))]
           (is (= [:condition-failed :no-blocks] (ending-of e))))))))
-
-(deftest the-shelter-blocks-are-the-calls-use
-  (is (= {:use {:blocks ["dirt"]}} ((:legacy-args (get registry/jobs 'jobs.survival.dig-niche)) {:blocks ["dirt"]})))
-  (is (= {:use {:blocks ["dirt"]} :enclose true} ((:legacy-args (get registry/jobs 'jobs.survival.dig-in)) {:blocks ["dirt"] :enclose true}))))
 
 (deftest a-click-that-does-not-set-the-spawn-is-a-failed-try
   (async done

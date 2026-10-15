@@ -55,10 +55,6 @@
   (is (= [10.5 63 2.5] (:moves-to ((:quote-of (job 'jobs.movement.boat-drive))
                                    {:primitives (tu/fake {}) :args {:pos [10 63 2]} :quote-call {}})))))
 
-(deftest old-time-limits-become-the-spend
-  (is (= {:player "S" :spend {:time 9}} (follow/legacy-args {:player "S" :timeout-s 9})))
-  (is (= {:pos [1 63 1] :spend {:time 9}} (boat-drive/legacy-args {:pos [1 63 1] :max-s 9}))))
-
 (defn ^:async ending-of
   "Submit spec over a fake world and tick until the job ends: {:event :completed|:stopped :kind :reason}, plus the
   event's data keys ks."
@@ -89,7 +85,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed}
-               (select-keys (await (ending-of {:entities [steve]} '(jobs.movement.follow {:player "Steve" :timeout-s 2}))) [:event])))
+               (select-keys (await (ending-of {:entities [steve]} '(jobs.movement.follow {:player "Steve" :spend {:time 2}}))) [:event])))
         (is (= {:event :stopped :kind :condition-failed :reason :absent}
                (await (ending-of {} '(jobs.movement.follow {:player "Steve"}))))))))) 
 

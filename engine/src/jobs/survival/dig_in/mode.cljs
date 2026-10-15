@@ -25,13 +25,6 @@
   (let [used (ctx/use c :blocks)]
     (if (seq used) used (choose/fillers :shelter))))
 
-(defn legacy-args
-  "An old caller's :blocks as the call's :use {:blocks [...]}."
-  [{:keys [blocks] :as args}]
-  (cond-> args
-    (sequential? blocks) (dissoc :blocks)
-    (and (sequential? blocks) (nil? (get-in args [:use :blocks]))) (assoc-in [:use :blocks] (vec blocks))))
-
 (defn mode-choice
   "[mode refusal] for the shelter from start: the first of :plug (only with a room-plug cell), :walls (only when
   walls-ok?) and :dig whose cells are all permitted, else the first of them with its refusal (nil when permitted).

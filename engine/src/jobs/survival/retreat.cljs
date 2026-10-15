@@ -116,7 +116,7 @@
   :cannot_escape only once every option failed in two sweeps in a row with no gain between.
   Each change of what it chose among is said in one retreat.choice info: the hostiles and where, every closed room and why
   it is not run to, the cells that are no closed room, the home and why it is no run (:home-why), the goal and why it is dropped, where it leans.
-  Blocks placed are the call's :use :blocks (old :blocks in legacy-args), else every :build filler, carried or dug.
+  Blocks placed are the call's :use :blocks, else every :build filler, carried or dug.
   Needs nothing to start (no conditions). Ends done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none},
   nothing-possible :cannot_escape {:fled [ids]}, or limit-reached. Quote: time (0, ::mean-s, ##Inf).
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
@@ -155,15 +155,6 @@
 (def target [])
 
 (def defaults {:spend {:time ::time-s}})
-
-(defn legacy-args
-  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}, its :blocks as :use {:blocks [...]}."
-  [{:keys [weapons blocks] :as args}]
-  (cond-> args
-    (sequential? weapons) (dissoc :weapons)
-    (sequential? blocks) (dissoc :blocks)
-    (and (sequential? weapons) (nil? (get-in args [:use :tools]))) (assoc-in [:use :tools] (mapv name weapons))
-    (and (sequential? blocks) (nil? (get-in args [:use :blocks]))) (assoc-in [:use :blocks] (mapv name blocks))))
 
 (def conditions [])
 

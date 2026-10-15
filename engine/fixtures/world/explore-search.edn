@@ -12,13 +12,13 @@
  :cases
  [{:name "legs-walked-until-the-target-is-in-scan-range"
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 60 :max-legs 16 :timeout-s 130})]]
+                                     :use-notes false :max-distance 60 :max-legs 16 :spend {:time 130}})]]
    :expect [{:event {:source :job :kind :search.done :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :search.not-found} :for-s 140 :until {:source :job :kind :search.done}}
             {:no-event {:source :system :kind :error} :for-s 60}]}
   {:name "tightest-spacing-still-ends-found"
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 4 :scan-radius 8
-                                     :use-notes false :max-distance 60 :max-legs 24 :timeout-s 130})]]
+                                     :use-notes false :max-distance 60 :max-legs 24 :spend {:time 130}})]]
    :expect [{:event {:source :job :kind :search.done :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :search.not-found} :for-s 140 :until {:source :job :kind :search.done}}
             {:no-event {:source :system :kind :error} :for-s 60}]}]}

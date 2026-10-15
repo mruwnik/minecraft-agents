@@ -14,8 +14,7 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
-            [jobs.lib.util :as u]
-            [jobs.survival.fight-back :as fight-back]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "A hostile is near: fight it (jobs.survival.fight-back, best weapon equipped) when the odds are fair,
@@ -38,7 +37,7 @@
   Done once no real danger (as the hostile-near trigger, jobs.lib.danger, in sight) is within :radius
   (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
   Done at once (0 hostiles) with no real danger near. The weapons are the call's :use :tools (default the
-  weapons carried; the old :weapons substrings map in legacy-args), handed to both children as their :use :tools.
+  weapons carried), handed to both children as their :use :tools.
   Ends :done when the danger is gone or left heard-only; :nothing-possible with the retreat's own kind and cause (:cannot_escape)
   when the retreat ends otherwise, or :no_response after ::max-unchanged (3) calls in a row that change
   neither the body's cell, its health, the dangers near nor the fight's hits; never :continue. Its time budget (::time-s) may end it :limit-reached; the hostile trigger fires again at once while the danger stands.
@@ -72,11 +71,6 @@
 (def target [])
 
 (def defaults {:spend {:time ::time-s} :use {:tools :attack}})
-
-(defn legacy-args
-  "An old caller's :weapons (item name parts) as the call's :use {:tools [...]}."
-  [args]
-  (fight-back/legacy-args args))
 
 (defn weapons
   "The weapons of the call: its :use :tools, else the default substrings."
