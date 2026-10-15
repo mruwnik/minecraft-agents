@@ -2,8 +2,11 @@
   "The night shuts an open door of the closed room the body stands in instead of digging in behind it."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.events :as events]
             [engine.hut-shelter-test :refer [hut-world door-states door-open? roof door]]
+            [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
+            [engine.perception :as perception]
             [engine.registry :as registry]
             [jobs.lib.world-files :as ew]
             [jobs.lib.shelter :as sh]
@@ -38,6 +41,29 @@
           (is (= [] (st/calls p "place")) "nothing placed")
           (is (= [] (st/calls p "dig")) "nothing dug")
           (is (= [] (st/entries eng :shelter)) "no dig-in shelter"))))))
+
+(defn seeing-setup
+  "st/setup over a body that has seen only what its sight passes showed (perception over the fake), as live."
+  [world]
+  (let [clock (atom 1000000)
+        [_ sink] (tu/legacy-capture-sink)
+        p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} world))
+        _ (st/dawn-after! p st/default-dawn)
+        per (perception/create (fake-raw/create p) {:now (constantly 1000000)})
+        eng (core/create {:primitives (perception/wrap p per) :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                          :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p}))
+
+(deftest night-looks-up-at-the-roof-before-judging-the-room-open-and-then-shuts-its-open-door
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (seeing-setup (merge (open-door-hut {:x 5 :y 64 :z 0} {}) {:inventory st/dirt-stack}))]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 12))
+          (is (false? (door-open? p)) "the door is shut")
+          (is (= [] (st/calls p "place")) "nothing placed"))))))
 
 (deftest night-shuts-an-open-door-of-a-room-with-a-hole-in-its-wall
   (async done

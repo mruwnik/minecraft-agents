@@ -422,8 +422,9 @@
     (note-spawn-lost! c)
     (retract-gone-bed! c)
     (cond
-      (and bed-way (sh/unlooked-for-bed? p (ctx/view c)))
-      (do (await (look/look-around! c))
+      (or (and bed-way (sh/unlooked-for-bed? p (ctx/view c))) (sh/unlooked-for-roof? p (ctx/view c)))
+      (do (when-let [roof (sh/unseen-roof-cell p)] (await (sense/look-at! c roof)))
+          (await (look/look-around! c))
           (ctx/remember! c :night-looked {:cell (sh/feet p)} sh/night-looked-policy)
           :again)
       (not (sh/night? p)) (await (morning/morning! c))

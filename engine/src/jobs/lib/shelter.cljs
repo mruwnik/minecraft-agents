@@ -669,6 +669,24 @@
                            (empty? (mem/entries view :sleep-failed))
                            (shut-in-hut? p)))))))
 
+(defn unseen-roof-cell
+  "[x y z] of the first cell over the feet, within room-roof-height and under no seen solid block, the body has not seen:
+  a level look never shows the roof, so it is looked at before the room is judged open; nil when roofed or all seen."
+  [p]
+  (let [{:keys [x y z]} (feet p)]
+    (loop [dy 1]
+      (when (<= dy (room-roof-height))
+        (let [cell {:x x :y (+ y dy) :z z}]
+          (cond
+            (solid-at? p cell) nil
+            (look/unseen? p [cell]) [x (+ y dy) z]
+            :else (recur (inc dy))))))))
+
+(defn unlooked-for-roof?
+  "Night, awake, not looked from here (looked-here?) and a cell over the feet never seen (unseen-roof-cell): look up."
+  [p view]
+  (boolean (and (night? p) (not (sleeping? p)) (not (looked-here? p view)) (unseen-roof-cell p))))
+
 (defn breached-home?
   "Whether the roofed body's room has a hole: a :bed-open entry (a bed found open) within breach-near blocks and the body
   not shut in a closed room. A bare roof alone is no sign of a home."
