@@ -168,6 +168,45 @@ check "no second restart without a new change" "$(cat "$T/main/dashboard/.shadow
 kill "$(cat "$T/main/dashboard/.shadow-cljs/server.pid")" 2>/dev/null
 unset MC_COMPILE_MIN_START_MB MC_COMPILE_MAIN_IDLE_S MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
 
+# N compiles run at once (MC_COMPILE_SLOTS), one per checkout. The stub compile logs start/end <checkout> and holds until go-<checkout> exists.
+seen() { local i; for ((i=0; i<${3:-20}*10; i++)); do grep -q "$2" "$1" 2>/dev/null && return 0; sleep 0.1; done; return 1; }
+printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\nk=$(basename "$(dirname "$PWD")")\necho "start $k" >> "%s/par.log"\nwhile [ ! -e "%s/go-$k" ]; do sleep 0.1; done\necho "end $k" >> "%s/par.log"\n' "$T" "$T" "$T" > "$T/bin/npx"
+export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_SLOTS=2
+: > "$T/par.log"
+timeout 30 "$C" engine test >/dev/null 2>&1 & P1=$!
+seen "$T/par.log" "start repo"
+timeout 30 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & P2=$!
+seen "$T/par.log" "start wt"; check "two checkouts compile at once" "$?" 0
+"$C" engine test >/dev/null 2>&1 & P3=$!  # no timeout wrapper: the ticket is named after this pid
+touch "$T/go-wt"; wait $P2; check "second checkout compile rc" "$?" 0
+for _ in $(seq 1 100); do ls "$MC_COMPILE_QUEUE" | grep -q -- "-$P3\$" && break; sleep 0.1; done; sleep 1
+check "a second compile of a busy checkout waits for it" "$(grep -c "start repo" "$T/par.log")" 1
+touch "$T/go-repo"; wait $P1; check "first compile rc" "$?" 0
+wait $P3; check "queued same-checkout compile rc" "$?" 0
+check "queued same-checkout compile ran after" "$(grep -c "start repo" "$T/par.log")" 2
+kill "$(cat "$T/wt/dashboard/.shadow-cljs/server.pid")" 2>/dev/null
+rm -f "$T/go-repo" "$T/go-wt" "$T/wt/dashboard/.shadow-cljs/server.pid" "$T/main/dashboard/.shadow-cljs/server.pid"
+
+# a compile waiting for a slot starts its server first (never while holding a slot) and keeps it alive past the idle time
+export MC_COMPILE_SLOTS=1 MC_COMPILE_SERVER_IDLE_S=1 MC_COMPILE_MAIN_IDLE_S=1 MC_COMPILE_IDLE_POLL_S=1
+: > "$T/par.log"
+timeout 60 "$C" engine test >/dev/null 2>&1 & P1=$!
+seen "$T/par.log" "start repo"
+timeout 60 "$T/main/tools/compile" engine test >/dev/null 2>&1 & P2=$!
+timeout 60 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & P3=$!
+seen "$T/main/dashboard/.shadow-cljs/server.pid" .; check "a queued compile starts its server before it gets a slot" "$?" 0
+seen "$T/wt/dashboard/.shadow-cljs/server.pid" .
+MS=$(cat "$T/main/dashboard/.shadow-cljs/server.pid" 2>/dev/null); WS=$(cat "$T/wt/dashboard/.shadow-cljs/server.pid" 2>/dev/null)
+sleep 3
+kill -0 "$MS" 2>/dev/null; check "a queued main compile's server outlives the idle time" "$?" 0
+kill -0 "$WS" 2>/dev/null; check "a queued worktree compile's server outlives the idle time" "$?" 0
+touch "$T/go-repo" "$T/go-main" "$T/go-wt"
+wait $P1; check "slot holder rc" "$?" 0
+wait $P2; check "queued main compile rc" "$?" 0
+wait $P3; check "queued worktree compile rc" "$?" 0
+kill "$MS" "$WS" 2>/dev/null
+unset MC_COMPILE_MIN_START_MB MC_COMPILE_SLOTS MC_COMPILE_SERVER_IDLE_S MC_COMPILE_MAIN_IDLE_S MC_COMPILE_IDLE_POLL_S
+
 # the idle watcher kills only the server it was started for (pid + start time), and never while a compile runs
 W="$TOOLS/compile-idle-watch"
 starttime() { awk '{print $22}' "/proc/$1/stat"; }

@@ -4,8 +4,8 @@
 #   --output-dir DIR  build into DIR instead of the build's :output-dir (shadow-cljs --config-merge; relative to dashboard/).
 # Both project words use the one shadow-cljs project in dashboard/ (engine builds write to engine/out); `dashboard test` is the :dashboard-test build.
 #
-# Every cljs compile in this repo goes through here: it queues on /tmp/mc-compile.lock (the machine-wide compile lock, taken
-# here, so never wrap this in flock) and runs `npx shadow-cljs compile|release <build>` in dashboard/. The shadow-cljs CLI
+# Every cljs compile in this repo goes through here: it queues for one of MC_COMPILE_SLOTS (default 3) machine-wide compile
+# slots (/tmp/mc-compile.lock, then .1, .2: taken here, so never wrap this in flock), one compile per checkout, and runs `npx shadow-cljs compile|release <build>` in dashboard/. The shadow-cljs CLI
 # connects to the checkout's long-lived `shadow-cljs server` when one runs (no JVM per compile, ~2 s instead of ~30 s); this
 # script starts that server first, detached, when it is not running and memory allows.
 #
@@ -13,18 +13,19 @@
 #               For the owner's UI rebuilds (dashboard ui/server) and nothing else.
 #   --release   `shadow-cljs release` instead of `compile` (the :viewer build); the engine :body-release build always does.
 #   A build-time .clj (engine/src, dashboard/src) newer than the running server restarts it before the compile (shadow-cljs does not reload macros).
-#   --stop      stop the checkout's server (needs the lock; for restarts; no build argument).
+#   --stop      stop the checkout's server (waits for the checkout's compile; for restarts; no build argument).
 #
-# Queue: a ticket file <lane>-<ns>-<pid> per waiter in /tmp/mc-compile.queue (lane 0 priority, 1 normal); the first live
-# ticket waits on the flock in 2 s blocking slices (so it wakes the moment the lock frees, competing fairly with any plain
-# `flock` waiter; a non-blocking poll every 0.2 s would lose to them), so order is priority lane first, then arrival.
-# Dead waiters' tickets are pruned. Running under a process that holds the lock (an ancestor with the lock file open, e.g.
+# Queue: a ticket file <lane>-<ns>-<pid> per waiter in /tmp/mc-compile.queue (lane 0 priority, 1 normal; content "<wait|ready> <dir>"),
+# polled every 0.2 s, so order is priority lane first, then arrival. A waiter first takes its checkout's lock
+# (dashboard/.shadow-cljs/compile.lock) once no earlier ticket is for the same checkout, starts or restarts the server there
+# (never while holding a compile slot) and marks the ticket ready; then it takes a free slot once fewer than MC_COMPILE_SLOTS
+# ready tickets are ahead of it. Dead waiters' tickets are pruned. Running under a process that holds the lock (an ancestor with the lock file open, e.g.
 # `flock /tmp/mc-compile.lock tools/compile ...`) would wait for itself for ever: it exits 2 at once instead.
 # Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
 # A server started outside the main checkout (a git worktree: integration batches, test copies) runs under a `server` slot of
 # tools/res-slot (held for the server's life, so its JVM counts against the memory floor; kind apart from compiles, max 4); a start queues for a slot up to RES_SLOT_MAX_WAIT_MS (default 45 min, a status line every MC_COMPILE_WAIT_LINE_S=60 s), then exits 75 (retry).
 # Every server stops itself after an idle time without a compile: MC_COMPILE_SERVER_IDLE_S (default 150) for a worktree, MC_COMPILE_MAIN_IDLE_S (1800) for the main checkout (tools/compile-idle-watch, started with it: kills only that pid with that start time, never during a compile; the next compile restarts it).
-# That start waits before queueing (under <lock>.start only), so the global compile lock is free meanwhile.
+# A waiter holding its checkout writes last-use.compiling, so its server is not stopped while it waits for a slot.
 # A build that prints an :undeclared-var, :undeclared-ns or :fn-arity warning exits 1 (shadow-cljs itself exits 0).
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
 set -u
@@ -32,6 +33,7 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 lock=${MC_COMPILE_LOCK:-/tmp/mc-compile.lock}   # env overrides are for tools/compile.test.sh only
 queue=${MC_COMPILE_QUEUE:-/tmp/mc-compile.queue}
 MIN_START_MB=${MC_COMPILE_MIN_START_MB:-3500}
+slots=${MC_COMPILE_SLOTS:-3}   # compiles at once machine-wide; each runs in its own checkout's server, whose memory res-slot gates
 
 usage() { echo "usage: tools/compile <engine|dashboard> <build>... [--priority] [--release] [--output-dir DIR] | <engine|dashboard> --stop" >&2; exit 2; }
 
@@ -81,7 +83,7 @@ start_server() {
     exit 1
   fi
   echo "tools/compile: starting the shadow-cljs server" >&2
-  # the background subshell must drop the lock fds (8, 9) too, or it holds the lock until the server dies
+  # the background subshell must drop the lock fds (7, 9) too, or it holds the lock until the server dies
   slot=(); loops=300
   idle=${MC_COMPILE_MAIN_IDLE_S:-1800}
   [ "$(cd "$repo" && git rev-parse --git-dir)" = "$(cd "$repo" && git rev-parse --git-common-dir)" ] || { idle=${MC_COMPILE_SERVER_IDLE_S:-150}
@@ -90,7 +92,7 @@ start_server() {
   # The server is shared by every agent: double fork so it is no descendant of the caller's shell, and drop the agent label
   # (LIVE_TESTS_AGENT_ID), so agent-usage attributes it to no agent (agent_reap of the starter must not kill it). The idle watcher stops it.
   rm -f "$dir/.shadow-cljs/launch.pid"
-  ( (exec 8>&- 9>&-; echo "$BASHPID" > "$dir/.shadow-cljs/launch.pid"; cd "$dir" && exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 "${slot[@]}" npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) & )
+  ( (exec 7>&- 9>&-; echo "$BASHPID" > "$dir/.shadow-cljs/launch.pid"; cd "$dir" && exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 "${slot[@]}" npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) & )
   last_line=$SECONDS
   for ((i=0; loops < 0 || i < loops; i++)); do
     p=$(server_pid) && [ -s "$dir/.shadow-cljs/nrepl.port" ] && [ -s "$dir/.shadow-cljs/http.port" ] && break
@@ -109,68 +111,73 @@ start_server() {
   # idle watcher: a server must not outlive its use (a worktree's holds a server slot; every JVM holds ~2 GB)
   touch "$dir/.shadow-cljs/last-use"
   sp=$(server_pid)
-  ( (exec 8>&- 9>&-; exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 "$repo/tools/compile-idle-watch" "$sp" "$(awk '{print $22}' "/proc/$sp/stat")" "$dir/.shadow-cljs/last-use" \
+  ( (exec 7>&- 9>&-; exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 "$repo/tools/compile-idle-watch" "$sp" "$(awk '{print $22}' "/proc/$sp/stat")" "$dir/.shadow-cljs/last-use" \
     "$idle" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) & )
   sleep 3
 }
 
-# A worktree's server start may queue a long time for a server slot: do it before queueing, under a lock of its own, so the
-# global compile lock is never held meanwhile. The start lock keeps two compiles from both starting a server; the queued
-# part then finds the server running.
-if [ "$stop" = 0 ] && [ "$(cd "$repo" && git rev-parse --git-dir)" != "$(cd "$repo" && git rev-parse --git-common-dir)" ]; then
-  exec 8>>"$lock.start"
-  flock 8
-  server_pid >/dev/null || start_server
-  exec 8>&-
-fi
-
-mkdir -p "$queue"
-ticket="$queue/$lane-$(date +%s%N)-$$"
-: > "$ticket"
-exec 9>>"$lock"
-out=
-trap 'rm -f "$ticket" "$out"' EXIT
-t0=$(date +%s.%N)
-while :; do
-  for f in "$queue"/*; do  # prune tickets of dead waiters
-    [ -e "$f" ] || continue
-    pid=${f##*-}
-    kill -0 "$pid" 2>/dev/null || rm -f "$f"
-  done
-  first=$(ls "$queue" 2>/dev/null | head -n1)
-  if [ "$queue/$first" = "$ticket" ]; then
-    if flock -w 2 9; then
-      first=$(ls "$queue" 2>/dev/null | head -n1)  # a priority ticket may have arrived while we blocked
-      [ "$queue/$first" = "$ticket" ] && break
-      flock -u 9
-    fi
-  else
-    sleep 0.2
-  fi
-done
-t1=$(date +%s.%N)
-rm -f "$ticket"
-
-if [ "$stop" = 1 ]; then
-  p=$(server_pid) || { echo "no shadow-cljs server running" >&2; exit 0; }
-  kill "$p"; exit 0
-fi
-
 # shadow-cljs does not reload macro / build-hook .clj files into a running server: one changed since it started means stale
-# macros (bogus "undeclared" errors until a restart). We hold the lock, so no compile is running; restart before ours.
-if p=$(server_pid) && [ -n "$(find "$repo/engine/src" "$repo/dashboard/src" "$repo/dashboard/bench-src" -name '*.clj' -newer "/proc/$p" -print -quit 2>/dev/null)" ]; then
+# macros (bogus "undeclared" errors until a restart). Called holding the checkout lock, so no compile of it is running.
+restart_if_stale() {
+  local p
+  p=$(server_pid) && [ -n "$(find "$repo/engine/src" "$repo/dashboard/src" "$repo/dashboard/bench-src" -name '*.clj' -newer "/proc/$p" -print -quit 2>/dev/null)" ] || return 0
   echo "tools/compile: a build-time .clj file changed since the server started; restarting it" >&2
   kill "$p"
   for _ in $(seq 1 100); do kill -0 "$p" 2>/dev/null || break; sleep 0.2; done
   kill -0 "$p" 2>/dev/null && { echo "tools/compile: the old server (pid $p) did not stop" >&2; exit 1; }
+  return 0
+}
+
+mkdir -p "$queue" "$dir/.shadow-cljs"
+exec 7>>"$dir/.shadow-cljs/compile.lock"
+if [ "$stop" = 1 ]; then
+  flock 7
+  p=$(server_pid) || { echo "no shadow-cljs server running" >&2; exit 0; }
+  kill "$p"; exit 0
 fi
-server_pid >/dev/null || start_server
+
+ticket="$queue/$lane-$(date +%s%N)-$$"
+echo "wait $dir" > "$ticket"
+out=
+trap 'rm -f "$ticket" "$out"; [ "$(cat "$dir/.shadow-cljs/last-use.compiling" 2>/dev/null)" = "$$" ] && rm -f "$dir/.shadow-cljs/last-use.compiling"' EXIT
+t0=$(date +%s.%N)
+own=0
+while :; do
+  same=0; ready=0
+  for f in $(ls "$queue" 2>/dev/null); do
+    [ "$queue/$f" = "$ticket" ] && break
+    kill -0 "${f##*-}" 2>/dev/null || { rm -f "$queue/$f"; continue; }  # a dead waiter's ticket
+    read -r st d < "$queue/$f" 2>/dev/null || continue
+    [ "$d" = "$dir" ] && same=1
+    [ "$st" = ready ] && ready=$((ready + 1))
+  done
+  if [ "$own" = 0 ] && [ "$same" = 0 ] && flock -n 7; then
+    own=1
+    echo $$ > "$dir/.shadow-cljs/last-use.compiling"
+    restart_if_stale
+    server_pid >/dev/null || start_server
+    touch "$dir/.shadow-cljs/last-use"
+    echo "ready $dir" > "$ticket"
+    continue
+  fi
+  if [ "$own" = 1 ] && [ "$ready" -lt "$slots" ]; then
+    for ((i = 0; i < slots; i++)); do
+      s=$lock; [ "$i" = 0 ] || s=$lock.$i
+      exec 9>>"$s"
+      flock -n 9 && break 2
+      exec 9>&-
+    done
+  fi
+  sleep 0.2
+done
+t1=$(date +%s.%N)
+rm -f "$ticket"
 
 cd "$dir" || exit 1
-touch .shadow-cljs/last-use; echo $$ > .shadow-cljs/last-use.compiling  # keeps the idle watcher off while compiling and for the idle time after
-# the server (and any detached child) must not inherit the lock fd
+touch .shadow-cljs/last-use  # last-use.compiling (written when queued) keeps the idle watcher off while compiling, last-use for the idle time after
+# the server (and any detached child) must not inherit the lock fds
 out=$(mktemp)
-npx shadow-cljs "$verb" "${builds[@]}" "${extra[@]}" 9>&- 2>&1 | tee "$out"
+npx shadow-cljs "$verb" "${builds[@]}" "${extra[@]}" 7>&- 9>&- 2>&1 | tee "$out"
 code=${PIPESTATUS[0]}
 # shadow-cljs only warns on a call to a missing var or namespace (a moved function) or with the wrong number of args: the build passes and the job throws or reads nil at run time.
 if [ "$code" = 0 ] && grep -qE 'WARNING #[0-9]+ - :(undeclared-(var|ns)|fn-arity)' "$out"; then
