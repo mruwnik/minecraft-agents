@@ -2718,11 +2718,12 @@
 
 (deftest stay-level-declines-on-the-surface-and-says-what-to-do
   (let [stay {:stay-level true}]
-    (is (= :on-surface (:reason (mine/surface-cause stay [15 15]))))
-    (is (re-find #"access.stair" (:text (mine/surface-cause stay [0 4]))))
-    (is (nil? (mine/surface-cause stay [0 0])) "sealed from the sky")
-    (is (nil? (mine/surface-cause stay [])) "no light data")
-    (is (nil? (mine/surface-cause {} [15 15])) "only :stay-level declines")))
+    (is (= :on-surface (:reason (mine/surface-cause stay 15))))
+    (is (re-find #"access.stair" (:text (mine/surface-cause stay 15))))
+    (is (nil? (mine/surface-cause stay 12)) "a cave mouth or overhang keeps spilled sky light")
+    (is (nil? (mine/surface-cause stay 0)) "sealed from the sky")
+    (is (nil? (mine/surface-cause stay nil)) "no light data")
+    (is (nil? (mine/surface-cause {} 15)) "only :stay-level declines")))
 
 (deftest the-end-text-names-the-other-ores-picked
   (is (nil? (mine-end/ores-text nil)))

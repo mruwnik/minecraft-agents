@@ -250,20 +250,20 @@
     (contract/never :no-block "no :block to mine")))
 
 (defn surface-cause
-  "{:reason :on-surface :text ..} for a :stay-level run whose body cells (sky-lights: the sky light of the feet and head cell, as
-  loaded) see the sky: its tunnel would breach open at the first cell. nil otherwise, and without light data."
-  [args sky-lights]
-  (when (and (:stay-level args) (some pos? sky-lights))
+  "{:reason :on-surface :text ..} for a :stay-level run whose head cell has full sky light (head-light 15, as loaded): it stands in
+  the open and its tunnel would breach open at the first cell. Less light is a cave mouth or an overhang (spilled light): nil, as without light data."
+  [args head-light]
+  (when (and (:stay-level args) (= 15 head-light))
     {:reason :on-surface
      :text "mine :stay-level declined: the body stands in the open; cut a stair down first (access.stair {:dir :down :y 16}) or run it without :stay-level with a :level"}))
 
 (defn on-surface
-  "surface-cause of the body's own cells, before the run has begun (a resumed run stands where it dug)."
+  "surface-cause of the body's head cell, before the run has begun (a resumed run stands where it dug)."
   [c]
   (let [p (:primitives c)
-        {:keys [x y z] :as f} (shelter/feet p)]
+        {:keys [x y z]} (shelter/feet p)]
     (when-not (or (:goal (ctx/mem c)) (:side-cut? (:args c)))
-      (surface-cause (:args c) (keep #(shelter/sky-light-at p %) [f {:x x :y (inc y) :z z}])))))
+      (surface-cause (:args c) (shelter/sky-light-at p {:x x :y (inc y) :z z})))))
 
 (def can-start?
   (cond/and (checks/refusing :here "where it was submitted" away)
