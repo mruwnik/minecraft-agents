@@ -140,3 +140,33 @@
           (is (= {:kind :condition-failed :cause :no-bucket} (kc end))))
         (let [{:keys [end]} (await (obsidian-end (ot/world ot/ground [ot/pick {:name "water_bucket" :count 1}]) {:count 1}))]
           (is (= {:kind :condition-failed :cause :no-lava} (kc end))))))))
+
+(defn ^:async obsidian-with-slow-lava
+  "make-obsidian on a lava lake where the poured water never turns it, the engine's clock moving a second with every
+  primitive call; the 'wait' calls it made, and the end state."
+  [args]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/seeing-all (tu/fake-on-floor (ot/world ot/lava-lake [ot/pick {:name "water_bucket" :count 1}])))
+        now (tu/act-clock clock p 1000)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now now
+                          :events (events/make {:body "Fake" :sinks [sink] :now now})})
+        s {:eng eng :p p :seen seen}
+        placed (atom 0)]
+    (.override (.-world p) "place"
+               (fn [token a impl]
+                 (if (= "water_bucket" (.-item a))
+                   (do (swap! placed inc) #js {:status "placed" :block "water"})
+                   (impl token a))))
+    (core/submit! eng (list obsidian args) {})
+    (await (tu/run-until-empty eng 80))
+    (assoc s :waits (count (filter #(= "wait" (.-name %)) (.-calls (.-world p)))) :placed @placed)))
+
+(deftest the-wait-for-the-conversion-ends-with-the-engines-limit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [waits placed seen]} (await (obsidian-with-slow-lava {:count 1 :spend {:job-time 6}}))]
+          (is (= 1 placed))
+          (is (= [:job-time] (mapv :reason (filter #(= :stopped (:kind %)) @seen))) "the engine's limit ends it")
+          (is (< waits 6) "the limit cuts the wait between its half-second looks"))))))

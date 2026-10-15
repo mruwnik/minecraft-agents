@@ -16,7 +16,7 @@
   Takes seen obsidian first (jobs.gather.mine). Else it needs a water bucket carried (an empty bucket is filled at seen water) and a seen
   lava cell with seen air above it and a stand cell beside that air (a standable cell with no lava beside it, never over lava):
   it walks to the stand (go-to, which keeps off lava), pours the water at the air cell above the lava, waits for the lava to turn to obsidian,
-  scoops the water back up, and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
+  scoops the water back up (also in the cleanup of a cut run), and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
   Ends :done {:got n} at :count obsidian gained. Else it ends with :got n in its data: condition-failed :no-bucket (no water bucket and no bucket
   with water seen) or :no-lava (no seen lava with open air above and a safe stand); nothing-possible :pour-failed (two sites in a row where
   the pour or the conversion failed: moving lava gives cobblestone) or :unreachable (the stand could not be walked to); the mine child's
@@ -92,20 +92,44 @@
           :continue :continue
           :blocked)))))
 
+(def settle-looks 6)
+
 (defn ^:async pour!
-  "Pour at the air cell above the lava of site, wait for the conversion, scoop the water back. :again, or :failed."
-  [c {:keys [lava above]}]
-  (let [p (:primitives c)
-        st (.-status (await (ctx/act c :place (clj->js {:pos above :item "water_bucket"}))))]
+  "Pour at the air cell above the lava of site and note it in memory (:poured); settle! waits and scoops. :again, or :failed."
+  [c {:keys [lava above] :as site}]
+  (let [st (.-status (await (ctx/act c :place (clj->js {:pos above :item "water_bucket"}))))]
     (if-not (= "placed" st)
       :failed
-      (do (dotimes [_ 6]
-            (when (not= "obsidian" (u/seen-name p lava))
-              (await (ctx/act c :wait (clj->js {:ms 500})))))
-          (let [made? (= "obsidian" (u/seen-name p lava))]
-            (when (= "water" (u/seen-name p above))
-              (await (ctx/act c :place (clj->js {:pos above :item "bucket"}))))
-            (if made? :again :failed))))))
+      (do (ctx/update-mem! c assoc :poured (assoc site :looks 0)) :again))))
+
+(defn ^:async settle!
+  "One look at the poured water: the lava turned (or the looks are spent) scoops the water back and books the success
+  or the failed site; else half a second is waited
+  (a pause child, so the engine's limit and cuts apply between looks). :again, or :continue while the pause waits."
+  [c]
+  (let [p (:primitives c)
+        {:keys [lava above looks]} (:poured (ctx/mem c))
+        made? (= "obsidian" (u/seen-name p lava))]
+    (if (or made? (>= looks settle-looks))
+      (do (when (= "water" (u/seen-name p above))
+            (await (ctx/act c :place (clj->js {:pos above :item "bucket"}))))
+          (ctx/update-mem! c #(-> (dissoc % :poured)
+                                  (cond-> made? (assoc :failed 0)
+                                          (not made?) (-> (update :tried (fnil conj []) lava) (update :failed (fnil inc 0))))))
+          :again)
+      (let [e (await (child/pause! c 0.5 :waiting-for-conversion))]
+        (if (= :continue e)
+          :continue
+          (do (ctx/update-mem! c update-in [:poured :looks] inc) :again))))))
+
+(defn ^:async cleanup
+  "However the run ended: water poured and not yet scooped back is taken up again."
+  [c _]
+  (let [{:keys [above]} (:poured (ctx/mem c))]
+    (when (and above (= "water" (u/seen-name (:primitives c) above)))
+      (await (ctx/act c :place (clj->js {:pos above :item "bucket"}))))
+    (ctx/update-mem! c dissoc :poured)
+    (ctx/end c :done nil {})))
 
 (defn ^:async mine-seen!
   "The seen obsidian mined with a mine child: :again, :continue while it works, or its ending when it got none."
@@ -123,6 +147,7 @@
         got (gained c)]
     (cond
       (>= got count) (ctx/end c :done nil {:got got})
+      (:poured (ctx/mem c)) (await (settle! c))
       (seq (seen-of c ["obsidian"])) (await (mine-seen! c got))
       (>= (:failed (ctx/mem c) 0) 2) (end c :nothing-possible :pour-failed "water on the lava did not make obsidian twice in a row")
       (zero? (carried c "water_bucket"))
@@ -138,11 +163,10 @@
         (let [w (await (walk! c (:stand site) 1))]
           (case w
             :continue :continue
-            :there (let [r (await (pour! c site))]
-                     (if (= :again r)
-                       (do (ctx/update-mem! c assoc :failed 0) :again)
-                       (do (ctx/update-mem! c #(-> % (update :tried (fnil conj []) (:lava site)) (update :failed (fnil inc 0))))
-                           :again)))
+            :there (if (= :again (await (pour! c site)))
+                     :again
+                     (do (ctx/update-mem! c #(-> % (update :tried (fnil conj []) (:lava site)) (update :failed (fnil inc 0))))
+                         :again))
             (end c :nothing-possible :unreachable (str "could not walk to the stand at " (pr-str (:stand site))))))
         (end c :condition-failed :no-lava "no seen lava with open air above and a safe stand beside it")))))
 
