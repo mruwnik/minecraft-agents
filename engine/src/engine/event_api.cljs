@@ -5,6 +5,7 @@
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [engine.args :as a]
             [clojure.string :as str]
+            [clojure.walk :as walk]
             [cljs.reader :as reader]
             [engine.core :as core]
             [engine.core.quote :as quote]
@@ -377,7 +378,8 @@
                 entry (get (:jobs eng) sym)]
             (when entry
               (merge
-               (select-keys entry [:target :ways :defaults])
+               (cond-> (select-keys entry [:target :ways :defaults])
+                 (:defaults entry) (update :defaults (partial walk/postwalk #(if (fn? %) :from-args %))))
                {:ok true :kind :job :name sym
                 :doc (short-text (:doc entry) (setting "catalog-doc-limit"))
                 :args (bounded-value (a/described sym (:args entry)) 0 (volatile! catalog-args-budget))})))

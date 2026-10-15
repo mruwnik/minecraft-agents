@@ -534,12 +534,12 @@
     (is (= {:closed? false :reason :leak :cells 15} (select-keys bounded [:closed? :reason :cells])))))
 
 (deftest catalog-entry-shows-target-ways-and-defaults
-  (let [eng {:jobs {'jobs.demo.go {:doc "go" :args {} :target [:pos] :ways [:walk :stair] :defaults {:spend {:time 30} :least 1}}
+  (let [eng {:jobs {'jobs.demo.go {:doc "go" :args {} :target [:pos] :ways [:walk :stair] :defaults {:spend {:time 30 :food (fn [_] 2)} :least 1}}
                     'jobs.demo.old {:doc "old" :args {}}}}
         entry (event-api/catalog-entry eng "job" "jobs.demo.go")]
     (is (= [:pos] (:target entry)))
     (is (= [:walk :stair] (:ways entry)))
-    (is (= {:spend {:time 30} :least 1} (:defaults entry)))
+    (is (= {:spend {:time 30 :food :from-args} :least 1} (:defaults entry)) "a default set by a fn of the args reads :from-args")
     (is (not-any? #(contains? (event-api/catalog-entry eng "job" "jobs.demo.old") %) [:target :ways :defaults]))))
 
 (def quoted-job

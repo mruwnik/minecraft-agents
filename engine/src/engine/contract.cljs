@@ -180,9 +180,10 @@
                          (if (seq ways) (str "its ways are " (str/join ", " ways)) "it has no ways")))))
 
 (defn resolve-settings
-  "defaults with each qualified keyword value read with (lookup k), a settings key."
-  [defaults lookup]
-  (walk/postwalk #(if (qualified-keyword? %) (lookup %) %) defaults))
+  "defaults with each qualified keyword value read with (lookup k), a settings key, and each fn value called with
+  args, the call's args (a spend that grows with the work asked)."
+  [defaults lookup args]
+  (walk/postwalk #(cond (qualified-keyword? %) (lookup %) (fn? %) (% args) :else %) defaults))
 
 (def merged-keys "Call keys a call merges over the defaults line by line." #{:spend :floor :use})
 

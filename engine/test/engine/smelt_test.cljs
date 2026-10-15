@@ -268,7 +268,8 @@
           (is (empty? (of-kind seen :job.limit-reached))))))))
 
 (deftest the-default-time-budget-covers-the-cook-of-the-count
-  (let [time-of #(get-in (smelt/legacy-args %) [:spend :time])]
+  (let [time-of #(get-in (contract/freeze {:defaults (contract/resolve-settings smelt/defaults (partial settings/get smelt/settings) %)} % nil)
+                         [:spend :time])]
     (is (< 640 (time-of {:item "raw_iron" :count 64})))
     (is (< 640 (time-of {:item "raw_iron"})) "no count: up to a stack")
     (is (< (time-of {:item "raw_iron" :count 3}) (time-of {:item "raw_iron" :count 64})))

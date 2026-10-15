@@ -72,7 +72,7 @@
   [c def]
   (let [view ((:view c))
         caller (when (seq (:slots c)) (:contract (mem/job-mem view (:root c) (pop (:slots c)))))
-        defaults (contract/resolve-settings (:defaults def) #(settings/get (:settings def) %))
+        defaults (contract/resolve-settings (:defaults def) #(settings/get (:settings def) %) (:args c))
         call (fill-use c def (contract/freeze (assoc def :defaults defaults) (:args c) (:call caller)))]
     (if (:call caller)
       (let [t (now (:engine c))]

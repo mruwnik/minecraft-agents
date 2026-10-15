@@ -427,16 +427,14 @@
 
 (def target [:item])
 
-(def defaults {:spend {:time ::time-s}})
-
-(defn legacy-args
+(defn default-time
   "The call's default :spend :time: ::time-s for the walk and fetch plus the furnace's cook of the count (a stack when
-  nil) of each item; a given :spend :time stays."
-  [{:keys [item count] :as args}]
-  (let [n (* (or count 64) (if (coll? item) (clojure.core/count item) 1))
-        cook-s (/ (settings/ticks->ms (* n (sp/cook-ticks "furnace"))) 1000)]
-    (cond-> args
-      (nil? (get-in args [:spend :time])) (assoc-in [:spend :time] (+ (settings/get settings ::time-s) cook-s)))))
+  nil) of each item."
+  [{:keys [item count]}]
+  (let [n (* (or count 64) (if (coll? item) (clojure.core/count item) 1))]
+    (+ (settings/get settings ::time-s) (/ (settings/ticks->ms (* n (sp/cook-ticks "furnace"))) 1000))))
+
+(def defaults {:spend {:time default-time}})
 
 (defn not-smeltable
   "At the call's start: impossible when the :item is one no furnace cooks, else nil."

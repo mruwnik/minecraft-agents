@@ -63,6 +63,16 @@
                    (select-keys data [:name :cause :used :call])))
             (is (= 6 (get-in data [:report :uses :time])))))))))
 
+(deftest a-default-spend-may-be-a-fn-of-the-args
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'slow (assoc slow :defaults {:spend {:time (fn [{:keys [n]}] (* 2 n))}})})]
+          (core/submit! eng '(slow {:n 2}) {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (= {:kind :limit-reached :cause {:line :time :spend 4}} (stopped seen))))))))
+
 (def counted
   (assoc slow :done? (fn [_] (if (when-let [n (:done-throws @world)] (>= (:slow-rounds @world 0) n)) (throw (js/Error. "boom")) {:done? false :units :cells :done 5 :left 3}))))
 
