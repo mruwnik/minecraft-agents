@@ -22,7 +22,7 @@
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch false})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :need :cause {:item "cobblestone"}}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :need :item "cobblestone"}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} :for-s 20}]
    :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}
   {:name "fetch-nothing-fetchable-fails-clearly"

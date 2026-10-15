@@ -26,5 +26,5 @@
   {:name "wall-without-a-slit-declines"
    :blocks [[:set [19 1 16] "stone"]]
    :act [[:job (jobs.survival.block-arrow-gap {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-ranged-danger}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:cause :already}} :within-s 30 :of-job true}]
    :after [[:block [19 1 16] "stone"] [:not-block [18 0 16] "cobblestone"]]}]}
