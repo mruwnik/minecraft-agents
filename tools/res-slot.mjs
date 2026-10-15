@@ -33,6 +33,9 @@ export const hasHeavyMarker = (cwd) => {
 }
 export const usableSlots = (free, max, reserve, heavy) => heavy ? free : free.filter((i) => i < max - reserve)
 
+// Slot indices a run tries, in order: `want` own slots (0..want-1); a heavy run tries the reserved ones (max-reserve..max-1) first, still `want` in all.
+export const candidateSlots = (want, max, reserve, heavy) => [...(heavy ? [...Array(reserve).keys()].map((j) => max - reserve + j) : []), ...Array(want).keys()].slice(0, want)
+
 export const slotDir = () => process.env.RES_SLOT_DIR ?? '/tmp/mc-res'
 const dir = slotDir
 const lockFile = (kind, i) => path.join(dir(), `${kind}.${i}`)
@@ -74,6 +77,13 @@ export const logRun = (entry) => fs.appendFileSync(path.join(dir(), 'log.jsonl')
 // Pure: total need of grants still ramping.
 export const reservedMb = (grants, now, rampMs, alive = () => true) =>
   grants.filter((g) => now - g.t < rampMs && alive(g.pid)).reduce((a, g) => a + g.needMb, 0)
+// Heavy waiters: <dir>/heavy-wait/<kind>.<pid>. While one is alive, light runs of the kind do not start, so a freed slot reaches the heavy run.
+export const isHeavy = (cwd = process.cwd()) => !!process.env.RES_SLOT_HEAVY || hasHeavyMarker(cwd)
+export const heavyWaitFile = (kind, pid = process.pid, n = '') => path.join(dir(), 'heavy-wait', `${kind}.${pid}${n && `.${n}`}`)
+export const heavyWaiting = (kind, self = process.pid) => {
+  const d = path.join(dir(), 'heavy-wait')
+  return fs.existsSync(d) && fs.readdirSync(d).some((f) => f.startsWith(`${kind}.`) && Number(f.split('.')[1]) !== self && pidAlive(Number(f.split('.')[1])))
+}
 const grantDir = () => path.join(dir(), 'grants')
 const pidAlive = (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
 const readGrants = () => {
@@ -138,16 +148,19 @@ const main = async () => {
   const t0 = Date.now()
   let lastLine = t0, lastReason = ''
   for (;;) {
+    if (heavy) fs.mkdirSync(path.dirname(heavyWaitFile(kind)), { recursive: true }), fs.writeFileSync(heavyWaitFile(kind), '')
     const free = usableSlots([...Array(k.max).keys()].filter((i) => !held(kind, i)), k.max, k.reserve ?? 0, heavy)
     const gated = await withGate(() => {
       const reserved = currentReserved()
-      const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved })
+      const lightDeferred = !heavy && heavyWaiting(kind)
+      const d = decide({ freeSlots: lightDeferred ? 0 : free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved })
       if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now() }))
       return d
     })
     const d = gated
     if (d.action === 'run') {
       const t1 = Date.now()
+      fs.rmSync(heavyWaitFile(kind), { force: true })
       const dropGrant = () => fs.rmSync(path.join(grantDir(), `${process.pid}.json`), { force: true })
       for (const i of free) {
         const code = await tryRun(kind, i, cmd)
@@ -156,7 +169,7 @@ const main = async () => {
         process.exit(code)
       }
       dropGrant()
-    } else if (d.action === 'busy') { console.error(`res-slot: busy (${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}), retry later (gave up waiting after ${Math.round((Date.now() - t0) / 1000)}s)`); process.exit(75) }
+    } else if (d.action === 'busy') { fs.rmSync(heavyWaitFile(kind), { force: true }); console.error(`res-slot: busy (${d.why}${free.length ? '' : `; held by ${holders(kind, k.max)}`}), retry later (gave up waiting after ${Math.round((Date.now() - t0) / 1000)}s)`); process.exit(75) }
     else {
       // live-tests phase line (TEST_EVENTS=1), once per change of reason (digits ignored: free MB drifts)
       const reason = d.why.replace(/\d+/g, '#')

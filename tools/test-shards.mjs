@@ -12,7 +12,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { slotArgs, logRun, slotDir } from './res-slot.mjs'
+import { slotArgs, logRun, slotDir, candidateSlots, isHeavy, heavyWaitFile } from './res-slot.mjs'
 import { expectedMs, runTimeoutS, lastFinished, isolate, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -100,10 +100,17 @@ export const eventForwarder = (write, shardNs) => {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// Runs cmd under the first free slot; polls until one is free.
+// Runs cmd under the first free slot; polls until one is free. A heavy run (integration) also tries the reserved slot first and, while it waits, keeps light res-slot runs from starting.
+let waitSeq = 0
 const runInSlot = async (slots, cmd, opts, onOut = () => {}, onWait = () => {}) => {
   const t0 = Date.now()
-  for (let first = true; ; first = false) for (let i = 0; i < slots; i++) {
+  const heavy = isHeavy(), order = candidateSlots(slots, RES.kinds.tests.max, RES.kinds.tests.reserve ?? 0, heavy)
+  const wait = heavyWaitFile('tests', process.pid, waitSeq++)
+  if (heavy) fs.mkdirSync(path.dirname(wait), { recursive: true }), fs.writeFileSync(wait, '')
+  try { return await tryInSlots(order, slots, cmd, opts, onOut, onWait, t0) } finally { fs.rmSync(wait, { force: true }) }
+}
+const tryInSlots = async (order, slots, cmd, opts, onOut, onWait, t0) => {
+  for (let first = true; ; first = false) for (const [n, i] of order.entries()) {
     const t1 = Date.now()
     const r = await new Promise((res) => {
       let out = ''
@@ -115,7 +122,7 @@ const runInSlot = async (slots, cmd, opts, onOut = () => {}, onWait = () => {}) 
       logRun({ kind: 'tests', needMb: SHARD_MB, waitedS: Math.round((t1 - t0) / 1000), ranS: Math.round((Date.now() - t1) / 1000), code: r.code, cmd: cmd.join(' ') })
       return r
     }
-    if (first && i === slots - 1) onWait()
+    if (first && n === order.length - 1) onWait()
     await sleep(1000 + Math.random() * 500)
   }
 }
