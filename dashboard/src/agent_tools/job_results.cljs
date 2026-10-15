@@ -8,6 +8,7 @@
 (def history-limit 1000)
 (def result-limit 8000) ; Events a result read scans back (a job's outcome sits among scheduler noise).
 (def event-limit 8)
+(def scan-deadline-ms 15000) ; A read of the result-limit window is some 16 pages; a loaded body answers each slowly.
 (def terminal-kinds
   "Every event kind that ends a job (the engine's end statuses); one definition for results and observe wakes."
   #{:completed :failed :cancelled :stopped})
@@ -92,7 +93,7 @@
    :recorded. A shared deadline limits the whole read; reducing a read-only page after
    its byte cap is safe."
   [get! socket-path {:keys [signal deadline snap limit record-ids] :or {limit history-limit}}]
-  (let [deadline (or deadline (+ (js/Date.now) 3000))
+  (let [deadline (or deadline (+ (js/Date.now) (if (> limit history-limit) scan-deadline-ms 3000)))
         read (fn [endpoint]
                (when (>= (js/Date.now) deadline)
                  (throw (doto (js/Error. "job history deadline exceeded") (aset "code" "ETIMEDOUT"))))
@@ -136,10 +137,12 @@
                                 (with-recorded (:events history) (get-in history [:snapshot :generation-id]) (:recorded history) [id])
                                 partial?
                                 (get-in history [:snapshot :state :next-id])))
-        deadline (or deadline (+ (js/Date.now) 3000))
-        recent-history (await (history! get! socket-path {:signal signal :deadline deadline :limit history-limit :record-ids [id]}))
-        recent (project-from recent-history false)]
-    (if (and (:ok recent) (= :complete (:history recent)))
+        recent-history (await (history! get! socket-path {:signal signal :deadline (or deadline (+ (js/Date.now) 3000))
+                                                          :limit history-limit :record-ids [id]}))
+        recent (project-from recent-history false)
+        next-id (get-in recent-history [:snapshot :state :next-id])]
+    (if (or (and (:ok recent) (= :complete (:history recent)))
+            (never-issued? id next-id))
       recent
       (let [history (await (history! get! socket-path {:signal signal :deadline deadline :limit result-limit :record-ids [id]
                                                        :snap (:snapshot recent-history)}))]

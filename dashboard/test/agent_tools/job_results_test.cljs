@@ -102,3 +102,37 @@
                            false)]
     (is (= :stopped (:status r)))
     (is (= {:kind :nothing-possible :cause {:ways {:a :x}} :reason :ways} (:ending r)))))
+
+(defn unknown-id-get
+  "A get! over a log of n filler events whose snapshot says ids below j5 were issued; counts its requests in calls."
+  [n calls]
+  (let [log (mapv #(event % "filler" :memory_written {}) (range 1 (inc n)))
+        edn (fn [v] (js/Promise.resolve {:status 200 :content-type "application/edn" :text (pr-str v)}))]
+    (fn [_ path _]
+      (swap! calls inc)
+      (case path
+        "/snapshot" (edn {:generation-id "g" :cursor {:stream-id "s" :seq n} :state {:next-id 5}})
+        (let [after (js/parseInt (second (re-find #"after=(\d+)" path)))
+              size (js/parseInt (second (re-find #"limit=(\d+)" path)))]
+          (edn {:gap? false :events (vec (take size (drop after log)))}))))))
+
+(deftest an-id-the-engine-never-issued-is-unknown-without-scanning-the-wide-window
+  (let [calls (atom 0)]
+    (async done
+      (.then (results/read! (unknown-id-get 8000 calls) "sock" "j999" {})
+             (fn [result]
+               (is (= :unknown-job (:reason result)))
+               (is (<= @calls 6) (str @calls " requests"))
+               (done))))))
+
+(deftest the-wide-window-is-read-in-full-when-every-page-is-slow
+  (let [real-now (.-now js/Date)
+        clock (atom 0)
+        inner (unknown-id-get 8000 (atom 0))
+        get! (fn [socket path opts] (swap! clock + 400) (inner socket path opts))]
+    (set! (.-now js/Date) (fn [] @clock))
+    (async done
+      (-> (results/history! get! "sock" {:limit results/result-limit})
+          (.then (fn [history] (count (:events history))) (fn [error] (.-code error)))
+          (.then (fn [outcome] (is (= results/result-limit outcome))))
+          (.finally (fn [] (set! (.-now js/Date) real-now) (done)))))))
