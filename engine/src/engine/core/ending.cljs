@@ -4,8 +4,7 @@
   one ends the job, one that asks for a look gets a look round first), freezes the
   call keys at the first round, asks done? before the start (and, at the first round of a call with a :least other than 1, its quote for the
   least check) and adds :because to the ending the job's round returns. Once started, the job's round decides when it is done."
-  (:require [engine.condition :as condition]
-            [engine.contract :as contract]
+  (:require [engine.contract :as contract]
             [engine.core.base :refer [cut-error manual-job now owner?]]
             [engine.core.limits :as limits]
             [engine.ctx :as ctx]
@@ -206,13 +205,8 @@
   (if (or (not (contract-job? def)) (::wrapped def))
     def
     (do (doseq [entry (:conditions def)]
-          (when-not (and (vector? entry)
-                         (or (and (= :fn (first entry)) (fn? (second entry)))
-                             (and (= :holds (first entry)) (seq? (second entry)) (or (= 2 (count entry)) (keyword? (nth entry 2)))
-                              (nil? (condition/check-job-form (second entry))))))
-            (throw (ex-info (str "a condition is [:fn f] or [:holds form reason?], not " (pr-str entry)
-                                 (when-let [m (when (= :holds (first entry)) (condition/check-job-form (second entry)))] (str ": " m)))
-                            {:condition entry}))))
+          (when-not (and (vector? entry) (= :fn (first entry)) (fn? (second entry)))
+            (throw (ex-info (str "a condition is [:fn f], not " (pr-str entry)) {:condition entry}))))
         (assoc def ::wrapped true :check #(check def %) :round #(run def %)))))
 
 (defn registry "jobs with every contract job wrapped." [jobs] (some-> jobs (update-vals wrap)))

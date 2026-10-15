@@ -53,9 +53,8 @@
   "The condition compiler the body uses (engine.condition).
   Takes a form (data, or text from a command line). Returns the language's refusal
   {:ok false :reason :at :message :allowed}, or {:ok true :when f :explain g}:
-    f  (fn [world memory & _]), true only on a definite true
-    g  (fn [world memory]) -> [{:form :value}], reads f's state without advancing it
-  Each call makes fresh state (held-for timers, scan cache), kept in this process only."
+    f  (fn [world memory & _]), true when the condition's status is :ok
+    g  (fn [world memory]) -> its status, every part in :parts"
   [form]
   (let [read (condition/read-condition form)
         compiled (when (:ok read) (condition/compile (:form read)))]
@@ -63,14 +62,10 @@
       (not (:ok read)) read
       (not (:ok compiled)) compiled
       :else
-      (let [node (:node compiled)
-            state (atom {})]
+      (let [status #((:check compiled) {:primitives %1 :view (constantly %2)})]
         {:ok true
-         :when (fn [world memory & _]
-                 (let [{:keys [value] :as r} (condition/evaluate node {:world world :memory memory} @state)]
-                   (reset! state (:state r))
-                   (true? value)))
-         :explain (fn [world memory] (condition/explain node {:world world :memory memory} @state))}))))
+         :when (fn [world memory & _] (= :ok (first (status world memory))))
+         :explain status}))))
 
 (defn condition-trigger
   "The trigger behind every ad hoc entry: it holds when that entry's own
@@ -107,11 +102,11 @@
     (if compiled (swap! fns assoc id compiled) (swap! fns dissoc id))))
 
 (defn explain
-  "{:id id :terms [{:form :value} ...]}: every sub-term of entry id's condition
-  with its value now, root first; {:id id :message text} when it has none."
+  "{:id id :status s}: entry id's condition status now, every part in :parts; {:id id :message text} when it has
+  none."
   [eng id]
   (if-let [g (get-in @(get-in eng [:triggers :condition :fns] (atom {})) [id :explain])]
-    {:id id :terms (g (:primitives eng) (mem/view (:store eng)))}
+    {:id id :status (g (:primitives eng) (mem/view (:store eng)))}
     {:id id :message (str id " has no condition to explain (not an ad hoc entry, or not in the register)")}))
 
 ;; ------------------------------------------------------------------ validation

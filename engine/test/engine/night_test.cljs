@@ -4,7 +4,6 @@
   sleeping player in sight): logged out in short stints until morning, then roofed or buried: the queue runs, else
   dig in."
   (:require [cljs.test :refer [deftest is async]]
-            [engine.condition :as condition]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -435,8 +434,7 @@
         cause (fn [world args]
                 (let [p (tu/fake world)]
                   (ctx/check-wait {:primitives p :args args :slots [:x]
-                                   :view (fn [] {:data mem/empty-data :now 0})
-                                   :holds (fn [form a] (condition/job-cause {:world p :memory {:data mem/empty-data :now 0}} a form))}
+                                   :view (fn [] {:data mem/empty-data :now 0})}
                                   {:conditions conditions})))]
     (is (= :not-night (:reason (cause {:time noon} {}))))
     (is (= (contract/impossible :offline-forbidden) (cause {:time night} {:offline-allowed false})))

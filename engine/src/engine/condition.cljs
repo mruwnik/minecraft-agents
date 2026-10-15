@@ -1,29 +1,18 @@
 (ns engine.condition
-  "Trigger conditions: an EDN list in the look of a job expression, read (never
-  evaluated) and walked against a fixed table of operators and facts. See
-  README.md, Conditions.
+  "Agent conditions: an EDN list in the look of a job expression, read (never evaluated) and compiled against the
+  library the default trigger set names (engine.triggers/library): its names and literals only, so nothing an agent
+  writes runs code of its own. See README.md, Conditions.
 
     (and (< (inventory \"bread\") 8)
-         (< (distance-to (place :home)) 16))
+         (because :far-from-home (< (distance-to (place :home)) 16)))
 
-  compile validates a form once, at registration, into a node or a refusal
-  {:ok false :reason :at :allowed}. evaluate walks a node against the world
-  and memory: pure, with the held-for timers and the scan cache threaded
-  through as state. when-fn wraps a node as a register :when with its own
-  state. Values are numbers, strings, keywords, positions, booleans or
-  unknown; unknown propagates and and/or are three-valued, and only
-  (known? x) turns an unknown into a definite boolean."
+  compile gives {:ok true :check f}, f a fn of a ctx {:primitives :view} returning a status (engine.contract), or a
+  refusal {:ok false :reason :at :message :allowed}."
   (:refer-clojure :exclude [compile])
   (:require [clojure.string :as str]
-            [clojure.walk :as walk]
             [cljs.tools.reader.edn :as edn]
             [cljs.tools.reader.reader-types :as rt]
-            [engine.condition.facts :as facts]
             [engine.triggers :as triggers]))
-
-(def unknown facts/unknown)
-
-(defn unknown? [v] (= unknown v))
 
 ;; ------------------------------------------------------------------ reader
 
@@ -63,34 +52,39 @@
 ;; ------------------------------------------------------------------ the vocabulary
 
 (def ops
-  "Operators by symbol. :args is the type every argument must have (:any for
-  =), :arity an exact count or :min a least one."
-  {'and {:sig "(and boolean ...)" :min 1 :args :boolean}
-   'or {:sig "(or boolean ...)" :min 1 :args :boolean}
-   'not {:sig "(not boolean)" :arity 1 :args :boolean}
+  "The operators' grammar by symbol (their fns are in the library). :args is the type every argument must have (:any
+  for =), :arity an exact count, else :min and :max."
+  {'and {:sig "(and status ...)" :min 1 :args :status}
+   'or {:sig "(or status ...)" :min 1 :args :status}
+   'not {:sig "(not status)" :arity 1 :args :status}
    '< {:sig "(< number number)" :arity 2 :args :number}
    '> {:sig "(> number number)" :arity 2 :args :number}
    '<= {:sig "(<= number number)" :arity 2 :args :number}
    '>= {:sig "(>= number number)" :arity 2 :args :number}
-   '= {:sig "(= a a), a a number, string, keyword or boolean" :arity 2 :args :any}
-   'held-for {:sig "(held-for seconds boolean)" :arity 2}
+   '= {:sig "(= a a), a a number, string or keyword" :arity 2 :args :any}
+   'because {:sig "(because keyword string? status)" :min 2 :max 3}
    'known? {:sig "(known? form)" :arity 1}})
 
-(def comparable #{:number :string :keyword :boolean})
+(def comparable #{:number :string :keyword})
 
-(defn fact-sig [sym {:keys [args type]}]
+(defn entry "The library entry sym names (an operator's has no :type), or nil." [sym]
+  (let [e (get triggers/library sym)] (when (:type e) e)))
+
+(defn entry-sig [sym {:keys [args type]}]
   (str "(" (str/join " " (cons sym (map name args))) ") -> " (name type)))
 
 (defn sig [sym]
   (if-let [op (get ops sym)]
     (:sig op)
-    (fact-sig sym (get triggers/facts sym))))
+    (entry-sig sym (entry sym))))
 
 (def vocabulary
   "Every signature, operators first: what a refusal for an unknown symbol lists."
-  (into (mapv :sig (vals ops)) (map (fn [[sym f]] (fact-sig sym f))) (sort-by key triggers/facts)))
+  (into (mapv :sig (vals ops)) (keep (fn [[sym e]] (when (:type e) (entry-sig sym e)))) (sort-by key triggers/library)))
 
-;; ------------------------------------------------------------------ validator
+(defn op-fn [sym] (:fn (get triggers/library sym)))
+
+;; ------------------------------------------------------------------ compiler
 
 (defn literal-type [x]
   (cond
@@ -103,295 +97,93 @@
 
 (defn check-args
   "The checked children of form's arguments, or the first refusal."
-  [args path]
-  (reduce (fn [acc [i a]]
-            (let [r (check a (conj path i))]
+  [args]
+  (reduce (fn [acc a]
+            (let [r (check a)]
               (if (refusal? r) (reduced r) (conj acc r))))
-          [] (map-indexed vector args)))
+          [] args))
 
-(defn arity-ok? [{:keys [arity min]} n]
-  (if arity (= arity n) (>= n min)))
+(defn arity-ok? [{:keys [arity min max]} n]
+  (if arity (= arity n) (and (>= n min) (or (nil? max) (<= n max)))))
 
 (defn type-refusal [sym child expected]
   (refuse :type (:form child)
           (str (pr-str (:form child)) " is a " (name (:type child)) "; " sym " wants a " (name expected) " here")
           :allowed [(sig sym)]))
 
-(defn check-held-for [form [secs inner] path]
-  (cond
-    (not (and (number? secs) (>= secs 0)))
-    (refuse :bad-duration form "held-for takes a literal number of seconds (0 or more), then a boolean"
-            :allowed [(sig 'held-for)])
-
-    :else
-    (let [c (check inner (conj path 1))]
-      (cond
-        (refusal? c) c
-        (not= :boolean (:type c)) (type-refusal 'held-for c :boolean)
-        :else {:op :held-for :form form :type :boolean :ms (* 1000 secs) :path path :children [c]}))))
+(defn typed
+  "The node of (sym children...) when each child has its type in types, else the first mismatch's refusal."
+  [form sym children types]
+  (if-let [[c t] (first (remove (fn [[c t]] (= t (:type c))) (map vector children types)))]
+    (type-refusal sym c t)
+    {:form form :type (if (entry sym) (:type (entry sym)) :status) :value (apply (op-fn sym) (map :value children))}))
 
 (defn check-known
-  "known? takes a fact or a call, of any type: a literal is always known, so
-  it is refused rather than answered."
-  [form [inner] path]
-  (let [c (check inner (conj path 0))]
+  "known? takes an entry or a call, of any type: a literal is always known, so it is refused rather than answered."
+  [form [inner]]
+  (let [c (check inner)]
     (cond
       (refusal? c) c
-      (= :literal (:op c)) (refuse :type inner
+      (literal-type inner) (refuse :type inner
                                    (str (pr-str inner) " is a literal and always known; known? wants a fact or a call here")
                                    :allowed [(sig 'known?)])
-      :else {:op :known? :form form :type :boolean :children [c]})))
+      :else {:form form :type :status :value ((op-fn 'known?) (:value c))})))
 
-(defn check-op [form sym args path]
-  (let [op (get ops sym)
-        args-type (:args op)
-        children (check-args args path)]
+(defn check-op [form sym args]
+  (let [args-type (:args (get ops sym))
+        children (check-args args)
+        [a b] (map :type (when-not (refusal? children) children))]
     (cond
       (refusal? children) children
-
-      (= :any args-type)
-      (let [[a b] (map :type children)]
-        (if (and (= a b) (comparable a))
-          {:op sym :form form :type :boolean :children children}
-          (refuse :incomparable form (str "= compares two values of one type, not a " (name a) " and a " (name b))
-                  :allowed [(:sig op)])))
-
-      :else
-      (if-let [bad (first (remove #(= args-type (:type %)) children))]
-        (type-refusal sym bad args-type)
-        {:op sym :form form :type :boolean :children children}))))
-
-(defn check-fact [form sym args path]
-  (let [{:keys [type] :as fact} (get triggers/facts sym)
-        children (check-args args path)
-        mismatch (when-not (refusal? children)
-                   (first (remove (fn [[c t]] (= t (:type c))) (map vector children (:args fact)))))]
-    (cond
-      (refusal? children) children
-      mismatch (type-refusal sym (first mismatch) (second mismatch))
-      :else {:op :fact :fact sym :form form :type type :children children})))
+      (= 'because sym) (typed form sym children (if (= 2 (count args)) [:keyword :status] [:keyword :string :status]))
+      (not= :any args-type) (typed form sym children (repeat args-type))
+      (and (= a b) (comparable a)) (typed form sym children [a a])
+      :else (refuse :incomparable form (str "= compares two values of one type, not a " (name a) " and a " (name b))
+                    :allowed [(sig sym)]))))
 
 (defn check
-  "The checked node of form at path, or a refusal naming the sub-form."
-  [form path]
+  "The checked node {:form :type :value} of form, value a literal or a checker, or a refusal naming the sub-form."
+  [form]
   (let [head (when (seq? form) (first form))
         args (when (seq? form) (rest form))
         lit (literal-type form)]
     (cond
-      lit {:op :literal :form form :type lit :value form}
+      lit {:form form :type lit :value form}
 
       (quoted? form) (refuse :quoted form quoted-message)
 
       (not (and (seq? form) (symbol? head)))
       (refuse :not-a-form form
               (str (pr-str form) " is not a value or a call; facts are called like (health) and literals are"
-                   " numbers, strings, keywords, true or false")
+                   " numbers, strings or keywords")
               :allowed vocabulary)
 
-      (not (or (contains? ops head) (contains? triggers/facts head)))
+      (not (or (contains? ops head) (entry head)))
       (refuse :unknown-symbol form
               (str head " is not in the condition language: no variables, arithmetic or functions of your own;"
                    " when nothing here says it, ask for a new fact")
               :allowed vocabulary)
 
-      (not (arity-ok? (or (get ops head) {:arity (count (:args (get triggers/facts head)))}) (count args)))
+      (not (arity-ok? (or (get ops head) {:arity (count (:args (entry head)))}) (count args)))
       (refuse :arity form (str head " takes " (sig head) ", not " (count args) " argument(s)") :allowed [(sig head)])
 
-      (= 'held-for head) (check-held-for form args path)
-      (= 'known? head) (check-known form args path)
-      (contains? ops head) (check-op form head args path)
-      :else (check-fact form head args path))))
+      (= 'known? head) (check-known form args)
+      (contains? ops head) (check-op form head args)
+      :else (let [children (check-args args)]
+              (if (refusal? children) children (typed form head children (:args (entry head))))))))
 
-(def boolean-forms
-  (filterv #(or (str/ends-with? % "boolean") (not (str/includes? % "->"))) vocabulary))
+(def status-forms
+  (filterv #(or (str/ends-with? % "status") (not (str/includes? % "->"))) vocabulary))
 
 (defn compile
-  "{:ok true :node node} for a condition form, or a refusal {:ok false
-  :reason :at :message :allowed}. Reasons: :quoted :not-a-form
-  :unknown-symbol :arity :type :incomparable :bad-duration :not-boolean."
+  "{:ok true :check f} for a condition form, f a fn of a ctx {:primitives :view} returning a status, or a refusal
+  {:ok false :reason :at :message :allowed}. Reasons: :quoted :not-a-form :unknown-symbol :arity :type :incomparable
+  :not-a-status."
   [form]
-  (let [r (check form [])]
+  (let [r (check form)]
     (cond
       (refusal? r) r
-      (not= :boolean (:type r))
-      (refuse :not-boolean form (str "a condition must be true or false; " (pr-str form) " is a " (name (:type r)))
-              :allowed boolean-forms)
-      :else {:ok true :node r})))
-
-;; ------------------------------------------------------------------ evaluator
-
-(defn k-and [vs]
-  (cond (some false? vs) false (some unknown? vs) unknown :else true))
-
-(defn k-or [vs]
-  (cond (some true? vs) true (some unknown? vs) unknown :else false))
-
-(def compare-fns {'< < '> > '<= <= '>= >= '= =})
-
-(defn combine [op vs]
-  (cond
-    (= 'and op) (k-and vs)
-    (= 'or op) (k-or vs)
-    (some unknown? vs) unknown
-    (= 'not op) (not (first vs))
-    :else (apply (compare-fns op) vs)))
-
-(defn read-fact
-  "[value cache'] of fact sym with arg values vs: unknown args give unknown
-  unread; a :scan fact is served from cache while younger than :refresh-s."
-  [sym vs env now cache cache']
-  (let [{:keys [read cost refresh-s]} (get triggers/facts sym)
-        k [sym vs]
-        hit (get cache k)]
-    (cond
-      (some unknown? vs) [unknown cache']
-      (not= :scan cost) [(apply read env vs) cache']
-      (and hit (< (- now (:t hit)) (* 1000 refresh-s))) [(:value hit) (assoc cache' k hit)]
-      :else (let [v (apply read env vs)] [v (assoc cache' k {:t now :value v})]))))
-
-(defn walk
-  "[tree state'] for node: tree is {:form :value :children [tree]}. Every
-  child is evaluated, so held-for timers do not depend on their siblings.
-  state' holds only the timers and cache entries this walk used."
-  [node env now state state']
-  (let [[kids st] (reduce (fn [[ts st] c] (let [[t st2] (walk c env now state st)] [(conj ts t) st2]))
-                          [[] state'] (:children node))
-        vs (mapv :value kids)
-        done (fn [v st] [{:form (:form node) :value v :children kids} st])]
-    (case (:op node)
-      :literal (done (:value node) st)
-      :fact (let [[v cache] (read-fact (:fact node) vs env now (:cache state) (:cache st))]
-              (done v (assoc st :cache cache)))
-      :held-for (let [inner (first vs)
-                      since (get-in state [:since (:path node)] now)]
-                  (cond
-                    (unknown? inner) (done unknown st)
-                    (false? inner) (done false st)
-                    :else (let [remaining-ms (max 0 (- (+ since (:ms node)) now))
-                                value (zero? remaining-ms)]
-                            [{:form (:form node) :value value :children kids :remaining-ms remaining-ms}
-                             (assoc-in st [:since (:path node)] since)])))
-      :known? (done (not (unknown? (first vs))) st)
-      (done (combine (:op node) vs) st))))
-
-(defn run [node env state]
-  (walk node env (or (:now env) (:now (:memory env))) state {:since {} :cache {}}))
-
-(defn evaluate
-  "{:value v :state state'} of a compiled node now. env is {:world primitives
-  :memory view} plus an optional :now (ms; default the view's :now). state is
-  {} at first, then the :state of the previous call for the same instance."
-  [node env state]
-  (let [[tree st] (run node env state)]
-    {:value (:value tree) :state st}))
-
-(defn explain
-  "Every sub-term of node with its value now, depth first, root first:
-  [{:form f :value v} ...]. Active held-for terms also include :remaining-ms.
-  It reads state but does not advance it."
-  [node env state]
-  (->> (tree-seq (comp seq :children) :children (first (run node env state)))
-       (mapv #(select-keys % [:form :value :remaining-ms]))))
-
-(defn when-fn
-  "A register :when, (fn [world memory args & _]) -> boolean, for a compiled
-  node, with its own held-for timers and scan cache. Make one per registered
-  trigger instance. It holds only on a definite true."
-  [node]
-  (let [state (atom {})]
-    (fn [world memory _args & _]
-      (let [{:keys [value] :as r} (evaluate node {:world world :memory memory} @state)]
-        (reset! state (:state r))
-        (true? value)))))
-
-;; ------------------------------------------------------------------ job conditions
-
-(defn fact-value
-  "The value of fact sym with argument values vs now, for env {:world :memory}: unknown when the body cannot know."
-  [env sym vs]
-  (if-let [{:keys [read]} (get triggers/facts sym)]
-    (apply read env vs)
-    (throw (js/Error. (str sym " is not a fact; the facts: " (str/join ", " (sort (keys triggers/facts))))))))
-
-(defn with-args
-  "form with every (arg :k) replaced by args' value of k, or nil when one is missing or not a literal."
-  [form args]
-  (let [bad (volatile! false)
-        out (walk/prewalk (fn [x]
-                            (if (and (seq? x) (= 'arg (first x)))
-                              (let [v (get args (second x))] (if (literal-type v) v (do (vreset! bad true) x)))
-                              x))
-                          form)]
-    (when-not @bad out)))
-
-(def negated '{< ">=" > "<=" <= ">" >= "<" = "!="})
-
-(defn value-text [v]
-  (cond (unknown? v) "unknown"
-        (and (number? v) (not (integer? v))) (.toFixed v 1)
-        :else (pr-str v)))
-
-(defn term-text
-  "A sub-term as the wait text shows it: a literal's value, else the call without brackets and its value."
-  [{:keys [form value]}]
-  (if (seq? form)
-    (str (str/join " " (map #(if (or (string? %) (keyword? %)) (name %) (pr-str %)) form)) " " (value-text value))
-    (value-text value)))
-
-(defn cmp-text
-  "A comparison term as text: its operator turned round when it failed, as it is when it holds (under a not)."
-  [{:keys [form children] :as t} holds?]
-  (let [sym (when (seq? form) (first form))
-        op (when (contains? negated sym) (if holds? (name sym) (negated sym)))]
-    (cond
-      (not op) (term-text t)
-      (some #(unknown? (:value %)) children) (term-text (first (filter #(unknown? (:value %)) children)))
-      :else (str (term-text (first children)) " " op " " (term-text (second children))))))
-
-(defn failing
-  "The sub-term that makes tree not true: and/or descend to their first child that is not true (an or has only
-  such children); a not or a comparison is the term."
-  [{:keys [form children] :as t}]
-  (if (and (seq? form) (#{'and 'or} (first form)))
-    (failing (first (remove #(true? (:value %)) children)))
-    t))
-
-(defn failing-text
-  "The wait text of the failing term t: a not shows the term it negates, anything else the comparison or fact."
-  [{:keys [form children] :as t}]
-  (if (and (seq? form) (= 'not (first form)))
-    (str "not " (cmp-text (first children) true))
-    (cmp-text t false)))
-
-(defn arg-keys [form]
-  (->> (tree-seq seq? seq form) (filter #(and (seq? %) (= 'arg (first %)))) (keep second) distinct vec))
-
-(defn check-job-form
-  "nil when a job's condition form is in the language and can run (called when the job is registered), else the
-  message of the first refusal. held-for is out (a job keeps no timers); (arg :k) stands for a value of any type."
-  [form]
-  (let [bad-arg (some #(when-not (and (= 2 (count %)) (keyword? (second %))) %)
-                      (filter #(and (seq? %) (= 'arg (first %))) (tree-seq seq? seq form)))
-        ks (arg-keys form)
-        trials (reduce (fn [ms k] (for [m ms v [0 "" :k true]] (assoc m k v))) [{}] ks)
-        results (map #(compile (walk/prewalk (fn [x] (if (and (seq? x) (= 'arg (first x))) (get % (second x) x) x)) form)) trials)]
-    (cond
-      (some #{'held-for} (tree-seq seq? seq form)) (str "condition " (pr-str form) ": held-for is for triggers only")
-      bad-arg (str "condition " (pr-str form) ": " (pr-str bad-arg) " is not (arg :key)")
-      (some :ok results) nil
-      :else (str "condition " (pr-str form) ": " (:message (first results))))))
-
-(defn first-fact [form]
-  (some #(when (and (seq? %) (contains? triggers/facts (first %))) (keyword (first %))) (tree-seq seq? rest form)))
-
-(defn job-cause
-  "nil when a job's condition form holds now for a call with args, else {:fact :form :text}: the fact the failing
-  part reads, the form, and the failing comparison as the wait text shows it (\"inventory torch 0 < 4\"). The form is
-  the trigger language plus (arg :k) for the call's arg (check-job-form vets it at registration); one whose arg is
-  missing, not a literal or of the wrong type holds (the job's args check reports it). Unknown fails."
-  [env args form]
-  (let [{:keys [ok node]} (some-> (with-args form args) compile)
-        tree (when ok (first (run node env {})))]
-    (when-not (or (not ok) (true? (:value tree)))
-      (let [t (failing tree)]
-        {:fact (or (first-fact (:form t)) :condition) :form (pr-str form) :text (failing-text t)}))))
+      (not= :status (:type r))
+      (refuse :not-a-status form (str "a condition must be a status; " (pr-str form) " is a " (name (:type r)))
+              :allowed status-forms)
+      :else {:ok true :check (:value r)})))

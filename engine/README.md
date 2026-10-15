@@ -308,10 +308,8 @@ among them; a reflex ends `:condition-failed`); `:never` ends `:impossible`; `:l
 `:later`. Old conditions are read as statuses (`contract/read-old`). A condition
 `[:fn f]` gives nil (start), a cause (skip: a listed job not started stays queued and waits, else `:condition-failed`),
 `(contract/impossible cause)` (ends `:impossible`, the job leaves the queue) or `(contract/look-first cause)` (the
-engine looks round once, hook `:look/around`, then asks again). `[:holds form reason?]` is a fact form (Conditions,
-plus `(arg :k)` for the call's arg; a missing one passes): not true (false or unknown) skips with `{:reason (reason, else
-the fact) :fact :form :text}`, the wait text the failing comparison (`waiting: inventory torch 0 < 4`); no `held-for`.
-`(ctx/fact c 'inventory "torch")` reads one fact. Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` is asked before the start only, ahead of the conditions (an impossible one aside; a throw counts as not done, warn `job.done_failed`): a goal that holds ends `:done` `:already` and never waits; once started, the job's round decides when it is done; done?'s units go in the `:report` of every ending but an impossible, cut-off or `:duplicate-call` one, and its `:data` (the result so far) is the data of a `:limit-reached` ending without its own; a reflex run that ends `:already` is fruitless (backoff); endings are `{:kind :cause :because :report :data}`. A
+engine looks round once, hook `:look/around`, then asks again). Checks of current state are `jobs.lib.cond` fns
+(Conditions): `(def can-start? (cond/because :day-not-come (cond/daytime)))`. Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` is asked before the start only, ahead of the conditions (an impossible one aside; a throw counts as not done, warn `job.done_failed`): a goal that holds ends `:done` `:already` and never waits; once started, the job's round decides when it is done; done?'s units go in the `:report` of every ending but an impossible, cut-off or `:duplicate-call` one, and its `:data` (the result so far) is the data of a `:limit-reached` ending without its own; a reflex run that ends `:already` is fruitless (backoff); endings are `{:kind :cause :because :report :data}`. A
 started frame left without an ending (its root ends or is dropped, its parent clears its slot) gets `:cut-off`.
 
 **Quotes (engine.core.quote).** `{:uses {:job-time fig :health fig :food fig :items {name fig} :wear {tool fig}} :yields
@@ -444,23 +442,29 @@ To see a trigger fire without its real job, register it against `jobs.debug.noti
 
 ### Conditions
 
-An ad hoc `:when` can be a condition: an EDN list read by `engine.condition` against a fixed table, never evaluated.
+An ad hoc `:when` can be a condition: an EDN list `engine.condition/compile` maps onto the library `defaults.edn`
+names (`:library`, `jobs.lib.cond`), never evaluated; only library names and literals.
 
 ```clojure
-(and (< (inventory "bread") 8) (< (distance-to (place :home)) 16))
-(held-for 5 (hostile-near 10))
+(and (not (in-water)) (< (inventory "bread") 8) (because :day-not-come (daytime)))
 (not (known? (place :home)))
 (or (not (known? (since :bred-cows))) (> (since :bred-cows) 1200))
 ```
 
-- Operators: `and or not < > <= >= =`, `(held-for seconds cond)`, `(known? x)`.
-- Facts: numbers `(health) (food) (inventory "item") (free-slots) (distance-to pos) (blocks-near "name" r) (seen blocks only)
-  (since :kind) (time-of-day)`; a position `(place :kind)`; booleans `(daytime) (mounted) (in-water) (hostile-near r, a real danger) (burning) (suffocating)
-  (night-unsafe) (wearing "item")`. `(since :kind)` is the seconds since body memory last recorded an unexpired
-  entry of that kind (unknown when none).
-- A fact can be unknown (offline, no such place). Unknown propagates; `and`/`or` are three-valued; a condition holds only
-  when definitely true; `known?` is how to ask about absence.
-- No variables, arithmetic or functions. What the vocabulary cannot say becomes a new fact in the table `defaults.edn` names (`:facts`).
+- Every check gives a status (Contract jobs). The trigger holds on `:ok`; `GET /triggers?id=` shows the status, every
+  part in `:parts`.
+- Values: `(health) (food) (inventory "item") (free-slots) (distance-to pos) (blocks-near "name" r)` (seen blocks only,
+  read once a tick) `(since :kind) (time-of-day)`, a position `(place :kind)`; comparisons `< > <= >= =` make them a status
+  (`"inventory bread 9 >= 8"`, reason the value's name). `(since :kind)`: seconds since memory last recorded an
+  unexpired entry of that kind.
+- Statuses: `(daytime) (mounted) (in-water) (hostile-near r)` (a real danger) `(burning) (suffocating) (night-unsafe)
+  (wearing "item")`; each has an ok and a fail reason (`(mounted)`: `:mounted` / `:not-aboard`).
+- `(and ...)`: any `:never`, else the first `:later`, else the first `:look`, else `:ok`. `(or ...)`: the first `:ok`,
+  else `:look`, `:later`, `:never`. Both ask every part. `(not a)` swaps `:ok` and a definite `:later`/`:never`, keeping
+  a's text and reason. `(because :reason "text"? a)` renames a failing reason.
+- Unknown (offline, no such place) is `[:later "... not known" {:unknown true}]`, which `not` keeps; `(known? x)` is
+  definite.
+- Job code calls the same fns: `(cond/and (cond/< (cond/health) 7) (cond/not (cond/mounted)))` is a fn of the ctx.
 - `compile` validates once at registration; a bad form is refused as data `{:ok false :reason :at :message :allowed}`.
 
 ## The scheduler

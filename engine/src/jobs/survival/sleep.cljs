@@ -3,7 +3,9 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [engine.contract :as contract]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
@@ -92,18 +94,17 @@
   (when (and (false? (:open-bed (:args c))) (<= (u/dist (u/self-pos c) bed) 3) (bed-block? c bed) (open-bed? c))
     {:reason :bed-open :pos bed :text "the bed is open (not shut in a roofed room)"}))
 
-(defn start-fact
-  "The fact that bars starting, or nil: night and a bed that is not given up on and not occupied."
+(defn bed-status
+  "Ok when asleep already or with a bed to sleep in, else later :no-bed, :bed-unreachable (given up on) or :bed-open."
   [c]
-  (when-not (ctx/frozen-call c)
-    (let [bed (bed-of c)
-          p (:primitives c)]
-      (cond
-        (not (sh/night? p)) :not-night
-        (sh/sleeping? p) nil
-        (nil? bed) {:reason :no-bed :text "no bed given or remembered within the bed radius"}
-        (unreachable-bed? c bed) {:reason :bed-unreachable :pos bed}
-        :else (bed-open c bed)))))
+  (let [bed (bed-of c)
+        open (when bed (bed-open c bed))]
+    (cond
+      (sh/sleeping? (:primitives c)) (contract/ok :asleep "asleep")
+      (nil? bed) (contract/later :no-bed "no bed given or remembered within the bed radius")
+      (unreachable-bed? c bed) (contract/later :bed-unreachable "the bed was given up on as unreachable" :pos bed)
+      open (contract/later :bed-open (:text open) :pos bed)
+      :else (contract/ok :bed "a bed" :pos bed))))
 
 (defn sheltered-hold
   "The hold of a body in a shelter with the bed far off: {:reason :night-sheltered ...}, else nil."
@@ -112,7 +113,7 @@
     {:reason :night-sheltered :shelter shelter :pos bed
      :text (str "the bed is " (js/Math.round (u/dist (u/self-pos c) bed)) " blocks away; the body stays in its shelter until day")}))
 
-(def conditions [[:fn start-fact]])
+(def can-start? (cond/and (cond/because :not-night "not night" (cond/not (cond/daytime))) bed-status))
 
 (def target [])
 

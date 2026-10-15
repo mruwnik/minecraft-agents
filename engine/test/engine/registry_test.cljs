@@ -53,9 +53,9 @@
                (expr/problem registry/jobs '(jobs.primitive.dig {:bogus 1}))))
   (is (nil? (expr/problem registry/jobs '(jobs.primitive.dig {:pos [1 2 3] :timeoutS 5})))))
 
-(deftest every-job-exports-conditions-and-round-and-a-doc
+(deftest every-job-exports-checks-and-round-and-a-doc
   (doseq [[sym job] registry/jobs]
-    (is (some? (:conditions job)) (str sym))
+    (is (some some? ((juxt :conditions :can-start? :can-run?) job)) (str sym))
     (is (fn? (:round job)) (str sym))
     (is (string? (:doc job)) (str sym))))
 
@@ -99,9 +99,9 @@
     (is (= :cooldown (:persistence t)) "a body still aboard fires again after the cooldown, not only after being off once")
     (is (pos? (:cooldown-s t)))))
 
-(deftest the-facts-table-is-the-one-the-defaults-name
-  (is (contains? triggers/facts 'health))
-  (is (not (contains? triggers/facts 'stuck))))
+(deftest the-condition-library-is-the-one-the-defaults-name
+  (is (contains? triggers/library 'health))
+  (is (not (contains? triggers/library 'stuck))))
 
 (deftest numeric-args-are-bounded-at-submit
   (doseq [form ['(jobs.farm.find-spot {:w 1000})

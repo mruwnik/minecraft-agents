@@ -11,7 +11,6 @@
             [engine.core.limits :as limits]
             [engine.core.quote :as quote]
             [engine.core.tally :as tally]
-            [engine.condition :as condition]
             [engine.contract :as contract]
             [engine.chat :as chat]
             [engine.memory :as mem]
@@ -104,8 +103,6 @@
                                      (contract/left state t (- t (nth (:t0s base) (count s) t))))))
      :section-depth (:section-depth base) :held (:held base) :section-closed #(limits/section-closed! eng base)
      :view #(mem/view store)
-     :fact (fn [sym vs] (condition/fact-value {:world (:primitives eng) :memory (mem/view store)} sym vs))
-     :holds (fn [form args] (condition/job-cause {:world (:primitives eng) :memory (mem/view store)} args form))
      :update-mem (fn [f more]
                    (check!)
                    (let [before (mem/job-mem (mem/view store) root slots)]

@@ -138,8 +138,7 @@
 (defn fires?
   "Whether the trigger condition holds now, in the engine's own clock and memory."
   [{:keys [eng p]}]
-  (let [r (c/compile breed-again)]
-    (:value (c/evaluate (:node r) {:world p :memory (view eng)} {}))))
+  (= :ok (first ((:check (c/compile breed-again)) {:primitives p :view #(view eng)}))))
 
 (defn advance! [{:keys [clock]} seconds] (swap! clock + (* 1000 seconds)))
 

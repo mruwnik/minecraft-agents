@@ -7,7 +7,8 @@
             [engine.events :as events]
             [engine.event-api :as event-api]
             [engine.job-api :as job-api]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.lib.cond :as cond]))
 
 (def gate
   "What the gated job's condition answers: true (passes), a cause it waits for, or nil (a bare failure)."
@@ -26,7 +27,7 @@
 (def registry
   {'gated (tu/job [gate-condition] count-round)
    'never (tu/job [(constantly :not-ready)] count-round)
-   'torch-lit {:conditions [[:holds '(>= (inventory "torch") 4) :few-torches]] :round count-round}})
+   'torch-lit {:can-start? (cond/because :few-torches (cond/>= (cond/inventory "torch") 4)) :round count-round}})
 
 (defn setup []
   (let [clock (atom 1000000)

@@ -713,8 +713,5 @@
     (is (= {:job-time 30} (:spend (second (expr/leaf reg 'migrated {:timeout-s 30})))))
     (is (re-find #"migrated has no arg :bogus" (expr/problem reg '(migrated {:bogus 1}))))))
 
-(deftest registering-a-job-with-a-bad-fact-form-is-refused-naming-it
-  (are [form re] (thrown-with-msg? js/Error re (ending/wrap {:conditions [[:holds form :why]]}))
-    '(>= (inventory) 4) #"inventory"
-    '(held-for 5 (daytime)) #"held-for"
-    '(>= (carried "torch") 4) #"carried"))
+(deftest registering-a-job-with-a-condition-that-is-no-fn-is-refused-naming-it
+  (is (thrown-with-msg? js/Error #"held-for" (ending/wrap {:conditions [[:holds '(held-for 5 (daytime)) :why]]}))))

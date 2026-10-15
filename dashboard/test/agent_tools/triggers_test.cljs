@@ -64,12 +64,12 @@
     (is (= 1 (:priority item))))
   (is (= [1 2] (mapv :priority (:items (triggers/compact (request "list") (assoc listing :order [:second :first]))))))
   (is (not (contains? (second (:items (triggers/compact (request "list") (assoc listing :order [:first])))) :priority)))
-  (let [shown (triggers/compact (request "show" "first") (assoc listing :explain {:terms (vec (repeat 100 {:form true :value true}))}))
-        timed (triggers/compact (request "show" "first")
-                                (assoc listing :explain {:terms [{:form (list 'held-for 5) :value false :remaining-ms 2500}]}))]
+  (let [part [:ok "day" {:reason :daytime}]
+        shown (triggers/compact (request "show" "first")
+                                (assoc listing :explain {:status [:ok "day" {:reason :daytime :parts (vec (repeat 100 part))}]}))]
     (is (= :first (:id shown)))
-    (is (= 16 (count (:explain shown))))
-    (is (= 2500 (get-in timed [:explain 0 :remaining-ms]))))
+    (is (= [:ok "day"] (subvec (:explain shown) 0 2)))
+    (is (= 16 (count (get-in shown [:explain 2 :parts])))))
   (is (= :trigger-not-found (:reason (triggers/compact (request "show" "unknown") listing))))
   (is (= {:ok true :id :first :op :mute :muted true}
          (triggers/compact (request "mute" "first")

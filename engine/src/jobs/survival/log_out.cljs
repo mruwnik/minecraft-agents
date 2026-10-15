@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.shelter :as sh]))
 
 (def doc
@@ -38,7 +39,7 @@
 
 (def conditions
   [[:fn #(when (= false (:offline-allowed (:args %))) (contract/impossible :offline-forbidden))]
-   [:holds '(not (daytime)) :not-night]
+   [:fn (cond/because :not-night "not night" (cond/not (cond/daytime)))]
    [:fn #(when (sh/log-out-unsupported? (ctx/view %)) (contract/impossible :log-out-unsupported))]])
 
 (a/defargs settings

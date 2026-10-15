@@ -1,4 +1,4 @@
-{:facts triggers.facts/table
+{:library jobs.lib.cond/library
 
  ;; The default trigger set: id -> trigger fn, default job, args and persistence. The order here is the default
  ;; register's priority (most urgent first), used when a scenario has no :register; an explicit :register orders its own.

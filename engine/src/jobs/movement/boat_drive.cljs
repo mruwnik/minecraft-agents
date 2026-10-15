@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
@@ -49,11 +50,11 @@
 (defn cell-of-call [c] (:pos (b/parse (:args c))))
 
 (defn bad-args
-  "The cause :bad-args unless :pos names a cell."
+  "Never :bad-args unless :pos names a cell."
   [c]
-  (when-not (cell-of-call c) (contract/impossible :bad-args)))
+  (if (cell-of-call c) (contract/ok :args "a cell to steer to") (contract/never :bad-args "no :pos cell to steer to")))
 
-(def conditions [[:fn bad-args] [:holds '(mounted) :not-aboard]])
+(def can-start? (cond/and bad-args (cond/mounted)))
 
 (defn left-of
   "Blocks (horizontally) from the vehicle to the middle of the cell, or nil when not aboard."

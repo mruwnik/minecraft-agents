@@ -200,8 +200,8 @@ Add and put both create or replace a custom entry; built-in entries cannot be re
 (defn compact-show [{:keys [id]} value]
   (if-let [entry (first (filter #(= id (:id %)) (:items value)))]
     (let [result (bounded entry)]
-      (if (some? (get-in value [:explain :terms]))
-        (assoc result :explain (bounded (get-in value [:explain :terms])))
+      (if (some? (get-in value [:explain :status]))
+        (assoc result :explain (bounded (get-in value [:explain :status])))
         result))
     {:ok false :reason :trigger-not-found :id id}))
 

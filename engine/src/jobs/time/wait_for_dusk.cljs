@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [jobs.lib.game-facts :as facts]
             [engine.ctx :as ctx]
+            [jobs.lib.cond :as cond]
             [engine.settings :as settings]))
 
 (def idle-ok true)
@@ -18,7 +19,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:holds (list '>= '(time-of-day) facts/dusk-tick) :dusk-not-come]])
+(def can-start? (cond/because :dusk-not-come (cond/>= (cond/time-of-day) facts/dusk-tick)))
 
 (defn done?
   "Done when it is evening or later in the day's ticks."

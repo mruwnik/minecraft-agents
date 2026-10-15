@@ -4,6 +4,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -63,21 +64,18 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(defn problem
-  "The cause {:reason :bad-args} unless a player name and an item name are given."
+(defn named
+  "Never :bad-args unless a player name and an item name are given."
   [c]
   (let [{:keys [player item]} (:args c)]
-    (when-not (and (string? player) (string? item))
-      {:reason :bad-args :why "needs a player name and an item name"})))
+    (if (and (string? player) (string? item))
+      (contract/ok :args "a player and an item")
+      (contract/never :bad-args "needs a player name and an item name"))))
 
-(defn lacking
-  "The cause :no-item when nothing of the item is carried and nothing was tossed yet."
-  [c]
-  (let [{:keys [item]} (:args c)]
-    (when (and (string? item) (nil? (:tossed (ctx/mem c))) (zero? (storage/carried (u/inventory (:primitives c)) item)))
-      {:reason :no-item :item item})))
+(defn carried "Later :no-item while none of the item is carried." [c]
+  ((cond/because :no-item (cond/> (cond/inventory (:item (:args c))) 0)) c))
 
-(def conditions [[:fn (fn [c] (some-> (problem c) contract/impossible))] [:fn lacking]])
+(def can-start? (cond/and named carried))
 
 (defn given-so-far
   "Items given and not taken back so far."

@@ -1,7 +1,6 @@
 (ns engine.boat-drive-test
   "jobs.movement.boat-drive against the fake world: steer the boat the body is in to a water cell."
   (:require [cljs.test :refer [deftest is async]]
-            [engine.contract :as contract]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.library-test :as lt]
@@ -102,8 +101,8 @@
           (is (some #(= :boat.driven (:kind %)) @seen)))))))
 
 (deftest a-call-naming-no-cell-is-impossible
-  (is (= :bad-args (contract/impossible-cause (boat-drive/bad-args {:args {}}))))
-  (is (nil? (boat-drive/bad-args {:args {:pos [10 63 2]}}))))
+  (is (= [:never :bad-args] ((juxt first (comp :reason #(nth % 2))) (boat-drive/bad-args {:args {}}))))
+  (is (= :ok (first (boat-drive/bad-args {:args {:pos [10 63 2]}})))))
 
 (deftest the-time-spend-counts-the-time-the-job-has-run-not-the-wall-clock
   (async done

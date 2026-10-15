@@ -1,6 +1,7 @@
 (ns jobs.time.wait-for-day
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.cond :as cond]
             [jobs.lib.shelter :as sh]))
 
 (def idle-ok true)
@@ -16,7 +17,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def conditions [[:holds '(daytime) :day-not-come]])
+(def can-start? (cond/because :day-not-come (cond/daytime)))
 
 (defn done?
   "Done when it is day."

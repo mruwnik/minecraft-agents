@@ -48,9 +48,17 @@
         (let [day (await (waiting-after '(jobs.time.wait-for-day) {:time 15000}))
               dusk (await (waiting-after '(jobs.time.wait-for-dusk) {:time 6000}))]
           (is (= :day-not-come (:reason (:waiting day))))
-          (is (= "daytime false" (:text (:observed day))))
+          (is (= "night" (:text (:observed day))))
           (is (= :dusk-not-come (:reason (:waiting dusk))))
           (is (= "time-of-day 6000 < 12000" (:text (:observed dusk)))))))))
+
+(deftest the-pilots-check-with-can-start-built-from-the-library
+  (are [sym] (= [true false] [(fn? (get-in registry/jobs [sym :can-start?])) (some? (get-in registry/jobs [sym :conditions]))])
+    'jobs.time.wait-for-day
+    'jobs.time.wait-for-dusk
+    'jobs.survival.sleep
+    'jobs.movement.boat-drive
+    'jobs.items.give))
 
 (deftest stair-without-a-pickaxe-says-no-tool
   (async done

@@ -4,7 +4,7 @@
   (world view args world-knowledge live) -> truthy; :job the default job spec (an expression, see engine.expr);
   :args the trigger's own. A body's register orders its triggers; `order` is the default register's. See README.md, Triggers and
   the register."
-  (:require-macros [engine.registry :refer [trigger-registry trigger-order facts-table]]))
+  (:require-macros [engine.registry :refer [trigger-registry trigger-order library-table]]))
 
 (def all
   "Every default trigger by id."
@@ -14,6 +14,6 @@
   "The ids of the default trigger set in the order the default register fires them."
   (trigger-order))
 
-(def facts
-  "The facts a trigger condition may name (engine.condition), the table the default trigger set names (:facts)."
-  (facts-table))
+(def library
+  "The names a trigger condition may use (engine.condition), the library the default trigger set names (:library)."
+  (library-table))

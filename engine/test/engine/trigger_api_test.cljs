@@ -409,7 +409,8 @@
   (are [form reason] (= reason (:reason (api/compile-condition form)))
     '(nope) :unknown-symbol
     ''(< (health) 10) :quoted
-    '(health) :not-boolean))
+    '(held-for 5 (daytime)) :unknown-symbol
+    '(health) :not-a-status))
 
 (deftest known-compiles-through-the-seam-and-fires-on-an-absent-place
   (let [{:keys [explain] fire :when :as r} (api/compile-condition '(not (known? (place :home))))
@@ -419,28 +420,17 @@
     (is (true? (:ok r)))
     (is (true? (fire p {:now 0 :data {:entries {} :policies {}}})) "no home remembered: fires")
     (is (false? (fire p memory)) "once a home is remembered it stops")
-    (is (= [['(not (known? (place :home))) true] ['(known? (place :home)) false] ['(place :home) :engine.condition.facts/unknown]]
-           (mapv (juxt :form :value) (take 3 (explain p {:now 0 :data {:entries {} :policies {}}})))))
+    (is (= [:ok "place home not known" {:reason :not-known}] (explain p {:now 0 :data {:entries {} :policies {}}})))
     (is (= :arity (:reason (api/compile-condition '(known?)))))))
 
-(deftest real-conditions-keep-their-own-held-for-timers
+(deftest a-real-condition-fires-while-its-status-is-ok
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen] :as r} (setup {:compile api/compile-condition})
-              fired-ids #(mapv :reflex (of-kind seen :reflex :fired))]
-          (api/request! eng (assoc adhoc :id :a :when '(held-for 2 (< (health) 30))))
+        (let [{:keys [eng seen] :as r} (setup {:compile api/compile-condition})]
+          (api/request! eng (assoc adhoc :when '(< (health) 30)))
           (await (tick-at r t0))
-          (await (tick-at r (+ t0 1000)))
-          (is (= 1000 (get-in (api/triggers-view eng "a") [:explain :terms 0 :remaining-ms])))
-          (api/request! eng (assoc adhoc :id :b :when '(held-for 2 (< (health) 30))))
-          (await (tick-at r (+ t0 2000)))
-          (is (= 0 (get-in (api/triggers-view eng "a") [:explain :terms 0 :remaining-ms])))
-          (is (= [:a] (fired-ids)) "a has held 2 s; b only started")
-          (await (tick-at r (+ t0 3000)))
-          (is (= [:a] (fired-ids)))
-          (await (tick-at r (+ t0 4000)))
-          (is (= [:a :b] (fired-ids))))))))
+          (is (= 1 (fired seen))))))))
 
 (deftest a-false-real-condition-never-fires
   (async done
@@ -455,8 +445,11 @@
   (let [{:keys [eng]} (setup {:compile api/compile-condition})]
     (api/request! eng (assoc adhoc :when '(< (health) 10)))
     (api/request! eng {:op :put :trigger :high})
-    (is (= [['(< (health) 10) false] ['(health) 20] [10 10]]
-           (mapv (juxt :form :value) (get-in (api/triggers-view eng "bread-low") [:explain :terms]))))
+    (is (= [:later "health 20 >= 10" {:reason :health :have 20 :want 10}]
+           (get-in (api/triggers-view eng "bread-low") [:explain :status])))
+    (api/request! eng (assoc adhoc :id :both :when '(and (< (health) 10) (daytime))))
+    (is (= [[:later "health 20 >= 10" {:reason :health :have 20 :want 10}] [:ok "day" {:reason :daytime}]]
+           (get-in (api/triggers-view eng "both") [:explain :status 2 :parts])))
     (is (= :bread-low (get-in (api/triggers-view eng :bread-low) [:explain :id])))
     (is (string? (get-in (api/triggers-view eng "high") [:explain :message])) "a built-in has no condition to explain")
     (is (nil? (:explain (api/triggers-view eng))))))

@@ -7,7 +7,8 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.items.give :as give]))
 
 (def job 'jobs.items.give)
 
@@ -90,12 +91,12 @@
           (swap! (fake/state p) update :entities conj @held)
           (reset! held nil))))))
 
-(deftest give-conditions-want-strings
-  (are [args ok] (= ok (nil? ((second (first (:conditions (get registry/jobs job)))) {:args args})))
-    {:player "Steve" :item "bread"} true
-    {:player "Steve" :item nil} false
-    {:player nil :item "bread"} false
-    {:player 5 :item "bread"} false))
+(deftest give-needs-a-player-and-an-item-name
+  (are [args kind] (= kind (first (give/named {:args args})))
+    {:player "Steve" :item "bread"} :ok
+    {:player "Steve" :item nil} :never
+    {:player nil :item "bread"} :never
+    {:player 5 :item "bread"} :never))
 
 (deftest gives-the-count-to-a-player-ten-away
   (async done

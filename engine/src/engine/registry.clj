@@ -253,11 +253,11 @@
     []))
 
 (defn trigger-defaults
-  "The default trigger set, resource triggers/defaults.edn: {:facts sym :triggers [{:id :when :job :args
+  "The default trigger set, resource triggers/defaults.edn: {:library sym :triggers [{:id :when :job :args
   :persistence :cooldown-s :level :backoff} ...]}, checked: every :when names a fn that exists, in a namespace under
   triggers/ once that folder holds any; every :level is :danger, :urgent or :comfort; ids unique. {} when absent."
   []
-  (let [{:keys [facts triggers] :as data} (or (read-edn-resource "triggers/defaults.edn") {})
+  (let [{:keys [library triggers] :as data} (or (read-edn-resource "triggers/defaults.edn") {})
         repeated (keep (fn [[id n]] (when (> n 1) id)) (frequencies (map :id triggers)))
         in-dir (set (trigger-files-namespaces))]
     (when (seq repeated)
@@ -270,15 +270,15 @@
       (check-ref (str "trigger " id " :when") when-fn)
       (when (and (seq in-dir) (not (in-dir (symbol (namespace when-fn)))))
         (throw (ex-info (str "trigger " id " :when " when-fn ": not a namespace under triggers/") {:id id}))))
-    (when facts (check-ref "triggers/defaults.edn :facts" facts))
+    (when library (check-ref "triggers/defaults.edn :library" library))
     data))
 
 (defn trigger-namespaces
   "Every namespace the trigger registry needs loaded: each file under triggers/, and the namespaces the default
-  trigger set names (:when fns and :facts)."
+  trigger set names (:when fns and :library)."
   []
-  (let [{:keys [facts triggers]} (trigger-defaults)
-        named (map (comp symbol namespace) (cond-> (map :when triggers) facts (conj facts)))]
+  (let [{:keys [library triggers]} (trigger-defaults)
+        named (map (comp symbol namespace) (cond-> (map :when triggers) library (conj library)))]
     (vec (distinct (concat (trigger-files-namespaces) named)))))
 
 (defmacro trigger-registry
@@ -297,10 +297,10 @@
   []
   (mapv :id (:triggers (trigger-defaults))))
 
-(defmacro facts-table
-  "The facts table the default trigger set names (:facts), or {}."
+(defmacro library-table
+  "The condition library the default trigger set names (:library), or {}."
   []
-  (or (:facts (trigger-defaults)) {}))
+  (or (:library (trigger-defaults)) {}))
 
 (defn trigger-metadata
   "For tooling (the dashboard): one entry per default trigger {:id :fn :file :ns-doc :doc :job :args}, :doc the

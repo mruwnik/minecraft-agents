@@ -1,18 +1,10 @@
 (ns engine.condition-test
   (:require [cljs.test :refer [deftest is are]]
             [engine.condition :as c]
-            [engine.core :as core]
-            [engine.ctx :as ctx]
             [engine.triggers :as triggers]
             [engine.memory :as mem]
-            [engine.test-util :as tu]))
-
-(def ? c/unknown)
-
-(defn node [form]
-  (let [r (c/compile form)]
-    (is (:ok r) (pr-str r))
-    (:node r)))
+            [engine.test-util :as tu]
+            [jobs.lib.cond :as cond]))
 
 (defn view
   "A memory view at now with the given {kind [data ...]} entries, all written at t 0."
@@ -22,14 +14,23 @@
     :data {:entries (into {} (map (fn [[k ds]] [k (mapv (fn [d] {:t 0 :data d}) ds)])) kinds)
            :policies (into {} (map (fn [k] [k {:cap 50 :ttl :forever}])) (keys kinds))}}))
 
-(defn env
-  ([] (env (tu/fake)))
-  ([p] (env p (view 0)))
-  ([p memory] {:world p :memory memory}))
+(defn ctx-of
+  ([] (ctx-of (tu/fake)))
+  ([p] (ctx-of p (view 0)))
+  ([p memory] {:primitives p :view (constantly memory)}))
 
-(defn value
-  ([form] (value form (env)))
-  ([form e] (:value (c/evaluate (node form) e {}))))
+(defn check [form]
+  (let [r (c/compile form)]
+    (is (:ok r) (pr-str r))
+    (:check r)))
+
+(defn status
+  ([form] (status form (ctx-of)))
+  ([form ctx] ((check form) ctx)))
+
+(defn kind
+  ([form] (first (status form)))
+  ([form ctx] (first (status form ctx))))
 
 ;; ------------------------------------------------------------------ reader
 
@@ -38,8 +39,7 @@
     "(< (health) 7)" '(< (health) 7)
     "(and (< (inventory \"bread\") 8) (< (distance-to (place :home)) 16))"
     '(and (< (inventory "bread") 8) (< (distance-to (place :home)) 16))
-    "  (daytime) " '(daytime))
-  (is (= (c/read-condition "(held-for 5 (burning))") (c/read-condition '(held-for 5 (burning))))))
+    "  (daytime) " '(daytime)))
 
 (deftest a-leading-quote-is-refused
   (are [x] (= :quoted (:reason (c/read-condition x)))
@@ -53,7 +53,7 @@
     "(daytime) (burning)" :trailing
     "" :unreadable))
 
-;; ------------------------------------------------------------------ validator
+;; ------------------------------------------------------------------ the compiler
 
 (defn refusal [form] (c/compile form))
 
@@ -63,6 +63,8 @@
     '(let [x (health)] (< x 7)) :unknown-symbol '(let [x (health)] (< x 7))
     '(and (daytime) (< (+ (health) 1) 7)) :unknown-symbol '(+ (health) 1)
     '(> (count (inventory "bread")) 2) :unknown-symbol '(count (inventory "bread"))
+    '(held-for 5 (daytime)) :unknown-symbol '(held-for 5 (daytime))
+    '(js/process.exit 1) :unknown-symbol '(js/process.exit 1)
     '(< (health) 7 8) :arity '(< (health) 7 8)
     '(and) :arity '(and)
     '(not (daytime) (burning)) :arity '(not (daytime) (burning))
@@ -71,12 +73,15 @@
     '(distance-to :home) :type :home
     '(not 3) :type 3
     '(< (daytime) 1) :type '(daytime)
-    '(health) :not-boolean '(health)
-    '(place :home) :not-boolean '(place :home)
+    '(because "x" (daytime)) :type "x"
+    '(because :x 3 (daytime)) :type 3
+    '(because :x (daytime) (daytime)) :type '(daytime)
+    '(health) :not-a-status '(health)
+    '(place :home) :not-a-status '(place :home)
+    true :not-a-status true
     '(= (health) "bread") :incomparable '(= (health) "bread")
     '(= (place :home) (place :bed)) :incomparable '(= (place :home) (place :bed))
-    '(held-for (health) (daytime)) :bad-duration '(held-for (health) (daytime))
-    '(held-for -1 (daytime)) :bad-duration '(held-for -1 (daytime))
+    '(= (daytime) false) :incomparable '(= (daytime) false)
     '(and health (daytime)) :not-a-form 'health
     '(and [1] (daytime)) :not-a-form [1]
     '(< nil 2) :not-a-form nil
@@ -85,237 +90,136 @@
 
 (deftest an-unknown-symbol-refusal-lists-the-whole-vocabulary
   (let [{:keys [allowed]} (refusal '(some (daytime)))]
-    (is (some #{"(and boolean ...)"} allowed))
+    (is (some #{"(and status ...)"} allowed))
+    (is (some #{"(because keyword string? status)"} allowed))
     (is (some #{"(inventory string) -> number"} allowed))
-    (is (some #{"(held-for seconds boolean)"} allowed))))
+    (is (some #{"(mounted) -> status"} allowed))
+    (is (not-any? #(re-find #"held-for" %) allowed))))
 
 (deftest an-arity-or-type-refusal-lists-the-signature
   (is (= ["(inventory string) -> number"] (:allowed (refusal '(< (inventory) 3)))))
   (is (= ["(distance-to position) -> number"] (:allowed (refusal '(< (distance-to "home") 3))))))
 
-(deftest literals-and-nesting-compile
+(deftest nesting-compiles
   (are [form] (:ok (c/compile form))
-    true
     '(and (< (inventory "bread") 8) (< (distance-to (place :home)) 16))
     '(or (burning) (suffocating) (not (daytime)))
-    '(= (daytime) false)
-    '(held-for 0 (held-for 2.5 (hostile-near 10)))
+    '(because :day-not-come "waiting for day" (daytime))
+    '(and (not (in-water)) (< (inventory "bread") 8) (because :day-not-come (daytime)))
     '(> (blocks-near "oak_log" 16) 3)))
 
-;; ------------------------------------------------------------------ evaluator
+(deftest the-library-is-what-the-default-trigger-set-names
+  (is (= cond/library triggers/library))
+  (is (every? #(contains? triggers/library %) '[health food inventory time-of-day place since distance-to free-slots
+                                                 blocks-near daytime mounted in-water wearing hostile-near burning
+                                                 suffocating night-unsafe])))
 
-(def f-env (env (tu/fake {:self {:health 5 :food 20}})))
+;; ------------------------------------------------------------------ statuses of compiled forms
 
-(deftest kleene-truth-table
-  ;; (place :nowhere) is unknown, so (< (distance-to (place :nowhere)) 1) is the unknown boolean u
-  (let [u '(< (distance-to (place :nowhere)) 1)
-        t '(< (health) 7)
-        f '(> (health) 7)]
-    (are [form expected] (= expected (value form f-env))
-      t true
-      f false
-      u ?
-      (list 'not u) ?
-      (list 'not t) false
-      (list 'and f u) false
-      (list 'and u f) false
-      (list 'and t u) ?
-      (list 'and t t) true
-      (list 'or t u) true
-      (list 'or u t) true
-      (list 'or f u) ?
-      (list 'or f f) false
-      (list '= u t) ?
-      (list '= t true) true)))
+(def hurt (ctx-of (tu/fake {:self {:health 5 :food 20}})))
 
-(deftest comparisons
-  (are [form expected] (= expected (value form f-env))
-    '(< (health) 5) false
-    '(<= (health) 5) true
-    '(> (health) 4) true
-    '(>= (health) 6) false
-    '(= (health) 5) true
-    '(= "a" "a") true
-    '(= :a :b) false))
+(deftest a-comparison-is-a-status-showing-the-relation-that-holds
+  (are [form expected] (= expected (status form hurt))
+    '(< (health) 7) [:ok "health 5 < 7" {:reason :health :have 5 :want 7}]
+    '(> (health) 7) [:later "health 5 <= 7" {:reason :health :have 5 :want 7}]
+    '(<= (health) 5) [:ok "health 5 <= 5" {:reason :health :have 5 :want 5}]
+    '(>= (health) 6) [:later "health 5 < 6" {:reason :health :have 5 :want 6}]
+    '(= (health) 5) [:ok "health 5 = 5" {:reason :health :have 5 :want 5}])
+  (is (= :ok (kind '(= "a" "a"))))
+  (is (= :later (kind '(= :a :b)))))
 
-(deftest held-for-holds-after-the-condition-was-true-long-enough
-  (let [n (node '(held-for 5 (< (health) 7)))
-        hurt (tu/fake {:self {:health 5}})
-        well (tu/fake {:self {:health 20}})
-        step (fn [state p now] (c/evaluate n (env p (view now)) state))
-        r0 (step {} hurt 1000)
-        r1 (step (:state r0) hurt 5999)
-        r2 (step (:state r1) hurt 6000)
-        r3 (step (:state r2) well 6500)
-        r4 (step (:state r3) hurt 7000)
-        r5 (step (:state r4) hurt 11999)]
-    (is (= [false false true false false false] (mapv :value [r0 r1 r2 r3 r4 r5])))
-    (is (= true (:value (step (:state r5) hurt 12000))))))
+(deftest a-comparison-names-the-fact-on-either-side
+  (is (= :food (:reason (nth (status '(> 30 (food)) hurt) 2)))))
 
-(deftest held-for-is-unknown-and-restarts-when-its-condition-is-unknown
-  (let [n (node '(held-for 1 (< (distance-to (place :home)) 5)))
-        home (view 0 {:home [{:pos {:x 0 :y 64 :z 0}}]})
-        step (fn [state memory] (c/evaluate n (env (tu/fake) memory) state))
-        r0 (step {} home)
-        r1 (step (:state r0) (assoc (view 0) :now 2000))
-        r2 (step (:state r1) (assoc home :now 2500))
-        r3 (step (:state r2) (assoc home :now 3500))]
-    (is (= [false ? false true] (mapv :value [r0 r1 r2 r3])))))
+(deftest an-unknown-value-makes-a-comparison-an-unknown-later
+  (is (= [:later "distance-to (place nowhere) not known" {:reason :distance-to :unknown true}]
+         (status '(< (distance-to (place :nowhere)) 1) hurt))))
 
-(deftest held-for-timers-do-not-depend-on-siblings
-  (let [n (node '(or (daytime) (held-for 2 (< (health) 7))))
-        p (tu/fake {:self {:health 5} :time 1000})
-        r0 (c/evaluate n (env p (view 0)) {})
-        r1 (c/evaluate n (env p (view 2000)) (:state r0))]
-    (is (= true (:value r0)))
-    (is (seq (:since (:state r1))))))
+(deftest because-replaces-a-failing-reason-and-keeps-the-kind
+  (are [form expected] (= expected (status form hurt))
+    '(because :too-healthy (> (health) 7)) [:later "health 5 <= 7" {:reason :too-healthy :have 5 :want 7}]
+    '(because :too-healthy "not hurt enough" (> (health) 7)) [:later "not hurt enough" {:reason :too-healthy :have 5 :want 7}]
+    '(because :hurt "hurt" (< (health) 7)) [:ok "health 5 < 7" {:reason :health :have 5 :want 7}]))
 
-(deftest explain-lists-every-sub-term-with-its-value
-  (is (= [{:form '(and (< (health) 7) (daytime)) :value true}
-          {:form '(< (health) 7) :value true}
-          {:form '(health) :value 5}
-          {:form 7 :value 7}
-          {:form '(daytime) :value true}]
-         (c/explain (node '(and (< (health) 7) (daytime))) f-env {}))))
+(deftest a-trigger-condition-holds-on-ok
+  (let [f (check '(and (< (health) 7) (daytime)))]
+    (is (= :ok (first (f hurt))))
+    (is (= :later (first (f (ctx-of (tu/fake {:self {:health 20}}))))))))
 
-(deftest explain-reports-active-held-for-time-and-clears-it-when-reset
-  (let [n (node '(held-for 5 (< (health) 7)))
-        hurt (tu/fake {:self {:health 5}})
-        well (tu/fake {:self {:health 20}})
-        step (fn [state p now] (c/evaluate n (env p (view now)) state))
-        first-step (step {} hurt 1000)
-        explain-at (fn [state p now] (c/explain n (env p (view now)) state))
-        active (explain-at (:state first-step) hurt 3000)
-        elapsed (explain-at (:state first-step) hurt 6000)
-        reset-step (step (:state first-step) well 6500)
-        reset (explain-at (:state reset-step) well 6500)
-        restarted (step (:state reset-step) hurt 7000)
-        restart-explain (explain-at (:state restarted) hurt 7001)]
-    (is (= 3000 (:remaining-ms (first active))))
-    (is (= 0 (:remaining-ms (first elapsed))))
-    (is (= false (:value (first reset))))
-    (is (nil? (:remaining-ms (first reset))))
-    (is (= 4999 (:remaining-ms (first restart-explain))))))
+(deftest every-part-is-in-the-status
+  (let [[k text {:keys [parts]}] (status '(and (< (health) 7) (daytime)) hurt)]
+    (is (= :ok k))
+    (is (= "health 5 < 7; day" text))
+    (is (= [[:ok "health 5 < 7" {:reason :health :have 5 :want 7}] [:ok "day" {:reason :daytime}]] parts))))
 
-(deftest a-scanning-fact-is-served-from-the-cache-until-its-refresh
+(deftest a-scanning-entry-is-read-once-a-tick
   (let [calls (atom 0)
         p (tu/seeing-all (tu/fake {:blocks {"1,64,0" "oak_log" "2,64,0" "oak_log"}}))
         counting (js/Object.assign #js {} p #js {:seenBlocks (fn [o] (swap! calls inc) (.seenBlocks p o))})
-        n (node '(> (blocks-near "oak_log" 16) 1))
-        step (fn [state now] (c/evaluate n (env counting (view now)) state))
-        r0 (step {} 0)
-        r1 (step (:state r0) 4999)
-        r2 (step (:state r1) 5000)]
-    (is (= [true true true] (mapv :value [r0 r1 r2])))
+        f (check '(and (> (blocks-near "oak_log" 16) 1) (< (blocks-near "oak_log" 16) 5)))
+        at (fn [now] (first (f (ctx-of counting (view now)))))]
+    (is (= [:ok :ok :ok] [(at 0) (at 0) (at 50)]))
     (is (= 2 @calls))))
 
-(deftest the-adapter-has-the-register-shape-and-its-own-state
-  (let [pred-a (c/when-fn (node '(held-for 1 (< (health) 7))))
-        pred-b (c/when-fn (node '(held-for 1 (< (health) 7))))
-        p (tu/fake {:self {:health 5}})]
-    (is (false? (pred-a p (view 0) {} nil)))
-    (is (true? (pred-a p (view 1000) {} nil)))
-    (is (false? (pred-b p (view 1000) {} nil)))
-    (is (false? ((c/when-fn (node '(< (distance-to (place :x)) 1))) p (view 0) {})))))
+;; ------------------------------------------------------------------ operators (trusted code)
 
-;; ------------------------------------------------------------------ facts
+(defn const [s] (let [asked (atom 0)] [(fn [_] (swap! asked inc) s) asked]))
+
+(def ok-a [:ok "a" {:reason :a}])
+(def ok-b [:ok "b" {:reason :b}])
+(def later-a [:later "la" {:reason :la}])
+(def later-b [:later "lb" {:reason :lb}])
+(def unknown-l [:later "u not known" {:reason :u :unknown true}])
+(def never-a [:never "na" {:reason :na}])
+(def look-a [:look "ka" {:reason :ka}])
+
+(defn op [f & ss] (let [r ((apply f (map (comp first const) ss)) {})] (update r 2 dissoc :parts)))
+
+(deftest and-is-any-never-else-the-first-later-else-the-first-look-else-ok
+  (are [ss expected] (= expected (apply op cond/and ss))
+    [ok-a ok-b] [:ok "a; b" {:reason :a}]
+    [ok-a later-a later-b] later-a
+    [look-a later-b] later-b
+    [later-a never-a] never-a
+    [ok-a look-a] look-a))
+
+(deftest or-is-the-first-ok-else-the-first-look-else-the-first-later-else-never
+  (are [ss expected] (= expected (apply op cond/or ss))
+    [later-a ok-a ok-b] ok-a
+    [later-a look-a] look-a
+    [never-a later-b] later-b
+    [never-a never-a] never-a))
+
+(deftest not-turns-definite-statuses-round-and-keeps-unknown-and-look
+  (are [s expected] (= expected (op cond/not s))
+    ok-a [:later "a" {:reason :a}]
+    later-a [:ok "la" {:reason :la}]
+    never-a [:ok "na" {:reason :na}]
+    unknown-l unknown-l
+    look-a look-a))
+
+(deftest and-and-or-ask-every-part
+  (let [parts (map const [ok-a later-a never-a ok-b])
+        [_ _ data] ((apply cond/and (map first parts)) {})
+        _ ((apply cond/or (map first parts)) {})]
+    (is (= [2 2 2 2] (map (comp deref second) parts)))
+    (is (= [ok-a later-a never-a ok-b] (:parts data)))))
+
+(deftest a-check-that-returns-no-status-is-an-error-naming-it
+  (is (thrown-with-msg? js/Error #"not a status" ((cond/and (fn bad-check [_] nil)) {}))))
+
+(deftest trusted-code-builds-the-same-checks-from-the-fns
+  (is (= (status '(and (< (health) 7) (not (mounted))) hurt)
+         ((cond/and (cond/< (cond/health) 7) (cond/not (cond/mounted))) hurt))))
+
+;; ------------------------------------------------------------------ entries
 
 (def offline #js {:self (fn [] #js {:status "offline"})
                   :entities (fn [_] #js [])
                   :blocks (fn [_] #js [])
                   :blockAt (fn [_] nil)})
 
-;; ------------------------------------------------------------------ known?
-
-(def home (view 0 {:home [{:pos {:x 0 :y 64 :z 0}}]}))
-
-(deftest known-turns-unknown-into-a-definite-boolean
-  (let [step (fn [form p memory] (value form (env p memory)))
-        no-home '(not (known? (place :home)))
-        near-home '(and (known? (place :home)) (< (distance-to (place :home)) 16))
-        p (tu/fake {:self {:health 5}})]
-    (are [form p memory expected] (= expected (step form p memory))
-      no-home p (view 0) true
-      no-home p home false
-      '(known? (place :home)) p home true
-      '(known? (place :home)) p (view 0) false
-      '(known? (health)) p (view 0) true
-      '(known? (health)) offline (view 0) false
-      near-home p (view 0) false
-      near-home p home true)))
-
-(deftest known-over-a-boolean-expression-is-true-exactly-when-it-is-definite
-  (let [u '(< (distance-to (place :nowhere)) 1)
-        t '(< (health) 7)
-        f '(> (health) 7)]
-    (are [form expected] (= expected (value form f-env))
-      (list 'known? u) false
-      (list 'known? t) true
-      (list 'known? (list 'and t u)) false
-      (list 'known? (list 'and f u)) true
-      (list 'known? (list 'or t u)) true
-      (list 'known? (list 'or f u)) false
-      (list 'known? (list 'not u)) false
-      (list 'known? (list 'known? u)) true)))
-
-(deftest held-for-over-known-times-the-absence-and-is-evaluated-every-tick
-  (let [n (node '(held-for 5 (not (known? (place :bed)))))
-        step (fn [state memory] (c/evaluate n (env (tu/fake) memory) state))
-        bed (fn [now] (assoc (view 0 {:bed [{:pos {:x 0 :y 64 :z 0}}]}) :now now))
-        r0 (step {} (view 1000))
-        r1 (step (:state r0) (view 5999))
-        r2 (step (:state r1) (view 6000))
-        r3 (step (:state r2) (bed 6500))
-        r4 (step (:state r3) (view 7000))]
-    (is (= [false false true false false] (mapv :value [r0 r1 r2 r3 r4])))))
-
-(deftest known-over-held-for-is-unknown-only-while-its-condition-is
-  (let [n (node '(known? (held-for 5 (< (distance-to (place :home)) 5))))
-        step (fn [state memory] (c/evaluate n (env (tu/fake) memory) state))
-        r0 (step {} (view 0))
-        r1 (step (:state r0) home)
-        r2 (step (:state r1) (assoc home :now 100))]
-    (is (= [false true true] (mapv :value [r0 r1 r2])))
-    (is (seq (:since (:state r1))) "the timer inside advanced while the outer form was a plain boolean")))
-
-(deftest known-evaluates-its-sub-form-with-no-short-circuit
-  (let [n (node '(and (known? (place :home)) (held-for 2 (< (health) 7))))
-        p (tu/fake {:self {:health 5}})
-        r0 (c/evaluate n (env p (view 0)) {})
-        r1 (c/evaluate n (env p (assoc home :now 2000)) (:state r0))]
-    (is (= [false true] (mapv :value [r0 r1])))))
-
-(deftest known-takes-one-fact-or-expression
-  (are [form reason at] (let [r (refusal form)]
-                          (and (false? (:ok r)) (= reason (:reason r)) (= at (:at r))
-                               (= ["(known? form)"] (:allowed r))))
-    '(known?) :arity '(known?)
-    '(known? (place :home) (place :bed)) :arity '(known? (place :home) (place :bed))
-    '(known? 3) :type 3
-    '(known? :home) :type :home
-    '(known? "x") :type "x")
-  (are [form reason at] (let [r (refusal form)] (and (= reason (:reason r)) (= at (:at r))))
-    '(known? health) :not-a-form 'health
-    '(known? (nope)) :unknown-symbol '(nope)
-    '(known? (inventory :bread)) :type :bread))
-
-(deftest known-is-in-the-vocabulary-and-a-condition-by-itself
-  (is (some #{"(known? form)"} (:allowed (refusal '(some (daytime))))))
-  (is (some #{"(known? form)"} (:allowed (refusal '(health)))))
-  (is (:ok (c/compile '(known? (place :home)))))
-  (is (:ok (c/compile '(and (known? (health)) (not (known? (place :bed))))))))
-
-(deftest explain-shows-known-and-its-inner-term-with-their-values
-  (is (= [{:form '(not (known? (place :home))) :value true}
-          {:form '(known? (place :home)) :value false}
-          {:form '(place :home) :value ?}
-          {:form :home :value :home}]
-         (c/explain (node '(not (known? (place :home)))) (env) {})))
-  (is (= [{:form '(known? (health)) :value true}
-          {:form '(health) :value 5}]
-         (c/explain (node '(known? (health))) f-env {}))))
-
-(deftest facts-read-the-fake-world
+(deftest entries-read-the-fake-world
   (let [p (tu/fake {:self {:held "iron_sword" :health 12 :food 9 :pos {:x 3 :y 64 :z 4} :inWater true}
                     :time 13000
                     :inventory [{:name "bread" :count 5} {:name "bread" :count 2} {:name "stick" :count 1}]
@@ -324,56 +228,59 @@
                                {:kind "hostile" :name "zombie" :pos {:x 3 :y 64 :z 20} :visible true}
                                {:kind "hostile" :name "skeleton" :pos {:x 3 :y 64 :z 6} :visible false}]
                     :blocks {"3,66,4" "stone"}})
-        e (env (tu/seeing-all p) (view 0 {:home [{:pos {:x 0 :y 64 :z 0}}]}))]
-    (are [form expected] (= expected (value form e))
-      '(= (health) 12) true
-      '(= (food) 9) true
-      '(= (inventory "bread") 7) true
-      '(= (inventory "apple") 0) true
-      '(= (free-slots) 33) true
-      '(wearing "iron_helmet") true
-      '(wearing "shield") true
-      '(wearing "iron_boots") false
-      '(wearing "bread") false
-      '(wearing "iron_sword") false
-      '(= (distance-to (place :home)) 5) true
-      '(daytime) false
-      '(hostile-near 4) true
-      '(hostile-near 2) false ; the skeleton is only heard: its band (about 4 blocks), not its exact place, is judged
-      '(in-water) true
-      '(burning) false
-      '(suffocating) false
-      '(night-unsafe) false
-      '(= (blocks-near "stone" 8) 1) true
-      '(= (time-of-day) 13000) true
-      '(mounted) false)))
+        e (ctx-of (tu/seeing-all p) (view 0 {:home [{:pos {:x 0 :y 64 :z 0}}]}))]
+    (are [form expected] (= expected (kind form e))
+      '(= (health) 12) :ok
+      '(= (food) 9) :ok
+      '(= (inventory "bread") 7) :ok
+      '(= (inventory "apple") 0) :ok
+      '(= (free-slots) 33) :ok
+      '(wearing "iron_helmet") :ok
+      '(wearing "shield") :ok
+      '(wearing "iron_boots") :later
+      '(wearing "bread") :later
+      '(wearing "iron_sword") :later
+      '(= (distance-to (place :home)) 5) :ok
+      '(daytime) :later
+      '(hostile-near 4) :ok
+      '(hostile-near 2) :later ; the skeleton is only heard: its band (about 4 blocks), not its exact place, is judged
+      '(in-water) :ok
+      '(burning) :later
+      '(suffocating) :later
+      '(night-unsafe) :later
+      '(= (blocks-near "stone" 8) 1) :ok
+      '(= (time-of-day) 13000) :ok
+      '(mounted) :later)))
 
-(deftest mounted-is-true-while-riding-a-vehicle
-  (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0} :vehicle 9} :entities [{:id 9 :kind "passive" :name "boat" :pos {:x 0 :y 64 :z 0} :visible true}]})]
-    (is (true? (value '(mounted) (env (tu/seeing-all p) (view 0 {})))))))
+(deftest a-status-entry-says-why-it-holds-or-not
+  (let [riding (ctx-of (tu/seeing-all (tu/fake {:self {:pos {:x 0 :y 64 :z 0} :vehicle 9}
+                                                 :entities [{:id 9 :kind "passive" :name "boat" :pos {:x 0 :y 64 :z 0} :visible true}]})))]
+    (is (= [:ok "aboard" {:reason :mounted}] (status '(mounted) riding)))
+    (is (= [:later "on foot" {:reason :not-aboard}] (status '(mounted) hurt)))
+    (is (= [:later "aboard" {:reason :mounted}] (status '(not (mounted)) riding)) "not keeps the text and reason of an ok")
+    (is (= [:ok "day" {:reason :daytime}] (status '(daytime) hurt)))))
 
 (deftest hostile-near-is-a-real-danger-as-the-trigger-defines-it
   (let [wall (into {} (for [[x z] [[4 0] [6 0] [5 1] [5 -1]] y [64 65]] [(str x "," y "," z) "stone"]))
         zombie {:id 1 :kind "hostile" :name "zombie" :pos {:x 5 :y 64 :z 0} :visible true}
         skeleton {:id 2 :kind "hostile" :name "skeleton" :pos {:x 0 :y 64 :z 10} :visible true}
-        near? (fn [world] (value '(hostile-near 8) (env (tu/seeing-all (tu/fake-on-floor (assoc world :self {:pos {:x 0 :y 64 :z 0}}))))))
-        near-12? (fn [world] (value '(hostile-near 12) (env (tu/seeing-all (tu/fake-on-floor (assoc world :self {:pos {:x 0 :y 64 :z 0}}))))))]
-    (is (true? (near? {:entities [zombie]})))
-    (is (false? (near? {:blocks wall :entities [zombie]})) "a melee mob walled off is no danger")
-    (is (false? (near? {:entities [skeleton]})) "a ranged mob beyond the written radius is not")
-    (is (true? (near-12? {:entities [skeleton]})) "a ranged mob with a line of fire within the radius is")))
+        near (fn [form world] (kind form (ctx-of (tu/seeing-all (tu/fake-on-floor (assoc world :self {:pos {:x 0 :y 64 :z 0}}))))))]
+    (is (= :ok (near '(hostile-near 8) {:entities [zombie]})))
+    (is (= :later (near '(hostile-near 8) {:blocks wall :entities [zombie]})) "a melee mob walled off is no danger")
+    (is (= :later (near '(hostile-near 8) {:entities [skeleton]})) "a ranged mob beyond the written radius is not")
+    (is (= :ok (near '(hostile-near 12) {:entities [skeleton]})) "a ranged mob with a line of fire within the radius is")))
 
 (deftest blocks-near-counts-only-blocks-the-body-has-seen
   (let [fresh #(tu/fake {:blocks {"3,64,4" "diamond_ore" "3,60,4" "diamond_ore"}})
-        count-of (fn [p] (first (filter #(value (list '= '(blocks-near "diamond_ore" 8) %) (env p)) (range 5))))]
-    (is (= 0 (count-of (tu/blind (fresh)))))
-    (is (= 2 (count-of (tu/seeing-all (fresh)))))
-    (let [only-top (doto (fresh)
-                     (aset "seenBlocks" (fn [q] (.filter (.blocks (fresh) q) (fn [b] (= 64 (.-y (.-pos b))))))))]
-      (is (= 1 (count-of only-top))))))
+        only-top (doto (fresh)
+                   (aset "seenBlocks" (fn [q] (.filter (.blocks (fresh) q) (fn [b] (= 64 (.-y (.-pos b))))))))]
+    (are [p n] (= n (:have (nth (status '(= (blocks-near "diamond_ore" 8) 0) (ctx-of p)) 2)))
+      (tu/blind (fresh)) 0
+      (tu/seeing-all (fresh)) 2
+      only-top 1)))
 
-(deftest facts-are-unknown-when-the-body-is-offline
-  (are [form] (= ? (value form (env offline)))
+(deftest entries-are-unknown-laters-while-the-body-is-offline
+  (are [form] (= [:later true] ((juxt first (comp :unknown #(nth % 2))) (status form (ctx-of offline))))
     '(< (health) 7)
     '(< (food) 7)
     '(< (inventory "bread") 7)
@@ -388,9 +295,40 @@
     '(night-unsafe)
     '(< (blocks-near "stone" 8) 1)))
 
-(deftest the-fact-table-declares-a-cost-for-every-fact
-  (is (every? #{:cheap :scan} (map :cost (vals triggers/facts))))
-  (is (every? pos? (keep :refresh-s (vals triggers/facts)))))
+(deftest not-of-an-unknown-never-passes-on-an-offline-body
+  (is (= :later (kind '(not (hostile-near 8)) (ctx-of offline)))))
+
+;; ------------------------------------------------------------------ known?
+
+(def home (view 0 {:home [{:pos {:x 0 :y 64 :z 0}}]}))
+
+(deftest known-turns-unknown-into-a-definite-status
+  (let [p (tu/fake {:self {:health 5}})]
+    (are [form p memory expected] (= expected (kind form (ctx-of p memory)))
+      '(not (known? (place :home))) p (view 0) :ok
+      '(not (known? (place :home))) p home :later
+      '(known? (place :home)) p home :ok
+      '(known? (place :home)) p (view 0) :later
+      '(known? (health)) p (view 0) :ok
+      '(known? (health)) offline (view 0) :later
+      '(known? (daytime)) offline (view 0) :later
+      '(not (known? (daytime))) offline (view 0) :ok
+      '(and (known? (place :home)) (< (distance-to (place :home)) 16)) p (view 0) :later
+      '(and (known? (place :home)) (< (distance-to (place :home)) 16)) p home :ok)))
+
+(deftest known-takes-one-entry-or-expression
+  (are [form reason at] (let [r (refusal form)]
+                          (and (false? (:ok r)) (= reason (:reason r)) (= at (:at r))
+                               (= ["(known? form)"] (:allowed r))))
+    '(known?) :arity '(known?)
+    '(known? (place :home) (place :bed)) :arity '(known? (place :home) (place :bed))
+    '(known? 3) :type 3
+    '(known? :home) :type :home
+    '(known? "x") :type "x")
+  (are [form reason at] (let [r (refusal form)] (and (= reason (:reason r)) (= at (:at r))))
+    '(known? health) :not-a-form 'health
+    '(known? (nope)) :unknown-symbol '(nope)
+    '(known? (inventory :bread)) :type :bread))
 
 ;; ------------------------------------------------------------------ since
 
@@ -403,38 +341,25 @@
 (def forever {:cap 50 :ttl :forever})
 
 (deftest since-is-the-seconds-since-the-latest-entry-of-the-kind
-  (are [now ts seconds] (true? (value (list '= '(since :slept) seconds) (env (tu/fake) (memory-at now :slept ts forever))))
+  (are [now ts seconds] (= :ok (kind (list '= '(since :slept) seconds) (ctx-of (tu/fake) (memory-at now :slept ts forever))))
     10000 [4000] 6
     10000 [1000 4000] 6
     10000 [4000 1000] 9
     1500 [1000] 0.5
     1000 [1000] 0))
 
-(deftest since-is-unknown-without-an-entry-and-known-says-never
-  (let [e (env (tu/fake) (memory-at 10000 :looked [1000] forever))]
-    (are [form expected] (= expected (value form e))
-      '(< (since :slept) 5) ?
-      '(= (since :slept) 0) ?
-      '(known? (since :slept)) false
-      '(not (known? (since :slept))) true
-      '(known? (since :looked)) true)))
-
 (deftest since-never-or-too-long-ago
   (let [form '(or (not (known? (since :slept))) (> (since :slept) 3600))
-        at (fn [now ts] (value form (env (tu/fake) (memory-at now :slept ts forever))))]
-    (is (true? (value form (env))) "never")
-    (is (false? (at 3600000 [1000])) "3599 s ago")
-    (is (true? (at 3602000 [1000])) "3601 s ago")))
+        at (fn [now ts] (kind form (ctx-of (tu/fake) (memory-at now :slept ts forever))))]
+    (is (= :ok (kind form)) "never")
+    (is (= :later (at 3600000 [1000])) "3599 s ago")
+    (is (= :ok (at 3602000 [1000])) "3601 s ago")))
 
 (deftest since-reads-a-namespaced-kind
-  (let [form '(or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200))
-        at (fn [now ts] (value form (env (tu/fake) (memory-at now :bred/cow ts forever))))]
-    (is (true? (value form (env))) "never")
-    (is (false? (at 1000000 [1000])) "999 s ago")
-    (is (true? (at 1202000 [1000])) "1201 s ago")))
+  (is (= :ok (kind '(> (since :bred/cow) 1200) (ctx-of (tu/fake) (memory-at 1202000 :bred/cow [1000] forever))))))
 
 (deftest since-does-not-see-an-expired-entry
-  (is (= ? (value '(> (since :looked) 0) (env (tu/fake) (memory-at 7200000 :looked [1000] {:cap 5 :ttl 3600000}))))))
+  (is (= :ok (kind '(not (known? (since :looked))) (ctx-of (tu/fake) (memory-at 7200000 :looked [1000] {:cap 5 :ttl 3600000}))))))
 
 (deftest since-takes-one-keyword-literal
   (are [form reason at] (let [r (refusal form)]
@@ -445,76 +370,3 @@
     '(< (since (place :home)) 5) :type '(place :home)
     '(< (since) 5) :arity '(since)
     '(< (since :a :b) 5) :arity '(since :a :b)))
-
-(deftest since-is-in-the-vocabulary-and-compiles-with-any-kind
-  (is (some #{"(since keyword) -> number"} (:allowed (refusal '(nope)))))
-  (is (:ok (c/compile '(> (since :never-written-kind) 5)))))
-
-(deftest explain-shows-since-with-its-value-and-unknown-as-unknown
-  (is (= [{:form '(> (since :slept) 5) :value true}
-          {:form '(since :slept) :value 9}
-          {:form :slept :value :slept}
-          {:form 5 :value 5}]
-         (c/explain (node '(> (since :slept) 5)) (env (tu/fake) (memory-at 10000 :slept [1000] forever)) {})))
-  (is (= [{:form '(known? (since :slept)) :value false}
-          {:form '(since :slept) :value ?}
-          {:form :slept :value :slept}]
-         (c/explain (node '(known? (since :slept))) (env) {}))))
-
-;; ------------------------------------------------------------------ job conditions
-
-(def torches (env (tu/fake {:inventory [{:name "torch" :count 2}]})))
-
-(deftest a-job-condition-that-holds-gives-no-cause
-  (are [form args] (nil? (c/job-cause torches args form))
-    '(>= (inventory "torch") 2) {}
-    '(>= (inventory (arg :item)) (arg :count)) {:item "torch" :count 2}))
-
-(deftest a-failing-job-condition-names-its-fact-and-shows-the-comparison
-  (are [form args text] (= {:fact :inventory :form (pr-str form) :text text} (c/job-cause torches args form))
-    '(>= (inventory "torch") 4) {} "inventory torch 2 < 4"
-    '(>= (inventory (arg :item)) (arg :count)) {:item "torch" :count 4} "inventory torch 2 < 4"
-    '(and (daytime) (> (inventory "torch") 2)) {} "inventory torch 2 <= 2"))
-
-(deftest a-failing-boolean-fact-shows-its-value
-  (is (= {:fact :daytime :form "(daytime)" :text "daytime false"}
-         (c/job-cause (env (tu/fake {:time 15000})) {} '(daytime)))))
-
-(deftest an-unknown-fact-fails-a-job-condition
-  (is (= "inventory torch unknown" (:text (c/job-cause (env offline) {} '(>= (inventory "torch") 4))))))
-
-(deftest a-job-condition-passes-when-an-arg-it-names-is-missing-or-not-a-value
-  (are [args] (nil? (c/job-cause torches args '(>= (inventory "torch") (arg :count))))
-    {}
-    {:count [4]}))
-
-(deftest check-job-form-refuses-a-form-job-cause-could-not-run
-  (are [form re] (re-find re (c/check-job-form form))
-    '(>= (inventory) 4) #"inventory"
-    '(>= (carried "torch") 4) #"carried"
-    '(held-for 5 (daytime)) #"held-for"
-    '(>= (inventory "torch") (arg "count")) #"arg"
-    '(>= (inventory "torch") (arg)) #"arg"))
-
-(deftest check-job-form-accepts-forms-whose-args-take-any-type
-  (are [form] (nil? (c/check-job-form form))
-    '(>= (inventory (arg :item)) (arg :count))
-    '(and (daytime) (or (< (health) 5) (not (= (arg :mode) :x))))))
-
-(deftest a-job-condition-whose-arg-has-the-wrong-type-holds-instead-of-throwing
-  (is (nil? (c/job-cause torches {:count "many"} '(>= (inventory "torch") (arg :count))))))
-
-(deftest a-failing-or-names-its-first-comparison
-  (is (= "inventory torch 2 < 4" (:text (c/job-cause torches {} '(or (>= (inventory "torch") 4) (not (daytime))))))))
-
-(deftest a-failing-not-names-the-term-it-negates
-  (are [form text] (= text (:text (c/job-cause torches {} form)))
-    '(not (daytime)) "not daytime true"
-    '(not (< (inventory "torch") 4)) "not inventory torch 2 < 4"))
-
-(deftest ctx-fact-reads-a-fact-for-the-job-body
-  (let [eng (core/create {:primitives (tu/fake {:inventory [{:name "torch" :count 3}]}) :jobs {} :triggers {}
-                          :dir (tu/tmp-dir)})
-        c (core/make-ctx eng {:root "j1" :slots [] :chain [] :token nil})]
-    (is (= 3 (ctx/fact c 'inventory "torch")))
-    (is (thrown-with-msg? js/Error #"not a fact" (ctx/fact c 'carried "torch")))))

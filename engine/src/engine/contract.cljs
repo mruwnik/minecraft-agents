@@ -230,20 +230,11 @@
       (throw (js/Error. (str "check " (fn-name f) " returned " (pr-str s) ", not a status [kind text {:reason ..}]"))))
     s))
 
-(defn entry-result
-  "What one old condition says now: [:fn f] is (f c); [:holds form] or [:holds form reason] (a fact form, engine.condition)
-  is nil while the form holds, else a cause {:reason (reason, else the fact's name) :fact :form :text}."
-  [c [kind x reason]]
-  (case kind
-    :fn (run-condition c x)
-    :holds (let [holds (or (:holds c) (throw (js/Error. "a fact condition needs a ctx made by the engine (:holds)")))]
-             (when-let [cause (holds x (:args c))] (assoc cause :reason (or reason (:fact cause)))))))
-
 (defn verdict
-  "What def's checks say now, as one status (all): its old conditions (read-old), can-start? and can-run?, each that it
-  has."
+  "What def's checks say now, as one status (all): its old conditions ([:fn f] each, read-old), can-start? and
+  can-run?, each that it has."
   [c {:keys [conditions can-start? can-run?]}]
-  (all (concat (map #(read-old (entry-result c %)) conditions)
+  (all (concat (map #(read-old (run-condition c (second %))) conditions)
                (map #(asked c %) (keep identity [can-start? can-run?])))))
 
 ;; ------------------------------------------------------------------ the call
