@@ -127,9 +127,9 @@
 (def conditions [[:fn (started/at-start not-night)]])
 
 (defn done?
-  "Before its first round: already sheltered with nothing for the night to do. Once begun, the round ends the night."
+  "Already sheltered with nothing for the night to do (asked before the start only; the round ends the night)."
   [c]
-  {:done? (boolean (and (not (:began (ctx/mem c))) (:shelter (quiet-night c)))) :units :nights})
+  {:done? (boolean (:shelter (quiet-night c))) :units :nights})
 
 (defn quote-of
   "The time left of the night (jobs.time.wait-for-day's quote), a bed possibly ending it at once, and ::morning-s on top."
@@ -447,7 +447,6 @@
 (defn ^:async round
   "The whole night in one round (see doc): passes until one ends it."
   [c]
-  (when-not (:began (ctx/mem c)) (ctx/update-mem! c assoc :began true))
   (loop []
     (let [r (await (pass c))]
       (if (= :again r)
