@@ -45,12 +45,7 @@
     (contract/ok :zones-read "zones read")
     (contract/later :no-zones "no zone list has been read")))
 
-(defn always
-  "The can-start? of a job with no precondition: it still makes the job a contract job."
-  [_]
-  (contract/ok :holds "no precondition"))
-
-(defn holds "A :ok status for a check with nothing to say." [] (always nil))
+(defn holds "A :ok status for a check with nothing to say." [] (contract/ok :holds "no precondition"))
 
 (defn cause-text [m] (str (or (:why m) (:text m) (name (:reason m)))))
 

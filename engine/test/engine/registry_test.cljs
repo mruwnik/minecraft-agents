@@ -1,5 +1,5 @@
 (ns engine.registry-test
-  (:require-macros [engine.registry-test-macros :refer [describe-message]])
+  (:require-macros [engine.registry-test-macros :refer [describe-message describes-job?]])
   (:require [cljs.test :refer [deftest is]]
             [engine.expr :as expr]
             [engine.registry :as registry]
@@ -55,7 +55,7 @@
 
 (deftest every-job-exports-checks-and-round-and-a-doc
   (doseq [[sym job] registry/jobs]
-    (is (some some? ((juxt :conditions :can-start? :can-run?) job)) (str sym))
+    (is (nil? (:check job)) (str sym))
     (is (fn? (:round job)) (str sym))
     (is (string? (:doc job)) (str sym))))
 
@@ -154,3 +154,7 @@
   (is (re-find #"defines check but no conditions"
                (describe-message "(ns jobs.probe)\n(defn check [c] nil)\n(defn round [c] :continue)")))
   (is (nil? (describe-message "(ns jobs.probe)\n(def conditions [])\n(defn round [c] :continue)"))))
+
+(deftest a-file-with-only-a-round-is-a-job-and-one-without-is-a-helper
+  (is (describes-job? "(ns jobs.probe)\n(defn round [c] :continue)"))
+  (is (not (describes-job? "(ns jobs.probe)\n(defn helper [c] :continue)"))))

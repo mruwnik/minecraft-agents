@@ -15,3 +15,13 @@
       nil
       (catch Exception e (ex-message e))
       (finally (io/delete-file file) (io/delete-file dir) (io/delete-file (.getParentFile dir))))))
+
+(defmacro describes-job?
+  "Whether describe takes the job file with source as a job (not a helper)."
+  [source]
+  (let [dir (doto (io/file (System/getProperty "java.io.tmpdir") (str "registry-describe-" (System/nanoTime) "/jobs")) .mkdirs)
+        file (io/file dir "probe.cljs")]
+    (spit file source)
+    (try
+      (some? (registry/describe dir file))
+      (finally (io/delete-file file) (io/delete-file dir) (io/delete-file (.getParentFile dir))))))

@@ -220,7 +220,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'held {:can-start? never :done? (fn [_] {:done? true :units :items :done 0 :left 0})
+        (let [{:keys [eng seen]} (setup {'held {:can-start? (constantly (contract/never :not-yet "no")) :done? (fn [_] {:done? true :units :items :done 0 :left 0})
                                                 :round (fn [c] (ctx/end c :done nil))}})]
           (core/submit! eng '(held) {})
           (await (core/tick! eng))

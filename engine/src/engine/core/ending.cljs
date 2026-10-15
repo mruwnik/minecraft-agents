@@ -13,7 +13,10 @@
             [engine.memory :as mem]
             [engine.settings :as settings]))
 
-(defn contract-job? [def] (some some? ((juxt :conditions :can-start? :can-run?) def)))
+(defn contract-job?
+  "A def with conditions, can-start? or can-run?, or a round and no old check: the checks default to :ok."
+  [def]
+  (boolean (or (some some? ((juxt :conditions :can-start? :can-run?) def)) (::wrapped def) (and (:round def) (nil? (:check def))))))
 
 (defn started? [c] (some? (ctx/frozen-call c)))
 
@@ -214,11 +217,12 @@
                                        ", not :continue or an ending (ctx/end)"))))))))
 
 (defn old-never?
-  "Whether the statuses [start run] hold a :never an old condition gave (bad args, game data): it beats a goal that
-  holds, which a can-start? :never does not."
-  [ss]
+  "Whether the statuses [start run] hold a :never that beats a goal that holds: one an old condition gave (bad args,
+  game data), or before the start a can-start? :never :bad-args. Any other can-start? :never does not."
+  [ss fresh?]
   (let [[kind _ data] (contract/all ss)]
-    (and (= :never kind) (contains? data ::contract/cause))))
+    (and (= :never kind)
+         (or (contains? data ::contract/cause) (and fresh? (= :bad-args (:reason data)))))))
 
 (defn done-between
   "The ending done? gives between steps of a started job (ctx/done): its :done ending when it ends the job, else nil."
@@ -243,7 +247,7 @@
   (let [asked (take-asked! c)
         ss (statuses def c asked)
         fresh? (not (started? c))
-        [d err] (if-let [de (:done asked)] de (when (not (old-never? ss)) (done-or-error def c)))
+        [d err] (if-let [de (:done asked)] de (when (not (old-never? ss fresh?)) (done-or-error def c)))
         _ (remember-done! c d)
         _ (when err (ctx/emit! c :done_failed :warn {:error (str (or (.-message err) err))}))
         done? (and d (ends? d fresh?))

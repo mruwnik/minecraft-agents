@@ -295,6 +295,24 @@
           (await (core/tick! eng))
           (is (= [:not-needed] (mapv #(:reason (:data %)) (job-ev seen :waiting))) "a goal not held waits as before"))))))
 
+(defn held-goal [start]
+  {:can-start? (constantly start)
+   :round (fn [_] (swap! world assoc :ran true) :continue)
+   :done? (constantly {:done? true :units :items :done 0 :left 0})})
+
+(deftest bad-args-beat-a-goal-that-holds-but-another-never-does-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'bad (held-goal (contract/never :bad-args "count 0"))
+                                         'other (held-goal (contract/never :not-smeltable "no"))
+                                         'bare {:round (fn [c] (ctx/end c :done nil))}})
+              ended (fn ^:async e [spec] (core/submit! eng spec {}) (await (core/tick! eng))
+                      (select-keys (:data (last (filter #(#{:completed :stopped} (:kind %)) @seen))) [:kind :cause]))]
+          (is (= {:kind :impossible :cause {:reason :bad-args :text "count 0"}} (await (ended '(bad)))))
+          (is (= {:kind :done :cause :already} (await (ended '(other)))))
+          (is (= {:kind :done} (select-keys (await (ended '(bare))) [:kind])) "a job with only a round runs"))))))
+
 (def wraps-up
   "Reaches its goal in its first round and yields; its second round wraps up."
   {:conditions []

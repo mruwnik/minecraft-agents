@@ -1,7 +1,6 @@
 (ns jobs.movement.look-around
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [engine.primitive :as primitive]))
@@ -26,8 +25,6 @@
   {::time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:spend {:job-time ::time-s}})
-
-(def can-start? checks/always)
 
 (defn quote-of
   "The quotes of its two acts, the look and the wait, added."

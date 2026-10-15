@@ -57,9 +57,9 @@
   '#{conditions can-start? can-run?})
 
 (defn job?
-  "A job file defines round and conditions, can-start? or can-run?; any other file under jobs/ is a helper."
+  "A job file defines round and conditions, can-start? or can-run? (round alone: no old check either); any other file under jobs/ is a helper."
   [defines]
-  (boolean (and (defines 'round) (some defines check-names))))
+  (boolean (and (defines 'round) (or (some defines check-names) (not (defines 'check))))))
 
 (defn describe
   "{:ns sym :defines #{...}} for a job file, nil for a helper file (job?), or throws when a job file's ns does not match

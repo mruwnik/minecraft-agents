@@ -32,8 +32,8 @@
         args (legacy/given-args entry args)]
     (cond
       (nil? entry) (throw (ex-info (str "unknown job " sym) {:job sym}))
-      (not (and (some some? ((juxt :conditions :can-start? :can-run?) entry)) (fn? (:round entry))))
-      (throw (ex-info (str "job " sym " needs a round and conditions, can-start? or can-run?") {:job sym}))
+      (not (and (or (some some? ((juxt :conditions :can-start? :can-run?) entry)) (nil? (:check entry)) (:engine.core.ending/wrapped entry)) (fn? (:round entry))))
+      (throw (ex-info (str "job " sym " needs a round and no old check, or conditions, can-start? or can-run?") {:job sym}))
       :else (if-let [problem (contract/call-problem sym (:ways entry) args)]
               (fail problem args)
               (try [entry (a/conform sym data (a/merge-args data (a/defaults data) args))]

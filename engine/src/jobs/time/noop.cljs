@@ -1,7 +1,6 @@
 (ns jobs.time.noop
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.lib.checks :as checks]
             [engine.primitive :as primitive]))
 
 (def idle-ok true)
@@ -23,8 +22,6 @@
   {::time-s {:default 3600 :doc "Seconds one pause may take." :spec (a/int-in 1 nil)}})
 
 (def defaults {:spend {:job-time ::time-s}})
-
-(def can-start? checks/always)
 
 (defn total-ms [c] (* 1000 (:seconds (:args c) 0)))
 
