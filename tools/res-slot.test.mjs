@@ -279,3 +279,15 @@ test('integration: when the slot frees, a waiting heavy run goes before light wa
   assert.deepEqual(fs.readFileSync(out, 'utf8').split('\n').slice(0, 2), ['holder', 'H'])
   fs.rmSync(dir, { recursive: true, force: true })
 })
+
+test('integration: a heavy run keeps its heavy-wait marker until its command holds the slot', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
+  const env = { ...process.env, RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '5000' }
+  delete env.RES_SLOT_HEAVY
+  const script = new URL('./res-slot.mjs', import.meta.url).pathname
+  const r = spawnSync('node', [script, 't', '--heavy', '--', 'sh', '-c', `ls ${dir}/heavy-wait`], { cwd: dir, encoding: 'utf8', env })
+  assert.equal(r.status, 0); assert.match(r.stdout, /^t\.\d+$/m)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
