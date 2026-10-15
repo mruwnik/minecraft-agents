@@ -113,7 +113,7 @@
   [c]
   (when (and (lacks-meal? c) (nil? (fetch-opts c))) {:reason :need :item "bone_meal"}))
 
-(def can-start? (cond/and (checks/zones-read :fertilize.declined "fertilize")
+(def can-start? (cond/and (checks/zones-declined :fertilize.declined "fertilize")
                           (checks/refusing :meal "bone meal carried or fetchable" no-meal-source)))
 
 (defn done?

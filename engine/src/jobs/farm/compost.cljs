@@ -70,7 +70,7 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(def can-start? (checks/zones-read :compost.declined "compost"))
+(def can-start? (checks/zones-declined :compost.declined "compost"))
 
 (defn done?
   "Counts only (the round ends the call with its data): the bone meal taken and the rest of :times."
