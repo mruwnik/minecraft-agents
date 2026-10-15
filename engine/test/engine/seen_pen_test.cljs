@@ -3,11 +3,13 @@
   the job goes and looks at it; only a cell seen as open ends :no-pen."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.herd-test :as ht]
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [engine.test-util :as tu]
+            [jobs.animals.herd-pen :as hp]
             [jobs.animals.herd-run :as hr]))
 
 (defn coarse-world
@@ -157,3 +159,20 @@
               _ (await (ht/run-ticks s 60))]
           (is (= ht/gate (:gate (ht/done-event s))) "walked to the gate, saw the floor, read the pen in full")
           (is (= :brought (:reason (ht/done-event s)))))))))
+
+(defn unseen-approach-with
+  "unseen-approach over primitives that know nothing of the cells in unknown-cells, with looked-pen memory looked."
+  [unknown-cells looked]
+  (let [p #js {:sensedAt (fn [pos] (if (contains? unknown-cells [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} #js {}))}]
+    (with-redefs [ctx/mem (constantly {:looked-pen looked})]
+      (hp/unseen-approach {:primitives p} {:why :no-approach :cell [5 64 5]}))))
+
+(deftest an-approach-cell-never-seen-is-looked-at-first-and-a-looked-at-one-is-not-again
+  (is (= [5 63 5] (unseen-approach-with #{[5 63 5] [5 65 5]} [])) "floor first")
+  (is (= [5 65 5] (unseen-approach-with #{[5 63 5] [5 65 5]} [[5 63 5]])) "looked-at floor skipped")
+  (is (nil? (unseen-approach-with #{[5 63 5]} [[5 63 5]])) "all looked at: the verdict follows")
+  (is (nil? (unseen-approach-with #{} [])) "all seen: the verdict follows"))
+
+(deftest only-a-no-approach-refusal-looks-at-an-approach-cell
+  (with-redefs [ctx/mem (constantly {})]
+    (is (nil? (hp/unseen-approach {:primitives #js {:sensedAt (fn [_] #js {:unknown true})}} {:why :other :cell [5 64 5]})))))

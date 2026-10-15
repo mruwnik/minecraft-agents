@@ -491,8 +491,10 @@
   (is (= (repeat 20 true) (seen-in-one-pass pond-world 1 pond-cells))))
 
 (deftest ground-rows-see-nothing-behind-a-wall
-  (let [blocks (merge (tu/floor -20 0 20 40) (tu/box -8 64 12 8 67 12 "stone") {"0,63,20" "gold_block"})]
-    (is (= (repeat 20 false) (seen-in-one-pass blocks 1 [[0 63 20]])))))
+  (let [open (merge (tu/floor -20 0 20 40) {"0,63,20" "gold_block"})
+        walled (merge open (tu/box -8 64 12 8 67 12 "stone"))]
+    (is (= (repeat 20 true) (seen-in-one-pass open 1 [[0 63 20]])))
+    (is (= (repeat 20 false) (seen-in-one-pass walled 1 [[0 63 20]])))))
 
 (deftest a-lower-effort-casts-fewer-rays
   (let [rays (fn [effort]
