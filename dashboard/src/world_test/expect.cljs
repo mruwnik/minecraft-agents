@@ -114,7 +114,7 @@
   "results of a run that ends at its first failure: the ones still pending become failures saying they were not judged."
   [results]
   (mapv #(if (= :pending (:status %))
-           (assoc % :status :fail :evidence "not judged: the run stopped at the first failure")
+           (assoc % :status :fail :not-judged true :evidence "not judged: the run stopped at the first failure")
            %)
         results))
 

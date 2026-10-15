@@ -45,3 +45,17 @@
   (let [m (ev/result {:id "f/c" :run 1 :status :flaky :why "passed on a retry"})]
     (is (= "flaky" (:outcome m)))
     (is (= "passed on a retry" (:message m)))))
+
+(deftest the-message-names-the-real-failure-before-a-not-judged-one
+  (let [not-judged {:status :fail :not-judged true :evidence "not judged: the run stopped at the first failure" :expect {:event {:kind :a} :within-s 5}}
+        real {:status :fail :evidence "unwanted job/no_air" :expect {:no-event {:kind :no_air} :for-s 30}}]
+    (is (re-find #"no_air" (:message (ev/result {:id "f/c" :run 1 :status :fail :expects [not-judged real]}))))
+    (is (re-find #"not judged" (:message (ev/result {:id "f/c" :run 1 :status :fail :expects [not-judged]}))))
+    (is (re-find #"after.*wrong" (:message (ev/result {:id "f/c" :run 1 :status :fail :expects [not-judged]
+                                                       :afters [{:check [:x] :pass? false :evidence "wrong"}]})))
+        "a failed after check outranks a not-judged expectation")))
+
+(deftest a-failed-case-always-carries-a-why-naming-its-first-failure
+  (is (re-find #"after.*wrong" (:why (ev/with-why {:status :fail :expects [expect-ok] :afters [{:check [:x] :pass? false :evidence "wrong"}]}))))
+  (is (= "kept" (:why (ev/with-why {:status :fail :why "kept"}))))
+  (is (not (contains? (ev/with-why {:status :pass :expects [expect-ok]}) :why))))

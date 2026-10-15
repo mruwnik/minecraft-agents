@@ -1568,8 +1568,8 @@
                                                         (.then (after-checks! opts origin rc)
                                                                (fn [afters]
                                                                  (mark-stalled
-                                                                  (result (cond-> {:status (if (and (x/passed? expects) (every? :pass? afters)) :pass :fail)
-                                                                                   :expects expects :afters afters}
+                                                                  (result (cond-> (ev/with-why {:status (if (and (x/passed? expects) (every? :pass? afters)) :pass :fail)
+                                                                                                :expects expects :afters afters})
                                                                             (some :ended-early-s expects) (assoc :ended-early-s (some :ended-early-s expects)
                                                                                                           :idle-grace-s (:idle-grace-s rc 3)))))))))))))))))))
         (.catch (fn [e] (result {:status :error :why (.-message e)})))
