@@ -6,6 +6,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.go-to-test :as gt]
+            [engine.go-to-column-test :refer [hiding]]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
@@ -1346,3 +1347,9 @@
           (is (= "air" (block p [3 62 0])) "dug as guessed rock")
           (is (= "cobblestone" (block p [4 62 0])) "the lava it laid open is sealed")
           (is (seq (events-of seen :blocks.dig.sealed))))))))
+
+(deftest a-dig-route-does-not-step-on-a-floor-the-body-has-not-seen-under-seen-air
+  (let [world (apply dissoc (box 0 60 -1 6 70 1 "stone") (for [x (range 3) y [64 65]] (str x "," y ",0")))
+        p (hiding world #(= [2 63 0] %))
+        cells (esc/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false))]
+    (is (some #(= 1 (nth (:cell %) 2)) cells) "it digs round the seen-open cell whose floor is unseen")))

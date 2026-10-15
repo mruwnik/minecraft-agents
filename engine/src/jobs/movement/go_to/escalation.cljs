@@ -277,7 +277,12 @@
   dig, nil when no such route."
   [p from goal may-dig? own?]
   (let [block-at (escape/block-at-of p)
-        cells (:dig (dig-route/route block-at from goal {:dig-s cost/dig-cost
+        ;; a floor never seen under a cell seen open may be a void: dig-route reads nil as no floor
+        seen-floor (fn [[x y z :as cell]]
+                     (when-not (and (dig-look/unknown? p cell) (dig-route/open? (block-at [x (inc y) z]))
+                                    (not (dig-look/unknown? p [x (inc y) z])))
+                       (block-at cell)))
+        cells (:dig (dig-route/route seen-floor from goal {:dig-s cost/dig-cost
                                                          :step-s (:cost (cost/walk-cost {:distance 1}))}))]
     (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells))
       (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells))))
