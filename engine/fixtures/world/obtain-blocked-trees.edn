@@ -3,7 +3,7 @@
 ;; waits night-sheltered; it does not stop no-source).
 ;; Cut-off case: stone plateaus x 8..15 and x 21..28 (top y 7) with a 5-wide chasm to the floor between; the tree stands on the far one;
 ;; the body has only an axe (no blocks to bridge, no pickaxe to dig a stair). Night case: a stone room with a glass window east, a tree outside.
-;; Should-fail: both end without logs; the first stopped no-source naming "ended :no-tree (", the second only waits.
+;; Should-fail: both end without logs; the first stopped no-source naming "ended :none-seen (", the second only waits.
 {:defaults
  {:tags [:items :obtain :fell-tree :jobs]
   :time :day
