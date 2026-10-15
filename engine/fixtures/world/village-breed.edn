@@ -6,13 +6,13 @@
   :body {:at [10.5 0 16.5] :yaw 270 :inventory [["bread" 8]]}
   :limit-s 240}
  :cases
- [;; should succeed: target already met by the villagers in sight, nothing is fed
+ [;; should succeed: target already met by the villagers in sight, so the call ends done :already and nothing is fed
   {:name "met-target-feeds-nothing"
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20264,7,1,1]}"]
          [:summon "villager" [16.5 0 18.5] "{NoAI:1b,UUID:[I;20264,7,1,2]}"]
          [:wait-s 2]
          [:job (jobs.village.breed {:target 2})]]
-   :expect [{:event {:source :job :kind :breed.done :data {:births 0}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 30 :of-job true}]
    :after [[:item "bread" 8]]}
   ;; should succeed: two fed adults with beds make a child (needs AI villagers; beds are placed by the setup)
   {:name "pair-with-beds-breeds"
@@ -22,7 +22,7 @@
          [:wait-s 2]
          [:job (jobs.village.breed {:target 3 :wait-s 60})]]
    :expect [{:event {:source :job :kind :breed.done} :within-s 200 :of-job true}]}
-  ;; should fail: a single adult has nobody to pair with (a start condition: the manual root stops condition-failed)
+  ;; should fail: a single adult has nobody to pair with; the listed call waits on :no-pair (a start condition: the manual root stops condition-failed)
   {:name "one-adult-is-no-pair"
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20264,7,3,1]}"]
          [:wait-s 2]
@@ -35,4 +35,4 @@
          [:summon "villager" [16.5 0 18.5] "{NoAI:1b,UUID:[I;20264,7,4,2]}"]
          [:wait-s 2]
          [:job (jobs.village.breed {:target 3 :wait-s 20})]]
-   :expect [{:event {:source :job :kind :breed.gave-up :data {:reason "no-births"}} :within-s 200 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :breed.gave-up :data {:reason :no-births}} :within-s 200 :of-job true}]}]}
