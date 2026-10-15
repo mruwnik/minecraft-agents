@@ -20,10 +20,9 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter :as sh]
             [plan.shape :as shape]
             [jobs.lib.check-cache :as check-cache]
-            [jobs.build.from-plan.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted world-block judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
+            [jobs.build.from-plan.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
             [jobs.build.from-plan.text :refer [summary announce! stopped-text assoc-fetch-failed]]))
 
 (def doc
@@ -52,9 +51,7 @@
   3. Walk to a stand cell one to three blocks beside the nearest buildable (or diggable) cell, on the ground there
      (the body's feet height, or one up or down on a slope).
   4. Walk toward the nearest unloaded cell. Unseen cells are never taken as built.
-  5. By day, with a bed built and no respawn bed known (jobs.lib.shelter/spawn-bed-live), use the bed to set the
-     respawn point (jobs.survival.set-spawn child, once).
-  6. Finish.
+  5. Finish.
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
   the end it is given up with jobs.lib.placement's reason (:no-support, :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
   cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unloaded).
@@ -66,7 +63,7 @@
   :lava-adjacent). A cell with an untaken one is refused as :hazard.
   :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
   fill; it is not listed :wrong.
-  done? holds when no cell is owed, none came out wrong and step 5 has nothing to do; the engine then ends it :done.
+  done? holds when no cell is owed, none came out wrong; the engine then ends it :done.
   Ends with data {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
   :want}] :refused [...] :fetch-failed {item {:failed :why}}}: done when nothing is missing (and no block came out wrong: nothing-possible :wrong-blocks) or the cells placed meet
   the call's :least (default :all); else with :text naming the missing count and what it left: nothing-possible
@@ -140,11 +137,10 @@
 (def can-start? (cond/and plan-problem no-items))
 (def can-run? plan-problem)
 
-(declare spawn-cell result-data)
+(declare result-data)
 
 (defn done?
-  "Done when the plan has nothing owed, no block came out wrong (the round ends it with its build.wrong warn) and the
-  spawn is set (spawn-cell); the cells placed this call, the cells still owed and the result so far. A check (no token)
+  "Done when the plan has nothing owed, no block came out wrong (the round ends it with its build.wrong warn); the cells placed this call, the cells still owed and the result so far. A check (no token)
   reads the plan judged once per check-cache window, a round afresh."
   [c]
   (let [{:keys [cells trouble]} (if (:token c) (planned c) (judged-plan c))
@@ -157,7 +153,6 @@
       trouble (apply contract/later :plan-trouble (str "plan " plan ": " trouble) data)
       (pos? left) (apply contract/later :owed (str "build of " plan ": " left " cells owed") data)
       (seq (:wrong result)) (apply contract/later :wrong (str "build of " plan ": " (count (:wrong result)) " blocks wrong") data)
-      (spawn-cell c cells) (apply contract/later :spawn (str "build of " plan ": the spawn is to set at the bed") data)
       :else (apply contract/ok :built (str "build of " plan " done: placed " placed) data))))
 
 (defn quote-of [c]
@@ -424,27 +419,6 @@
     (announce! c result)
     (ending-of c result)))
 
-(defn spawn-cell
-  "By day, the foot cell of a bed the plan wants that stands built, when no respawn bed is known and the spawn was not
-  yet tried by this job; else nil."
-  [c cells]
-  (let [p (:primitives c)]
-    (when (and (not (:spawn-tried (ctx/mem c))) (not (sh/night? p)) (nil? (sh/spawn-bed-live (ctx/view c))))
-      (some (fn [{:keys [pos want]}]
-              (when (and (map? want) (= "foot" (some-> (:part want) name)) (str/ends-with? (str (:block want)) "_bed")
-                         (str/ends-with? (str (:name (world-block p pos))) "_bed"))
-                pos))
-            cells))))
-
-(defn ^:async set-spawn!
-  "Use the built bed at pos to set the respawn point (jobs.survival.set-spawn child); one try."
-  [c pos]
-  (let [w (await (ctx/call c :spawn 'jobs.survival.set-spawn {:bed pos}))]
-    (if (= :continue w)
-      :continue
-      (do (ctx/update-mem! c assoc :spawn-tried true)
-          :again))))
-
 (defn ^:async build-step!
   "One step of the build (:again, or :continue while a walk waits): place or dig what is in reach, else walk, else finish."
   [c cells]
@@ -476,7 +450,6 @@
       (seq todo) (await (walk-to! c cells (nearest todo)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
-      (spawn-cell c cells) (await (set-spawn! c (spawn-cell c cells)))
       :else (let [before (ctx/mem c)]
               (ctx/update-mem! c retry-walks (u/self-pos c) true)
               (if (= before (ctx/mem c)) (finish! c cells) :again)))))

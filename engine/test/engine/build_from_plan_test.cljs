@@ -399,7 +399,7 @@
                 {:id "bed-foot" :cells [[4 64 3]] :want {:block "white_bed" :facing :south :part :foot}}])
 
 (defn ^:async build-bed
-  "Build a bed from a plan at time of day: [uses spawn-bed entries]."
+  "Build a bed from a plan at time of day: [beds used, spawn-bed entries]."
   [time]
   (let [{:keys [eng p]} (start {:blocks ground :time time :inventory [{:name "white_bed" :count 1}]}
                                {"house" {:id "house" :parts bed-parts}})]
@@ -407,12 +407,12 @@
     [(mapv (fn [c] (let [a (.-args c)] [(.-x (.-pos a)) (.-y (.-pos a)) (.-z (.-pos a))])) (h/calls p "useOn"))
      (mapv :data (mem/entries (mem/view (:store eng)) :spawn-bed))]))
 
-(deftest a-bed-built-by-day-gets-the-spawn-set-at-night-it-does-not
+(deftest a-built-bed-leaves-the-spawn-alone-by-day-and-at-night
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [[[4 64 3]] [{:pos {:x 4 :y 64 :z 3}}]] (await (build-bed 1000))))
-        (is (= [[] []] (await (build-bed 14000))) "the sleep job sets the spawn at night")))))
+        (is (= [[] []] (await (build-bed 1000))))
+        (is (= [[] []] (await (build-bed 14000))))))))
 
 (deftest a-wall-torch-is-placed-with-a-torch-on-its-wall-and-a-floor-torch-looking-down
   (async done
