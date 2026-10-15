@@ -41,7 +41,8 @@
   :hazards [:under-feet] :why :no-side-stand}. Only :accept :under-feet digs it from on top.
   In reach it holds the best carried tool (tools/equip!; by hand when a tool of another kind is held) and digs through
   jobs.lib.tidy/dig!, so a dig of another's block with :ignore-zones? is recorded for jobs.survival.restore-broken.
-  With :collect it picks up the drops (only the item entities that appeared with this dig, by id).
+  With :collect it picks up the drops (only the item entities that appeared with this dig, by id). A cancel or limit after
+  the block came out leaves the seal and the pickup to the cleanup.
   With :on-lava :seal (default), seen lava beside the dug cell is filled with a building block from the rim
   (jobs.lib.lava, a jobs.blocks.place child, event blocks.dig.sealed); the dug cell stays dug. When it cannot be (no block
   carried or fetched (:seal-fetch), or two places fail) the body steps off the cells beside the lava and the job ends
@@ -185,8 +186,8 @@
 (def can-start? (cond/and bad-args not-loaded refused no-tool-unfetched))
 
 (defn done?
-  "Ok when the cell is air and no dug block of this call is still to seal or collect (the round ends with the
-  wrap-up); else later."
+  "Ok when the cell is air and no dug block of this call is still to seal or collect (the cleanup does the
+  wrap-up if the round was cut before); else later."
   [c]
   (let [{:keys [pos error]} (b/parse (:args c))
         block (when-not error (b/target-name (:primitives c) pos b/hidden-guess))
@@ -220,6 +221,7 @@
   else condition-failed (:fluid :fluid-adjacent :cannot), nothing-possible (:lava-unsealed, a refused dig) or
   limit-reached :job-time (the primitive timed out). The data is the result."
   [c result]
+  (ctx/update-mem! c assoc :finished true)
   (let [result (cond-> result (:stepped-aside (ctx/mem c)) (assoc :stepped-aside (:stepped-aside (ctx/mem c))))
         {:keys [cell place stepped-aside reason]} result
         result (assoc result :text (text-of result cell place stepped-aside))]
@@ -403,3 +405,22 @@
   (let [{:keys [pos]} (b/parse (:args c))]
     (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
     (await (attempt! c pos))))
+
+(defn ^:async cleanup
+  "However the call ended: a block this call dug whose lava is not yet sealed or whose drops are not yet collected gets
+  both now (the round's own seal-step! and collect!). Done once nothing is left, :continue while a child waits."
+  [c _]
+  (let [{:keys [pos]} (b/parse (:args c))
+        m (ctx/mem c)
+        done #(ctx/end c :done nil {})]
+    (if (or (:finished m) (not (:dug m)) (not= pos (:for m)))
+      (done)
+      (loop []
+        (let [s (await (seal-step! c pos))]
+          (cond
+            (= :again s) (recur)
+            (= :continue s) :continue
+            s (done)
+            (and (:collect (:args c)) (seq (:ids (:dug m))))
+            (let [r (await (collect! c pos))] (if (= :continue r) :continue (done)))
+            :else (done)))))))
