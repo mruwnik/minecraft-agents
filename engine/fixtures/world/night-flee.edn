@@ -3,6 +3,9 @@
 ;; :walk-radius 5 makes the roofed home a flee target instead of the lit roof walk. Needs night: --allow-time --time-log <the
 ;; shared time log>, one case per call. The three flee cases thin the floor near the start (one block over air, x 0..18) so no
 ;; pit site within 16 exists and night flees instead of hand-digging a pit; the dirt field and overhang lie beyond 16.
+;; A home counts only under a roof cell the body has seen (sight stops at the first block): the homes sit under a roof cell
+;; whose west face the body sees from its start. The walled home is bedrock: go-to digs stone by hand, so only bedrock
+;; makes the walk truly impossible.
 {:defaults
  {:tags [:night :survival :flee]
   :time :night
@@ -13,7 +16,7 @@
  :cases
  [{:name "flees-to-a-roofed-home"
    :blocks [[:fill [29 2 15] [31 2 17] "stone"]]
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [30 0 16]})]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [29 0 16]})]
          [:job (jobs.survival.night {:walk-radius 5})]]
    :expect [{:event {:source :job :kind :shelter.fled :data {:target :roofed-place}} :within-s 120}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 60 :until {:source :job :kind :shelter.fled :data {:target :roofed-place}}}]
@@ -41,8 +44,8 @@
             {:event {:source :job :kind :shelter.exposed} :within-s 120}]
    :limit-s 150}
   {:name "walled-home-flee-fails-honestly"
-   :blocks [[:fill [28 0 14] [31 4 18] "stone" :hollow]]
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [30 1 16]})]
+   :blocks [[:fill [28 0 14] [31 4 18] "bedrock" :hollow] [:set [28 4 16] "air"] [:set [27 0 16] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [29 1 16]})]
          [:job (jobs.survival.night {:walk-radius 5})]]
    :expect [{:event {:source :job :kind :shelter.flee_failed} :within-s 150}
             {:event {:source :job :kind :shelter.exposed} :within-s 200}]

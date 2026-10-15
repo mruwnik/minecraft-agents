@@ -6,6 +6,7 @@
 ;; :night trigger after the plot is built, so beds and structures are in :blocks, remembered beds in :memory and a carried
 ;; bed in :body :inventory; :settle-s 0 so the reaction falls inside the event window. Cases that must not refire are
 ;; checked by hand by counting events in the body's log for 5 minutes.
+;; A bed set by RCON after the start is set where the body looks (:yaw 90, west): one set behind it is not seen.
 {:defaults
  {:tags [:night :survival :sleep]
   :time :night-exclusive
@@ -66,7 +67,7 @@
   {:name "monster-near-one-sleep-failed-no-refire"
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
-   :body {:at [13.5 0 13.5]}
+   :body {:at [13.5 0 13.5] :yaw 90}
    :act [[:summon "zombie" [14.5 0 11.5] "{NoAI:1b,Silent:1b}"] [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"] [:rcon "execute positioned $X $Y $Z run setblock ~11 ~ ~12 red_bed[facing=east,part=head]"] [:wait-s 75]]
    :expect [{:event {:source :job :kind :shelter.sleep_failed} :within-s 40}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 75}]

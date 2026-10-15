@@ -40,6 +40,6 @@
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]}) [:now]]
          [:job (jobs.survival.sleep {:bed #at [10 0 12]})]]
    :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 30}
-            {:event {:source :job :kind :waiting :data {:reason :bed-occupied}} :within-s 30 :of-job true}]
+            {:event {:source :job :kind :holding :data {:reason :bed-occupied}} :within-s 30 :of-job true}]
    :after [[:body-near [13.5 0 13.5] 1.5]]
    :limit-s 50}]}
