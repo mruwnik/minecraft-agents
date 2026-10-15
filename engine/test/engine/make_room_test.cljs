@@ -800,7 +800,7 @@
     (aset p "sensedAt" (fn [pos] (if (> (.-x pos) fx) #js {:unknown true} (omniscient pos))))
     (is (= [-1 0] (mr/direction p nil)) "the east cells were never looked at: west")))
 
-(deftest a-toss-the-body-takes-back-ends-stopped-taken-back
+(deftest a-toss-the-body-takes-back-is-reported-by-the-cleanup-as-taken-back
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -813,7 +813,7 @@
                              (.apply step p (to-array a))))
           (await (tick-out! eng 30))
           (is @back "walk-away ran")
-          (is (= {:status :stopped :reason :taken-back} (select-keys @out [:status :reason]))))))))
+          (is (= {:kind :nothing-possible :cause :taken-back} (get-in @out [:cleanup]))))))))
 
 ;; ------------------------------------------------------------------ job contract
 
@@ -857,3 +857,22 @@
             "it tossed, still short")
         (is (= {:event :completed :kind :done :reason nil}
                (await (root-ending {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "dirt" 2 64)))} {:free 3 :keep-blocks 0}))))))))
+
+(deftest a-make-room-cut-after-a-toss-walks-away-in-its-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35)})
+              walks (atom 0)
+              go-to {:ways [:walk :clear-seal]
+                     :round (fn ^:async go-to-round [c] (swap! walks inc) (ctx/end c :done nil))}
+              spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
+          (.override (.-world p) "toss" (fn ^:async f [token a impl]
+                                          (let [r (await (impl token a))]
+                                            (core/cancel! eng (first (:list (core/state eng))))
+                                            r)))
+          (core/submit! eng '(jobs.storage.make-room) {})
+          (await (tick-out! eng 10))
+          (is (= 1 @walks) "the walk away ran after the cut")
+          (is (empty? (spots))))))))

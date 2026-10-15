@@ -21,7 +21,7 @@
 (def doc
   "Make room in a nearly full inventory (the inventory-nearly-full reflex) until :free slots are free. One round is
   the whole attempt: it re-reads the inventory before every step and puts away, swaps or tosses until enough is free
-  or nothing more may go. It never yields: the walk away is waited out inside the round.
+  or nothing more may go. It never yields: the walk away (the cleanup export) is waited out inside it.
   What is thrown, like a player: names with no keep first (plain junk blocks such as granite, tuff and gravel first, whole
   big stacks before partial, then the rest by worth: flowers, saplings, leaf litter), then the surplus above the
   keep of cobblestone, dirt and planks; ores, fuel and the like are not thrown (below :toss-below only). Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
@@ -39,16 +39,17 @@
      below :toss-below, and it is thrown whole and only while the name's floor stays carried. Cheapest first,
      then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
      of the four directions with two free cells ahead at eye level and tosses.
-  After tossing it walks up to :away blocks from where the items were thrown (a go-to child; the farthest cell back
+  After tossing, the cleanup export (however the call ends) walks up to :away blocks from where the items were thrown (a go-to child; the farthest cell back
   that is no seen obstacle, none: no walk), so it does not pick them up again.
   Resume: a toss or swap writes its intent first; a run that finds one (after a cut or a restart) checks the
   inventory before acting again. What was tossed before a cut stays in the result when the job survives the cut (a
   child); the spot to walk away from is body memory, so a cut reflex's refire still walks away from it.
+  A done run whose tossed items the body carries again after the walk away has the cleanup ending :taken-back.
   Needs: nothing; a bag with :free slots free is done at once.
   Ends:
   - done {:tossed [{:item :count}] :free} once :free slots are free (info make-room.done when it acted);
   - nothing-possible :short (it acted, nothing more may go) or :nothing-to-go (it may put away or toss nothing),
-    :taken-back (the body picked its tossed items up again), :stalled after :max-steps steps (warn make-room.stalled)
+    :stalled after :max-steps steps (warn make-room.stalled)
     or :toss-failed after three failed tosses in a row (warn make-room.toss-failed); data :free, :tossed and :text,
     info make-room.stopped for the first two. The report counts the free slots.
   Also emits info make-room.tossed (with :junk) and make-room.swapped.")
@@ -397,14 +398,14 @@
   (max 0 (- (:free (:args c)) (u/free-slots (:primitives c)))))
 
 (defn done?
-  "Done when :free slots are free; a run that acted and was cut still has its walk away and its summary to do."
+  "Done when :free slots are free; a run that acted still has its summary to do."
   [c]
   (let [left (slots-short c)
         free (u/free-slots (:primitives c))
         data [:units :slots :done free :left left :result {:tossed (vec (:tossed (ctx/mem c))) :free free}]]
     (cond
       (pos? left) (apply contract/later :short (str "make-room: " left " slot(s) short") data)
-      (:acted (ctx/mem c)) (apply contract/later :wrapping-up "make-room: room made, the walk away and summary to do" data)
+      (:acted (ctx/mem c)) (apply contract/later :wrapping-up "make-room: room made, the summary to do" data)
       :else (apply contract/ok :room (str free " free") data))))
 
 (defn quote-of
@@ -427,8 +428,7 @@
   {:short "nothing more may go"
    :nothing-to-go "nothing it may put away or toss"
    :stalled "still short of room after its :max-steps steps"
-   :toss-failed "three tosses failed"
-   :taken-back "the tossed items came back to the body (it cannot toss them out of its own reach)"})
+   :toss-failed "three tosses failed"})
 
 (defn ^:async finish-end!
   "The summary event and the :done or :stopped result."
@@ -446,21 +446,23 @@
           (ctx/emit! c :make-room.stopped :info (assoc summary :reason reason :text text)))
         (ctx/end c :nothing-possible reason {:text text :free free-now :tossed tossed})))))
 
-(defn ^:async end!
-  "Walk away from a toss spot the body is still near, then end: done when :free slots are free (reason nil), else stopped with reason.
-  :stalled and :toss-failed are warns (make-room.<reason>), the others info make-room.stopped."
-  [c reason]
-  (let [spot (tossed-spot c)
-        near? (and spot (near-spot? c spot))
-        _ (when (and spot (not near?)) (ctx/forget-where! c :make-room-tossed (constantly true)))
-        _ (when near? (await (walk-away! c spot)))
-        tossed? (seq (:tossed (ctx/mem c)))
-        back? (and (nil? reason) tossed? (< (u/free-slots (:primitives c)) (:free (:args c))))]
-    (await (finish-end! c (if back? :taken-back reason)))))
+(defn ^:async cleanup
+  "However the call ends: an intent a cut left is settled, then it walks away from a toss spot the body is still near
+  (a spot left far behind is forgotten). Done, or nothing-possible :taken-back when a done run's tossed items are carried again
+  and fewer than :free slots are free."
+  [c ending]
+  (await (settle-intents! c))
+  (let [spot (tossed-spot c)]
+    (if (and spot (near-spot? c spot))
+      (await (walk-away! c spot))
+      (ctx/forget-where! c :make-room-tossed (constantly true))))
+  (if (and (= :done (:kind ending)) (seq (:tossed (ctx/mem c))) (< (u/free-slots (:primitives c)) (:free (:args c))))
+    (ctx/end c :nothing-possible :taken-back nil)
+    (ctx/end c :done nil)))
 
 (defn ^:async step!
   "One unit of work on a fresh look at the inventory: a deposit child call, a swap or a toss (:again), or the end
-  (:done, through end!). run is {:steps :chest-done}."
+  (:done, through finish-end!). run is {:steps :chest-done}."
   [c run]
   (let [{:keys [free max-steps toss-below]} (:args c)
         p (:primitives c)
@@ -473,13 +475,13 @@
         order (toss-order inventory keep recency toss-below)]
     (swap! run update :steps inc)
     (cond
-      (>= free-now free) (await (end! c nil))
-      (>= (:toss-fails m 0) 3) (await (end! c :toss-failed))
-      (> (:steps @run) max-steps) (await (end! c :stalled))
+      (>= free-now free) (await (finish-end! c nil))
+      (>= (:toss-fails m 0) 3) (await (finish-end! c :toss-failed))
+      (> (:steps @run) max-steps) (await (finish-end! c :stalled))
       (and chest (seq names)) (do (await (put-away! c run chest names keep)) :again)
       swap (do (await (swap-in! c swap)) :again)
       (seq order) (do (await (toss! c (first order) (direction p nil) {})) :again)
-      :else (await (end! c (if (:acted m) :short :nothing-to-go))))))
+      :else (await (finish-end! c (if (:acted m) :short :nothing-to-go))))))
 
 (defn ^:async round
   "One whole attempt: settle intents left by a cut, then step! until it ends."
