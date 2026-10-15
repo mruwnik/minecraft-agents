@@ -1033,3 +1033,13 @@
           (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
           (is (= [] (filterv #(= :food.no-cook (:kind %)) @seen)) "no give-up on the cooking wait")
           (is (= [] (reflex-events seen :continued))))))))
+
+(deftest a-cook-still-under-way-on-the-next-call-is-waited-out-not-given-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (assoc furnace-world :self {:food 2}) :step-ms 20)]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :hungry}]}"))
+          (await (core/tick! eng))
+          (is (= [] (filterv #(= :food.no-cook (:kind %)) @seen)) "no give-up while the load cooks")
+          (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken"))))))
