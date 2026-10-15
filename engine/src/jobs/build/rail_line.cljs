@@ -7,6 +7,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.lib.placement :as placement]
@@ -33,7 +34,7 @@
   3. :check runs plan.rail/judge-line over the world. A sturdy block where the plan wants bed or buffer fill is
      no fault.
   Needs: the plan, a zone list (unless :ignore-zones?), and the items for every cell still to build carried (unless
-  :all-carried false). Returns, as the data of its ending, {:ok? :breaks :hazards :built {:placed :missing :short
+  :all-carried false); those lacking are fetched first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause). Returns, as the data of its ending, {:ok? :breaks :hazards :built {:placed :missing :short
   :given-up :wrong :refused}}. :hazards lists falling beds (gravel, sand).
   Endings: done when the line is sound (a line sound already is done at once, placed 0);
   nothing-possible :broken when it is not (one warn rail-build.broken with :breaks {:pos :why} (:gap :shape :unlit
@@ -44,7 +45,7 @@
   - condition-failed: the plan is missing or unreadable (:plan); no zone list has been read (:no-zones); a cell wanting
     a redstone block holds another block (:source-blocked, :cells; the builder never digs, so on natural ground put a
     torch or lever in the plan, or use a raised bed); a cell still to build is refused by the access rules
-    (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :all-carried (the default) items for
+    (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :all-carried (the default) and :fetch off for items, items for
     the cells still to build are not all carried (:short, one rail-build.short warn {item n}; an :any want counts every
     choice carried; only cells seen empty are owed, the warn's :up-to {item n} counts the unseen cells too). With
     :all-carried false it builds what is carried.
@@ -57,6 +58,7 @@
    :give-up {:doc "as jobs.build.from-plan" :spec (a/int-in 1 nil) :default 3}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :spec boolean? :default true}
+   :fetch {:doc "get the items still to place with jobs.lib.need before the build: true, a set of kinds or a map of limits; false (or without :item) waits :short" :spec need/option? :default true}
    :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :spec (a/or-of (a/int-in 0 nil) false?) :default 1}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
@@ -117,14 +119,19 @@
     (mapv #(placement/item-of (if (string? %) % (:block %))) (rest want))
     [item]))
 
-(defn lacking
-  "{item n} still lacking for cells, carried {item n}; an :any want is keyed by its text and counts every choice."
+(defn shortages
+  "[[key n choices]] still lacking for cells, carried {item n}; an :any want is keyed by its text and counts every choice."
   [cells carried]
-  (into (sorted-map)
+  (into []
         (keep (fn [[k group]]
                 (let [n (- (count group) (reduce + (map #(get carried % 0) (choices (first group)))))]
-                  (when (pos? n) [k n]))))
-        (group-by #(if (vector? (:want %)) (shape/want-text (:want %)) (:item %)) cells)))
+                  (when (pos? n) [k n (choices (first group))]))))
+        (sort-by key (group-by #(if (vector? (:want %)) (shape/want-text (:want %)) (:item %)) cells))))
+
+(defn lacking
+  "{item n} still lacking for cells, carried {item n}."
+  [cells carried]
+  (into (sorted-map) (map (fn [[k n]] [k n])) (shortages cells carried)))
 
 (defn short-of
   "{item n} certainly lacking: only cells seen to be empty are owed; a cell nobody has seen may hold ground already."
@@ -141,6 +148,12 @@
   [cells]
   (vec (sort (keep #(when (and (= "redstone_block" (shape/want-block (:want %))) (= :wrong (:answer %))) (:pos %))
                    cells))))
+
+(defn fetch-opts
+  "The limits {:how :explore :minutes} for fetching the items still to place, nil when :fetch does not allow items."
+  [c]
+  (when-let [o (need/opts c 'jobs.build.rail-line)]
+    (when (contains? (:what o) :item) (select-keys o [:how :explore :minutes]))))
 
 (defn not-ready
   "Why a line that is not sound may not be begun, as a wait reason {:reason kw :why text}, or nil when it may: no
@@ -161,7 +174,7 @@
       (seq no) (let [text (str "cells refused: " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) no)))]
                  (decline! c {:reason :refused :refused no :text text})
                  {:reason :refused :refused no :why text})
-      (and all-carried (seq short))
+      (and all-carried (not (fetch-opts c)) (seq short))
       (let [text (str "short of " (plan/shortage-text short))]
         (ctx/warn-once! c [plan :short] :rail-build.short
                         {:plan plan :part part :short short :up-to (up-to-of owed carried)
@@ -292,6 +305,19 @@
              (cond-> (assoc proof :built built)
                (:ok? proof) (assoc :text (str "rail line " plan " is sound, " rails " rails, placed " (:placed built)))))))
 
+(defn ^:async fetch-step!
+  "Before the build is begun with :all-carried, fetch the first item certainly lacking (jobs.lib.need): :continue while
+  the child waits, :again once got, the failed ending, nil when nothing is due."
+  [c cells]
+  (when-let [[_ n names] (and (:all-carried (:args c)) (not (:building (ctx/mem c))) (fetch-opts c)
+                              (first (shortages (filter #(= :missing (:answer %)) (plan/owed cells))
+                                                (storage/carried-totals (u/inventory (:primitives c))))))]
+    (let [o (fetch-opts c)
+          e (await (if (= 1 (count names)) (need/item! c (first names) n o) (need/blocks! c names n o)))]
+      (cond (= :continue e) :continue
+            (= :done (:kind e)) :again
+            :else e))))
+
 (defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)
         phase (:phase (ctx/mem c))]
@@ -300,7 +326,8 @@
       (= :check phase) (finish! c cells)
       (= :switch phase) (await (switch-step! c cells))
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
-                (await (build-step! c cells))))))
+                (or (await (fetch-step! c cells))
+                    (await (build-step! c cells)))))))
 
 (defn ^:async round
   "The whole attempt: build, switch the levers, prove the line, in steps (pace/steps!); :continue only while a walk, a dig

@@ -7,30 +7,38 @@
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]))
 
 (def doc
   "Get :count obsidian by pouring water on a seen lava source and mining the result with a diamond pickaxe.
-  Takes seen obsidian first (jobs.gather.mine). Else it needs a water bucket carried (an empty bucket is filled at seen water) and a seen
+  Takes seen obsidian first (jobs.gather.mine). Else it needs a water bucket carried (an empty bucket is filled at seen water; no bucket at all is fetched, :fetch) and a seen
   lava cell with seen air above it and a stand cell beside that air (a standable cell with no lava beside it, never over lava):
   it walks to the stand (go-to, which keeps off lava), pours the water at the air cell above the lava, waits for the lava to turn to obsidian,
   scoops the water back up (also in the cleanup of a cut run), and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
   Ends :done {:got n} at :count obsidian gained. Else it ends with :got n in its data: condition-failed :no-bucket (no water bucket and no bucket
-  with water seen) or :no-lava (no seen lava with open air above and a safe stand); nothing-possible :pour-failed (two sites in a row where
+  with water seen, or :fetch off); a failed bucket fetch ends with its need cause or :no-lava (no seen lava with open air above and a safe stand); nothing-possible :pour-failed (two sites in a row where
   the pour or the conversion failed: moving lava gives cobblestone) or :unreachable (the stand could not be walked to); the mine child's
   ending (:no-tool ..) passes up; a limit of the call ends limit-reached.
   Quote: time by the walk to the stand and the pour; yields the obsidian.")
 
 (a/defargs args
   {:count {:doc "obsidian to get" :spec (a/int-in 1 nil) :default 1}
-   :radius {:doc "how far from the body to look for lava, obsidian and water" :spec (a/num-in 1 nil) :default 24}})
+   :radius {:doc "how far from the body to look for lava, obsidian and water" :spec (a/num-in 1 nil) :default 24}
+   :fetch {:doc "get a bucket when no bucket is carried, and the mine child's pickaxe, with jobs.lib.need: true, a set of kinds or a map of limits; false waits :no-bucket" :spec need/option? :default true}})
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds making obsidian may take: the walks, the pour, the wait for the conversion and the mining." :spec (a/num-in 0 nil)}})
 
 (def mine-fetch {:what #{:tool} :how #{:chest :craft}})
+
+(defn fetch-opts
+  "The limits {:how :explore :minutes} for fetching a bucket, nil when :fetch does not allow items."
+  [c]
+  (when-let [o (need/opts c 'jobs.gather.make-obsidian)]
+    (when (contains? (:what o) :item) (select-keys o [:how :explore :minutes]))))
 
 (defn carried [c name]
   (reduce + 0 (keep #(when (= name (:name %)) (:count %)) (u/inventory (:primitives c)))))
@@ -146,7 +154,7 @@
   "The seen obsidian mined with a mine child: :again, :continue while it works, or its ending when it got none."
   [c got]
   (let [e (await (ctx/call c :mine 'jobs.gather.mine
-                           {:block "obsidian" :item "obsidian" :count (- (:count (:args c)) got) :fetch mine-fetch :mend false :radius (:radius (:args c))}))]
+                           {:block "obsidian" :item "obsidian" :count (- (:count (:args c)) got) :fetch (if (contains? (:what (need/opts c 'jobs.gather.make-obsidian)) :tool) mine-fetch false) :mend false :radius (:radius (:args c))}))]
     (cond
       (= :continue e) :continue
       (> (gained c) got) :again
@@ -168,7 +176,12 @@
             :continue :continue
             :again :again
             (end c :condition-failed :no-bucket "no water bucket is carried and no seen water to fill the bucket at")))
-        (end c :condition-failed :no-bucket "no water bucket is carried (a bucket is 3 iron plus a seen water source)"))
+        (if (fetch-opts c)
+          (let [e (await (need/item! c "bucket" 1 (fetch-opts c)))]
+            (cond (= :continue e) :continue
+                  (= :done (:kind e)) :again
+                  :else e))
+          (end c :condition-failed :no-bucket "no water bucket is carried (a bucket is 3 iron plus a seen water source)")))
       :else
       (if-let [site (first (sites c))]
         (let [w (await (walk! c (:stand site) 1))]
@@ -192,11 +205,12 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn bucket-cause
-  "Cause :no-bucket before the start (the round's own ending covers it later): no obsidian seen to mine, no water bucket carried and no bucket with water seen to fill."
+  "Cause :no-bucket before the start (the round's own ending covers it later): no obsidian seen to mine, no water bucket carried and no bucket with water seen to fill; none when a bucket can be fetched."
   [c]
   (when (and (zero? (carried c "water_bucket"))
              (empty? (seen-of c ["obsidian"]))
-             (not (and (pos? (carried c "bucket")) (seq (seen-of c ["water"])))))
+             (not (and (pos? (carried c "bucket")) (seq (seen-of c ["water"]))))
+             (not (and (zero? (carried c "bucket")) (fetch-opts c))))
     {:reason :no-bucket}))
 
 (defn lava-cause

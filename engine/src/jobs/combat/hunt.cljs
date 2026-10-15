@@ -9,6 +9,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.hunting :as hunting]
+            [jobs.lib.need :as need]
             [jobs.lib.shelter :as sh]
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]
@@ -30,7 +31,7 @@
   A hunt waits (can-run?) while the body is too hurt (:low-health, jobs.lib.body/too-hurt), also once begun, and (can-start?) at its start (one kind
   only) while :no-color (a :color and none of it in range; :seen-colors) or :too-few (:keep or fewer adults within :radius; the
   cause has :in-range, :radius, :keep and :nearest, the distance of the nearest adult of the kind in sight up to ::sight-radius).
-  The first round ends :condition-failed :unarmed for a hostile kind and no weapon of the call's :use :tools carried.
+  A hostile kind with no weapon of the call's :use :tools carried gets a sword first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause), else with :fetch off the first round ends :condition-failed :unarmed.
   One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
   1. With a :target, the attack child fights it. It is booked killed, or skipped when attack gave up on it or lost it.
      :max-skips skips in a row end the job :gave-up (warn hunt.gave-up).
@@ -62,6 +63,7 @@
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
    :off-limits {:doc "animal kinds never hunted; nil: the jobs.lib.animal-spare/off-limits setting" :spec (a/or-of (a/pred "nil" nil?) (a/coll-of a/item?)) :default nil}
    :spare-pens {:doc "never hunt animals in a zone or plan of the body's own or in a closed enclosure (false: this hunt may take them)" :spec boolean? :default true}
+   :fetch {:doc "get a sword when a hostile kind is hunted unarmed, with jobs.lib.need: true, a set of kinds or a map of limits; false (or without :tool) ends :unarmed" :spec need/option? :default true}
    :max-skips {:doc "animals skipped in a row before the hunt gives up" :spec (a/int-in 1 nil) :default 3}})
 
 (a/defargs settings
@@ -166,6 +168,22 @@
   (let [mob (:mob (:args c))
         out {:killed 0 :reason :unarmed :mob mob :text (str "hunt stopped: no weapon carried for a hostile " mob)}]
     (ctx/end c :condition-failed :unarmed out)))
+
+(defn fetch-opts
+  "The limits {:how :explore :minutes} for fetching a weapon, nil when :fetch does not allow tools."
+  [c]
+  (when-let [o (need/opts c 'jobs.combat.hunt)]
+    (when (contains? (:what o) :tool) (select-keys o [:how :explore :minutes]))))
+
+(defn ^:async fetch-weapon!
+  "Get a sword with jobs.lib.need: :yield while it works, :again once got (the memory :fetching marks the fetch under way across
+  rounds), else the failed ending."
+  [c]
+  (ctx/update-mem! c assoc :fetching true)
+  (let [e (await (need/tool! c {:kind "sword"} (fetch-opts c)))]
+    (cond (= :continue e) :yield
+          (= :done (:kind e)) (do (ctx/update-mem! c dissoc :fetching) :again)
+          :else (do (ctx/update-mem! c dissoc :fetching) e))))
 
 (defn no-color
   "The cause :no-color while nothing of the :color is in range: the colours that are, in the data and text."
@@ -279,7 +297,8 @@
     (let [{:keys [target collecting killed]} (ctx/mem c)
           next-target (first (candidates c))]
       (cond
-        (and first? (hostile? c) (not (armed? c))) (unarmed! c)
+        (and (or first? (:fetching (ctx/mem c))) (hostile? c) (not (armed? c)))
+        (if (fetch-opts c) (await (fetch-weapon! c)) (unarmed! c))
         target (await (hunting/attack! c (attack-opts c)))
         collecting (await (hunting/collect! c :yield))
         (>= (or killed 0) wanted) (finish! c :count)

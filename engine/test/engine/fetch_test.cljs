@@ -820,6 +820,17 @@
           (is (empty? (transfers s)))
           (is (= [:no-sapling] (mapv :reason (events-of s :waiting)))))))))
 
+(deftest plant-sapling-with-fetch-limited-to-tools-waits-no-sapling-and-touches-no-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {chest-at [{:name "oak_sapling" :count 2}]}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak" :fetch #{:tool}}) {})
+          (await (run-ticks s 10))
+          (is (= 1 (count (listed s))) "still queued")
+          (is (empty? (transfers s)))
+          (is (= [:no-sapling] (mapv :reason (events-of s :waiting)))))))))
+
 (deftest plant-sapling-with-nothing-to-fetch-ends-need-with-the-failure
   (async done
     (tu/run-async done

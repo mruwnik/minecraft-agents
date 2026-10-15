@@ -62,7 +62,7 @@
 
     (and (= "obsidian" (:key need))
          (empty? (look/seen-blocks (:primitives c) {:names ["obsidian"] :radius (seen-radius) :max 1})))
-    (assoc need :job 'jobs.gather.make-obsidian :args {:count (:count need) :radius (seen-radius)})
+    (assoc need :job 'jobs.gather.make-obsidian :args {:count (:count need) :radius (seen-radius) :fetch #{:tool}})
 
     :else
     (if-let [name (when (or (:ore? need) (= "dirt" (:key need))) (:name (seen-of c need)))]

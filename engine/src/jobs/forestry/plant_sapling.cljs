@@ -19,14 +19,14 @@
   n bone meal on it.
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
   A missing sapling is got with jobs.lib.need (a seen chest, or the leaves of its tree broken for the drop) unless :fetch
-  is false. The sapling kind is the species' (mangrove propagule, fungus too); the same one already on the spot counts as
+  is false or leaves out :item. The sapling kind is the species' (mangrove propagule, fungus too); the same one already on the spot counts as
   planted.
   Zones: a spot in another owner's zone or claim, or in another body's plan footprint (but :for-plan's own, or the body's own plan), is not planted.
   The job warns plant-sapling.declined once, with :reason :refused (or :no-zones when no zone list was read).
   :ignore-zones? true skips the check.
 
   Start conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), :no-sapling (none carried and
-  :fetch false; data :species); a log on the spot (data :pos) is waited out. A spot that holds its sapling, or no debt owed, is done at once. Ends :done with data
+  :fetch off for items; data :species); a log on the spot (data :pos) is waited out. A spot that holds its sapling, or no debt owed, is done at once. Ends :done with data
   {:pos} once planted (and the bone meal used up, grown or gone); condition-failed with the need cause when the fetch
   failed, :refused when the zone rule changed on the way; nothing-possible :plant-blocked (the spot cannot be reached or
   planted, data :text) or :unseen (the spot was never seen, after a look). Quote: the walk to the spot.")
@@ -38,7 +38,7 @@
    :species {:doc "sapling species; any when nil" :spec a/name? :default nil}
    :bone-meal {:doc "bone meal uses after planting, 0 for none" :spec (a/int-in 0 nil) :default 0}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :fetch {:doc "get a missing sapling with jobs.lib.need: true, a set of kinds or a map of limits; false ends :no-sapling" :spec need/option? :default true}
+   :fetch {:doc "get a missing sapling with jobs.lib.need: true, a set of kinds or a map of limits; false or without :item waits :no-sapling" :spec need/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -79,6 +79,12 @@
       (cond-> {:reason :no-sapling :species species}
         species (assoc :item (sapling-of species))))))
 
+(defn fetch-opts
+  "The limits {:how :explore :minutes} for fetching a sapling, nil when :fetch does not allow items."
+  [c]
+  (when-let [o (need/opts c 'jobs.forestry.plant-sapling)]
+    (when (contains? (:what o) :item) (select-keys o [:how :explore :minutes]))))
+
 (def spot-refused
   (checks/refusing :spot-allowed "the spot may be planted"
                    (fn [c]
@@ -88,7 +94,7 @@
 (def no-sapling
   (checks/refusing :sapling "a sapling is carried or fetched"
                    (fn [c]
-                     (when-not (:fetch (:args c))
+                     (when-not (fetch-opts c)
                        (some-> (problem c) (dissoc :item))))))
 
 (def log-on-spot
@@ -126,7 +132,7 @@
 (defn quote-of [c]
   (let [t (current-target c)
         d (if t (u/dist (u/self-pos c) (:pos t)) 0)
-        fetch? (and (:fetch (:args c)) (problem c))]
+        fetch? (and (fetch-opts c) (problem c))]
     {:uses {:job-time [1 (+ 2 (* 0.3 d)) (if fetch? (max (time-s) (+ 4 (* 0.6 d))) (+ 4 (* 0.6 d)))]}}))
 
 (defn ^:async walk!
@@ -167,7 +173,7 @@
 (defn ^:async fetch-sapling!
   "Get the missing sapling w names with jobs.lib.need: :continue while it works, :again once got, else the ending."
   [c w]
-  (let [e (await (if (:item w) (need/item! c (:item w)) (need/blocks! c saplings 1)))]
+  (let [e (await (if (:item w) (need/item! c (:item w) 1 (fetch-opts c)) (need/blocks! c saplings 1 (fetch-opts c))))]
     (cond (= :continue e) :continue
           (= :done (:kind e)) :again
           :else e)))

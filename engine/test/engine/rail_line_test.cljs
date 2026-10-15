@@ -128,10 +128,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (declines (spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} {:plan "line"}))]
+        (let [r (await (declines (spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} {:plan "line" :fetch false}))]
           (is (= [{"powered_rail" 2}] (:short r)))
           (is (= 1 (:warns r)))
           (is (= 0 (:places r))))))))
+
+(deftest short-of-powered-rails-is-fetched-and-a-failed-fetch-ends-need-before-any-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (b/start (spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [])
+              e (await (ending-of {:eng eng} job {:plan "line"} 200))]
+          (is (= [:condition-failed :need "powered_rail"] [(:kind e) (get-in e [:cause :reason]) (get-in e [:cause :item])]))
+          (is (zero? (count (h/calls p "place")))))))))
 
 (defn built-world
   "The fake world with every cell of the plan already as it wants (names only: the fake works the rail states out)."
@@ -254,7 +263,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[seen] (await (broken-run {}))]
+        (let [[seen] (await (broken-run {:fetch false}))]
           (is (= [{"rail" 1}] (mapv :short (h/events-of seen :rail-build.short))))
           (is (empty? (h/events-of seen :rail-build.broken))))))))
 
@@ -552,13 +561,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[world plans zones reason text]
+        (doseq [[world plans zones reason text extra]
                 [[(spec "stone" 63 (kit {})) {"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} [] :refused #"footprint"]
-                 [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail"]
+                 [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail" {:fetch false}]
                  [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :no-zones #"zone list"]
                  [(spec "stone" 63 (kit {:power :block})) {"line" (line-plan {:power :block})} [] :source-blocked #"redstone block"]
                  [(spec "stone" 63 (kit {})) {} [] :plan #"plan"]]]
-          (let [r (await (declines world plans {:plan "line"} zones))
+          (let [r (await (declines world plans (merge {:plan "line"} extra) zones))
                 w (first (:waits r))]
             (is (= reason (:reason w)) (str reason))
             (is (re-find text (str (:text w))) (str reason " " (pr-str w)))))

@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.entity-observations :as obs]
             [engine.fake :as fake]
+            [engine.farm-contract-test :refer [ending-of]]
             [engine.hostile-test :as h]
             [engine.settings :as settings]
             [engine.test-util :as tu]
@@ -346,6 +347,18 @@
           (is (empty? (world-ids s)) "all three zombies died")
           (is (= 3 (:killed (done-event s))))
           (is (= :count (:reason (done-event s)))))))))
+
+(deftest an-unarmed-hunt-of-a-hostile-kind-fetches-a-weapon-and-ends-with-the-failure-or-unarmed-when-fetch-is-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args kind reason] [[{:mob "zombie"} :condition-failed :tool]
+                                    [{:mob "zombie" :fetch false} :condition-failed :unarmed]
+                                    [{:mob "zombie" :fetch #{:item}} :condition-failed :unarmed]]]
+          (let [s (h/setup {:inventory [] :entities [(zombie 1 3)]} 20)
+                e (await (ending-of s 'jobs.combat.hunt args 60))]
+            (is (= [kind reason] [(:kind e) (get-in e [:cause :reason] (:cause e))]) (pr-str args))
+            (is (empty? (h/calls (:p s) "attack")) "no fist fight")))))))
 
 (deftest the-check-passes-for-a-single-hostile-mob
   (async done
