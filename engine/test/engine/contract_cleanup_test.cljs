@@ -361,6 +361,23 @@
           (is (= [[:high :done] [:low :stopped]]
                  (mapv (juxt (comp :reflex-id :context) (comp :outcome :data)) (filter #(= [:reflex :ended] [(:source %) (:kind %)]) @seen)))))))))
 
+(deftest a-paused-reflex-whose-trigger-still-holds-resumes-instead-of-firing-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! world {})
+        (reset! clock 1000000)
+        (let [[seen sink] (tu/capture-sink)
+              once (fn [k pred] (fn [_ _ _] (let [go? (and (pred) (not (k @world)))] (when go? (swap! world assoc k true)) go?)))
+              eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref clock) :jobs {'low paused-low 'high high}
+                                :triggers {:high {:name :high :job '(high) :when (once :high-fired #(:alarm @world))}
+                                           :low {:name :low :job '(low) :when (fn [_ _ _] (< (count (:log @world)) 4))}}
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/register-reflex! eng {:trigger :high})
+          (core/register-reflex! eng {:trigger :low})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= 1 (count (filter #(and (= [:reflex :fired] [(:source %) (:kind %)]) (= :low (-> % :context :reflex-id))) @seen)))))))))
+
 (def old-done
   {:check (constantly true)
    :round (fn ^:async old-done [c]

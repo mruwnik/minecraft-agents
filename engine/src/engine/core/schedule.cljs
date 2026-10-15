@@ -100,10 +100,17 @@
     (when paused?
       (emit! eng (merge (job-fields eng (:id h)) {:source :job :kind :cut :level :info :by by :cause cause})))))
 
-(defn paused-reflex
-  "A reflex job cut in its cleanup (cut!): it gets the body before the list does."
+(defn paused-reflexes
+  "The reflex jobs cut in their cleanup (cut!) as {entry id job id}."
   [eng]
-  (some (fn [[id inst]] (when (and (:reflex inst) (cleanup/closing? eng id [])) id)) (:instances (state eng))))
+  (into {} (keep (fn [[id inst]] (when (and (:reflex inst) (cleanup/closing? eng id [])) [(:reflex inst) id])))
+        (:instances (state eng))))
+
+(defn paused-reflex
+  "The reflex job cut in its cleanup (cut!) whose entry comes first in the register: it gets the body before the list does."
+  [eng order]
+  (let [paused (paused-reflexes eng)]
+    (some #(paused (:id %)) order)))
 
 (defn fire! [eng entry h]
   (let [id (new-id! eng)
@@ -187,11 +194,12 @@
   (check-body-idle! eng)
   (let [order (effective-register (state eng) (now eng))
         h (holder eng)
-        firing (choose-firing! eng order (evaluate-register! eng order) h)]
+        paused (paused-reflexes eng)
+        firing (choose-firing! eng order (remove #(contains? paused (:id %)) (evaluate-register! eng order)) h)]
     (cond
       firing (fire! eng firing h)
       (running eng) (check-idle! eng)
-      :else (when-let [id (or (paused-reflex eng) (choose-listed eng))] (start-round! eng id)))))
+      :else (when-let [id (or (paused-reflex eng order) (choose-listed eng))] (start-round! eng id)))))
 
 (defn tick!
   "One scheduling pass. Synchronous; returns the promise of a round it
