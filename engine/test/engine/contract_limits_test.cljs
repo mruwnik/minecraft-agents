@@ -69,6 +69,38 @@
             (is (= {:spend {:time 5} :least 1} (:call data)))
             (is (= 6 (get-in data [:report :uses :time])))))))))
 
+(def counted
+  (assoc slow :done? (fn [_] (if (when-let [n (:done-throws @world)] (>= (:slow-rounds @world 0) n)) (throw (js/Error. "boom")) {:done? false :units :cells :done 5 :left 3}))))
+
+(deftest a-limit-ending-reports-the-units-done-and-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (enforced
+                (fn ^:async enforced-units []
+                  (let [{:keys [eng seen]} (setup {'counted counted
+                                                   'top {:conditions []
+                                                         :round (fn ^:async top [c]
+                                                                  (let [e (await (ctx/call c :kid 'counted {}))]
+                                                                    (if (= :continue e)
+                                                                      :continue
+                                                                      (do (swap! world assoc :kid-ending e) (ctx/end c :done nil)))))}})]
+                    (core/submit! eng '(counted) {})
+                    (dotimes [_ 2] (await (core/tick! eng)))
+                    (is (= :limit-reached (:kind (stopped seen))))
+                    (is (= {:units :cells :done 5 :left 3}
+                           (select-keys (:report (:data (first (job-ev seen :stopped)))) [:units :done :left])))
+                    (core/submit! eng '(top) {})
+                    (dotimes [_ 2] (await (core/tick! eng)))
+                    (is (= :limit-reached (:kind (:kid-ending @world))))
+                    (is (= {:units :cells :done 5 :left 3} (select-keys (:report (:kid-ending @world)) [:units :done :left]))
+                        "a child's too")
+                    (swap! world assoc :done-throws 3)
+                    (core/submit! eng '(counted) {})
+                    (dotimes [_ 2] (await (core/tick! eng)))
+                    (is (= :limit-reached (:kind (:data (second (job-ev seen :stopped)))))
+                        "a done? that throws does not hide the limit")))))))))
+
 ;; ---------------------------------------------------------------- handed down
 
 (defn kid [f]

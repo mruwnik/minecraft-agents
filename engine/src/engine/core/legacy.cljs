@@ -12,7 +12,7 @@
                   :unarmed :declined :not-ready :danger :hostile-near :tool-spent
                   :gone :no-target :no-targets :no-source :no-tree :no-sapling :no-composter :no-boat :no-vehicle
                   :not-found :nothing-found :no-food-found :no-box :no-home
-                  :no-base :no-block :no-item :no-items :no-mob-or-box]
+                  :no-base :no-block :no-item :no-items :no-mob-or-box :chest-lacks :no-food]
                  (repeat :condition-failed))
          (zipmap [:bad-args :bad-pos :unsupported :no-pen] (repeat :impossible))
          (zipmap [:timeout :low-health :hungry] (repeat :limit-reached))
@@ -43,10 +43,11 @@
               (contract/ending :done nil data)))))
 
 (defn result-of
-  "The result an old parent reads (child-result) of a contract child's ending e."
+  "The result an old parent reads (child-result) of a contract child's ending e; :already? when its goal held before it
+  started."
   [e]
   (if (= :done (:kind e))
-    (assoc (:data e) :status :done)
+    (cond-> (assoc (:data e) :status :done) (= :already (:cause e)) (assoc :already? true))
     (assoc (:data e) :status :stopped :reason (contract/cause-key e) :ending e)))
 
 (defn given-args

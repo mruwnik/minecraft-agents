@@ -62,11 +62,12 @@
                            :state-update #(remove-listed % id)}))
 
 (defn ending-data
-  "A root job's ending as its terminal event's :data: :done as {:status :completed :kind :done}, any other kind as
+  "A root job's ending as its terminal event's :data: :done as {:status :completed :kind :done} (:cause when it has one,
+  :already), any other kind as
   {:status :stopped :kind :cause :reason (the cause key)}, with :because (cut for events) and the job's :data."
   [e]
   (if (= :done (:kind e))
-    (merge (:data e) {:status :completed :kind :done})
+    (merge (:data e) {:status :completed :kind :done} (when (:cause e) {:cause (:cause e)}))
     (merge (:data e) {:status :stopped :kind (:kind e) :cause (:cause e) :reason (contract/cause-key e)}
            (when (:because e) {:because (:because (contract/for-event e))}))))
 

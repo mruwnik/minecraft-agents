@@ -126,14 +126,14 @@
         (is (= {:event :stopped :kind :nothing-possible :reason :stuck}
                (await (burn-end {:self {:onFire true} :blocks {"0,63,0" "stone" "1,64,0" "fire"}}))))))))
 
-(deftest a-body-that-is-not-burning-waits
+(deftest a-body-that-is-not-burning-is-done-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (et/setup {:blocks (et/floor 8)})]
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (is (= 1 (count (:list (core/state eng)))) "a standing body does not start it"))))))
+          (is (empty? (:list (core/state eng))) "its goal holds: done, not queued"))))))
 
 (deftest standing-beside-a-danger-is-a-failed-condition
   (async done

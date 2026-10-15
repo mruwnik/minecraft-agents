@@ -249,7 +249,7 @@ Wherever a job is named (scenarios, register entries, `submit!`, `do-now!`, the 
 | `(jobs.survival.eat {:item "bread"})` | a leaf: the job namespace with optional args |
 | `(seq e1 e2 ...)` | run children in order, one child round per round |
 | `(any e1 e2 ...)` | each round, call the first child whose check passes |
-| `(repeat e)` | when the child is done, start it fresh; never done |
+| `(repeat e)` | when the child is done, start it fresh; never done; a child done `:already` is not counted and rests |
 | `(repeat n e)` | the same, done after `n` runs |
 | `(until g e)` | repeat `e`; done at the top of a round once `g`'s check passes (`g` never runs), e.g. `(until (jobs.time.wait-for-dusk) e)`; a daily routine is `(repeat (seq (jobs.time.wait-for-day) ... (jobs.time.wait-for-dusk)))` |
 | a refused child | a child that ends :done with a `:stopped` result stops `seq` with that cause (a stopped result of their own); `any` skips it and tries the next; `repeat` and `until` stop so only when it was impossible or cut off (or in a reflex job), else rest (`:engine.composite/rest-s` 30 s, doubled for each such run in a row up to `rest-max-s` 600 s; wait `:resting`) and run it again |
@@ -272,7 +272,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(await (ctx/act ctx :moveTo #js {...}))` | call an acting primitive |
 | `(await (ctx/call-child ctx slot job args))` | run one round of a child (`:done`, `:continue`, `:declined`) |
 | `(await (jobs.lib.child/call-walk ctx slot go-to-args))` | a go-to child round that, when it yields `:continue` waiting for day in a shelter, holds the round still with `:night-sheltered` (or `:sealed-hostile-near`: shut in by its own retreat plug with a hostile near, no escalating way; ends after 3 min in all, counted across the parent's go-to children, or at low food or health; the event `go-to.sealed-hostile-near` names the mob, its band and whether it was seen or heard) so jobs show and body.idle name it; every walking parent uses it instead of `ctx/call-child` on go-to (`child/run!` of go-to does the same and returns `:continue` at once; the night, retreat, sleep, extinguish, breathe and dig-niche walks go at night on purpose and stay on `call-child`) |
-| `(await (ctx/call ctx slot job args))` | one round of a child: `:continue` or its ending (Contract jobs); a call of the same job on the same target args (`:target`) as a frame on its chain ends `:impossible` `{:reason :duplicate-call :of frame-id}`, with no round and no `:job-report` entry |
+| `(await (ctx/call ctx slot job args))` | one round of a child: `:continue` or its ending (Contract jobs); a call of the same job on the same target args (`:target`) as a frame on its chain ends `:condition-failed` `{:reason :duplicate-call :of frame-id}`, with no round and no `:job-report` entry |
 | `(ctx/end ctx kind cause data?)` | a contract job's ending, returned by its round |
 | `(ctx/way? ctx k)`, `(ctx/use ctx purpose)` | whether the call allows way `k`; the list the call gives for `purpose` |
 | `(ctx/left ctx)` | what is left of the call's limits and its callers' (each line the least): `{:spend {line n} :floor {line n} :deadline ms}` |
@@ -301,7 +301,7 @@ a finished job's goes to body memory `:job-report` (cap 256), with its ending's 
 `defaults`, `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A condition
 `[:fn f]` gives nil (start), a cause (skip: a listed job not started stays queued and waits, else `:condition-failed`),
 `(contract/impossible cause)` (ends `:impossible`, the job leaves the queue) or `(contract/look-first cause)` (the
-engine looks round once, hook `:look/around`, then asks again). Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` ends `:done`; endings are `{:kind :cause :because :report :data}`. A
+engine looks round once, hook `:look/around`, then asks again). Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` is asked before the conditions (an impossible one aside): a goal that holds ends `:done` (cause `:already` before the start) and never waits; done?'s units go in the `:report` of every ending but an impossible or cut-off one; endings are `{:kind :cause :because :report :data}`. A
 started frame left without an ending (its root ends or is dropped, its parent clears its slot) gets `:cut-off`.
 
 **Quotes (engine.core.quote).** `{:uses {:time fig :health fig :food fig :items {name fig} :wear {tool fig}} :yields

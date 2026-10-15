@@ -300,17 +300,20 @@
           (is (= [] (:list (core/state eng))))
           (is (= 7 (food p))))))))
 
-(deftest eat-declines-without-edible-food-or-when-fed
+(deftest eat-declines-without-edible-food-and-is-done-when-fed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [world [{:self {:food 4} :inventory [{:name "rotten_flesh" :count 2} {:name "spider_eye" :count 1}
-                                                    {:name "cobblestone" :count 9}]}
-                       {:self {:food 18} :inventory [{:name "bread" :count 2}]}]]
-          (let [{:keys [eng p]} (setup world)]
-            (core/submit! eng '(jobs.survival.eat) {})
-            (is (nil? (core/tick! eng)) "the check declines")
-            (is (= [] (calls p "eat")))))))))
+        (let [{:keys [eng p]} (setup {:self {:food 4} :inventory [{:name "rotten_flesh" :count 2} {:name "spider_eye" :count 1}
+                                                                  {:name "cobblestone" :count 9}]})]
+          (core/submit! eng '(jobs.survival.eat) {})
+          (is (nil? (core/tick! eng)) "the check declines")
+          (is (= [] (calls p "eat"))))
+        (let [{:keys [eng p]} (setup {:self {:food 18} :inventory [{:name "bread" :count 2}]})]
+          (core/submit! eng '(jobs.survival.eat) {})
+          (await (core/tick! eng))
+          (is (empty? (:list (core/state eng))) "fed: done at once")
+          (is (= [] (calls p "eat"))))))))
 
 (deftest eat-takes-bad-food-only-when-allowed
   (async done

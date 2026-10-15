@@ -96,13 +96,17 @@
 
 (defn ran!
   "After the child in slot i ended :done: stopped with its cause when it was impossible or cut off (any refusal, in a
-  reflex job, which runs one round); a rest when it could not finish (each in a row doubles it); else a run counted.
+  reflex job, which runs one round); a rest when it could not finish (each in a row doubles it), or of ::rest-s, not
+  counted, when its goal held before it started (it would only end again at once); else a run counted.
   :done after times runs, else :continue."
   [c i times]
   (let [res (refusal c i)
         kind (some-> res kind-of)]
     (cond
       (and res (or (:reflex c) (#{:impossible :cut-off} kind))) (stop! c res)
+      (:already? (ctx/child-result c (slot i)))
+      (do (ctx/update-mem! c assoc :rest {:until (+ (ctx/now c) (* 1000 (settings/get settings ::rest-s))) :after :already :kind :done})
+          :continue)
       (and res (not= :done kind))
       (let [fails (inc (:fails (ctx/mem c) 0))
             s (min (settings/get settings ::rest-max-s) (* (settings/get settings ::rest-s) (js/Math.pow 2 (dec fails))))]

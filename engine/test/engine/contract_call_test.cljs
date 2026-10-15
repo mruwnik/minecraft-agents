@@ -1,5 +1,5 @@
 (ns engine.contract-call-test
-  "A call equal to one of its ancestors' (same job, same target args) is refused: impossible :duplicate-call,
+  "A call equal to one of its ancestors' (same job, same target args) is refused: condition-failed :duplicate-call,
   booked nowhere as a failure."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
@@ -7,7 +7,8 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.lib.need :as need]))
 
 (def endings (atom []))
 
@@ -43,10 +44,28 @@
           (core/submit! eng '(ping {:pos 1 :again [1 2]}) {})
           (await (core/tick! eng))
           (let [[[_ _ dup] [_ _ fine] [_ _ pong-e]] @endings]
-            (is (= :impossible (:kind dup)))
+            (is (= :condition-failed (:kind dup)) "a loop, not a verdict on the args: the parent tries another way")
             (is (= :duplicate-call (contract/cause-key dup)))
             (is (string? (get-in dup [:cause :of])) "names the ancestor's frame")
             (is (= :done (:kind fine)) "the same job on another target runs")
             (is (= :done (:kind pong-e)) "the refusal is an ending the caller reads, not an error"))
           (is (= 3 (mem/count-in (mem/view (:store eng)) :job-report 1000000))
               "ping 2, pong and the root ping are booked; the refused call is not"))))))
+
+(deftest a-refusal-passed-up-through-need-does-not-end-the-root-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'ping {:conditions [] :target [:pos] :args {:pos {:doc "target" :default nil}}
+                                                :round (fn ^:async ping [c]
+                                                         (let [e (await (ctx/call c :pong 'pong {}))]
+                                                           (if (= :done (:kind e)) (ctx/end c :done nil) e)))}
+                                         'pong {:conditions [] :args {}
+                                                :round (fn ^:async pong [c]
+                                                         (need/ending-for (await (ctx/call c :ping 'ping {:pos 1}))
+                                                                          :need {:item "ping"}))}})]
+          (core/submit! eng '(ping {:pos 1}) {})
+          (await (core/tick! eng))
+          (let [stopped (:data (first (filter #(= [:job :stopped] [(:source %) (:kind %)]) @seen)))]
+            (is (= :condition-failed (:kind stopped)))
+            (is (= {:reason :need :why :duplicate-call :item "ping"} (:cause stopped)))))))))

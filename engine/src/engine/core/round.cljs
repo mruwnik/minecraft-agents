@@ -218,10 +218,10 @@
           :declined)
         (let [t0 (now eng)
               {:keys [status error ending]} (try (limits/check! eng c)
-                                                 (normalize-result (or (limits/ending eng (:root base) slots nil)
+                                                 (normalize-result (or (ending/with-progress def c (limits/ending eng (:root base) slots nil))
                                                                        (await ((:round def) c))))
                                                  (catch :default e
-                                                   (if-let [l (limits/ending eng (:root base) slots e)] {:status :ended :ending l} (throw e)))
+                                                   (if-let [l (ending/with-progress def c (limits/ending eng (:root base) slots e))] {:status :ended :ending l} (throw e)))
                                                  (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))
               report (merge (tally/report eng (:root base) slots) (:report ending))
               status (if ending :done status)]
@@ -297,7 +297,7 @@
               (mem/update-job! store (:root base) slots (fn [m] (let [ident (ending/frame-identity def args)] (cond-> (assoc m :args args :children {}) ident (assoc :contract ident))))))
           t0 (now eng)
           c (child-ctx eng base slot args)
-          own-limit #(limits/ending eng (:root base) slots %)
+          own-limit #(ending/with-progress def c (limits/ending eng (:root base) slots %))
           r (try (limits/check! eng c)
                  (or (own-limit nil)
                      (let [r (await (if (ending/contract-job? def) ((:round def) c) (old-round base c child-id def)))]
@@ -332,7 +332,7 @@
         c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
                          :args args :round (:round run) :reflex (:reflex run) :results results
                          :child-wait child-wait :t0s [t0]})
-        own-limit #(limits/ending eng (:id run) [] %)
+        own-limit #(ending/with-progress def c (limits/ending eng (:id run) [] %))
         ;; flat: a nested let here compiles to an awaited async fn, a tick before the round starts, in which a reflex could cut it
         {:keys [op job]} (:spec inst)
         ident (when (and (= :leaf op) (ending/contract-job? def)) (ending/frame-identity (assoc def :sym job) args))]

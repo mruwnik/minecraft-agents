@@ -243,8 +243,9 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (hunting-cull {:keep 0} {:inventory h/sword :entities [(cow 1 3)]})) [:event])))
-        (is (= {:event :waiting :reason :too-few}
-               (await (hunting-cull {:keep 2} {:inventory h/sword :entities [(cow 1 3)]}))))
+        (is (= {:event :completed :kind :done}
+               (await (hunting-cull {:keep 2} {:inventory h/sword :entities [(cow 1 3)]})))
+            "no more than :keep already: done, no wait")
         (is (= {:event :stopped :kind :nothing-possible :reason :unreachable}
                (await (hunting-cull {:keep 0} {:inventory h/sword :entities [(assoc (cow 1 3) :invulnerable true)]})))
             "an animal that cannot be hurt: 0 killed is not done")))))

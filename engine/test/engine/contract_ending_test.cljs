@@ -260,6 +260,51 @@
           (await (core/tick! eng))
           (is (= {:kind :impossible :cause {:reason :not-smeltable :item "diamond"}} (dissoc (:child-ending @world) :report))))))))
 
+(def holds
+  "Its goal holds while :holds; done? keeps the call it was asked under."
+  {:conditions [[:fn (gate :go :not-needed)]]
+   :defaults {:spend {:time 20}}
+   :round (fn [_] (swap! world assoc :holds-ran true) :continue)
+   :done? (fn [c] (swap! world assoc :asked-call (ctx/frozen-call c))
+            {:done? (boolean (:holds @world)) :units :items :done 0 :left 0})})
+
+(deftest a-goal-that-already-holds-ends-done-before-its-conditions-are-asked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'holds holds
+                                         'calls-holds {:conditions []
+                                                       :round (fn ^:async calls-holds [c]
+                                                                (swap! world assoc :child-ending (await (ctx/call c :kid holds {})))
+                                                                (ctx/end c :done nil))}})]
+          (swap! world assoc :holds true)
+          (core/submit! eng '(holds) {})
+          (await (core/tick! eng))
+          (is (empty? (job-ev seen :waiting)) "never waits on the failing condition")
+          (is (nil? (:holds-ran @world)) "no round")
+          (is (empty? (:list (core/state eng))))
+          (is (= {:kind :done :cause :already} (select-keys (:data (first (job-ev seen :completed))) [:kind :cause])))
+          (is (= {:units :items :done 0 :left 0}
+                 (select-keys (:report (:data (first (job-ev seen :completed)))) [:units :done :left])))
+          (is (= {:time 20} (:spend (:asked-call @world))) "done? reads the call it would start with")
+          (core/submit! eng '(calls-holds) {})
+          (await (core/tick! eng))
+          (is (= {:kind :done :cause :already} (select-keys (:child-ending @world) [:kind :cause])) "a child too")
+          (swap! world assoc :holds false)
+          (core/submit! eng '(holds) {})
+          (await (core/tick! eng))
+          (is (= [:not-needed] (mapv #(:reason (:data %)) (job-ev seen :waiting))) "a goal not held waits as before"))))))
+
+(deftest an-impossible-condition-wins-over-a-goal-that-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'never (assoc never :done? (constantly {:done? true}))})]
+          (core/submit! eng '(never) {})
+          (await (core/tick! eng))
+          (is (= :impossible (:kind (:data (first (job-ev seen :stopped))))))
+          (is (empty? (job-ev seen :completed))))))))
+
 (def tried
   {:conditions [[:fn (ctx/after-tries 2 (fn [_] (:cause @world)))]]
    :round (fn [c] (swap! world assoc :tried-ran true) (ctx/end c :done nil))})
@@ -609,6 +654,8 @@
     :no-boat :condition-failed :no-boat
     :no-vehicle :condition-failed :no-vehicle
     :not-found :condition-failed :not-found
+    :chest-lacks :condition-failed :chest-lacks
+    :no-food :condition-failed :no-food
     :timeout :limit-reached {:line :time :reason :timeout}
     :low-health :limit-reached {:line :health :reason :low-health}
     :tool-spent :condition-failed :tool-spent

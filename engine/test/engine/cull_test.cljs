@@ -44,10 +44,10 @@
 (defn rounds [{:keys [seen]}] (count (filter #(= :round_started (:kind %)) @seen)))
 
 (defn ^:async too-few-outcome
-  "{:rounds :acted} of the job submitted in a world: it waits, never starts a round, attacks and walks nowhere."
+  "{:finished :acted} of the job submitted in a world: its goal holds, so it ends done at once, attacks and walks nowhere."
   [args entities]
   (let [{:keys [p] :as s} (await (scenario args {:inventory h/sword :entities entities} 20))]
-    {:rounds (rounds s) :acted (+ (count (h/calls p "attack")) (count (h/calls p "moveTo")))}))
+    {:finished (finished? s) :acted (+ (count (h/calls p "attack")) (count (h/calls p "moveTo")))}))
 
 (deftest six-adults-keep-two-kills-four-and-collects
   (async done
@@ -78,7 +78,7 @@
           (is (= :keep (:reason (done-event s))))
           (is (= 2 (get (inv s) "beef"))))))))
 
-(deftest without-a-surplus-the-job-waits-too-few
+(deftest without-a-surplus-the-job-is-done-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -88,7 +88,7 @@
                  [{:keep 2} [(animal 1 "sheep" 3) (animal 2 "sheep" 4) (animal 3 "sheep" 5)] "only other kinds"]
                  [{:keep 2} [(cow 1 3) (cow 2 4)] "exactly keep"]
                  [{:keep 0} [] "keep zero and nothing there"]]]
-          (is (= {:rounds 0 :acted 0} (await (too-few-outcome args entities))) note))))))
+          (is (= {:finished true :acted 0} (await (too-few-outcome args entities))) note))))))
 
 (deftest a-surplus-of-one-with-calves-around-kills-one-adult
   (async done
@@ -158,7 +158,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:rounds 0 :acted 0}
+        (is (= {:finished true :acted 0}
                (await (too-few-outcome {:keep 1 :radius 10} [(cow 1 3) (cow 2 30) (cow 3 40)])))
             "one cow in range is not above keep")))))
 

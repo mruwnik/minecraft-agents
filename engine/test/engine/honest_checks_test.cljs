@@ -87,14 +87,17 @@
 (deftest survival-and-maintenance-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
     'jobs.gather.mine {} :no-block
-    'jobs.movement.leave-vehicle {} :not-mounted
-    'jobs.survival.breathe {} :not-underwater
-    'jobs.survival.extinguish {} :not-burning
     'jobs.survival.get-food {} :not-hungry
     'jobs.survival.night {} :not-night
     'jobs.survival.recover-drops {} :no-drops
-    'jobs.survival.restore-broken {} :nothing-to-restore
-    'jobs.survival.unwedge {} :not-wedged))
+    'jobs.survival.restore-broken {} :nothing-to-restore))
+
+(deftest a-goal-that-already-holds-passes-the-check
+  (are [job] (nil? (waiting-reason job {}))
+    'jobs.movement.leave-vehicle
+    'jobs.survival.breathe
+    'jobs.survival.extinguish
+    'jobs.survival.unwedge))
 
 (deftest a-blank-or-non-string-item-is-refused-at-submit
   (are [job item] (re-find #":item must be an item name \(non-empty string\)" (expr/problem registry/jobs (list job {:item item})))
