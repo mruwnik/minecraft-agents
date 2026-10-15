@@ -154,12 +154,12 @@
     (-> (contract/ending :done (when fresh? :already) (cond-> result (not (::contract/old (nth s 2))) (assoc :text text)))
         (assoc :report (contract/progress s)))))
 
-(defn with-progress
-  "Ending e (or nil) with done?'s count in its report, and done?'s :result (the job's result so far) as the data of a
-  :limit-reached or :cut-off ending without its own; a :limit-reached ending whose done? counts the call's :least units
-  is :done (the limit in its report). A done? that throws leaves e as it is."
-  [def c e]
-  (if-let [s (when e (try (done-now def c) (catch :default _ nil)))]
+(defn progress-ending
+  "Ending e (or nil) with done? status s's count in its report, and s's :result (the job's result so far) as the data of
+  a :limit-reached or :cut-off ending without its own; a :limit-reached ending whose s counts the call's :least units
+  is :done (the limit in its report). c may be nil for a cut-off."
+  [c s e]
+  (if (and e s)
     (let [e (update e :report merge (contract/progress s))
           {:keys [result] :as d} (nth s 2)]
       (cond
@@ -169,6 +169,27 @@
         (and (#{:limit-reached :cut-off} (:kind e)) (not (:data e)) (seq result)) (assoc e :data result)
         :else e))
     e))
+
+(defn with-progress
+  "Ending e (or nil) with done? asked afresh (progress-ending). A done? that throws leaves e as it is."
+  [def c e]
+  (progress-ending c (when e (try (done-now def c) (catch :default _ nil))) e))
+
+(defn remember-done!
+  "Keep done? status s of a root frame c for a cancel, which asks nothing."
+  [c s]
+  (when (and s (empty? (:slots c))) (some-> (:engine c) :seen-done (swap! assoc (asked-key c) s)))
+  s)
+
+(defn forget-done! [c] (some-> (:engine c) :seen-done (swap! dissoc (asked-key c))))
+
+(defn progress-of
+  "Cut-off ending e of root job id with the count of the last done? status asked for it (nothing asked: e as it is)."
+  [eng id e]
+  (let [seen (:seen-done eng) k (mem/path->id id [])
+        s (get @seen k)]
+    (swap! seen dissoc k)
+    (progress-ending nil s e)))
 
 (defn finish
   "The round's ending e with the last ending of a child that did not end :done as its :because, and done?'s count."
@@ -202,8 +223,14 @@
 (defn done-between
   "The ending done? gives between steps of a started job (ctx/done): its :done ending when it ends the job, else nil."
   [def c]
-  (let [s (first (done-or-error def c))]
+  (let [s (remember-done! c (first (done-or-error def c)))]
     (when (and s (ends? s false)) (done-ending s false))))
+
+(defn ended!
+  "r, the round's answer, after a root job's remembered done? status is dropped once r ends it."
+  [c r]
+  (when-not (= :continue r) (forget-done! c))
+  r)
 
 (defn ^:async run
   "One round of contract job def: an ending, or :continue. A goal that holds ends it :done (:already before the start),
@@ -213,27 +240,30 @@
   one round; a called child tells its caller's wait with the status). The round's ctx asks done? and can-run? between
   steps (ctx/done, ctx/can-run)."
   [def c]
-  (let [ss (statuses def c (take-asked! c))
+  (let [asked (take-asked! c)
+        ss (statuses def c asked)
         fresh? (not (started? c))
-        [d err] (when (not (old-never? ss)) (done-or-error def c))
+        [d err] (if-let [de (:done asked)] de (when (not (old-never? ss)) (done-or-error def c)))
+        _ (remember-done! c d)
         _ (when err (ctx/emit! c :done_failed :warn {:error (str (or (.-message err) err))}))
         done? (and d (ends? d fresh?))
         [start-s run-s] (if done? ss (await (looked def c ss)))
         s (contract/all [start-s run-s])
-        counted #(if fresh? (cond-> % d (update :report merge (contract/progress d))) (with-progress def c %))
+        counted #(if fresh? (cond-> % d (update :report merge (contract/progress d))) (progress-ending c d %))
         failed #(counted (contract/ending :condition-failed (contract/status-cause %) nil))]
-    (cond
-      done? (done-ending d fresh?)
-      (= :never (first s)) (contract/ending :impossible (contract/status-cause s) nil)
-      (= :later (first start-s)) (if (stays-listed? c) :continue (failed start-s))
-      (= :later (first run-s)) (cond (:reflex c) (failed run-s)
-                                     (seq (:slots c)) (do (some-> (:child-wait c) (reset! (contract/wait-reason run-s))) :continue)
-                                     :else :continue)
-      :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
-              (counted (contract/ending :condition-failed floor nil))
-              (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))
-                                               :done #(done-between def c))
-                                    d))))))
+    (ended! c
+     (cond
+       done? (done-ending d fresh?)
+       (= :never (first s)) (contract/ending :impossible (contract/status-cause s) nil)
+       (= :later (first start-s)) (if (stays-listed? c) :continue (failed start-s))
+       (= :later (first run-s)) (cond (:reflex c) (failed run-s)
+                                      (seq (:slots c)) (do (some-> (:child-wait c) (reset! (contract/wait-reason run-s))) :continue)
+                                      :else :continue)
+       :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
+               (counted (contract/ending :condition-failed floor nil))
+               (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))
+                                                :done #(done-between def c))
+                                     d)))))))
 
 (defn spent?
   "Whether a started job's spend or deadline line is crossed (a floor is not: below one it waits)."
@@ -248,14 +278,18 @@
   waiting is bounded by the call's limits, :wall-time among them."
   [def c]
   (let [fresh? (not (started? c))
-        {start-s :start run-s :run} (remember-asked! c (if fresh? (zipmap [:start :run] (statuses def c)) {:run (run-status def c)}))
+        asked (if fresh? (zipmap [:start :run] (statuses def c)) {:run (run-status def c)})
+        {start-s :start run-s :run} asked
         s (if fresh? (contract/all [start-s run-s]) run-s)
         later? (= :later (first s))
         w (or (when later? (contract/wait-reason s))
-              (some-> (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def)))) contract/cause-wait))]
+              (some-> (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def)))) contract/cause-wait))
+        de (when (and w (not= :never (first s))) (done-or-error def c))]
+    (remember-asked! c (cond-> asked de (assoc :done de)))
+    (remember-done! c (first de))
     (cond
       (or (nil? w) (= :never (first s))) true
-      (some-> (first (done-or-error def c)) (ends? fresh?)) true
+      (some-> (first de) (ends? fresh?)) true
       fresh? (ctx/wait c w)
       (and later? (spent? c)) true
       :else (ctx/wait c w))))
@@ -268,6 +302,7 @@
     (do (doseq [entry (:conditions def)]
           (when-not (and (vector? entry) (= :fn (first entry)) (fn? (second entry)))
             (throw (ex-info (str "a condition is [:fn f], not " (pr-str entry)) {:condition entry}))))
-        (assoc def ::wrapped true :check #(check def %) :round #(run def %)))))
+        (assoc def ::wrapped true :check #(check def %)
+:round #(run def %)))))
 
 (defn registry "jobs with every contract job wrapped." [jobs] (some-> jobs (update-vals wrap)))

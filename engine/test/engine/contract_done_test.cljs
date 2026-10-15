@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.core.ending :as ending]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
@@ -109,7 +110,7 @@
           (is (= {:units :blocks :done 1 :left 2}
                  (select-keys (:report (:data (first (job-ev seen :stopped)))) [:units :done :left]))))))))
 
-(deftest a-cancel-carries-dones-result-and-count
+(deftest a-cancel-carries-the-last-asked-dones-result-and-count
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -117,6 +118,58 @@
               id (core/submit! eng '(builder) {})]
           (await (core/tick! eng))
           (core/cancel! eng id)
-          (is (= {:kind :cut-off :cause :agent :placed 1} (select-keys (:data (first (job-ev seen :cancelled))) [:kind :cause :placed])))
-          (is (= {:units :blocks :done 1 :left 2}
+          (is (= {:kind :cut-off :cause :agent :placed 0} (select-keys (:data (first (job-ev seen :cancelled))) [:kind :cause :placed])))
+          (is (= {:units :blocks :done 0 :left 3}
                  (select-keys (:report (:data (first (job-ev seen :cancelled)))) [:units :done :left]))))))))
+
+(def fragile
+  "A builder whose done? throws once :boom is set."
+  (assoc builder :done? (fn [c] (when (:boom @world) (throw (js/Error. "boom"))) (goal c))))
+
+(deftest a-cancel-uses-the-last-done-status-and-asks-nothing-more
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'fragile fragile})
+              id (core/submit! eng '(fragile) {})]
+          (await (core/tick! eng))
+          (swap! world assoc :boom true)
+          (core/cancel! eng id)
+          (is (= {:kind :cut-off :cause :agent :placed 0} (select-keys (:data (first (job-ev seen :cancelled))) [:kind :cause :placed])))
+          (is (empty? (:list (core/state eng))) "the job is gone"))))))
+
+(deftest a-cancel-goes-ahead-when-the-progress-step-throws
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'builder builder})
+              id (core/submit! eng '(builder) {})]
+          (await (core/tick! eng))
+          (with-redefs [ending/progress-of (fn [& _] (throw (js/Error. "boom")))]
+            (core/cancel! eng id :death))
+          (is (= {:kind :cut-off :cause :death} (select-keys (:data (first (job-ev seen :cancelled))) [:kind :cause])))
+          (is (= 1 (count (filterv #(= :warn (:level %)) @seen)))))))))
+
+(deftest done-is-asked-once-per-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom 0)
+              {:keys [eng]} (setup {'counted (assoc builder :done? (fn [c] (swap! asked inc) (goal c)))})]
+          (core/submit! eng '(counted) {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (= 2 @asked) "one ask per round"))))))
+
+(deftest a-waiting-job-asks-done-once-per-tick
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom 0)
+              {:keys [eng]} (setup {'counted (assoc builder :done? (fn [c] (swap! asked inc) (goal c)))})]
+          (swap! world assoc :paused true)
+          (core/submit! eng '(counted) {})
+          (await (core/tick! eng))
+          (let [n @asked]
+            (await (core/tick! eng))
+            (is (= 1 (- @asked n)))))))))

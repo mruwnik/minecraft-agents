@@ -67,7 +67,7 @@
   fill; it is not listed :wrong.
   done? holds when no cell is owed, none came out wrong and step 5 has nothing to do; the engine then ends it :done.
   Ends with data {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
-  :want}] :refused [...] :fetch-failed {item {:failed :why}}}: done when nothing is missing or the cells placed meet
+  :want}] :refused [...] :fetch-failed {item {:failed :why}}}: done when nothing is missing (and no block came out wrong: nothing-possible :wrong-blocks) or the cells placed meet
   the call's :least (default :all); else with :text naming the missing count and what it left: nothing-possible
   :incomplete when cells were given up, condition-failed {:reason :no-items :needs} when items are short, condition-failed
   :refused when the rules refuse the rest, nothing-possible :shut-in. For a block placed in the wrong state, :found names the state it came out in.
@@ -393,12 +393,13 @@
   (assoc-fetch-failed c (summary c cells (ctx/mem c) (:sturdy-ground (:args c)))))
 
 (defn ending-of
-  "The ending of a build with nothing more to do: done when nothing is missing or the placed cells meet the call's
+  "The ending of a build with nothing more to do: done when nothing is missing (and no block came out wrong: nothing-possible :wrong-blocks) or the placed cells meet the call's
   :least; else by what holds the rest back: given-up cells (nothing-possible :incomplete), items not carried and not
   fetched (condition-failed :no-items), cells refused by the rules (condition-failed :refused)."
-  [c {:keys [placed missing short given-up refused] :as result}]
+  [c {:keys [placed missing short given-up refused wrong] :as result}]
   (let [data (assoc result :text (stopped-text (:plan (:args c)) result))]
     (cond
+      (and (empty? missing) (seq wrong)) (ctx/end c :nothing-possible :wrong-blocks data)
       (or (empty? missing) (common/enough? c placed (+ placed (count missing)))) (ctx/end c :done nil result)
       (seq given-up) (ctx/end c :nothing-possible :incomplete data)
       (seq short) (ctx/end c :condition-failed {:reason :no-items :needs short} data)

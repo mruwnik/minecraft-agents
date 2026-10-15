@@ -111,10 +111,11 @@
   "End job id (list-edits/cancel!); its cut-off carries done?'s count and :result (ending/with-progress)."
   ([eng id] (cancel! eng id :agent))
   ([eng id by]
-   (let [inst (get-in (state eng) [:instances id])
-         [def args] (when inst (job-of eng inst))]
-     (list-edits/cancel! eng id by (cond->> (contract/ending :cut-off by nil)
-                                     def (ending/with-progress def (round/check-ctx eng inst args)))))))
+   (list-edits/cancel! eng id by (try (ending/progress-of eng id (contract/ending :cut-off by nil))
+                                      (catch :default e
+                                        (emit! eng {:source :job :kind :cancel_progress_failed :level :warn :job id
+                                                    :error (str (or (.-message e) e))})
+                                        (contract/ending :cut-off by nil))))))
 (def insert-next list-edits/insert-next)
 (def insert-now list-edits/insert-now)
 (def retry! list-edits/retry!)
@@ -261,6 +262,7 @@
              :deferred (atom {})
              :fruitless (atom {})
              :asked (atom {})
+             :seen-done (atom {})
              :said (atom [])
              :rounds (atom {})
              :passes (atom {})

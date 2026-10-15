@@ -1350,7 +1350,7 @@
               _ (reset! gate nil)
               _ (core/submit! eng (list 'parked {:hold :night}) {})
               round (core/tick! eng)
-              _ (await (settle-until #(some? @gate) 50))]
+              _ (await (settle-until #(seq (holdings seen)) 50))]
           (is (= [["j1" :night 1000000]] (mapv (juxt :job :reason :since) (holdings seen))))
           (is (= {:reason :night :since 1000000} (core/holding eng "j1")))
           (is (= {:reason :night :since 1000000} (:holding (job-api/summary eng "j1"))) "agents see it in jobs show")

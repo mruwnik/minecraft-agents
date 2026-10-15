@@ -64,8 +64,9 @@
 
 (defn stopped-text
   "Why a build that left cells ended stopped: the plan, how many were placed and are missing, and what it left."
-  [plan {:keys [placed missing fetch-failed] :as result}]
-  (let [left (str/join "; " (remove str/blank? [(left-text result) (fetch-failed-text fetch-failed)]))]
+  [plan {:keys [placed missing fetch-failed wrong] :as result}]
+  (let [left (str/join "; " (remove str/blank? [(left-text result) (fetch-failed-text fetch-failed)
+                                                 (when (seq wrong) (str (count wrong) " blocks wrong"))]))]
     (str "build of " plan " stopped: placed " placed ", still missing " (count missing) (when (seq left) (str " (" left ")")))))
 
 (defn assoc-fetch-failed

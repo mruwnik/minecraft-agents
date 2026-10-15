@@ -271,3 +271,16 @@
           (is (= [["cow" "jobs.animals.cull" :cull] ["cow" "jobs.animals.cull" :cull]]
                  (mapv (juxt :animal :by :rule) es)))
           (is (= #{1 2} (set (map :entity es)))))))))
+
+(deftest drops-that-cannot-be-collected-do-not-hold-the-cull-at-collecting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:inventory h/sword :entities [(cow 1 3)]} 50)]
+          (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
+          (core/submit! eng (spec {:count 1 :keep 0}) {})
+          (dotimes [_ 40]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (= 1 (:killed (done-event s))))
+          (is (finished? s)))))))

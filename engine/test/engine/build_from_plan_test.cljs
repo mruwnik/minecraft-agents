@@ -443,6 +443,7 @@
             (is (= 1 (count (places p))))
             (is (empty? (h/calls p "dig")))
             (is (= [{:pos [3 64 3] :found "oak_stairs[facing=north]" :want "oak_stairs[facing=east]" :placed true}] (:wrong result)))
+            (is (= [:stopped :wrong-blocks] ((juxt :status :reason) result)) "done? says not done, so the build does not end :done")
             (is (= 1 (count (h/events-of seen :build.wrong))))))))))
 
 (deftest the-opt-out-needs-no-zone-list
