@@ -111,6 +111,33 @@
               (is (seq (gt/events-of s :go-to.surfacing)) "it swims up while its search goes on")
               (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))))
 
+(deftest a-walking-round-between-fresh-searches-under-water-resets-their-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [real near/walk-round!
+              n (atom 0)]
+          (with-redefs [near/walk-round! (fn [c pos range opts]
+                                           (let [i (swap! n inc)]
+                                             (cond
+                                               (not= 28 (:x pos)) (real c pos range opts)
+                                               (= 3 i) (js/Promise.resolve {:result {:status :partial :reason :stuck} :status "partial"
+                                                                            :from (:pos c) :to {:x 10.5 :y 58 :z 0.5}})
+                                               (<= i 5) (searching-slice c 20)
+                                               :else (real c pos range opts))))]
+            (let [s (await (gt/go! {:self {:pos [4.5 58 0.5] :inWater true :oxygen 20} :blocks (pond 24)}
+                                   {:pos [28 64 0] :range 1 :ways #{:walk :clear-seal}}))]
+              (is (empty? (gt/events-of s :go-to.surfacing)) "two fresh searches each side of a walk are not more than two restarts"))))))))
+
+(deftest a-goal-cell-that-is-water-says-so-when-the-body-stays-in-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (gt/go! {:self {:pos [-4.5 64 0.5]} :blocks (pond 24)}
+                                                 {:pos [10 61 0] :range 0 :ways #{:walk :clear-seal}}))]
+          (is (true? (:arrived @out)) (str "result " @out))
+          (is (re-find #"goal cell is water" (str (:text (first (gt/events-of s :go-to.in-water)))))))))))
+
 (defn dry-walk-fails
   "walk-round! where a walk on to the east bank (x over 12) answers r (fn of c), any other the real one."
   [r]

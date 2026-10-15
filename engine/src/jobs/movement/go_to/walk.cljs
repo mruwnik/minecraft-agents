@@ -177,6 +177,7 @@
                         :text (str "arrived within range but in water: "
                                    (cond dry (str "the walk on to the dry stand at " [(:x dry) (:y dry) (:z dry)] " ended " status)
                                          tried? "the walk on to a dry stand failed earlier in the call"
+                                         (zero? r) "the goal cell is water"
                                          :else "no dry stand seen within range"))}))
           (arrived! c)))))
 
@@ -362,7 +363,7 @@
                 unstuck? (await (unstick/swim-out! c pos walked))
                 progress? (or (< left (dec best)) explored? nearer?)
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
-            (ctx/update-mem! c assoc :blocked tries :searching 0 :best (if (< left (dec best)) left best)
+            (ctx/update-mem! c assoc :blocked tries :searching 0 :wet-fresh 0 :best (if (< left (dec best)) left best)
                              :closest (min left (:closest (ctx/mem c) left)) :last-dist left
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
