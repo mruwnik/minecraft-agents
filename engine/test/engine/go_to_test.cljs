@@ -38,10 +38,10 @@
   ([world shared]
   (let [clock (or (:clock world) (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter :clock)))
+        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter :clock :ray-deg)))
         _ (when-let [l (:light world)] (swap! (fake/state raw) assoc :light-default l))
         p (if (:light world)
-            (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now #(deref clock)
+            (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg (:ray-deg world 2) :now #(deref clock)
                                                                       :rand (constantly (:jitter world 0.5))}))
             raw)
         eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)

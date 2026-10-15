@@ -10,6 +10,11 @@
             [engine.test-util :as tu]
             [jobs.animals.herd-run :as hr]))
 
+(defn coarse-world
+  "ht/world with sight rays 4 degrees apart: the fence stays in view and a pass costs a quarter."
+  [w]
+  (assoc (ht/world w) :ray-deg 4))
+
 (defn scan!
   "Turn through every heading, level and down, a sight pass at each."
   [s]
@@ -21,7 +26,7 @@
   "The body west of the pen after a full sight pass; aged?: then 30 s on and looking at its feet, so the fence and floor
   are remembered and the gate (a mutable block, remembered 10 s) is unknown."
   [w aged?]
-  (let [s (ht/clock-on-wait! (h/setup-seeing (ht/world w) nil 700))]
+  (let [s (ht/clock-on-wait! (h/setup-seeing (coarse-world w) nil 700))]
     (scan! s)
     (when aged?
       (swap! (:clock s) + 30000)
@@ -61,7 +66,7 @@
 (defn dark-run
   "A herd run in a pitch-dark pen: a cell is made out only within 4 blocks (perception's near)."
   []
-  (let [s (ht/clock-on-wait! (h/setup-seeing (ht/world {:entities [(ht/cow 1 4 3)]}) [0 0] 700))]
+  (let [s (ht/clock-on-wait! (h/setup-seeing (coarse-world {:entities [(ht/cow 1 4 3)]}) [0 0] 700))]
     (ht/submit! s {:target 1})))
 
 (deftest a-dark-pen-is-looked-at-then-the-run-ends
@@ -85,7 +90,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (blind-pen! (ht/clock-on-wait! (h/setup-seeing (ht/world {:entities [(ht/cow 1 4 3)]}) [0 0] 700)))
+        (let [s (blind-pen! (ht/clock-on-wait! (h/setup-seeing (coarse-world {:entities [(ht/cow 1 4 3)]}) [0 0] 700)))
               _ (ht/submit! s {:target 1})
               _ (await (ht/run-ticks s 60))]
           (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings"))))))
@@ -111,7 +116,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (ht/clock-on-wait! (h/setup-seeing (ht/world {:entities [(ht/cow 1 4 3)]}) nil 700))
+        (let [s (ht/clock-on-wait! (h/setup-seeing (coarse-world {:entities [(ht/cow 1 4 3)]}) nil 700))
               _ (is (= :unloaded (:reason (read s))) "nothing seen yet: unloaded cells, not :no-start")
               _ (ht/submit! s {:target 1})
               _ (await (ht/run-ticks s 40))]

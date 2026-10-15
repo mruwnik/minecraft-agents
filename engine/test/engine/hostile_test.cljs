@@ -66,10 +66,10 @@
   ([world light ms]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        raw (tu/fake-on-floor (merge {:floor flight-floor} world))
+        raw (tu/fake-on-floor (merge {:floor flight-floor} (dissoc world :ray-deg)))
         _ (when light (swap! (fake/state raw) assoc :light-default light))
         now (tu/act-clock clock raw ms)
-        p (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now now}))
+        p (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg (:ray-deg world 2) :now now}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :seen seen :clock clock})))

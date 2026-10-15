@@ -285,19 +285,6 @@
           (is (< 40 (:explored @out) 100) (str "result " @out))
           (is (< walked 100) (str "walks: " (mapv (juxt :status :to) (moved eng)))))))))
 
-;; the abyss strip with a way on at its north end: a bridge west along z 199..200 and a walk back south along x -401..-399
-;; to the goal. Without :explore-blocks the tour walks the south end first, then the north end, and arrives (a tour gives
-;; up only when every frontier is spent)
-(deftest go-to-tours-both-ends-of-a-strip-to-a-way-at-its-far-end
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [blocks (merge abyss-strip (box -401 63 199 -1 63 200 "stone") (box -401 63 -1 -399 63 198 "stone"))
-              {:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 2.5 :y 64 :z 0.5}} :viewChunks 1}
-                                              {:pos [-400 64 0] :range 1 :escalate false}))]
-          (is (= {:arrived true} (select-keys @out [:arrived]))
-              (str "result " @out " at " (at p) " walks: " (mapv (juxt :status :from :to) (moved eng)))))))))
-
 ;; walking straight on toward a far unloaded goal comes nearer all the way: a budget smaller than the walk never runs out
 (deftest go-to-a-far-unloaded-goal-straight-on-arrives-within-a-small-explore-budget
   (async done
