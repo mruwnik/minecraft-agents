@@ -16,5 +16,5 @@
    :act [[:wait-s 2] [:job (jobs.maintenance.shut-doors)] [:await {:source :job :kind :shut-doors.stopped} 20]
          [:rcon "execute at $BODY run tp $BODY ~3 ~ ~"]]
    :expect [{:event {:source :job :kind :shut-doors.stopped :data {:left [{:reason :standing-in}]}} :within-s 20}
-            {:event {:source :job :kind :completed} :within-s 60}]
+            {:event {:source :reflex :kind :ended :context {:reflex-id :door-left} :data {:outcome :done}} :within-s 60}]
    :after [[:block [10 0 16] "oak_fence_gate[open=false]"]]}]}

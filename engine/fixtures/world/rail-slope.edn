@@ -1,7 +1,7 @@
 ;; Card 0a74133e: the rail builder's stands follow the ground (build/ground-stands), not the body's feet height. A rail line
 ;; up a 1:1 hillside (plan.rail/layout [[2 0 16] [16 0 16] [24 8 16] [38 8 16]], written out below) from a plateau 8 high:
 ;; the hill is stone columns x 17..24 (column x rises to y x-17, z 14..18) and a plateau x 25..40 up to y 7.
-;; Should-succeed: the body at the foot builds the whole line, walking the stands on the slope (rail-build.done, no gave-up or declined).
+;; Should-succeed: the body at the foot builds the whole line, walking the stands on the slope (:completed, no gave-up or declined).
 ;; Should-fail: without the redstone torches the line waits for them (rail-build.short), no rail is laid.
 ;; Line plan is plan.rail/layout output; items: rail 25, powered_rail 12, redstone_torch 6, fill 47 (cobblestone).
 {:defaults

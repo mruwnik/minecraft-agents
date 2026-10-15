@@ -42,7 +42,7 @@
          [:await {:source :action :kind :done :data {:name "useOn"}} 30]
          [:job (jobs.movement.go-to {:pos #at [5 0 20] :range 1}) [:now]]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :door-left}} :within-s 50}
-            {:event {:source :job :kind :completed :data {:shut 1}} :within-s 80}]
+            {:event {:source :reflex :kind :ended :context {:reflex-id :door-left} :data {:outcome :done}} :within-s 80}]
    :after [[:block [16 0 16] "oak_fence_gate[open=false]"]]
    :limit-s 100}
   {:name "never-treats-the-door-as-a-wall"

@@ -39,6 +39,6 @@
          [:await {:source :job :kind :shut-doors.stopped} 60]
          [:rcon "kill @e[type=cow,tag=wt,$BOX]"]]
    :expect [{:event {:source :job :kind :shut-doors.stopped} :within-s 60}
-            {:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 120}]
+            {:event {:source :reflex :kind :ended :context {:reflex-id :door-left} :data {:outcome :done}} :within-s 120}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"]]
    :limit-s 140}]}
