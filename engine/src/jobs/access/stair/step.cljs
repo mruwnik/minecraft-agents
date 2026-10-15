@@ -197,4 +197,9 @@
                (empty? plans) {:reason :no-support-floor :cell floor :tried [floor (update floor 1 dec)]
                                :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
                :else (await (bridge/place-plans! c in item plans (take-back-floor? c))))]
-    (if stop (await (shut-opening! c in stop cs item)) :again)))
+    ;; a refusal may be the body's own entity in the cell: one more round before giving up
+    (cond
+      (and (= :place-failed (:reason stop)) (not= (:cell stop) (:refused (ctx/mem c))))
+      (do (ctx/update-mem! c assoc :refused (:cell stop)) :again)
+      stop (await (shut-opening! c in stop cs item))
+      :else :again)))

@@ -760,6 +760,33 @@
           (is (< 1 @n) "a second plan was tried")
           (is (= "cobblestone" (block-at p [1 63 0]))))))))
 
+(deftest one-refused-place-of-a-bridged-floor-is-tried-again-the-next-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              n (atom 0)
+              prep (fn [p]
+                     (.override (.-world p) "place"
+                                (fn ^:async f [token a impl]
+                                  (if (= 1 (swap! n inc))
+                                    #js {:status "failed" :reason "place-failed: block is still air"}
+                                    (await (impl token a))))))
+              {:keys [out p]} (await (stair! {:blocks (dissoc ground "1,63,0" "1,62,0") :inventory inv} (assoc east :steps 1) prep))]
+          (is (= :done (:status @out)) (pr-str (dissoc @out :dug)))
+          (is (= "cobblestone" (block-at p [1 63 0]))))))))
+
+(deftest a-floor-the-world-keeps-refusing-ends-place-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              prep (fn [p]
+                     (.override (.-world p) "place"
+                                (fn ^:async f [_ _ _] #js {:status "failed" :reason "place-failed: block is still air"})))
+              {:keys [out]} (await (stair! {:blocks (dissoc ground "1,63,0" "1,62,0") :inventory inv} (assoc east :steps 1) prep))]
+          (is (= :place-failed (:reason @out)) (pr-str (dissoc @out :dug))))))))
+
 (deftest lava-for-a-floor-is-never-bridged-it-is-exposed-lava
   (async done
     (tu/run-async done
