@@ -12,6 +12,7 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.items.get-kit :as kit]
@@ -300,3 +301,11 @@
           (is (= {:status :done :made ["iron_pickaxe"]} (select-keys @(:out s) [:status :made]))
               (pr-str (select-keys @(:out s) [:status :item :reason :why])))
           (is (= 1 (get (f/inv s) "iron_pickaxe"))))))))
+
+(deftest each-obtain-child-gets-the-minutes-setting-as-its-job-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings {:jobs.items.get-kit/minutes 2}
+                 (fn ^:async two-minutes []
+                   (is (= {:job-time 120} (:spend (kit/obtain-args {:args {:items ["iron_pickaxe"]}} "iron_pickaxe" 1)))))))))))

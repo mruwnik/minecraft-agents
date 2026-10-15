@@ -21,8 +21,8 @@
   When the next missing item needs furnace material, one jobs.items.obtain child gets what all missing pieces need together (iron_ingot: 32 for the
   whole kit, less what is carried), so the ore is mined and smelted in one go; if it cannot, the job stops at once
   naming the material, unless raw input of it is carried: then that is smelted, the pieces it covers are made in
-  order and the job stops at the first one it cannot make. Then one obtain child per missing piece, in order, with :explore and :minutes (nil: ::minutes,
-  longer than the fetch limit). Each piece got is an info kit.progress.
+  order and the job stops at the first one it cannot make. Then one obtain child per missing piece, in order, with :explore and a :spend :job-time of the ::minutes setting
+  (longer than the fetch limit). Each piece got is an info kit.progress.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
   :min-food food points are carried (nil: ::min-food; harmful food does not count), a jobs.survival.get-food child
   (with :explore, and :stock :min-food to fill the pack) runs before the work and again after each piece (:food false: no child, stops :needs-food instead). A child that
@@ -45,7 +45,6 @@
   {:items {:doc "the items to get, in order" :spec (a/coll-of a/item?) :default iron-kit}
    :wear {:doc "wear each armour piece once it is carried" :spec boolean? :default true}
    :explore {:doc "passed to the obtain children: walk and look for raw needs not seen" :spec (a/or-of boolean? map?) :default true}
-   :minutes {:doc "time budget of each obtain child; nil: ::minutes" :spec (a/num-in 0 nil) :default nil}
    :food {:doc "run a get-food child when mining or smelting is ahead and fewer than :min-food points are carried; false: stop :needs-food" :spec boolean? :default true}
    :min-food {:doc "food points to carry before mining or smelting starts and between pieces; nil: ::min-food" :spec (a/int-in 0 nil) :default nil}})
 
@@ -152,7 +151,7 @@
   (let [a (:args c)]
     (assoc (if (vector? item) {:any-of item} {:item item})
            :count (min 64 n) :explore (:explore a)
-           :minutes (or (:minutes a) (settings/get settings ::minutes)))))
+           :spend {:job-time (* 60 (settings/get settings ::minutes))})))
 
 (defn armed?
   "Whether a weapon (jobs.lib.combat/default-weapons: a sword or an axe) is carried."
