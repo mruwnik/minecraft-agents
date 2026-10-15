@@ -929,6 +929,18 @@
           (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])))
           (is (= 1 (count (furnaces-at p)))))))))
 
+(deftest no-furnace-to-be-had-stops-before-the-logs-become-fuel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:blocks {"-2,64,3" "crafting_table"}
+                                         :recipes {"oak_planks" {:count 4 :needs {"oak_log" 1}}}
+                                         :inventory [{:name "oak_log" :count 11}]}
+                                        {:item "charcoal" :count 4 :fetch {:how #{:chest}}}))
+              carried (into {} (map (juxt :name :count)) (:inventory @(fake/state p)))]
+          (is (= :no-furnace-seen (:reason r)))
+          (is (= {"oak_log" 11} carried) "no log was turned into planks"))))))
+
 ;; ------------------------------------------------------------------ several items in one call
 
 (def two-foods {:blocks {pos-key "furnace"}

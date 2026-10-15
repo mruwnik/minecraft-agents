@@ -32,9 +32,9 @@
   woken round that finds the cook unfinished waits again from the furnace's own bars.
   What is owed is kept in memory before the load, so a restart or cut neither loses the output nor loads twice.
   Needs: the input, the fuel (the :fuel item, else coal or charcoal, else planks of any wood, sized by what one item of it
-  smelts) and a furnace. With :fetch (default true; jobs.lib.need) what is missing is fetched first by obtain
-  children, and, when no furnace is seen, a carried furnace is put down beside the body, else one is fetched and put
-  down. A fetch that finds nothing leaves the cause below (no-item, no-fuel, no-furnace-seen), the fetch's ending
+  smelts) and a furnace. With :fetch (default true; jobs.lib.need) a furnace comes first (when none is seen, a carried one is put down beside the body, else one is fetched and put
+  down; none to be had ends no-furnace-seen before any fuel is fetched), then what else is missing is fetched by obtain
+  children. A fetch that finds nothing leaves the cause below (no-item, no-fuel, no-furnace-seen), the fetch's ending
   its :because. :fetch false skips all of it. Starts only with an item some furnace cooks (impossible :not-smeltable, the job leaves the queue;
   an output such as cooked_chicken names its input). Quote: the cook time of the count (a furnace; half in the other
   two), the input and fuel items, the product; open-ended when no furnace is given or seen.
@@ -345,32 +345,33 @@
 
 ;; ------------------------------------------------------------------ the round, with the fetches
 
-(defn ^:async round-fetched
-  "The round once the missing input and fuel are fetched."
-  [c]
-  (cond
-    (furnace-of c) (await (round-with c (furnace-of c)))
-    :else
-    (if-let [pos (nearest-furnace c (sp/input-of (:item (:args c)) (carried c)))]
-      (do (ctx/update-mem! c assoc :furnace pos)
-          (ctx/emit! c :smelt.furnace :info {:furnace pos :text (str "smelting at the furnace seen at " (:x pos) " " (:y pos) " " (:z pos))})
-          (await (round-with c pos)))
-      (or (await (look/survey! c :cell))
-          (let [f (await (sf/furnace-fetch! c))]
-            (case f
-              nil (if-let [why (and (pos? (storage/carried (carried c) "furnace")) (:furnace-refusal (ctx/mem c)))]
-                    (stop! c "furnace-not-placed" nil (str "a furnace is carried but could not be put down: " why))
-                    (stop! c "no-furnace-seen" nil (when (:furnace-tried (ctx/mem c)) "none could be made either: a furnace is 8 cobblestone mined with a pickaxe")))
-              :again (await (round-with c (:furnace (ctx/mem c))))
-              f))))))
+(defn ^:async acquire-furnace!
+  "With no furnace chosen: the nearest one seen is chosen (nil), else look around once, then put a carried or
+  fetched one down. nil once a furnace is chosen; :continue while that goes on; a stop when none can be had."
+  [c input]
+  (if-let [pos (nearest-furnace c input)]
+    (do (ctx/update-mem! c assoc :furnace pos)
+        (ctx/emit! c :smelt.furnace :info {:furnace pos :text (str "smelting at the furnace seen at " (:x pos) " " (:y pos) " " (:z pos))})
+        nil)
+    (or (await (look/survey! c :cell))
+        (let [f (await (sf/furnace-fetch! c))]
+          (case f
+            nil (if-let [why (and (pos? (storage/carried (carried c) "furnace")) (:furnace-refusal (ctx/mem c)))]
+                  (stop! c "furnace-not-placed" nil (str "a furnace is carried but could not be put down: " why))
+                  (stop! c "no-furnace-seen" nil (when (:furnace-tried (ctx/mem c)) "none could be made either: a furnace is 8 cobblestone mined with a pickaxe")))
+            :again nil
+            f)))))
 
 (defn ^:async item-round
-  "One bounded step: yield while the cook is not due, else reach the furnace, read it, then load (first) or collect.
-  Without a :furnace the first round chooses the nearest seen one (kept in memory); with none in view it looks around
-  once from where it stands (the four headings, level and down, a sight pass after each) and chooses again; none seen
-  after that ends no-furnace-seen."
+  "One bounded step: yield while the cook is not due, else get a furnace (the nearest one seen, else one put down:
+  a body that cannot have one stops before it spends logs on fuel), fetch the missing input and fuel, reach the
+  furnace, read it, then load (first) or collect. With none in view it looks around once from where it stands (the
+  four headings, level and down, a sight pass after each) first; none after that ends no-furnace-seen."
   [c]
-  (or (await (sf/fetch-stages! c (fetch-fuels) (fetch-wood-fuels))) (await (round-fetched c))))
+  (or (when-not (or (furnace-of c) (some? (:owed (ctx/mem c))))
+        (await (acquire-furnace! c (sp/input-of (:item (:args c)) (carried c)))))
+      (await (sf/fetch-stages! c (fetch-fuels) (fetch-wood-fuels)))
+      (await (round-with c (furnace-of c)))))
 
 (defn raw-carried
   "The raw foods and ores carried, by name."
