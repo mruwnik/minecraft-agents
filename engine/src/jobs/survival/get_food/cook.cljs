@@ -2,6 +2,7 @@
   "Cooking the raw food carried, for get-food's cook way and the night's hold."
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.child :as child]
@@ -77,7 +78,7 @@
   [c]
   (boolean (or (seq (threats/sensed-mobs (:primitives c) {}))
                (and (<= (food-level c) 0) (starving-too-soon? c))
-               (and (seq (raw-carried c)) (risk/refusal c (or (:furnace (:cooking (ctx/mem c))) (nearest-cooker c)))))))
+               (and (seq (raw-carried c)) (risk/refusal c (or (get-in (ctx/mem c) [:cooking :args :furnace]) (nearest-cooker c)))))))
 
 (defn worth-cooking?
   "Cooking the raw food carried beats eating it now (jobs.lib.cost/cook-worth?): the walk to the furnace known, or
@@ -108,25 +109,27 @@
 
 (defn ^:async cook!
   "Smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace known (or the given one); the cooking
-  wait is spent in the round. :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
+  wait yields the round (once the furnace holds the load, the world must move on before the next look). :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
   ([c] (await (cook! c nil)))
   ([c cooker]
-  (let [{:keys [name count]} (or (first (raw-carried c)) (:cooking (ctx/mem c)))
-        furnace (or (:furnace (:cooking (ctx/mem c))) cooker (nearest-cooker c))
-        args (cond-> {:item name :count count} furnace (assoc :furnace furnace))
-        _ (ctx/update-mem! c assoc :cooking {:name name :count count :furnace furnace})]
-    (loop [n 0]
-      (let [st (await (child/run! c :cook 'jobs.items.smelt args))]
+  (let [{:keys [name] :as cooking}
+        (or (:cooking (ctx/mem c))
+            (let [{:keys [name count]} (first (raw-carried c))
+                  furnace (or cooker (nearest-cooker c))]
+              {:name name :args (cond-> {:item name :count count} furnace (assoc :furnace furnace))}))
+        args (:args cooking)
+        _ (ctx/update-mem! c assoc :cooking cooking)]
+    (loop [n 1]
+      (let [e (await (child/run!* c :cook 'jobs.items.smelt args {:max-calls 1}))
+            loaded? (some? (get-in (ctx/mem c) [:children :cook :owed]))]
         (cond
           (not (ctx/alive? c)) :continue
-          (= :continue st) :continue
-          (and (= :declined st) (< n (child/default-max-calls))) (do (await (child/pace!)) (recur (inc n)))
-          (= :declined st) :continue
-          :else (let [res (ctx/child-result c :cook)]
-                  (ctx/update-mem! c dissoc :cooking)
-                  (if (pos? (:smelted res 0))
-                    :again
-                    (let [reason (or (:reason res) "short")]
-                      (ctx/remember! c :no-cook {:reason reason} no-bake-policy)
-                      (ctx/emit! c :food.no-cook :info {:text (str "cannot cook " name ": " reason)})
-                      nil)))))))))
+          (and (= :continue e) (not loaded?) (< n (child/default-max-calls))) (do (await (child/pace!)) (recur (inc n)))
+          (= :continue e) :continue
+          :else (do (ctx/update-mem! c dissoc :cooking)
+                    (if (pos? (:smelted (:data e) 0))
+                      :again
+                      (let [reason (if (= :done (:kind e)) "short" (clojure.core/name (contract/cause-key e)))]
+                        (ctx/remember! c :no-cook {:reason reason} no-bake-policy)
+                        (ctx/emit! c :food.no-cook :info {:text (str "cannot cook " name ": " reason)})
+                        nil)))))))))

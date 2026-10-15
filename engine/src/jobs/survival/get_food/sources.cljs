@@ -120,7 +120,7 @@
 (defn ^:async go-near!
   "Walk within reach of pos by one go-to call: :there, :far (it gave up) or :continue (go-to waits on the world)."
   [c pos]
-  (let [r (await (child/run! c :goto 'jobs.movement.go-to {:pos pos :range (reach)} {:max-calls 1}))]
+  (let [r (await (child/run!* c :goto 'jobs.movement.go-to {:pos pos :range (reach)} {:max-calls 1}))]
     (cond
       (= :continue r) :continue
       (<= (u/dist (u/self-pos c) pos) (inc (reach))) :there
@@ -147,10 +147,10 @@
     (when pos
       (access/trespass! c "get-food" trespass)
       ;; access/choose made the zone call (a missing zone list never blocks survival); the dig notes a trespass for restore-broken
-      (let [st (await (child/run! c :dig 'jobs.blocks.dig {:pos pos :ignore-zones? true}))]
+      (let [e (await (child/run!* c :dig 'jobs.blocks.dig {:pos pos :ignore-zones? true}))]
         (cond
-          (= :continue st) :continue
-          (and (= :done st) (:dug (ctx/child-result c :dig))) :again
+          (= :continue e) :continue
+          (and (= :done (:kind e)) (:dug (:data e))) :again
           :else (do (ctx/update-mem! c update :skipped-blocks (fnil conj []) pos) :again))))))
 
 (defn ^:async farm!
@@ -186,7 +186,7 @@
   "Withdraw n of item from the chest at pos (storage.withdraw): :again; a chest that gave nothing is forgotten."
   [c pos item n]
   (let [before (carried-count c item)
-        st (await (child/run! c :withdraw 'jobs.storage.withdraw
+        st (await (child/run!* c :withdraw 'jobs.storage.withdraw
                               {:chest pos :items {item (+ before n)} :ignore-zones? (:ignore-zones? (:args c))}))]
     (cond
       (= :continue st) :continue

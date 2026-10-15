@@ -70,14 +70,13 @@
           (is (= {:kind :nothing-possible :cause :no-stock} (kc e)))
           (is (= 8 (get-in e [:data :stock]))))))))
 
-(deftest a-body-above-the-hungry-line-is-condition-failed-not-hungry
+(deftest a-body-above-the-hungry-line-is-done-already
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:self {:food 8 :health 20}})
               e (await (ending-of eng {}))]
-          (is (= {:kind :condition-failed :cause :not-hungry} (assoc (kc e) :cause (contract/cause-key e))))
-          (is (re-find #"hungry below 7$" (str (get-in e [:cause :why])))))))))
+          (is (= :done (:kind e))))))))
 
 (deftest nothing-to-try-inside-the-cooldown-is-condition-failed-after-one-look
   (async done

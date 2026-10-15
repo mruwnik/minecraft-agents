@@ -542,16 +542,15 @@
           (await (core/tick! eng))
           (is (= [:no-food-found] (distinct (map :reason (events-of seen :waiting))))))))))
 
-(deftest a-body-above-the-hungry-line-waits-not-hungry-and-says-the-line
+(deftest a-body-above-the-hungry-line-is-done-without-waiting
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 8 :health 20}})]
           (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
           (await (core/tick! eng))
-          (let [w (first (events-of seen :waiting))]
-            (is (= :not-hungry (:reason w)))
-            (is (re-find #"food 8 .*hungry below 7$" (str (:why (:cause w)))) (pr-str w))))))))
+          (is (= [] (events-of seen :waiting)))
+          (is (= [] (:list (core/state eng)))))))))
 
 (deftest rotten-flesh-above-the-eat-bad-line-is-nothing-to-try
   (async done
@@ -650,6 +649,20 @@
           (is (= [] (calls p "transfer")))
           (is (re-find #"too-dangerous" (stop-text seen)))
           (is (re-find #"passes creeper" (stop-text seen))))))))
+
+(deftest after-a-too-dangerous-ending-the-next-call-acts-nothing-so-the-reflex-backs-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup (merge bread-chest {:self {:food 5 :health 2} :time 6000
+                                                              :entities [(assoc creeper :pos {:x 50.5 :y 64 :z 0.5})]})
+                                          :step-ms 5)]
+          (know-source! eng {:x 60 :y 64 :z 0} :chest)
+          (await (one-round! eng {:explore false}))
+          (let [n (count (.-calls (.-world p)))]
+            (await (one-round! eng {:explore false}))
+            (is (= n (count (.-calls (.-world p)))) "the second call acts nothing")
+            (is (= [:too-dangerous] (distinct (map :reason (events-of seen :waiting)))) "a listed call waits on it")))))))
 
 (deftest a-body-on-low-health-walks-to-a-source-with-no-hostile-about
   (async done
@@ -902,7 +915,7 @@
         (let [{:keys [eng p seen]} (setup {:self {:food 20} :inventory [{:name "bread" :count 3}] :entities herd})]
           (await (one-round! eng {:stock 10}))
           (is (empty? (call-args p "attack" "id")))
-          (is (empty? (ended seen)) "the check declines: nothing to do"))))))
+          (is (= [:completed] (mapv :kind (ended seen))) "the goal holds: done without acting"))))))
 
 (deftest stock-with-no-source-stops-naming-the-reason
   (async done
