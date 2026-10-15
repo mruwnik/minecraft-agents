@@ -148,6 +148,15 @@
     (is (= (:rays-per-pass all) (:rays all)))
     (is (< (:rays one) (/ (:rays-per-pass all) 10)))))
 
+(deftest a-forced-look-drops-the-pass-in-flight
+  (let [{:keys [p per]} (rig {} {:pass-ms 1000 :step-ms 50})]
+    (perception/step! per)
+    (turn! p 90)
+    (perception/pass! per)
+    (let [st (perception/stats per)]
+      (is (= 1 (:passes st)))
+      (is (< (:rays st) (* 1.5 (:rays-per-pass st)))))))
+
 (deftest seen-block-carries-age-and-properties
   (let [clock (atom 5000)
         {:keys [per]} (rig {"0,65,3" "oak_log"} {:now #(deref clock)})]

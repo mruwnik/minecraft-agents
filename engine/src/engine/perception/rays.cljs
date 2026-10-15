@@ -218,10 +218,10 @@
        (set! (.-lastStart st) nil)))))
 
 (defn pass!
-  "A whole sight pass at once (tests, and a forced look): finishes any pass in flight, then runs a fresh one."
+  "A whole sight pass from the eye as it is now (tests, and a forced look). A pass in flight is dropped, not finished: this one covers the whole cone."
   [{:keys [st] :as per}]
   (let [^js st st]
-    (while (.-pass st) (step! per))
+    (set! (.-pass st) nil)
     (when (.eye ^js (:raw per))
       (step! per true)
       (while (.-pass st) (step! per)))))
