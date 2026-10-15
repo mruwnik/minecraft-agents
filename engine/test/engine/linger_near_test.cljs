@@ -29,6 +29,17 @@
     (core/submit! eng '(recording-parent) {})
     {:eng eng :p p :clock clock :seen seen :out out})))
 
+(defn direct
+  "An engine running the job itself (not as a child), so its own events reach the sink."
+  [args extra-jobs]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        eng (core/create {:primitives (tu/fake-on-floor {}) :jobs (merge registry/jobs extra-jobs) :triggers triggers/all
+                          :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (core/submit! eng (list job args) {})
+    {:eng eng :clock clock :seen seen}))
+
 (defn ^:async run-ticks [{:keys [eng clock]} n step]
   (loop [i 0]
     (when (and (< i n) (seq (:list (core/state eng))))
@@ -116,44 +127,46 @@
           (is (<= (Math/abs (- 2 (self-x p))) 3))
           (is (= :not-done @(:out s))))))))
 
-(deftest an-arrival-resets-the-blocked-count
+(deftest the-first-failed-walk-back-ends-stopped-with-go-tos-ending-as-the-because
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stub (scripted-go-to [:fail :fail :arrive :fail :fail :arrive])
-              holder (atom nil)
-              s (setup {} {:pos {:x 10 :y 64 :z 0} :range 1 :wait-s 30}
-                       {'jobs.movement.go-to (assoc stub :round (fn [c] ((:round stub) (assoc c :s @holder))))})]
-          (reset! holder s)
-          (await (run-ticks s 6 500))
-          (fake/swap-self! (:p s) assoc :pos [0 64 0])
-          (await (run-ticks s 6 500))
-          (is (= :not-done @(:out s)) "two failures, an arrival, two more failures: not yet stopped"))))))
+        (let [stub (scripted-go-to [:fail :arrive])
+              s (direct {:pos {:x 10 :y 64 :z 0} :range 1 :wait-s 1} {'jobs.movement.go-to stub})]
+          (await (run-ticks s 1 2000))
+          (let [e (first (of-kind (:seen s) :stopped))]
+            (is (some? e) "one failure is enough: go-to retries itself")
+            (is (false? (:lingered e)))
+            (is (= :no_path (contract/cause-key (:because e))) "go-to's own ending is the because")))))))
 
-(deftest walking-time-does-not-count-and-a-body-never-in-range-is-not-lingered
+(deftest a-pause-that-does-not-end-done-adds-no-waited-time
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [holder (atom nil)
-              stub (scripted-go-to (repeat :fail))
-              s (setup {} {:pos {:x 10 :y 64 :z 0} :range 1 :wait-s 1}
-                       {'jobs.movement.go-to (assoc stub :round (fn [c] ((:round stub) (assoc c :s @holder))))})]
-          (reset! holder s)
-          (await (run-ticks s 6 2000))
-          (is (= :stopped (:status @(:out s))))
-          (is (false? (:lingered @(:out s)))))))))
+        (let [stub {:round (fn ^:async stub-round [c] :continue)}
+              s (setup {} {:pos {:x 2 :y 64 :z 0} :range 3 :wait-s 1} {'jobs.time.noop stub})]
+          (await (run-ticks s 10 500))
+          (is (= :not-done @(:out s))))))))
+
+(deftest the-done-event-says-waited
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (direct {:pos {:x 0 :y 64 :z 0} :range 3 :wait-s 1} {})]
+          (await (run-ticks s 12 500))
+          (is (= "waited" (:reason (first (of-kind (:seen s) :completed)))) (pr-str (of-kind (:seen s) :completed))))))))
 
 (deftest walking-time-does-not-count-towards-the-wait
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stub (scripted-go-to [:fail :fail :arrive])
+        (let [stub (scripted-go-to [:arrive])
               holder (atom nil)
               s (setup {} {:pos {:x 10 :y 64 :z 0} :range 1 :wait-s 2}
                        {'jobs.movement.go-to (assoc stub :round (fn [c] ((:round stub) (assoc c :s @holder))))})]
           (reset! holder s)
-          (await (run-ticks s 3 5000))
-          (is (= :not-done @(:out s)) "ten seconds of failed walking and an arrival: nothing waited yet")
+          (await (run-ticks s 1 5000))
+          (is (= :not-done @(:out s)) "five seconds of walking and an arrival: nothing waited yet")
           (await (run-ticks s 2 5000))
           (is (= :not-done @(:out s)) "one second in range of the two asked for")
           (await (run-ticks s 6 500))
@@ -177,6 +190,7 @@
         (let [least (fn ^:async least-of [pos] (let [{:keys [eng]} (setup {} {:pos pos :range 3 :wait-s 30})]
                                         (let [q (:quote (await (event-api/quote-view eng (str job) (pr-str {:pos pos :range 3 :wait-s 30}))))]
                                           (is (nil? (contract/quote-problem q)))
+                                          (is (= (linger-near/budget-s) (last (get-in q [:uses :job-time]))) "most is the job-time budget")
                                           (first (get-in q [:uses :job-time])))))
               near (await (least {:x 2 :y 64 :z 0}))
               far (await (least {:x 10 :y 64 :z 0}))]

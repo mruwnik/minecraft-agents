@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
@@ -15,10 +16,10 @@
   (pushed away, or at the start) it walks back with a go-to child (:ways #{:walk :clear-seal}).
   Ends with a result:
   - {:lingered true :reason \"waited\"} when :wait-s of time in range has been waited, with the body in range.
-  - {:status :stopped :lingered false :reason :unreachable :why <go-to's reason>} when go-to
-    does not arrive three times in a row.
-  Only time held in range counts (500 ms per round, kept in job memory): walking back and time the job was
-  preempted add nothing, and a resume checks the range again before it can end. A cut leaves nothing to undo; a caller whose wait
+  - {:status :stopped :lingered false :reason :unreachable} when go-to does not arrive; go-to's ending is the :because.
+  Only time held in range counts (a pause that ended done adds its 500 ms, kept in job memory): walking back, a cut
+  pause and time the job was preempted add nothing, and a resume checks the range again before it can end.
+  Quote: the wait plus the walk back; most is the job-time budget, since being pushed out can repeat the walk. A cut leaves nothing to undo; a caller whose wait
   ends early cuts the job.")
 
 (a/defargs args
@@ -27,7 +28,6 @@
    :wait-s {:doc "seconds to stay" :spec (a/num-in 0 nil) :default nil}})
 
 (def idle-ms 500)
-(def max-blocked 3)
 
 (def target [:pos])
 
@@ -38,6 +38,8 @@
 
 (a/defargs settings
   {::job-time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(defn budget-s [] (settings/get settings ::job-time-s))
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -60,7 +62,7 @@
         [wl wm wx] (if (u/within? (u/self-pos c) pos range)
                      [0 0 0]
                      (or (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range range})) [:uses :job-time]) [0 0 0]))]
-    {:uses {:job-time [(+ wait-s wl) (+ wait-s wm) (+ wait-s wx (* 4 wait-s))]}}))
+    {:uses {:job-time [(+ wait-s wl) (+ wait-s wm) (max (+ wait-s wx) (budget-s))]}}))
 
 (defn finish!
   "Release the hold and end the call."
@@ -69,22 +71,13 @@
   (ctx/end c kind cause data))
 
 (defn ^:async walk-back!
-  "Walk within range of pos: :continue while the child waits or after an arrival or one failure, else the third
-  failure in a row ends the job stopped."
+  "Walk within range of pos: :continue while the child waits or after an arrival, else go-to's failure ends the job stopped."
   [c pos range]
-  (let [r (await (child/call-walk* c :walk {:pos pos :range range :ways #{:walk :clear-seal}}))
-        res (:data r)]
-    (cond
-      (= :continue r) :continue
-      (:arrived res) (do (ctx/update-mem! c assoc :blocked 0) :continue)
-      :else
-      (let [blocked (inc (:blocked (ctx/mem c) 0))]
-        (ctx/update-mem! c assoc :blocked blocked)
-        (if (< blocked max-blocked)
-          :continue
-          (finish! c :nothing-possible :unreachable
-                   {:lingered false :why (when (not= :done (:kind r)) (contract/cause-key r))
-                    :text (str "cannot get within " range " of " (pr-str pos))}))))))
+  (let [r (await (child/call-walk* c :walk {:pos pos :range range :ways #{:walk :clear-seal}}))]
+    (if (or (= :continue r) (:arrived (:data r)))
+      :continue
+      (finish! c :nothing-possible :unreachable
+               {:lingered false :text (str "cannot get within " range " of " (pr-str pos))}))))
 
 (defn ^:async round
   "One bounded step: in range, end when the waited time is up, else hold still and count the wait; out of range,
@@ -97,9 +90,10 @@
           (await (walk-back! c pos range)))
 
       (>= (:waited (ctx/mem c) 0) (* 1000 wait-s))
-      (finish! c :done nil {:lingered true})
+      (finish! c :done nil {:lingered true :reason "waited"})
 
       :else
-      (do (await (child/pause! c (/ idle-ms 1000) :lingering))
-          (ctx/update-mem! c update :waited (fnil + 0) idle-ms)
-          :continue))))
+      (let [r (await (child/pause! c (/ idle-ms 1000) :lingering))]
+        (when (= :done (:kind r))
+          (ctx/update-mem! c update :waited (fnil + 0) idle-ms))
+        :continue))))
