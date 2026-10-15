@@ -4,7 +4,7 @@
 ;; Should-succeed: a calm day, a known chest of bread 24 blocks off: walked to and eaten from; raw beef is cooked at a known furnace
 ;; 24 blocks off.
 ;; Should-fail: at night the trigger never fires; a creeper known on the route stops get-food condition-failed :too-dangerous with
-;; the body staying put; a creeper by the furnace makes it eat the raw beef instead of cooking (no smelt.done).
+;; the body staying put; a creeper by the furnace makes it eat the raw beef instead of cooking (no cooking).
 {:defaults
  {:tags [:survival :hungry :get-food :fragile]
   :time :day
@@ -41,12 +41,12 @@
    :blocks [[:set [28 0 16] "furnace[facing=west]"]]
    :memory [{:kind :furnace :data {:pos #xyz [28 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["beef" 2] ["coal" 2]]}
-   :expect [{:event {:source :job :kind :smelt.done} :within-s 80}]}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}]}
   {:name "creeper-by-the-furnace-eats-the-beef-raw"
    :blocks [[:set [28 0 16] "furnace[facing=west]"]]
    :memory [{:kind :furnace :data {:pos #xyz [28 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["beef" 2] ["coal" 2]]}
    :act [[:summon "creeper" [26.5 0 18.5] "{NoAI:1b,Silent:1b}"]
          [:job (jobs.survival.get-food {})]]
-   :expect [{:no-event {:source :job :kind :smelt.done} :for-s 40}]
+   :expect [{:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 40}]
    :after [[:item "beef" [:<= 1]] [:body-near [4.5 0 16.5] 6]]}]}

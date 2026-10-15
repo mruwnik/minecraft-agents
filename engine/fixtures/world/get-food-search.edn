@@ -41,8 +41,8 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore {:max-distance 64 :max-legs 3 :spend {:job-time 30}}})]]
-   :expect [{:event {:source :job :kind #{:search.done :search.not-found}} :within-s 110}
-            {:no-event {:source :job :kind :failed} :for-s 100 :until {:source :job :kind #{:search.done :search.not-found}}}]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :explore}} :within-s 110}
+            {:no-event {:source :job :kind :failed} :for-s 100 :until {:source :job :kind :child_ended :data {:slot :explore}}}]
    :limit-s 150}
   {:name "fed-enough-body-inside-the-cooldown-ends-without-searching"
    :memory [{:kind :hungry :data {:food 8} :age-s 90 :policy {:cap 10 :ttl 3600000}}]
@@ -50,11 +50,11 @@
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore true})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind #{:search.done :search.not-found}} :for-s 30}]}
+            {:no-event {:source :job :kind :child_started :data {:slot :explore}} :for-s 30}]}
   {:name "stock-ask-explores-while-fed-past-a-give-up"
    :memory [{:kind :hungry :data {:food 8} :age-s 60 :policy {:cap 10 :ttl 3600000}}]
    :act [[:job (jobs.survival.get-food {:stock 8 :explore {:max-distance 64 :max-legs 3 :spend {:job-time 30}}})]]
-   :expect [{:event {:source :job :kind #{:search.done :search.not-found}} :within-s 110}]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :explore}} :within-s 110}]
    :limit-s 150}
   {:name "far-cow-found-by-the-explore-search"
    :plot {:height 6 :length 96 :width 32}
@@ -69,7 +69,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore {:max-distance 64 :max-legs 3 :spend {:job-time 30}}})]]
-   :expect [{:event {:source :job :kind #{:search.done :search.not-found}} :within-s 110}]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :explore}} :within-s 110}]
    :limit-s 150}
   {:name "night-starving-body-with-a-zombie-near-does-not-search"
    :time :night
@@ -78,7 +78,7 @@
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore true})]]
    :expect [{:event {:source :job :kind :food.none :message [:contains "not searched"]} :within-s 60}
-            {:no-event {:source :job :kind #{:search.done :search.not-found}} :for-s 40}]}
+            {:no-event {:source :job :kind :child_started :data {:slot :explore}} :for-s 40}]}
   {:name "melon-seen-is-dug-and-eaten"
    :blocks [[:set [20 0 16] "melon"]]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]

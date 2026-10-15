@@ -20,6 +20,11 @@
     (is (= [{:event :search.done :data {:found [{:what "stone" :pos [5 70 3]}] :coverage {:scans 1}}}]
            (:events result)))))
 
+(deftest the-terminal-events-data-is-the-jobs-result
+  (let [events [(event 1 "j4" :queued {}) (event 2 "j4" :completed {:status :completed :scope :seen :blocks [{:name "iron_ore"}]})]]
+    (is (= {:status :completed :scope :seen :blocks [{:name "iron_ore"}]} (:result (results/project "j4" "g" events false))))
+    (is (not (contains? (results/project "j4" "g" [(event 1 "j4" :queued {})] false) :result)))))
+
 (deftest history-and-output-loss-are-explicit
   (is (= :unknown-job (:reason (results/project "j999" "g" [] false))))
   (is (= :job-history-unavailable (:reason (results/project "j999" "g" [] true))))

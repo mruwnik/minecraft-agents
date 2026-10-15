@@ -2,8 +2,7 @@
   (:require [engine.args :as a] [engine.entity-observations :as obs] [jobs.lib.util :as u]
             ["minecraft-data" :as minecraft-data] [engine.contract :as contract] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
 (def doc
-  "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. Emits
-  look.observed, available through observe --wait --watch or observe result after completion. :at inspects one exact
+  "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. :at inspects one exact
   block as last seen, with properties (a cell never seen is :unknown). Nearby samples are nearest first and bounded;
   :more-blocks?/:more-entities? report extra matches. Nothing is sensed through walls (players are always listed).
   This is sight evidence, not a terrain map. A refused argument ends :condition-failed with cause {:reason :bad-args :text why}. On success ends :done with the observation as its data.")
@@ -117,8 +116,5 @@
 (defn round [c]
   (let [a (options (:args c) (block-name-checker (:primitives c)))]
     (if-let [error (:error a)]
-      (do (ctx/emit! c :look.refused :warn {:reason :bad-args :text error})
-          (ctx/end c :condition-failed {:reason :bad-args :text error} {:observed false}))
-      (let [result (observe (:primitives c) a)]
-        (ctx/emit! c :look.observed :info result)
-        (ctx/end c :done nil result)))))
+      (ctx/end c :condition-failed {:reason :bad-args :text error} {:observed false})
+      (ctx/end c :done nil (observe (:primitives c) a)))))

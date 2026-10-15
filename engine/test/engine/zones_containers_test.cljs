@@ -161,4 +161,4 @@
             (core/submit! eng (list 'jobs.items.smelt (merge {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3} extra)) {})
             (await (run-until-empty eng 3))
             (is (= touched? (pos? (count (calls p "furnace")))) (pr-str [zone extra]))
-            (is (= ({true [] false ["refused"]} touched?) (mapv :reason (events-of seen :smelt.gave-up))) (pr-str [zone extra]))))))))
+            (is (= ({true [] false [:refused]} touched?) (mapv :reason (events-of seen :stopped))) (pr-str [zone extra]))))))))

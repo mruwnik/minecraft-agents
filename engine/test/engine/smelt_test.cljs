@@ -246,8 +246,8 @@
           (is (= {"raw_iron" 2 "coal" 2 "iron_ingot" 3} (inv-of p)))
           (is (empty? (:list (core/state eng))))
           (is (= ["read" "load" "read" "take"] (ops p)))
-          (let [done-event (first (of-kind seen :smelt.done))]
-            (is (= 3 (:smelted done-event)))))))))
+          (let [done-event (first (filter #(= "jobs.items.smelt" (:name %)) (of-kind seen :completed)))]
+            (is (= 3 (:smelted done-event)) (pr-str done-event))))))))
 
 (deftest a-full-stack-smelts-within-the-default-budget
   (async done
@@ -263,7 +263,7 @@
               _ (swap! clock + 650000)
               _ (await (ticks eng 4))]
           (is (= 64 (get (inv-of p) "iron_ingot")) "all 64 were taken")
-          (is (= 64 (:smelted (first (of-kind seen :smelt.done)))))
+          (is (= 64 (:smelted (first (of-kind seen :completed)))))
           (is (empty? (of-kind seen :job.limit-reached))))))))
 
 (deftest the-default-budgets-cover-the-cook-of-the-count
@@ -297,7 +297,7 @@
           (await (ticks eng 2))
           (is (= 3 (get (inv-of p) "iron_ingot")))
           (is (empty? (:list (core/state eng))))
-          (is (= 3 (:smelted (first (of-kind seen :smelt.done))))))))))
+          (is (= 3 (:smelted (first (of-kind seen :completed))))))))))
 
 (defn ^:async smelt-to-the-end
   "A world with one furnace block, the job over item and count, the cook done and the clock past it: [p seen eng]."
@@ -329,7 +329,7 @@
               _ (advance! p 1)
               _ (core/submit! eng iron-job {})
               _ (await (ticks eng 2))]
-          (is (empty? (of-kind seen :smelt.gave-up)) "the cook in the furnace is waited out")
+          (is (empty? (of-kind seen :stopped)) "the cook in the furnace is waited out")
           (is (= 1 (count (:list (core/state eng)))))
           (advance! p 2000)
           (swap! clock + 100000)
@@ -337,7 +337,7 @@
           (advance! p 2000)
           (swap! clock + 100000)
           (await (ticks eng 3))
-          (is (empty? (of-kind seen :smelt.gave-up)))
+          (is (empty? (of-kind seen :stopped)))
           (is (= {"cooked_beef" 2 "iron_ingot" 3} (select-keys (inv-of p) ["cooked_beef" "iron_ingot"]))))))))
 
 (def gave-up-rows
@@ -361,8 +361,8 @@
                         before (inv-of p)]
                     (core/submit! eng (list 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item item :count 3}) {})
                     (await (ticks eng 6))
-                    (is (= reason (:reason (first (of-kind seen :smelt.gave-up)))) label)
-                    (is (= 1 (count (of-kind seen :smelt.gave-up))) label)
+                    (is (= (keyword reason) (:reason (first (of-kind seen :stopped)))) label)
+                    (is (= 1 (count (of-kind seen :stopped))) label)
                     (is (empty? (:list (core/state eng))) label)
                     (is (not (some #{"load"} (ops p))) label)
                     (is (= before (inv-of p)) label)))))))))
@@ -384,7 +384,7 @@
       (fn ^:async t []
         (let [filler (mapv (fn [i] {:name (str "item_" i) :count 1}) (range 35))
               [p seen eng] (await (smelt-to-the-end "furnace" (into filler [{:name "raw_iron" :count 1} {:name "coal" :count 2}]) "raw_iron" 1))]
-          (is (= "inventory-full" (:reason (first (of-kind seen :smelt.gave-up)))))
+          (is (= :inventory-full (:reason (first (of-kind seen :stopped)))))
           (is (= {:name "iron_ingot" :count 1} (:output (furnace-of p))) "the ingot is still in the furnace")
           (is (empty? (:list (core/state eng)))))))))
 
@@ -431,7 +431,7 @@
               _ (swap! clock + 40000)
               _ (await (ticks eng 5))
               n (count (calls p "furnace"))]
-          (is (= "furnace-gone" (:reason (first (of-kind seen :smelt.gave-up)))))
+          (is (= :furnace-gone (:reason (first (of-kind seen :stopped)))))
           (is (empty? (:list (core/state eng))))
           (await (ticks eng 5))
           (is (= n (count (calls p "furnace"))) "no loop"))))))
@@ -465,7 +465,7 @@
           (swap! clock + 40000)
           (await (ticks eng 3))
           (is (= 3 (get (inv-of p) "iron_ingot")))
-          (is (empty? (of-kind seen :smelt.gave-up))))))))
+          (is (empty? (of-kind seen :stopped))))))))
 
 (deftest an-out-fire-with-no-fuel-left-gives-the-raw-input-back
   (async done
@@ -480,8 +480,8 @@
               _ (await (ticks eng 1))
               _ (swap! clock + 7000)
               _ (await (ticks eng 2))
-              gave-up (first (of-kind seen :smelt.gave-up))]
-          (is (= "out-of-fuel" (:reason gave-up)))
+              gave-up (first (of-kind seen :stopped))]
+          (is (= :out-of-fuel (:reason gave-up)))
           (is (= {"iron_ingot" 1 "raw_iron" 2} (inv-of p)))
           (is (empty? (:list (core/state eng)))))))))
 
@@ -494,7 +494,7 @@
               _ (await (ticks eng 1))
               _ (swap! clock + 7000)
               _ (await (ticks eng 2))]
-          (is (= "not-smeltable" (:reason (first (of-kind seen :smelt.gave-up)))))
+          (is (= :not-smeltable (:reason (first (of-kind seen :stopped)))))
           (is (= 3 (get (inv-of p) "clay")))
           (is (empty? (:list (core/state eng)))))))))
 
@@ -511,7 +511,7 @@
           (swap! clock + 40000)
           (await (ticks eng 3))
           (is (= 5 (get (inv-of p) "iron_ingot")))
-          (is (= 3 (:smelted (first (of-kind seen :smelt.done))))))))))
+          (is (= 3 (:smelted (first (of-kind seen :completed))))))))))
 
 (deftest a-furnace-emptied-by_someone_else_is_reported
   (async done
@@ -523,7 +523,7 @@
               _ (swap! (fake/state p) assoc-in [:furnaces (fake/parse-cell pos-key) :input] nil)
               _ (swap! clock + 40000)
               _ (await (ticks eng 2))]
-          (is (= "output-gone" (:reason (first (of-kind seen :smelt.gave-up)))))
+          (is (= :output-gone (:reason (first (of-kind seen :stopped)))))
           (is (empty? (:list (core/state eng)))))))))
 
 (deftest a-blast-furnace-cooks-four-iron-on-two-planks-without-a-second-load
@@ -552,8 +552,8 @@
               _ (fake/set-block! p (fake/parse-cell pos-key) "chest")
               _ (swap! clock + 40000)
               _ (await (ticks eng 2))
-              ev (first (of-kind seen :smelt.gave-up))]
-          (is (= "furnace-gone" (:reason ev)))
+              ev (first (of-kind seen :stopped))]
+          (is (= :furnace-gone (:reason ev)))
           (is (re-find #"chest" (:text ev))))))))
 
 (deftest a-furnace-replaced-by-another-block-mid-cook-is-gone
@@ -566,7 +566,7 @@
               _ (fake/set-block! p (fake/parse-cell pos-key) "chest")
               _ (swap! clock + 40000)
               _ (await (ticks eng 2))]
-          (is (= "furnace-gone" (:reason (first (of-kind seen :smelt.gave-up))))))))))
+          (is (= :furnace-gone (:reason (first (of-kind seen :stopped))))))))))
 
 (deftest an-unreachable-furnace-is-given-up-after-three-tries
   (async done
@@ -576,9 +576,9 @@
                                             :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]})]
           (core/submit! eng '(jobs.items.smelt {:furnace {:x 20 :y 64 :z 0} :item "raw_iron" :count 3}) {})
           (await (ticks eng 2))
-          (is (empty? (of-kind seen :smelt.gave-up)) "two tries do not end it")
+          (is (empty? (of-kind seen :stopped)) "two tries do not end it")
           (await (ticks eng 3))
-          (is (= "unreachable" (:reason (first (of-kind seen :smelt.gave-up)))))
+          (is (= :unreachable (:reason (first (of-kind seen :stopped)))))
           (is (empty? (:list (core/state eng))))
           (is (empty? (calls p "furnace"))))))))
 
@@ -592,7 +592,7 @@
                                                  :inventory (into filler [{:name "raw_iron" :count 5} {:name "coal" :count 3}])))
               _ (core/submit! eng iron-job {})
               _ (await (ticks eng 2))]
-          (is (= "inventory-full" (:reason (first (of-kind seen :smelt.gave-up)))))
+          (is (= :inventory-full (:reason (first (of-kind seen :stopped)))))
           (is (not (some #{"load"} (ops p))) "nothing was loaded")
           (is (= {:name "iron_ingot" :count 2} (:output (furnace-of p)))))))))
 
@@ -618,7 +618,7 @@
                     (forcing p op result)
                     (core/submit! eng iron-job {})
                     (await (ticks eng 3))
-                    (is (= reason (:reason (first (of-kind seen :smelt.gave-up)))) reason)
+                    (is (= (keyword (.replace reason " " "-")) (:reason (first (of-kind seen :stopped)))) reason)
                     (is (empty? (:list (core/state eng))) reason)))))))))
 
 (defn ^:async result-of
@@ -641,8 +641,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:smelted 3 :wanted 3 :status :done} (await (result-of base-world {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))))
-        (is (= {:smelted 3 :wanted 3 :status :done}
+        (is (= {:smelted 3 :wanted 3 :text "smelted 3" :status :done} (await (result-of base-world {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))))
+        (is (= {:smelted 3 :wanted 3 :text "smelted 3" :status :done}
                (await (result-of (assoc base-world :furnaces {pos-key {:input {:name "raw_iron" :count 2}}})
                                  {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3})))
             "input already in the furnace is not counted")
@@ -769,7 +769,7 @@
               before (inv-of p)]
           (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
           (await (seeing-ticks s 3))
-          (is (= ["no-furnace-seen"] (mapv :reason (of-kind seen :smelt.gave-up))))
+          (is (= [:no-furnace-seen] (mapv :reason (of-kind seen :stopped))))
           (is (empty? (:list (core/state eng))))
           (is (= before (inv-of p))))))))
 
@@ -782,7 +782,7 @@
           (await (seeing-ticks s 4))
           (is (= {:name "raw_iron" :count 3} (:input (get (:furnaces @(fake/state p)) [0 64 -3])))
               "the furnace behind the body was found by turning around")
-          (is (empty? (of-kind seen :smelt.gave-up))))))))
+          (is (empty? (of-kind seen :stopped))))))))
 
 (deftest with-no-furnace-anywhere-it-looks-around-once-then-ends
   (async done
@@ -792,7 +792,7 @@
           (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3 :fetch false}) {})
           (await (seeing-ticks s 4))
           (is (= 8 (count (calls p "look"))) "four headings, level and down, once")
-          (is (= ["no-furnace-seen"] (mapv :reason (of-kind seen :smelt.gave-up)))))))))
+          (is (= [:no-furnace-seen] (mapv :reason (of-kind seen :stopped)))))))))
 
 (deftest the-wait-counts-game-ticks-at-the-live-rate
   (settings/set-clock! 40 false :packet)
@@ -842,10 +842,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[r _ seen] (await (fetched-run {:inventory (conj iron-and-coal {:name "furnace" :count 1})} {:item "raw_iron" :count 3}
+        (let [[r] (await (fetched-run {:inventory (conj iron-and-coal {:name "furnace" :count 1})} {:item "raw_iron" :count 3}
                                              {'jobs.blocks.place refusing-place}))]
           (is (= :furnace-not-placed (:reason r)) "not 'no-furnace-seen': a furnace is carried")
-          (is (re-find #"footprint" (str (:why (first (of-kind seen :smelt.gave-up)))))))))))
+          (is (re-find #"footprint" (str (:why r)))))))))
 
 (deftest a-missing-furnace-is-fetched-from-a-seen-chest
   (async done

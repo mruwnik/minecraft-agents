@@ -32,7 +32,7 @@
   A death since the job began (body memory :died) clears the children and what was made; the next round re-plans from
   what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
   Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]}. Every other ending has
-  :have, :made, the next :item and a :why text, warn kit.stopped:
+  :have, :made, the next :item, a :why and a :text:
   - the obtain child's kind and cause (:no-source, a walk cause such as :zone-exit or :not-home, :time ..; :item is then the furnace material when that failed);
   - condition-failed {:reason :needs-food :cause c :food :min-food} (the starving body found no food, or :food is false);
   - nothing-possible {:reason :wear-failed}.
@@ -173,16 +173,14 @@
       :else (stop-of (:kind e) (:cause e) (why-of e)))))
 
 (defn finish!
-  "End the call: done when out is nil, else with the stop out; the data has what is had and made."
+  "End the call: done when out is nil, else with the stop out; the data has what is had and made, and a text."
   [c items have out]
   (let [data {:have have :made (vec (:made (ctx/mem c)))}]
     (if-not out
-      (do (ctx/emit! c :kit.done :info {:have have :text (str "kit complete: " (count have) " item(s)")})
-          (ctx/end c :done nil data))
-      (do (ctx/emit! c :kit.stopped :warn (assoc (select-keys out [:item :reason :why]) :have have
-                                                 :text (str "kit stopped at " (:item out) ": " (name (:reason out))
-                                                            (when (:why out) (str " (" (:why out) ")")))))
-          (ctx/end c (:kind out) (:cause out) (merge data (select-keys out [:item :why])))))))
+      (ctx/end c :done nil data)
+      (ctx/end c (:kind out) (:cause out)
+               (merge data (select-keys out [:item :why])
+                      {:text (str "kit stopped at " (:item out) ": " (name (:reason out)) (when (:why out) (str " (" (:why out) ")")))})))))
 
 (defn food-args
   "The get-food child's args: feed the body, then stock the pack up to :min-food points."

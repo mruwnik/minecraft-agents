@@ -89,6 +89,7 @@
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (= {"head" "iron_helmet"} (worn s)))
           (is (= {:status :done :made ["iron_pickaxe" "iron_helmet"]} (select-keys @(:out s) [:status :made])))
+          (is (empty? (f/events-of s :kit.done)))
           (is (= ["iron_pickaxe" "iron_helmet"] (mapv :item (f/events-of s :kit.progress)))))))))
 
 (deftest ingots-that-cannot-be-got-stop-the-job-at-once-naming-the-ingots
@@ -101,6 +102,8 @@
           (is (not-any? #{"iron_pickaxe" "iron_helmet" "iron_boots"} (crafted s)))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason])))
+          (is (re-find #"^kit stopped at iron_ingot: no-source" (str (:text @(:out s)))))
+          (is (empty? (f/events-of s :kit.stopped)))
           (is (re-find #"iron_ingot" (str (:why @(:out s))))))))))
 
 (deftest items-before-the-furnace-material-are-made-first

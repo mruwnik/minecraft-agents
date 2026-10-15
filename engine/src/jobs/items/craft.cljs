@@ -31,11 +31,11 @@
   The count carried at the start is kept in memory and the target is that plus :count, so a cut or a partial
   batch loses nothing.
   Needs: an item name (impossible :bad-args).
-  Ends :done with {:made n}, the number of items gained (plus :spent, :spent-at and a :text when it put a table down).
-  Stopping short it ends with :made as well: condition-failed with the cause :need (data :short {name n}, an ingredient
+  Ends :done with {:made n :item :text}, the number of items gained (plus :spent and :spent-at when it put a table down).
+  Stopping short it ends with :made, :item and a :text as well: condition-failed with the cause :need (data :short {name n}, an ingredient
   ran out, and :alternatives), :no-table, :not-a-table or :full (the bag is full and one
   jobs.storage.make-room child freed nothing), or nothing-possible with :unreachable (a walk to a table failed) or :cannot (data :detail, the reason the game
-  gives) or :craft-failed (three failed crafts in a row, data :detail the status); each after a warn or info.
+  gives) or :craft-failed (three failed crafts in a row, data :detail the status)
   One call is the whole craft: it walks (a go-to child) and crafts again until the count is carried or it stops; it
   yields only while a child waits on the world.
   An ingredient that runs out is got with a jobs.items.obtain child (jobs.lib.need) and the craft goes on (a
@@ -141,8 +141,9 @@
   [c made extra]
   (let [placed (spent/log c)
         reason (:reason extra)
-        data (cond-> (merge {:made made} (dissoc extra :reason))
-               (seq placed) (merge (spent/summary placed) {:text (spent/text placed "crafting table")}))
+        data (cond-> (merge {:made made :item (:item (:args c))} (dissoc extra :reason))
+               (seq placed) (merge (spent/summary placed)
+                                   {:text (str/join "; " (keep identity [(spent/text placed "crafting table") (:text extra)]))}))
         total (:count (:args c))]
     (cond
       (nil? reason) (ctx/end c :done nil data)
@@ -153,8 +154,9 @@
   "u/fail!: :again until the third failure in a row, then finish with the made count and the reason."
   ([c made reason] (give-up! c made reason nil))
   ([c made reason extra]
-   (let [r (u/fail! c :craft.gave-up (str "craft gave up: " (name reason) (when-let [d (:detail extra)] (str " " d))))]
-     (if (= :done r) (finish! c made (assoc extra :reason reason)) :again))))
+   (if (u/count-fail! c)
+     (finish! c made (assoc extra :reason reason :text (str "craft gave up: " (name reason) (when-let [d (:detail extra)] (str " " d)))))
+     :again)))
 
 (def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
 
@@ -335,10 +337,8 @@
   reason \"unreachable\" when a walk to a table failed. :again, :continue or :done."
   [c made]
   (or (await (table-fetch! c))
-      (let [text (no-table-text c (:radius (:args c)))]
-        (ctx/emit! c :craft.no-table :warn {:text text})
-        (finish! c made (cond-> {:reason (if (seq (unreachable-tables c)) :unreachable :no-table)}
-                          (or (seq (unreachable-tables c)) (:table-why (ctx/mem c))) (assoc :text text))))))
+      (finish! c made {:reason (if (seq (unreachable-tables c)) :unreachable :no-table)
+                       :text (no-table-text c (:radius (:args c)))})))
 
 (defn ^:async reach-table!
   "The craft was unreachable: walk to the remembered or the nearest table with a go-to child. A table the walk cannot
@@ -397,9 +397,7 @@
 
         :else
         (do (ctx/update-mem! c dissoc :wants)
-            (let [text (str "craft " item " is missing " (pr-str short))]
-              (ctx/emit! c :craft.short :info {:text text})
-              (finish! c made (assoc shortage :reason :need :text text))))))))
+            (finish! c made (assoc shortage :reason :need :text (str "craft " item " is missing " (pr-str short)))))))))
 
 (defn ^:async craft-act!
   "The craft call alone (no follow-up): the target is carried already -> finish!'s result, else {:r the primitive's
@@ -431,8 +429,7 @@
           made (- (storage/carried (u/inventory p) item) start)]
       (when table (ctx/update-mem! c assoc :table table))
       (case status
-        "crafted" (do (ctx/emit! c :craft.done :info {:text (str "crafted " made " " item) :item item :made made})
-                      (finish! c made {}))
+        "crafted" (finish! c made {:text (str "crafted " made " " item)})
         "no-item" (await (short! c item r made))
         "partial" (if (= "no-item" (.-reason r))
                     (await (short! c item r made))
@@ -449,14 +446,11 @@
                                                         (or (when (and (carried-table? c) (not (:table (:args c)))) (await (table-fetch! c)))
                                                             (await (reach-table! c made))))
                         (not= "not-a-table" (.-reason r)) (await (reach-table! c made))
-                        (:table (:args c)) (do (ctx/emit! c :craft.no-table :warn {:text (str "not a crafting table: " (pr-str table))})
-                                               (finish! c made {:reason :not-a-table}))
+                        (:table (:args c)) (finish! c made {:reason :not-a-table :text (str "not a crafting table: " (pr-str table))})
                         :else (do (ctx/update-mem! c dissoc :table) :again))
         "full" (or (await (room! c))
-                   (do (ctx/emit! c :craft.full :warn {:text "inventory is full and make-room freed nothing"})
-                       (finish! c made {:reason :full})))
-        "cannot" (do (ctx/emit! c :craft.cannot :warn {:text (str "cannot craft " item ": " (.-reason r))})
-                     (finish! c made {:reason :cannot :detail (.-reason r)}))
+                   (finish! c made {:reason :full :text "inventory is full and make-room freed nothing"}))
+        "cannot" (finish! c made {:reason :cannot :detail (.-reason r) :text (str "cannot craft " item ": " (.-reason r))})
         (give-up! c made :craft-failed {:detail status})))))
 
 (defn ^:async cleanup

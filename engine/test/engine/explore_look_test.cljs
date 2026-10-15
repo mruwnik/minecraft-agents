@@ -29,7 +29,7 @@
           (let [event (first (filter #(= :stopped (:kind %)) @seen))]
             (is (= :bad-args (get-in event [:data :reason])))
             (is (re-find #"no_such_block" (pr-str (:data event))))
-            (is (empty? (filter #(= :look.observed (:kind %)) @seen)))
+            (is (empty? (filter #(= :look.refused (:kind %)) @seen)))
             (is (= :impossible (get-in event [:data :kind])))
             (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")))))))
 (deftest loaded-air-unloaded-cell-and-exact-properties-have-distinct-evidence
@@ -60,7 +60,8 @@
                                 :events (events/make {:sinks [sink]})})]
           (core/submit! eng '(jobs.explore.look {:max-blocks 2 :radius 16}) {})
           (await (core/tick! eng))
-          (let [event (first (filter #(= :look.observed (:kind %)) @seen))]
+          (let [event (first (filter #(= :completed (:kind %)) @seen))]
+            (is (empty? (filter #(= :look.observed (:kind %)) @seen)))
             (is (= [[1 64 0] [2 64 0]] (mapv :pos (get-in event [:data :blocks]))))
             (is (get-in event [:data :more-blocks?]))
             (is (= "sheep-uuid" (get-in event [:data :entities 0 :uuid])))

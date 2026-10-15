@@ -33,8 +33,7 @@
   Needs (can-start?, a listed job waits): a step that would run (raw food carried above the
   reserve with a cooked shortfall, wheat for a loaf), so a body with nothing to cook is not held, and not too far from
   the chest (:away). There is no rest timer: a pass that cannot cook ends with its stop and repeat decides.
-  Every pass books info kitchen.done, its text naming what was smelted, baked and stored, and data {:steps {step
-  summary}}; smelt summaries are keyed by food, the deposit's has :stored {name n}. It ends done
+  Every pass ends with data {:steps {step summary} :text}, the text naming what was smelted, baked and stored; smelt summaries are keyed by food, the deposit's has :stored {name n}. It ends done
   when something was cooked, baked or stored; otherwise with the ending of the first step that stopped (its kind and
   cause), or nothing-possible {:reason :nothing-to-do} when every step was skipped.
   Quote: a smelt of each raw food carried.")
@@ -231,12 +230,12 @@
   "End the pass: done when it cooked, baked or stored something; else the ending of the first step that stopped (its
   kind and cause), or nothing-possible when every step was skipped."
   [c report]
-  (let [failed (:failed (ctx/mem c))]
-    (ctx/emit! c :kitchen.done :info {:steps report :text (done-text report)})
+  (let [failed (:failed (ctx/mem c))
+        data {:steps report :text (done-text report)}]
     (cond
-      (progressed? report) (ctx/end c :done nil {:steps report})
-      failed (ctx/end c (:kind failed) (:cause failed) {:steps report})
-      :else (ctx/end c :nothing-possible {:reason :nothing-to-do} {:steps report}))))
+      (progressed? report) (ctx/end c :done nil data)
+      failed (ctx/end c (:kind failed) (:cause failed) data)
+      :else (ctx/end c :nothing-possible {:reason :nothing-to-do} data))))
 
 (defn after-child
   "Memory after the child of step ended with the summary booked: a smelt marks its food tried and stays; the

@@ -42,8 +42,8 @@
   The default :spend :job-time is ::job-time-s for the walk and fetches plus the cook of the count (10 s an item, a stack when nil);
   the default :wall-time is that plus ::away-s, for other jobs done while it cooks.
   Ends :done with {:smelted n :wanted n}: :wanted is the count this job loaded and :smelted what came of it; input
-  already in the furnace and the output already there do not count. A give-up warns (smelt.gave-up) and ends with the
-  cause named and the same data (0 of N is never :done):
+  already in the furnace and the output already there do not count. A give-up ends with the
+  cause named and the same data (plus :text) (0 of N is never :done):
   - condition-failed: no-furnace-seen (no :furnace given and none seen), no-furnace, not-a-furnace, furnace-gone (broken or
     replaced meanwhile), no-item, nothing-smeltable, not-smeltable (this kind of furnace cannot cook it, also found when
     it never lit), no-fuel, unknown-fuel, rejected-fuel, fuel-busy (the fuel slot holds another fuel), furnace-busy (the
@@ -180,19 +180,17 @@
   [c extra]
   (let [r (results c extra)]
     (if (and (pos? (:wanted r)) (zero? (:smelted r)))
-      (do (ctx/emit! c :smelt.gave-up :warn {:reason "output-gone" :text "smelt gave up: output-gone"})
-          (end-with c "output-gone" r))
-      (ctx/end c :done nil r))))
+      (end-with c "output-gone" (assoc r :text "smelt gave up: output-gone"))
+      (ctx/end c :done nil (assoc r :text (str "smelted " (:smelted r)))))))
 
 (defn stop!
-  "Warn and end with a cause; block is the block the body saw where the furnace should be, why the cause when the reason alone misleads."
+  "End with a cause; block is the block the body saw where the furnace should be, why the cause when the reason alone misleads."
   ([c reason] (stop! c reason nil nil))
   ([c reason block] (stop! c reason block nil))
   ([c reason block why]
-   (ctx/emit! c :smelt.gave-up :warn (cond-> {:reason reason :text (str "smelt gave up: " reason (when block (str " (saw " block ")")) (when why (str ": " why)))}
-                                       block (assoc :block block)
-                                       why (assoc :why why)))
-   (end-with c reason (results c (when why {:why why})))))
+   (end-with c reason (results c (cond-> {:text (str "smelt gave up: " reason (when block (str " (saw " block ")")) (when why (str ": " why)))}
+                                   block (assoc :block block)
+                                   why (assoc :why why))))))
 
 (defn ^:async stop-back!
   "Give up after a load: leftover input goes back to the pockets first."
@@ -201,11 +199,11 @@
   (stop! c reason))
 
 (defn refuse!
-  "End refused: the furnace is in another's zone or claim; one smelt.gave-up warn names them."
+  "End refused: the furnace is in another's zone or claim; the ending names them."
   [c verdict]
   (let [fields (access/refusal-fields [verdict])]
-    (ctx/emit! c :smelt.gave-up :warn (assoc fields :reason "refused" :text (str "smelt gave up: refused by " (access/refusal-text fields))))
-    (end-with c "refused" (assoc (select-keys fields [:zones :claims]) :reason :refused) (results c nil))))
+    (end-with c "refused" (assoc (select-keys fields [:zones :claims]) :reason :refused)
+              (results c {:text (str "smelt gave up: refused by " (access/refusal-text fields))}))))
 
 (defn give-up!
   "Count a failed round in a row: :continue until u/max-failures, then stop with the reason."
@@ -285,8 +283,7 @@
             (cond
               (= "full" (:status r)) (stop! c "inventory-full")
               (:input r) (wait-until! c (recheck-ms))
-              :else (do (ctx/emit! c :smelt.done :info {:text (str "smelted " (:got (ctx/mem c))) :smelted (:got (ctx/mem c))})
-                        (finish! c {}))))
+              :else (finish! c {})))
     :wait (wait-until! c (wait-ms (:kind state) state))
     :out-of-fuel (if-let [v (access/container-refusal c :put (furnace-of c))]
                    (refuse! c v)
@@ -295,8 +292,7 @@
     :done (let [m (ctx/mem c)]
             (if (< (:got m 0) (:count (:owed m) 0))
               (stop! c "output-gone")
-              (do (ctx/emit! c :smelt.done :info {:text (str "smelted " (:got m)) :smelted (:got m)})
-                  (finish! c {}))))))
+              (finish! c {})))))
 
 (defn ^:async reach!
   "Walk until the body is within 3 cells of the furnace, as a go-to child: :there, :partial (it waits on the world, or
@@ -397,11 +393,9 @@
         smelted (reduce + (map #(:smelted % 0) (vals results)))
         wanted (reduce + (map #(:wanted % 0) (vals results)))
         failed (into {} (keep (fn [[i r]] (when (:reason r) [i (:reason r)]))) results)
-        data (cond-> {:smelted smelted :wanted wanted :items results}
+        data (cond-> {:smelted smelted :wanted wanted :items results
+                      :text (str "smelted " smelted " of " wanted " (" (str/join ", " items) ")")}
                (seq failed) (assoc :failed failed))]
-    (ctx/emit! c :smelt.batch-done (if (zero? smelted) :warn :info)
-               {:smelted smelted :wanted wanted :failed failed
-                :text (str "smelted " smelted " of " wanted " (" (str/join ", " items) ")")})
     (if (zero? smelted)
       (end-with c (get failed (first items) "nothing-smeltable") data)
       (ctx/end c :done nil data))))

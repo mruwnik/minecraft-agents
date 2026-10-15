@@ -11,11 +11,11 @@
 (def clean-events
   [queued-goal
    (ev 2 :picked-up :data {:item "oak_log"})
-   (ev 5 :craft.done :data {:item "wooden_pickaxe"})
+   (ev 5 :child_ended :data {:slot :craft :ending {:kind :done :data {:item "wooden_pickaxe" :made 1}}})
    (ev 9 :picked-up :data {:item "cobblestone"})
-   (ev 20 :smelt.done :data {:smelted {"iron_ingot" 3}})
+   (ev 20 :child_ended :data {:slot :smelt :ending {:kind :done :data {:smelted 3}}})
    (ev 40 :kit.progress :data {:item "iron_pickaxe"})
-   (ev 60 :kit.done)])
+   (ev 60 :completed :data {:name "jobs.items.get-kit"})])
 
 (deftest milestones-are-the-first-event-that-proves-them
   (let [m (k/milestones (conj clean-events (ev 70 :picked-up :data {:item "birch_log"})))]
@@ -24,7 +24,7 @@
            (map m [:wooden-pickaxe :cobblestone :first-ingot :iron_pickaxe :kit-done])))))
 
 (deftest a-smelt-that-made-nothing-is-no-ingot
-  (is (nil? (:first-ingot (k/milestones [(ev 1 :smelt.done :data {:smelted 0})])))))
+  (is (nil? (:first-ingot (k/milestones [(ev 1 :child_ended :data {:slot :smelt :ending {:kind :done :data {:smelted 0}}})])))))
 
 (deftest a-clean-run
   (let [rep (k/report {:started-ms t0} clean-events (at 61))]
@@ -41,7 +41,7 @@
     (is (= #{:death :intervention :crash :give-up-without-reason} (set (:failed (k/clean rep)))))))
 
 (deftest a-kit-after-three-days-is-too-slow-and-no-kit-is-not-done
-  (is (= [:kit-too-slow] (:failed (k/clean (k/report {:started-ms t0} [queued-goal (ev 100 :kit.done)] (at 101))))))
+  (is (= [:kit-too-slow] (:failed (k/clean (k/report {:started-ms t0} [queued-goal (ev 100 :completed :data {:name "jobs.items.get-kit"})] (at 101))))))
   (is (= [:kit-not-done] (:failed (k/clean (k/report {:started-ms t0} [queued-goal] (at 5)))))))
 
 (deftest stalls-are-gaps-over-five-minutes-between-progress-events

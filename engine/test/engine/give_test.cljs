@@ -126,10 +126,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out clock] :as s} (await (give bread {:player "Steve" :item "bread"} 12 true))]
-          (is (= {:given 0 :reason :gone :text "gave 0 bread (gone)"} @out))
+          (is (= {:given 0 :reason :gone :text "Steve is not here"} @out))
           (is (<= 2000 (- @clock 1000000)))
           (is (empty? (calls p "toss")))
-          (is (has-event? s :give.gone)))))))
+          (is (not (has-event? s :give.gone)) "the ending carries it"))))))
 
 (deftest three-blocked-walks-are-unreachable
   (async done
@@ -137,10 +137,10 @@
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)] :unreachable ["10,64,0"])
                                                  {:player "Steve" :item "bread"} 12 true))]
-          (is (= {:given 0 :reason :unreachable :text "gave 0 bread (unreachable)"} @out))
+          (is (= {:given 0 :reason :unreachable :text "cannot reach Steve"} @out))
           (is (= 3 (count (tu/walked-to (:eng s)))))
           (is (empty? (calls p "toss")))
-          (is (has-event? s :give.unreachable)))))))
+          (is (not (has-event? s :give.unreachable)) "the ending carries it"))))))
 
 (deftest a-drop-never-taken-is-collected-back-after-wait-s
   (async done
@@ -152,7 +152,7 @@
           (is (= {"bread" 5} (inv p)))
           (is (= 1 (count (calls p "collect"))))
           (is (<= 6000 (- @clock 1000000)))
-          (is (has-event? s :give.returned)))))))
+          (is (not (has-event? s :give.returned)) "the ending carries it"))))))
 
 (deftest a-part-of-the-toss-coming-back-counts-what-was-given
   (async done
@@ -177,7 +177,7 @@
                                                 (fn [p] (.override (.-world p) "toss" (fn ^:async f [_ _ _] #js {:status "no-item" :count 0})))))]
           (is (= {:given 0 :reason :no-item :text "gave 0 bread (no-item)"} @out))
           (is (= 3 (count (calls p "toss"))))
-          (is (has-event? s :give.gave-up)))))))
+          (is (not (has-event? s :give.gave-up)) "the ending carries it"))))))
 
 (deftest a-drop-that-cannot-be-collected-ends-as-litter
   (async done
@@ -188,7 +188,7 @@
                                                 (fn [p] (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "unreachable" :gained #js []})))))]
           (is (= {:given 5 :reason :litter :returned 0 :text "gave 5 bread (litter)"} @out))
           (is (= 3 (count (calls p "collect"))))
-          (is (has-event? s :give.gave-up)))))))
+          (is (not (has-event? s :give.gave-up)) "the ending carries it"))))))
 
 (deftest collects-that-fail-in-a-row-give-up-but-a-collect-between-resets-the-count
   (async done
@@ -225,9 +225,9 @@
               {:keys [out clock] :as s} (await (give (assoc bread :entities [(steve 10)])
                                                     {:player "Steve" :item "bread" :count 5} 30 false
                                                     #(late-drop % held)))]
-          (is (= {:given 5 :unconfirmed true :text "gave 5 bread"} @out))
+          (is (= {:given 5 :unconfirmed true :text "never saw the drop of bread"} @out))
           (is (<= 3000 (- @clock 1000000)))
-          (is (has-event? s :give.unconfirmed)))))))
+          (is (not (has-event? s :give.unconfirmed)) "the ending carries it"))))))
 
 (defn stray-bread-and-player-takes-the-drop
   "A hook: the tick after the toss a bread entity far away appears, the tick after that the player takes the

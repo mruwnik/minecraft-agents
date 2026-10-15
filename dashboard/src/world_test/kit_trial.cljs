@@ -71,39 +71,48 @@
 (defn- smelted-count [v]
   (cond (map? v) (reduce + (vals v)) (number? v) v :else 0))
 
+(defn- child-done
+  "The ending data of the child in slot, when this event is that child ending done."
+  [{:keys [kind data]} slot]
+  (when (and (= :child_ended kind) (= slot (:slot data)) (= :done (get-in data [:ending :kind])))
+    (get-in data [:ending :data])))
+
 (defn- piece-of
   "The kit piece or milestone an event proves, or nil."
-  [{:keys [kind data]}]
-  (let [item (:item data)]
+  [{:keys [kind data] :as e}]
+  (let [item (:item data)
+        crafted (:item (child-done e :craft))]
     (cond
       (and (= :picked-up kind) (str/ends-with? (str item) "_log")) :logs
       (and (= :picked-up kind) (= "cobblestone" item)) :cobblestone
-      (and (= :craft.done kind) (= "crafting_table" item)) :table
-      (and (= :craft.done kind) (= "wooden_pickaxe" item)) :wooden-pickaxe
-      (and (= :craft.done kind) (= "stone_pickaxe" item)) :stone-pickaxe
-      (and (= :craft.done kind) (= "furnace" item)) :furnace
+      (= "crafting_table" crafted) :table
+      (= "wooden_pickaxe" crafted) :wooden-pickaxe
+      (= "stone_pickaxe" crafted) :stone-pickaxe
+      (= "furnace" crafted) :furnace
       (= :smelt.furnace kind) :furnace
-      (and (= :smelt.done kind) (pos? (smelted-count (:smelted data)))) :first-ingot
+      (pos? (smelted-count (:smelted (child-done e :smelt)))) :first-ingot
       (and (= :kit.progress kind) (some #{item} kit-pieces)) (keyword item)
       :else nil)))
 
 (defn milestones
-  "events (time-ordered, from the run's start) -> {milestone ms-of-first-event}. Kit pieces are :iron_pickaxe ...; :kit-done from kit.done."
+  "events (time-ordered, from the run's start) -> {milestone ms-of-first-event}. Kit pieces are :iron_pickaxe ...; :kit-done from the get-kit job completing."
   [events]
   (reduce (fn [m e]
-            (let [k (or (piece-of e) (when (= :kit.done (:kind e)) :kit-done))]
+            (let [k (or (piece-of e) (when (and (= :completed (:kind e)) (= "jobs.items.get-kit" (get-in e [:data :name]))) :kit-done))]
               (cond-> m (and k (not (m k))) (assoc k (ms e)))))
           {} events))
 
 (defn deaths [events]
   (mapv (fn [e] {:at-ms (ms e) :cause (get-in e [:data :cause])}) (filter #(= :died (:kind %)) events)))
 
-(def progress-kinds #{:picked-up :craft.done :smelt.done :kit.progress :stair.step :completed})
+(def progress-kinds #{:picked-up :kit.progress :stair.step :completed})
 
 (defn progress?
-  "A progress kind, or a child ending that reports a dig (a long dig inside one child emits nothing else)."
+  "A progress kind, or a child ending that reports a dig (a long dig inside one child emits nothing else) or a craft or smelt."
   [e]
   (or (contains? progress-kinds (:kind e))
+      (some? (child-done e :craft))
+      (some? (child-done e :smelt))
       (and (= :child_ended (:kind e)) (boolean? (get-in e [:data :ending :data :dug])))))
 
 (defn stalls

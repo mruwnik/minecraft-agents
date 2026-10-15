@@ -2,7 +2,7 @@
 ;; The furnace stands at [20 0 14], the chest at [12 0 18] holds the stock; the body at [16.5 0 16.5] carries its stock.
 ;; Should-succeed: iron in a blast furnace on planks, iron in a furnace on coal, beef in a smoker on coal, the same
 ;; stock withdrawn from the chest first (seq).
-;; Should-fail (smelt.gave-up with its reason, nothing smelted): no fuel, no furnace at the position, nothing
+;; Should-fail (a :stopped job event with its reason, nothing smelted): no fuel, no furnace at the position, nothing
 ;; smeltable carried, an item this kind of furnace does not cook.
 ;; Default time budget scales with the count (600 s plus 10 s an item): a full stack of 64 takes 640 s of furnace time and
 ;; still ends done; the same stack under an explicit :spend {:job-time 5} ends limit-reached :job-time and the furnace output stays.
@@ -17,57 +17,57 @@
    :blocks [[:set [20 0 14] "blast_furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 4] ["oak_planks" 6]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 4})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 4}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 4}} :within-s 100 :of-job true}]
    :after [[:item "iron_ingot" 4]]}
   {:name "furnace-iron-on-coal"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 3] ["coal" 3]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 3})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 3}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 3}} :within-s 100 :of-job true}]
    :after [[:item "iron_ingot" 3]]}
   {:name "smoker-beef-on-coal-fuel-chosen-from-carried"
    :blocks [[:set [20 0 14] "smoker[facing=west]"]]
    :body {:inventory [["beef" 4] ["coal" 3]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "beef" :count 4})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 4}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 4}} :within-s 100 :of-job true}]
    :after [[:item "cooked_beef" 4]]}
   {:name "withdraw-from-chest-then-smelt"
    :blocks [[:set [20 0 14] "blast_furnace[facing=west]"]
             [:set [12 0 18] "chest[facing=east]{Items:[{Slot:0b,id:\"minecraft:raw_iron\",count:4},{Slot:1b,id:\"minecraft:oak_planks\",count:6}]}"]]
    :act [[:job (seq (jobs.storage.withdraw {:chest #xyz [12 0 18] :items {"raw_iron" 4 "oak_planks" 6}})
                     (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 4}))]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 4}} :within-s 110 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 4}} :within-s 110 :of-job true}]
    :after [[:item "iron_ingot" 4]]}
   {:name "no-fuel-gives-up"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 3]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 3})]]
-   :expect [{:event {:source :job :kind :smelt.gave-up :data {:reason "no-fuel"}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-fuel}} :within-s 30 :of-job true}]
    :after [[:item "iron_ingot" 0] [:item "raw_iron" 3]]}
   {:name "no-furnace-at-the-position-gives-up"
    :body {:inventory [["raw_iron" 3] ["coal" 3]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [24 0 14] :item "raw_iron" :count 3})]]
-   :expect [{:event {:source :job :kind :smelt.gave-up :data {:reason "no-furnace"}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-furnace}} :within-s 30 :of-job true}]
    :after [[:item "iron_ingot" 0] [:item "raw_iron" 3]]}
   {:name "nothing-smeltable-gives-up"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
    :body {:inventory [["dirt" 3] ["coal" 2]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14]})]]
-   :expect [{:event {:source :job :kind :smelt.gave-up :data {:reason "nothing-smeltable"}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :nothing-smeltable}} :within-s 30 :of-job true}]
    :after [[:item "dirt" 3] [:item "coal" 2]]}
   {:name "smoker-does-not-cook-iron"
    :blocks [[:set [20 0 14] "smoker[facing=west]"]]
    :body {:inventory [["raw_iron" 3] ["coal" 3]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 3})]]
-   :expect [{:event {:source :job :kind :smelt.gave-up :data {:reason "not-smeltable"}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :not-smeltable}} :within-s 30 :of-job true}]
    :after [[:item "iron_ingot" 0] [:item "raw_iron" 3]]}
   {:name "full-stack-default-budget-ends-done"
    :tags [:slow]
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 64] ["coal" 8]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 64})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 64}} :within-s 780 :of-job true}
-            {:no-event {:source :job :kind :limit_reached} :for-s 780 :until {:source :job :kind :smelt.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 64}} :within-s 780 :of-job true}
+            {:no-event {:source :job :kind :limit_reached} :for-s 780 :until {:source :job :kind :completed}}]
    :limit-s 800
    :after [[:item "iron_ingot" 64]]}
   {:name "full-stack-under-a-short-explicit-budget-is-limit-reached"
@@ -75,5 +75,5 @@
    :body {:inventory [["raw_iron" 64] ["coal" 8]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 64 :spend {:job-time 5}})]]
    :expect [{:event {:source :job :kind :limit_reached :data {:cause {:line :job-time}}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :smelt.done} :for-s 30 :until {:source :job :kind :limit_reached}}]
+            {:no-event {:source :job :kind :completed} :for-s 30 :of-job true :until {:source :job :kind :limit_reached}}]
    :limit-s 90}]}

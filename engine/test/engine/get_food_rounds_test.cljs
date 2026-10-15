@@ -467,6 +467,10 @@
 ;; ---------------------------------------------------------------- nothing seen: explore, rotten flesh, say why
 
 (defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
+(defn searches
+  "The endings of the explore search child."
+  [seen]
+  (filterv #(and (= :child_ended (:kind %)) (= :explore (:slot %))) @seen))
 
 (deftest nothing-seen-searches-for-food-before-giving-up
   (async done
@@ -474,7 +478,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 1}} :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= 1 (count (events-of seen :search.not-found))) "one search for animals and crops")
+          (is (= 1 (count (searches seen))) "one search for animals and crops")
           (is (re-find #"explored" (str (:text (first (events-of seen :food.none)))))))))))
 
 (deftest explore-false-gives-up-without-searching
@@ -483,7 +487,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 1}} :step-ms 5)]
           (await (one-round! eng {:explore false}))
-          (is (= [] (events-of seen :search.not-found)))
+          (is (= [] (searches seen)))
           (is (= 1 (count (events-of seen :food.none)))))))))
 
 (deftest a-starving-body-searches-again-after-a-short-rest
@@ -494,7 +498,7 @@
           (await (one-round! eng {}))
           (swap! clock + 120000)
           (await (one-round! eng {}))
-          (is (= 2 (count (events-of seen :search.not-found))) "the 10 min rest is cut short when starving"))))))
+          (is (= 2 (count (searches seen))) "the 10 min rest is cut short when starving"))))))
 
 (deftest each-give-up-widens-the-next-search
   (async done
@@ -517,7 +521,7 @@
           (await (one-round! eng {}))
           (swap! clock + 120000)
           (await (one-round! eng {}))
-          (is (= 1 (count (events-of seen :search.not-found)))))))))
+          (is (= 1 (count (searches seen)))))))))
 
 (deftest starving-with-only-rotten-flesh-eats-it-as-a-last-resort
   (async done
@@ -567,7 +571,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 1} :time 15000} :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= [] (events-of seen :search.not-found)))
+          (is (= [] (searches seen)))
           (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
 
 (deftest hungry-underground-does-not-explore-the-caves
@@ -576,7 +580,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:time 6000 :blocks {"0,66,0" "stone"} :self {:food 8 :health 10}} :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= [] (events-of seen :search.not-found)) "food 8 underground: no search through the dark caves")
+          (is (= [] (searches seen)) "food 8 underground: no search through the dark caves")
           (is (re-find #"underground" (str (:text (first (events-of seen :food.none)))))))))))
 
 (deftest a-starving-body-underground-explores-the-caves
@@ -585,7 +589,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:time 6000 :blocks {"0,66,0" "stone"} :self {:food 0 :health 20}} :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= 1 (count (events-of seen :search.not-found))) "starving: the search goes on"))))))
+          (is (= 1 (count (searches seen))) "starving: the search goes on"))))))
 
 (deftest a-starving-body-searches-at-night-when-no-danger-is-near
   (async done
@@ -593,7 +597,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 0} :time 15000} :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= 1 (count (events-of seen :search.not-found))) "food 0 and nothing near: the night does not stop the search"))))))
+          (is (= 1 (count (searches seen))) "food 0 and nothing near: the night does not stop the search"))))))
 
 (deftest a-starving-body-does-not-search-at-night-with-a-hostile-near
   (async done
@@ -603,7 +607,7 @@
                                          :entities [{:id 5 :name "zombie" :kind "hostile" :pos {:x 4.5 :y 64 :z 0.5} :health 20}]}
                                         :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= [] (events-of seen :search.not-found)) "a hostile near: no search")
+          (is (= [] (searches seen)) "a hostile near: no search")
           (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
 
 (defn stop-text
@@ -619,7 +623,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup {:self {:food 10 :health 2} :time 23800} :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= [] (events-of seen :search.not-found)) "no search")
+          (is (= [] (searches seen)) "no search")
           (is (= [] (tu/walk-calls p)))
           (is (re-find #":reason :too-dangerous" (stop-text seen)))
           (is (= [] (entries eng :hungry)) "not a fruitless search: no rest written"))))))
@@ -630,7 +634,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 10 :health 2} :time 6000} :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= 1 (count (events-of seen :search.not-found)))))))))
+          (is (= 1 (count (searches seen)))))))))
 
 (def bread-chest {:floor [-30 -10 100 10] :containers {"60,64,0" [{:name "bread" :count 4}]}})
 
@@ -692,7 +696,7 @@
                                                                                        :time 15000})
                                         :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= [] (events-of seen :search.not-found)) "no search out of the hut at night")
+          (is (= [] (searches seen)) "no search out of the hut at night")
           (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
 
 ;; ---------------------------------------------------------------- cooking raw food
@@ -965,7 +969,7 @@
         (let [{:keys [eng seen]} (setup {:self {:food 20}} :step-ms 5)]
           (mem/write! (:store eng) :hungry {:food 3} {:cap 10 :ttl 3600000})
           (await (one-round! eng {:stock 8}))
-          (is (= 1 (count (events-of seen :search.not-found))) "searched though it gave up a minute ago")
+          (is (= 1 (count (searches seen))) "searched though it gave up a minute ago")
           (is (= :no-stock (:reason (first (ended seen))))))))))
 
 (deftest explore-is-done-once-per-job-unless-starving-and-rested

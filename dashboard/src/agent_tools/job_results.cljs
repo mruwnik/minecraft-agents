@@ -68,6 +68,7 @@
                      (when-not terminal
                        {:state (if (some #(and (= id (get-in % [:context :job-id])) (= :round_started (:kind %))) matching)
                                  :running :queued)}))
+        (seq (:data terminal)) (assoc :result (:value (bounded (:data terminal))))
         (seq selected) (assoc :events (:value clipped))
         (or (> (count observations) event-limit) (:truncated? clipped)) (assoc :events-truncated? true)
         (:kind (:data terminal)) (assoc :ending (select-keys (:data terminal) [:kind :cause :reason]))

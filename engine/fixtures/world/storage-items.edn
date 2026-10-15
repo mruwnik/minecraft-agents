@@ -16,19 +16,19 @@
  [{:name "make-room-keeps-cobblestone-and-tosses-the-rest"
    :body {:inventory [["cobblestone" 640] ["dirt" 128] ["sand" 64] ["gravel" 64] ["tuff" 64] ["andesite" 64] ["diorite" 64] ["granite" 64] ["netherrack" 64] ["deepslate" 64] ["calcite" 64]]}
    :act [[:job (jobs.storage.make-room {:free 20 :toss-below 5 :keep-blocks 64})]]
-   :expect [{:event {:source :job :kind :make-room.done} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "cobblestone" [:>= 64]]]}
   {:name "make-room-at-a-tunnel-end-walks-away-quietly"
    :blocks [[:fill [8 -1 8] [24 5 24] "stone"] [:fill [10 0 16] [16 1 16] "air"]]
    :body {:at [10.5 0 16.5] :inventory [["gravel" 64] ["sand" 64] ["tuff" 64] ["andesite" 64] ["diorite" 64] ["granite" 64] ["cobblestone" 64]]}
    :act [[:job (jobs.storage.make-room {:free 33})]]
-   :expect [{:event {:source :job :kind :make-room.done} :within-s 80 :of-job true}
-            {:no-event {:source :job :level :warn :message [:contains "gave up walking"]} :for-s 80 :until {:source :job :kind :make-room.done}}]}
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :job :level :warn :message [:contains "gave up walking"]} :for-s 80 :until {:source :job :kind :completed}}]}
   {:name "tossed-junk-is-not-picked-up-again"
    :register [{:trigger :loose-items}]
    :body {:inventory [["gravel" 64] ["sand" 64] ["tuff" 64] ["andesite" 64] ["diorite" 64] ["granite" 64]]}
    :act [[:job (jobs.storage.make-room {:free 33})]]
-   :expect [{:event {:source :job :kind :make-room.done} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :loose-items.picked} :for-s 40}]
    :after [[:item "gravel" 0] [:item "sand" 0]]
    :limit-s 80}
@@ -78,7 +78,7 @@
    :register [{:trigger :inventory-nearly-full}]
    :blocks [[:fill [14 -1 14] [18 3 18] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
    :body {:at [16.5 0 16.5] :inventory [["gravel" 192] ["sand" 1] ["tuff" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["netherrack" 1] ["deepslate" 1] ["calcite" 1] ["coarse_dirt" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["feather" 1] ["bone" 1] ["string" 1] ["gunpowder" 1] ["rotten_flesh" 1] ["spider_eye" 1] ["leather" 1] ["paper" 1] ["sugar" 1] ["slime_ball" 1] ["ink_sac" 1] ["egg" 1] ["snowball" 1] ["glowstone_dust" 1] ["redstone" 1] ["lapis_lazuli" 1] ["dirt" 1]]}
-   :expect [{:count-event {:source :job :kind :make-room.done} :for-s 70 :at-least 1 :at-most 1}]
+   :expect [{:count-event {:source :reflex :kind :ended :outcome :done} :for-s 70 :at-least 1 :at-most 1}]
    :limit-s 90}
   ;; card 558b7b4b: a trip's deposit keeps ores and metal: the raw iron and coal stay in the bag, the junk goes into the chest
   {:name "mine-trip-deposit-keeps-the-iron-and-coal"

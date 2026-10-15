@@ -130,7 +130,7 @@
         (let [{:keys [eng clock] :as s} (setup {:inventory [(item "beef" 3) (item "coal" 1)]})]
           (core/submit! eng (list 'repeat (list job (assoc args :furnace {:x 30 :y 64 :z 0}))) {})
           (dotimes [_ 12] (await (core/tick! eng)) (swap! clock + 1000))
-          (is (= 1 (count (events-of s :kitchen.done))) "ticks 1 s apart, inside the 30 s rest")
+          (is (= 1 (count (filter #(get-in % [:ending :data :steps]) (events-of s :child_ended)))) "ticks 1 s apart, inside the 30 s rest")
           (is (seq (filter #(= :resting (:reason %)) (events-of s :waiting)))))))))
 
 (deftest no-table-seen-or-carried-leaves-the-chest-wheat-alone-with-fetch-false
@@ -186,7 +186,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (run (list job args) {:inventory [(item "beef" 3) (item "coal" 2)] :containers {"10,64,0" []}} 40 {}))
-              e (first (events-of s :kitchen.done))]
+              e (first (events-of s :completed))]
           (is (= {"cooked_beef" 3} (chest-items s)))
           (is (= {:stored {"cooked_beef" 3}} (get-in e [:steps :deposit])))
           (is (= "kitchen done: smelted beef 3; stored cooked_beef 3" (:text e))))))))

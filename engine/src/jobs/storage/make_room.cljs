@@ -47,10 +47,9 @@
   A done run whose tossed items the body carries again after the walk away has the cleanup ending :taken-back.
   Needs: nothing; a bag with :free slots free is done at once.
   Ends:
-  - done {:tossed [{:item :count}] :free} once :free slots are free (info make-room.done when it acted);
+  - done {:tossed [{:item :count}] :free :text} once :free slots are free;
   - nothing-possible :short (it acted, nothing more may go) or :nothing-to-go (it may put away or toss nothing),
-    or :toss-failed after three failed tosses in a row (warn make-room.toss-failed); data :free, :tossed and :text,
-    info make-room.stopped for the first two. The report counts the free slots.
+    or :toss-failed after three failed tosses in a row (data :status); data :free, :tossed and :text. The report counts the free slots.
   Also emits info make-room.tossed (with :junk) and make-room.swapped.")
 
 (a/defargs args
@@ -428,20 +427,16 @@
    :toss-failed "three tosses failed"})
 
 (defn ^:async finish-end!
-  "The summary event and the :done or :stopped result."
+  "The :done or :nothing-possible ending, its data the summary."
   [c reason]
   (let [m (ctx/mem c)
         free-now (u/free-slots (:primitives c))
-        {:keys [tossed text] :as summary} (tossed-summary m free-now)]
+        {:keys [tossed text]} (tossed-summary m free-now)]
     (when (seq tossed) (ctx/remember! c :make-room-rest {} rest-policy))
     (if (nil? reason)
-      (do (when (:acted m) (ctx/emit! c :make-room.done :info summary))
-          (ctx/end c :done nil {:tossed tossed :free free-now}))
-      (let [text (str (stop-texts reason) "; " text)]
-        (if (= :toss-failed reason)
-          (ctx/emit! c (keyword (str "make-room." (name reason))) :warn (assoc summary :text text :status (:toss-status m)))
-          (ctx/emit! c :make-room.stopped :info (assoc summary :reason reason :text text)))
-        (ctx/end c :nothing-possible reason {:text text :free free-now :tossed tossed})))))
+      (ctx/end c :done nil {:tossed tossed :free free-now :text text})
+      (ctx/end c :nothing-possible reason (cond-> {:text (str (stop-texts reason) "; " text) :free free-now :tossed tossed}
+                                            (= :toss-failed reason) (assoc :status (:toss-status m)))))))
 
 (defn ^:async cleanup
   "However the call ends: an intent a cut left is settled, then it walks away from a toss spot the body is still near

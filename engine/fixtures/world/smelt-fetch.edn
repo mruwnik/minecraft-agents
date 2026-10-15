@@ -14,27 +14,27 @@
  [{:name "no-furnace-seen-crafts-and-places-one"
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 140 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 2]]}
   {:name "fetch-false-no-furnace-seen-gives-up"
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2 :fetch false})]]
-   :expect [{:event {:source :job :kind :smelt.gave-up :data {:reason "no-furnace-seen"}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :smelt.done} :for-s 15 :until {:source :job :kind :smelt.gave-up}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "iron_ingot" 0] [:item "raw_iron" 2]]
    :limit-s 50}
   {:name "product-name-cooks-its-input-in-a-furnace-ten-off"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]]
    :body {:inventory [["chicken" 2] ["coal" 2]]}
    :act [[:job (jobs.items.smelt {:item "cooked_chicken" :count 2})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :smelt.gave-up :data {:reason "no-furnace-seen"}} :for-s 15 :until {:source :job :kind :smelt.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :for-s 15 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "cooked_chicken" 2]]}
   {:name "iron-ingot-name-loads-raw-iron"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 2] ["coal" 2]]}
    :act [[:job (jobs.items.smelt {:item "iron_ingot" :count 2})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 100 :of-job true}]
    :after [[:item "iron_ingot" 2]]}
   {:name "diamond-is-no-input"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]]
@@ -46,23 +46,23 @@
   {:name "carried-furnace-is-placed-and-used"
    :body {:inventory [["furnace" 1] ["raw_iron" 2] ["coal" 2]]}
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :smelt.gave-up :data {:reason "no-furnace-seen"}} :for-s 15 :until {:source :job :kind :smelt.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :for-s 15 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_ingot" 2]]}
   {:name "furnace-still-cooking-copper-is-waited-for-then-iron-loaded"
    :blocks [[:set [20 0 14] "furnace[facing=west,lit=true]{BurnTime:1600s,CookTime:0s,CookTimeTotal:200s,Items:[{Slot:0b,id:\"minecraft:raw_copper\",count:3},{Slot:1b,id:\"minecraft:coal\",count:2}]}"]]
    :body {:inventory [["raw_iron" 2] ["coal" 2]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 2})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :smelt.gave-up :data {:reason "furnace-busy"}} :for-s 20 :until {:source :job :kind :smelt.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :furnace-busy}} :for-s 20 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_ingot" 2] [:item "copper_ingot" 3]]}
   ;; card 8b9e64e4: no coal anywhere, only birch seen/carried: any wood burns
   {:name "carried-birch-logs-are-the-fuel"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 2] ["birch_log" 4]]}
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :smelt.gave-up :data {:reason "no-fuel"}} :for-s 15 :until {:source :job :kind :smelt.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-fuel}} :for-s 15 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_ingot" 2]]}
   {:name "birch-planks-from-a-seen-chest-are-the-fuel"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]
@@ -70,7 +70,7 @@
    :memory [{:kind :chest :data {:pos #xyz [20 0 12]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["raw_iron" 2]]}
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
-   :expect [{:event {:source :job :kind :smelt.done :data {:smelted 2}} :within-s 140 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 2]]}
   ;; card f23d925d: smelt with no :item cooks every raw food carried
   {:name "no-item-cooks-all-the-raw-food-carried"

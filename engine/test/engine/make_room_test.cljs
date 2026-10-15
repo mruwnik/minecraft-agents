@@ -109,6 +109,10 @@
 (defn feet [p] (let [pos (.-pos (.self p))] {:x (Math/floor (.-x pos)) :y (Math/floor (.-y pos)) :z (Math/floor (.-z pos))}))
 
 (defn of-kind [seen kind] (filterv #(= kind (:kind %)) @seen))
+(defn reflex-done
+  "The reflex.ended events of runs that ended done: a reflex run keeps no data of its own."
+  [seen]
+  (filterv #(and (= :reflex (:source %)) (= :ended (:kind %)) (= :done (:outcome %))) @seen))
 
 ;; ------------------------------------------------------------------ pure
 
@@ -294,7 +298,7 @@
                  (select-keys (carried p) ["iron_pickaxe" "iron_chestplate" "water_bucket" "cooked_beef" "bread" "cobblestone"]))
               "bread and the building blocks stay")
           (is (= 6 (- 36 (stack-count p))) "six slots are free")
-          (is (contains? (event-kinds seen) :make-room.done))
+          (is (seq (reflex-done seen)))
           (is (not (declined? seen))))))))
 
 ;; The live case: bread and cobblestone sit in low slots, junk after them.
@@ -374,7 +378,7 @@
           (is (= 32 (stack-count p)))
           (is (>= 1 (Math/abs (- -4 (:x (feet p))))) "then it walks 4 blocks back from where it threw, against the throw direction")
           (is (= 0 (:z (feet p))))
-          (is (= [:make-room.tossed :make-room.done] (vec (distinct (filter #{:make-room.tossed :make-room.done} (map :kind @seen)))))))))))
+          (is (= [:make-room.tossed :ended] (vec (distinct (filter #{:make-room.tossed :ended} (map :kind @seen)))))))))))
 
 (deftest the-name-picked-up-more-recently-is-tossed-last
   (async done
@@ -398,7 +402,7 @@
         (let [{:keys [eng p seen]} (setup {:inventory (vec (concat (same "iron_pickaxe" 20 1) (same "bread" 10 3) (same "shield" 4 1)))})]
           (await (run-reflex eng {:toss-below 1000} {}))
           (is (= 0 (count (calls p "toss"))))
-          (is (= [:nothing-to-go] (mapv :reason (of-kind seen :make-room.stopped)))))))))
+          (is (= [:nothing-to-go] (mapv :reason (of-kind seen :stopped)))))))))
 
 (deftest buckets-are-never-tossed
   (async done
@@ -417,8 +421,8 @@
           (is (= 2 (count (calls p "toss"))) "at most two of the three stacks")
           (is (= 64 (get (inv p) "cobblestone")))
           (is (not (declined? seen)))
-          (is (= [:short] (mapv :reason (of-kind seen :make-room.stopped))) "ending short is stopped, not done")
-          (is (empty? (of-kind seen :make-room.done))))))))
+          (is (= [:short] (mapv :reason (of-kind seen :stopped))) "ending short is stopped, not done")
+          (is (empty? (reflex-done seen))))))))
 
 (deftest a-nearly-full-bag-tosses-the-flower-and-keeps-dirt-cobblestone-and-seeds
   (async done
@@ -439,7 +443,7 @@
           (await (run-reflex eng {} {}))
           (is (= 0 (count (calls p "toss"))))
           (is (not (declined? seen)))
-          (is (= [:nothing-to-go] (mapv :reason (of-kind seen :make-room.stopped))))
+          (is (= [:nothing-to-go] (mapv :reason (of-kind seen :stopped))))
           (is (= {} (:instances (core/state eng)))))))))
 
 (def diamond-on-ground
@@ -456,7 +460,7 @@
           (is (= 1 (get (inv p) "diamond")))
           (is (= 36 (stack-count p)) "35 coal stacks and the diamond")
           (is (not (declined? seen)))
-          (is (= [:short] (mapv :reason (of-kind seen :make-room.stopped))) "a swap with nothing more to toss is still short")
+          (is (= [:short] (mapv :reason (of-kind seen :stopped))) "a swap with nothing more to toss is still short")
           (is (contains? (event-kinds seen) :make-room.swapped)))))))
 
 (deftest the-swap-throws-away-from-the-item
@@ -511,7 +515,7 @@
           (is (= ["cobbled_deepslate" "tuff"] (mapv #(arg-of "item" %) (calls p "toss"))))
           (is (= {"coal" 30 "raw_copper" 12} (select-keys (carried p) ["coal" "raw_copper"])))
           (is (= [{:item "cobbled_deepslate" :count 64} {:item "tuff" :count 20}]
-                 (:tossed (first (filter #(= :make-room.done (:kind %)) @seen)))))
+                 (mapv #(select-keys % [:item :count]) (of-kind seen :make-room.tossed))))
           (is (some #(and (= :make-room.tossed (:kind %)) (:junk %)) @seen) "the event says it was a junk block"))))))
 
 (deftest a-submitted-make-room-ends-done-after-the-toss-that-made-room
@@ -525,7 +529,7 @@
           (dotimes [_ 12]
             (swap! clock + 700)
             (await (core/tick! eng)))
-          (is (some #(= :make-room.done (:kind %)) @seen) "done is emitted, not a wait for not-ready")
+          (is (seq (of-kind seen :completed)) "done is emitted, not a wait for not-ready")
           (is (empty? (:list (core/state eng))) "the job ended"))))))
 
 (deftest torches-are-never-tossed
@@ -540,7 +544,7 @@
       (fn ^:async t []
         (let [{:keys [out returns p]} (await (run-child {:inventory (many "junk" 35)} {} nil))]
           (is (= [:done] @returns) "three tosses and the walk away in one call")
-          (is (= {:status :done :free 4 :tossed [{:item "junk_0" :count 1} {:item "junk_1" :count 1} {:item "junk_2" :count 1}]}
+          (is (= {:status :done :free 4 :text "4 free, tossed 1 junk_0, 1 junk_1, 1 junk_2" :tossed [{:item "junk_0" :count 1} {:item "junk_1" :count 1} {:item "junk_2" :count 1}]}
                  @out))
           (is (= 32 (stack-count p))))))))
 
@@ -563,7 +567,7 @@
         (let [{:keys [eng seen]} (setup {:inventory (many "junk" 35)})]
           (await (run-reflex eng {} {}))
           (is (= 1 (count (of-kind seen :round_started))))
-          (is (= 1 (count (of-kind seen :make-room.done)))))))))
+          (is (= 1 (count (reflex-done seen)))))))))
 
 (deftest ending-short-is-stopped-with-the-count-and-what-went
   (async done
@@ -705,8 +709,8 @@
                                             #js {:status "failed"}
                                             (await (impl token a)))))
           (await (run-reflex eng {} {}))
-          (is (empty? (of-kind seen :make-room.toss-failed)) "a failure between successes does not add up")
-          (is (= 1 (count (of-kind seen :make-room.done)))))))))
+          (is (empty? (of-kind seen :stopped)) "a failure between successes does not add up")
+          (is (= 1 (count (reflex-done seen)))))))))
 
 ;; ------------------------------------------------------------------ zones
 
@@ -722,7 +726,7 @@
           (is (= 0 (count (calls p "transfer"))) "nothing put into another's chest")
           (is (pos? (count (calls p "toss"))) "tossed instead")
           (is (= 3 (- 36 (stack-count p))) "three slots are free")
-          (is (contains? (event-kinds seen) :make-room.done)))))))
+          (is (seq (reflex-done seen))))))))
 
 (deftest ignore-zones-fills-a-chest-in-another-s-zone
   (async done

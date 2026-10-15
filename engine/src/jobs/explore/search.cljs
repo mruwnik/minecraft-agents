@@ -40,10 +40,10 @@
 
   With :use-notes, live :seen notes of a target within :max-distance count as found (:noted true, :by), unless the body
   sees another block at that cell now, and a noted entity standing in a zone or plan of the body's own (its pens) never counts. The
-  search.done text lists the positions.
+  ending text lists the positions.
 
-  Ends with info search.done or warn search.not-found (the data {:found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
-  :failed [{:pos :reason}] :skipped :farthest} :why}) and the ending:
+  The ending's data: {:found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
+  :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :legs (:max-legs walked) or :stuck (three failed walks in a row).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s; the engine ends it, round time only, so go-to's wait for day in a shelter does not count), with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
@@ -202,8 +202,7 @@
   {:legs (:legs m 0) :scans (:scans m 0) :failed (:failed m []) :skipped (:skipped m 0) :farthest (:farthest m 0)})
 
 (defn done?
-  "The targets found against :count; done once all are found (the round's search.done event then comes only when it
-  ends first)."
+  "The targets found against :count; done once all are found."
   [c]
   (let [n (count (:found (ctx/mem c)))
         left (max 0 (- (:count (:args c)) n))
@@ -234,19 +233,17 @@
                (look/seen-entities p {:names names :radius radius :max 32}))))
 
 (defn finish!
-  "Emit the outcome and end the call: done when found, else the ending of why."
+  "End the call: done when found (or nothing was left to find), else the ending of why; the text and findings are the ending's data."
   [c reason why]
   (let [m (ctx/mem c)
-        result (cond-> {:reason reason :found (:found m [])
-                        :coverage (coverage m)}
-                 why (assoc :why why))
-        what (str/join "/" (targets c))]
-    (if (= :found reason)
-      (ctx/emit! c :search.done :info (assoc result :text (str "found " (count (:found result)) " " what " at "
-                                                                           (str/join ", " (map #(str/join "," (:pos %)) (:found result))))))
-      (ctx/emit! c :search.not-found :warn
-                 (assoc result :text (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
-                                          (:scans m 0) " looks, " (:farthest m 0) " blocks out"))))
+        what (str/join "/" (targets c))
+        found (:found m [])
+        result (cond-> {:reason reason :found found :coverage (coverage m)
+                        :text (if (= :found reason)
+                                (str "found " (count found) " " what " at " (str/join ", " (map #(str/join "," (:pos %)) found)))
+                                (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
+                                     (:scans m 0) " looks, " (:farthest m 0) " blocks out"))}
+                 why (assoc :why why))]
     (case why
       nil (ctx/end c :done nil result)
       (ctx/end c :nothing-possible why result))))

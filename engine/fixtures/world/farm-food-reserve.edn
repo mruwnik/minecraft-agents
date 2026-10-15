@@ -38,7 +38,7 @@
   {:name "make-room-keeps-the-food-reserve"
    :body {:at [12.5 0 16.5] :inventory [["bread" 20] ["cobblestone" 64] ["dirt" 64] ["gravel" 64]]}
    :act [[:job (jobs.storage.make-room {:free 34})]]
-   :expect [{:event {:source :job :kind #{:make-room.done :make-room.stopped}} :within-s 70 :of-job true}
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed :data {:item "bread"}} :for-s 70
-             :until {:source :job :kind #{:make-room.done :make-room.stopped}}}]
+             :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "bread" [:>= 12]]]}]}

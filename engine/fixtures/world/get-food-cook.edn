@@ -1,10 +1,10 @@
 ;; Cards 698d6896 2e4d9b7d 08af40de 1bda3325 (cook gaps).
 ;; survival.get-food cooks raw meat before eating it (owner: cook whenever it can) and the night hold cooks a furnace-side meal too.
 ;; Hunger is drained by RCON (food 8 after 5 s, near 0 after 8 s) and damage sets hp 15, so the body is hungry; the mobs are NoAI.
-;; Should-succeed: raw chicken beside a seen furnace is smelted first (smelt.done) by the hungry reflex; a carried furnace is put down
+;; Should-succeed: raw chicken beside a seen furnace is smelted first by the hungry reflex; a carried furnace is put down
 ;; and 2 raw chops cooked; food near 0 with a furnace in sight still cooks; the night hold in a closed hut cooks beef at a furnace
 ;; inside and then eats it; reserved bait carrots are eaten by neither the hungry reflex nor the night hold.
-;; Should-fail: a creeper in sight rushes the body: the raw beef is eaten, no smelt.done; with carrots reserved as bait the
+;; Should-fail: a creeper in sight rushes the body: the raw beef is eaten, no cooking; with carrots reserved as bait the
 ;; hungry body keeps all of them.
 {:defaults
  {:tags [:survival :get-food :cook]
@@ -20,7 +20,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
-            {:event {:source :job :kind :smelt.done} :within-s 80}
+            {:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 90}]
    :after [[:item "chicken" 0]]}
   {:name "carried-furnace-is-put-down-and-two-chops-cooked"
@@ -28,7 +28,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :smelt.done} :within-s 80}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}]
    :after [[:item "porkchop" 0]]}
   {:name "food-near-zero-with-a-furnace-in-sight-still-cooks"
@@ -37,7 +37,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:wait-s 10]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :smelt.done} :within-s 80}]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}]
    :after [[:item "beef" 0]]}
   ;; 2e4d9b7d: a furnace 36 blocks off, known as the :furnace place, still pays for the walk (cook-far-radius 64, not the 16 of a placed one)
   {:name "remembered-furnace-36-blocks-away-is-walked-to-and-used"
@@ -48,7 +48,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :smelt.done} :within-s 100}]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 100}]
    :after [[:item "beef" 0]]
    :limit-s 130}
   ;; 2e4d9b7d: at food 0 with health that will not outlast a 2-item cook (20 s of starvation = 5 hp, plus a margin of 3) the beef is eaten raw
@@ -59,7 +59,7 @@
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :smelt.done} :for-s 50 :until {:source :job :kind #{:completed :stopped}}}]
+            {:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 50 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "beef" [:<= 1]]]}
   ;; fixer-meat-value (05563e845): two wild beef pay for making a furnace (replacement cost 1 + 3 with no pen): the table and cobblestone
   ;; in the pack become a furnace and the beef is cooked
@@ -69,7 +69,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :smelt.done} :within-s 120}]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 120}]
    :after [[:item "beef" 0]]
    :limit-s 150}
   {:name "creeper-in-sight-eats-the-beef-raw"
@@ -80,7 +80,7 @@
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :smelt.done} :for-s 50 :until {:source :job :kind #{:completed :stopped}}}]
+            {:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 50 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "beef" [:<= 1]]]}
   {:name "reserved-bait-carrots-survive-the-hungry-reflex"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]

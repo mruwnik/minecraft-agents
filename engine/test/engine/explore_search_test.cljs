@@ -65,6 +65,18 @@
     (await (run-until-done s (or n 400)))))
 
 (defn event-of [{:keys [seen]} kind] (first (filter #(= kind (:kind %)) @seen)))
+(defn ended-of
+  "The job's ending event."
+  [s]
+  (some #(when (#{:completed :stopped} (:kind %)) %) @(:seen s)))
+(defn found-of
+  "The ending's data when it found the targets."
+  [s]
+  (let [d (ended-of s)] (when (and (= :completed (:kind d)) (= :found (:reason d))) d)))
+(defn not-found-of
+  "The ending's data when it did not find them."
+  [s]
+  (let [d (ended-of s)] (when (and d (not (found-of s))) d)))
 (defn walks
   "The targets of the walks go-to made, in order (each walk writes a :moved entry)."
   [{:keys [eng]}]
@@ -117,8 +129,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :max-distance 48} {:blocks {"40,64,0" "diamond_block"} :cone? true}))
-              e (event-of s :search.done)]
-          (is (= nil (event-of s :search.not-found)))
+              e (found-of s)]
+          (is (= nil (not-found-of s)))
           (is (= [{:what "diamond_block" :pos [40 64 0]}] (:found e)))
           (is (seq (walks s))))))))
 
@@ -130,8 +142,8 @@
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block"} {:blocks {"10,64,0" "diamond_block"}}))]
           (is (finished? s))
-          (is (= :found (:reason (event-of s :search.done))))
-          (is (= [{:what "diamond_block" :pos [10 64 0]}] (:found (event-of s :search.done))))
+          (is (= :found (:reason (found-of s))))
+          (is (= [{:what "diamond_block" :pos [10 64 0]}] (:found (found-of s))))
           (is (= [] (walks s))))))))
 
 (def two-diamonds {"10,64,0" "diamond_block" "0,64,12" "diamond_block"})
@@ -141,14 +153,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :avoid [[10 0]]} {:blocks two-diamonds}))]
-          (is (= [[0 64 12]] (map :pos (:found (event-of s :search.done))))))))))
+          (is (= [[0 64 12]] (map :pos (:found (found-of s))))))))))
 
 (deftest a-target-in-an-avoided-box-is-not-found
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :avoid-boxes [[[8 -3] [14 3]]]} {:blocks two-diamonds}))]
-          (is (= [[0 64 12]] (map :pos (:found (event-of s :search.done))))))))))
+          (is (= [[0 64 12]] (map :pos (:found (found-of s))))))))))
 
 (deftest a-target-in-a-foreign-zone-is-found-only-without-takeable
   (async done
@@ -158,8 +170,8 @@
               spec {:blocks two-diamonds :zones [vault]}
               any (await (search! {:target "diamond_block"} spec))
               own (await (search! {:target "diamond_block" :takeable true} spec))]
-          (is (= [[10 64 0]] (map :pos (:found (event-of any :search.done)))))
-          (is (= [[0 64 12]] (map :pos (:found (event-of own :search.done))))))))))
+          (is (= [[10 64 0]] (map :pos (:found (found-of any)))))
+          (is (= [[0 64 12]] (map :pos (:found (found-of own))))))))))
 
 (deftest a-target-out-of-sight-is-walked-to-found-and-noted
   (async done
@@ -168,12 +180,12 @@
         (let [s (await (search! {:target "diamond_block"} {:blocks diamond}))
               ns (file-notes s)]
           (is (finished? s))
-          (is (= :found (:reason (event-of s :search.done))))
-          (is (= [[45 64 3]] (map :pos (:found (event-of s :search.done)))))
+          (is (= :found (:reason (found-of s))))
+          (is (= [[45 64 3]] (map :pos (:found (found-of s)))))
           (is (pos? (count (walks s))))
           (is (some #(= [:seen "diamond_block" [45 64 3] "Fake"] ((juxt :kind :what :pos :by) %)) ns))
           (is (some #(= [:searched ["diamond_block"]] ((juxt :kind :what) %)) ns))
-          (is (nil? (event-of s :search.not-found))))))))
+          (is (nil? (not-found-of s))))))))
 
 (deftest a-seen-note-lasts-the-seen-ttl-setting
   (async done
@@ -194,7 +206,7 @@
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (is (finished? s) "legs walked and the ore found in one round")
-          (is (= :found (:reason (event-of s :search.done)))))))))
+          (is (= :found (:reason (found-of s)))))))))
 
 (deftest an-entity-target-is-found-and-noted-by-its-uuid
   (async done
@@ -202,7 +214,7 @@
       (fn ^:async t []
         (let [s (await (search! {:target ["cow" "pig"]}
                                 {:entities [{:id 3 :uuid "u3" :name "cow" :kind "passive" :pos {:x 30.5 :y 64 :z 0.5}}]}))]
-          (is (= [{:what "cow" :pos [30 64 0] :id "u3"}] (:found (event-of s :search.done))))
+          (is (= [{:what "cow" :pos [30 64 0] :id "u3"}] (:found (found-of s))))
           (is (some #(= [:seen "cow" "u3"] ((juxt :kind :what :id) %)) (file-notes s))))))))
 
 (deftest nothing-within-the-distance-ends-not-found-with-the-coverage
@@ -210,9 +222,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :max-distance 20} {:blocks diamond}))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (finished? s))
-          (is (= :not-found (:reason e)))
+          (is (= :stopped (:kind e)))
           (is (= :distance (:why e)))
           (is (= 4 (get-in e [:coverage :legs])))
           (is (= 5 (get-in e [:coverage :scans])))
@@ -230,7 +242,7 @@
                                                  (fn ^:async f [token args impl]
                                                    (swap! clock + 1000)
                                                    (await (impl token args)))))))]
-          (is (= [:legs 2] ((juxt :why #(get-in % [:coverage :legs])) (event-of legs :search.not-found))))
+          (is (= [:legs 2] ((juxt :why #(get-in % [:coverage :legs])) (not-found-of legs))))
           (is (= :job-time (:reason (event-of timed :stopped))) "the engine's time limit ends it"))))))
 
 (deftest ground-another-body-searched-for-these-targets-is-skipped
@@ -240,7 +252,7 @@
         (let [marks (for [[x z] (search/spiral-points [0 0] 16 23)]
                       {:kind :searched :what ["diamond_block"] :pos [x 64 z] :r 24 :by "Other" :t 1 :until 9e15})
               s (await (search! {:target "diamond_block" :max-distance 23} {} 400 #(write-other! % "Other" marks)))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (= [] (walks s)))
           (is (= 8 (get-in e [:coverage :skipped])))
           (is (= :distance (:why e))))))))
@@ -252,7 +264,7 @@
         (let [marks (for [[x z] (search/outward-points [0.5 0.5] :north 16)]
                       {:kind :searched :what ["diamond_block"] :pos [x 64 z] :r 3 :by "Other" :t 1 :until 9e15})
               s (await (search! {:target "diamond_block" :pattern :outward :heading :north :max-distance 64} {} 400 #(write-other! % "Other" marks)))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (pos? (count (walks s))) "the body walked on instead of ending at once")
           (is (every? #(< (:z %) -16) (walks s)) "past the searched legs, further north")
           (is (pos? (get-in e [:coverage :legs]))))))))
@@ -273,9 +285,9 @@
               s (await (search! {:target "diamond_block"} {:cone? true :blocks diamond} 400 #(write-other! % "Other" seen)))
               own (await (search! {:target "diamond_block" :use-notes false :max-distance 20} {:cone? true :blocks diamond} 400
                                   #(write-other! % "Other" seen)))]
-          (is (= [{:what "diamond_block" :pos [45 64 3] :noted true :by "Other"}] (:found (event-of s :search.done))))
+          (is (= [{:what "diamond_block" :pos [45 64 3] :noted true :by "Other"}] (:found (found-of s))))
           (is (= [] (walks s)))
-          (is (= :not-found (:reason (event-of own :search.not-found)))))))))
+          (is (= :stopped (:kind (not-found-of own)))))))))
 
 (deftest a-noted-animal-in-the-bodys-own-zone-is-no-find-one-outside-is-and-the-text-gives-where
   (async done
@@ -287,8 +299,8 @@
                                                        #(write-other! % "Other" (note pos)))))
               penned (await (run! [3 64 3]))
               wild (await (run! [12 64 12]))]
-          (is (= :not-found (:reason (event-of penned :search.not-found))) "the penned cow is not counted")
-          (is (re-find #"12,64,12" (str (:text (event-of wild :search.done)))) "the text says where"))))))
+          (is (= :stopped (:kind (not-found-of penned))) "the penned cow is not counted")
+          (is (re-find #"12,64,12" (str (:text (found-of wild)))) "the text says where"))))))
 
 (deftest legs-that-cannot-be-stood-on-or-walked-are-recorded-and-skipped
   (async done
@@ -314,7 +326,7 @@
           (swap! (fake/state (:p s)) assoc :unloaded #{})
           (await (run-until-done s 400))
           (is (= 4 (count (walks s))))
-          (is (= :distance (:why (event-of s :search.not-found)))))))))
+          (is (= :distance (:why (not-found-of s)))))))))
 
 (deftest ground-that-never-loads-waits-until-the-call-time-is-spent
   (async done
@@ -322,7 +334,7 @@
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}} {:unloaded ring-1-cells}))]
           (is (= :job-time (:reason (event-of s :stopped))) "no clock of its own: the engine's time limit ends the wait")
-          (is (nil? (event-of s :search.not-found)))
+          (is (= "stopped: job-time" (:text (ended-of s))))
           (is (= [] (walks s))))))))
 
 ;; a leg whose goal lies by a mob the body would flee is not walked: go-to gives it up (:goal-danger :end), it is recorded
@@ -334,7 +346,7 @@
         (let [zombie {:key "z1" :name "zombie" :pos {:x 17 :y 64 :z 1}}
               s (with-redefs [threats/sensed-mobs (constantly [zombie])]
                   (await (search! {:target "diamond_block" :max-distance 20} {})))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (= :distance (:why e)) (pr-str e))
           (is (some #{{:pos [16 64 0] :reason :goal-dangerous}} (get-in e [:coverage :failed])) (pr-str (:coverage e)))
           (is (not-any? #(= {:x 16 :z 0} (select-keys % [:x :z])) (walks s)) "the leg by the zombie is never walked to")
@@ -353,9 +365,9 @@
                             (aset p "sensedAt" (fn [pos] (if (far? pos) #js {:unknown true} (at pos))))))
               s (with-redefs [threats/sensed-mobs (constantly [zombie])]
                   (await (search! {:target "diamond_block" :max-distance 20} {} 80 blind-far)))
-              given-up (filterv #(= :goal-dangerous (:reason %)) (get-in (or (event-of s :search.not-found) (event-of s :search.done)) [:coverage :failed]))]
+              given-up (filterv #(= :goal-dangerous (:reason %)) (get-in (or (not-found-of s) (found-of s)) [:coverage :failed]))]
           (is (finished? s) "the search ends")
-          (is (= [{:pos [0 64 -6] :reason :goal-dangerous}] given-up) (pr-str (event-of s :search.not-found) (walks s)))
+          (is (= [{:pos [0 64 -6] :reason :goal-dangerous}] given-up) (pr-str (not-found-of s) (walks s)))
           (is (not-any? #(= {:x 0 :z -6} (select-keys % [:x :z])) (walks s)) "the step by the zombie is never walked to"))))))
 
 (deftest a-step-toward-an-unseen-column-that-fails-is-not-repeated
@@ -367,7 +379,7 @@
                             (aset p "sensedAt" (fn [pos] (if (or (> (js/Math.abs (.-x pos)) 8) (> (js/Math.abs (.-z pos)) 8)) #js {:unknown true} (at pos))))))
               s (await (search! {:target "diamond_block" :max-distance 20}
                                 {:self {:pos [0 100 0]} :blocks (tu/box -2 99 -2 8 99 2 "stone")} 60 blind-far))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (finished? s) "the search ends within 60 rounds, not at the time bound")
           (is (not= :time (:why e)))
           (let [ps (map :pos (get-in e [:coverage :failed]))]
@@ -400,7 +412,7 @@
                         (await (real c slot args))))
               s (with-redefs [child/call-walk-reason* night]
                   (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}} {} 400)))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (finished? s))
           (is (not= :time (:why e)) (:text e)))))))
 
@@ -420,7 +432,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :max-distance 23} {:unreachable (mapv (fn [[x z]] (str x ",64," z)) (search/spiral-points [0 0] 16 23))}))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (= :stuck (:why e)))
           (is (= [[-16 64 -16] [16 64 -16] [16 64 16]] (mapv :pos (get-in e [:coverage :failed])))
               "each next leg lies another way: one within 60 degrees of a failed leg's way is held back"))))))
@@ -432,7 +444,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :max-distance 23} {:unreachable ["-16,64,-16" "0,64,-16" "16,64,-16"]}))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (= :distance (:why e)) (pr-str e))
           (is (= #{[-16 64 -16] [0 64 -16] [16 64 -16]} (set (map :pos (get-in e [:coverage :failed])))) "the held leg is walked later, after an arrival"))))))
 
@@ -445,7 +457,7 @@
         (let [marks (for [[x z] [[16 -16] [16 0] [16 16] [0 16] [-16 16]]]
                       {:kind :searched :what ["diamond_block"] :pos [x 64 z] :r 3 :by "Other" :t 1 :until 9e15})
               s (await (search! {:target "diamond_block" :max-distance 23} {:unreachable ["-16,64,-16"]} 400 #(write-other! % "Other" marks)))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (= :distance (:why e)) (pr-str e))
           (is (some #(= {:x 0 :z -16} (select-keys % [:x :z])) (walks s)) "the held legs are walked after the one failure"))))))
 
@@ -456,7 +468,7 @@
         (let [s (await (search! {:target "diamond_block" :pattern :outward :heading :east :max-distance 40} {}))]
           (is (= [16 30] (take 2 (map :x (walks s)))) "the second leg is 16 further than where the body stopped, 2 short of the first")
           (is (every? #(<= (js/Math.hypot (:x %) (:z %)) 40) (walks s)) "no leg beyond :max-distance")
-          (is (= :distance (:why (event-of s :search.not-found)))))))))
+          (is (= :distance (:why (not-found-of s)))))))))
 
 (deftest an-unknown-pattern-or-heading-is-refused-at-submit
   (is (re-find #":pattern must be one of :outward, :spiral, got :zigzag"
@@ -486,7 +498,7 @@
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0}
                                 {:blocks {"-4,64,0" "diamond_block"} :cone? true}))
-              e (event-of s :search.done)]
+              e (found-of s)]
           (is (= 1 (count (:found e))))
           (is (some #(= :seen (:kind %)) (file-notes s))))))))
 
@@ -504,7 +516,7 @@
                                                                  (when (some #(= "diamond_block" (.-name %)) r)
                                                                    (fake/set-block! p {:x 0 :y 64 :z 5} "air"))
                                                                  r)))))))]
-          (is (some? (event-of s :search.done)) "no sight pass corrected it: memory still says ore")
+          (is (some? (found-of s)) "no sight pass corrected it: memory still says ore")
           (is (some #(= :seen (:kind %)) (file-notes s))))))))
 
 (deftest a-name-with-many-sightings-does-not-fill-the-scan-cap-for-the-others
@@ -535,7 +547,7 @@
         (let [s (setup {} 0)]
           (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 40 :spacing 4}) {})
           (await (run-until-done s 400))
-          (let [e (event-of s :search.not-found)]
+          (let [e (not-found-of s)]
             (is (<= (get-in e [:coverage :scans]) 2) "a step that only goes on choosing points does not look again")
             (is (= :distance (:why e)))
             (is (> (count (get-in e [:coverage :failed])) 100))))))))
@@ -551,7 +563,7 @@
       (fn ^:async t []
         (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :spacing 4 :scan-radius 16 :spend {:job-time 40}}
                                 {:blocks sealed-room :cone? true :self {:pos {:x 16.5 :y 64 :z 16.5}}} 60))]
-          (is (nil? (event-of s :search.done)) (pr-str (:found (event-of s :search.done)))))))))
+          (is (nil? (found-of s)) (pr-str (:found (found-of s)))))))))
 
 (deftest a-note-of-a-block-the-body-now-sees-as-something-else-is-not-a-finding
   (async done
@@ -559,8 +571,8 @@
       (fn ^:async t []
         (let [seen [{:kind :seen :what "diamond_block" :pos [0 64 5] :by "Other" :t 1 :until 9e15}]
               s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0} {:cone? true} 60 #(write-other! % "Other" seen)))]
-          (is (nil? (event-of s :search.done)) "the cell is in view and holds air: the note is out of date")
-          (is (= :not-found (:reason (event-of s :search.not-found)))))))))
+          (is (nil? (found-of s)) "the cell is in view and holds air: the note is out of date")
+          (is (= :stopped (:kind (not-found-of s)))))))))
 
 ;; a body in water does not look round (it sinks and drowns while it does): it walks on, and a leg ending in water fails
 (deftest a-body-in-water-does-not-look-round-where-it-is
@@ -568,7 +580,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :max-distance 20} {:self {:pos [0.5 64 0.5] :inWater true}}))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (finished? s))
           (is (zero? (get-in e [:coverage :scans])) (pr-str e)))))))
 
@@ -582,7 +594,7 @@
               stats #(perception/stats (aget (:p %) "perception"))
               s (await (search! {:target "diamond_block" :max-distance 20} {:blocks {"0,64,5" "diamond_block"} :cone? true} 60
                                 (fn [s] (perception/pass! (aget (:p s) "perception")) (reset! rays (:rays (stats s))))))]
-          (is (= [{:what "diamond_block" :pos [0 64 5]}] (:found (event-of s :search.done))))
+          (is (= [{:what "diamond_block" :pos [0 64 5]}] (:found (found-of s))))
           (is (= 0 (looks s)))
           (is (= @rays (:rays (stats s))) "no sight pass cast a ray"))))))
 
@@ -597,7 +609,7 @@
                      (js/Promise.resolve [{:kind :nothing-possible :cause :unreachable :data {}} nil]))
               s (with-redefs [child/call-walk-reason* walk]
                   (await (search! {:target "diamond_block" :max-distance 23} {} 60 #(reset! prims (:p %)))))
-              e (event-of s :search.not-found)]
+              e (not-found-of s)]
           (is (= :stuck (:why e)))
           (is (= 3 (get-in e [:coverage :scans])))
           (is (= 8 (looks s)) "one look round (four headings, level and down) at the first spot only"))))))

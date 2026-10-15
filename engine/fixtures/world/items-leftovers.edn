@@ -13,7 +13,7 @@
  [{:name "kitchen-bakes-chest-wheat-and-stores-the-bread"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"] [:set [20 0 18] "crafting_table"]]
    :act [[:job (jobs.items.kitchen {:chest #xyz [20 0 16] :reserve {} :stock {"bread" 3}})]]
-   :expect [{:event {:source :job :kind :kitchen.done :message [:contains "stored bread 3"]} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:text [:contains "stored bread 3"]}} :within-s 80 :of-job true}]
    :after [[:item "bread" 0] [:item "wheat" 0]]}
   {:name "kitchen-without-a-table-or-wood-stops-no-table"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"]]
@@ -24,14 +24,14 @@
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"]]
    :body {:inventory [["oak_planks" 8]]}
    :act [[:job (jobs.items.kitchen {:chest #xyz [20 0 16] :reserve {} :stock {"bread" 3}})]]
-   :expect [{:event {:source :job :kind :kitchen.done :message [:contains "stored bread 3"]} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:text [:contains "stored bread 3"]}} :within-s 80 :of-job true}]
    :after [[:item "bread" 0] [:item "wheat" 0]]}
   {:name "kitchen-fetch-false-skips-no-table-even-with-planks"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"]]
    :body {:inventory [["oak_planks" 8]]}
    :act [[:job (jobs.items.kitchen {:chest #xyz [20 0 16] :reserve {} :stock {"bread" 3} :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :skipped {:take :no-table :bake :no-table}}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :kitchen.done} :for-s 20}]
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :after [[:item "bread" 0] [:item "wheat" 0] [:item "oak_planks" 8]]}
   {:name "enchant-without-a-table-gives-up-no-table"
    :body {:inventory [["diamond_pickaxe" 1] ["lapis_lazuli" 3]]}
