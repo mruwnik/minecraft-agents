@@ -32,3 +32,13 @@
   (let [w (world {[1 9 0] "air" [1 8 0] "air" [1 7 0] "air" [1 6 0] "air"})]
     (is (= {:dig []} (dr/route w [0 10 0] [1 6 0] {:max-fall 4})))
     (is (seq (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 1}))))))
+
+(deftest digs-are-priced-by-the-callers-seconds-per-block
+  (let [hard (into {} (for [y (range 10 14) z (range -3 4)] [[1 y z] "obsidian"]))
+        w (fn [c] (or ({[3 10 0] "air" [3 11 0] "air" [-1 10 0] "air" [-1 11 0] "air"} c)
+                      (hard c)
+                      (if (< (c 1) 10) "stone" "dirt")))]
+    (is (some (comp #{"obsidian"} w) (:dig (dr/route w [-1 10 0] [3 10 0] {})))
+        "by count the way through the obsidian wall is the shortest")
+    (is (not-any? (comp #{"obsidian"} w) (:dig (dr/route w [-1 10 0] [3 10 0] {:dig-s #(if (= "obsidian" %) 50 1) :step-s 0.2})))
+        "priced, it digs under the wall")))

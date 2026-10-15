@@ -184,3 +184,7 @@
   (is (< (cost/tour-worth 2 {:tour-floor-blocks 0}) (cost/tour-worth 2)))
   (is (= (+ (cost/trip) (:cost (cost/walk-cost {:distance 10}))) (cost/tour-worth 10 {:tour-floor-blocks 0 :tour-ratio 1})))
   (is (= 7 (:cost (cost/tour-cost {:explored 0 :walks 7} {:per-frontier-walk 1})))))
+
+(deftest dig-cost-is-the-item-base-s-dig-term
+  (is (< (cost/dig-cost "dirt") (cost/dig-cost "stone") (cost/dig-cost "obsidian")))
+  (is (nil? (cost/dig-cost "bedrock")) "never dug"))

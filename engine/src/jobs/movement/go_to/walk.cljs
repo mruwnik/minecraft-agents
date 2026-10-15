@@ -370,7 +370,7 @@
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
                     result (dive-end c pos (dark-end c result))
-                    ended (cond-> (if (esc/escalate? c result) result (sight-end c pos (unloaded-end result unloaded?)))
+                    ended (cond-> (if (esc/escalate? c tries result) result (sight-end c pos (unloaded-end result unloaded?)))
                             (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]
                 (if (await (clear-goal-seal! c pos ended))
                   :again

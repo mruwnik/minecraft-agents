@@ -36,16 +36,20 @@
 (defn route
   "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet
   cell goal, at most :max-digs of them, within :margin cells of both ends, falls of at most :max-fall; each step's floor must be a seen solid block.
-  {:dig [cell ..]} or {:problem :no-route}."
-  [block-at from goal {:keys [max-digs margin max-fall] :or {max-digs 16 margin 3 max-fall 3}}]
+  Priced :step-s a step and (:dig-s name) a cell dug (default 0 and 1: the fewest digs); a block :dig-s prices nil is
+  not dug. {:dig [cell ..]} or {:problem :no-route}."
+  [block-at from goal {:keys [max-digs margin max-fall dig-s step-s] :or {max-digs 16 margin 3 max-fall 3 dig-s (constantly 1) step-s 0}}]
   (let [lo (mapv #(- (min %1 %2) margin) from goal)
         hi (mapv #(+ (max %1 %2) margin) from goal)
         inside? (fn [c] (every? true? (map #(<= %1 %2 %3) lo c hi)))
         step (fn [m n]
                (when (floor-ok? (block-at [(n 0) (dec (n 1)) (n 2)]))
-                 (let [cs (map (comp cell-cost block-at) (step-cells m n))]
-                   (when (every? some? cs) (reduce + cs)))))]
-    (loop [dist {from 0} prev {} done #{}]
+                 (let [names (map block-at (step-cells m n))
+                       digs (map cell-cost names)
+                       prices (map (fn [n d] (if (pos? d) (dig-s n) 0)) names digs)]
+                   (when (every? some? (concat digs prices))
+                     [(+ step-s (reduce + prices)) (reduce + digs)]))))]
+    (loop [dist {from 0} digs {from 0} prev {} done #{}]
       (let [[cur d] (->> dist (remove (fn [[k _]] (done k))) (sort-by val) first)]
         (cond
           (nil? cur) {:problem :no-route}
@@ -55,9 +59,12 @@
                                        c (sort-by #(- (% 1)) (step-cells m n))
                                        :when (pos? (cell-cost (block-at c)))]
                                    c)))})
-          (> d max-digs) {:problem :no-route}
           :else
           (let [relax (for [n (neighbours cur max-fall) :when (and (inside? n) (not (done n)))
-                            :let [s (step cur n)] :when s] [n (+ d s)])
+                            :let [[s k] (step cur n)] :when (and s (<= (+ (digs cur) k) max-digs))]
+                        [n (+ d s) (+ (digs cur) k)])
                 better (filter (fn [[n nd]] (< nd (get dist n js/Infinity))) relax)]
-            (recur (into dist better) (into prev (map (fn [[n _]] [n cur]) better)) (conj done cur))))))))
+            (recur (into dist (map (fn [[n nd _]] [n nd])) better)
+                   (into digs (map (fn [[n _ k]] [n k])) better)
+                   (into prev (map (fn [[n _]] [n cur])) better)
+                   (conj done cur))))))))

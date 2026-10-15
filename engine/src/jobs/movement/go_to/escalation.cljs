@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
+            [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
@@ -20,6 +21,7 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]
+            [jobs.movement.go-to.tuning :refer [max-blocked]]
             [jobs.movement.go-to.way-steps :as ways]))
 
 (def max-escalations 3)
@@ -261,13 +263,14 @@
 (def max-route-digs "Cells a :dig-route escalation digs at most." 16)
 
 (defn dig-way
-  "{:step :dig-route :cells [{:cell :block}]}: the fewest cells to dig for a walk from feet cell from down or across
-  into goal (jobs.lib.dig-route, at most max-route-digs, falls of at most 3), in walking order, every one
-  escape/diggable?; else nil."
+  "{:step :dig-route :cells [{:cell :block}]}: the cheapest cells to dig for a walk from feet cell from down or across
+  into goal (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most max-route-digs, falls of
+  at most 3), in walking order, every one escape/diggable?; else nil."
   [p from goal may-dig? {:keys [own? skip]}]
   (when-not (skip :dig-route)
     (let [block-at (escape/block-at-of p)
-          cells (:dig (dig-route/route block-at from goal {:max-digs max-route-digs}))]
+          cells (:dig (dig-route/route block-at from goal {:max-digs max-route-digs :dig-s cost/dig-cost
+                                                           :step-s (:cost (cost/walk-cost {:distance 1}))}))]
       (when (and (seq cells) (every? #(escape/diggable? block-at may-dig? own? %) cells))
         {:step :dig-route :cells (mapv (fn [cell] {:cell cell :block (block-at cell)}) cells)}))))
 
@@ -405,11 +408,11 @@
   :again)
 
 (defn escalate?
-  "Whether a give-up with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed (walker-fault?) or the body is shut in (reach/enclosed?), and no door or
+  "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :retry false caller is no proof) or the body is shut in (reach/enclosed?), and no door or
   gate borders where it can walk (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never,
   is a wall). Never out of
   the body's own shelter: it is shut in on purpose."
-  [c result]
+  [c tries result]
   (and (ways/escalating? c)
        (or (shelter-exit? c result) (not (sh/sheltered-in c)))
        (or (shelter-exit? c result)
@@ -418,12 +421,12 @@
            (dive? c result)
            (goal-walled? c result)
            (let [doors (some-> (:doors (:args c)) keyword)]
-             (and (or (walker-fault? result)
+             (and (or (and (walker-fault? result) (>= tries max-blocked))
                       (and (escalate-reason? result doors) (escape/enclosed? (:primitives c) doors)))
                   (not (escape/door-beside? (:primitives c) (end/feet-cell c) doors)))))))
 
 (defn ^:async give-up-or-escalate! [c pos tries status result]
-  (if (escalate? c result)
+  (if (escalate? c tries result)
     (do (ctx/update-mem! c assoc :dive-climb (dive? c result)
                          :give-up {:tries tries :status status
                                    :result (select-keys result [:status :reason :kind :cells :near :one-way :at :dip :rise :move :why :step :partial])})
@@ -555,21 +558,40 @@
       (succeeded? e r) (escalated! c pos e true)
       :else (escalation-failed! c pos (merge {:step step} (stop-detail r))))))
 
+(defn ^:async route-cell!
+  "Dig one cell of a :dig-route escalation: look first at a cell the body has not sensed, then check it again as it
+  is now (escape/protected?, escape/diggable? over may-dig-fn and own-placed-fn: a block built there since the route
+  was planned is someone's) and dig it (b/dig-cell!: no tool needed, the drops left), noting it as a hole once dug.
+  The dig's outcome, :open for a cell open already, or :not-diggable."
+  [c {:keys [cell] :as planned}]
+  (let [p (:primitives c)]
+    (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
+    (let [block-at (escape/block-at-of p)
+          n (block-at cell)]
+      (cond
+        (escape/passable? n) :open
+        (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c) (own-placed-fn c) cell))) :not-diggable
+        :else
+        (let [o (await (b/dig-cell! c (zipmap [:x :y :z] cell) {:ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+              dug (assoc planned :block n)]
+          (when (= :dug o)
+            (forget-dug-own! c [dug])
+            (note-holes! c [dug]))
+          o)))))
+
 (defn ^:async dig-route-round!
-  "One round of digging a :dig-route escalation's cells in walking order, one jobs.blocks.dig child a cell
-  (b/dig-cell!: no tool needed, the drops left), each noted as a hole (note-holes!) once dug; a cell already open is
-  passed. A dig that fails ends it (escalation-failed!)."
+  "One round of digging a :dig-route escalation's cells in walking order (route-cell!); a cell already open is passed,
+  so a resumed round goes on where it stopped. A cell that may not or could not be dug ends it (escalation-failed!)."
   [c pos]
   (let [{:keys [cells] :as e} (:escalation (ctx/mem c))]
     (loop [todo cells]
-      (if-let [{:keys [cell] :as dug} (first todo)]
-        (let [o (await (b/dig-cell! c (zipmap [:x :y :z] cell) {:ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-          (forget-dug-own! c [dug])
-          (note-holes! c [dug])
+      (if-let [{:keys [cell] :as planned} (first todo)]
+        (let [o (await (route-cell! c planned))]
           (cond
             (= :continue o) :continue
-            (#{:dug :missing} o) (recur (rest todo))
-            :else (await (escalation-failed! c pos {:step :dig-route :reason o :cell cell}))))
+            (#{:dug :missing :open} o) (recur (rest todo))
+            :else (await (escalation-failed! c pos (cond-> {:step :dig-route :reason o :cell cell}
+                                                     (= :not-diggable o) (assoc :block ((escape/block-at-of (:primitives c)) cell)))))))
         (escalated! c pos e true)))))
 
 (defn ^:async escalation-round!

@@ -1243,3 +1243,45 @@
           (await (tick-out! eng 1000))
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [:clear-path] (mapv :step (events-of seen :go-to.escalated))) "three stuck walks round the wall, then a door through it"))))))
+
+(deftest one-stuck-walk-under-retry-false-gives-up-without-digging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (merge (box -20 63 -40 20 63 40 "stone") (box 3 64 -12 3 65 12 "dirt"))
+              {:keys [eng p seen]} (setup {:self {:pos {:x 2.5 :y 64 :z 0.5}} :blocks wall})
+              steers (atom 0)
+              stuck (gt/steer-through (fn [_] (gt/pose 2.5 0.5)))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 0 :retry false})))]
+          (gt/override-steer! p (fn [token a impl] (if (<= (swap! steers inc) 1) (stuck token a impl) (impl token a))))
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 1000))
+          (is (false? (:arrived @out)) (pr-str @out))
+          (is (empty? (events-of seen :go-to.escalated)) "a caller that re-aims itself gets the stuck walk back, no door dug")
+          (is (empty? (calls p "dig"))))))))
+
+(deftest a-dig-route-never-digs-a-block-built-there-after-it-was-planned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [below (apply dissoc (box -20 55 -20 20 63 20 "stone") ["3,60,0" "3,61,0"])
+              around [[2 60 0] [4 60 0] [3 60 1] [3 60 -1] [3 59 0] [2 61 0] [4 61 0] [3 61 1] [3 61 -1] [3 62 0]]
+              {:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks below
+                                           :inventory [{:name "stone_pickaxe" :count 1}]})
+              walled? (atom false)
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [3 60 0] :range 0})))]
+          (.override (.-world p) "dig"
+                     (fn [token a impl]
+                       (when-not @walled?
+                         (reset! walled? true)
+                         (swap! (fake/state p) update :blocks merge (zipmap around (repeat "bricks"))))
+                       (impl token a)))
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 1000))
+          (is (false? (:arrived @out)) (pr-str @out))
+          (is (= (repeat (count around) "bricks") (map #(block p %) around))
+              "a brick wall put round the goal after the route was planned is someone's build")
+          (is (some #(= [:dig-route :not-diggable] ((juxt :step :reason) %)) (events-of seen :go-to.escalation-stopped))
+              (pr-str (events-of seen :go-to.escalation-stopped))))))))

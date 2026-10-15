@@ -131,6 +131,15 @@
         tier (max default-tier (block-tier md b))]
     (max min-s (/ (* hardness-s (min max-hardness (.-hardness b))) (get speed tier (get speed default-tier))))))
 
+(defn dig-cost
+  "Seconds digging the block name takes, the item base's dig term (dig-seconds); nil for a block never dug (bedrock) or
+  one minecraft-data does not know. Options :version and :basis as item-value's."
+  [name & {:keys [version basis]}]
+  (let [md (minecraft-data (or version @game/version))
+        b (aget (.-blocksByName md) name)]
+    (when (and b (number? (.-hardness b)) (not (neg? (.-hardness b))))
+      (dig-seconds md (deep-merge default-basis basis) b))))
+
 (defn wood-block? [name] (boolean (re-find #"(_log|_stem|_wood|_hyphae|^bamboo_block)$" name)))
 
 (defn find-seconds [md basis b]
