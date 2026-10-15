@@ -30,4 +30,15 @@
    :act [[:job (jobs.forestry.maintain {:plan "$plan:forest" :pillar? false})]]
    :expect [{:event {:source :job :kind :forest.left :data {:reason :too-tall}} :within-s 90 :of-job true}]
    :after [[:block [16 11 16] "oak_log"] [:item "dirt" 20]]
-   :limit-s 100}]}
+   :limit-s 100}
+  ;; Card b9a70d2f: the hungry reflex cuts the felling mid-pillar; it eats and the felling goes on with the same tree.
+  {:name "hungry-reflex-mid-pillar-then-the-same-tree-is-finished"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
+   :body {:inventory [["iron_axe" 1] ["dirt" 20] ["bread" 8]]}
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]
+         [:wait-s 25]
+         [:rcon "effect give $BODY minecraft:hunger 5 255 true"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 80}
+            {:event {:source :job :kind :completed} :within-s 190 :of-job true}]
+   :after [[:not-block [16 11 16] "oak_log"] [:not-block [16 0 16] "oak_log"] [:item "dirt" [:>= 14]]]
+   :limit-s 220}]}

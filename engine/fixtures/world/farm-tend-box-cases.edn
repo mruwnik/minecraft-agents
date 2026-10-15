@@ -67,4 +67,21 @@
    :body {:inventory [["stone_hoe" 1]]}
    :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [13 -1 16] :fetch false})]]
    :expect [{:event {:source :job :kind :till.done :data {:tilled 3}} :within-s 70 :of-job true}]
-   :after [[:block [10 -1 16] "farmland"] [:block [11 -1 16] "farmland"] [:block [13 -1 16] "farmland"] [:block [12 -1 16] "grass_block"]]}]}
+   :after [[:block [10 -1 16] "farmland"] [:block [11 -1 16] "farmland"] [:block [13 -1 16] "farmland"] [:block [12 -1 16] "grass_block"]]}
+  ;; Card f793bc9a: a plan added just before the job (the plan file is new to the body's cache) is read at once, not "no crop cells".
+  {:name "plan-added-just-before-the-job-is-read-at-once"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
+            [:fill [10 0 16] [13 0 16] "carrots[age=7]"]]
+   :body {:inventory [["carrot" 12]]}
+   :act [[:cli "plans" ["--world" "$world" "add" "late-$tag" "--edn" {:id "late-$tag" :parts [{:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]} "--by" "$body"]]
+         [:job (jobs.farm.tend {:plan "late-$tag"})]]
+   :expect [{:event {:source :job :kind :farm-tend.done :data {:steps {:harvest {:cut 4}}}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :for-s 20 :until {:source :job :kind :farm-tend.done}}]
+   :after [[:block [10 0 16] "carrots[age=0]"]]}
+  ;; Card d62866ae: till over a meadow (grass with flowers on one row, a stone patch on another) tills every grass cell and skips the stone.
+  {:name "till-over-a-meadow-tills-grass-under-flowers-and-skips-the-stone-patch"
+   :blocks [[:fill [10 0 16] [14 0 16] "poppy"] [:fill [10 -1 18] [14 -1 18] "stone"]]
+   :body {:inventory [["stone_hoe" 1]]}
+   :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [14 -1 18] :fetch false})]]
+   :expect [{:event {:source :job :kind :till.done :data {:tilled 10}} :within-s 90 :of-job true}]
+   :after [[:block [10 -1 16] "farmland"] [:block [14 -1 17] "farmland"] [:block [12 -1 18] "stone"]]}]}

@@ -1,0 +1,27 @@
+;; Card dd4ba7a7 (get-food digs ripe crops of another's plan only as a last resort and warns; the body's own plan field is no trespass;
+;; the dug crop is noted for the tidy-up with the seed to sow, restore itself is not checked here). Plan-less planting stays refused by
+;; the plan (farm.plant is not given an override), covered by farm-tend-zones.
+;; A row of 4 ripe potato cells x 22..25, z 22 on farmland (water at z 23 over stone). Hunger drained by RCON, nothing carried.
+;; Should-succeed: on another body's plan the field is dug and get-food.trespass-last-resort is warned; on the body's own plan it is dug
+;; with no warning. Should-fail: none (the refusal text is a unit test).
+{:defaults
+ {:tags [:survival :get-food :farm :zones]
+  :time :day
+  :plot {:height 6 :floor "grass_block"}
+  :blocks [[:fill [22 -1 22] [25 -1 22] "farmland[moisture=7]"] [:fill [22 -2 23] [25 -2 23] "stone"] [:fill [22 -1 23] [25 -1 23] "water"]
+           [:fill [22 0 22] [25 0 22] "potatoes[age=7]"]]
+  :body {:at [10.5 0 16.5] :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+        [:rcon "damage $BODY 5 minecraft:generic"]
+        [:job (jobs.survival.get-food {})]]
+  :limit-s 100}
+ :cases
+ [{:name "ripe-potatoes-in-anothers-plan-are-dug-as-a-last-resort-with-a-warning"
+   :plans [{:id "field" :metadata {:by "SomeoneElse"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
+   :expect [{:event {:source :job :kind :get-food.trespass-last-resort} :within-s 80 :of-job true}]
+   :after [[:not-block [22 0 22] "potatoes[age=7]"]]}
+  {:name "ripe-potatoes-in-the-own-plan-are-dug-without-a-warning"
+   :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :get-food.trespass-last-resort} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:not-block [22 0 22] "potatoes[age=7]"]]}]}
