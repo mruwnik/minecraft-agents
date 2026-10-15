@@ -41,7 +41,7 @@
   weapons carried; the old :weapons substrings map in legacy-args), handed to both children as their :use :tools.
   Ends :done when the danger is gone or left heard-only; :nothing-possible with the retreat's own kind and cause (:cannot_escape)
   when the retreat ends otherwise, or :no_response after ::max-unchanged (3) calls in a row that change
-  neither the body's cell, its health, the dangers near nor the fight's hits; never :continue. No time limit by default.
+  neither the body's cell, its health, the dangers near nor the fight's hits; never :continue. Its time budget (::time-s) may end it :limit-reached; the hostile trigger fires again at once while the danger stands.
   Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter,
   and says it in one hostile.decided event.
   A danger reflex: never backed off.")

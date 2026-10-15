@@ -1004,6 +1004,19 @@
           (is (= 2 (count (reflex-fired seen))) "fired again at once: the zombie still stands")
           (is (empty? (filter #(= :backoff (:kind %)) @seen)) "never backed off"))))))
 
+(deftest a-reflex-ended-by-its-time-budget-fires-again-while-the-danger-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup-flight {:entities [(zombie 5 0)]})]
+          (stuck-walks! p)
+          (core/register-reflex! eng {:trigger :hostile-near :job '(jobs.survival.respond-to-hostile {:spend {:time 2}})})
+          (await (core/tick! eng))
+          (is (= [[:stopped :time]] (mapv (juxt :outcome :reason) (reflex-ended seen))) "the time budget ended the call")
+          (await (core/tick! eng))
+          (is (= 2 (count (reflex-fired seen))) "fired again at once: the zombie still stands")
+          (is (empty? (filter #(= :backoff (:kind %)) @seen)) "never backed off"))))))
+
 (deftest an-explicit-cooldown-in-the-agents-entry-is-honoured
   (async done
     (tu/run-async done
