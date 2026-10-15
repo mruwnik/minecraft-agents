@@ -16,7 +16,7 @@
   is not taken) from the feet cell :at [x y z], or from every surface inside :box (or the columns a :plan's fence, wall and gate cells close in), where a step out of the box
   is a leak. Reads what the body has seen; a pen it has not seen closed is checked again after it looks at the
   cells it has not seen (jobs.lib.sense/decide!); a cell that stays unseen (hidden behind a block) is walked to, at
-  most 3 times, until the eye sees it. Never digs or places. Waits (condition) and ends impossible :no-pen without :at, :box and :plan, and :plan-trouble when :plan is missing or has no fence, wall or gate cells (before any look).
+  most 3 times, until the eye sees it. Never digs or places. Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or has no fence, wall or gate cells.
 
   The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
@@ -73,18 +73,19 @@
   (let [{:keys [at box plan]} (:args c)]
     (when-not (or at box plan) {:reason :no-pen :why "needs :at, :box or :plan"})))
 
+(defn can-run?
+  "Later :plan-trouble while :plan is missing or has no fence, wall or gate cells (it may be saved or fixed later)."
+  [c]
+  (if-let [t (:trouble (pen-box c))]
+    (contract/later :plan-trouble t :why t)
+    (contract/ok :pen "a pen to read")))
+
 (defn can-start?
   "Never :no-pen without :at, :box and :plan."
   [c]
   (if (no-pen c)
     (contract/never :no-pen "pen-check needs :at, :box or :plan" :why "needs :at, :box or :plan")
-    (contract/ok :pen "a pen to read")))
-
-(defn problem
-  "The cause of a call with no pen to read, or nil."
-  [c]
-  (or (no-pen c)
-      (when-let [t (:trouble (pen-box c))] {:reason :plan-trouble :why t})))
+    (can-run? c)))
 
 (defn done?
   "Later with the cells of the pen read: the round ends the call with the answer."
@@ -149,6 +150,6 @@
           (ctx/end c :condition-failed (:reason result) result))))))
 
 (defn ^:async round [c]
-  (if-let [p (problem c)]
-    (ctx/end c :condition-failed p nil)
+  (if (:trouble (pen-box c))
+    :continue
     (await (read-pen! c))))

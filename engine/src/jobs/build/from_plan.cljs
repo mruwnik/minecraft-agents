@@ -72,8 +72,8 @@
   Events: build.short, build.gave-up, build.refused, build.wrong and build.gap (a fence or wall placed over air; warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   Start facts (one build.declined warn naming the plan and the reason): no zone list read (unless :ignore-zones?) is a
-  failed condition {:reason :no-zones}, also later in the call (a plan that goes bad later ends impossible :plan-trouble too); a plan that is missing, unreadable or has no cells to
-  build (in :part) is impossible {:reason :plan-trouble :why text}; at the start, with nothing to place, dig, fetch or
+  failed condition {:reason :no-zones}; a plan that is missing, unreadable or has no cells to
+  build (in :part) is impossible {:reason :plan-trouble :why text}, at the start and later in the call; at the start, with nothing to place, dig, fetch or
   look at, a failed condition {:reason :no-items :needs {item n}}.
   Wood: a generic wood want (jobs.build.wood: planks, logs, wooden_stairs, wooden_slabs, wooden_doors, wooden_fences,
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
@@ -493,9 +493,7 @@
 (defn ^:async step [c]
   (let [{:keys [trouble wood]} (planned c)]
     (if trouble
-      (if (= no-zones trouble)
-        (ctx/end c :condition-failed {:reason :no-zones} nil)
-        (ctx/end c :impossible {:reason :plan-trouble :why trouble} nil))
+      :continue
       (do (when (and wood (nil? (:wood (ctx/mem c)))) (ctx/update-mem! c assoc :wood wood))
           (or (await (fetch-step! c))
               (let [cells (:cells (planned c))]

@@ -303,7 +303,7 @@
   (let [{:keys [cells trouble]} (planned c)
         phase (or (:phase (ctx/mem c)) :build)]
     (cond
-      trouble (ctx/end c :condition-failed {:reason :plan-trouble :why trouble})
+      trouble :continue
       (= :exit phase) (await (exit-step! c cells))
       (= :shut phase) (await (shut-step! c))
       (= :check phase) (do (await (look/survey! c)) (finish! c cells)) ; cells behind the body are not seen until it looks

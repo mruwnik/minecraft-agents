@@ -36,7 +36,7 @@
   {:skipped {step reason}}.
 
   Ends :done after the pass, with {:mob :target :adults :babies (live census in the box) :steps {step
-  summary}}; a plan part that vanishes after the start ends condition-failed :plan-trouble. Summaries: breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
+  summary}}. Summaries: breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
   With :plan and :part the pen is that part of the plan: its :box, and :mob and :target from its :herd
@@ -215,6 +215,13 @@
                           :adults (:adults f) :babies (:babies f) :target target
                           :skipped (into {} (map (fn [[step d]] [step (:skip d)])) decisions)))))))
 
+(defn can-run?
+  "Later :plan-trouble while the plan, the part or its herd is missing."
+  [c]
+  (if-let [trouble (:trouble (pen-of c))]
+    (contract/later :plan-trouble trouble :why trouble)
+    (contract/ok :pen "the pen can be read")))
+
 (defn can-start?
   "Never :no-box without a box or a plan; later for :plan-trouble, a resting pen or nothing to do."
   [c]
@@ -293,10 +300,7 @@
   (let [{:keys [trouble] :as pen} (pen-of c0)
         c (if pen (with-pen c0 pen) c0)]
     (if trouble
-      (do (ctx/warn-once! c [(:plan (:args c)) trouble] :tend.declined
-                          {:plan (:plan (:args c)) :part (:part (:args c)) :reason trouble
-                           :text (str "tend declines plan " (:plan (:args c)) " part " (:part (:args c)) ": " trouble)})
-          (ctx/end c :condition-failed :plan-trouble {:why trouble}))
+      :continue
       (loop []
         (let [r (await (step c))]
           (case r

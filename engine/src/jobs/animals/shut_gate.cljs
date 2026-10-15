@@ -32,8 +32,7 @@
   shut-gate.gave-up and a :gate-gave-up memory entry, which keeps the trigger away from it for 10 minutes.
 
   Ends :done with the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at its start ends done at once, with no event (done?); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
-  A call whose :plan is missing or unreadable waits (:plan-trouble); one that goes bad after the start ends :condition-failed :plan-trouble with one warn
-  shut-gate.declined and {:shut 0 :left [] :declined text}.")
+  A call whose :plan is missing or unreadable waits (:plan-trouble), at the start and later.")
 
 (a/defargs args
   {:plan {:doc "id of a plan whose open gates are all shut; nil: the open planned gates of every active plan within :radius" :spec a/name? :default nil}
@@ -101,11 +100,6 @@
       (ctx/end c :done nil (assoc result :text text))
       (do (ctx/emit! c :shut-gate.stopped :warn (assoc result :text text))
           (ctx/end c :nothing-possible :left (assoc result :text text))))))
-
-(defn decline!
-  [c text]
-  (ctx/emit! c :shut-gate.declined :warn {:plan (:plan (:args c)) :text (str "shut-gate: " text)})
-  (ctx/end c :condition-failed :plan-trouble {:shut 0 :left [] :declined text}))
 
 (defn give-up!
   "Give up the gate: one warn, one memory entry the trigger reads; the entry for the left list."
@@ -182,7 +176,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(defn can-start?
+(defn can-run?
   "Later :plan-trouble while :plan is missing or unreadable."
   [c]
   (let [id (:plan (:args c))
@@ -190,6 +184,8 @@
     (if why
       (contract/later :plan-trouble (str "shut-gate waits: " why) :plan id)
       (contract/ok :plan "the plan is readable"))))
+
+(def can-start? can-run?)
 
 (defn done?
   "Ok once no watched gate is open or unread (the gates shut so far and none left as its result); before the start the
@@ -226,7 +222,7 @@
 (defn ^:async round [c]
   (let [[cells trouble] (watched-cells c)]
     (if trouble
-      (decline! c trouble)
+      :continue
       (if-let [fresh (grace! c cells)]
         (ctx/end c :condition-failed :gate-grace {:shut 0 :left [] :graced fresh})
         (loop [shut (:shut (ctx/mem c) 0) left (:left (ctx/mem c) []) skip #{}]

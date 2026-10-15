@@ -322,7 +322,7 @@
   (let [{:keys [cells trouble]} (planned c)
         phase (:phase (ctx/mem c))]
     (cond
-      trouble (ctx/end c (if (#{:no-zones :plan} (:reason trouble)) :condition-failed :impossible) (dissoc trouble :text))
+      trouble :continue
       (= :check phase) (finish! c cells)
       (= :switch phase) (await (switch-step! c cells))
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
