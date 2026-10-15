@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
+            [engine.memory :as mem]
             [engine.test-util :as tu]
             [jobs.animals.escort :as escort]
             [jobs.animals.lure-to :as lure-to]
@@ -483,4 +484,76 @@
 
 (deftest unreachable-inside-a-shut-pen-names-the-pen
   (let [c {:primitives (tu/fake {:floor tu/walk-floor :blocks ring}) :args {:mob "cow" :pos {:x 7 :y 64 :z 0}}}]
-    (is (re-find #"shut pen" (lure-to/stop-text c :unreachable)))))
+    (is (re-find #"closed pen" (lure-to/stop-text c :unreachable)))))
+
+(deftest an-ambiguous-or-empty-uuid-start-is-refused-naming-the-matches
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[uuid pat] [["ab12" #"matches 2 animals"] ["" #"empty"]]]
+          (let [s (await (scenario {:uuid uuid} {:inventory wheat
+                                                 :entities [(cow 1 3 {:uuid "ab12-1111"}) (cow 2 4 {:uuid "ab12-2222"})]} 8))]
+            (is (finished? s) (pr-str uuid))
+            (is (= :stopped (:kind (done-event s))) (pr-str (done-event s)))
+            (is (re-find pat (pr-str (done-event s))) (pr-str uuid))
+            (is (empty? (tu/walked-to (:eng s))) "no animal is led")))))))
+
+(def gate-lane
+  "A fence across the lane at x 15 (floor under it) with a shut gate at z 0."
+  (merge (tu/box 15 63 -10 15 63 10 "stone") (tu/box 15 64 -10 15 64 10 "oak_fence") {"15,64,0" "oak_fence_gate"}))
+
+(defn gate-open? [{:keys [p]}]
+  (:open (js->clj (.-properties (.blockAt p #js {:x 15 :y 64 :z 0})) :keywordize-keys true)))
+
+(defn gate-world []
+  {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)] :blocks gate-lane
+   :states {"15,64,0" {:open false :facing "east"}}})
+
+(defn ^:async tick-n [{:keys [clock eng]} n]
+  (dotimes [_ n] (swap! clock + 700) (await (core/tick! eng))))
+
+(defn watch-gate!
+  "The atom holds whether the gate was ever open after a steer; (f) is called once the gate is open and the cow is through it."
+  [{:keys [p] :as s} f]
+  (let [seen-open (atom false)
+        called (atom false)]
+    (.override (.-world p) "steer"
+               (fn [token a impl]
+                 (.then (impl token a)
+                        (fn [r]
+                          (when (gate-open? s) (reset! seen-open true))
+                          (when (and (gate-open? s) (< 17 (first (:pos (cow-of s 1)))) (not @called)) (reset! called true) (f))
+                          r))))
+    seen-open))
+
+(deftest the-gate-the-legs-opened-is-shut-after-the-lure-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup (gate-world) 50)
+              opened (watch-gate! s identity)]
+          (tu/seeing-all p)
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (tick-n s 40))
+          (is (true? @opened) "the legs opened the gate")
+          (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
+          (is (false? (gate-open? s)) "the cleanup shut the gate behind the cow and the body"))))))
+
+(deftest the-gate-the-legs-opened-is-shut-after-a-cancel-and-another-jobs-gate-stays
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (gate-world) (update :blocks assoc "-20,64,0" "oak_fence_gate") (assoc :states {"15,64,0" {:open false :facing "east"} "-20,64,0" {:open true :facing "east"}}))
+              {:keys [eng p] :as s} (h/setup world 50)
+              store (:store eng)
+              other-gate #(:open (js->clj (.-properties (.blockAt p #js {:x -20 :y 64 :z 0})) :keywordize-keys true))
+              opened (watch-gate! s #(core/cancel! eng (first (:list (core/state eng)))))]
+          (tu/seeing-all p)
+          (swap! store update :data mem/add-entry :opened {:t ((:now @store)) :data {:cell {:x -20 :y 64 :z 0} :by "other-job/1" :shut? false}} nil)
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (tick-n s 40))
+          (is (true? @opened) "the legs opened the gate")
+          (is (finished? s))
+          (is (false? (gate-open? s)) "the cleanup shut it after the cancel")
+          (is (true? (other-gate)) "another job's open gate is left")
+          (is (nil? (.-held (.self p))) "the food is put away"))))))

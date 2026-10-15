@@ -225,9 +225,8 @@
   round before the next leg. Answer :arrived, :failed (a leg did not arrive),
   :waiting (a leg's child is waiting on the world: the job yields), :catching-up (the caller waits for the animal) or
   {:problem :lost|:lead-broke|:animal-stalled}. :searching: the plan search for the next leg is still
-  going on (nothing was walked; the caller calls again), at most max-search-rounds calls in a row, then :failed.
-  :stopped: (stop? c) held after a leg, with more to walk."
-  [c slot target range gap & [stop?]]
+  going on (nothing was walked; the caller calls again), at most max-search-rounds calls in a row, then :failed."
+  [c slot target range gap]
   (let [pre (when (:catching-up (ctx/mem c)) (escort-problem c gap))]
     (cond
       (= :wait pre) :catching-up
@@ -254,5 +253,4 @@
                                             :arrived)
                         problem {:problem problem}
                         (not leg) :arrived
-                        (and stop? (stop? c)) :stopped
                         :else (recur))))))))))

@@ -36,7 +36,7 @@
   - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within :range + 3 blocks of :pos) and not in the cell of a planned gate, else the
     body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away (another carried item in hand when no slot is free); :near says whether the animal is by the spot.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
-  Every result gives :distance: the animal's, or its last sighting's when it is unseen.
+  Every ending the job concludes itself gives :distance: the animal's, or its last sighting's when it is unseen (the engine's limit ending carries no data).
   - :no-animal (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
     :unreachable (a walk gave up).
   Endings: :arrived is done; :no-food is condition-failed (the fetch's kind when it gave one); the engine's limit (the call's :spend :job-time, default
@@ -53,13 +53,12 @@
    :radius {:doc "animals within this many blocks of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
    :watch-radius {:doc "how far from the body the lured animal is looked for" :spec (a/num-in 0 nil) :default 64}
    :fetch {:doc "get the food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
-   :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place" :spec string? :default nil}
+   :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts" :spec string? :default nil}
    :include-penned? {:doc "also lure animals standing in a closed pen" :default false :spec boolean?}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (a/defargs settings
-  {::timeout-s {:default 180 :doc "Seconds from the first round (not the food fetch) before the lure gives up." :spec (a/num-in 0 nil)}
-})
+  {::timeout-s {:default 180 :doc "Seconds from the first round (not the food fetch) before the lure gives up." :spec (a/num-in 0 nil)}})
 (defn timeout-s [] (settings/get settings ::timeout-s))
 
 (def near-spot "An animal this close (flat) to :pos counts as :near." 6)
@@ -79,6 +78,27 @@
       (nil? mob) (contract/never :no-mob "lure-to needs a :mob")
       (nil? pos) (contract/never :no-destination "lure-to needs a :pos")
       :else (contract/ok :order "the order is complete"))))
+
+(defn uuid-matches
+  "The keys of the animals within :watch-radius whose key starts with the :uuid argument."
+  [c]
+  (let [{:keys [mob uuid watch-radius]} (:args c)]
+    (->> (animals/adults (:primitives c) mob watch-radius)
+         (map animals/key-of)
+         (filter #(str/starts-with? (str %) uuid))
+         distinct
+         vec)))
+
+(defn can-run?
+  "Never while the :uuid start is empty or names more than one animal in sight (checked until an animal is chosen)."
+  [c]
+  (let [uuid (:uuid (:args c))
+        matches (when (and uuid (nil? (:animal (ctx/mem c)))) (uuid-matches c))]
+    (cond
+      (nil? matches) (contract/ok :uuid "no uuid start to settle")
+      (str/blank? uuid) (contract/never :empty-uuid "the :uuid start is empty: it would match every animal")
+      (< 1 (count matches)) (contract/never :ambiguous-uuid (str "the :uuid start " (pr-str uuid) " matches " (count matches) " animals: " (str/join ", " matches)))
+      :else (contract/ok :uuid "the :uuid start names at most one animal"))))
 
 (defn time-limit "Seconds the lure may take." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (timeout-s)))
@@ -126,7 +146,7 @@
                         (str "the " mob " stopped following at " (pr-str (select-keys animal [:x :z])) ", "
                              (js/Math.round distance) " blocks from the body at " (pr-str (select-keys body [:x :z]))))
       :unreachable (if (spare/enclosed? c (atom #{}) #js {:pos (clj->js (:pos (:args c)))})
-                     (str "the spot is inside a shut pen: the lure does not open its gate")
+                     "the spot is inside a closed pen; no way in found"
                      "luring stopped: unreachable")
       (str "luring stopped: " (name reason)))))
 
@@ -208,7 +228,7 @@
   "Another adult the zone rules allow, within follow-reach of the body: it follows the food as well as the lost one."
   [c]
   (let [me (u/self-pos c)]
-    (->> (candidates c)
+    (->> (when-not (:uuid (:args c)) (candidates c))
          (filterv #(<= (u/flat-dist me (u/pos-of (.-pos %))) escort/follow-reach))
          first)))
 
