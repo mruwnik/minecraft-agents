@@ -65,13 +65,13 @@
    :takeable {:doc "leave out blocks a zone, claim or plan footprint bars this body from taking" :spec boolean? :default false}
    :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :avoid-boxes {:doc "boxes [[x1 z1] [x2 z2]] (corners inclusive, any order) of columns whose blocks do not count as found: a pen is one box, not its columns (a job expression is size-limited)" :spec (a/coll-of (a/pred "two [x z] corners" #(and (vector? %) (= 2 (count %)) (every? vector? %)))) :default nil}
-   :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}
-   :seen-ttl-s {:doc "how long a note of a block seen lasts" :spec (a/num-in 0 nil) :default 259200}
-   :entity-ttl-s {:doc "how long a note of an entity seen lasts" :spec (a/num-in 0 nil) :default 600}
-   :searched-ttl-s {:doc "how long a note of searched ground lasts" :spec (a/num-in 0 nil) :default 86400}})
+   :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}})
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up, not counting the time go-to holds for day in a shelter." :spec (a/num-in 0 nil)}
+  {::seen-ttl-s {:default 259200 :doc "Seconds a note of a block seen lasts." :spec (a/num-in 0 nil)}
+   ::entity-ttl-s {:default 600 :doc "Seconds a note of an entity seen lasts." :spec (a/num-in 0 nil)}
+   ::searched-ttl-s {:default 86400 :doc "Seconds a note of searched ground lasts." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up, not counting the time go-to holds for day in a shelter." :spec (a/num-in 0 nil)}
    ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
    ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}
@@ -268,7 +268,10 @@
   "Look round (every heading, once per spot: not again within look/near-blocks of the last look round), unless what is
   seen already makes up :count; note what was seen and the spot as searched, book the findings."
   [c names]
-  (let [{:keys [scan-radius seen-ttl-s entity-ttl-s searched-ttl-s] want :count} (:args c)
+  (let [{:keys [scan-radius] want :count} (:args c)
+        seen-ttl-s (settings/get settings ::seen-ttl-s)
+        entity-ttl-s (settings/get settings ::entity-ttl-s)
+        searched-ttl-s (settings/get settings ::searched-ttl-s)
         seen #(vec (takeable c (sense (:primitives c) names scan-radius)))
         _ (when (< (count (add-found (:found (ctx/mem c) []) (seen) want)) want)
             (when-not (await (look/survey! c :near (look/search-effort))) (look/see! c (look/search-effort))))

@@ -11,6 +11,7 @@
             [engine.memory :as mem]
             [engine.notes :as notes]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu]
@@ -173,6 +174,16 @@
           (is (some #(= [:seen "diamond_block" [45 64 3] "Fake"] ((juxt :kind :what :pos :by) %)) ns))
           (is (some #(= [:searched ["diamond_block"]] ((juxt :kind :what) %)) ns))
           (is (nil? (event-of s :search.not-found))))))))
+
+(deftest a-seen-note-lasts-the-seen-ttl-setting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings {:jobs.explore.search/seen-ttl-s 100}
+                 (fn ^:async short-ttl []
+                   (let [s (await (search! {:target "diamond_block"} {:blocks diamond}))
+                         n (first (filter #(= :seen (:kind %)) (file-notes s)))]
+                     (is (= 100000 (- (:until n) (:t n))))))))))))
 
 (deftest the-whole-search-is-one-round
   (async done
