@@ -29,14 +29,12 @@
     (when (seq gone) (ctx/forget-where! c :stair-way #(and (= dim (:dim %)) (contains? gone (:floors %)))))
     (ctx/remember! c :stair-way {:dim dim :floors floors} way-policy)))
 
-(def tool-failed-policy {:cap 16 :ttl (* 60 60 1000)})
-
 (defn tool-failed?
-  "Whether a fetch of a tool for block failed and is not to be tried again yet (memory :stair-tool-failed)."
+  "Whether a fetch of a tool for block failed in this call (job memory), so it is dug bare-handed and not asked for again."
   [c block]
-  (boolean (some #(and (= block (:block (:data %))) (< (ctx/now c) (:until (:data %)))) (ctx/entries c :stair-tool-failed))))
+  (contains? (:tool-failed (ctx/mem c)) block))
 
 (defn tool-failed!
-  "Remember the failed fetch of a tool for block for minutes."
-  [c block minutes]
-  (ctx/remember! c :stair-tool-failed {:block block :until (+ (ctx/now c) (* 60000 minutes))} tool-failed-policy))
+  "Remember the failed fetch of a tool for block for the rest of the call."
+  [c block]
+  (ctx/update-mem! c update :tool-failed (fnil conj #{}) block))

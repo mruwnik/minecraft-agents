@@ -476,7 +476,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:entities [cow]})]
           (refuse-while-a-mob-stands-in! p 5)
-          (core/submit! eng (list job {:height 3 :mob-wait-ms 0}) {})
+          (core/submit! eng (list job {:height 3 :mob-waits 0}) {})
           (await (ticks s eng 20))
           (is (finished? eng))
           (is (empty? (calls p "jumpPlace")))
