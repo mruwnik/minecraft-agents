@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [clojure.string :as str]
             [jobs.forestry.fell-tree :as fell-tree]
+            [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.need :as need]
             [jobs.lib.look :as look]
@@ -22,7 +23,8 @@
   Before the first tree it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
   with :count, :pos, :reason (:no-sapling or :not-planted) and :text. Ends :done (the wood is the goal), with {:replant-owed n} when
-  debts stay owed. With :count, the three phases repeat on the next tree until that many logs are carried.
+  debts stay owed. With :count, the three phases repeat on the next tree until that many logs are carried; done? holds
+  at once when they are carried already (the job ends :done :already).
   No tree in range before the first is felled is a condition (:no-tree, after the condition's look round): a listed job waits, a called one ends condition-failed :no-tree. Endings otherwise are the felling's, passed up with :got (the logs carried) and :replant-owed in the data: condition-failed
   :no-tree when no tree is left after the first (with :count); a fell that ends for want of an axe or pillar blocks (:need, :tool, :free-slots)
   or hunger, a limit, or nothing-possible :tree-unreachable / :tree-blocked (data :why, :columns); nothing-possible
@@ -166,6 +168,7 @@
                                       (update :children dissoc :fell :collect :plant)))
               :again)
           (= :plant phase) (do (warn-owed! c)
+                               (ctx/update-mem! c assoc :phase :done)
                                (ctx/end c :done nil (owed-data c)))
           :else (let [next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil nil))))]
                   (ctx/update-mem! c assoc :phase next-phase)
@@ -203,12 +206,17 @@
 (def can-start? (cond/and sheltered no-tree-to-fell))
 
 (defn done?
-  "Counts only: the plant phase follows the felling, so the round ends the call. The logs got this call."
+  "Ok once the last tree is planted, or (with :count) the logs are carried and no tree is under way; else later with the
+  logs got this call."
   [c]
-  (let [got (max 0 (- (logs-carried c) (:logs-before (ctx/mem c) (logs-carried c))))
-        want (:count (:args c))]
-    (apply contract/later :harvesting (str "harvest-wood: " got " logs, the plant phase follows") :units :logs :done got
-           :result {:logs got} (when want [:left (max 0 (- want got))]))))
+  (let [m (ctx/mem c)
+        got (max 0 (- (logs-carried c) (:logs-before m (logs-carried c))))
+        want (:count (:args c))
+        idle? (and (= :fell (:phase m :fell)) (nil? (:tree m)) (not (checks/child-under-way? c)))
+        data (concat [:units :logs :done got :result {:logs got}] (when want [:left (max 0 (- want (logs-carried c)))]))]
+    (if (or (= :done (:phase m)) (and want idle? (not (more-trees? c))))
+      (apply contract/ok :harvested (str "harvest-wood: " got " logs got") data)
+      (apply contract/later :harvesting (str "harvest-wood: " got " logs, the plant phase follows") data))))
 
 (defn ^:async quote-of [c]
   (let [e (await (fell-tree/quote-of (assoc c :args (fell-args (:args c)))))

@@ -198,7 +198,7 @@
       (fn ^:async t []
         (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9))) plant {:box pt/field-box} 100))]
           (is (= {:kind :done :cause nil} (kc e)))
-          (is (= {:planted 9 :skipped []} (:data e))))
+          (is (= {:planted 9 :skipped []} (dissoc (:data e) :text))))
         (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}}
                (kcm (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9))) plant {:box (pt/box 8 8 9 9)} 20)))))
         (is (= {:kind :condition-failed :cause {:reason :need :any-of ["beetroot_seeds" "carrot" "potato" "wheat_seeds"] :count 9}}
@@ -293,8 +293,8 @@
                (kcm (await (ending-of (ht/start {:world ht/zoned-world :shared (ew/of-data {} {} nil)}) harvest {:radius 6} 20)))))
         (is (= {:kind :condition-failed :cause {:reason :refused}}
                (kcm (await (ending-of (ht/start {:world ht/zoned-world :shared (ew/of-data {} {} [(ht/zone-over-crop "Miles")])}) harvest {:radius 6} 20)))))
-        (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}}
-               (kcm (await (ending-of (ht/start {:world {:blocks (ht/field "wheat" 3 [2 3] [2]) :ages (ht/ages 3 [2 3] [2])}}) harvest {} 20)))))))))
+        (is (= {:kind :done :cause :already}
+               (kc (await (ending-of (ht/start {:world {:blocks (ht/field "wheat" 3 [2 3] [2]) :ages (ht/ages 3 [2 3] [2])}}) harvest {} 20)))))))))
 
 (deftest harvest-partial-run-is-done-only-when-it-meets-least
   (async done

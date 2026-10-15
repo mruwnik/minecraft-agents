@@ -118,10 +118,13 @@
                           (checks/refusing :meal "bone meal carried or fetchable" no-meal-source)))
 
 (defn done?
-  "Ok once :max uses are made; else later with the uses made and the targets left within :max."
+  "Ok once :max uses are made, or a look round showed nothing left to fertilize and the uses meet :least; else later
+  with the uses made and the targets left within :max."
   [c]
   (let [used (:used (ctx/mem c) 0)]
-    (if (>= used (:max (:args c)))
+    (if (or (>= used (:max (:args c)))
+            (and (look/surveyed? c) (empty? (raw-targets c))
+                 (or (zero? used) (common/enough? c used used))))
       (contract/ok :fertilized (str "fertilized with " used " bone meal") :units :cells :done used :left 0 :result {:used used})
       (contract/later :fertilizing (str "fertilize: " used " bone meal used") :units :cells :done used
                       :left (min (count (targets c)) (max 0 (- (:max (:args c)) used))) :result {:used used}))))

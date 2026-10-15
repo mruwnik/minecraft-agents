@@ -221,12 +221,26 @@
 
 (def can-start? (cond/and bad-args work))
 
+(declare result-of)
+
 (defn done?
-  "Counts only: no bare cell is not a planted field (cells may be unseen or untilled), and the round names which. The cells
-  sown this call and the bare cells left."
+  "Ok once no cell of the field is bare (skipped and refused ones included), no cell needs tilling, a look round has
+  been made and the cells sown meet :least; else later with the cells sown and the bare cells left."
   [c]
-  (contract/later :planting "plant sows the field"
-                  :units :cells :done (:planted (ctx/mem c) 0) :left (count (unsown c))))
+  (let [{:keys [box plan]} (:args c)
+        m (ctx/mem c)
+        field (when plan (planned c))
+        bare (count (unsown c))
+        sown (:planted m 0)
+        waiting (cond
+                  (:trouble field) :plan-trouble
+                  (pos? bare) :planting
+                  (and box (seq (untilled-cells (:primitives c) box))) :untilled
+                  (and box (not (:started m)) (not (look/surveyed? c :cell))) :looking
+                  (and (pos? sown) (not (common/enough? c sown sown))) :short)]
+    (if waiting
+      (contract/later waiting (str "plant: " sown " sown, " bare " bare") :units :cells :done sown :left bare :result (result-of c nil))
+      (contract/ok :planted (str "plant done: " sown " sown, no bare cell left") :units :cells :done sown :left 0 :result (result-of c nil)))))
 
 (defn quote-of [c]
   (let [n (count (unsown c))

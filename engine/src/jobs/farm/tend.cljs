@@ -341,12 +341,26 @@
 
 (declare out-of)
 
-(defn done?
-  "Counts only (the round ends the call with its data): the steps that changed something, the steps not yet decided."
+(defn in-order?
+  "Whether the part in c needs no step and nothing else: part-status says only :nothing-to-do (no short seed, refused or
+  covered cells, no look owed)."
   [c]
-  (let [m (ctx/mem c)]
-    (contract/later :tending "farm tend: the round ends the call with its report" :units :steps
-                    :done (count (filter #(apply worked? %) (step-summaries m))) :left (count (:todo m)) :result (or (out-of c) {}))))
+  (let [[kind _ data] (part-status c)]
+    (and (= :later kind) (= {:reason :nothing-to-do} (dissoc data :text)))))
+
+(defn done?
+  "Ok once a pass changed something and every part is in order (no step would run); else later with the steps that
+  changed something and the steps not yet decided. A field in order before the first pass stays a failed condition
+  (nothing-to-do names why: zones, no seed)."
+  [c]
+  (let [m (ctx/mem c)
+        worked (count (filter #(apply worked? %) (step-summaries m)))
+        data [:units :steps :done worked :left (count (:todo m)) :result (or (out-of c) {})]]
+    (if (and (not (:limit m))
+             (pos? worked)
+             (every? #(in-order? (for-part c %)) (parts-of c)))
+      (apply contract/ok :in-order "farm tend: the field is in order" data)
+      (apply contract/later :tending "farm tend: the field is being tended" data))))
 
 (defn quote-of
   "A guess: a second and a half per cell of the field."

@@ -70,7 +70,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p out]} (await (fell tall {:radius 10} 200))]
-          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} out))
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} (dissoc out :text)))
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
           (is (pos? (count (h/calls p "jumpPlace"))) "a pillar was built")
           (is (= [] (ledger/open-entries (mem/view (:store eng)))) "ledger empty")
@@ -98,7 +98,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p out]} (await (fell tall-9 {:radius 10 :fetch false} 300))]
-          (is (= {:base {:x 6 :y 64 :z 0} :logs 9 :axe :skipped-fetch-off} out))
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 9 :axe :skipped-fetch-off} (dissoc out :text)))
           (is (= (set (range 64 73)) (set (dug-ys p))) "every log dug")
           (is (pos? (count (h/calls p "jumpPlace"))) "a pillar was built")
           (is (= [] (ledger/open-entries (mem/view (:store eng)))) "ledger empty")
@@ -231,7 +231,7 @@
       (fn ^:async t []
         (let [s (await (fell (chest-world [{:name "dirt" :count 20}]) {:radius 10} 300))
               {:keys [p out]} s]
-          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} out))
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} (dissoc out :text)))
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
           (is (= 20 (dirt-in-chest s)) "no dirt fetched while logs are carried")
           (is (= [] (log-pillar-cells p)) "no pillar block left"))))))
@@ -242,7 +242,7 @@
       (fn ^:async t []
         (let [s (await (fell (assoc (chest-world [{:name "dirt" :count 20}]) :lose-logs? true) {:radius 10} 300))
               {:keys [p out]} s]
-          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} out))
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} (dissoc out :text)))
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
           (is (< 1 (- 20 (dirt-in-chest s))) "the chest gave the pillar's height, not one block")
           (is (= [] (pillar-cells p)) "no pillar block left"))))))
@@ -317,7 +317,7 @@
                          (fake/set-block! p [6 64 0] "oak_log"))
                        (await (impl token args))))
           (let [out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))]
-            (is (= {:base {:x 6 :y 64 :z 0} :logs 3 :axe :skipped-small-tree} out) "the stump log is the base")
+            (is (= {:base {:x 6 :y 64 :z 0} :logs 3 :axe :skipped-small-tree} (dissoc out :text)) "the stump log is the base")
             (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts (:eng s))) "the replant is on the ground, not on the log above it")))))))
 
 (deftest a-body-left-up-in-the-leaves-after-the-felling-comes-down-to-the-ground

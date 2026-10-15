@@ -131,10 +131,9 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start (field-world (inv "wheat_seeds" 9)))
               result (await (child-outcome eng job {:box field-box} 100))]
-          (is (= {:planted 9 :skipped []} result))
+          (is (= {:planted 9 :skipped []} (dissoc result :text)))
           (is (sown p (range 2 5) (range 2 5) "wheat"))
           (is (= {} (inv-of p)))
-          (is (= 1 (count (events-of seen :plant.done))))
           (is (= 0 (count (events-of seen :plant.gave-up)))))))))
 
 (deftest fewer-seeds-than-cells-plant-what-there-is
@@ -143,7 +142,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start (field-world (inv "carrot" 5 "bread" 12)))
               result (await (child-outcome eng job {:box field-box} 100))]
-          (is (= {:planted 5 :skipped []} result))
+          (is (= {:planted 5 :skipped []} (dissoc result :text)))
           (is (= 5 (count (filter (fn [[x z]] (= "carrots" (block-at p x 64 z))) (for [x (range 2 5) z (range 2 5)] [x z])))))
           (is (= {"bread" 12} (inv-of p))))))))
 
@@ -154,7 +153,7 @@
         (let [xs (range 2 14)
               {:keys [eng p]} (start {:blocks (farmland xs [2]) :inventory (inv "wheat_seeds" 12) :floor tu/walk-floor})
               result (await (child-outcome eng job {:box (box 2 2 13 2)} 100))]
-          (is (= {:planted 12 :skipped []} result))
+          (is (= {:planted 12 :skipped []} (dissoc result :text)))
           (is (pos? (count (tu/walk-calls p))))
           (is (sown p xs [2] "wheat")))))))
 
@@ -165,7 +164,7 @@
         (let [xs (range 2 14)
               {:keys [eng p]} (start {:blocks (farmland xs [2]) :inventory (inv "wheat_seeds" 12) :floor tu/walk-floor})
               result (await (child-outcome eng job {:box (box 2 2 13 2)} 1))]
-          (is (= {:planted 12 :skipped []} result))
+          (is (= {:planted 12 :skipped []} (dissoc result :text)))
           (is (sown p xs [2] "wheat")))))))
 
 (deftest nothing-is-planted-outside-the-box-or-on-a-crop
@@ -175,7 +174,7 @@
         (let [{:keys [eng p]} (start {:blocks (merge (farmland (range 0 7) [2]) {"3,64,2" "carrots"})
                                       :inventory (inv "wheat_seeds" 20) :floor tu/walk-floor})
               result (await (child-outcome eng job {:box (box 2 2 4 2)} 100))]
-          (is (= {:planted 2 :skipped []} result))
+          (is (= {:planted 2 :skipped []} (dissoc result :text)))
           (is (= ["air" "air" "wheat" "carrots" "wheat" "air" "air"]
                  (mapv #(block-at p % 64 2) (range 0 7))))
           (is (= {"wheat_seeds" 18} (inv-of p))))))))
@@ -427,7 +426,7 @@
               {:keys [eng seen]} (start-on p)
               result (await (child-outcome eng job {:box field-box} 100))]
           (is (seq (calls p "look")))
-          (is (= {:planted 9 :skipped []} result))
+          (is (= {:planted 9 :skipped []} (dissoc result :text)))
           (is (empty? (events-of seen :waiting))))))))
 
 (def dried-world

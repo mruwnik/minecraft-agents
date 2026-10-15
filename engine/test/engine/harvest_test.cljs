@@ -263,7 +263,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:world {:blocks (field "wheat" 3 [2 3] [2]) :ages (ages 3 [2 3] [2])}})]
           (core/submit! eng (list job {}) {})
-          (is (nil? (core/tick! eng)))
+          (await (core/tick! eng))
+          (is (empty? (:list (core/state eng))) "ends :done :already")
           (is (zero? (count (.-calls (.-world p))))))))))
 
 (defn look-then-see

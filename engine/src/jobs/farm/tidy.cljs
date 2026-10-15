@@ -327,14 +327,26 @@
 (def can-start? plan-ok)
 
 (defn done?
-  "Counts only: the round ends the call, reporting the kept and wrong blocks it found. The strays dug and still in the
-  plan's cells."
+  "Ok once no stray is left in the plan's cells, none is refused or wrong (finish! warns of them), no sweep is owed
+  and the cells were seen; else later with the strays dug and left."
   [c]
   (let [{:keys [answer trouble]} (planned c)
-        dug (:dug (ctx/mem c) 0)]
-    (contract/later :tidying (str "tidy: " dug " strays dug, the round ends the call") :units :strays :done dug
-                    :left (if trouble 0 (count (:dig (strays (work-cells (:cells answer) (:part (:args c))) #(tr/world-block (:primitives c) %)))))
-                    :result {:dug dug :collected (:collected (ctx/mem c) 0)})))
+        m (ctx/mem c)
+        dug (:dug m 0)
+        cells (when-not trouble (work-cells (:cells answer) (:part (:args c))))
+        found (when cells (strays cells #(tr/world-block (:primitives c) %)))
+        left (count (:dig found))
+        data [:units :strays :done dug :left left :result {:dug dug :collected (:collected m 0) :kept (:kept found) :wrong (:wrong found) :refused (vec (:refused m))}]
+        waiting (cond
+                  trouble :plan-trouble
+                  (pos? left) :tidying
+                  (or (seq (:wrong found)) (seq (:refused m))) :reporting
+                  (:collect m) :collecting
+                  (checks/child-under-way? c) :wrapping-up
+                  (and (not (look/surveyed? c)) (cells-unseen? c cells)) :looking)]
+    (if waiting
+      (apply contract/later waiting (str "tidy: " dug " strays dug, " left " left") data)
+      (apply contract/ok :tidied (str "tidy: no stray left, " dug " dug") data))))
 
 (defn quote-of [_c]
   {:uses {:job-time [1 30 (settings/get settings ::job-time-s)]}

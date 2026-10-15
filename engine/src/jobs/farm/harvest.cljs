@@ -41,7 +41,8 @@
   afterwards, are named in :bare and a harvest.bare warn. Done when it cut or replanted some and the number meets :least
   (cells, default 1; :all wants every ripe crop it found); with none cut and crops given up on, nothing-possible
   :gave-up; some cut but fewer than :least with nothing left, nothing-possible :partial; none, condition-failed
-  :nothing-to-do. done? counts the cells cut and the ripe crops left.")
+  :nothing-to-do. done? holds once no ripe crop, owed seed, sweep or given-up cell is left (and :least is met): a
+  field with nothing ripe at the start ends :done :already.")
 
 (a/defargs args
   {:radius {:doc "how far around the centre to harvest, in blocks" :spec (a/num-in 0 nil) :default 12}
@@ -264,13 +265,33 @@
 
 (def can-start? (checks/refusing :work "something to harvest" problem))
 
+(declare lost-cells)
+
 (defn done?
-  "Counts only (the round ends the call with its data): the cells cut this call and the ripe crops left."
+  "Ok once nothing ripe is left to cut, no seed is owed, no sweep is owed, no cell was given up on and a look round has
+  been made, and the cells worked meet :least; the cells cut this call and the ripe crops left."
   [c]
-  (let [c (with-field c (planned c))]
-    (let [m (ctx/mem c)]
-      (contract/later :harvesting (str "harvest: cut " (:cut m 0)) :units :cells :done (:cut m 0)
-                      :left (count (ripe-of c (:skipped m))) :result {:cut (:cut m 0) :replanted (:replanted m 0)}))))
+  (let [field (planned c)
+        c (with-field c field)
+        m (ctx/mem c)
+        ripe (count (ripe-raw c nil))
+        cut (:cut m 0)
+        worked (max cut (:replanted m 0))
+        lost (lost-cells (:primitives c) (:planted m))
+        data [:units :cells :done cut :left ripe :result {:cut cut :replanted (:replanted m 0) :bare (vec (distinct (concat (:bare m) (map :pos (:replant m)) lost))) :lost lost :gave-up (gave-up? c)}]
+        waiting (cond
+                  (:trouble field) :plan-trouble
+                  (blind? c) :looking
+                  (pos? ripe) :ripe
+                  (or (seq (:replant m)) (seq (sowable c))) :replanting
+                  (:collect m) :collecting
+                  (or (seq (:bare m)) (seq lost)) :bare
+                  (not (or (:plan-cells c) (crop-seen? c))) :no-crop
+                  (checks/child-under-way? c) :wrapping-up
+                  (and (pos? worked) (not (common/enough? c worked worked))) :short)]
+    (if waiting
+      (apply contract/later waiting (str "harvest: cut " cut ", " ripe " ripe left") data)
+      (apply contract/ok :harvested (str "harvest done: cut " cut ", no ripe crop left") data))))
 
 (defn quote-of [c]
   (let [c (with-field c (planned c))

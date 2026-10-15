@@ -459,11 +459,29 @@
 (def can-start? not-ready)
 
 (defn done?
-  "Counts only (a standing job): the trees felled and planted this call."
+  "Ok once the forest is in order: no tree to collect, fell or replant, no cell blocked or left, the field seen and no
+  child under way; else later with the trees felled and planted this call."
   [c]
-  (let [m (ctx/mem c)]
-    (contract/later :maintaining (str "forest: felled " (:felled m 0) ", planted " (:planted m 0)) :units :trees
-                    :done (+ (:felled m 0) (:planted m 0)) :result {:felled (:felled m 0) :planted (:planted m 0)})))
+  (let [m (ctx/mem c)
+        field (planned c)
+        data [:units :trees :done (+ (:felled m 0) (:planted m 0)) :result {:felled (:felled m 0) :planted (:planted m 0) :left (vec (sort-by (juxt :x :y :z) (left-cells c))) :bare []}]
+        read #(classes-of c (:trees field))
+        classes (when-not (:trouble field)
+                  (if (or (:begun m) (look/unseen? (:primitives c) (field-cells field)))
+                    (read)
+                    (check-cache/cached c :classes read)))
+        waiting (cond
+                  (:trouble field) :plan-trouble
+                  (and (not (:begun m)) (look/unseen? (:primitives c) (field-cells field))) :looking
+                  (or (:collect m) (:cut m)) :working
+                  (seq (ripe-cells c classes)) :ripe
+                  (seq (plantable c (owed-cells c classes))) :planting
+                  (blocked-reason c classes) :blocked
+                  (seq (left-cells c)) :left
+                  (checks/child-under-way? c) :wrapping-up)]
+    (if waiting
+      (apply contract/later waiting (str "forest: felled " (:felled m 0) ", planted " (:planted m 0)) data)
+      (apply contract/ok :in-order "forest: no tree to fell or plant" data))))
 
 (defn quote-of [_c]
   {:uses {:job-time [1 60 (settings/get settings ::job-time-s)]}})

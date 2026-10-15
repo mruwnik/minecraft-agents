@@ -255,11 +255,22 @@
               :walked))))))
 
 (defn done?
-  "Never done before the sweep has run its course: a drop may still be found."
+  "Ok once no wanted item lies in sight within :radius of the anchor and none was left unseen, the :search (when one is
+  owed) is over and the sweep took something or skipped nothing; else later."
   [c]
-  (let [n (:collected (ctx/mem c) 0)]
-    (contract/later :collecting (str "collect-drops: " n " collected, the sweep goes on") :units :items :done n
-                    :result {:collected n})))
+  (let [m (ctx/mem c)
+        n (:collected m 0)
+        anchor (or (:anchor m) (:near (:args c)) (u/self-pos c))
+        in-sight (count (candidates c anchor))
+        waiting (cond
+                  (pos? in-sight) :collecting
+                  (seq (:left m)) :left
+                  (seq (remove (set (:skipped m)) (:ids (:args c)))) :ids-unseen
+                  (and (pos? (:search (:args c))) (< (wanted-count c) (:want (:args c)))) :searching
+                  (and (zero? n) (seq (:skipped m))) :skipped)]
+    (if waiting
+      (contract/later waiting (str "collect-drops: " n " collected, " in-sight " in sight") :units :items :done n :left in-sight :result {:collected n})
+      (contract/ok :collected (str "collect-drops: " n " collected, no drop in sight") :units :items :done n :left 0 :result {:collected n}))))
 
 (defn quote-of
   "What is in sight within :radius of the anchor: yields by name, time to walk to each (unbounded when a :search or a :dig may go on)."

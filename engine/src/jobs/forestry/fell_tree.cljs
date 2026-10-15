@@ -413,11 +413,19 @@
 (def can-start? (cond/and sheltered no-tree))
 
 (defn done?
-  "Always :later: the round ends the call once the tree is down and its drops are judged."
+  "Ok once the chosen tree is down: logs were dug, none of its column is left and the body is off the canopy, no child
+  under way; else later with the logs dug."
   [c]
-  (let [m (ctx/mem c)]
-    (contract/later :felling (str "fell-tree: " (:dug m 0) " logs dug") :units :trees :done 0 :left 1
-                    :result {:base (:base m) :logs (:dug m 0)})))
+  (let [m (ctx/mem c)
+        dug (:dug m 0)
+        data [:units :trees :done (if (pos? dug) 1 0) :left (if (pos? dug) 0 1) :result (tree-result c)]
+        down? (and (:column m) (pos? dug) (not (:pillar m))
+                   (empty? (tree-logs c (:radius (:args c))))
+                   (not (on-canopy? c))
+                   (not (checks/child-under-way? c)))]
+    (if down?
+      (apply contract/ok :felled (str "fell-tree: the tree is down, " dug " logs dug") data)
+      (apply contract/later :felling (str "fell-tree: " dug " logs dug") data))))
 
 (defn ^:async quote-of
   "The walk to the tree's base as go-to quotes it, then 3 s and 1.5 s a log."

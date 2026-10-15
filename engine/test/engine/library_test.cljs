@@ -360,7 +360,7 @@
                                                      :unreachable ["2,64,0"]}))
                                        'jobs.forestry.collect-drops {:radius 10} 8)))
               "the unreachable stick is not counted but booked left")
-          (is (= {:status :done :collected 0}
+          (is (= {:status :done :collected 0 :already? true :text "collect-drops: 0 collected, no drop in sight"}
                  (await (child-outcome (:eng (setup {})) 'jobs.forestry.collect-drops {:radius 10} 3)))))))))
 
 (deftest collect-drops-counts-the-items-that-entered-the-inventory-not-the-entities

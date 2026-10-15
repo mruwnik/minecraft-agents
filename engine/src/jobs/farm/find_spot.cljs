@@ -181,11 +181,15 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn done?
-  "An act with no goal state: :later, the round ends the search (and the walk) with the spots it found."
+  "Ok once spots are found (and, with :walk, the body stands at the best one); else later."
   [c]
-  (let [spots (:spots (ctx/mem c))]
-    (contract/later :searching (str "find-spot: " (count spots) " spots found") :units :spots :done 0 :left 1
-                    :result (if spots {:spot (:pos (first spots)) :spots spots} {}))))
+  (let [{:keys [spots walked]} (ctx/mem c)
+        found (boolean (and (seq spots) (or (not (:walk (:args c))) walked)))
+        data [:units :spots :done (count spots) :left (if found 0 1)
+              :result (if (seq spots) {:spot (:pos (first spots)) :spots spots :walked (boolean walked)} {})]]
+    (if found
+      (apply contract/ok :found (str "find-spot: " (count spots) " spots found") data)
+      (apply contract/later :searching (str "find-spot: " (count spots) " spots found") data))))
 
 (defn quote-of [c]
   (let [{:keys [range walk]} (merge (into {} (map (fn [[k v]] [k (:default v)])) args) (:args c))]
@@ -249,7 +253,8 @@
           (case (await (common/walk! c (update pos :y inc) 2 {:zone-tolls true}))
             :continue :continue
             :blocked (ctx/end c :nothing-possible :unreachable (assoc result :walked false :reason :unreachable))
-            (ctx/end c :done nil (assoc result :walked true))))))))
+            (do (ctx/update-mem! c assoc :walked true)
+                (ctx/end c :done nil (assoc result :walked true)))))))))
 
 (defn ^:async round
   "The whole attempt: scan slice after slice, then the walk; :continue only while the walk waits on the world."

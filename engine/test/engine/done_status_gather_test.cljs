@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.contract :as contract]
             [engine.expr :as expr]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -147,3 +148,106 @@
     :done [:ok :stripped]
     :restore [:later :stripping]
     :strip [:later :stripping]))
+
+(defn field-of
+  "Farmland at y 63 and a wheat crop of age over the xs of z 0."
+  [age xs]
+  {:blocks (into {} (mapcat (fn [x] [[(str x ",63,0") "farmland"] [(str x ",64,0") "wheat"]]) xs))
+   :ages (into {} (map (fn [x] [(str x ",64,0") age])) xs)})
+
+(def here {:x 0 :y 64 :z 0})
+
+(deftest harvest-is-done-when-nothing-ripe-is-left-and-nothing-is-owed
+  (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.harvest world {:radius 6} m)))
+    (field-of 7 [2 3]) {} [:later :ripe]
+    (field-of 3 [2 3]) {} [:ok :harvested]
+    (field-of 3 [2 3]) {:cut 2 :replanted 2} [:ok :harvested]
+    (field-of 3 [2 3]) {:collect true} [:later :collecting]
+    (field-of 3 [2 3]) {:replant [{:pos {:x 2 :y 64 :z 0} :seed "wheat_seeds"}]} [:later :replanting]
+    (field-of 3 [2 3]) {:bare [{:x 2 :y 64 :z 0}]} [:later :bare]
+    (field-of 3 [2 3]) {:children {:collect {}}} [:later :wrapping-up]
+    {} {} [:later :looking]))
+
+(def plant-box {:min {:x 0 :y 63 :z 0} :max {:x 1 :y 63 :z 0}})
+
+(deftest plant-is-done-when-no-cell-is-bare-and-the-field-was-seen
+  (are [blocks m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.plant {:blocks blocks} {:box plant-box} m)))
+    {"0,63,0" "farmland" "1,63,0" "farmland"} {} [:later :planting]
+    {"0,63,0" "farmland" "1,63,0" "farmland" "0,64,0" "wheat" "1,64,0" "wheat"} {:looked here} [:ok :planted]
+    {"0,63,0" "farmland" "1,63,0" "farmland" "0,64,0" "wheat" "1,64,0" "wheat"} {:started true :planted 2} [:ok :planted]
+    {"0,63,0" "farmland" "1,63,0" "farmland" "0,64,0" "wheat" "1,64,0" "wheat"} {} [:later :looking]
+    {"0,63,0" "farmland" "1,63,0" "dirt" "0,64,0" "wheat"} {:looked here} [:later :untilled]))
+
+(deftest fertilize-is-also-done-when-a-look-found-nothing-to-fertilize
+  (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.fertilize world {:max 3} m)))
+    (field-of 7 [2]) {:looked here} [:ok :fertilized]
+    (field-of 3 [2]) {:looked here} [:later :fertilizing]
+    (field-of 7 [2]) {} [:later :fertilizing]))
+
+(deftest find-spot-is-done-when-spots-are-found-and-the-walk-is-made
+  (let [spots [{:pos {:x 4 :y 64 :z 4} :score 90}]]
+    (are [args m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.find-spot {} args m)))
+      {} {} [:later :searching]
+      {} {:spots spots} [:ok :found]
+      {:walk true} {:spots spots} [:later :searching]
+      {:walk true} {:spots spots :walked true} [:ok :found])))
+
+(def tidy-plan {:id "p" :parts [{:id "a" :cells [[0 65 0]] :want :clear}]})
+
+(deftest farm-tidy-is-done-when-no-stray-is-left
+  (are [blocks m reason] (= reason (tu/kind-reason (done-in 'jobs.farm.tidy {:blocks blocks} {:plan "p"} m {"p" tidy-plan})))
+    {"0,65,0" "dirt"} {:looked here} [:later :tidying]
+    {} {:looked here} [:ok :tidied]
+    {} {:looked here :collect true} [:later :collecting]
+    {} {:looked here :refused [{:pos {:x 0 :y 65 :z 0}}]} [:later :reporting]))
+
+(deftest farm-tend-is-done-when-every-part-is-in-order
+  (let [box {:min {:x 0 :y 63 :z 0} :max {:x 1 :y 64 :z 0}}]
+    (are [world m reason] (= reason (tu/kind-reason (done-in 'jobs.farm.tend world {:box box} m {})))
+      (field-of 3 [0 1]) {:results {"*" {:steps {:harvest {:cut 1}}}}} [:ok :in-order]
+      (field-of 3 [0 1]) {} [:later :tending]
+      (field-of 7 [0 1]) {} [:later :tending]
+      (field-of 3 [0 1]) {:todo [:till]} [:later :tending]
+      (field-of 3 [0 1]) {:limit {:reason :x}} [:later :tending])))
+
+(def tree-at {:column {:x 5 :z 5} :base {:x 5 :y 64 :z 5}})
+
+(deftest fell-tree-is-done-when-its-column-is-cut-and-the-body-is-down
+  (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.forestry.fell-tree world {} (merge tree-at m))))
+    {} {:dug 3} [:ok :felled]
+    {} {:dug 0} [:later :felling]
+    {} {:dug 3 :pillar true} [:later :felling]
+    {} {:dug 3 :children {:down {}}} [:later :felling]
+    {:blocks {"5,64,5" "oak_log" "5,65,5" "oak_log"}} {:dug 1} [:later :felling])
+  (is (= [:later :felling] (tu/kind-reason (done-of 'jobs.forestry.fell-tree {} {} {:dug 3})))))
+
+(def logs-2 {:inventory [{:name "oak_log" :count 2}]})
+
+(deftest harvest-wood-is-done-when-the-planting-is-over-or-the-count-is-carried
+  (are [world args m reason] (= reason (tu/kind-reason (done-of 'jobs.forestry.harvest-wood world args m)))
+    logs-2 {:count 2} {} [:ok :harvested]
+    logs-2 {:count 3} {} [:later :harvesting]
+    logs-2 {:count 2} {:phase :collect :tree {:x 1 :y 64 :z 1}} [:later :harvesting]
+    logs-2 {:count 2} {:children {:fell {}}} [:later :harvesting]
+    logs-2 {} {} [:later :harvesting]
+    logs-2 {} {:phase :done} [:ok :harvested]))
+
+(deftest forestry-maintain-is-done-when-the-forest-is-in-order
+  (are [blocks inv m reason] (= reason (tu/kind-reason (done-in 'jobs.forestry.maintain {:blocks blocks :inventory inv} {:plan "forest"} m {"forest" oak-plan})))
+    {"3,63,0" "dirt" "3,64,0" "oak_sapling"} [] {:begun true} [:ok :in-order]
+    {"3,63,0" "dirt" "3,64,0" "oak_sapling"} [] {:begun true :collect ["oak"]} [:later :working]
+    {"3,63,0" "dirt"} [] {:begun true} [:later :blocked]
+    {"3,63,0" "dirt"} [{:name "oak_sapling" :count 1}] {:begun true} [:later :planting]))
+
+(deftest collect-drops-is-done-when-no-wanted-drop-is-in-sight
+  (are [args m reason] (= reason (tu/kind-reason (done-of 'jobs.forestry.collect-drops {} args m)))
+    {} {} [:ok :collected]
+    {} {:collected 2} [:ok :collected]
+    {:search 4 :want 3} {:collected 1} [:later :searching]
+    {} {:collected 0 :skipped [7]} [:later :skipped]
+    {} {:left [7]} [:later :left]
+    {:ids [7]} {} [:later :ids-unseen]
+    {:ids [7]} {:collected 1 :skipped [7]} [:ok :collected])
+  (let [c (ctx-of 'jobs.forestry.collect-drops {} {} {})]
+    (swap! (fake/state (:primitives c)) fake/spawn [1 64 1] "apple" 1)
+    (is (= [:later :collecting] (tu/kind-reason ((:done? (get registry/jobs 'jobs.forestry.collect-drops)) c))))))

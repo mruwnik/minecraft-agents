@@ -64,7 +64,7 @@
       (fn ^:async t []
         (let [{:keys [end]} (await (fell-ending ft/tall 'jobs.forestry.fell-tree {:radius 10} 200))]
           (is (= :done (:kind end)))
-          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} (:data end))))
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} (dissoc (:data end) :text))))
         (let [{:keys [end]} (await (fell-ending {:blocks {}} 'jobs.forestry.fell-tree {:radius 10} 40))]
           (is (= {:kind :condition-failed :cause :no-tree} (kc end)))
           (is (= 10 (get-in end [:cause :radius]))))))))
