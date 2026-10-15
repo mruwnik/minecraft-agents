@@ -4,6 +4,7 @@
   sleeping player in sight): logged out in short stints until morning, then roofed or buried: the queue runs, else
   dig in."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.condition :as condition]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -435,11 +436,14 @@
 
 (deftest a-log-out-needs-night-and-says-so
   (let [conditions (:conditions (get registry/jobs 'jobs.survival.log-out))
-        cause (fn [world args] (some (fn [[_ f]] (f {:primitives (tu/fake world) :args args :slots [:x]
-                                                     :view (fn [] {:data mem/empty-data :now 0})}))
-                                     conditions))]
-    (is (= :not-night (cause {:time noon} {})))
-    (is (= :offline-forbidden (contract/impossible-cause (cause {:time night} {:offline-allowed false}))))
+        cause (fn [world args]
+                (let [p (tu/fake world)]
+                  (contract/verdict {:primitives p :args args :slots [:x]
+                                     :view (fn [] {:data mem/empty-data :now 0})
+                                     :holds (fn [form a] (condition/job-cause {:world p :memory {:data mem/empty-data :now 0}} a form))}
+                                    conditions)))]
+    (is (= :not-night (get-in (cause {:time noon} {}) [1 :reason])))
+    (is (= [:impossible :offline-forbidden] (cause {:time night} {:offline-allowed false})))
     (is (nil? (cause {:time night} {})))))
 
 (deftest a-log-out-quotes-the-stint-in-time
