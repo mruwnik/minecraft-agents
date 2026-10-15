@@ -9,6 +9,7 @@
     survivable budget, all but 1 hp. Not with a higher floor (never crossed) or a :spend :health (a cap): those, a call
     that does not allow it, and a body that still has no way, give up :needs-health."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as health]
             [jobs.lib.foods :as foods]
@@ -80,7 +81,7 @@
       (do (when-not st
             (ctx/emit! c :go-to.waiting-health :info {:health (:health body) :food (:food body)
                                                       :text (str "waiting to heal (" (:health body) " hp) before a drop it cannot afford")}))
-          (await (ctx/act c :wait #js {:ms wait-ms}))))
+          (await (child/pause! c (/ wait-ms 1000) :healing))))
     :continue))
 
 (defn ^:async probe-plan!

@@ -20,6 +20,22 @@
       (when-let [missing (seq (remove #(some? (get (:args c) %)) need))]
         (contract/impossible {:reason :bad-args :missing (vec missing)})))))
 
+(def precondition-statuses
+  "Statuses that say a precondition was false before the act ran (a failed condition); any other status the table
+  reads as a failed condition is an act that ran and did not reach its end."
+  #{:missing :occupied :gone :not-night :monsters-near :no-item :no-room :no-support :no-water :no-rod :no-food
+    :no-lapis :no-levels :not-mounted :not-a-boat :not-mountable :hand-full :full :empty :busy :refused-mounted})
+
+(defn read-ending
+  "The table's ending e with the kind read by when the act failed: :unsupported impossible, a false precondition a
+  failed condition, anything else nothing possible."
+  [e]
+  (cond
+    (not= :condition-failed (:kind e)) e
+    (= :unsupported (:cause e)) (assoc e :kind :impossible)
+    (precondition-statuses (:cause e)) e
+    :else (assoc e :kind :nothing-possible)))
+
 (defn args-data [k]
   (into {} (map (fn [arg] [arg (if (position-keys arg)
                                   {:doc "where, [x y z] or {:x :y :z}" :spec ::a/pos}
@@ -48,5 +64,5 @@
                              (if (.-badArgs err) err (throw err))))]
                 (if (instance? js/Error r)
                   (ctx/end c :impossible {:reason :bad-args :why (.-message r)})
-                  (let [e (ending r)]
+                  (let [e (read-ending (ending r))]
                     (ctx/end c (:kind e) (:cause e) (js->clj r :keywordize-keys true))))))}))

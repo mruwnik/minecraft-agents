@@ -4,7 +4,9 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.library-test :as lt]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.world-files :as world]
@@ -185,3 +187,16 @@
         (is (true? (await (waits? {:entities [boat]} 'jobs.movement.boat-drive {:pos [10 63 2]}))) "on foot")
         (is (true? (await (waits? {:self {:vehicle 5} :entities [boat (assoc boat :id 5 :name "minecart")]}
                                   'jobs.movement.mount {:id 9}))) "aboard another vehicle")))))
+
+(deftest look-around-waits-in-a-noop-pause-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pauses (atom [])
+              stub {:conditions [] :target []
+                    :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
+              {:keys [eng p]} (lt/setup {})
+              res (await (tu/child-outcome (assoc-in eng [:jobs 'jobs.time.noop] stub) 'jobs.movement.look-around {:every-ms 1500} 20))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (= [{:seconds 1.5 :why :looking}] @pauses))
+          (is (empty? (filter #(= "wait" (.-name %)) (.-calls (.-world p)))) "no bare wait act"))))))

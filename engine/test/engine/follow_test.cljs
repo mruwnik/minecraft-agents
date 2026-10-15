@@ -175,3 +175,15 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (follow {:entities [(steve 2)]} {:player "Steve" :timeout-s 3} 20 1000))]
           (is (= {:reason :timeout} (ended @out))))))))
+
+(deftest the-wait-beside-the-player-is-a-noop-pause-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pauses (atom [])
+              stub {:check (constantly true)
+                    :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
+              s (setup {:entities [(steve 1)]} {:player "Steve" :range 3 :radius 10})]
+          (await (run-ticks (assoc-in s [:eng :jobs 'jobs.time.noop] stub) 3 500))
+          (is (= [{:seconds 0.5 :why :following}] (distinct @pauses)))
+          (is (empty? (calls (:p s) "wait")) "no bare wait act"))))))

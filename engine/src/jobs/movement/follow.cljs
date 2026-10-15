@@ -58,9 +58,9 @@
            u/pos-of))
 
 (defn ^:async idle!
-  "A neutral wait, then :continue."
+  "A noop pause, then :continue."
   [c]
-  (await (ctx/act c :wait #js {:ms idle-ms}))
+  (await (child/pause! c (/ idle-ms 1000) :following))
   :continue)
 
 (defn ^:async look-at-head!

@@ -20,7 +20,7 @@
   Impossible: :bad-args (:item is no boat, :pos names no cell). Conditions at the start: :aboard (already on a vehicle), :no-water (none in sight),
   :no-room (water in sight, none with room for a boat); the engine looks round once first. A listed call waits on them.
   Ends done (data {:id :boat name :pos :boarded bool}), info boat.launched, or
-  condition-failed: the place's own (:need, :not-allowed, :no-support, :unreachable, :occupied ...; its ending is the :because), or
+  condition-failed: the place's own (:need, :not-allowed, :no-support, :occupied ...; its ending, nothing-possible :unreachable too, is the :because), or
   nothing-possible: :no-boat (the placed boat is not in sight), :board-failed (mount's ending is the :because).
 
   Recover: the boat is :id, else the nearest boat or raft in sight. When aboard, it gets off first (jobs.movement.leave-vehicle),
@@ -211,10 +211,14 @@
                     (do (ctx/emit! c :boat.launched :info {:id (:id boat) :boat (:name boat) :pos cell :text (str "put " (:name boat) " on the water")})
                         (ctx/end c :done nil {:id (:id boat) :boat (:name boat) :pos cell :boarded false})))))))))))
 
+(defn out-of-time?
+  "Whether the call's time line is spent: the engine counts the job's own running time across rounds and cuts."
+  [c]
+  (some-> (get-in (ctx/left c) [:spend :time]) (<= 0)))
+
 (defn ^:async recover! [c]
   (let [p (:primitives c)
         id (:id (:args c))
-        deadline (+ (js/Date.now) (* 1000 (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))))
         aboard (when (vehicle/mounted? p) (await (ctx/call c :leave 'jobs.movement.leave-vehicle {})))]
     (cond
       (= :continue aboard) :continue
@@ -224,7 +228,7 @@
         (let [boat (pick-boat c)]
           (cond
             (nil? boat) (ctx/end c :condition-failed :gone {:id id})
-            (>= (js/Date.now) deadline) (ctx/end c :limit-reached {:line :time :reason :not-broken} {:id (:id boat) :hits hits})
+            (out-of-time? c) (ctx/end c :limit-reached {:line :time :reason :not-broken} {:id (:id boat) :hits hits})
             (> (u/dist (u/self-pos c) (:pos boat)) reach)
             (let [w (await (child/call-walk* c :walk {:pos (:pos boat) :range 2 :escalate false}))]
               (cond

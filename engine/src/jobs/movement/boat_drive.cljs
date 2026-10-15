@@ -113,11 +113,15 @@
 (defn paddle! [c {:keys [turn forward ticks]}]
   (ctx/act c :paddle (clj->js (cond-> {:ticks ticks :forward forward} turn (assoc :turn turn)))))
 
+(defn out-of-time?
+  "Whether the call's time line is spent: the engine counts the job's own running time across rounds and cuts."
+  [c]
+  (some-> (get-in (ctx/left c) [:spend :time]) (<= 0)))
+
 (defn ^:async drive! [c]
   (let [p (:primitives c)
         {:keys [range max-strokes]} (:args c)
         cell (cell-of-call c)
-        deadline (+ (js/Date.now) (* 1000 (or (get-in (ctx/frozen-call c) [:spend :time]) (time-s))))
         goal (some-> cell centre-of)
         stop! (fn [kind reason & [data]] (ctx/end c kind reason data))]
     (cond
@@ -146,7 +150,7 @@
                   (do (ctx/emit! c :boat.driven :info {:pos pos :strokes strokes :text (str "steered the boat to " (:x cell) " " (:y cell) " " (:z cell))})
                       (ctx/end c :done nil {:pos pos :strokes strokes}))
                   (>= strokes max-strokes) (stop! :nothing-possible :strokes {:pos pos :left left})
-                  (>= (js/Date.now) deadline) (stop! :limit-reached {:line :time :reason :timeout} {:pos pos :left left})
+                  (out-of-time? c) (stop! :limit-reached {:line :time :reason :timeout} {:pos pos :left left})
                   :else
                   (let [s (stroke-for pos yaw goal range turn-deg speed)
                         out (await (paddle! c s))

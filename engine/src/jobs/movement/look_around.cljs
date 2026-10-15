@@ -1,6 +1,7 @@
 (ns jobs.movement.look-around
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [engine.primitive :as primitive]))
 
@@ -44,5 +45,5 @@
   (let [pos (look-point (u/self-pos c) (rand) (rand))]
     (await (ctx/act c :look (clj->js {:pos pos})))
     (ctx/remember! c :looked {} looked-policy)
-    (await (ctx/act c :wait (clj->js {:ms (:every-ms (:args c))})))
+    (await (child/pause! c (/ (:every-ms (:args c)) 1000) :looking))
     (ctx/end c :done nil)))

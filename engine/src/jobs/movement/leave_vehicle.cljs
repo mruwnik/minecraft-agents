@@ -1,6 +1,7 @@
 (ns jobs.movement.leave-vehicle
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
 
@@ -51,8 +52,6 @@
         target (or toward (vehicle/nearest-dry-cell (:primitives c) from (or radius 2)))]
     (when target (vehicle/yaw-toward from (vehicle/centre target)))))
 
-(defn wait! [ms] (js/Promise. (fn [resolve] (js/setTimeout resolve ms))))
-
 (defn ^:async round [c]
   (let [p (:primitives c)
         max-tries (:max-tries (:args c) 8)
@@ -70,6 +69,7 @@
                 (ctx/end c :done nil out))
               (let [tries (inc tries)]
                 (if (< tries max-tries)
-                  (do (await (wait! (min 1000 (* wait-ms (bit-shift-left 1 (dec tries)))))) (recur tries))
+                  (let [r (await (child/pause! c (/ (min 1000 (* wait-ms (bit-shift-left 1 (dec tries)))) 1000) :dismount-retry))]
+                    (if (= :continue r) :continue (recur tries)))
                   (do (ctx/emit! c :vehicle.dismount_failed :warn {:tries tries :status (.-status r)})
                       (ctx/end c :nothing-possible :dismount-failed {:tries tries :status (.-status r)})))))))))))

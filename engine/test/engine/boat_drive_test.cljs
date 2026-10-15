@@ -105,3 +105,12 @@
 (deftest a-call-naming-no-cell-is-impossible
   (is (= :bad-args (contract/impossible-cause (boat-drive/bad-args {:args {}}))))
   (is (nil? (boat-drive/bad-args {:args {:pos [10 63 2]}}))))
+
+(deftest the-time-spend-counts-the-time-the-job-has-run-not-the-wall-clock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (lt/setup {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}})
+              _ (.override (.-world p) "paddle" (fn [token a impl] (swap! clock + 40000) (impl token a)))
+              res (await (tu/child-outcome eng 'jobs.movement.boat-drive {:pos [18 63 18] :spend {:time 100}} 60))]
+          (is (= {:status :stopped :reason :timeout} (select-keys res [:status :reason])) (pr-str res)))))))

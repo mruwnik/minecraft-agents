@@ -277,7 +277,7 @@
   [c]
   (loop [i 0]
     (when (and (< i (land-max-steps)) (false? (.-onGround (.self (:primitives c)))))
-      (await (ctx/act c :wait (clj->js {:ms (land-step-ms)})))
+      (await (child/pause! c (/ (land-step-ms) 1000) :landing))
       (recur (inc i)))))
 
 (defn centred?
@@ -330,7 +330,7 @@
   give up :mob-in-cell."
   [c l {:keys [cell]} mob]
   (if (mob-wait! c)
-    (do (await (ctx/act c :wait (clj->js {:ms (settings/get settings ::mob-step-ms)})))
+    (do (await (child/pause! c (/ (settings/get settings ::mob-step-ms) 1000) :mob-in-cell))
         :again)
     (finish! c l (give-up :mob-in-cell :at cell :mob (:name mob)))))
 

@@ -2,6 +2,7 @@
   "jobs.lib.vehicle (what the body rides, the vehicle hold), the :mounted trigger and
   jobs.movement.leave-vehicle against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.events :as events]
             [jobs.lib.vehicle :as vehicle]
@@ -43,8 +44,13 @@
   "A ctx with empty job memory over primitives p for check and round, recording what it writes."
   [p args]
   (let [mem* (atom {})
-        seen (atom [])]
+        seen (atom [])
+        pauses (atom [])]
     {:primitives p :args args :root "j1" :slots [] :token "t"
+     :engine {:jobs registry/jobs}
+     :call (fn [_slot _def pause-args] (swap! pauses conj pause-args) (js/Promise.resolve (contract/ending :done nil nil)))
+     :pauses pauses
+     :hold-still (fn [_])
      :view (fn [] {:data {:entries {(mem/job-kind "j1") [{:t 0 :data @mem*}]}} :now 0})
      :update-mem (fn [f more] (swap! mem* #(apply f % more)))
      :emit (fn [kind level fields] (swap! seen conj [kind level fields]))
@@ -157,6 +163,15 @@
           (is (= 2 (count (calls p "dismount"))))
           (is (= [[:vehicle.dismount_failed :warn {:tries 2 :status "timeout"}]]
                  (filterv #(= :vehicle.dismount_failed (first %)) @(:seen c)))))))))
+
+(deftest the-wait-between-dismount-tries-is-a-noop-pause-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (setup-owner (aboard {:dismountFails true}))
+              c (bare-ctx p {:max-tries 3 :wait-ms 100})
+              _ (await (leave/round c))]
+          (is (= [{:seconds 0.1 :why :dismount-retry} {:seconds 0.2 :why :dismount-retry}] @(:pauses c))))))))
 
 (deftest the-default-run-keeps-trying-far-longer-than-two-tries
   (async done

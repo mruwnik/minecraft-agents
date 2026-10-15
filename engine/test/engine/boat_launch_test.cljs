@@ -1,6 +1,6 @@
 (ns engine.boat-launch-test
   "jobs.movement.boat-launch against the fake world: put a boat on water and board it, and take it back."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -157,7 +157,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run {:blocks pond :entities [(boat-at 9 1.5 :invulnerable true)]} {:action :recover :spend {:time 0.3}}))]
+        (let [{:keys [eng p clock]} (lt/setup {:blocks pond :entities [(boat-at 9 1.5 :invulnerable true)]})
+              _ (.override (.-world p) "attack" (fn [token a impl] (swap! clock + 100) (impl token a)))
+              res (await (tu/child-outcome eng 'jobs.movement.boat-launch {:action :recover :spend {:time 0.3}} 40))]
           (is (= {:status :stopped :reason :not-broken} (select-keys res [:status :reason]))))))))
 
 (deftest recover-without-a-drop-is-not-collected
@@ -224,3 +226,8 @@
     (is (nil? (bl/no-water (c {:blocks pond}))))
     (is (= :no-water (:reason (contract/look-cause (bl/no-water (c {}))))))
     (is (= :no-room (:reason (contract/look-cause (bl/no-water (c {:blocks channel}))))))))
+
+(deftest recover-is-out-of-time-when-the-calls-time-line-is-spent
+  (are [left out?] (= out? (boolean (bl/out-of-time? {:left (constantly {:spend {:time left}})})))
+    0 true
+    5 false))

@@ -2,7 +2,7 @@
   "The primitive table (jobs.primitive) and the act check: before an act runs its most is checked against what is left
   of every frame of the chain; enforced, a crossing act is refused and ends the outermost crossed frame :limit-reached,
   in shadow mode job.limit_would_end is told and the act runs."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -76,6 +76,23 @@
     (is (= {:kind :limit-reached :cause {:line :time}} (end #js {:status "timeout"})))
     (is (= {:kind :nothing-possible :cause :failed} (end #js {:status "failed"})))
     (is (= {:kind :condition-failed :cause :unreachable} (end #js {:status "unreachable"})))))
+
+(deftest an-act-that-ran-and-failed-is-nothing-possible-a-false-precondition-a-failed-condition
+  (let [end #(primitive-job/read-ending ((get-in primitive/table [:dig :ending]) #js {:status %}))]
+    (are [status kind] (= kind (:kind (end status)))
+      "unreachable" :nothing-possible
+      "partial" :nothing-possible
+      "blocked" :nothing-possible
+      "out-of-reach" :nothing-possible
+      "cannot" :nothing-possible
+      "missing" :condition-failed
+      "occupied" :condition-failed
+      "gone" :condition-failed
+      "not-night" :condition-failed
+      "monsters-near" :condition-failed
+      "unsupported" :impossible
+      "failed" :nothing-possible)
+    (is (= :unreachable (:cause (end "unreachable"))))))
 
 (defn drops-to [y]
   {:conditions [] :defaults {:floor {:health 15}}
