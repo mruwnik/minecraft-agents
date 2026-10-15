@@ -33,7 +33,7 @@
    :max-days-awake {:doc "in-game days without sleep before a bed in the open is slept in and the urgent radius applies" :spec (a/num-in 0 nil) :default sh/max-days-awake}})
 
 (a/defargs settings
-  {::time-s {:default 300 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched, the sleep." :spec (a/num-in 0 nil)}
+  {::time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched (an obtain may take its own 600 without a change), the sleep." :spec (a/num-in 0 nil)}
    ::walk-speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn bed-permit
@@ -221,5 +221,5 @@
                   e (when (and (contains? (:what o) :item) (problem c)) (await (need/blocks! c bed-names 1 (select-keys o [:how :explore]))))]
               (cond
                 (or (= :continue e) (nil? (problem c))) :continue
-                (and e (not= :done (:kind e))) (assoc e :data {:slept false})
+                (and e (not= :done (:kind e))) (contract/with-because (ctx/end c (:kind e) {:reason :need} {:slept false}) e)
                 :else (ctx/end c :condition-failed :no-bed {:slept false}))))))

@@ -665,6 +665,18 @@
             (is (= n (count (.-calls (.-world p)))) "the second call acts nothing")
             (is (= [:too-dangerous] (distinct (map :reason (events-of seen :waiting)))) "a listed call waits on it")))))))
 
+(deftest a-body-at-food-zero-does-not-rest-after-a-too-dangerous-ending
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup (merge bread-chest {:self {:food 0 :health 2} :time 6000
+                                                            :entities [(assoc creeper :pos {:x 50.5 :y 64 :z 0.5})]})
+                                        :step-ms 5)]
+          (know-source! eng {:x 60 :y 64 :z 0} :chest)
+          (await (one-round! eng {:explore false}))
+          (await (one-round! eng {:explore false}))
+          (is (empty? (events-of seen :waiting)) "starving: the second call looks again instead of waiting out the rest"))))))
+
 (deftest a-body-on-low-health-walks-to-a-source-with-no-hostile-about
   (async done
     (tu/run-async done

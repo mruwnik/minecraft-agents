@@ -56,7 +56,7 @@
   an animal, a furnace to cook at) only on a calm day (jobs.lib.dawn/calm?) and not past known hostiles whose route
   danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it then ends condition-failed
   :too-dangerous (no :hungry written; a :food-too-dangerous entry) and the hungry trigger waits for a calm day
-  (jobs.survival.get-food.risk). For ::danger-rest-s (300) after that, while still fragile with nothing to eat, a call
+  (jobs.survival.get-food.risk). For ::danger-rest-s (300) after that, while still fragile, above food 0, with nothing to eat, a call
   ends so at once (condition :too-dangerous) without acting, so the hungry reflex backs off.
   Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
@@ -251,12 +251,13 @@
 (def danger-policy {:cap 1 :ttl (* 60 60 1000)})
 
 (defn too-dangerous
-  "The cause :too-dangerous while a call ended so within ::danger-rest-s and the body is still fragile with nothing
+  "The cause :too-dangerous while a call ended so within ::danger-rest-s and the body is still fragile, not at food 0, with nothing
   carried to eat: the call ends before it acts, so a hungry reflex's backoff counts it."
   [c]
   (when-let [{:keys [t data]} (ctx/latest c :food-too-dangerous)]
     (when (and (< (- (ctx/now c) t) (* 1000 (settings/get settings ::danger-rest-s)))
                (foods/fragile? (.self (:primitives c)))
+               (pos? (.-food (.self (:primitives c))))
                (not-any? #(tryable-food? c %) (u/inventory (:primitives c))))
       {:reason :too-dangerous :why (:why data)})))
 
