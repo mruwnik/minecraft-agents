@@ -375,7 +375,7 @@
             (is (< (self-x s) 10))
             (is (empty? (on-lead s)))))))))
 
-(deftest a-run-low-on-time-with-the-gate-open-and-an-animal-led-lets-it-go-and-shuts-the-gate
+(deftest a-run-ended-by-the-engines-limit-with-the-gate-open-and-an-animal-led-has-its-cleanup-let-it-go-and-shut-the-gate
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -385,7 +385,7 @@
           (await (run-ticks s 400))
           (is @opened "the gate was opened")
           (is (stopped? s))
-          (is (= :timeout (:reason (done-event s))))
+          (is (= [:job-time] (mapv :reason (events-of s :stopped))) "the engine's limit ends it")
           (is (empty? (on-lead s)) "the animal is let go")
           (is (not (gate-open? s)))
           (is (empty? (held-entries s))))))))

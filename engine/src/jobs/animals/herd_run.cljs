@@ -224,6 +224,7 @@
         result (merge {:reason reason :inside (count inside) :target target :brought brought
                        :given-up (:given-up m {}) :gate (:gate m) :escaped (:escaped-total m 0) :animals rows}
                       extra)]
+    (ctx/update-mem! c assoc :finished true)
     (when (:gate m) (drop-gate! c))
     (when-not (#{:brought :full} reason)
       (ctx/emit! c :herd.gave-up :warn {:reason reason :text (str "herding stopped: " (name reason))}))

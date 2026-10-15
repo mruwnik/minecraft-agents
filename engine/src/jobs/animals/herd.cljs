@@ -76,10 +76,8 @@
 
   Lead watching: an animal seen off this body's lead is given up on (:lead-broke), one not seen at all too
   (:lost); a lured animal seen beyond follow-range while the gate stands open is kept (the pinned steps go back for it). With nobody led, the open gate is shut, leads within 8 blocks are picked up
-  (jobs.forestry.collect-drops) and leashing starts again once, with the :lead-broke animals forgiven. A second time ends :lost. One
-  run that has less than ::release-margin-s (30) of its time left while an animal is led ends :timeout, so the animal is let go
-  before the call's budget runs out. An end with an animal on the lead lets it go where the body
-  stands and shuts the gate from the body's side.
+  (jobs.forestry.collect-drops) and leashing starts again once, with the :lead-broke animals forgiven. A second time ends :lost. An end with an animal on the lead lets it go where the body
+  stands and shuts the gate from the body's side; a cut by the engine's limit or a cancel does the same in the job's cleanup.
 
   One call is the whole run: it ends with the run, never yields. Waits for an animal to settle or a cell to clear are
   jobs.time.noop pauses. A cut can leave the body unsafe (animal led, gate
@@ -92,7 +90,7 @@
   :full also gives one warn herd.gave-up. An animal is booked brought once, however often it is led. Reasons:
   :brought (pen holds :target), :short (fewer than :target in the pen: some came, or none came and no other
   reason), :full,
-  :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost, :timeout,
+  :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost,
   :no-food (a lure run found no food), :no-hold (the food would not stay in hand),
   or the leash reason when nobody could be led. The body ends outside with the gate shut. Endings: done when the pen
   holds :target (:brought, :full) or the call's :least (default 1) animals were brought; else condition-failed for
@@ -116,7 +114,7 @@
 
 (def leading
   "The phases in which the animal is on the lead and the walk is the body's own: watched before each step, bound
-  by the time left (::release-margin-s)."
+  cut by the engine's limit."
   #{:approach :clear-out :line-up :open :step :shut-behind :shut-deepest :shut-back :shut-click :retry-back :retry-shut
     :retry-out
     :give-up-walk :deep})
@@ -124,15 +122,8 @@
 
 (a/defargs settings
   {::pace-ms {:default 100 :doc "A step that changed nothing and took less than this is followed by a pause of settle-ms." :spec (a/int-in 0 nil)}
-   ::job-time-s {:default 900 :doc "Seconds a herd run may take." :spec (a/num-in 0 nil)}
-   ::release-margin-s {:default 30 :doc "A run with an animal on the lead and less than this many seconds of its time left lets it go and ends :timeout." :spec (a/num-in 0 nil)}})
+   ::job-time-s {:default 900 :doc "Seconds a herd run may take." :spec (a/num-in 0 nil)}})
 (defn pace-ms [] (settings/get settings ::pace-ms))
-(defn release-margin-s [] (settings/get settings ::release-margin-s))
-
-(defn out-of-time?
-  "True when the call's time left (ctx/left) is under the release margin."
-  [c]
-  (some-> (:job-time (:spend (ctx/left c))) (< (release-margin-s))))
 
 (def target [:mob :box])
 
@@ -281,14 +272,13 @@
                    :else (await (shut-when-clear! c 3 (shut-look-ms) :shut-gate nil #(shut-failed! c)))))))
 
 (defn ^:async step-once!
-  "One step of the run: the timeout and the lead looked at, the :gate-held entry kept fresh, then the phase's step."
+  "One step of the run: the lead looked at, the :gate-held entry kept fresh, then the phase's step."
   [c]
   (let [{:keys [phase gate]} (ctx/mem c)
         phase (or phase :survey)
         lead-phase? (contains? leading phase)]
     (when (and gate (gate-open? c)) (hold-gate! c))
     (cond
-      (and lead-phase? (out-of-time? c)) (end! c :timeout)
       (and lead-phase? (not (and (= :approach phase) (lure? c) (not (:walked (ctx/mem c))))) (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
       :else (do (when lead-phase? (await (watch/watch! c {})))
                 (await (step! c phase))))))
@@ -356,3 +346,14 @@
         (do (when (and (= before (ctx/mem c)) (< (- (ctx/now c) from) (pace-ms)))
               (await (pause! c :herd-step-waits)))
             (recur))))))
+
+(defn ^:async cleanup
+  "A run that ended by itself is left as it is. Cut by the limit, a cancel or a parent's end: an animal still on this body's lead is let go and an open gate
+  shut, by the run's own ending phases, a step per round. Done when the body is safe (animal free, gate shut, body
+  outside)."
+  [c _]
+  (if (or (:finished (ctx/mem c)) (safe? c))
+    (ctx/end c :done nil {})
+    (do (when-not (:ending (ctx/mem c)) (end! c :cancelled))
+        (let [r (await (step-once! c))]
+          (if (= :continue r) :continue (ctx/end c :done nil {}))))))
