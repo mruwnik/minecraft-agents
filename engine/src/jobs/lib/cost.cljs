@@ -94,6 +94,7 @@
 (def item-value value/item-value)
 (def fetch-cost value/fetch-cost)
 (def walk-cost value/walk-cost)
+(defn walk-blocks-per-s [] (value/walk-blocks-per-s))
 (def dig-cost value/dig-cost)
 (def detour-cost value/detour-cost)
 (def tour-cost value/tour-cost)

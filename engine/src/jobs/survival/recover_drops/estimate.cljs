@@ -9,6 +9,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.config :as cfg]))
 
@@ -66,10 +67,16 @@
           :when (and at (not= at pos) (string? cause) (pos? left))]
       {:name cause :pos at :left-ms left})))
 
+(defn flight-s
+  "Seconds a flight from the priced mobs ([{:name :pos}]) may add to the walk back: until the farthest gives up the chase
+  (jobs.lib.threats/follow-range past it), at walking speed."
+  [here mobs]
+  (/ (apply max 0 (for [{:keys [name pos]} mobs :when pos] (- (threats/follow-range name) (u/dist here pos))))
+     (cost/walk-blocks-per-s)))
+
 (defn estimate
-  "{:value :cost :parts :reason :top-items :top-mobs :hold-ms :priced-ids} (:hold-ms: how long a skip for this danger is remembered,
-  ::danger-memory-ms, or what is left of the killer guards when only assumed killers add danger; :priced-ids: the ids
-  of the hostiles weighed) of recovering the drops of the :died data (cost js/Infinity when they cannot be fetched)."
+  "{:value :cost :parts :reason :top-items :top-mobs :hold-ms :flight-s} (:hold-ms: how long a skip for this danger is remembered,
+  ::danger-memory-ms, or what is left of the killer guards when only assumed killers add danger; :flight-s: flight-s) of recovering the drops of the :died data (cost js/Infinity when they cannot be fetched)."
   [c {:keys [pos inventory cause experience]} elapsed]
   (let [p (:primitives c)
         known (danger-q/seen-hostiles p)
@@ -93,7 +100,7 @@
              :hold-ms (if (every? (set (map :pos guard)) (map :pos (:mobs threat)))
                         (min (cfg/danger-memory-ms) (apply max 0 (map :left-ms guard)))
                         (cfg/danger-memory-ms))
-             :priced-ids (vec (keep #(.-id %) known))
+             :flight-s (flight-s here (:mobs threat))
              :top-items (mapv #(select-keys % [:name :count :value]) (take (cfg/top-n) (:items worth)))}
       (:parts fetch) (assoc :parts (:parts fetch))
       (:reason fetch) (assoc :reason (:reason fetch))
