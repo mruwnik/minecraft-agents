@@ -187,9 +187,8 @@
             (await (core/tick! eng))
             (is (= expected (:use (:call @world))) (pr-str use-defaults))))))))
 
-(deftest a-dig-default-without-a-block-or-pos-says-so
-  (is (thrown-with-msg? js/Error #"neither :block nor :pos"
-                        (choose/default-use {:args {} :primitives (tu/fake {})} :tools :dig))))
+(deftest a-dig-default-without-a-block-or-pos-names-no-tools-and-leaves-the-ending-to-the-job
+  (is (nil? (choose/default-use {:args {} :primitives (tu/fake {})} :tools :dig))))
 
 (deftest a-listed-job-waits-on-its-conditions-then-any-ending-ends-it
   (async done

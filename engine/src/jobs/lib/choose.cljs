@@ -126,8 +126,8 @@
 
 (defn default-use
   "The item names a call's :use gets for purpose when the job's defaults name chooser spec for it (the :use/default
-  hook; see use-spec?). {:tools :dig} is the tools for the args' :block, else the block at :pos, and throws when
-  the args give neither; {:tools :attack|:till|:shovel|:shear} the carried tools of that purpose; {:blocks :build|...} the
+  hook; see use-spec?). {:tools :dig} is the tools for the args' :block, else the block at :pos, nil when
+  the args give neither (the job's own args check ends the call); {:tools :attack|:till|:shovel|:shear} the carried tools of that purpose; {:blocks :build|...} the
   carried fillers of that purpose. nil when the list is not known yet (the block at :pos is hidden). An unknown
   spec throws."
   [c purpose spec]
@@ -138,7 +138,5 @@
     (if (not= :dig spec)
       (mapv :item (:list (tools-for c [spec] 1)))
       (let [{:keys [block pos]} (:args c)]
-        (when-not (or block pos)
-          (throw (js/Error. "default :use {:tools :dig}: the args give neither :block nor :pos")))
-        (when-let [block (or block (blocks/target-name (:primitives c) pos blocks/hidden-guess))]
+        (when-let [block (or block (when pos (blocks/target-name (:primitives c) pos blocks/hidden-guess)))]
           (mapv :item (:list (tools-for c [:dig block] 1))))))))
