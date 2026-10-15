@@ -2,11 +2,14 @@
   "jobs.animals.pen-check against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.build-from-plan-test :as b]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
             [engine.pen-build-test :as pb]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
+            [jobs.animals.pen-check :as pen-check]
             [jobs.lib.pen :as pen]))
 
 (def job 'jobs.animals.pen-check)
@@ -242,3 +245,13 @@
           (is (= :leak (:reason event)))
           (is (some #{{:x 2 :y 64 :z -1}} (map :pos (:leaks event))))
           (is (<= (* 2 fills) looks) (str fills " fills for " looks " looks")))))))
+
+(deftest the-default-time-budget-grows-with-the-pen
+  (let [time-of #(get-in (contract/freeze {:defaults (contract/resolve-settings pen-check/defaults (partial settings/get pen-check/settings) %)} % nil)
+                         [:spend :time])
+        box (fn [n] {:min [0 0 0] :max [(dec n) 0 (dec n)]})]
+    (is (< 30 (time-of {:at [1 0 1]})) "no box: up to the most cells the fill visits")
+    (is (< (time-of {:box (box 3)}) (time-of {:box (box 20)})))
+    (is (< (time-of {:box (box 20)}) (time-of {:box (box 200)})) "a big box is capped by :max-cells")
+    (is (< (time-of {:at [1 0 1] :max-cells 50}) (time-of {:at [1 0 1]})))
+    (is (= 5 (time-of {:at [1 0 1] :spend {:time 5}})) "a given time stays")))
