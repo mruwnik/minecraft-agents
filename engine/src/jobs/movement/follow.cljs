@@ -94,7 +94,7 @@
   (ctx/end c kind cause data))
 
 (defn ^:async walk!
-  "Walk to pos within range with go-to calls (:leg-s legs while the player moves, then pos is read again with
+  "Walk to pos within range with go-to calls (legs of leg-s seconds while the player moves, then pos is read again with
   target-now, which returns nil when the target is out of sight). The counts are per call: a walk that did not arrive
   counts as blocked when go-to stopped; the first ends the job (warn follow.unreachable, result
   {:reason \"unreachable\"}); three legs that got closer but left the body out of range of where the target stands now
