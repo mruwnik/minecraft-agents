@@ -5,6 +5,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [engine.contract :as contract]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.places :as places]))
@@ -31,16 +33,16 @@
   One call is the whole run (walk, click, walks closer); it yields :continue only while the go-to child waits on the
   world. There is no second click.
 
-  Waits (conditions): :not-loaded (the block is not loaded) and :standing-in (the body stands in the door or gate to be
-  closed; it must step out).
+  Checked at the start (never): :bad-args, :needs-redstone, :not-toggleable and :bad-state (with :valid). Waits
+  before every round (later): :no-block, :not-loaded (the block is not loaded) and :standing-in (the body stands in
+  the door or gate to be closed; it must step out). A called job whose block has no block ends condition-failed
+  :no-block.
 
-  Ends :done (:changed or already there; data :pos :block :wanted :was :now), or impossible with the cause :bad-args,
-  :not-toggleable, :needs-redstone or :bad-state (with :valid), or condition-failed with :no-block, :gone (block vanished or
-  unloaded) or :refused (useOn said cannot or no-item), or nothing-possible with :unreachable, :unchanged (a click
-  that changed nothing: iron-like block, protected area or lag, which cannot be told apart), :wrong-way (a block that
-  moved but not to the wanted state) or :unseen. Each refusal is one warn toggle.declined, each give-up one warn
-  toggle.gave-up. The pen-gate trigger may shut a planned pen gate this job
-  opened once the body has been more than 2 blocks away for 4 s.")
+  Ends :done (:changed or already there; data :pos :block :wanted :was :now), or impossible with the start causes
+  above, or condition-failed with :no-block, :gone (block vanished or unloaded) or :refused (useOn said cannot or
+  no-item), or nothing-possible with :unreachable, :unchanged (a click that changed nothing: iron-like block,
+  protected area or lag, which cannot be told apart), :wrong-way (a block that moved but not to the wanted state) or
+  :unseen. Each give-up is one warn toggle.gave-up.")
 
 (a/defargs args
   {:pos {:doc "the block, [x y z] or {:x :y :z}; either half of a door" :spec ::a/pos :default nil}
@@ -78,25 +80,38 @@
 
 (def condition-failures "Give-up reasons that read as a failed condition, the others as nothing possible." #{:gone :refused})
 
-(def impossible-reasons "Decline reasons the args or the block's kind settle for good." #{:bad-args :needs-redstone :not-toggleable :bad-state})
-
-(defn decline!
-  ([c reason pos state text] (decline! c reason pos state text nil))
-  ([c reason pos state text more]
-   (let [result (report :declined reason pos state more)]
-     (ctx/emit! c :toggle.declined :warn (assoc result :text (str "toggle: " text)))
-     (ctx/end c (if (impossible-reasons reason) :impossible :condition-failed) reason (dissoc result :status :reason)))))
-
 (defn give-up!
   [c reason pos state text more]
   (let [result (report :stopped reason pos state more)]
     (ctx/emit! c :toggle.gave-up :warn (assoc result :text (str "toggle: " text)))
     (ctx/end c (if (condition-failures reason) :condition-failed :nothing-possible) reason (dissoc result :status :reason))))
 
+(def bad-args
+  "Never :bad-args unless :pos and :state parse."
+  (checks/args-fit "toggle needs a :pos and a :state" #(nil? (:error (parse (:args %))))))
+
+(defn block-facts
+  "Never :needs-redstone, :not-toggleable or :bad-state when the block at :pos can never be put in :state by hand;
+  later :no-block when it is air. A block not loaded says nothing (can-run? waits)."
+  [c]
+  (let [{:keys [pos state error]} (parse (:args c))
+        b (when-not error (u/block-at (:primitives c) pos))
+        block (some-> b .-name)
+        kind (click/kind-of block)]
+    (cond
+      (or error (nil? b)) (contract/ok :ready "nothing settled yet")
+      (click/air? block) (contract/later :no-block (str "no block at " (pr-str pos)) :pos pos)
+      (= :iron kind) (contract/never :needs-redstone (str block " at " (pr-str pos) " ignores a hand") :block block)
+      (nil? kind) (contract/never :not-toggleable (str block " at " (pr-str pos) " is not a gate, door, trapdoor, lever or button") :block block)
+      (not (contains? (valid-states kind) state))
+      (contract/never :bad-state (str block " at " (pr-str pos) " cannot be " (name state)) :block block :valid (sort (valid-states kind)))
+      :else (contract/ok :ready "a block a hand can toggle"))))
+
+(def can-start? (cond/and bad-args block-facts))
+
 (defn waits
-  "Later :not-loaded (the block is not loaded) or :standing-in (the body stands in the door or gate to be closed; it
-  must step out). Bad args and every other refusal end the round, so do these for a toggle run as an old child (herd,
-  rail-line), whose parent reads the result."
+  "Later :not-loaded (the block is not loaded), :no-block (it is gone) or :standing-in (the body stands in the door or
+  gate to be closed; it must step out)."
   [c]
   (let [{:keys [pos state error]} (parse (:args c))]
     (if error
@@ -105,12 +120,12 @@
             props (some-> b click/props-of)]
         (cond
           (nil? b) (contract/later :not-loaded "the block is not loaded" :pos pos)
+          (click/air? (.-name b)) (contract/later :no-block (str "no block at " (pr-str pos)) :pos pos)
           (and (= :openable (click/kind-of (.-name b))) (= :closed state)
                (not (click/reached? state props))
                (click/standing-in? (u/self-pos c) pos (:half props)))
           (contract/later :standing-in "standing in the door" :pos pos :block (.-name b))
           :else (contract/ok :ready "nothing to wait for"))))))
-
 
 (def can-run? waits)
 
@@ -167,28 +182,16 @@
       :else (give-up! c :unreachable pos state (str "cannot walk within reach of " block " at " (pr-str pos)) {:block block}))))
 
 (defn ^:async next!
-  "One piece of the run: a decline, the walk, or the click. :again, :continue (the walk waits) or the ending."
+  "One piece of the run: the walk or the click. :again, :continue (the walk waits) or the ending."
   [c]
-  (let [{:keys [pos state error]} (parse (:args c))]
-    (if error
-      (decline! c :bad-args nil nil error)
-      (let [b (u/block-at (:primitives c) pos)
-            block (some-> b .-name)
-            kind (click/kind-of block)
-            text (str block " at " (pr-str pos))]
-        (cond
-          (nil? b) (decline! c :not-loaded pos state (str (pr-str pos) " is not loaded"))
-          (click/air? block) (decline! c :no-block pos state (str "no block at " (pr-str pos)))
-          (= :iron kind) (decline! c :needs-redstone pos state (str text " ignores a hand") {:block block})
-          (nil? kind) (decline! c :not-toggleable pos state (str text " is not a gate, door, trapdoor, lever or button") {:block block})
-          (not (contains? (valid-states kind) state))
-          (decline! c :bad-state pos state (str text " cannot be " (name state)) {:block block :valid (sort (valid-states kind))})
-          (and (= :openable kind) (= :closed state) (click/standing-in? (u/self-pos c) pos (:half (click/props-of b))))
-          (decline! c :standing-in pos state (str "the body stands in " text) {:block block})
-          (and (not (:arrived (ctx/mem c)))
-               (not (or (u/within? (u/self-pos c) pos (reach c))
-                        (<= (u/dist (u/self-pos c) pos) (reach c))))) (await (walk! c pos state block))
-          :else (await (click! c pos state block)))))))
+  (let [{:keys [pos state]} (parse (:args c))
+        b (u/block-at (:primitives c) pos)
+        block (some-> b .-name)]
+    (if (and (not (:arrived (ctx/mem c)))
+             (not (or (u/within? (u/self-pos c) pos (reach c))
+                      (<= (u/dist (u/self-pos c) pos) (reach c)))))
+      (await (walk! c pos state block))
+      (await (click! c pos state block)))))
 
 (defn ^:async round
   "The whole run: next! until it ends, a pace between pieces."

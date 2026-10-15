@@ -153,7 +153,18 @@
             (is (= (if (= :no-block reason) :condition-failed :impossible) (get-in result [:ending :kind])) (str name args))
             (is (empty? (calls p "useOn")) (str name args))
             (is (empty? (tu/walk-calls p)) (str name args ": no walk"))
-            (is (= 1 (count (kinds seen :toggle.declined))) (str name args))))))))
+            (is (empty? (kinds seen :toggle.declined)) (str name args))))))))
+
+(deftest the-start-check-settles-what-the-block-and-the-args-never-allow
+  (doseq [[name from args expected] [["iron_door" {:open false} {:pos at :state :open} [:never :needs-redstone]]
+                                     ["stone" nil {:pos at :state :open} [:never :not-toggleable]]
+                                     ["lever" {:powered false} {:pos at :state :open} [:never :bad-state]]
+                                     ["oak_door" {:open false} {:pos at} [:never :bad-args]]
+                                     ["air" nil {:pos at :state :open} [:later :no-block]]]]
+    (let [c {:primitives (tu/fake (world name from 3 14)) :args args}]
+      (is (= expected (tu/kind-reason ((:can-start? (get registry/jobs job)) c))) (str name args))))
+  (is (= :ok (first ((:can-start? (get registry/jobs job))
+                     {:primitives (tu/fake (world "oak_door" {:open false} 3 14)) :args {:pos at :state :open}})))))
 
 (deftest a-state-no-block-has-is-refused-at-submit
   (is (re-find #"jobs.access.toggle :state must be one of .*, got :ajar"
