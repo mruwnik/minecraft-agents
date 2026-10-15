@@ -227,6 +227,19 @@ test('runPool: waits (polling) while the load average is above the core count, b
   assert.ok(started[1][1] >= 3, 'the second child waited until the load dropped')
   assert.equal(sleeps, 2)
 })
+test('runPool: a load-gate wait is logged once it ends, with the body, the load, the limit and the seconds waited', { timeout: 10000 }, async () => {
+  const loads = [20, 20, 3, 20, 3, 3, 3, 3, 3, 3]
+  let polls = 0, t = 0
+  const logs = []
+  await runPool({
+    units: ['a', 'b'], workers: workerSpecs(2, 19, 'P', 0),
+    runUnit: async ({ file }) => { await new Promise((r) => setTimeout(r, 20)); return ok(file) },
+    load: () => { polls++; return loads[Math.min(polls - 1, loads.length - 1)] }, cores: 8,
+    sleep: async (ms) => { t += ms }, now: () => t, log: (m) => logs.push(m),
+  })
+  assert.equal(logs.length, 1)
+  assert.match(logs[0], /P\w* waited \d+ s for the load to drop to 8 or less \(load 20, now 3\)/)
+})
 test('runPool: a high load never blocks when nothing is running (no livelock)', { timeout: 10000 }, async () => {
   const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: async ({ file }) => ok(file), load: () => 99, cores: 4, sleep: async () => { throw new Error('slept') } })
   assert.equal(r.code, 0)

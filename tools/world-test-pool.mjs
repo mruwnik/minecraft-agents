@@ -34,6 +34,7 @@ import { fileURLToPath } from 'node:url'
 
 const PLOTS_PER_BODY = 20
 const LOAD_POLL_MS = 5000
+const LOAD_PER_CORE = 1.5 // a gate at 1x cores idled bodies that mostly wait on the server; the memory floor and res-slot still bound the pool
 export const BOOT_EXIT = 6 // a child's results end in repeated boot failures (the body dies at start): the pool stops at once, keeping them
 export const PRECHECK_EXIT = 5 // a child's refusal that holds for every case (a stranger near the plot grid): the pool stops at once
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -270,7 +271,7 @@ const FAULT_RERUNS = 2 // a case that still faults after this many free reruns s
 const BOOT_FAULT = /did not start within/
 const bootFault = (form) => summarize(form).status === 'error' && [':error', ':why', ':evidence'].some((k) => BOOT_FAULT.test(valueOf(form, k) ?? ''))
 const connFault = (form) => summarize(form).status === 'error' && [':error', ':why', ':evidence'].some((k) => CONN_FAULT.test(valueOf(form, k) ?? ''))
-export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, known = new Map(), listed = null, repeat = 1, emit = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, known = new Map(), listed = null, repeat = 1, emit = () => {}, log = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   probe = async () => true, now = Date.now, serverWaitMs = 300000, serverPollMs = 3000, settleMs = 10000 }) => {
   const queue = units.map((file) => ({ file, match: null, avoid: null }))
   const done = new Map() // `id#run` (or file when the unit died) -> form text, in first-seen order
@@ -372,7 +373,13 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
       if (unreachable || precheck || bootDead) return
       const job = take(worker)
       if (job) {
-        while (busy && load() > cores) await sleep(LOAD_POLL_MS)
+        let first = busy ? load() : 0
+        if (first > cores) {
+          const since = now()
+          let l = first
+          while (busy && l > cores) { await sleep(LOAD_POLL_MS); l = load() }
+          log(`world-test pool: ${worker.body} waited ${Math.round((now() - since) / 1000)} s for the load to drop to ${cores} or less (load ${first}, now ${l})`)
+        }
         busy++
         const res = await runUnit({ file: job.file, match: job.match, exact: job.match !== null, worker, attempt: job.attempt ?? 0 })
         if (res.code === PRECHECK_EXIT && !res.text) { precheck = true; busy--; notify(); return }
@@ -672,7 +679,7 @@ export const main = async (args) => {
   }
   const total = listing === null ? null : countListed(listing, repeatOf(p))
   if (total !== null) emitLine({ event: 'plan', total })
-  const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores, probe: serverProbe([rconPort(), gamePort()]), serverWaitMs: p.serverWaitS * 1000, settleMs: p.serverSettleS * 1000 })
+  const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores: Math.floor(cores * LOAD_PER_CORE), log: (m) => console.error(m), probe: serverProbe([rconPort(), gamePort()]), serverWaitMs: p.serverWaitS * 1000, settleMs: p.serverSettleS * 1000 })
   if (r.precheck) console.error('world-test pool: a precheck refused every case (see the line above); pass stopped, no case recorded')
   if (r.bootDead) console.error('world-test pool: every body died at boot (see the child log, e.g. a heap OOM); pass stopped, the cases not run are not recorded')
   if (r.unreachable) console.error(`world-test pool: server unreachable (RCON port ${rconPort()} or game port ${gamePort()} closed for ${p.serverWaitS} s); stopped, the cases not run are not recorded${r.pending?.length ? `; ${r.pending.length} failures awaiting a retry are recorded as inconclusive` : ''}`)
