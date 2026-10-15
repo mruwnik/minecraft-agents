@@ -182,6 +182,15 @@
           (is (= {:status :stopped :reason :refused :tilled 0 :skipped {{:x 1 :y 63 :z 1} :refused}} (dissoc (await (child-outcome eng job args 8)) :text)))
           (is (= 2 (count (calls p "useOn")))))))))
 
+(deftest a-refused-till-is-a-failed-condition
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"1,63,1" "dirt"}})
+              args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}]
+          (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :before #js {:name "dirt"} :after #js {:name "dirt"} :consumed 0}))
+          (is (= :condition-failed (get-in (await (tu/child-outcome eng job args 8)) [:ending :kind]))))))))
+
 (deftest till-keeps-its-count-across-a-cut
   (async done
     (tu/run-async done

@@ -34,7 +34,7 @@
   refused) and the hoe above.
   Ends with data {:tilled n :skipped {pos reason}}: done when it tilled some (the least accepted is :least, cells) or had
   nothing to till; with none tilled and cells skipped, condition-failed for :not-tillable, :covered, :not-permitted, :gone
-  and :no-hoe, else nothing-possible (:unreachable, :refused, :cover-stuck), the cause the one skip reason or
+  , :no-hoe and :refused, else nothing-possible (:unreachable, :cover-stuck), the cause the one skip reason or
   :nothing-tilled when mixed. done? counts the cells tilled this call and the cells left.")
 
 (a/defargs args
@@ -228,7 +228,7 @@
 
 (def condition-skips
   "Skip reasons that name a cell or a hoe that is not there to use; any other skip is nothing-possible."
-  #{:not-tillable :covered :not-permitted :gone :no-hoe})
+  #{:not-tillable :covered :not-permitted :gone :no-hoe :refused})
 
 (defn nothing-tilled
   "The cause (the one skip reason, :nothing-tilled when they are mixed) and text of a run that tilled nothing."

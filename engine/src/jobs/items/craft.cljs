@@ -33,8 +33,8 @@
   Needs: an item name (impossible :bad-args).
   Ends :done with {:made n}, the number of items gained (plus :spent, :spent-at and a :text when it put a table down).
   Stopping short it ends with :made as well: condition-failed with the cause :need (data :short {name n}, an ingredient
-  ran out, and :alternatives), :no-table, :not-a-table, :unreachable or :full (the bag is full and one
-  jobs.storage.make-room child freed nothing), or nothing-possible with :cannot (data :detail, the reason the game
+  ran out, and :alternatives), :no-table, :not-a-table or :full (the bag is full and one
+  jobs.storage.make-room child freed nothing), or nothing-possible with :unreachable (a walk to a table failed) or :cannot (data :detail, the reason the game
   gives) or :craft-failed (three failed crafts in a row, data :detail the status); each after a warn or info.
   One call is the whole craft: it walks (a go-to child) and crafts again until the count is carried or it stops; it
   yields only while a child waits on the world.
@@ -118,7 +118,7 @@
          (when (seq skip) (str "; the table at " (str/join ", " (map #(str "[" (str/join " " %) "]") (sort skip))) " cannot be reached"))
          (when why (str "; " why)))))
 
-(def condition-reasons "Stops that read as a failed condition, the others as nothing possible." #{:need :no-table :not-a-table :unreachable :full})
+(def condition-reasons "Stops that read as a failed condition, the others as nothing possible." #{:need :no-table :not-a-table :full})
 
 (defn finish!
   "Keep the ending in memory (a cut during the table pick-up goes on with it) and return it: done with the made count, or

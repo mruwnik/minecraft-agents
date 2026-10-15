@@ -383,11 +383,13 @@
       (fn ^:async t []
         (doseq [[w expected] [[(ew/of-data {} {} [(assoc farm-zone :min [8 60 -2] :max [10 70 2])]) {:zones ["farm"] :plans []}]
                               [(ew/of-data {"pad" (plan-over "pad" [9 65 0] "sugar_cane")} {} []) {:zones [] :plans ["pad"]}]]]
-          (let [s (await (in-world {:item "sugar_cane"} {:blocks (stand "sugar_cane" 9 0 3)} w 20))]
+          (let [s (start {:p (tu/seeing-all (tu/fake-on-floor {:blocks (stand "sugar_cane" 9 0 3)})) :shared w})
+                out (await (tu/child-outcome (:eng s) 'jobs.gather.get-seeds {:item "sugar_cane"} 40))]
             (is (empty? (dug-cells s)))
             (is (zero? (count (tu/walked-to (:eng s)))) "no walk to a refused cell")
             (is (= [(assoc expected :reason :refused)] (gave-up-fields s)))
             (is (= :refused (:reason (done-event s))))
+            (is (= :condition-failed (get-in out [:ending :kind])))
             (is (= 0 (:got (done-event s))))
             (is (finished? s))))))))
 
@@ -583,8 +585,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup-with-jobs {} {'jobs.storage.withdraw (tu/job [(constantly :not-ready)] nil)})]
-          (core/submit! (:eng s) (spec {:count 2 :chest {:x 10 :y 64 :z 0}}) {})
-          (await (run-ticks s 30 700))
+          (is (= :condition-failed (get-in (await (tu/child-outcome (:eng s) 'jobs.gather.get-seeds {:count 2 :chest {:x 10 :y 64 :z 0}} 40)) [:ending :kind])))
           (is (= :withdraw-declined (:reason (done-event s))))
           (is (= [:withdraw-declined] (mapv :reason (events-of s :get-seeds.gave-up))))
           (is (finished? s)))))))

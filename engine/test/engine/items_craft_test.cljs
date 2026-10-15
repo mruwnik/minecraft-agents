@@ -630,6 +630,8 @@
                  (await (end {:inventory [{:name "wheat" :count 3}]} {:item "bread" :fetch false}))))
           (is (= {:event :stopped :kind :condition-failed :reason :not-a-table :made 0}
                  (await (end {:inventory [{:name "wheat" :count 3}] :blocks {"10,64,0" "stone"}} {:item "bread" :table table}))))
+          (is (= {:event :stopped :kind :nothing-possible :reason :unreachable :made 0}
+                 (await (end {:inventory [{:name "wheat" :count 3}] :blocks table-block :unreachable ["10,64,0"]} {:item "bread"}))) "a walk to the table failed")
           (is (= {:event :stopped :kind :nothing-possible :reason :cannot :made 0}
                  (await (end {} {:item "dragon_egg"})))))))))
 

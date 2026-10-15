@@ -46,8 +46,8 @@
   (warn get-seeds.gave-up). A batch of only skipped blocks is not barren.
 
   Ends :done (data {:got n :reason :count}, info get-seeds.done) when the goal is carried. Any other end is
-  nothing-possible with the cause :none, :dry, :barren, :refused, :short (the chest gave less) or :withdraw-declined,
-  and data {:got n :reason r}; :got is how many more are carried than at the start, at least 0. The same event
+  condition-failed with the cause :refused or :withdraw-declined, else nothing-possible with the cause :none, :dry,
+  :barren or :short (the chest gave less), and data {:got n :reason r}; :got is how many more are carried than at the start, at least 0. The same event
   get-seeds.done tells it.
 
   Conditions (one warn get-seeds.declined {:reason r} per reason): :no-source (a material with no known way),
@@ -212,8 +212,11 @@
            (str "no " (str/join "/" names) " within " radius))
          (when far (str ", the nearest seen is " (Math/round (u/dist (u/self-pos c) (:pos far))) " away")))))
 
+(def condition-reasons #{:refused :withdraw-declined})
+
 (defn finish!
-  "Emit the outcome and end the job: :done for :count, else nothing-possible with the reason."
+  "Emit the outcome and end the job: :done for :count, condition-failed for :refused and :withdraw-declined (a zone, claim
+  or chest can change), else nothing-possible with the reason."
   [c reason]
   (let [{:keys [goal]} (ctx/mem c)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
@@ -221,7 +224,7 @@
     (ctx/emit! c :get-seeds.done :info (assoc data :text (str "get-seeds done: " (if (= :none reason) (none-why c) (name reason)) ", got " got)))
     (if (= :count reason)
       (ctx/end c :done nil data)
-      (ctx/end c :nothing-possible reason data))))
+      (ctx/end c (if (condition-reasons reason) :condition-failed :nothing-possible) reason data))))
 
 (defn give-up!
   "Warn and end."
