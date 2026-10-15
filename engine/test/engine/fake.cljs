@@ -850,7 +850,7 @@
                                            (let [out (decide (to-js (rekey camel pose)))]
                                              (when out
                                                {:controls (some-> (.-controls out) (js->clj :keywordize-keys true))
-                                                :yaw (.-yaw out) :done (.-done out) :failed (.-failed out)}))))]
+                                                :yaw (.-yaw out) :pitch (.-pitch out) :done (.-done out) :failed (.-failed out)}))))]
                            (-> (try (steer/steer! {:state state :owner-of #(deref owner) :after-walk after-walk} token
                                                   {:decide decide' :timeout-s timeoutS})
                                     (catch ExceptionInfo e (throw (js-error e))))

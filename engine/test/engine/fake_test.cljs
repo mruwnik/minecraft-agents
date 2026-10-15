@@ -817,6 +817,15 @@
     (is (= "cut" (some-> e .-code)))
     (is (nil? (:back (:controls @(fake/state p)))))))
 
+(deftest steer-turns-the-head-to-the-decides-yaw-and-pitch-as-live-bot-look-does
+  (async-test
+   (fn ^:async t []
+     (let [p (owned {:blocks (into {} (for [x (range -2 6)] [(str x ",63,0") "stone"]))})
+           n (atom 0)
+           decide (fn [_] (if (> (swap! n inc) 3) #js {:done #js {}} #js {:controls #js {:forward true} :yaw (- (/ js/Math.PI 2)) :pitch -0.5}))
+           _ (await (act p "steer" {:decide decide}))]
+       (is (= [270 (/ (* 0.5 180) js/Math.PI)] [(:yaw @(fake/state p)) (:pitch @(fake/state p))]))))))
+
 (deftest fake-drive-clears-the-controls
   (are [label clear]
        (let [p (owned)]

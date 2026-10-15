@@ -3,7 +3,7 @@
   :self {:pos [x y z]} :controls {} :unreachable #{[x y z]} :no-path #{[x y z]}}.
 
   steer is a toy kinematic walker, not physics: every tick (a setImmediate, so tests are fast) it asks decide for
-  controls, then moves 0.2 blocks (0.26 sprinting) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
+  controls and turns the head (world :yaw/:pitch) to its yaw and pitch, then moves 0.2 blocks (0.26 sprinting) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
   next floor once its box (half-width) has left the floor it is on (supported?), and climbs or descends a ladder. A
   move into a cell holding a fence, gate, wall, pane or bamboo is
   judged by the body's box against the joined blocks' boxes (engine.path.space), so a body slips beside a post as in the game; without :body-hitbox the position kept is the cell, or :sub-pos beside a post (sub-pos). The kinematics are pure functions (body, controls, yaw, world)
@@ -35,6 +35,7 @@
 (def scan-down 4)
 (def fall-limit 256)
 (def bury 3)
+(def deg (/ 180 js/Math.PI))
 (def passable
   #{"air" "water" "bubble_column" "ladder" "vine" "short_grass" "tall_grass" "rail" "powered_rail" "detector_rail" "activator_rail"})
 ;; small blocks (and crops) with no collision box: the planner and the game walk through them
@@ -402,7 +403,10 @@
                           (:done out) (finish resolve {:status "done" :result (:done out) :ticks @ticks})
                           :else
                           (do (swap! state assoc :controls controls)
-                              (when (number? (:yaw out)) (reset! yaw (:yaw out)))
+                              (when (number? (:yaw out))
+                                (reset! yaw (:yaw out))
+                                ;; the head turns as live steer.mjs's bot.look(yaw, pitch): perception reads it
+                                (swap! state assoc :yaw (mod (- 180 (* deg (:yaw out))) 360) :pitch (- (* deg (or (:pitch out) 0)))))
                               (reset! body (step-body @state @body controls @yaw))
                               (swap! state assoc-in [:self :pos]
                                      (if (:body-hitbox @state)
