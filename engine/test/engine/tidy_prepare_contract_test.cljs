@@ -194,8 +194,9 @@
     (is (= [:look :nothing-to-do] (tu/kind-reason (status false))))
     (is (= [:later :nothing-to-do] (tu/kind-reason (status true))))))
 
-(deftest prepare-with-only-an-unseen-cell-is-ok-with-the-look-reason
+(deftest prepare-with-only-an-unseen-cell-asks-a-look-at-it
   (let [c {:primitives (tu/fake {}) :args {}}]
     (with-redefs [field/planned (constantly {}) prepare/states-of (constantly {}) maintain/field-cells (constantly [])
-                  field/todo (constantly []) prepare/unseen-room? (constantly true)]
-      (is (= [:ok :look] (tu/kind-reason (prepare/not-ready c)))))))
+                  field/todo (constantly []) prepare/unseen-room (constantly [[1 65 2]])]
+      (is (= [:look :unseen-room] (tu/kind-reason (prepare/not-ready c))))
+      (is (= [[1 65 2]] (:look-at (nth (prepare/not-ready c) 2)))))))
