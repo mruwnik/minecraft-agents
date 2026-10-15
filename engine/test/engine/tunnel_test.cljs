@@ -1,6 +1,7 @@
 (ns engine.tunnel-test
   "jobs.access.tunnel: the approach choice, the stops, and whole tunnels against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [clojure.string :as str]
             [jobs.lib.ledger :as ledger]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -777,6 +778,30 @@
           (is (= :reached (:reason @out)) (pr-str @out))
           (is (= [5 20 0] (feet p)))
           (is (not= "air" (block-at p [2 19 0])) "the missing floor was placed"))))))
+
+(defn gravel-trip
+  "go-to with a one-off fault: the first walk into cell fails after gravel has fallen into it; later walks are go-to's."
+  [pa cell]
+  (let [real (get registry/jobs 'jobs.movement.go-to)
+        tripped (atom false)]
+    (assoc real :round (fn ^:async trip [c]
+                         (if (and (not @tripped) (= cell (vec (:pos (:args c)))))
+                           (do (reset! tripped true)
+                               (set-block! @pa (str/join "," cell) "gravel")
+                               (ctx/end c :nothing-possible {:reason :stuck} {}))
+                           (await ((:round real) c)))))))
+
+(deftest gravel-fallen-into-the-next-cell-is-dug-again-not-a-failed-step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [row (merge (stone -12 12 0 64 -3 8) {"0,20,0" "air" "0,21,0" "air" "6,20,0" "iron_ore"})
+              pa (atom nil)
+              {:keys [out p]} (await (tick-out! (setup {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks row :inventory pick}
+                                                       {:target [6 20 0] :max-length 24} #(reset! pa %)
+                                                       :jobs {'jobs.movement.go-to (gravel-trip pa [3 20 0])})))]
+          (is (= :reached (:reason @out)) (pr-str (:reason @out)))
+          (is (= [5 20 0] (feet p))))))))
 
 (deftest one-call-is-a-dead-end-and-its-way-out
   (async done

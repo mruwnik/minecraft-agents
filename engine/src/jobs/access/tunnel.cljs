@@ -72,6 +72,8 @@
   floor of air is bridged with a carried building block (jobs.access.stair.step/bridge!), as the stair does. A target on the body's
   row or column farther than :max-length is cut the same way in legs of :max-length from the body's cell.
 
+  A run cell that fills again before the walk (gravel) is dug again.
+
   The body's cell is the progress. On the stair line the stair child goes on, on the run line the run, at the
   stand it is done, anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
   Dug cells are left and recorded.
@@ -250,6 +252,7 @@
                   (= :continue r) :continue
                   (and (:arrived (:data r)) (= next (reach/standing-vec (:primitives c))))
                   (do (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))}) :again)
+                  (some #(not (rules/air ((:block-at (stair/rules-in c feet)) %))) cut) :again
                   :else {:reason :step-failed :cell next :walk (ending-result r)})))))))
 
 (defn ^:async open-over-target!
