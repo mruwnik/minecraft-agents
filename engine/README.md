@@ -276,9 +276,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/left ctx)` | what is left of the call's limits and its callers' (each line the least): `{:spend {line n} :floor {line n} :deadline ms}` |
 | `(await (ctx/quote ctx job args quote-deadline?))` | what a call would use and yield (Quotes), or the `:duplicate-call` ending |
 | `(await (ctx/next-way ctx quote-of-way thing?))` | `{:way k :dropped {way why}}`, the next way to try (Quotes) |
-| `(ctx/check-status ctx def)`, `(ctx/child-status ctx slot job args)` | the status def (the child in slot) would start with now: its check's (`:ok`, or `:later` with its wait reason), or (a combinator) `contract/verdict` of its checks, which a combinator passes on with `:slot` |
-| `(ctx/check-wait ctx def)`, `(ctx/child-wait ...)` | the same as an old wait: nil, a wait map, `contract/impossible`/`look-first` |
-| `(ctx/can-run ctx)` | the job's `can-run?` status now; `jobs.lib.pace/steps!` asks it between steps (`:never` ends impossible, `:later`/`:look` yield) |
+| `(ctx/check-status ctx def)`, `(ctx/child-status ctx slot job args)`, `check-wait`/`child-wait` (the same as an old wait) | the status def (the child in slot) would start with now; `jobs.lib.pace/steps!` also asks `(ctx/can-run ctx)` between steps |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
 | `(ctx/submit! ctx spec opts)` | put a peer job at the end of the list; returns its id |
@@ -299,17 +297,16 @@ started, yields and waits included (both spend lines). Endings and a root's `com
 a finished job's goes to body memory `:job-report` (cap 256), with its ending's `:kind` and `:cause`.
 
 **Contract jobs.** Export `conditions` and `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
-`defaults` (a settings key value reads the setting; a fn value is called with the args, the catalog shows `:from-args`), `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). **Statuses** (`engine.contract`): a check returns `[kind text data]`, kind `:ok :later :never :look`, data a map with
-`:reason`; constructors `(contract/ok reason text & data)`, `later`, `never`, `look`; an ending's cause is `(assoc data
-:text text)`, a wait reason too. `can-start?` (asked until the start) and `can-run?` (every round and between steps) are
-fns of the ctx giving a status (none: `:ok`; any other return is an error naming the fn): `:later` from `can-start?`
-waits (a called child ends `:condition-failed`), from `can-run?` yields (the job waits, bounded by its limits, `:elapsed`
-among them; a reflex ends `:condition-failed`); `:never` ends `:impossible`; `:look` looks once, a second counts as
-`:later`. Old conditions are read as statuses (`contract/read-old`). A condition
+`defaults` (a settings key value reads the setting; a fn value is called with the args, the catalog shows `:from-args`), `done?`. Call keys `:use :ways :spend :floor :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A check returns a status `[kind text data]`
+(`:ok :later :never :look`, data with `:reason`; `contract/ok|later|never|look`; an ending's cause is data plus `:text`).
+`can-start?` (until the start) and `can-run?` (every round, between steps) give one (none: `:ok`): `:later` waits (a
+called child ends `:condition-failed`; from `can-run?` it yields, bounded by the call's limits; a reflex ends
+`:condition-failed`), `:never` ends `:impossible`, `:look` looks once, then counts as `:later`. Old conditions are read
+as statuses. A condition
 `[:fn f]` gives nil (start), a cause (skip: a listed job not started stays queued and waits, else `:condition-failed`),
 `(contract/impossible cause)` (ends `:impossible`, the job leaves the queue) or `(contract/look-first cause)` (the
 engine looks round once, hook `:look/around`, then asks again). Checks of current state are `jobs.lib.cond` fns
-(Conditions): `(def can-start? (cond/because :day-not-come (cond/daytime)))`. Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` is asked before the start only, ahead of the conditions (an impossible one aside; a throw counts as not done, warn `job.done_failed`): a goal that holds ends `:done` `:already` and never waits; once started, the job's round decides when it is done; done?'s units go in the `:report` of every ending but an impossible, cut-off or `:duplicate-call` one, and its `:data` (the result so far) is the data of a `:limit-reached` ending without its own; a reflex run that ends `:already` is fruitless (backoff); endings are `{:kind :cause :because :report :data}`. A
+(Conditions): `(def can-start? (cond/because :day-not-come (cond/daytime)))`. Impossible only for args, game data or counts that only grow; `(ctx/after-tries n f)` makes skipping `f` impossible `:tries` once the job was held up n times (`ctx/tries`, saved in the job's `:tries`; a wait that goes on, or changes only its detail, is one try). `done?` is asked before the start only, ahead of every check (an old condition's impossible aside; a throw counts as not done, warn `job.done_failed`): a goal that holds ends `:done` `:already` and never waits; once started, the job's round decides when it is done; done?'s units go in the `:report` of every ending but an impossible, cut-off or `:duplicate-call` one, and its `:data` (the result so far) is the data of a `:limit-reached` ending without its own; a reflex run that ends `:already` is fruitless (backoff); endings are `{:kind :cause :because :report :data}`. A
 started frame left without an ending (its root ends or is dropped, its parent clears its slot) gets `:cut-off`.
 
 **Quotes (engine.core.quote).** `{:uses {:job-time fig :health fig :food fig :items {name fig} :wear {tool fig}} :yields

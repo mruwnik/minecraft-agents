@@ -55,10 +55,10 @@
         (await (ctx/call c (slot i) def args))))))
 
 (defn contract-def
-  "A combinator as a contract job: its can-run? passes on a child's status, which the scheduler asks of a listed one
+  "A combinator, named label in errors, as a contract job: its can-run? passes on a child's status, which the scheduler asks of a listed one
   (ctx/check-status) and a parent combinator of a child one."
-  [status round]
-  {:can-run? status :round round})
+  [label status round]
+  {:label label :can-run? status :round round})
 
 (defn seq-def
   "Children in order, one call per round; :at in memory is the next
@@ -69,6 +69,7 @@
   (let [at (fn [c] (:at (ctx/mem c) 0))
         last-i (dec (count kids))]
     (contract-def
+     "seq"
      (fn seq-status [c] (kid-status c kids (at c)))
      (fn ^:async seq-round [c]
        (let [i (at c)
@@ -89,6 +90,7 @@
   (let [refused (fn [c] (:refused (ctx/mem c) {}))
         first-passing (fn [c] (first (filter #(and (not (contains? (refused c) (slot %))) (ok? (kid-status c kids %))) (range (count kids)))))]
     (contract-def
+     "any"
      (fn any-status [c] (if (or (some? (first-passing c)) (seq (refused c))) ready (kid-status c kids 0)))
      (fn ^:async any-round [c]
        (let [i (first-passing c)]
@@ -145,6 +147,7 @@
   [kid times]
   (let [kids [kid]]
     (contract-def
+     "repeat"
      (fn repeat-status [c] (rest-status c kids 0))
      (fn ^:async repeat-round [c]
        (let [e (await (call c kids 0))]
@@ -158,6 +161,7 @@
   (let [kids [guard kid]
         reached? (fn [c] (ok? (kid-status c kids 0)))]
     (contract-def
+     "until"
      (fn until-status [c] (if (reached? c) ready (rest-status c kids 1)))
      (fn ^:async until-round [c]
        (if (reached? c)

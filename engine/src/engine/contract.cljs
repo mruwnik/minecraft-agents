@@ -179,13 +179,13 @@
     [kind (or (:text w) (name reason)) {:reason reason ::wait w ::cause cause}]))
 
 (defn read-old
-  "An old condition's answer r as a status: nil :ok, (impossible cause) :never, (look-first cause) :look, any other
-  cause :later; a status as it is."
+  "An old condition's answer r as a status: nil or false :ok (the old verdict ignored them), (impossible cause) :never,
+  (look-first cause) :look, any other cause :later; a status as it is."
   [r]
   (let [old #(from-old %1 (if (:reason (when (map? %2) %2)) %2 (cause-wait %2)) %2)]
     (cond
       (status? r) r
-      (nil? r) (ok :holds "holds")
+      (not r) (ok :holds "holds")
       (impossible-cause r) (old :never (impossible-cause r))
       (look-cause r) (old :look (look-cause r))
       :else (old :later r))))
@@ -223,19 +223,21 @@
            (throw (js/Error. (str "condition " (fn-name f) ": " (or (.-message e) e))))))))
 
 (defn asked
-  "The status check f (can-start?, can-run?) gives for c; any other return is an error naming f."
-  [c f]
+  "The status check f (export what, :can-start? or :can-run?, of def) gives for c; any other return is an error naming
+  the export and the job (its symbol or combinator label)."
+  [c def what f]
   (let [s (run-condition c f)]
     (when-not (status? s)
-      (throw (js/Error. (str "check " (fn-name f) " returned " (pr-str s) ", not a status [kind text {:reason ..}]"))))
+      (throw (js/Error. (str (name what) " of " (or (:sym def) (:label def) (fn-name f)) " returned " (pr-str s)
+                             ", not a status [kind text {:reason ..}]"))))
     s))
 
 (defn verdict
   "What def's checks say now, as one status (all): its old conditions ([:fn f] each, read-old), can-start? and
   can-run?, each that it has."
-  [c {:keys [conditions can-start? can-run?]}]
+  [c {:keys [conditions] :as def}]
   (all (concat (map #(read-old (run-condition c (second %))) conditions)
-               (map #(asked c %) (keep identity [can-start? can-run?])))))
+               (for [k [:can-start? :can-run?] :let [f (get def k)] :when f] (asked c def k f)))))
 
 ;; ------------------------------------------------------------------ the call
 

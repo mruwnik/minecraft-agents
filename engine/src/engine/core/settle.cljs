@@ -22,12 +22,12 @@
       :else (str "stopped: " (some-> reason name) (some->> cell pr-str (str " at "))))))
 
 (defn note-child-wait!
-  "A listed job's round returned :declined because its child's check waits (reason, or nil when the child gave none):
-  the job waits with that reason, told once. Any other round result drops a wait taken from a child."
+  "A listed job's round returned :declined because its child's check waits, or :continue because its called child's
+  can-run? did (reason, or nil when the child gave none): the job waits with that reason, told once. Any other round result drops a wait taken from a child."
   [eng id status reason]
   (let [before (get @(:waiting eng) id)]
     (cond
-      (and (= :declined status) reason)
+      (and (#{:declined :continue} status) reason)
       (let [r (with-meta (wait-reason reason) {:child true})]
         (when (not= before r)
           (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))

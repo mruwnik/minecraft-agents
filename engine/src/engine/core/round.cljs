@@ -96,7 +96,7 @@
         wrote! (fn [kind] (emit! eng {:source :job :kind :memory_written :level :debug :job id
                                       :chain chain :round round :reflex reflex :memory kind}))]
     {:engine eng :primitives (:primitives eng) :token token :args args :id id
-     :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base) :t0s (:t0s base)
+     :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base) :t0s (:t0s base) :child-wait child-wait
      :quote-deadline (:quote-deadline base)
      :left #(let [t (now eng)]
               (contract/least-left (for [[s state] (limits/frames eng root slots)]
@@ -289,6 +289,7 @@
                 :round (:round base) :reflex (:reflex base)}]
     (own! eng base)
     (limits/refuse! eng base)
+    (reset! (:child-wait base) nil)
     (if-let [dup (ending/duplicate-ending eng base def args)]
       (do (emit! eng (assoc fields :kind :duplicate_call :ending dup))
           (reset! child-ending dup)

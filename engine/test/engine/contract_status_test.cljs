@@ -36,6 +36,7 @@
 (deftest the-reader-maps-old-condition-returns-onto-statuses
   (let [kind #(first (contract/verdict {} {:conditions [[:fn (constantly %)]]}))]
     (is (= :ok (kind nil)))
+    (is (= :ok (kind false)) "the old verdict ignored a false")
     (is (= :later (kind :no-tree)))
     (is (= :later (kind {:reason :no-tree :near 3})))
     (is (= :never (kind (contract/impossible :bad-args))))
@@ -45,7 +46,9 @@
 (defn odd-check [_] :not-a-status)
 
 (deftest an-export-that-returns-no-status-is-an-error-naming-it
-  (is (thrown-with-msg? js/Error #"odd-check" (contract/verdict {} {:can-run? odd-check}))))
+  (is (thrown-with-msg? js/Error #"odd-check" (contract/verdict {} {:can-run? odd-check})))
+  (is (thrown-with-msg? js/Error #"can-run\? of jobs.x" (contract/verdict {} {:sym 'jobs.x :can-run? (fn [_] :odd)})))
+  (is (thrown-with-msg? js/Error #"can-start\? of seq" (contract/verdict {} {:label "seq" :can-start? (fn [_] :odd)}))))
 
 ;; ---------------------------------------------------------------- the engine
 
@@ -55,9 +58,10 @@
   (reset! world {})
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
-        eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers {}
+        p (tu/fake {})
+        eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers {}
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :seen seen :clock clock}))
+    {:eng eng :seen seen :clock clock :p p}))
 
 (defn job-ev [seen kind] (filterv #(= [:job kind] [(:source %) (:kind %)]) @seen))
 
@@ -187,3 +191,64 @@
       (is (= [:later "torches 0 < 4" {:reason :paused :have 0 :slot :c0}]
              (ctx/check-status c (composite/seq-def [kid]))))
       (is (= :c0 (:slot (nth (ctx/check-status c (composite/repeat-def kid nil)) 2)))))))
+
+(defn looks-at [p] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
+
+(defn kinds-job
+  "A job whose old condition asks for a look and whose can-run? says status k."
+  [k]
+  {:conditions [[:fn (fn [_] (contract/look-first :unseen))]]
+   :can-run? (constantly (case k :later (contract/later :paused "paused") :never (contract/never :gone "gone")))
+   :round (fn [c] (ctx/end c :done nil))})
+
+(deftest a-look-is-not-taken-when-another-status-is-never-or-later
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {'later-look (kinds-job :later) 'never-look (kinds-job :never)})]
+          (core/submit! eng '(later-look) {})
+          (await (core/tick! eng))
+          (is (zero? (looks-at p)))
+          (is (= [:paused] (mapv #(:reason (:data %)) (job-ev seen :waiting))))
+          (core/submit! eng '(never-look) {})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (zero? (looks-at p)))
+          (is (= :impossible (:kind (:data (first (job-ev seen :stopped)))))))))))
+
+(deftest a-goal-that-holds-ends-done-already-even-when-can-start-says-never
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'held {:can-start? never :done? (fn [_] {:done? true :units :items :done 0 :left 0})
+                                                :round (fn [c] (ctx/end c :done nil))}})]
+          (core/submit! eng '(held) {})
+          (await (core/tick! eng))
+          (is (= [:already] (mapv #(:cause (:data %)) (job-ev seen :completed)))))))))
+
+(deftest can-run-is-asked-once-per-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'counted {:can-run? (fn [_] (swap! world update :asks (fnil inc 0)) (contract/ok :go "go"))
+                                              :round (fn [_] :continue)}})]
+          (core/submit! eng '(counted) {})
+          (await (core/tick! eng))
+          (is (= 1 (:asks @world)) "the first round")
+          (await (core/tick! eng))
+          (is (= 2 (:asks @world)) "a started job's next round"))))))
+
+(deftest a-called-child-waiting-on-can-run-shows-as-its-parents-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'parent {:can-run? ok
+                                                  :round (fn ^:async parent [c]
+                                                           (await (ctx/call c :kid gated {}))
+                                                           :continue)}})]
+          (swap! world assoc :start true :run true)
+          (core/submit! eng '(parent) {})
+          (await (core/tick! eng))
+          (swap! world assoc :run false)
+          (await (core/tick! eng))
+          (is (= ["waiting: torches 0 < 4"] (mapv :message (job-ev seen :waiting)))))))))

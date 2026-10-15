@@ -16,18 +16,37 @@
 
 (defn started? [c] (some? (ctx/frozen-call c)))
 
+(defn run-status "def's can-run? status for c (contract/verdict)." [def c] (contract/verdict c (select-keys def [:can-run?])))
+
 (defn statuses
   "[start run] for c: start the status of def's old conditions and, until it has started, its can-start?; run its
-  can-run?'s (contract/verdict)."
-  [def c]
-  [(contract/verdict c (cond-> (dissoc def :can-run?) (started? c) (dissoc :can-start?)))
-   (contract/verdict c (select-keys def [:can-run?]))])
+  can-run?'s (contract/verdict). asked: {:start s :run s} a check just computed for this round, used as it is."
+  ([def c] (statuses def c nil))
+  ([def c asked]
+   [(or (:start asked) (contract/verdict c (cond-> (dissoc def :can-run?) (started? c) (dissoc :can-start?))))
+    (or (:run asked) (run-status def c))]))
+
+(defn asked-key "c's frame, as ctx/child-status makes a child ctx without a new :id." [c] (mem/path->id (:root c) (:slots c)))
+
+(defn remember-asked!
+  "Keep a check's statuses {:start :run} for the round that follows it, so can-run? is asked once per round."
+  [c asked]
+  (some-> (:engine c) :asked (swap! assoc (asked-key c) asked))
+  asked)
+
+(defn take-asked!
+  "The statuses the last check of c left, once."
+  [c]
+  (when-let [a (some-> (:engine c) :asked)]
+    (let [k (asked-key c) asked (get @a k)]
+      (swap! a dissoc k)
+      asked)))
 
 (defn ^:async looked
-  "Statuses [start run], or after one look round (the :look/around hook) when either asks for a look, the statuses then;
-  a second :look counts as :later."
+  "Statuses [start run], or after one look round (the :look/around hook) when they come to :look (no :never or :later
+  among them), the statuses then; a second :look counts as :later."
   [def c ss]
-  (if (some #(= :look (first %)) ss)
+  (if (= :look (first (contract/all ss)))
     (do (await ((:look/around hooks/all) c))
         (mapv #(cond-> % (= :look (first %)) (assoc 0 :later)) (statuses def c)))
     ss))
@@ -152,16 +171,24 @@
           :else (throw (js/Error. (str "a contract job's round returned " (pr-str r)
                                        ", not :continue or an ending (ctx/end)"))))))))
 
+(defn old-never?
+  "Whether the statuses [start run] hold a :never an old condition gave (bad args, game data): it beats a goal that
+  holds, which a can-start? :never does not."
+  [ss]
+  (let [[kind _ data] (contract/all ss)]
+    (and (= :never kind) (contains? data ::contract/cause))))
+
 (defn ^:async run
-  "One round of contract job def: an ending, or :continue. A :never ends it impossible; else, before it starts, a goal
-  that holds ends it done :already, whatever its checks say (a done? that throws is told with job.done_failed and
+  "One round of contract job def: an ending, or :continue. Before it starts, a goal that holds ends it done :already,
+  whatever its checks say (but an old condition's :never); else a :never ends it impossible (a done? that throws is told with job.done_failed and
   counts as not done). A :later from its old conditions or can-start? keeps a listed job not started queued, else ends
-  it condition-failed; one from can-run? yields (a reflex ends condition-failed: it runs one round). The round's ctx
+  it condition-failed; one from can-run? yields (a reflex ends condition-failed: it runs one round; a called child
+  tells its caller's wait with the status). The round's ctx
   asks can-run? between steps (ctx/can-run)."
   [def c]
-  (let [ss (statuses def c)
+  (let [ss (statuses def c (take-asked! c))
         fresh? (not (started? c))
-        [d err] (when (and fresh? (not= :never (first (contract/all ss)))) (done-or-error def c))
+        [d err] (when (and fresh? (not (old-never? ss))) (done-or-error def c))
         _ (when err (ctx/emit! c :done_failed :warn {:error (str (or (.-message err) err))}))
         [start-s run-s] (if (:done? d) ss (await (looked def c ss)))
         s (contract/all [start-s run-s])
@@ -171,7 +198,9 @@
       (:done? d) (counted (contract/ending :done :already nil))
       (= :never (first s)) (contract/ending :impossible (contract/status-cause s) nil)
       (= :later (first start-s)) (if (stays-listed? c) :continue (failed start-s))
-      (= :later (first run-s)) (if (:reflex c) (failed run-s) :continue)
+      (= :later (first run-s)) (cond (:reflex c) (failed run-s)
+                                     (seq (:slots c)) (do (some-> (:child-wait c) (reset! (contract/wait-reason run-s))) :continue)
+                                     :else :continue)
       :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
               (counted (contract/ending :condition-failed floor nil))
               (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))) d))))))
@@ -189,7 +218,8 @@
   round ends it: waiting is bounded by the call's limits, :wall-time among them."
   [def c]
   (let [fresh? (not (started? c))
-        s (if fresh? (contract/all (statuses def c)) (contract/verdict c (select-keys def [:can-run?])))
+        {start-s :start run-s :run} (remember-asked! c (if fresh? (zipmap [:start :run] (statuses def c)) {:run (run-status def c)}))
+        s (if fresh? (contract/all [start-s run-s]) run-s)
         later? (= :later (first s))
         w (or (when later? (contract/wait-reason s))
               (some-> (limits/floor-cause c #(or (ctx/frozen-call c) (first (call-of c def)))) contract/cause-wait))]

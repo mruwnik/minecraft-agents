@@ -252,6 +252,7 @@
              :activity (atom nil)
              :deferred (atom {})
              :fruitless (atom {})
+             :asked (atom {})
              :said (atom [])
              :rounds (atom {})
              :passes (atom {})
