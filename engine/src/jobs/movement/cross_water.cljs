@@ -25,6 +25,7 @@
   Ends done (data {:land {:x :y :z} :boat id :recovered bool}), info boat.landed (from boat-land), or the failed child's kind with its ending as the :because:
   condition-failed :no-boat (none carried and none could be fetched), :boat-not-seen (the placed boat is not in sight), the launch's other causes (:refused, :no-support,
   :unreachable, :occupied, :board-failed, :failed) and the landing's (:blocked, :drive-failed, :not-landed, :recover-failed, :no-shore); or nothing-possible :not-landed (on foot after the launch, not on the far shore).
+  Done (:already before the start) when the body stands on the far shore with no recovery owed.
   Resumes safely: aboard it goes on to the landing; on foot after the launch it lets boat-land finish or recover, and ends done only when the body stands on the far shore
   (else :not-landed). Quote: time by the straight distance to the far shore.
 
@@ -161,11 +162,15 @@
 (def can-start? (cond/and bad-args start-fact))
 
 (defn done?
-  "Done once the body stands on the far shore of the crossing under way."
+  "Ok when the body stands on the far shore (the crossing's, else the given :pos) with no recovery owed: no crossing
+  under way, or :recover false. With one under way the landing still wraps up (the boat is taken back)."
   [c]
   (let [saved (crossing c)
-        ashore (and saved (not (vehicle/mounted? (:primitives c))) (on-shore? c (:land saved)))]
-    (contract/later :crossing (if ashore "on the far shore, the landing wraps up" "crossing") :units :crossings :done 0 :left 1)))
+        land (or (:land saved) (given-pos c))
+        ashore (and land (not (vehicle/mounted? (:primitives c))) (on-shore? c land))]
+    (if (and ashore (or (nil? saved) (false? (:recover (:args c)))))
+      (contract/ok :on-shore "stands on the far shore" :units :crossings :done 1 :left 0 :result {:land land :recovered false})
+      (contract/later :crossing (if ashore "on the far shore, the landing wraps up" "crossing") :units :crossings :done 0 :left 1))))
 
 (defn quote-of [c]
   (let [land (or (given-pos c) (:land (spot-of c)))

@@ -206,3 +206,14 @@
               res (await (tu/child-outcome eng 'jobs.movement.cross-water {:min-cross 4 :recover false} 200))]
           (is (some #(= "look" (.-name %)) (.-calls (.-world p))))
           (is (= :done (:status res)) (pr-str res)))))))
+
+(deftest standing-on-the-given-far-shore-is-already-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res p seen]} (await (run (assoc world :self {:pos [7.5 64 0.5]}) {:pos [7 64 0]}))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (= far (:land res)))
+          (is (false? (:recovered res)))
+          (is (not (aboard? p)))
+          (is (not-any? #(= :boat.launched (:kind %)) @seen)))))))
