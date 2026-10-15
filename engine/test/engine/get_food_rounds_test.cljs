@@ -1,6 +1,6 @@
 (ns engine.get-food-rounds-test
   "get-food as one whole attempt (job-rounds design): one round eats, or gets food and eats, or stops with a reason;
-  a cut round resumes from the world; jobs.lib.child/run! runs a child to its end."
+  a cut round resumes from the world; jobs.lib.child/run!* runs a child to its end."
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.settings :as settings]
@@ -396,7 +396,7 @@
           (is (= [] (entries eng :food-source)))
           (is (= 0 (food p))))))))
 
-;; ---------------------------------------------------------------- jobs.lib.child/run!
+;; ---------------------------------------------------------------- jobs.lib.child/run!*
 
 (defn counting-child
   "A child that answers :continue n times (counted in its memory), then :done; calls counts every call."
@@ -411,9 +411,10 @@
 (defn run-parent [kid args opts out]
   {:check (constantly true)
    :round (fn ^:async parent-round [c]
-            (let [r (await (child/run! c :kid kid args opts))]
-              (swap! out conj [r (get-in (ctx/mem c) [:children :kid :k])])
-              (if (= :done r) :done :continue)))})
+            (let [r (await (child/run!* c :kid kid args opts))
+                  kind (if (map? r) (:kind r) r)]
+              (swap! out conj [kind (get-in (ctx/mem c) [:children :kid :k])])
+              (if (= :done kind) :done :continue)))})
 
 (defn ^:async run-parent! [kid args opts]
   (let [{:keys [eng]} (setup {})
@@ -458,7 +459,7 @@
               {:keys [eng]} (setup {})
               eng (assoc eng :jobs (assoc (:jobs eng) 'p {:check (constantly true)
                                                           :round (fn ^:async p-round [c]
-                                                                   (await (child/run! c :kid kid @args {:max-calls 2}))
+                                                                   (await (child/run!* c :kid kid @args {:max-calls 2}))
                                                                    (swap! out conj (get-in (ctx/mem c) [:children :kid :k]))
                                                                    :continue)}))]
           (core/submit! eng '(p) {})

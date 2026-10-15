@@ -1,12 +1,11 @@
 (ns jobs.lib.child
   "Run a child job to its end inside the parent's round, for children that still answer :continue per step."
-  (:refer-clojure :exclude [run!])
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]))
 
 (a/defargs settings
-  {::default-max-calls {:default 400 :doc "Calls of one run! before it gives the round back with :continue." :spec (a/int-in 1 nil)}})
+  {::default-max-calls {:default 400 :doc "Calls of one run!* before it gives the round back with :continue." :spec (a/int-in 1 nil)}})
 
 (def pace-ms "The timer awaited between two calls, so a loop with no act never starves the event loop." 50)
 
@@ -49,7 +48,7 @@
   (first (await (call-walk-reason* c slot args))))
 
 (defn ^:async run-with
-  "run! with the child call fn and walk-reason fn of its version."
+  "run!* with the child call fn and walk-reason fn."
   [call walk c slot job args max-calls]
   (when (not= args (get-in (ctx/mem c) [:child-args slot]))
     (ctx/update-mem! c #(-> % (update :children dissoc slot) (assoc-in [:child-args slot] args))))
@@ -60,16 +59,6 @@
       (if (and (= :continue r) (nil? why) (< n max-calls) (ctx/alive? c))
         (do (await (pace!)) (recur (inc n)))
         r))))
-
-(defn run!
-  "Call job as the child in slot until it ends (:done or :declined), then resolve to that status. Between calls it
-  awaits pace!. After :max-calls calls (opts) it resolves to :continue; the child keeps its memory, so the next run!
-  with the same args resumes it. A slot last run with other args is cleared first: the parent changed its mind.
-  A cut ends it at the next call (or at once, by ctx/alive?). A go-to child waiting for day in a shelter ends it
-  at once with :continue and call-walk's hold."
-  ([c slot job args] (run! c slot job args {}))
-  ([c slot job args {:keys [max-calls] :or {max-calls (default-max-calls)}}]
-   (run-with ctx/call-child call-walk-reason c slot job args max-calls)))
 
 (defn run!*
   "run! through ctx/call: resolves to the child's ending, or :continue after :max-calls calls or while a go-to child

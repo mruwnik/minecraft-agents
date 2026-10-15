@@ -62,8 +62,8 @@ Layout:
 - `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`); the build finds them. Helpers: `jobs.lib.*` (shared,
   including the walker `jobs.lib.walk`/`near`/`pass`), `jobs.<area>.*` (one area's). `jobs/hooks.edn` names the hooks.
   Results: `jobs.lib.result` (`permanent-walk?`, `unreachable-walk?`, `why` read go-to's ending).
-  `jobs.lib.child/run!` calls a child that still answers `:continue` per step until it ends (50 ms timer between calls; `:continue` after a call cap; a slot run with other args starts afresh).
-  The `*` versions (`child/call-walk*`, `run!*`, `walk-into!*`, `blocks/walk!*`, `child-wait*`) go through `ctx/call` and return the child's ending (or `:continue`).
+  `jobs.lib.child/run!*` calls a child (through `ctx/call`) until it ends (50 ms timer between calls; `:continue` after a call cap; a slot run with other args starts afresh).
+  The ctx/call versions `child/call-walk*`, `run!*`, `walk-into!*`, `blocks/walk!*`, `child-wait*` return the child's ending (or `:continue`).
 - `src/triggers/` the triggers, plain fns by area (`triggers.survival.hungry`); `defaults.edn` is the default set.
 - `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, ...; `scratch/` is git-ignored for hand-run probe starts; `idle.edn` is the idle template).
 - `test/engine/` cljs tests (helpers in `engine.test-util`); `test/engine/fake.cljs` is the scriptable fake world.
@@ -271,7 +271,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/remember! ctx kind data policy?)`, `forget-where!`, `forget-until!` | body-memory writes |
 | `(await (ctx/act ctx :moveTo #js {...}))` | call an acting primitive |
 | `(await (ctx/call-child ctx slot job args))` | run one round of a child (`:done`, `:continue`, `:declined`) |
-| `(await (jobs.lib.child/call-walk ctx slot go-to-args))` | a go-to child round that, when it yields `:continue` waiting for day in a shelter, holds the round still with `:night-sheltered` (or `:sealed-hostile-near`: shut in by its own retreat plug with a hostile near, no escalating way; ends after 3 min in all, counted across the parent's go-to children, or at low food or health; the event `go-to.sealed-hostile-near` names the mob, its band and whether it was seen or heard) so jobs show and body.idle name it; every walking parent uses it instead of `ctx/call-child` on go-to (`child/run!` of go-to does the same and returns `:continue` at once; the night, retreat, sleep, extinguish, breathe and dig-niche walks go at night on purpose and stay on `call-child`) |
+| `(await (jobs.lib.child/call-walk ctx slot go-to-args))` | a go-to child round that, when it yields `:continue` waiting for day in a shelter, holds the round still with `:night-sheltered` (or `:sealed-hostile-near`: shut in by its own retreat plug with a hostile near, no escalating way; ends after 3 min in all, counted across the parent's go-to children, or at low food or health; the event `go-to.sealed-hostile-near` names the mob, its band and whether it was seen or heard) so jobs show and body.idle name it; every walking parent uses it instead of `ctx/call-child` on go-to (`child/run!*` of go-to does the same and returns `:continue` at once; the night, retreat, sleep, extinguish, breathe and dig-niche walks go at night on purpose and stay on `call-child`) |
 | `(await (ctx/call ctx slot job args))` | one round of a child: `:continue` or its ending (Contract jobs); a call of the same job on the same target args (`:target`) as a frame on its chain ends `:condition-failed` `{:reason :duplicate-call :of frame-id}`, with no round and no `:job-report` entry |
 | `(ctx/end ctx kind cause data?)` | a contract job's ending, returned by its round |
 | `(ctx/way? ctx k)`, `(ctx/use ctx purpose)` | whether the call allows way `k`; the list the call gives for `purpose` |

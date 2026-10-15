@@ -180,7 +180,7 @@
               p (tu/fake-on-floor (night-hut {}))
               parent {:check (constantly true)
                       :round (fn ^:async walker [c]
-                               (await (child/run! c :walk 'jobs.movement.go-to {:pos [15 64 0]})))}
+                               (await (child/run!* c :walk 'jobs.movement.go-to {:pos [15 64 0]})))}
               eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
                                 :dir (tu/tmp-dir) :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
