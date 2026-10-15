@@ -45,7 +45,7 @@
   The cleanup export puts :home and the respawn bed back to :was however the call ends (a cut included). The torches the
   corridor took back are carried.
   Needs :site and :base (a new site also :at), else impossible :bad-args. A start in the strip phase with a real danger near
-  waits (:danger), and a running strip phase yields while one is near.
+  waits (:danger), and a running strip phase waits :danger while one is near (can-run?).
   Ends :done with data {:segments {state n} :taken {class n} :hauled {item n} :smelted {raw-item n} :smelt-failed [{:furnace :reason}]},
   or condition-failed (:bad-plan :no-site :no-shears :no-torches :food-short :base-full, or :child-failed), nothing-possible
   (:unreachable when the walk down found no way, :trips-exhausted, :all-skipped with :skipped {reason n} when no segment was
@@ -447,7 +447,7 @@
   (when-not (site c)
     (let [{:keys [at base shaft]} (:args c)]
       (save! c (constantly {:at at :base base :shaft shaft :phase :base :segments {} :trips 0 :smelt-failed []}))))
-  (await (pace/steps! c #(if (danger-wait? c) :continue (step! c)))))
+  (await (pace/steps! c #(step! c))))
 
 ;; ------------------------------------------------------------------ the contract
 
@@ -463,8 +463,12 @@
           (and (nil? at) (nil? (site c))) (contract/never :bad-args "a new site needs :at")
           :else (contract/ok :args "site, base and at given"))))
 
-(def can-start?
-  (cond/and bad-args (checks/refusing :no-danger "no danger to wait for" (fn [c] (when (danger-wait? c) :danger)))))
+(def danger
+  (checks/refusing :no-danger "no danger to wait for" (fn [c] (when (danger-wait? c) :danger))))
+
+(def can-start? (cond/and bad-args danger))
+
+(def can-run? danger)
 
 (defn done?
   "The strip is over (phase :done); the segments settled so far are the progress."

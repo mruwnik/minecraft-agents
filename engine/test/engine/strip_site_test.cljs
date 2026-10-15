@@ -385,7 +385,21 @@
         (let [env (setup :triggers {} :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 0 :y -27 :z 13} :health 20 :visible true}])
               r (await (start! env args))]
           (is (= :not-done r) "the job yields every round")
+          (is (= :danger (:reason (first (filter #(= :waiting (:kind %)) @(:seen env))))) "waiting with its reason")
           (is (= ["from-plan" "set-spawn" "set-place" "get-tool"] (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))) "the base phases ran, no corridor"))))))
+
+(deftest a-danger-that-comes-while-stripping-waits-with-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pa (atom nil)
+              zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 0 :y -27 :z 13} :health 20 :visible true}
+              env (setup :triggers {} :results {'jobs.items.get-tool (fn [_] (fake/add-entity! @pa zombie) {:status :done})})
+              _ (reset! pa (:p env))
+              r (await (start! env args))]
+          (is (= :not-done r))
+          (is (empty? (called env 'jobs.strip.corridor)) "no corridor with the zombie near")
+          (is (= :danger (:reason (first (filter #(= :waiting (:kind %)) @(:seen env)))))))))))
 
 (deftest a-cut-site-puts-home-and-spawn-back-in-its-cleanup
   (async done
