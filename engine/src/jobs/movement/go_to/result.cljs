@@ -100,13 +100,14 @@
    :zone "a stair or dig is refused by another's zone, claim or plan (pass :ignore-zones? or ask)"})
 
 (defn escalation-words
-  "A failed way out of a shut-in body in words: {:step :reason|:why :n}; a child's wait (:wait) names its own reason."
-  [{:keys [step reason why n wait]}]
+  "A failed way out of a shut-in body, or :into a walled-in goal, in words: {:step :reason|:why :n :into}; a child's
+  wait (:wait) names its own reason."
+  [{:keys [step reason why n wait into]}]
   (let [r (some-> (or (:reason wait) reason why) (as-> k (or (escalation-reason-words k) (str/replace (name k) "-" " "))))]
     (case step
-      :spent (str "gave up after " n " ways out")
-      :none (str "no way out" (some->> r (str ": ")))
-      (str "could not " (or (step-words step) "make a way out") (some->> r (str ": "))))))
+      :spent (str "gave up after " n " ways " (if into "in" "out"))
+      :none (str "no way " (if into "in" "out") (some->> r (str ": ")))
+      (str "could not " (or (step-words step) (str "make a way " (if into "in" "out"))) (some->> r (str ": "))))))
 
 (defn hostile-place-words
   "Where a hostile is, in words: \" at [x y z]\" for a cell, \" heard near, south\" for {:direction :band}, else nil."
@@ -119,7 +120,7 @@
   [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored torches waypoint-why heal hp-cost hp-budget low-passage dip rise route straight]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not= :way-dives why))
-         (str "shut in here; " (escalation-words escalation))
+         (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation))
          (case why
            :abilities (str (if shut-in "the body is shut in and " "it ") (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))
            :goal-enclosed (if low-passage (headroom/words low-passage) "the goal is walled in with no way through")

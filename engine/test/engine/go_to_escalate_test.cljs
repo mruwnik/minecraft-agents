@@ -949,6 +949,35 @@
           (is (seq (events-of seen :go-to.escalated)) "shut in: it escalates")
           (is (= :unreachable (:reason @out))))))))
 
+(def pocket
+  "A 1x2 air pocket at [8 64 0] inside a stone block (x 6..10, y 64..66, z -2..2) on a stone floor wide enough not to read as
+  enclosed (reach/room-cells): open land round it."
+  (apply dissoc (merge (box -20 63 -20 20 63 20 "stone") (box 6 64 -2 10 66 2 "stone")) ["8,64,0" "8,65,0"]))
+
+(def free-by-pocket {:self {:pos {:x 0 :y 64 :z 0}} :blocks pocket :inventory [{:name "stone_pickaxe" :count 1}]})
+
+(deftest a-free-body-digs-into-a-walled-in-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! free-by-pocket {:pos [8 64 0] :range 0}))]
+          (is (true? (:arrived @out)) "not shut in, but the goal is: it digs to it")
+          (is (= [8 64 0] (feet p)))
+          (is (some #{:clear-path} (map :step (events-of seen :go-to.escalated)))))))))
+
+(deftest a-walled-in-goal-is-not-dug-to-in-another-s-zone-or-under-walk-only
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[what args zones] [[:zone {} [{:name "vault" :owner "Miles" :min [6 60 -2] :max [10 70 2]}]]
+                                   [:walk-only {:ways #{:walk}} nil]]]
+          (let [{:keys [out p seen]} (await (run-job! free-by-pocket 'jobs.movement.go-to (merge {:pos [8 64 0] :range 0} args) zones))]
+            (is (false? (:arrived @out)) what)
+            (is (= :goal-enclosed (:why @out)) what)
+            (is (re-find #"the goal is walled in" (:text @out)) what)
+            (is (empty? (calls p "dig")) what)
+            (is (empty? (events-of seen :go-to.escalated)) what)))))))
+
 (deftest go-to-the-cut-off-deck-with-the-default-budget-is-still-cut-off
   (async done
     (tu/run-async done

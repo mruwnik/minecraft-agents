@@ -1,6 +1,6 @@
 (ns jobs.movement.go-to.escalation
-  "go-to's way out of a shut-in body: choose pillar, stair, clear-path or a walk to the wall, run the child, note the
-  holes it dug, put them back once the walk is on past them."
+  "go-to's way out of a shut-in body, or in to a walled-in goal: choose pillar, stair, clear-path or a walk to the wall,
+  run the child, note the holes it dug, put them back once the walk is on past them."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -228,6 +228,39 @@
   (when (and (> (second goal) (second feet)) (ways/way? c :stair) (not-any? (ctx/mem c) [:own-way-done :dive-climb]))
     (climb/recut feet (ledger/ways-of c))))
 
+(defn goal-walled?
+  "Whether a give-up with result is a free body's (not escape/enclosed?) whose goal the planner proved walled in: the
+  ways that change the world run toward the goal (goal-way)."
+  [c result]
+  (and (= :goal-enclosed (some-> (:reason result) keyword))
+       (not (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))))
+
+(defn goal-way
+  "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to
+  nearest the goal (a flood of at most reach/room-cells cells) is more than a block nearer, from there, as
+  {:step :approach :pos cell} first. Only a door, or a stair or pillar up to a higher goal, leads in (a walk along
+  the wall too, from where it stands); else {:step :none :why :no-dig}."
+  [c feet goal may-dig? opts]
+  (let [p (:primitives c)
+        kind-at (reach/lookup p reach/body-kind-of)
+        to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
+        near (->> (:cells (reach/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach/room-cells))
+                  (map vec)
+                  (apply min-key to-goal))
+        here? (or ((:skip opts) :approach) (>= (to-goal near) (dec (to-goal feet))))
+        from (if here? feet near)
+        e (escape/choose p from goal may-dig? opts)
+        in? (case (:step e)
+              :clear-path true
+              (:stair :pillar) (> (second goal) (second from))
+              :approach here?
+              false)]
+    (cond
+      (= :none (:step e)) e
+      (not in?) {:step :none :why :no-dig}
+      here? e
+      :else {:step :approach :pos near})))
+
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
   with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
@@ -243,11 +276,13 @@
         _ (when (<= n max-escalations) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         opts {:own? (own-placed-fn c) :skip (skips c)}
+        into? (goal-walled? c result)
+        choose (if into? #(goal-way c feet goal % opts) #(escape/choose (:primitives c) feet goal % opts))
         e (or (when (shelter-exit? c result) {:step :leave-shelter})
               (gap-fill c result (:skip opts))
               (own-stair c feet goal)
-              (escape/choose (:primitives c) feet goal (may-dig-fn c) opts))
-        choosable? #(not= :none (:step (escape/choose (:primitives c) feet goal % opts)))
+              (choose (may-dig-fn c)))
+        choosable? #(not= :none (:step (choose %)))
         e (cond
             (not= :none (:step e)) e
             (and (spare-own? c) (choosable? (may-dig-fn c false)))
@@ -258,11 +293,11 @@
       (and (:cave-climb (ctx/mem c)) (or (> n max-escalations) (= :none (:step e))))
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up) (assoc :cave-ok true)))
           :again)
-      (> n max-escalations) (end/give-up! c pos tries status result {:escalation (or failed (:last-failed (ctx/mem c)) {:step :spent :n max-escalations})})
-      (= :none (:step e)) (end/give-up! c pos tries status result {:escalation (or failed e)})
+      (> n max-escalations) (end/give-up! c pos tries status result {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) {:step :spent :n max-escalations}) into? (assoc :into true))})
+      (= :none (:step e)) (end/give-up! c pos tries status result {:escalation (cond-> (or failed e) into? (assoc :into true))})
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
-                                               :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way out on foot: " (name (:step e))))})
+                                               :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if into? "in" "out") " on foot: " (name (:step e))))})
           (ctx/update-mem! c #(-> (merge % counted)
                                   (assoc :escalations (inc (:escalations % 0)) :escalation e :escalation-from feet
                                          :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))
@@ -332,7 +367,7 @@
   :again)
 
 (defn escalate?
-  "Whether a give-up with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), or the body is shut in (reach/enclosed?) and no door or gate
+  "Whether a give-up with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the body is shut in (reach/enclosed?) and no door or gate
   borders where it can walk (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never,
   is a wall). Never out of
   the body's own shelter: it is shut in on purpose."
@@ -343,6 +378,7 @@
            (some? (gap-fill c result (skips c)))
            (sprint-only? result)
            (dive? c result)
+           (goal-walled? c result)
            (and (escalate-reason? result (some-> (:doors (:args c)) keyword))
                 (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))
                 (not (escape/door-beside? (:primitives c) (end/feet-cell c) (some-> (:doors (:args c)) keyword)))))))
