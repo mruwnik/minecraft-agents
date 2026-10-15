@@ -874,6 +874,28 @@
           (is (some #{"take"} (call-args p "furnace" "op")))
           (is (< (count (filter #{"beef"} (map #(.-name %) (.-inventory (.self p))))) 4) "raw beef was cooked"))))))
 
+(defn ^:async two-beef-crafts!
+  "Furnaces crafted when get-food holds 2 raw beef at food 5, no furnace seen and the stone for one in the pack, with entities around."
+  [entities]
+  (let [{:keys [eng p]} (setup {:self {:food 5}
+                                :inventory [{:name "beef" :count 2} {:name "cobblestone" :count 8} {:name "coal" :count 2}]
+                                :entities entities
+                                :blocks {"-2,64,3" "crafting_table"}
+                                :recipes {"furnace" {:count 1 :needs {"cobblestone" 8} :table true}}}
+                               :step-ms 500
+                               :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
+    (core/submit! eng (list 'jobs.survival.get-food {}) {})
+    (await (run-until-idle! eng p 60))
+    (count (calls p "craft"))))
+
+(deftest raw-beef-from-a-hunt-is-cooked-but-a-penned-herd-is-eaten
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [home-herd [(assoc cow :id 8 :pos {:x 8 :y 64 :z 0}) (assoc cow :id 9 :pos {:x 9 :y 64 :z 0})]]
+          (is (pos? (await (two-beef-crafts! []))) "no cows left near, no pen: replacing the beef is dear")
+          (is (= 0 (await (two-beef-crafts! home-herd))) "two cows penned in the home zone: beef is cheap to replace"))))))
+
 (deftest a-little-raw-meat-is-cooked-when-a-furnace-and-fuel-are-carried
   (async done
     (tu/run-async done

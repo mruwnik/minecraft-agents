@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.furnace :as furnace]
@@ -23,6 +24,10 @@
    ::furnace-cost {:default 8 :doc "Hunger points a furnace to make and place is counted to cost when cooking is weighed against eating raw." :spec (a/num-in 0 nil)}
    ::place-cost {:default 2 :doc "Hunger points putting down a furnace already carried is counted to cost." :spec (a/num-in 0 nil)}
    ::walk-cost {:default 0.2 :doc "Hunger points one block of walking to a furnace is counted to cost." :spec (a/num-in 0 nil)}
+   ::meat-pen-adults {:default 2 :doc "Penned adults of an animal kind in sight that make a working breeding pen: the body's raw meat of that kind is then valued at its cooking gain only." :spec (a/int-in 1 nil)}
+   ::meat-wild-premium {:default 3 :doc "Extra worth of raw meat from wild animals (times its cooking gain) when none of the kind is near and no pen breeds it: every hunt leaves fewer." :spec (a/num-in 0 nil)}
+   ::meat-wild-relief {:default 4 :doc "Wild adults of a kind in sight that halve the wild premium." :spec (a/num-in 0.1 nil)}
+   ::meat-radius {:default 32 :doc "Blocks within which the animals of a kind count toward the replacement cost of its meat." :spec (a/int-in 1 nil)}
    ::cook-kinds {:default #{"chicken" "beef" "porkchop" "mutton" "rabbit" "cod" "salmon" "potato"} :doc "Raw foods the cook step puts in a furnace." :spec (a/set-of a/item?)}})
 
 (defn shelter-cook-reach [] (settings/get settings ::shelter-cook-reach))
@@ -32,6 +37,28 @@
 (defn cook-costs [] {:furnace-cost (settings/get settings ::furnace-cost)
                      :place-cost (settings/get settings ::place-cost)
                      :walk-cost (settings/get settings ::walk-cost)})
+
+(defn meat-opts [] {:pen-adults (settings/get settings ::meat-pen-adults)
+                    :wild-premium (settings/get settings ::meat-wild-premium)
+                    :wild-relief (settings/get settings ::meat-wild-relief)})
+
+(defn animals-seen
+  "{:wild n :penned n}: the adult animals of a kind in sight within ::meat-radius, outside and inside a zone or enclosure of the body's own."
+  [c animal]
+  (let [pens (atom [])
+        adults (->> (array-seq (.entities (:primitives c) #js {:radius (settings/get settings ::meat-radius) :kind "passive"
+                                                               :names #js [animal] :max 32}))
+                    (remove #(true? (.-baby %))))
+        penned (count (filter #(spare/penned? c pens %) adults))]
+    {:wild (- (count adults) penned) :penned penned}))
+
+(defn meat-factor-fn
+  "A raw food's replacement cost (jobs.lib.cost/meat-factor) from the animals the body sees now: name -> number, 1 for food no animal gives."
+  [c]
+  (let [opts (meat-opts)
+        factors (into {} (map (fn [[meat animal]] [meat (cost/meat-factor (animals-seen c animal) opts)]))
+                      (filter (comp (set (map :name (u/inventory (:primitives c)))) key) cost/meat-animal))]
+    #(get factors % 1)))
 
 (def no-bake-policy {:cap 1 :ttl (* 10 60 1000)})
 
@@ -88,7 +115,7 @@
   (let [cooker (nearest-cooker c)]
     (cost/cook-worth? (raw-carried c) (food-level c) (when cooker (u/dist (u/self-pos c) cooker))
                       (boolean (some #(contains? #{"furnace" "smoker"} (:name %)) (u/inventory (:primitives c))))
-                      (cook-costs))))
+                      (assoc (cook-costs) :meat-factor (meat-factor-fn c)))))
 
 (defn can-cook?
   "Mid-cook, or raw food carried and no live :no-cook entry, with a furnace known or cooking worth a furnace of its

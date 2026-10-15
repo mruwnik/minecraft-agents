@@ -123,6 +123,30 @@
   (is (not (cost/cook-worth? four-beef 5 200 false costs)) "a furnace too far")
   (is (cost/cook-worth? four-beef 3 4 false costs) "low food still cooks at a furnace near"))
 
+(def meat-opts {:pen-adults 2 :wild-premium 3 :wild-relief 4})
+
+(deftest meat-is-replaced-dearly-unless-a-working-pen-breeds-it
+  (are [seen expected] (= expected (cost/meat-factor seen meat-opts))
+    {:wild 0 :penned 0} 4
+    {:wild 4 :penned 0} 2.5
+    {:wild 0 :penned 1} 4
+    {:wild 0 :penned 2} 1
+    {:wild 9 :penned 3} 1))
+
+(deftest meat-is-priced-by-its-animal
+  (are [raw animal] (= animal (cost/meat-animal raw))
+    "beef" "cow" "porkchop" "pig" "mutton" "sheep" "chicken" "chicken" "rabbit" "rabbit" "cod" nil))
+
+(deftest raw-meat-from-a-hunt-pays-for-a-furnace-a-penned-herd-does-not
+  (let [two-beef [{:name "beef" :count 2}]
+        factor {:hunted (constantly 4) :penned (constantly 1)}]
+    (are [kind furnace? food expected]
+         (= expected (cost/cook-worth? two-beef food nil furnace? (assoc costs :meat-factor (factor kind))))
+      :hunted false 5 true
+      :penned false 5 false
+      :penned true 5 true
+      :hunted false 20 true)))
+
 (deftest a-carried-furnace-makes-small-batches-worth-cooking
   (let [one-mutton [{:name "mutton" :count 1}]]
     (is (not (cost/cook-worth? one-mutton 12 nil false costs)) "no furnace at all: one mutton does not pay for making one")

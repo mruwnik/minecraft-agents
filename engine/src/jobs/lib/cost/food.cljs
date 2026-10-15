@@ -46,20 +46,38 @@
   (let [cooked (if (= "potato" name) "baked_potato" (str "cooked_" name))]
     (when (foods/food? cooked) cooked)))
 
+(def meat-animal
+  "The animal a raw meat comes from; nil for any other food."
+  {"beef" "cow" "porkchop" "pig" "mutton" "sheep" "chicken" "chicken" "rabbit" "rabbit"})
+
+(defn meat-factor
+  "What a raw meat is worth against its cooking gain, for an animal kind seen {:wild n :penned n} (adults near the
+  body outside and inside pens it knows): 1 when a working pen (opts :pen-adults penned adults) breeds more;
+  otherwise 1 + :wild-premium, less as more wild adults (:wild-relief of them halve the premium) are near, since
+  every hunt leaves fewer."
+  [{:keys [wild penned]} {:keys [pen-adults wild-premium wild-relief]}]
+  (if (>= penned pen-adults)
+    1
+    (+ 1 (/ wild-premium (+ 1 (/ wild wild-relief))))))
+
 (defn cook-gain
-  "Hunger points cooking the raw food in inventory ([{:name :count}]) adds over eating it raw."
-  [inventory]
-  (reduce (fn [n {:keys [name count]}]
-            (if-let [cooked (cooked-name name)]
-              (+ n (* count (max 0 (- (foods/points cooked) (or (foods/points name) 0)))))
-              n))
-          0 inventory))
+  "Hunger points cooking the raw food in inventory ([{:name :count}]) adds over eating it raw, each raw food's gain
+  times (factor-of name), its replacement cost (1 when omitted)."
+  ([inventory] (cook-gain inventory (constantly 1)))
+  ([inventory factor-of]
+   (reduce (fn [n {:keys [name count]}]
+             (if-let [cooked (cooked-name name)]
+               (+ n (* (factor-of name) count (max 0 (- (foods/points cooked) (or (foods/points name) 0)))))
+               n))
+           0 inventory)))
 
 (defn cook-worth?
-  "Whether cooking the raw food in inventory beats eating it now: the points gained cover the walk to a furnace
-  (distance, nil when none is known: one is made, :furnace-cost, or only put down, :place-cost, when carried-cooker?
-  says one is in the pack; :walk-cost a block) with the cost growing as food falls. costs: {:furnace-cost :place-cost
-  :walk-cost}. Whether time allows (starvation ticking, a hostile near) is the caller's."
-  [inventory food distance carried-cooker? {:keys [furnace-cost place-cost walk-cost]}]
+  "Whether cooking the raw food in inventory beats eating it now: the points gained, each raw food valued by its
+  replacement cost (costs :meat-factor, name -> number, default 1: wild meat is dear, see meat-factor), cover the walk
+  to a furnace (distance, nil when none is known: one is made, :furnace-cost, or only put down, :place-cost, when
+  carried-cooker? says one is in the pack; :walk-cost a block) with the cost growing as food falls. costs:
+  {:furnace-cost :place-cost :walk-cost :meat-factor}. Whether time allows (starvation ticking, a hostile near) is
+  the caller's."
+  [inventory food distance carried-cooker? {:keys [furnace-cost place-cost walk-cost meat-factor]}]
   (let [cost (cond distance (* distance walk-cost) carried-cooker? place-cost :else furnace-cost)]
-    (>= (cook-gain inventory) (* cost (+ 1 (/ (- 20 food) 20))))))
+    (>= (cook-gain inventory (or meat-factor (constantly 1))) (* cost (+ 1 (/ (- 20 food) 20))))))
