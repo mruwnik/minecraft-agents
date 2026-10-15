@@ -43,7 +43,7 @@
   :cells-unplantable :no-sapling :cells [..]}) or :nothing-to-do. Condition-failed {:reason :plan-trouble :why text}
   (one forest.declined warn) while the plan is missing, unreadable or has no tree cells, and while no zone list is loaded.
   A started job always runs on to finish.
-  Ends :done with data {:felled :planted :left :bare} (info forest.done) when it felled or planted a tree. With none of
+  Ends :done with data {:felled :planted :left :bare} when it felled or planted a tree. With none of
   those it ends nothing-possible :left when it left trees standing, else condition-failed :nothing-to-do.")
 
 (a/defargs args
@@ -417,10 +417,9 @@
   (let [m (ctx/mem c)
         bare (vec (keep (fn [[pos [kind _]]] (when (= :bare kind) pos)) classes))
         left (vec (sort-by (juxt :x :y :z) (left-cells c)))
-        result {:felled (:felled m 0) :planted (:planted m 0) :left left :bare bare}]
-    (ctx/emit! c :forest.done :info
-               (assoc result :text (str "forest done: felled " (:felled result) ", planted " (:planted result)
-                                        ", left " (count left) ", bare " (count bare))))
+        result {:felled (:felled m 0) :planted (:planted m 0) :left left :bare bare
+                :text (str "forest done: felled " (:felled m 0) ", planted " (:planted m 0)
+                           ", left " (count left) ", bare " (count bare))}]
     (cond
       (pos? (+ (:felled result) (:planted result))) (ctx/end c :done nil result)
       (seq left) (ctx/end c :nothing-possible :left result)

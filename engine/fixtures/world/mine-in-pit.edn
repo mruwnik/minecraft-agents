@@ -1,6 +1,6 @@
 ;; Card b7d6e88b: mine in a pit (stone cells beside the floor under solid ceilings) walks to each dug cell's drop and ends
 ;; honestly. Stone mass x 8..24, z 8..24, y -1..5; the body stands in a 1-wide shaft [16 0..5 16].
-;; Should-succeed: 6 cobblestone mined from the shaft walls, mine.done with got >= 6. Should-fail: asking 45 from ~5 seen stone with
+;; Should-succeed: 6 cobblestone mined from the shaft walls, the mine ends with got >= 6. Should-fail: asking 45 from ~5 seen stone with
 ;; no tunnel and no descent ends :stopped, never :completed.
 {:defaults
  {:tags [:mine :jobs]
@@ -12,7 +12,7 @@
  :cases
  [{:name "pit-wall-stone-mined-and-collected"
    :act [[:job (jobs.gather.mine {:block "stone" :item "cobblestone" :count 6 :tunnel-length 4 :radius 6})]]
-   :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 6]}} :within-s 110 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 6]}} :within-s 110 :of-job true}]
    :after [[:item "cobblestone" [:>= 6]]]}
   {:name "forty-five-from-a-few-stones-stops-never-completes"
    :blocks [[:fill [8 0 8] [24 5 24] "air"] [:fill [14 0 14] [18 0 14] "stone"]]

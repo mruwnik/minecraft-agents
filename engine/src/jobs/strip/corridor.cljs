@@ -47,7 +47,7 @@
   seen from the far end that are not this segment (the caller folds them into its memory with merge-segments); or
   condition-failed with the cause :bag-full :food-short :no-torches :no-tool (data :tool kind) :spawner (:cell) :refused,
   or nothing-possible with :unreachable :dig-failed :cart-failed :torch-failed (data :cell, :child), the data carrying :taken.
-  Events: strip.corridor.done (info), strip.corridor.stopped (warn).")
+  Event: strip.corridor.stopped (warn).")
 
 (a/defargs args
   {:segment {:doc "the segment map {:y :axis :line :from :to :open-ends} of jobs.lib.strip, or its id string" :spec (a/pred "a segment map or its id string" #(or (map? %) (string? %))) :default nil}
@@ -89,8 +89,7 @@
 (defn finish!
   [c extra]
   (let [res (merge {:taken (:taken (ctx/mem c) {})} extra)]
-    (ctx/emit! c :strip.corridor.done :info (assoc res :text (str "corridor done: took " (pr-str (:taken res)))))
-    (ctx/end c :done nil res)))
+    (ctx/end c :done nil (assoc res :text (str "corridor done: took " (pr-str (:taken res)))))))
 
 (defn stop! [c reason extra]
   (let [res (merge {:taken (:taken (ctx/mem c) {})} extra)]

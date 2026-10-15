@@ -33,7 +33,7 @@
         (let [{:keys [eng p seen]} (fm/start oak-world {"forest" oak-cell})]
           (core/submit! eng (list fm/job {:plan "forest"}) {})
           (await (fm/ticks eng 1))
-          (is (= 1 (count (h/events-of seen :forest.done))) "done after one tick")
+          (is (= 1 (count (h/events-of seen :completed))) "done after one tick")
           (is (= [[3 64 0 "oak_sapling"]] (places p))))))))
 
 (deftest prepare-readies-a-cell-in-one-round

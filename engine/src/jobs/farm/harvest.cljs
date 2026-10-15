@@ -438,7 +438,8 @@
         lost (lost-cells (:primitives c) (:planted m))
         bare (vec (distinct (concat (:bare m) (map :pos (:replant m)) lost)))
         no-crop? (and (not (:plan-cells c)) (zero? (:cut m 0)) (empty? (:replant m)) (not (crop-seen? c)))
-        result {:cut (:cut m 0) :replanted (:replanted m 0) :bare bare :lost lost :gave-up (gave-up? c)}
+        result {:cut (:cut m 0) :replanted (:replanted m 0) :bare bare :lost lost :gave-up (gave-up? c)
+                :text (str "harvest done: cut " (:cut m 0) ", replanted " (:replanted m 0) ", bare " (count bare))}
         worked (max (:cut result) (:replanted result))
         left (count (:skipped m))]
     (when no-crop?
@@ -449,10 +450,6 @@
                  {:cells bare :lost lost
                   :text (str "harvest could not replant " (count bare) " cells: " (str/join ", " (map pr-str bare))
                              (when (seq lost) (str "; lost after replanting: " (str/join ", " (map pr-str lost)))))}))
-    (when-not no-crop?
-      (ctx/emit! c :harvest.done :info
-               {:cut (:cut result) :replanted (:replanted result) :bare-count (count bare) :gave-up (:gave-up result)
-                :text (str "harvest done: cut " (:cut result) ", replanted " (:replanted result) ", bare " (count bare))}))
     (cond
       no-crop? (ctx/end c :condition-failed :no-crop-seen result)
       (and (pos? worked) (common/enough? c worked (+ worked left))) (ctx/end c :done nil result)

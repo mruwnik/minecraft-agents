@@ -67,7 +67,8 @@
 
 (defn calls [{:keys [p]} name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn done-event [s] (first (events-of s :farm-tend.done)))
+(defn done-events [s] (filterv #(#{:completed :stopped} (:kind %)) @(:seen s)))
+(defn done-event [s] (first (done-events s)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn block-at [{:keys [p]} x y z] (some-> (.blockAt p #js {:x x :y y :z z}) (.-name)))

@@ -1,7 +1,8 @@
 (ns engine.farm-tend-plan-test
   "jobs.farm.tend working a plan (:plan id, optional :part) against the fake world: two crops in one plan, each sown
   where the plan names it, till then sow, wrong crops left and reported, zones and footprints, declines."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -68,7 +69,8 @@
 (defn placed [s] (into {} (map (fn [c] [(pos-of c) (.-item (.-args c))])) (calls s "place")))
 (defn dug [s] (set (map pos-of (calls s "dig"))))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn done-event [s] (first (events-of s :farm-tend.done)))
+(defn done-events [s] (filterv #(#{:completed :stopped} (:kind %)) @(:seen s)))
+(defn done-event [s] (first (done-events s)))
 (defn step [s name] (get-in (done-event s) [:steps name]))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn block-at [{:keys [p]} x y z] (some-> (.blockAt p #js {:x x :y y :z z}) (.-name)))
@@ -103,7 +105,7 @@
               ev (done-event s)]
           (is (= {[2 64 2] "wheat_seeds" [3 64 2] "wheat_seeds" [2 64 3] "carrot" [3 64 3] "carrot"} (placed s)))
           (is (= ["wheat" "carrots"] (keys (:parts ev))) "one report per part, in order")
-          (is (= 1 (count (events-of s :farm-tend.done))))
+          (is (= 1 (count (done-events s))))
           (is (true? (finished? s))))))))
 
 (deftest parts-limit-the-job-to-the-named-parts
@@ -112,6 +114,11 @@
       (fn ^:async t []
         (let [s (await (run {:plan "mix" :parts ["carrots"]} (world-of farmland-all all-seed) {"mix" (plan-of)} 60))]
           (is (= #{[2 64 3] [3 64 3]} (set (keys (placed s))))))))))
+
+(defn pass-ends
+  "The child_ended events of finished tend passes (their ending data has :steps)."
+  [s]
+  (filterv #(contains? (ce/data %) :steps) (filter #(= :child_ended (:kind %)) @(:seen s))))
 
 (defn ^:async run-standing
   "Submit (repeat (tend args)) over the world, tick n times 700 ms apart; the setup map."
@@ -131,11 +138,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (run-standing {:plan "mix" :part "wheat"} stuck-wheat {"mix" (plan-of)} 80))]
-          (is (= 1 (count (events-of s :farm-tend.done))) "one pass, then the part rests")
+          (is (= 1 (count (pass-ends s))) "one pass, then the part rests")
           (is (some #(= [:wheat] (map keyword (:backed-off %))) (events-of s :waiting)) "the wait names the part")
           (swap! (:clock s) + 660000)
           (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
-          (is (= 2 (count (events-of s :farm-tend.done))) "after the back-off it tries again"))))))
+          (is (= 2 (count (pass-ends s))) "after the back-off it tries again"))))))
 
 (deftest a-missing-seed-leaves-its-cells-bare-with-one-note-and-the-other-crop-is-still-sown
   (async done
@@ -349,7 +356,7 @@
               (await (core/tick! (:eng s))))
             (is (pos? before))
             (is (= before (count (calls s "place"))) "nothing is placed after the plan was deleted")
-            (is (nil? (done-event s)))))))))
+            (is (empty? (filterv #(= :completed (:kind %)) (done-events s))))))))))
 
 ;; ---------------------------------------------------------------- declines
 

@@ -18,16 +18,16 @@
             :parts [{:id "stair" :stair {:from #at [16 0 16] :heading :east :to-y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.shaft :data {:shaft "s" :branch 1}} :within-s 100 :of-job true}
-            {:event {:source :job :kind :mine.done :data {:got [:>= 4] :text [:contains "via shaft s"]}} :within-s 130 :of-job true}]
+            {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :text [:contains "via shaft s"]}} :within-s 130 :of-job true}]
    :after [[:not-block [17 -1 16] "dirt"] [:not-block [19 -3 16] "dirt"] [:item "cobblestone" [:>= 4]]
            [:memory {:entries {:mine/shafts [{:data {"s" {:n [:>= 1]}}}]}}]]}
   {:name "no-shaft-stair-is-cut-and-declaring-it-is-suggested"
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
-   :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 4] :shaft-suggest {:to-y [:any]} :text [:contains "plans.mjs mineshaft"]}} :within-s 130 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :shaft-suggest {:to-y [:any]} :text [:contains "plans.mjs mineshaft"]}} :within-s 130 :of-job true}]
    :after [[:item "cobblestone" [:>= 4]]]}
   {:name "shaft-required-without-a-shaft-digs-nothing"
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8 :shaft :required})]]
-   :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :no-shaft}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :no-shaft}} :within-s 60 :of-job true}]
    :after [[:block [17 -1 16] "dirt"] [:block [16 -1 16] "dirt"] [:item "cobblestone" 0]]}
   ;; Card 65ac2209: a body standing on a step of a half-dug shaft (steps 1-2 cut) continues the stair from there: 2 steps, not 4 from the top.
   {:name "half-dug-shaft-continued-from-the-step-the-body-stands-on"
@@ -36,7 +36,7 @@
    :plans [{:id "s" :kind :mineshaft :metadata {:by "$body"}
             :parts [{:id "stair" :stair {:from #at [16 0 16] :heading :east :to-y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
-   :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 4] :text [:contains "via shaft s (stair 2 steps"]}} :within-s 130 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :text [:contains "via shaft s (stair 2 steps"]}} :within-s 130 :of-job true}]
    :after [[:item "cobblestone" [:>= 4]]]}
   ;; Card a50ce32a: a shaft whose top cannot be reached ends mine.no-shaft :unreachable and the usual descent goes on.
   {:name "unreachable-shaft-top-ends-no-shaft-and-the-usual-descent-follows"
@@ -45,7 +45,7 @@
             :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.no-shaft :data {:reason :unreachable}} :within-s 120 :of-job true}
-            {:event {:source :job :kind :mine.done :data {:got [:>= 4]}} :within-s 180 :of-job true}]
+            {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4]}} :within-s 180 :of-job true}]
    :after [[:block [6 0 6] "air"] [:item "cobblestone" [:>= 4]]]
    :limit-s 200}
   ;; Card 5ee1bdc0: an older own stair declared as a shaft that stops (bedrock in its first step) is marked failed; mine does not walk
@@ -56,7 +56,7 @@
             :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :north :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.no-shaft :data {:shaft "s"}} :within-s 120 :of-job true}
-            {:event {:source :job :kind :mine.done :data {:got [:>= 4]}} :within-s 180 :of-job true}]
+            {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4]}} :within-s 180 :of-job true}]
    :after [[:block [7 -1 6] "bedrock"] [:item "cobblestone" [:>= 4]]]
    :limit-s 200}
   ;; Card 1b7f6a3e: a shaft whose top lies in another's zone is not used (social rule); :ignore-zones? uses it.
@@ -66,7 +66,7 @@
             :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.no-shaft :data {:text [:contains "mine uses no mineshaft"]}} :within-s 100 :of-job true}
-            {:event {:source :job :kind :mine.done :data {:got [:>= 4]}} :within-s 180 :of-job true}]
+            {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4]}} :within-s 180 :of-job true}]
    :after [[:block [7 -1 6] "dirt"] [:item "cobblestone" [:>= 4]]]
    :limit-s 200}
   {:name "shaft-in-a-foreign-zone-is-used-with-ignore-zones"
@@ -74,6 +74,6 @@
    :plans [{:id "s" :kind :mineshaft :metadata {:by "SomeoneElse"}
             :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8 :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 4] :text [:contains "via shaft s"]}} :within-s 180 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :text [:contains "via shaft s"]}} :within-s 180 :of-job true}]
    :after [[:not-block [7 -1 6] "dirt"] [:item "cobblestone" [:>= 4]]]
    :limit-s 200}]}

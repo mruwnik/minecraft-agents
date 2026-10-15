@@ -50,7 +50,7 @@
   or condition-failed (:bad-plan :no-site :no-shears :no-torches :food-short :base-full, or :child-failed), nothing-possible
   (:unreachable when the walk down found no way, :trips-exhausted, :child-failed), or :child-failed ending with the kind of a
   child that ended condition-failed, limit-reached or impossible, with the same data and
-  :phase, :child and :because (the child's reason) for a child. Events: strip.site.done (info), strip.site.stopped (warn).")
+  :phase, :child and :because (the child's reason) for a child. Event: strip.site.stopped (warn).")
 
 (a/defargs args
   {:site {:doc "the site's name, the key of its memory" :spec a/name? :default nil}
@@ -403,10 +403,10 @@
         data (merge {:segments (counts s) :taken (:taken s {}) :hauled (:hauled s {}) :smelted (:smelted s {}) :smelt-failed (:smelt-failed s [])}
                     (dissoc fields :reason :child-kind))
         text (str "strip site " (:site (:args c)) " " (name status) " " (pr-str (counts s)))]
-    (ctx/emit! c (if (= :done status) :strip.site.done :strip.site.stopped) (if (= :done status) :info :warn)
-               (assoc (merge data (select-keys fields [:reason])) :text text))
+    (when-not (= :done status)
+      (ctx/emit! c :strip.site.stopped :warn (assoc (merge data (select-keys fields [:reason])) :text text)))
     (if (= :done status)
-      (ctx/end c :done nil data)
+      (ctx/end c :done nil (assoc data :text text))
       (ctx/end c (cond (and (= :child-failed reason) (passed-kinds child-kind)) child-kind
                        (condition-reasons reason) :condition-failed
                        :else :nothing-possible)

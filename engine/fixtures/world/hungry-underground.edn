@@ -27,6 +27,6 @@
          [:await {:source :job :kind :waiting :data {:reason :low-health}} 30]
          [:rcon "effect give $BODY minecraft:instant_health 1 2 true"]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :mine.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :low-health}}}
-            {:event {:source :job :kind :mine.done :data {:got 1}} :within-s 90 :of-job true}]
+            {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :low-health}}}
+            {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 90 :of-job true}]
    :after [[:item "raw_iron" 1]]}]}

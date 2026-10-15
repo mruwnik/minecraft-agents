@@ -38,7 +38,7 @@
   Refused cells are in the result's :refused [{:pos :block :reason}] and the warn tidy.refused.
   The sweep goes top-down, nearest first. It ends by collecting the drops within the field's extent plus 4 blocks
   (jobs.forestry.collect-drops as a child).
-  Ends :done with data {:dug n :collected n :kept [...] :wrong [...] :refused [...]} (info tidy.done); over a tidy
+  Ends :done with data {:dug n :collected n :kept [...] :wrong [...] :refused [...]}; over a tidy
   field it digs nothing and is done. When strays were found, none dug and some refused, it ends condition-failed
   :refused with the same data.
   Condition-failed {:reason :plan-trouble :why text} (one tidy.declined warn naming the plan and the reason) while the
@@ -267,7 +267,10 @@
   (let [m (ctx/mem c)
         plan (:plan (:args c))
         refused (vec (:refused m))
-        result {:dug (:dug m 0) :collected (:collected m 0) :kept (:kept found) :wrong (:wrong found) :refused refused}]
+        result {:dug (:dug m 0) :collected (:collected m 0) :kept (:kept found) :wrong (:wrong found) :refused refused
+                :text (str "tidy of " plan " done: "
+                           (if (and (zero? (:dug m 0)) (empty? refused)) "nothing to dig" (str "dug " (:dug m 0)))
+                           (when (seq refused) (str ", refused " (count refused))))}]
     (when (seq refused)
       (ctx/emit! c :tidy.refused :warn {:plan plan :refused refused
                                         :text (str "tidy of " plan " refused " (count refused) " strays: "
@@ -276,11 +279,6 @@
       (ctx/emit! c :tidy.wrong :warn {:plan plan :cells (:wrong found)
                                       :text (str "tidy of " plan " left " (count (:wrong found)) " wrong blocks: "
                                                  (str/join ", " (map #(str (pr-str (:pos %)) " " (:found %)) (:wrong found))))}))
-    (ctx/emit! c :tidy.done :info {:plan plan :dug (:dug result) :collected (:collected result) :kept (count (:kept found))
-                                   :wrong (count (:wrong found)) :refused (count refused)
-                                   :text (str "tidy of " plan " done: "
-                                              (if (and (zero? (:dug result)) (empty? refused)) "nothing to dig" (str "dug " (:dug result)))
-                                              (when (seq refused) (str ", refused " (count refused))))})
     (if (and (zero? (:dug result)) (seq refused))
       (ctx/end c :condition-failed :refused result)
       (ctx/end c :done nil result))))

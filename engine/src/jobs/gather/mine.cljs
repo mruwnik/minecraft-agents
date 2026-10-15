@@ -166,7 +166,7 @@
   is never done. Quote: about ::item-s s an item, open-ended; yields up to :count of the item.
 
   Data {:got n :reason r} (text: mine got n of m: reason) plus
-  :dig-reason, :resumes, :tunnel and :left when set; info mine.done with
+  :dig-reason, :resumes, :tunnel and :left when set, and
   :mended, the cells filled; its text (and the result's text when :got is 0) names the stair's steps and the tunnel's length,
   heading and height (\"; stair down 48 steps; tunnel 32 blocks east at y 16\"); :descent {:steps :stop} is in the result after any descent. With reason :wet (also when a tunnel dug nothing and seen blocks were skipped for water), :wet-skipped counts the seen blocks left for water beside them. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
   and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
@@ -331,8 +331,8 @@
                                               :text (str "mine walked out of zone " (:name zn) " to " (str/join "," (access/cell here)) " before it digs")})
           (ctx/update-mem! c assoc :pre-start here)
           :again)
-      :else (do (ctx/emit! c :mine.done :warn {:got 0 :reason :zone-exit :text (str "mine could not get out of zone " (:name zn) " before it digs")})
-                (end-run c {:got 0 :reason :zone-exit})))))
+      :else (end-run c {:got 0 :reason :zone-exit :mended 0
+                        :text (str "mine could not get out of zone " (:name zn) " before it digs")}))))
 
 ;; ------------------------------------------------------------------ the dig phase
 
@@ -415,8 +415,7 @@
   [c & [why]]
   (let [kind (tools/needed-kind (:primitives c) (:block (:args c)))]
     (ctx/emit! c :mine.no-tool :warn {:tool kind :text (str "mine has no " kind " for " (:block (:args c)))})
-    (ctx/emit! c :mine.done :info {:got 0 :reason :no-tool :tool kind :mended 0 :text "mine done: no-tool, got 0, mended 0"})
-    (end-run c (cond-> {:got 0 :reason :no-tool :tool kind} why (assoc :why why)))))
+    (end-run c (cond-> {:got 0 :reason :no-tool :tool kind :mended 0 :text "mine done: no-tool, got 0, mended 0"} why (assoc :why why)))))
 
 (defn fetch-limits
   "The limits map of :fetch when it allows a tool, else nil."
@@ -469,8 +468,8 @@
     (cond
       (= :continue r) :continue
       (at-pre-start? c) :again
-      :else (do (ctx/emit! c :mine.done :warn {:got 0 :reason :not-back :text (str "mine could not get back to " (str/join "," (access/cell cell)) " after fetching its tool")})
-                (end-run c {:got 0 :reason :not-back})))))
+      :else (end-run c {:got 0 :reason :not-back :mended 0
+                        :text (str "mine could not get back to " (str/join "," (access/cell cell)) " after fetching its tool")}))))
 
 (defn flooded!
   "The head is in water: no more digging (the cut may be what let it in). Warn; before the first dig end at once
@@ -480,8 +479,7 @@
   (if (:phase (ctx/mem c))
     (do (ctx/update-mem! c assoc :reason :flooded)
         (wrap-up! c))
-    (do (ctx/emit! c :mine.done :info {:got 0 :reason :flooded :mended 0 :text "mine done: flooded, got 0, mended 0"})
-        (end-run c {:got 0 :reason :flooded :text "mine got nothing: the head is in water"}))))
+    (end-run c {:got 0 :reason :flooded :mended 0 :text "mine got nothing: the head is in water"})))
 
 (defn hungry!
   "Food is short and get-food found none (trip/food-short?; not for soil, dug at the surface near home): before the first dig end at once {:got 0
@@ -491,8 +489,7 @@
   (if (:phase (ctx/mem c))
     (do (ctx/update-mem! c assoc :reason :hungry)
         (wrap-up! c))
-    (do (ctx/emit! c :mine.done :info {:got 0 :reason :hungry :mended 0 :text "mine done: hungry, got 0, mended 0"})
-        (end-run c {:got 0 :reason :hungry :text "mine got nothing: hungry, no food"}))))
+    (end-run c {:got 0 :reason :hungry :mended 0 :text "mine got nothing: hungry, no food"})))
 
 (defn ^:async step [c]
   (settle-dig! c)

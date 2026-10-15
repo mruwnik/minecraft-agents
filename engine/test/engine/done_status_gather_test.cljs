@@ -115,3 +115,10 @@
     {"3,63,0" "dirt" "3,64,0" "oak_sapling"} {:collect true} [:later :wrapping-up]
     {"3,63,0" "dirt" "3,64,0" "oak_sapling"} {:children {:dig {}}} [:later :wrapping-up]
     {"3,63,0" "dirt"} {} [:later :preparing]))
+
+(deftest fertilize-and-compost-are-done-once-their-count-is-reached
+  (are [sym args m reason] (= reason (tu/kind-reason (done-of sym {} args m)))
+    'jobs.farm.fertilize {:max 3} {:used 3} [:ok :fertilized]
+    'jobs.farm.fertilize {:max 3} {:used 1} [:later :fertilizing]
+    'jobs.farm.compost {:times 3} {:taken 3} [:ok :composted]
+    'jobs.farm.compost {:times 3} {:taken 1} [:later :composting]))

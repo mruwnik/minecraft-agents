@@ -74,11 +74,14 @@
 (def can-start? (checks/zones-declined :compost.declined "compost"))
 
 (defn done?
-  "Counts only (the round ends the call with its data): the bone meal taken and the rest of :times."
+  "Ok once :times bone meal is taken; else later with the bone meal taken and the rest of :times."
   [c]
-  (let [taken (:taken (ctx/mem c) 0)]
-    (contract/later :composting (str "compost: " taken " bone meal taken") :units :bone-meal :done taken
-                    :left (max 0 (- (:times (:args c)) taken)) :result {:fed (:fed (ctx/mem c) {}) :bone-meal taken})))
+  (let [taken (:taken (ctx/mem c) 0)
+        data [:units :bone-meal :done taken :left (max 0 (- (:times (:args c)) taken))
+              :result {:fed (:fed (ctx/mem c) {}) :bone-meal taken}]]
+    (if (>= taken (:times (:args c)))
+      (apply contract/ok :composted (str "composted, " taken " bone meal taken") data)
+      (apply contract/later :composting (str "compost: " taken " bone meal taken") data))))
 
 (defn quote-of [c]
   (let [times (:times (:args c))]
@@ -110,7 +113,12 @@
   [c extra]
   (let [m (ctx/mem c)
         taken (:taken m 0)
-        data (merge {:fed (:fed m {}) :bone-meal taken} extra)
+        fed (:fed m {})
+        data (merge {:fed fed :bone-meal taken
+                     :text (if (= :nothing-to-feed (:reason extra))
+                             "nothing left to feed the composter"
+                             (str "composted " (apply + (vals fed)) " items, took " taken " bone meal"))}
+                    extra)
         reason (:reason extra)]
     (cond
       (nil? reason) (ctx/end c :done nil data)
@@ -167,7 +175,6 @@
 
             (>= taken times)
             (let [fed (:fed mem {})]
-              (ctx/emit! c :compost.done :info {:fed fed :bone-meal taken :text (str "composted " (apply + (vals fed)) " items, took " taken " bone meal")})
               (finish! c {:level level}))
 
             :else
@@ -197,9 +204,7 @@
                           :again)))
 
                   (empty? todo)
-                  (do (ctx/emit! c :compost.done :info {:fed (:fed mem {}) :bone-meal taken :reason :nothing-to-feed
-                                                        :text "nothing left to feed the composter"})
-                      (finish! c {:level level :reason :nothing-to-feed}))
+                  (finish! c {:level level :reason :nothing-to-feed})
 
                   :else
                   (let [[name _] (first todo)

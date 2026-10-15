@@ -118,11 +118,13 @@
                           (checks/refusing :meal "bone meal carried or fetchable" no-meal-source)))
 
 (defn done?
-  "Counts only (the round ends the call with its data): the uses made and the targets left within :max."
+  "Ok once :max uses are made; else later with the uses made and the targets left within :max."
   [c]
   (let [used (:used (ctx/mem c) 0)]
-    (contract/later :fertilizing (str "fertilize: " used " bone meal used") :units :cells :done used
-                    :left (min (count (targets c)) (max 0 (- (:max (:args c)) used))) :result {:used used})))
+    (if (>= used (:max (:args c)))
+      (contract/ok :fertilized (str "fertilized with " used " bone meal") :units :cells :done used :left 0 :result {:used used})
+      (contract/later :fertilizing (str "fertilize: " used " bone meal used") :units :cells :done used
+                      :left (min (count (targets c)) (max 0 (- (:max (:args c)) used))) :result {:used used}))))
 
 (defn quote-of [c]
   (let [n (min (:max (:args c)) (count (raw-targets c)))]
@@ -133,15 +135,15 @@
   "The ending of a run with nothing left to do, budget spent or no bone meal."
   [c]
   (let [used (:used (ctx/mem c) 0)
-        left (count (raw-targets c))]
-    (ctx/emit! c :fertilize.done :info {:used used :text (str "fertilized with " used " bone meal")})
+        left (count (raw-targets c))
+        data {:used used :text (str "fertilized with " used " bone meal")}]
     (cond
-      (and (pos? used) (common/enough? c used (min (:max (:args c)) (+ used left)))) (ctx/end c :done nil {:used used})
+      (and (pos? used) (common/enough? c used (min (:max (:args c)) (+ used left)))) (ctx/end c :done nil data)
       (pos? used) (if (has-meal? (:primitives c))
-                    (ctx/end c :condition-failed :refused {:used used})
-                    (ctx/end c :nothing-possible :need {:used used}))
-      (pos? left) (ctx/end c :condition-failed :refused {:used 0})
-      :else (ctx/end c :done nil {:used 0}))))
+                    (ctx/end c :condition-failed :refused data)
+                    (ctx/end c :nothing-possible :need data))
+      (pos? left) (ctx/end c :condition-failed :refused data)
+      :else (ctx/end c :done nil data))))
 
 (defn ^:async fertilize-one!
   "Finish when nothing is left to fertilize, the budget is spent or the bone meal ran out; else walk to the nearest

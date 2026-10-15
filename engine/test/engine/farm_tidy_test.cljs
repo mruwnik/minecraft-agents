@@ -157,7 +157,6 @@
           (is (= #{{:pos [5 64 2] :found "carrots" :want "crop wheat"} {:pos [3 63 3] :found "dirt" :want "farmland"}}
                  (set (:wrong result))))
           (is (= [] (:refused result)))
-          (is (= 1 (count (of-kind seen :tidy.done))))
           (is (= 1 (count (of-kind seen :tidy.wrong)))))))))
 
 (deftest every-dig-goes-through-the-dig-job
@@ -220,8 +219,7 @@
             (is (= before (count (calls p "dig"))))
             (is (= 0 (:dug again)))
             (is (= 0 (:collected again)))
-            (is (= 2 (count (of-kind seen :tidy.done))))
-            (is (= "tidy of field done: nothing to dig" (:message (second (of-kind seen :tidy.done)))))))))))
+            (is (= "tidy of field done: nothing to dig" (:text again)))))))))
 
 (deftest a-part-limits-the-work-to-that-part
   (async done
@@ -478,8 +476,7 @@
             (await (run-until-empty (:eng b) 200))
             (is (= (set strays) (dug p)))
             (is (= (count strays) (count (calls p "dig"))) "no cell was dug twice")
-            (is (= 1 (count (of-kind (:seen b) :tidy.done))))
-            (is (= 5 (:dug (:data (first (of-kind (:seen b) :tidy.done))))) "the dig the cut came with is counted from the world after the restart")))))))
+            (is (= 5 (:dug (:data (first (filterv #(= :completed (:kind %)) @(:seen b)))))) "the dig the cut came with is counted from the world after the restart")))))))
 
 (deftest the-opt-out-needs-no-zone-list
   (async done

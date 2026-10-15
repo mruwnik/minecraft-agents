@@ -18,8 +18,8 @@
    :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["cobblestone" 8] ["torch" 8]]}
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 10 :radius 8})]]
    :expect [{:event {:source :job :kind :fetch.done} :within-s 120 :of-job true}
-            {:event {:source :job :kind :mine.done :data {:got 1}} :within-s 190 :of-job true}
-            {:no-event {:source :job :kind :mine.done :data {:reason :not-back}} :for-s 190 :until {:source :job :kind :mine.done}}]
+            {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:reason :not-back}} :for-s 190 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "raw_iron" 1] [:not-block [21 0 16] "iron_ore"] [:block [16 0 23] "crafting_table"]]
    :limit-s 220}
   {:name "stair-walks-back-after-the-body-is-moved-off-it"
@@ -36,10 +36,10 @@
    :body {:at [3.5 0 16.5]}
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 12 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.tunnel-skipped} :within-s 60 :of-job true}
-            {:event {:source :job :kind :mine.done :data {:got 1}} :within-s 190 :of-job true}]
+            {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 190 :of-job true}]
    :after [[:item "raw_iron" 1] [:block [8 0 16] "torch"]]}
   {:name "heading-west-beats-the-facing-east"
    :blocks [[:set [12 0 16] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :heading :west :tunnel-length 8 :radius 8})]]
-   :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 120 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 120 :of-job true}]
    :after [[:item "raw_iron" 1] [:block [17 0 16] "stone"] [:block [20 0 16] "stone"]]}]}

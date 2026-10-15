@@ -77,7 +77,11 @@
     s))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn done-event [s] (first (events-of s :mine.done)))
+(defn done-events
+  "The mine job's ending events."
+  [s]
+  (filterv #(and (#{:completed :stopped} (:kind %)) (= "jobs.gather.mine" (:name %))) @(:seen s)))
+(defn done-event [s] (first (done-events s)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn job-mem [{:keys [eng]}] (core/job-memory eng "j1"))
@@ -624,7 +628,6 @@
         (doseq [left [1 3]]
           (let [{:keys [s out]} (await (as-child {:block "stone" :count 2} {:blocks (cells "stone" [3 4] [64] [0]) :inventory [{:name "stone_pickaxe" :count 1 :durability left :max 131}]} nil 10))]
             (is (zero? (dig-count s)))
-            (is (= :no-tool (:reason (done-event s))))
             (is (= [:condition-failed :no-tool] [(:kind out) (contract/cause-key out)]) (pr-str out))))))))
 
 (deftest a-pickaxe-with-uses-to-spare-digs
@@ -936,7 +939,7 @@
                                  (rock-world {"5,64,0" "lava"}) 80))]
           (is (= 1 (count (events-of s :stair.sealed))))
           (is (not= "lava" (block-at s 5 64 0)))
-          (is (= :tunnel-length (:reason (last (events-of s :mine.done))))))))))
+          (is (= :tunnel-length (:reason (last (done-events s))))))))))
 
 (deftest the-tunnel-length-bound-ends-the-job-with-a-reason
   (async done
@@ -1346,7 +1349,7 @@
         (let [s (await (shafted via-shaft (assoc ore-east "7,60,-4" "iron_ore") [] 400))
               _ (core/submit! (:eng s) (spec via-shaft) {})
               _ (await (run-ticks s 400))
-              e (second (events-of s :mine.done))]
+              e (second (done-events s))]
           (is (= 2 (get (inv s) "raw_iron")))
           (is (= [[7 60 0] "north"] [(:origin (:tunnel e)) (:heading (:tunnel e))]))
           (is (re-find #"branch 2 north" (:text e))))))))
@@ -1360,7 +1363,7 @@
               _ (core/submit! (:eng s) (spec via-shaft) {})
               _ (await (run-ticks s 400))
               [no] (events-of s :mine.no-shaft)
-              second-done (second (events-of s :mine.done))]
+              second-done (second (done-events s))]
           (is (= {:shaft "s" :reason :unreachable} (select-keys no [:shaft :reason])))
           (is (not= "east" (:heading (:tunnel second-done))) "the usual descent does not dig the shaft's branch from the stair bottom")
           (is (not (re-find #"branch 2" (str (:text second-done)))))
@@ -2027,10 +2030,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [aisle (-> rock (dissoc "1,64,0" "2,64,0" "1,65,0" "2,65,0"))
-              {:keys [s]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "west" :tunnel-length 3 :mend false}
+              {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "west" :tunnel-length 3 :mend false}
                                            {:blocks aisle :drops {"iron_ore" "raw_iron" "stone" "cobblestone"}}
                                            "stone_pickaxe" 120 {:move-to [2.5 64 0.5]}))]
-          (is (= [0 64 0] (:origin (:tunnel (done-event s)))) "the origin is the cell the job began on, not the fetch spot"))))))
+          (is (= [0 64 0] (:origin (:tunnel (:data out)))) "the origin is the cell the job began on, not the fetch spot"))))))
 
 (deftest a-pickaxe-that-cannot-be-fetched-ends-stopped-no-tool
   (async done

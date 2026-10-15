@@ -50,7 +50,7 @@
   {:reason :nothing-to-do} (with :backed-off, :covered, :refused, :food-reserve) or {:reason :short-seed :seeds} when no
   step would run, after one look round from here when a cell was never seen. A started run always continues. A step under
   way is not re-decided.
-  Ends :done with data {:steps {step summary} :field {:crops :bare :untilled}} (info farm-tend.done) when some step
+  Ends :done with data {:steps {step summary} :field {:crops :bare :untilled}} when some step
   changed something (units steps); nothing-possible :gave-up with the same data when children ran and none did;
   limit-reached with a child's cause when a child hit a limit; condition-failed :nothing-to-do when no step ran.
   :field is counted live at the end. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n}, plant {:planted
@@ -73,7 +73,7 @@
   and again before the act. Untilled ground the rules refuse is left alone with one farm-tend.refused warn.
   When only refused ground remains, the check stays false: the job waits and the reason is on record.
   :parts (a list of part names) works those parts in one job, a pass each in order, and ends :done with
-  {:parts {part {:steps :field}}} (one info farm-tend.done). A part (or the whole field) whose pass leaves a step that would
+  {:parts {part {:steps :field}}}. A part (or the whole field) whose pass leaves a step that would
   still run rests 10 minutes (jobs.lib.standing): its condition fails for that long, the cause names it as :backed-off, and the
   other parts go on; so the job can stand in the queue under repeat without starving other jobs.
   Condition-failed {:reason :plan-trouble :why text} (one farm-tend.declined warn) while the plan is missing, unreadable,
@@ -401,7 +401,7 @@
       (some-> results first val))))
 
 (defn finish-all!
-  "Every part has had its pass: the event and the ending."
+  "Every part has had its pass: the ending."
   [c]
   (let [m (ctx/mem c)
         results (:results m)
@@ -409,10 +409,8 @@
         out (out-of c)
         summaries (step-summaries m)
         fields (if multi? (map :field (vals (:parts out))) [(:field out)])
-        sum #(reduce + (map (fn [f] (get f % 0)) fields))]
-    (when (seq results)
-      (ctx/emit! c :farm-tend.done :info
-                 (assoc out :text (str "farm tend done: " (sum :crops) " crops, " (sum :bare) " bare, " (sum :untilled) " untilled"))))
+        sum #(reduce + (map (fn [f] (get f % 0)) fields))
+        out (cond-> out (seq results) (assoc :text (str "farm tend done: " (sum :crops) " crops, " (sum :bare) " bare, " (sum :untilled) " untilled")))]
     (cond
       (:limit m) (ctx/end c :limit-reached (:limit m) out)
       (some #(apply worked? %) summaries) (ctx/end c :done nil out)

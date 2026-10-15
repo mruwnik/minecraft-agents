@@ -124,9 +124,9 @@
       (fn ^:async t []
         (let [e (await (ending-of (ft/setup ft/two-wheat) fertilize {} 30))]
           (is (= :done (:kind e)))
-          (is (= {:used 4} (:data e))))
+          (is (= {:used 4} (dissoc (:data e) :text))))
         (is (= {:kind :done :cause nil :data {:used 0}}
-               (await (ending-of (ft/setup {:inventory ft/meal :blocks {"2,64,0" "wheat"} :ages {"2,64,0" 7}}) fertilize {} 10)))
+               (update (await (ending-of (ft/setup {:inventory ft/meal :blocks {"2,64,0" "wheat"} :ages {"2,64,0" 7}}) fertilize {} 10)) :data dissoc :text))
             "nothing unripe: nothing to do")
         (let [env (ft/setup {:inventory ft/meal :blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}})]
           (.override (.-world (:p env)) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :consumed 0}))
@@ -281,7 +281,7 @@
       (fn ^:async t []
         (let [e (await (ending-of (ht/start {:world ht/wheat-world}) harvest {} 200))]
           (is (= {:kind :done :cause nil} (kc e)))
-          (is (= {:cut 9 :replanted 9 :bare [] :lost [] :gave-up false} (:data e))))
+          (is (= {:cut 9 :replanted 9 :bare [] :lost [] :gave-up false} (dissoc (:data e) :text))))
         (let [cells (for [x (range 8 13)] (ht/cell-key x 64 0))
               e (await (ending-of (ht/start {:world {:blocks (zipmap cells (repeat "wheat")) :ages (zipmap cells (repeat 7)) :unreachable cells}})
                                   harvest {:radius 14} 400))]

@@ -61,7 +61,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory meal :blocks {"2,64,0" "wheat" "3,64,1" "beetroots"}
                                       :ages {"2,64,0" 7 "3,64,1" 3}})]
-          (is (= {:used 0} (await (child-outcome eng job {} 5))))
+          (is (= {:used 0} (dissoc (await (child-outcome eng job {} 5)) :text)))
           (is (empty? (calls p "useOn"))))))))
 
 (deftest fertilize-max-stops-after-that-many-uses
@@ -69,7 +69,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup two-wheat)]
-          (is (= {:used 1} (await (child-outcome eng job {:max 1} 10))))
+          (is (= {:used 1} (dissoc (await (child-outcome eng job {:max 1} 10)) :text)))
           (is (= 1 (count (calls p "useOn")))))))))
 
 (deftest fertilize-waits-without-bone-meal-while-crops-are-unripe
@@ -89,7 +89,7 @@
           (.override (.-world p) "useOn"
                      (fn ^:async f [_ _ _] #js {:status "unchanged" :consumed 0}))
           (is (= {:used 0 :status :stopped :reason :refused :kind :condition-failed}
-                 (let [r (await (tu/child-outcome eng job {} 10))] (assoc (dissoc r :ending) :kind (get-in r [:ending :kind])))))
+                 (let [r (await (tu/child-outcome eng job {} 10))] (assoc (dissoc r :ending :text) :kind (get-in r [:ending :kind])))))
           (is (= 1 (count (calls p "useOn")))))))))
 
 (deftest fertilize-at-touches-only-that-crop
@@ -107,7 +107,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (assoc two-wheat :inventory [{:name "bone_meal" :count 1}]))]
-          (is (= {:used 1} (await (child-outcome eng job {} 10))))
+          (is (= {:used 1} (dissoc (await (child-outcome eng job {} 10)) :text)))
           (is (= 1 (count (calls p "useOn")))))))))
 
 (deftest fertilize-center-moves-the-radius-search
@@ -172,7 +172,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup two-grass)
               r (await (child-outcome eng job {:grass true} 20))]
-          (is (= {:used 2} r))
+          (is (= {:used 2} (dissoc r :text)))
           (is (= 2 (count (calls p "useOn")))))))))
 
 (deftest fertilize-grass-off-leaves-grass-alone
@@ -180,7 +180,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup two-grass)]
-          (is (= {:used 0} (await (child-outcome eng job {} 10))))
+          (is (= {:used 0} (dissoc (await (child-outcome eng job {} 10)) :text)))
           (is (empty? (calls p "useOn"))))))))
 
 (deftest fertilize-grass-skips-covered-grass
@@ -188,7 +188,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory meal :blocks {"2,63,0" "grass_block" "2,64,0" "stone"}})]
-          (is (= {:used 0} (await (child-outcome eng job {:grass true} 10))))
+          (is (= {:used 0} (dissoc (await (child-outcome eng job {:grass true} 10)) :text)))
           (is (empty? (calls p "useOn"))))))))
 
 (deftest fertilize-grass-max-stops-after-that-many-uses
@@ -196,7 +196,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup two-grass)]
-          (is (= {:used 1} (await (child-outcome eng job {:grass true :max 1} 10))))
+          (is (= {:used 1} (dissoc (await (child-outcome eng job {:grass true :max 1} 10)) :text)))
           (is (= 1 (count (calls p "useOn")))))))))
 
 (deftest fertilize-grass-waits-without-bone-meal

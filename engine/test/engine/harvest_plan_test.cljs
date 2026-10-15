@@ -47,7 +47,7 @@
               result (await (h/child-outcome eng h/job {:plan "field"} 200))]
           (is (= #{[2 2]} (dug p)))
           (is (= #{[2 2 "wheat_seeds"] [4 2 "wheat_seeds"]} (placed p)))
-          (is (= {:cut 1 :replanted 2 :bare [] :lost [] :gave-up false} result))
+          (is (= {:cut 1 :replanted 2 :bare [] :lost [] :gave-up false} (dissoc result :text)))
           (is (= [0 3 0] (mapv #(h/age-at p % 64 2) [2 3 4])))
           (is (= ["carrots" 7] [(h/block-at p 5 64 2) (h/age-at p 5 64 2)]))
           (is (= ["wheat" 7] [(h/block-at p 6 64 2) (h/age-at p 6 64 2)])))))))
@@ -61,7 +61,7 @@
               result (await (h/child-outcome eng h/job {:plan "field"} 200))]
           (is (= #{[2 2]} (dug p)))
           (is (= {:cut 1 :replanted 0 :bare [{:x 2 :y 64 :z 2} {:x 4 :y 64 :z 2}] :lost [] :gave-up false}
-                 (update result :bare #(vec (sort-by :x %))))))))))
+                 (dissoc (update result :bare #(vec (sort-by :x %))) :text))))))))
 
 (deftest a-part-limits-the-field-to-that-part
   (async done

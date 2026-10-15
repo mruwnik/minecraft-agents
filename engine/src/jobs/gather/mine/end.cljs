@@ -66,7 +66,7 @@
       :else (ctx/end c :nothing-possible cause data))))
 
 (defn finish!
-  "Emit the outcome and end the job (end-run)."
+  "End the job (end-run) with the outcome."
   [c]
   (let [{:keys [goal mended dig-reason resumes tunnel left descent wet-skipped] :as m} (ctx/mem c)
         suggest (shaft-suggest m (:args c))
@@ -74,30 +74,30 @@
         m (assoc m :shaft-suggest suggest :unreached unreached)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
         reason (if (and (zero? got) (pos? (or wet-skipped 0)) (#{:none :no-drops :tunnel-length :tunnel-stopped} (:reason m))) :wet (:reason m))
+        wet-text (when (= :wet reason) (str "; " (or wet-skipped 0) " seen blocks beside water skipped, pass :wet true to dig them"))
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (or (= :no-stone-found reason) (pos? (:steps descent 0))) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes) suggest (assoc :shaft-suggest suggest) (seq unreached) (assoc :unreached unreached) (seq (:holes-open m)) (assoc :holes-open (:holes-open m))
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
               (seq (:legs m)) (assoc :legs (:legs m))
               (seq (ore-pick/picked c)) (assoc :ores (ore-pick/picked c))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left))
               (seq (:lost m)) (assoc :lost (:lost m)))]
-    (ctx/emit! c :mine.done (if (= :not-home reason) :warn :info) (merge {:got got :reason reason :mended (or mended 0)
-                                          :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0)
-                                                     (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
-                                                     (when (= :wet reason) (str "; " (or wet-skipped 0) " seen blocks beside water skipped, pass :wet true to dig them"))
-                                                     (dug-text m reason)
-                                                     (when-let [{:keys [end back-at walked-back?]} (when (pos? (:steps tunnel 0)) tunnel)]
-                                                       (str (when end (str ", ended at " (str/join "," end)))
-                                                            (if walked-back?
-                                                              (str ", walked back to " (str/join "," back-at))
-                                                              ", did not get back to its origin"))))}
-                                         why))
     (end-run c (merge (cond
                         (zero? got) {:text (str "mine got nothing: " (name reason)
                                                 (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
+                                                wet-text
                                                 (dug-text m reason))}
                         (= :not-home reason) {:text (str "mine got " got " but did not get back to its start")}
-                        (< got (:count (:args c))) {:text (str "mine got " got " of " (:count (:args c)) ": " (name reason) (dug-text m reason))})
-                      {:got got :reason reason}
+                        (< got (:count (:args c))) {:text (str "mine got " got " of " (:count (:args c)) ": " (name reason) wet-text (dug-text m reason))}
+                        :else {:text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0)
+                                          (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
+                                          wet-text
+                                          (dug-text m reason)
+                                          (when-let [{:keys [end back-at walked-back?]} (when (pos? (:steps tunnel 0)) tunnel)]
+                                            (str (when end (str ", ended at " (str/join "," end)))
+                                                 (if walked-back?
+                                                   (str ", walked back to " (str/join "," back-at))
+                                                   ", did not get back to its origin"))))})
+                      {:got got :reason reason :mended (or mended 0)}
                       (:end-cause m)
                       why))))
 

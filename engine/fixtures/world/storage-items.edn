@@ -38,13 +38,13 @@
    :body {:inventory [["stone_pickaxe" 1] ["dirt" 1] ["sand" 1] ["gravel" 1] ["tuff" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["netherrack" 1] ["deepslate" 1] ["calcite" 1] ["coarse_dirt" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["feather" 1] ["bone" 1] ["string" 1] ["gunpowder" 1] ["rotten_flesh" 1] ["spider_eye" 1] ["leather" 1] ["paper" 1] ["sugar" 1] ["slime_ball" 1] ["ink_sac" 1] ["egg" 1] ["snowball" 1] ["glowstone_dust" 1] ["redstone" 1] ["lapis_lazuli" 1]]}
    :act [[:job (jobs.gather.mine {:block "stone" :count 2 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :trip.deposited} :within-s 60 :of-job true}
-            {:event {:source :job :kind :mine.done} :within-s 95 :of-job true}]}
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 95 :of-job true}]}
   {:name "mine-with-no-chest-known-goes-on"
    :blocks [[:fill [22 0 18] [28 2 22] "stone"]]
    :body {:inventory [["stone_pickaxe" 1] ["dirt" 1] ["sand" 1] ["gravel" 1] ["tuff" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["netherrack" 1] ["deepslate" 1] ["calcite" 1] ["coarse_dirt" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["feather" 1] ["bone" 1] ["string" 1] ["gunpowder" 1] ["rotten_flesh" 1] ["spider_eye" 1] ["leather" 1] ["paper" 1] ["sugar" 1] ["slime_ball" 1] ["ink_sac" 1] ["egg" 1] ["snowball" 1] ["glowstone_dust" 1] ["redstone" 1] ["lapis_lazuli" 1]]}
    :act [[:job (jobs.gather.mine {:block "stone" :count 2 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :trip.no-chest} :within-s 60 :of-job true}
-            {:event {:source :job :kind :mine.done} :within-s 95 :of-job true}]}
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 95 :of-job true}]}
   {:name "deposit-into-a-full-chest-places-the-carried-chest"
    :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:stone\",count:64},{Slot:1b,id:\"minecraft:stone\",count:64},{Slot:2b,id:\"minecraft:stone\",count:64},{Slot:3b,id:\"minecraft:stone\",count:64},{Slot:4b,id:\"minecraft:stone\",count:64},{Slot:5b,id:\"minecraft:stone\",count:64},{Slot:6b,id:\"minecraft:stone\",count:64},{Slot:7b,id:\"minecraft:stone\",count:64},{Slot:8b,id:\"minecraft:stone\",count:64},{Slot:9b,id:\"minecraft:stone\",count:64},{Slot:10b,id:\"minecraft:stone\",count:64},{Slot:11b,id:\"minecraft:stone\",count:64},{Slot:12b,id:\"minecraft:stone\",count:64},{Slot:13b,id:\"minecraft:stone\",count:64},{Slot:14b,id:\"minecraft:stone\",count:64},{Slot:15b,id:\"minecraft:stone\",count:64},{Slot:16b,id:\"minecraft:stone\",count:64},{Slot:17b,id:\"minecraft:stone\",count:64},{Slot:18b,id:\"minecraft:stone\",count:64},{Slot:19b,id:\"minecraft:stone\",count:64},{Slot:20b,id:\"minecraft:stone\",count:64},{Slot:21b,id:\"minecraft:stone\",count:64},{Slot:22b,id:\"minecraft:stone\",count:64},{Slot:23b,id:\"minecraft:stone\",count:64},{Slot:24b,id:\"minecraft:stone\",count:64},{Slot:25b,id:\"minecraft:stone\",count:64},{Slot:26b,id:\"minecraft:stone\",count:64}]}"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
@@ -87,5 +87,5 @@
    :body {:inventory [["stone_pickaxe" 1] ["raw_iron" 5] ["coal" 3] ["dirt" 1] ["sand" 1] ["gravel" 1] ["tuff" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["netherrack" 1] ["deepslate" 1] ["calcite" 1] ["coarse_dirt" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["feather" 1] ["bone" 1] ["string" 1] ["gunpowder" 1] ["rotten_flesh" 1] ["spider_eye" 1] ["leather" 1] ["paper" 1] ["sugar" 1] ["slime_ball" 1] ["ink_sac" 1] ["egg" 1] ["snowball" 1] ["glowstone_dust" 1]]}
    :act [[:job (jobs.gather.mine {:block "stone" :count 2 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :trip.deposited} :within-s 60 :of-job true}
-            {:event {:source :job :kind :mine.done} :within-s 95 :of-job true}]
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 95 :of-job true}]
    :after [[:item "raw_iron" 5] [:item "coal" 3] [:item "feather" 0]]}]}

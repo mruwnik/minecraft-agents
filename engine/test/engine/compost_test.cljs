@@ -52,8 +52,7 @@
               result (await (child-outcome eng job {:at at :items ["wheat_seeds"]} 40))]
           (is (= 1 (:bone-meal result)))
           (is (= {"wheat_seeds" 7} (:fed result)))
-          (is (= 3 (carried p "wheat_seeds")))
-          (is (= 1 (count (kinds seen :compost.done)))))))))
+          (is (= 3 (carried p "wheat_seeds"))))))))
 
 (deftest compost-is-one-call-the-whole-run
   (async done

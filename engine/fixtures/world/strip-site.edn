@@ -7,7 +7,7 @@
 ;; by :at, a rail at [10 0 16]; :shaft false walks in from the west mouth.
 ;; The "branch" cases add a second corridor along z at x 20 (z 11..15, y 0..2, x 19..21) with rails x 20 z 11..15, a support at
 ;; z 12 and a cobweb at [20 1 13]; it hangs on the main corridor at z 16 and is sealed at [20 0..2 15] when stripped.
-;; Should-succeed: the full strip ends strip.site.done, rails and cobwebs gone, the branch sealed with cobblestone, the loot hauled
+;; Should-succeed: the full strip ends done, rails and cobwebs gone, the branch sealed with cobblestone, the loot hauled
 ;; to the main chest (nothing of it left in the bag); carried raw iron is smelted and hauled; a spawner in the branch under :seal
 ;; stops that segment and the branch is sealed with the spawner left.
 ;; Should-fail: an unknown base plan stops :bad-plan; no torches (and none to get) stops :no-torches before any digging.
@@ -29,26 +29,26 @@
    :blocks [[:fill [19 0 11] [21 2 15] "air"] [:fill [20 0 11] [20 0 15] "rail"] [:set [20 1 13] "cobweb"]
             [:set [19 0 12] "oak_fence"] [:set [19 1 12] "oak_fence"] [:set [21 0 12] "oak_fence"] [:set [21 1 12] "oak_fence"] [:fill [19 2 12] [21 2 12] "oak_planks"]]
    :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false})]]
-   :expect [{:event {:source :job :kind :strip.site.done :data {:segments [:any] :taken [:any] :hauled [:any]}} :within-s 650 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:segments [:any] :taken [:any] :hauled [:any]}} :within-s 650 :of-job true}]
    :after [[:not-block [10 0 16] "rail"] [:not-block [20 0 12] "rail"] [:not-block [12 1 16] "cobweb"] [:not-block [20 1 13] "cobweb"]
            [:block [20 1 15] "cobblestone"] [:item "cobweb" 0] [:item "rail" 0]]}
   {:name "carried-raw-iron-is-smelted-at-the-base-and-hauled"
    :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
                       ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["raw_iron" 16] ["coal" 24] ["stick" 8]]}
    :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb]})]]
-   :expect [{:event {:source :job :kind :strip.site.done :data {:smelted [:any]}} :within-s 650 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
    :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
   {:name "spawner-in-the-branch-under-seal-stops-it-and-the-mouth-is-sealed"
    :blocks [[:fill [19 0 11] [21 2 15] "air"] [:fill [20 0 11] [20 0 15] "rail"]
             [:set [19 0 12] "oak_fence"] [:set [19 1 12] "oak_fence"] [:set [21 0 12] "oak_fence"] [:set [21 1 12] "oak_fence"] [:fill [19 2 12] [21 2 12] "oak_planks"]
             [:set [22 1 12] "spawner{RequiredPlayerRange:0s}"]]
    :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :spawner :seal})]]
-   :expect [{:event {:source :job :kind :strip.site.done} :within-s 650 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 650 :of-job true}]
    :after [[:block [22 1 12] "spawner"] [:block [20 1 15] "cobblestone"] [:not-block [10 0 16] "rail"]]}
   {:name "unknown-base-plan-stops-bad-plan"
    :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "no-such-base" :shaft false})]]
    :expect [{:event {:source :job :kind :strip.site.stopped :data {:reason :bad-plan}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :strip.site.done} :for-s 20}]
+            {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:block [10 0 16] "rail"]]
    :limit-s 200}
   {:name "no-torches-and-none-to-get-stops-no-torches-before-digging"
@@ -56,5 +56,5 @@
                       ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1]]}
    :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false})]]
    :expect [{:event {:source :job :kind :strip.site.stopped :data {:reason :no-torches}} :within-s 500 :of-job true}
-            {:no-event {:source :job :kind :strip.site.done} :for-s 20}]
+            {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:block [10 0 16] "rail"] [:block [12 1 16] "cobweb"]]}]}

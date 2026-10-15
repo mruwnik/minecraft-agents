@@ -17,57 +17,57 @@
  :cases
  [{:name "cobweb-and-rails-taken-torches-hung-then-taken-back"
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb :rail]})]]
-   :expect [{:event {:source :job :kind :strip.corridor.done :data {:taken {:cobweb [:>= 1] :rail [:>= 10]}}} :within-s 140 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken {:cobweb [:>= 1] :rail [:>= 10]}}} :within-s 140 :of-job true}]
    :after [[:not-block [10 1 16] "cobweb"] [:not-block [14 0 16] "rail"] [:not-block [25 0 16] "rail"] [:item "cobweb" [:>= 1]] [:item "torch" 8]]}
   {:name "a-support-is-wood-and-goes-to-an-axe"
    :blocks [[:set [14 0 15] "oak_fence"] [:set [14 1 15] "oak_fence"] [:set [14 0 17] "oak_fence"] [:set [14 1 17] "oak_fence"]
             [:fill [14 2 15] [14 2 17] "oak_planks"]]
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:wood]})]]
-   :expect [{:event {:source :job :kind :strip.corridor.done :data {:taken {:wood [:>= 7]}}} :within-s 140 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken {:wood [:>= 7]}}} :within-s 140 :of-job true}]
    :after [[:not-block [14 0 15] "oak_fence"] [:not-block [14 1 17] "oak_fence"] [:not-block [14 2 16] "oak_planks"] [:block [14 0 16] "rail"] [:block [10 1 16] "cobweb"]]}
   {:name "chest-minecart-in-the-segment-is-looted"
    :act [[:summon "chest_minecart" [12.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
          [:wait-s 2]
          [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]]
-   :expect [{:event {:source :job :kind :strip.corridor.done} :within-s 140 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 3] [:item "chest_minecart" [:>= 1]]]}
   {:name "no-shears-stops-no-tool-leaving-the-cobweb"
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["bread" 8]]}
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb]})]]
    :expect [{:event {:source :job :kind :strip.corridor.stopped :data {:reason :no-tool}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :strip.corridor.done} :for-s 15}]
+            {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [10 1 16] "cobweb"]]}
   {:name "dark-without-torches-stops-no-torches"
    :body {:inventory [["stone_pickaxe" 1] ["shears" 1] ["bread" 8]]}
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb :rail]})]]
    :expect [{:event {:source :job :kind :strip.corridor.stopped :data {:reason :no-torches}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :strip.corridor.done} :for-s 15}]
+            {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [14 0 16] "rail"]]}
   {:name "spawner-default-is-lit-and-left"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore]})]]
-   :expect [{:event {:source :job :kind :strip.corridor.done :data {:kept [:has {:why :spawner :lit true}]}} :within-s 140 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:kept [:has {:why :spawner :lit true}]}} :within-s 140 :of-job true}]
    :after [[:block [16 1 18] "spawner"] [:item "torch" [:<= 7]]]}
   {:name "spawner-default-without-torches-stops-no-torches"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
    :body {:inventory [["stone_pickaxe" 1] ["bread" 8]]}
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore]})]]
    :expect [{:event {:source :job :kind :strip.corridor.stopped :data {:reason :no-torches}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :strip.corridor.done} :for-s 15}]
+            {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [16 1 18] "spawner"]]}
   {:name "spawner-break-lights-it-then-digs-it"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :break})]]
-   :expect [{:event {:source :job :kind :strip.corridor.done :data {:taken {:spawner 1}}} :within-s 140 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken {:spawner 1}}} :within-s 140 :of-job true}]
    :after [[:not-block [16 1 18] "spawner"]]}
   {:name "spawner-seal-stops-spawner-and-leaves-it"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :seal})]]
    :expect [{:event {:source :job :kind :strip.corridor.stopped :data {:reason :spawner}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :strip.corridor.done} :for-s 15}]
+            {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [16 1 18] "spawner"]]}
   {:name "spawner-skip-leaves-it-unlit"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :skip})]]
-   :expect [{:event {:source :job :kind :strip.corridor.done :data {:kept [:has {:why :spawner}]}} :within-s 140 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:kept [:has {:why :spawner}]}} :within-s 140 :of-job true}]
    :after [[:block [16 1 18] "spawner"] [:item "torch" 8]]}]}

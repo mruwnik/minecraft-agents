@@ -18,14 +18,14 @@
    :body {:at [16.5 0 16.5]}
    :act [[:job (jobs.gather.mine {:block "stone" :count 3 :radius 8 :tunnel-length 0 :descend-limit 0})]]
    :expect [{:count-event {:source :job :kind :mine.unreachable} :for-s 130 :at-least 4 :of-job true}
-            {:event {:source :job :kind :mine.done :data {:got 0}} :within-s 130 :of-job true}
-            {:no-event {:source :job :kind :mine.gave-up} :for-s 130 :until {:source :job :kind :mine.done}}]
+            {:event {:source :job :kind #{:completed :stopped} :data {:got 0}} :within-s 130 :of-job true}
+            {:no-event {:source :job :kind :mine.gave-up} :for-s 130 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:block [13 7 16] "stone"] [:block [16 7 19] "stone"]]}
   {:name "pit-with-obsidian-walls-pillars-home"
    :blocks [[:fill [14 -5 14] [18 -1 18] "obsidian"] [:fill [15 -3 15] [17 -1 17] "air"] [:fill [15 -4 15] [17 -4 17] "stone"]]
    :body {:at [16.5 0 10.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
    :act [[:job (jobs.gather.mine {:block "stone" :count 2 :radius 10 :tunnel-length 0 :descend-limit 0})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :home-last}} :within-s 130 :of-job true}
-            {:event {:source :job :kind :mine.done :data {:got [:>= 2]}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :mine.not-home} :for-s 140 :until {:source :job :kind :mine.done}}]
+            {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 2]}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :mine.not-home} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [16.5 0 10.5] 2]]}]}
