@@ -80,3 +80,19 @@
          (is (= :blocked @out))
          (is (= 64 (js/Math.floor (second (e/feet p)))) "still on the plateau")
          (done))))))
+
+(deftest go-near-forwards-the-y-margin-to-the-walk
+  (async done
+    ((fn ^:async t []
+       (let [{:keys [eng]} (e/setup {:blocks (floor -2 -3 60 3)})
+             seen (atom [])
+             real (get-in eng [:jobs 'jobs.movement.go-to])
+             spy (assoc real :round (fn [c] (swap! seen conj (:y-margin (:args c))) ((:round real) c)))
+             job {:round (fn ^:async margin-round [c]
+                           (await (near/go-near! c {:x 10 :y 64 :z 0} 0 {:y-margin 7 :ways #{:walk}}))
+                           (ctx/end c :done nil))}
+             eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to spy 'margin-probe job))]
+         (core/submit! eng '(margin-probe) {})
+         (await (e/tick-out! eng 1000))
+         (is (= [7] (distinct @seen)))
+         (done))))))

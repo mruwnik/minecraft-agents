@@ -29,11 +29,11 @@
 (defn open-skip-drop [] (settings/get settings ::open-skip-drop))
 
 (defn open-start
-  "Where a strip tunnel really starts: from cell, along heading dir [dx dz] over cells already open (feet and head passable, a
-  solid floor, as seen), stepping down where the line drops to an open cell with a floor (a stair), at most max-drop (default
+  "Where a strip tunnel really starts: from cell, along heading dir [dx dz] over cells the body cut itself (own?, on a feet cell) that are
+  open (feet and head passable, a solid floor, as seen), stepping down where the line drops to an open cell with a floor (a stair), at most max-drop (default
   ::open-skip-drop) blocks below cell in all; the last such cell."
-  [name-at cell [dx dz] & [max-drop]]
-  (let [open? (fn [p] (and (passable (name-at p)) (passable (name-at (update p :y inc)))
+  [name-at cell [dx dz] own? & [max-drop]]
+  (let [open? (fn [p] (and (own? p) (passable (name-at p)) (passable (name-at (update p :y inc)))
                            (rules/solid-floor? name-at (update p :y dec))))
         ahead (fn [p] (-> p (update :x + dx) (update :z + dz)))]
     (loop [p cell n 0]
@@ -204,7 +204,9 @@
   (let [m (ctx/mem c)
         t (or (:tunnel m)
               (let [start (cell-of (u/self-pos c))
-                    origin (open-start #(u/seen-name (:primitives c) %) start (headings (:heading m)) (when (:stay-level (:args c)) 0))]
+                    own (ledger/own-cells c)
+                    origin (open-start #(u/seen-name (:primitives c) %) start (headings (:heading m)) #(contains? own [(:x %) (:y %) (:z %)])
+                                       (when (:stay-level (:args c)) 0))]
                 (when (not= origin start)
                   (ctx/emit! c :mine.tunnel-skipped :info {:from (access/cell start) :to (access/cell origin) :heading (:heading m)
                                                            :text (str "mine's tunnel line is open from " (str/join "," (access/cell start)) " to "

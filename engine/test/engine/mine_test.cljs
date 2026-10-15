@@ -860,10 +860,16 @@
     (fn [{:keys [x y z]}] (get m [x y z]))))
 
 (def east [1 0])
-(defn start-x [name-at] (:x (mine-tunnel/open-start name-at {:x 0 :y 64 :z 0} east)))
+(defn start-x [name-at] (:x (mine-tunnel/open-start name-at {:x 0 :y 64 :z 0} east any?)))
 
 (deftest open-start-runs-over-open-cells-with-a-floor
   (is (= 5 (start-x (open-line (range 0 6) (range 0 6))))))
+
+(deftest open-start-skips-only-cells-the-body-cut
+  (let [line (open-line (range 0 6) (range 0 6))
+        own-to #(fn [{:keys [x]}] (<= x %))]
+    (is (= 3 (:x (mine-tunnel/open-start line {:x 0 :y 64 :z 0} east (own-to 3)))) "the open cells beyond its cut are a cave or another's room")
+    (is (= 0 (:x (mine-tunnel/open-start line {:x 0 :y 64 :z 0} east (constantly false)))))))
 
 (deftest open-start-stops-at-an-unseen-cell
   (is (= 2 (start-x (open-line (concat (range 0 3) [4]) (range 0 6))))))
@@ -884,7 +890,7 @@
                      (when (zero? z)
                        (let [floor (- 63 x)]
                          (cond (= y floor) "stone" (> y floor) "air"))))
-        drop (- 64 (:y (mine-tunnel/open-start descending {:x 0 :y 64 :z 0} east)))]
+        drop (- 64 (:y (mine-tunnel/open-start descending {:x 0 :y 64 :z 0} east any?)))]
     (is (pos? drop) "a stair still counts")
     (is (= (mine-tunnel/open-skip-drop) drop) "the origin sits the drop bound below the start")))
 
@@ -894,8 +900,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 2 :mend false}
-                                 (rock-world (assoc corridor "3,65,0" "wall_torch")) 80))]
+        (let [s (start {:world (rock-world (assoc corridor "3,65,0" "wall_torch"))})]
+          (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 0] :delta [1 0] :steps 5})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 2 :mend false}) {})
+          (await (run-ticks s 80))
           (is (= [[6 65 0] [6 64 0] [7 65 0] [7 64 0]] (dug-cells s)) "new rock only, no torch")
           (is (= 2 (:length (first (tunnel-ends s))))))))))
 
@@ -903,8 +911,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 1 :mend false}
-                                 (rock-world {"1,64,0" "air" "1,65,0" "air" "1,66,0" "air" "1,63,0" "air"}) 80))]
+        (let [s (start {:world (rock-world {"1,64,0" "air" "1,65,0" "air" "1,66,0" "air" "1,63,0" "air"})})]
+          (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors [[1 62 0]]})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 1 :mend false}) {})
+          (await (run-ticks s 80))
           (is (= [[2 63 0] [2 64 0]] (sort-by second (dug-cells s))) "cut at the lower level")
           (is (empty? (filter #(= :no-floor (:reason %)) (tunnel-ends s)))))))))
 
@@ -2838,3 +2848,9 @@
           (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2 :mend false :from [-6 64 0]}) {})
           (await (run-ticks s 500))
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)))))))))
+
+(deftest a-stay-level-walk-to-ore-plans-no-way-over-the-ground
+  (is (= 8 (:y-margin (mine/dig-walk-opts {:stay-level true} false false))) "a way round over a hill is no way for a run that stays level")
+  (is (nil? (:y-margin (mine/dig-walk-opts {} false false))))
+  (is (= #{:walk :clear-seal} (:ways (mine/dig-walk-opts {:stay-level true} true false))))
+  (is (= :go (:at-night (mine/dig-walk-opts {} false true)))))

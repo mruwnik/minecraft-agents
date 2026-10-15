@@ -2,7 +2,7 @@
 ;; e2e3c99f: no stone pickaxe, so the fetch walks the body south to a table; the tunnel still runs east from the cell it began on
 ;; (the ore stands on that line; a tunnel from the table would find none). c1bdf186: a stair under way, the body is moved off it
 ;; (as a night reflex does); the stair walks back (stair.return) and finishes instead of ending :off-stair.
-;; 940dc025: a re-run along an old open corridor starts past it (mine.tunnel-skipped) and digs the new rock; a floor torch in the corridor stays.
+;; 940dc025: a re-run along its own old corridor (in memory) starts past it (mine.tunnel-skipped) and digs the new rock; a floor torch in the corridor stays.
 ;; f5ffa4f1: :heading :west beats the way the body faces (east).
 ;; Stone mass x 2..30, z 8..24, y 0..6 (cases 1, 3, 4); the stair case has its own mass.
 {:defaults
@@ -34,6 +34,7 @@
   {:name "rerun-along-an-old-corridor-digs-new-rock"
    :blocks [[:fill [3 0 16] [14 1 16] "air"] [:set [8 0 16] "torch"] [:set [18 0 16] "iron_ore"]]
    :body {:at [3.5 0 16.5]}
+   :memory [{:kind :tunnel-way :data {:dim "overworld" :origin #at [3 0 16] :delta [1 0] :steps 11} :policy {:cap 30 :ttl :forever}}]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 12 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.tunnel-skipped} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 190 :of-job true}]
