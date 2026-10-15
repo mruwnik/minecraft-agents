@@ -41,11 +41,7 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         out (atom :not-done)
-        parent {:check (fn [c] (if-let [w (ctx/child-wait c :kid job args)] (ctx/wait c w) true))
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (assoc (tu/recording-parent job args out) :conditions [[:fn #(ctx/child-wait % :kid job args)]])
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

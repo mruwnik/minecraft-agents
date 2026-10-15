@@ -29,15 +29,15 @@
 (defn leaver
   "A caller job, as the night-shelter job is by day: dig-leave/leave! every round until it hands a result over."
   [out toward]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async leaver-round [c]
             (let [r (await (dig-leave/leave! c (merge {:toward toward} (:leave-args (:args c)))))]
-              (if (map? r) (do (reset! out r) :done) :continue)))})
+              (if (map? r) (do (reset! out r) (ctx/end c :done nil)) :continue)))})
 
 (defn again
   "A caller job that leaves twice; between the leaves a second shelter is sealed (one log wall at 3 64 0)."
   [p runs]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async again-round [c]
             (let [r (await (dig-leave/leave! c))]
               (cond

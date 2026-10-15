@@ -28,7 +28,7 @@
                 (swap! clock + ahead-ms)
                 (reset! begun true))
               (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
-                (if (= :continue e) :continue (do (reset! out e) :done))))}))
+                (if (= :continue e) :continue (do (reset! out e) (ctx/end c :done nil)))))}))
 
 (defn ^:async go!
   "Run go-to with args under a parent (defaults defs) whose clock moves on ahead-ms first; {:ending :p :seen}."

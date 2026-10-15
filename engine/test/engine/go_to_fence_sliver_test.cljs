@@ -13,15 +13,14 @@
   [world first second]
   (let [{:keys [eng clock] :as s} (gd/setup world [])
         outs (atom [])
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async two-walks-round [c]
-                         (let [r (await (ctx/call-child c :a 'jobs.movement.go-to first))]
-                           (if-not (= :done r)
+                         (let [r (await (ctx/call c :a 'jobs.movement.go-to first))]
+                           (if (= :continue r)
                              r
-                             (do (swap! outs conj (ctx/child-result c :a))
-                                 (let [r2 (await (ctx/call-child c :b 'jobs.movement.go-to second))]
-                                   (when (= :done r2) (swap! outs conj (ctx/child-result c :b)))
-                                   r2)))))}
+                             (do (swap! outs conj (tu/outcome r))
+                                 (let [r2 (await (ctx/call c :b 'jobs.movement.go-to second))]
+                                   (if (= :continue r2) r2 (do (swap! outs conj (tu/outcome r2)) (ctx/end c :done nil))))))))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'two-walks parent))]
     (core/submit! eng '(two-walks) {})
     (await (gd/tick-out! eng clock 40))

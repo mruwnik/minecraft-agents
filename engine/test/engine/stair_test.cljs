@@ -269,17 +269,15 @@
   [spec args prep]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans :wrap-rounds :call)))
+        p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans :wrap-rounds :raw)))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
-                         (let [call (:call spec ctx/call-child)
-                               r (await (call c :kid job (if (satisfies? IDeref args) @args args)))]
-                           (cond
-                             (= :continue r) r
-                             (= call ctx/call-child) (do (when (= :done r) (reset! out (ctx/child-result c :kid))) r)
-                             :else (do (reset! out r) :done))))}
+                         (let [r (await (ctx/call c :kid job (if (satisfies? IDeref args) @args args)))]
+                           (if (= :continue r)
+                             r
+                             (do (reset! out (if (:raw spec) r (tu/outcome r))) (ctx/end c :done nil)))))}
         jobs (reduce-kv (fn [m k wrap] (update-in m [k :round] wrap)) (assoc registry/jobs 'recording-parent parent) (:wrap-rounds spec))
         eng (core/create {:primitives p :jobs jobs
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world w
@@ -785,15 +783,14 @@
           (is (= 2 (:steps @out)))
           (is (not-any? #(<= 3 (:x %)) (digs p))))))))
 
-(deftest a-first-step-wholly-in-a-zone-declines-and-digs-nothing
+(deftest a-first-step-wholly-in-a-zone-fails-its-condition-and-digs-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [zone {:name "garden" :min [1 50 -2] :max [6 70 2]}
-              {:keys [out p] :as s} (await (stair! {:blocks ground :zones [zone]} (assoc east :steps 5) (fn [_])))]
-          (is (= :not-done @out) "no result: the parent waits")
-          (is (= :refused (:reason (waiting s))))
-          (is (= ["garden"] (:zones (:cause (waiting s)))))
+              {:keys [out p]} (await (stair! {:blocks ground :zones [zone]} (assoc east :steps 5) (fn [_])))]
+          (is (= [:stopped :refused] ((juxt :status :reason) @out)) "a failed condition ends the child")
+          (is (= ["garden"] (:zones (:cause (:ending @out)))))
           (is (empty? (digs p))))))))
 
 (deftest no-zone-list-stops-before-any-dig
@@ -839,27 +836,25 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} (assoc east :fetch false) (fn [_])))]
-          (is (= :not-done @out) "the child declines: its parent waits")
-          (is (= :no-tool (:reason (waiting s))))
-          (is (= "pickaxe" (:tool (:cause (waiting s)))))
+        (let [{:keys [out p]} (await (stair! {:blocks ground :inventory []} (assoc east :fetch false) (fn [_])))]
+          (is (= [:condition-failed :no-tool] ((juxt :kind contract/cause-key) (:ending @out))))
+          (is (= "pickaxe" (:tool (:cause (:ending @out)))))
           (is (empty? (digs p))))))))
 
 (deftest bad-args-end-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (stair! {:blocks ground :call ctx/call} {:dir :down} (fn [_])))]
+        (let [{:keys [out]} (await (stair! {:blocks ground :raw true} {:dir :down} (fn [_])))]
           (is (= [:impossible :bad-args] [(:kind @out) (contract/cause-key @out)]))
           (is (string? (:why (:cause @out)))))))))
 
-(deftest y-behind-the-feet-waits-instead-of-ending-impossible
+(deftest y-behind-the-feet-is-a-failed-condition-not-impossible
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (stair! {:blocks ground} {:dir :down :heading :east :y 70} (fn [_])))]
-          (is (= :not-done @out) "the parent keeps waiting")
-          (is (= :y-not-beyond-feet (:reason (waiting s))))
+        (let [{:keys [out p]} (await (stair! {:blocks ground} {:dir :down :heading :east :y 70} (fn [_])))]
+          (is (= [:condition-failed :y-not-beyond-feet] ((juxt :kind contract/cause-key) (:ending @out))))
           (is (empty? (digs p))))))))
 
 (defn ^:async dig-reached!
@@ -1104,7 +1099,7 @@
       (fn ^:async t []
         (doseq [[owner extra status] [["Fake" {} :done]
                                       ["fake" {} :done]
-                                      ["Miles" {} nil]
+                                      ["Miles" {} :stopped]
                                       ["Miles" {:ignore-zones? true} :done]]]
           (let [{:keys [out]} (await (stair! {:blocks ground :zones [(assoc around-the-cut :owner owner)]}
                                              (merge east extra) (fn [_])))]
@@ -1181,7 +1176,8 @@
             (is (= dug? (boolean (seq (digs p)))) (pr-str uses args))
             (is (= [status reason] [(:status @out) (:reason @out)]) (pr-str uses args))))))))
 
-(deftest a-stair-submitted-far-from-where-the-body-stands-waits-moved-since-submit-unless-told-here
+(deftest a-stair-submitted-far-from-where-the-body-stands-fails-moved-since-submit-unless-told-here
+
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1190,10 +1186,10 @@
                                      [{:from {:x 80 :y 65 :z 0}} false :moved-since-submit]
                                      [{:from {:x 80 :y 65 :z 0} :here true} true nil]]]
           (let [{:keys [p] :as s} (await (stair! {:blocks ground :inventory pick} (merge east extra) (fn [_])))
-                w (waiting s)]
+                w (:cause (:ending @(:out s)))]
             (is (= dug? (boolean (seq (digs p)))) (pr-str extra))
             (is (= reason (:reason w)) (pr-str extra))
-            (is (= (when reason 80) (some-> w :cause :distance)) (pr-str extra))))))))
+            (is (= (when reason 80) (:distance w)) (pr-str extra))))))))
 
 (deftest a-stair-never-digs-the-floor-under-a-door
   (async done
@@ -1223,7 +1219,7 @@
 (defn ^:async ending-of
   "The ending of a stair run as a contract parent's ctx/call child reads it, as [kind cause-key]."
   [spec args prep]
-  (let [e (:out (await (stair! (assoc spec :call ctx/call) args prep)))]
+  (let [e (:out (await (stair! (assoc spec :raw true) args prep)))]
     [(:kind @e) (contract/cause-key @e)]))
 
 (deftest a-stair-ends-with-a-kind-and-a-cause
@@ -1273,7 +1269,7 @@
                                                               (let [r (await (impl token a))]
                                                                 (swap! (.. world -state) assoc-in [:blocks [0 66 0]] "stone")
                                                                 r)))))
-              e @(:out (await (stair! {:blocks ground :call ctx/call} east lose-floor)))]
+              e @(:out (await (stair! {:blocks ground :raw true} east lose-floor)))]
           (is (= 1 (:steps (:data e))))
           (is (= [1 64 0] (:at (:data e))))
           (is (= 1 (count (:dug (:data e))))))))))

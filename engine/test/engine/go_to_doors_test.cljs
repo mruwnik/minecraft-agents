@@ -50,10 +50,10 @@
   ([world args zones]
    (let [{:keys [eng clock] :as s} (setup world zones)
          out (atom :not-done)
-         parent {:check (constantly true)
+         parent {:conditions []
                  :round (fn ^:async recording-round [c]
                           (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
-                            (if (= :continue e) :continue (do (reset! out (gt/result-of e)) :done))))}
+                            (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
      (core/submit! eng '(recording-parent) {})
      (await (tick-out! eng clock 40))
@@ -603,10 +603,10 @@
           (let [world {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge flat (zipmap (map #(clojure.string/join "," %) seal-cells) (repeat "dirt")))}
                 {:keys [eng clock] :as s} (setup world [])
                 out (atom :not-done)
-                parent {:check (constantly true)
+                parent {:conditions []
                         :round (fn ^:async sealed-round [c]
                                  (let [e (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}}))]
-                                   (if (= :continue e) :continue (do (reset! out (gt/result-of e)) :done))))}
+                                   (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
             (ledger/write! (:store eng) entries)
             (core/submit! eng '(recording-parent) {})
@@ -624,10 +624,10 @@
                 world {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge flat wall)}
                 {:keys [eng clock] :as s} (setup world [])
                 out (atom :not-done)
-                parent {:check (constantly true)
+                parent {:conditions []
                         :round (fn ^:async plug-round [c]
                                  (let [e (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}}))]
-                                   (if (= :continue e) :continue (do (reset! out (gt/result-of e)) :done))))}
+                                   (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
             (ledger/write! (:store eng) entries)
             (core/submit! eng '(recording-parent) {})
@@ -683,11 +683,11 @@
               check pen/check
               {:keys [eng clock seen]} (setup (pen-world true 3) [])
               pos {:x 20 :y 64 :z -3}
-              twice {:check (constantly true)
+              twice {:conditions []
                      :round (fn ^:async twice-round [c]
                               (cut/start-attempt! c pos)
                               (cut/start-attempt! c pos)
-                              :done)}
+                              (ctx/end c :done nil))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'twice twice))]
           (with-redefs [pen/check (fn [o] (swap! checks inc) (check o))]
             (core/submit! eng '(twice) {:range 0})
@@ -701,12 +701,12 @@
       (fn ^:async t []
         (let [{:keys [eng clock seen]} (setup (pen-world false 3) [])
               pos {:x 20 :y 64 :z -3}
-              cut-at-gate {:check (constantly true)
+              cut-at-gate {:conditions []
                            :round (fn ^:async cut-at-gate-round [c]
                                     (cut/start-attempt! c pos)
                                     (await (pass/open-block! c gate-cell true))
                                     (cut/start-attempt! c pos)
-                                    :done)}
+                                    (ctx/end c :done nil))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'cut-at-gate cut-at-gate))]
           (core/submit! eng '(cut-at-gate) {:range 0})
           (await (tick-out! eng clock 5))

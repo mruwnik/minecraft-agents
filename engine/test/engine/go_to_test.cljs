@@ -61,12 +61,12 @@
 (defn recording-parent
   "A parent that runs go-to with args as its child (ctx/call) and keeps the child's result (result-of) in out."
   [out args]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async recording-round [c]
             (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
               (if (= :continue e)
                 :continue
-                (do (reset! out (result-of e)) :done))))})
+                (do (reset! out (result-of e)) (ctx/end c :done nil)))))})
 
 (defn ^:async tick-out!
   "Tick until the list is empty, at most n ticks; the ticks used."
@@ -173,11 +173,7 @@
                                     {:status :stopped :arrived false :reason :unreachable :why :abilities :kind :gap-up}]]]
           (let [{:keys [eng]} (setup world)
                 out (atom :not-done)
-                parent {:check (constantly true)
-                        :round (fn ^:async old-round [c]
-                                 (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to args))]
-                                   (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                   r))}
+                parent (tu/recording-parent 'jobs.movement.go-to args out)
                 eng (assoc eng :jobs (assoc (:jobs eng) 'old-parent parent))]
             (core/submit! eng '(old-parent) {})
             (await (tick-out! eng 30))
@@ -598,7 +594,7 @@
   "A parent that calls go-to with args as its child, keeps every call's return in returns and the child's result in out.
   seed, when given, is put in the child's memory before its first call (a stale hint left by an earlier round)."
   [out returns args seed]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async returns-round [c]
             (when (and seed (empty? @returns) (nil? (get-in (ctx/mem c) [:children :kid])))
               (ctx/update-mem! c assoc-in [:children :kid] (merge {:args args :children {}} seed)))
@@ -606,7 +602,7 @@
                   r (if (= :continue e) :continue :done)]
               (swap! returns conj r)
               (when (= :done r) (reset! out (result-of e)))
-              r))})
+              (if (= :continue r) r (ctx/end c :done nil))))})
 
 (defn ^:async go-returns!
   "Run go-to with args under returns-parent over world; {:eng :p :seen :out :returns}."
@@ -966,11 +962,11 @@
               opens (atom [])
               {:keys [eng]} (setup {:blocks flat})
               eng (assoc eng :jobs (assoc (:jobs eng) 'open-parent
-                                          {:check (constantly true)
+                                          {:conditions []
                                            :round (fn ^:async open-round [c]
-                                                    (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0}))]
+                                                    (let [r (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0}))]
                                                       (swap! opens conj (get-in (ctx/mem c) [:children :kid :open] :none))
-                                                      r))}))]
+                                                      (if (= :continue r) r (ctx/end c :done nil))))}))]
           (set! go-to/step! (fn [_ _] (js/Promise.resolve :continue)))
           (try
             (core/submit! eng '(open-parent) {})

@@ -22,10 +22,10 @@
     {:eng eng :p p :seen seen}))
 
 (defn recording-parent [out args]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async recording-round [c]
             (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
-              (if (= :continue e) :continue (do (reset! out (gt/result-of e)) :done))))})
+              (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))})
 
 (defn ^:async tick-out! [eng n]
   (loop [i 0]

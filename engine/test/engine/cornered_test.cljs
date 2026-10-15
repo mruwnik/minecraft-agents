@@ -751,8 +751,9 @@
 
 (def standing-go-to
   "A go-to whose walk stands searching: it ends a leg at once, the body where it was."
-  (fn [n] {:check (constantly true)
-           :round (fn ^:async stand [c] (swap! n inc) (ctx/result! c {:arrived false :leg true}) :done)}))
+  (fn [n] {:conditions []
+           :round (fn ^:async stand [c] (swap! n inc) (ctx/end c :limit-reached {:reason :leg :line :time} {:arrived false :leg true}))}
+))
 
 ;; a go-to that stands searching under a skeleton's fire is no flight: one stalled step, then it takes cover where it stands
 (deftest a-low-body-whose-cover-step-stands-still-takes-cover-where-it-stands

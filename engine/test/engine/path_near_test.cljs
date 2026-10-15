@@ -17,10 +17,10 @@
 (defn walker
   "A job whose one round is one go-near! with args, the return kept in out."
   [out args]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async walk-round [c]
             (reset! out (await (apply near/go-near! c (tu/as-near args))))
-            :done)})
+            (ctx/end c :done nil))})
 
 (defn ^:async walk!
   "Run one go-near! (args after c) over world; {:eng :p :out}."
@@ -132,7 +132,7 @@
 (defn repeat-walker
   "A job whose every round is one go-near! with args, then :continue."
   [args]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async repeat-round [c]
             (await (apply near/go-near! c (tu/as-near args)))
             :continue)})
@@ -205,14 +205,14 @@
               rounds (atom [])
               ;; go-near! until it is not :partial (a partial walk to the fence, the nearest the body gets), each time
               ;; with the round's own result
-              job {:check (constantly true)
+              job {:conditions []
                    :round (fn ^:async round [c]
                             (loop [n 0]
                               (let [r (await (near/walk-round! c {:x 14 :y 64 :z 0} 2 {:doors :shut}))]
                                 (swap! rounds conj (select-keys (:result r) [:status :reason]))
                                 (swap! outs conj (:status r))
                                 (when (and (= "partial" (:status r)) (< n 3)) (recur (inc n)))))
-                            :done)}
+                            (ctx/end c :done nil))}
               clock (atom 1000000)
               [_ sink] (tu/legacy-capture-sink)
               p (tu/fake {:self {:pos start} :blocks gateless-pen})

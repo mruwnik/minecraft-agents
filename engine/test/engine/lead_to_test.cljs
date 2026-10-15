@@ -712,8 +712,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [pauses (atom [])
-              stub {:check (constantly true)
-                    :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
+              noop (get registry/jobs 'jobs.time.noop)
+              stub (assoc noop :round (fn [c] (swap! pauses conj (:args c)) ((:round noop) c)))
               clock (atom 1000000)
               [_ sink] (tu/legacy-capture-sink)
               p (tu/fake-on-floor {:floor h/flight-floor :inventory lead :entities [(cow 1 3 {:trail 9})]})

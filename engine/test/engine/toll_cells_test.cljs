@@ -33,8 +33,8 @@
   "Run f (a fn of the ctx, may be async) as the round of a one-round job; its value."
   [{:keys [eng]} f]
   (let [out (atom nil)
-        job {:check (constantly true)
-             :round (fn ^:async f-round [c] (reset! out (await (f c))) :done)}
+        job {:conditions []
+             :round (fn ^:async f-round [c] (reset! out (await (f c))) (ctx/end c :done nil))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'f-job job))]
     (core/submit! eng '(f-job) {})
     (await (tu/tick-until-idle! eng 20))
@@ -179,11 +179,11 @@
                  (let [decide (.-decide a)
                        logged (fn [pose] (swap! trail conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))]) (decide pose))]
                    (impl token (walk/steer-args (.-timeoutS a) logged)))))
-    (let [job {:check (constantly true)
+    (let [job {:conditions []
                :round (fn ^:async back-round [c]
                         (ctx/update-mem! c assoc :need/return {:cell [40 64 0] :back true})
                         (loop [i 0] (when (< i 6) (await (need/return! c)) (recur (inc i))))
-                        :done)}
+                        (ctx/end c :done nil))}
           eng (assoc-in (:eng w) [:jobs 'back-job] job)]
       (core/submit! eng (list 'back-job args) {})
       (await (tu/tick-until-idle! eng 60)))

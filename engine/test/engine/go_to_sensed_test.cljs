@@ -89,11 +89,7 @@
         [_ sink] (tu/legacy-capture-sink)
         {:keys [w]} (sensed-only spec)
         out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid 'jobs.access.clear-path {:heading :east :max-thick 3}))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent 'jobs.access.clear-path {:heading :east :max-thick 3} out)
         eng (core/create {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -187,10 +183,10 @@
         {:keys [w p] :as world} (sensed-only spec)
         _ (when setup (setup world))
         out (atom :not-done)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
-                           (if (= :continue e) :continue (do (reset! out (gt/result-of e)) :done))))}
+                           (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
         eng (core/create (cond-> {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers {}
                                   :dir (tu/tmp-dir) :now #(deref clock) :backoff false
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
@@ -257,11 +253,11 @@
         [_ sink] (tu/legacy-capture-sink)
         {:keys [w]} (sensed-only spec)
         out (atom :not-done)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
                          (let [r (await (step-off/step-off! c {:x 0 :y 64 :z 0} opts))]
                            (when-not (= :continue r) (reset! out r))
-                           (if (= :continue r) :continue :done)))}
+                           (if (= :continue r) :continue (ctx/end c :done nil))))}
         eng (core/create {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -468,16 +464,16 @@
     (tu/run-async done
       (fn ^:async t []
         (let [torches (atom :none)
-              child {:check (constantly true)
+              child {:conditions []
                      :round (fn [c] (reset! torches (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory (:primitives c))))))
-                              :done)}
-              parent {:check (constantly true)
+                              (ctx/end c :done nil))}
+              parent {:conditions []
                       :round (fn ^:async r [c]
                                (let [c (assoc c :unknown true)]
                                  (await (torch/hold-torch! c))
                                  (ctx/update-mem! c assoc :escalation {:step :clear-path :heading [1 0]})
                                  (await (esc/escalation-round! c {:x 5 :y 64 :z 0}))
-                                 :done))}
+                                 (ctx/end c :done nil)))}
               w (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks ground :inventory [{:name "torch" :count 4}]})
               eng (core/create {:primitives (:w w) :jobs (assoc registry/jobs 'jobs.access.clear-path child 'torch-parent parent)
                                 :triggers {} :dir (tu/tmp-dir) :now (constantly 1000000) :backoff false})]
@@ -534,10 +530,10 @@
                                   :states {"5,64,0" {:open true :half "lower" :facing "east"}
                                            "5,65,0" {:open true :half "upper" :facing "east"}}})
         out (atom nil)
-        job {:check (constantly true)
+        job {:conditions []
              :round (fn ^:async door-round [c]
                       (reset! out (await (pass/await-open! c {:x 5 :y 64 :z 0})))
-                      :done)}
+                      (ctx/end c :done nil))}
         eng (core/create {:primitives w :jobs (assoc registry/jobs 'door-poll job) :triggers {} :dir (tu/tmp-dir)
                           :now #(deref clock) :backoff false
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

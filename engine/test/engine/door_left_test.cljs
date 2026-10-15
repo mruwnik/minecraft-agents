@@ -3,6 +3,7 @@
   left open (the walk was cut or cancelled between the open and the shut) is shut again."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.hut-shelter-test :as hs]
@@ -80,10 +81,10 @@
 ;; ---------------------------------------------------------------- a walk cut in the gate
 
 (defn walker [args]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async walk-round [c]
             (await (apply near/go-near! c (tu/as-near args)))
-            :done)})
+            (ctx/end c :done nil))})
 
 (defn setup
   ([world] (setup world [{:x 10 :y 64 :z 0} 0]))
@@ -301,7 +302,7 @@
 
 (def continuing-go-to
   "A go-to whose every round ends :continue, as one waiting on its own child does."
-  {'jobs.movement.go-to {:check (constantly true) :args {} :round (fn ^:async r [_c] :continue)}})
+  {'jobs.movement.go-to {:conditions [] :args {} :round (fn ^:async r [_c] :continue)}})
 
 (deftest a-block-the-body-stands-in-stays-left-with-its-entry-for-a-later-run
   (async done

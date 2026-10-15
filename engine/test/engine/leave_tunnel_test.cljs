@@ -95,17 +95,14 @@
         tun (atom :not-done)
         out (atom :not-done)
         w (world/of-data {} {} (get spec :zones []))
-        parent {:check (fn [c] (if-let [t (:tunnel (ctx/mem c))]
-                                 (if-let [w (ctx/child-wait c :kid job (assoc largs :tunnel t))] (ctx/wait c w) true)
-                                 true))
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
                          (if-let [t (:tunnel (ctx/mem c))]
-                           (let [r (await (ctx/call-child c :kid job (assoc largs :tunnel t)))]
-                             (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                             r)
-                           (let [r (await (ctx/call-child c :in tunnel-job targs))]
-                             (when (= :done r)
-                               (let [res (ctx/child-result c :in)]
+                           (let [r (await (ctx/call c :kid job (assoc largs :tunnel t)))]
+                             (if (= :continue r) r (do (reset! out (tu/outcome r)) (ctx/end c :done nil))))
+                           (let [r (await (ctx/call c :in tunnel-job targs))]
+                             (when-not (= :continue r)
+                               (let [res (tu/outcome r)]
                                  (reset! tun res)
                                  (when between (between p'))
                                  (when-let [z (:zones-after spec)] (world/set-zones! w z))
@@ -363,11 +360,7 @@
               [seen sink] (tu/legacy-capture-sink)
               p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory (inventory)})
               out (atom :not-done)
-              parent {:check (constantly true)
-                      :round (fn ^:async recording-round [c]
-                               (let [r (await (ctx/call-child c :kid job {:tunnel {}}))]
-                                 (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                                 r))}
+              parent (tu/recording-parent job {:tunnel {}} out)
               eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                                 :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -382,12 +375,11 @@
       (fn ^:async t []
         (let [calls (atom [])
               body (atom nil)
-              stub {:ways [:chest :craft :gather] :check (constantly true)
+              stub {:ways [:chest :craft :gather] :conditions []
                     :round (fn ^:async get-tool [c]
                              (swap! calls conj (:args c))
                              (fake/add-item! @body "iron_pickaxe" 1)
-                             (ctx/result! c {:status :done :tool "iron_pickaxe"})
-                             :done)
+                             (ctx/end c :done nil {:tool "iron_pickaxe"}))
                     :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
                            :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
               s (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {:fetch true}
@@ -403,12 +395,11 @@
       (fn ^:async t []
         (let [calls (atom [])
               body (atom nil)
-              stub {:ways [:chest :craft :gather] :check (constantly true)
+              stub {:ways [:chest :craft :gather] :conditions []
                     :round (fn ^:async get-tool [c]
                              (swap! calls conj (:args c))
                              (fake/add-item! @body "iron_pickaxe" 1)
-                             (ctx/result! c {:status :done :tool "iron_pickaxe"})
-                             :done)
+                             (ctx/end c :done nil {:tool "iron_pickaxe"}))
                     :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
                            :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
               s (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {}
@@ -424,12 +415,11 @@
       (fn ^:async t []
         (let [calls (atom [])
               body (atom nil)
-              stub {:ways [:chest :craft :gather] :check (constantly true)
+              stub {:ways [:chest :craft :gather] :conditions []
                     :round (fn ^:async get-tool [c]
                              (swap! calls conj (:args c))
                              (fake/add-item! @body "iron_pickaxe" 1)
-                             (ctx/result! c {:status :done :tool "iron_pickaxe"})
-                             :done)
+                             (ctx/end c :done nil {:tool "iron_pickaxe"}))
                     :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
                            :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
               s (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {:fetch false}

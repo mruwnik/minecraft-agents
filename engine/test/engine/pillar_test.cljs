@@ -194,7 +194,7 @@
 (defn obtain-stub
   "An obtain that records the args of each round in the atom and yields."
   [calls]
-  {:ways [:chest :craft :smelt :gather] :check (constantly true)
+  {:ways [:chest :craft :smelt :gather] :conditions []
    :round (fn ^:async obtain [c] (swap! calls conj (select-keys (:args c) [:any-of :count])) :continue)
    :args {:item {:default nil} :any-of {:default nil} :count {:default 1} :how {:default nil} :depth {:default nil} :explore {:default true}}})
 

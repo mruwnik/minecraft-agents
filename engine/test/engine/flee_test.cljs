@@ -48,14 +48,13 @@
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn recording-parent
-  "A parent that calls job once per round with args; every status it answers goes to calls, its result to out."
+  "A parent that calls job once per round with args; each round's :continue or :done (ended) goes to calls, its outcome to out."
   [calls out job args]
-  {:check (constantly true)
-   :round (fn ^:async recording-round [c]
-            (let [r (await (ctx/call-child c :kid job args))]
-              (swap! calls conj r)
-              (when (= :done r) (reset! out (ctx/child-result c :kid)))
-              r))})
+  (let [rec (tu/recording-parent job args out)]
+    (tu/job (fn ^:async recording-round [c]
+              (let [r (await ((:round rec) c))]
+                (swap! calls conj (if (= :continue r) :continue :done))
+                r)))))
 
 (defn ^:async run-job!
   "Run job with args under a recording parent until the list is empty (at most 5 ticks).
@@ -399,20 +398,20 @@
 (defn backer
   "A job that backs off once from the zombie and keeps what back-off! answered and whether the option stays tried."
   [out]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async backer-round [c]
             (let [threat (first (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
                   r (await (cornered/back-off! c threat))]
               (reset! out {:r r :tried (retreat-flight/tried? c :back-off)})
-              :done))})
+              (ctx/end c :done nil)))})
 
 (deftest back-off-steps-away-and-fails-when-the-walk-does
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label go-to want] [["walks" {} {:r :again :tried false}]
-                                    ["gives up" {'jobs.movement.go-to {:check (constantly true)
-                                                                       :round (fn ^:async no-leg [c] (ctx/result! c {:arrived false :reason :unreachable}) :done)}}
+                                    ["gives up" {'jobs.movement.go-to {:conditions []
+                                                                       :round (fn ^:async no-leg [c] (ctx/end c :nothing-possible :unreachable {:arrived false}))}}
                                      {:r nil :tried true}]]]
           (let [out (atom nil)
                 s (setup {:entities [(zombie 7 2 {})]})
@@ -576,8 +575,8 @@
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
               clock (:clock s)
-              declining {:check (constantly true)
-                         :round (fn ^:async idle-flight [c] (swap! clock + 1000) :done)}
+              declining {:conditions []
+                         :round (fn ^:async idle-flight [c] (swap! clock + 1000) (ctx/end c :done nil))}
               s (assoc-in s [:eng :jobs 'jobs.survival.retreat] declining)
               {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= [:done] calls))
@@ -651,11 +650,11 @@
 (defn targeter
   "A job that picks one flight target (cover/flight-target!) away from the hostiles it knows, kept in out."
   [out]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async targeter-round [c]
             (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})]
               (reset! out (await (cover/flight-target! c threats)))
-              :done))})
+              (ctx/end c :done nil)))})
 
 (deftest a-flight-in-an-open-field-turns-to-see-its-way-and-flees-far
   (async done
@@ -956,10 +955,10 @@
 
 (def walker
   "A listed job whose memory holds an open go-to walk to (10 64 16), as one cut on its way."
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async walker-round [c]
             (ctx/update-mem! c assoc :children {:go {:open 1 :goal {:x 10 :y 64 :z 16}}})
-            (ctx/wait c {:reason :walking}))})
+            :continue)})
 
 (deftest the-hostile-reflex-passes-on-the-goal-of-the-walk-it-interrupted
   (async done
@@ -1037,12 +1036,12 @@
         (let [s (buried-setup {:entities [(zombie 7 6 {})]})
               digs (atom 0)
               _ (.override (.-world (:p s)) "dig" (fn ^:async f [_ _ _] (swap! digs inc) #js {:status "failed"}))
-              job {:check (constantly true)
+              job {:conditions []
                    :round (fn ^:async again [c]
                             (dotimes [_ 3]
                               (ctx/update-mem! c dissoc :tried)
                               (await (cover/dig-pocket! c)))
-                            :done)}
+                            (ctx/end c :done nil))}
               s (assoc-in s [:eng :jobs 'again] job)]
           (await (run-job! s 'again {}))
           (is (= 1 @digs) "one dig attempt for the whole flight"))))))
@@ -1055,13 +1054,13 @@
       (fn ^:async t []
         (let [counts (atom [])
               raw-atom (atom nil)
-              job {:check (constantly true)
+              job {:conditions []
                    :round (fn ^:async twice [c]
                             (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})]
                               (dotimes [_ 3]
                                 (await (cover/flight-target! c threats))
                                 (swap! counts conj (looks @raw-atom)))
-                              :done))}
+                              (ctx/end c :done nil)))}
               s (setup-sensed {:blocks long-tunnel :entities [(zombie 7 8 {})]})
               _ (reset! raw-atom (:raw s))
               s (assoc-in s [:eng :jobs 'twice] job)]

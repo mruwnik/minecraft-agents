@@ -4,6 +4,7 @@
   round a remembered :threat spot."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -26,11 +27,11 @@
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor (merge {:floor [-5 -20 45 20]} world))
         out (atom nil)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async planning-round [c]
                          (doseq [t remembered] (threats/remember! c t))
                          (reset! out (await (near/plan! (assoc c :args (or args {})) [40 64 0] 0 :never (wworld/body-policy c) [] false nil nil true dangers)))
-                         :done)}
+                         (ctx/end c :done nil))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'planning-parent parent)
                           :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

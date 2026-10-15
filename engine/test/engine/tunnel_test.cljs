@@ -195,22 +195,16 @@
 
 (defn setup
   "An engine over the fake world; a recording parent runs the tunnel as its child and keeps its result in :out.
-  opts: :p and :dir to restart over an earlier engine's world and state (nothing submitted then); :call ctx/call
-  makes the parent a contract parent whose :out is the ending."
+  opts: :p and :dir to restart over an earlier engine's world and state (nothing submitted then); :raw true
+  keeps the child's ending in :out (else its outcome), and the parent does not wait on the child's conditions."
   [spec args prep & {:keys [dir] :as opts}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (or (:p opts) (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans))))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
-        parent {:check (if (:call opts) (constantly true) (fn [c] (if-let [w (ctx/child-wait c :kid job args)] (ctx/wait c w) true)))
-                :round (fn ^:async recording-round [c]
-                         (let [call (:call opts ctx/call-child)
-                               r (await (call c :kid job args))]
-                           (cond
-                             (= :continue r) r
-                             (= call ctx/call-child) (do (when (= :done r) (reset! out (ctx/child-result c :kid))) r)
-                             :else (do (reset! out r) :done))))}
+        parent (assoc (tu/recording-parent job args out (if (:raw opts) identity tu/outcome))
+                      :conditions (if (:raw opts) [] [[:fn #(ctx/child-wait % :kid job args)]]))
         eng (core/create {:primitives p :jobs (merge registry/jobs {'recording-parent parent} (:jobs opts))
                           :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -341,7 +335,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (tunnel! {:blocks ground :zones nil} {:target [6 57 0]} (fn [_]) :call ctx/call))]
+        (let [{:keys [out p]} (await (tunnel! {:blocks ground :zones nil} {:target [6 57 0]} (fn [_]) :raw true))]
           (is (= [:condition-failed :no-zones] [(:kind @out) (contract/cause-key @out)]))
           (is (empty? (digs p))))))))
 
@@ -678,13 +672,12 @@
 (defn get-tool-stub
   "A jobs.items.get-tool that records its args in calls and hands over give (a pickaxe name) or, when nil, stops :no-source."
   [calls p give]
-  {:ways [:chest :craft :gather] :check (constantly true)
+  {:ways [:chest :craft :gather] :conditions []
    :round (fn ^:async get-tool [c]
             (swap! calls conj (:args c))
             (if give
-              (do (fake/add-item! p give 1) (ctx/result! c {:status :done :tool give}))
-              (ctx/result! c {:status :stopped :reason :no-source}))
-            :done)
+              (do (fake/add-item! p give 1) (ctx/end c :done nil {:tool give}))
+              (ctx/end c :condition-failed :no-source)))
    :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}})
 
@@ -878,7 +871,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [run (fn ^:async run1 [spec args prep]
-                    (let [e @(:out (await (tunnel! spec args prep :call ctx/call)))]
+                    (let [e @(:out (await (tunnel! spec args prep :raw true)))]
                       [(:kind e) (contract/cause-key e)]))
               target {:target [6 57 0]}]
           (is (= [:done :done] (await (run {:blocks eight-down} target (fn [_])))))
@@ -895,7 +888,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [e @(:out (await (tunnel! {:blocks eight-down :inventory with-cobble} {:target [6 57 0]} lava-ahead :call ctx/call)))]
+        (let [e @(:out (await (tunnel! {:blocks eight-down :inventory with-cobble} {:target [6 57 0]} lava-ahead :raw true)))]
           (is (= :hazard (:reason (:data e))))
           (is (true? (:out (:data e))))
           (is (seq (:dug (:data e))))

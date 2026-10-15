@@ -110,11 +110,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks (merge boxed {"0,64,0" "bedrock"})})
               out (atom nil)
-              parent {:check (constantly true)
-                      :round (fn ^:async r [c]
-                               (let [s (await (ctx/call-child c :kid unwedge {}))]
-                                 (reset! out (ctx/child-result c :kid))
-                                 s))}
+              parent (tu/recording-parent unwedge {} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'uw-parent parent))]
           (core/submit! eng '(uw-parent) {})
           (await (core/tick! eng))

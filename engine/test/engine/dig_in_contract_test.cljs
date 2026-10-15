@@ -18,10 +18,10 @@
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
         out (atom :not-done)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call c :kid 'jobs.survival.dig-in args))]
-                           (if (= :continue r) r (do (reset! out r) :done))))}
+                           (if (= :continue r) r (do (reset! out r) (ctx/end c :done nil)))))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

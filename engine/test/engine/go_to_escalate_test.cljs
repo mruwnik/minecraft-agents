@@ -34,10 +34,10 @@
 (defn recording-parent
   "A parent that runs job with args as its child and keeps the child's result in out."
   [out job args]
-  {:check (constantly true)
+  {:conditions []
    :round (fn ^:async recording-round [c]
             (let [e (await (ctx/call c :kid job args))]
-              (if (= :continue e) :continue (do (reset! out (gt/result-of e)) :done))))})
+              (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))})
 
 (defn ^:async tick-out! [eng n]
   (loop [i 0]

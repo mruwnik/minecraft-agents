@@ -23,19 +23,13 @@
   unless args says otherwise; its result."
   ([world stub] (run-door world stub {:heading :east :max-thick 3}))
   ([world stub args] (run-door world stub args nil))
-  ([world stub args rounds] (run-door world stub args rounds ctx/call-child))
-  ([world stub args rounds call]
+  ([world stub args rounds] (run-door world stub args rounds tu/outcome))
+  ([world stub args rounds f]
    (let [clock (atom 1000000)
          [_ sink] (tu/legacy-capture-sink)
          p (tu/fake (dissoc world :plans))
          out (atom :not-done)
-         parent {:check (constantly true)
-                 :round (fn ^:async recording-round [c]
-                          (let [r (await (call c :kid job args))]
-                            (cond
-                              (= :continue r) r
-                              (= call ctx/call-child) (do (when (= :done r) (reset! out (ctx/child-result c :kid))) r)
-                              :else (do (reset! out r) :done))))}
+         parent (tu/recording-parent job args out f)
          jobs (cond-> (assoc registry/jobs 'recording-parent parent)
                 stub (assoc 'jobs.blocks.dig (assoc (get registry/jobs 'jobs.blocks.dig) :round stub))
                 rounds (as-> js (reduce-kv (fn [m k round] (assoc m k (assoc (get m k) :round round))) js rounds)))
@@ -118,7 +112,7 @@
                       (reset! asked (:args c))
                       (ctx/end c :nothing-possible :unreachable {:arrived false}))
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) nil
-                                 {:heading :east :max-thick 3} {'jobs.movement.go-to go-to} ctx/call))]
+                                 {:heading :east :max-thick 3} {'jobs.movement.go-to go-to} identity))]
           (is (= [:nothing-possible :step-failed] [(:kind r) (contract/cause-key r)]) (pr-str r))
           (is (= [[3 64 0] 0 #{:walk :clear-seal}] ((juxt :pos :range :ways) @asked)) (pr-str @asked)))))))
 
@@ -126,7 +120,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [e (await (run-door wall nil {:max-thick 3} nil ctx/call))]
+        (let [e (await (run-door wall nil {:max-thick 3} nil identity))]
           (is (= [:impossible :bad-args] [(:kind e) (contract/cause-key e)]) (pr-str e)))))))
 
 (deftest the-job-exports-the-contract-and-quotes-validly
@@ -143,7 +137,7 @@
       (fn ^:async t []
         (let [pick {:inventory [{:name "wooden_pickaxe" :count 1}]}
               end (fn ^:async end* [world stub args]
-                    (let [e (await (run-door world stub args nil ctx/call))]
+                    (let [e (await (run-door world stub args nil identity))]
                       [(:kind e) (contract/cause-key e) (:kind (:because e))]))
               refilling (fn ^:async refilling [c] (ctx/end c :done nil {:dug true :reason :dug}))
               failing (fn ^:async failing [c] (ctx/end c :nothing-possible :failed {:dug false :primitive "timeout"}))

@@ -3,6 +3,7 @@
   bends round them; jobs.lib.cost farm-tolls and zone-tolls build them."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -20,10 +21,10 @@
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor {:floor [-5 -20 45 20]})
         out (atom nil)
-        parent {:check (constantly true)
+        parent {:conditions []
                 :round (fn ^:async planning-round [c]
                          (reset! out (await (near/plan! c [40 64 0] 0 :never (wworld/body-policy c) [] false nil nil true false nil nil tolls)))
-                         :done)}
+                         (ctx/end c :done nil))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'planning-parent parent)
                           :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

@@ -415,11 +415,7 @@
   [world args]
   (let [{:keys [eng p]} (st/setup world)
         out (atom nil)
-        parent {:check (constantly true)
-                :round (fn ^:async r [c]
-                         (let [s (await (ctx/call-child c :kid 'jobs.survival.log-out args))]
-                           (reset! out (ctx/child-result c :kid))
-                           s))}
+        parent (tu/recording-parent 'jobs.survival.log-out args out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'out-parent parent))]
     (sleep-count! p 1 2)
     (core/submit! eng '(out-parent) {})

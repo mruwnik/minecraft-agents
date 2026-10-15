@@ -71,11 +71,11 @@
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake gate-world)
         cell {:x 5 :y 64 :z 0}
-        job {:check (constantly true)
+        job {:conditions []
              :round (fn ^:async leftover-round [c]
                       (ctx/remember! c :opened {:cell cell :by (if (= :self by) (:id c) by) :t 0 :shut? (not (false? shut?))} pass/opened-policy)
                       (await (pass/shut-leftovers! c))
-                      :done)}
+                      (ctx/end c :done nil))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'leftover job) :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :world (world/of-data {} {} [])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

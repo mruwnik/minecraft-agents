@@ -21,11 +21,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
         out (atom :not-done)
-        parent {:check (constantly true)
-                :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid job args))]
-                           (when (= :done r) (reset! out (ctx/child-result c :kid)))
-                           r))}
+        parent (tu/recording-parent job args out)
         eng (core/create {:primitives p :jobs (merge registry/jobs {'recording-parent parent} extra-jobs)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -167,7 +163,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [pauses (atom [])
-              stub {:check (constantly true)
+              stub {:conditions []
                     :round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
               s (setup {} {:pos {:x 2 :y 64 :z 0} :range 3 :wait-s 30} {'jobs.time.noop stub})]
           (await (run-ticks s 4 500))
