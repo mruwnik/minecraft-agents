@@ -803,6 +803,16 @@
           (is (= :reached (:reason @out)) (pr-str (:reason @out)))
           (is (= [5 20 0] (feet p))))))))
 
+(deftest a-level-run-is-remembered-as-a-tunnel-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [row (merge (stone -12 12 0 64 -3 8) {"0,20,0" "air" "0,21,0" "air" "6,20,0" "iron_ore"})
+              {:keys [eng out]} (await (tunnel! {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks row} {:target [6 20 0] :keep true} (fn [_])))]
+          (is (= :reached (:reason @out)))
+          (is (= [{:origin [0 20 0] :delta [1 0] :steps 5}]
+                 (map #(select-keys (:data %) [:origin :delta :steps]) (mem/entries (mem/view (:store eng)) :tunnel-way)))))))))
+
 (deftest one-call-is-a-dead-end-and-its-way-out
   (async done
     (tu/run-async done

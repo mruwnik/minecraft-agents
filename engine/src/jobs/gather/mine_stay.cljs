@@ -4,18 +4,13 @@
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.bridge :as bridge]))
-
-(def tunnel-way-policy {:cap 30 :ttl :forever})
+            [jobs.lib.bridge :as bridge]
+            [jobs.lib.ledger :as ledger]))
 
 (defn record-tunnel!
-  "Remember the tunnel this run cut (memory :tunnel-way: dim, origin feet cell [x y z], delta [dx dz], steps), so a later stay-level run
-  does not take its air for a cave."
+  "jobs.lib.ledger/record-tunnel! for the tunnel map of a strip run."
   [c {:keys [origin steps]} delta]
-  (when (pos? steps)
-    (ctx/remember! c :tunnel-way {:dim (.-dimension (.self (:primitives c))) :origin [(:x origin) (:y origin) (:z origin)]
-                                  :delta (vec delta) :steps steps}
-                   tunnel-way-policy)))
+  (ledger/record-tunnel! c [(:x origin) (:y origin) (:z origin)] delta steps))
 
 (defn beside-body?
   "Whether the target is one column or less from the body's feet cell, from one below it to one over the head (the cell under the feet itself never)."

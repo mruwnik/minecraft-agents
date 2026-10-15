@@ -15,6 +15,8 @@
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
             [jobs.lib.dig-look :as look]
+            [jobs.lib.ledger :as ledger]
+            [plan.shape :as shape]
             [jobs.lib.need :as need]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
@@ -71,6 +73,8 @@
   the line above from the body's own cell. That first leg stays open even in a dead end (:keep false). A leg that stops is tried once on the other axis; a
   floor of air is bridged with a carried building block (jobs.access.stair.step/bridge!), as the stair does. A target on the body's
   row or column farther than :max-length is cut the same way in legs of :max-length from the body's cell.
+
+  The level run walked is remembered as a :tunnel-way, so go-to's own way up links it.
 
   A run cell that fills again before the walk (gravel) is dug again.
 
@@ -185,6 +189,13 @@
 
 (def cause-keys [:cell :hazards :zone :zones :claim :plan :fluid :block :tool :why :headings :in :fetch])
 
+(defn record-run!
+  "Remember the level run walked (memory :tunnel-way, as the strip mine does), so go-to's own way up links the tunnel."
+  [c]
+  (let [{:keys [plan run-steps]} (ctx/mem c)]
+    (when (pos? (or run-steps 0))
+      (ledger/record-tunnel! c (:end (ln/line plan)) (shape/headings (:heading plan)) run-steps))))
+
 (defn finish!
   "End the tunnel: its event, and the ending: :done when reached, else by reason a kind (facts, the rest nothing
   possible) with the detail in the cause and the whole result as data."
@@ -200,6 +211,7 @@
                       (select-keys plan [:entry :heading :stand])
                       detail)
         cause (assoc (select-keys detail cause-keys) :reason reason)]
+    (record-run! c)
     (if reached?
       (ctx/emit! c :tunnel.done :info (assoc result :status :done :text (str "tunnel reached " (pr-str (:stand plan)))))
       (ctx/emit! c :tunnel.stopped :warn
@@ -251,7 +263,9 @@
                 (cond
                   (= :continue r) :continue
                   (and (:arrived (:data r)) (= next (reach/standing-vec (:primitives c))))
-                  (do (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))}) :again)
+                  (do (ctx/update-mem! c update :run-steps (fnil max 0) (run-index (:end (ln/line (:plan (ctx/mem c)))) next (:heading plan) (:run plan)))
+                      (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))})
+                      :again)
                   (some #(not (rules/air ((:block-at (stair/rules-in c feet)) %))) cut) :again
                   :else {:reason :step-failed :cell next :walk (ending-result r)})))))))
 

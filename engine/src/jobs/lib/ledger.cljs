@@ -201,6 +201,16 @@
   [c]
   (set (map (fn [[x y z]] [x (inc y) z]) (ways-of c))))
 
+(def tunnel-way-policy {:cap 30 :ttl :forever})
+
+(defn record-tunnel!
+  "Remember a level tunnel this body cut (memory :tunnel-way: dim, origin feet cell [x y z], delta [dx dz], steps), so a
+  later stay-level run does not take its air for a cave and go-to's own way up links it."
+  [c origin delta steps]
+  (when (pos? steps)
+    (ctx/remember! c :tunnel-way {:dim (.-dimension (.self (:primitives c))) :origin (vec origin) :delta (vec delta) :steps steps}
+                   tunnel-way-policy)))
+
 (defn tunnel-stands
   "The set of feet cells [x y z] of the level tunnels this body cut in its current dimension (memory :tunnel-way)."
   [c]
