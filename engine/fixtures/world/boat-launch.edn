@@ -14,13 +14,13 @@
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]]
    :expect [{:event {:source :job :kind :boat.launched :data {:boat "oak_boat"}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :vehicle.mounted} :within-s 60 :of-job true}]}
+            {:event {:source :job :kind :child_ended :data {:slot :mount :ending {:kind :done}}} :within-s 60 :of-job true}]}
   {:name "launch-without-boarding"
    :body {:inventory [["oak_boat" 1]]}
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {:board false})]]
    :expect [{:event {:source :job :kind :boat.launched} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :vehicle.mounted} :for-s 10}]}
+            {:no-event {:source :job :kind :child_started :data {:slot :mount}} :for-s 10}]}
   {:name "recover-a-boat-afloat"
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]

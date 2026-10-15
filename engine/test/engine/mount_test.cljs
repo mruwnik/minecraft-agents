@@ -41,7 +41,7 @@
           (is (= :done (:kind (:r o))))
           (is (= {:status :done :id 9 :vehicle "oak_boat"} (result-of o)))
           (is (some? (vehicle/vehicle-of (.self (:p o)))))
-          (is (some #(= :vehicle.mounted (first %)) (:seen o)))
+          (is (not-any? #(= :vehicle.mounted (first %)) (:seen o)) "the ending carries it")
           (is (some #{[:remember :vehicle-hold {:job "j1"}]} (:seen o)) "holds the vehicle"))))))
 
 (deftest already-aboard-is-done

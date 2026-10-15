@@ -16,7 +16,7 @@
   By :name it prefers a vehicle with no rider.
   Impossible: :bad-args. Conditions: at the start :no-vehicle while none is in sight and :aboard-other while on another vehicle (a listed call waits). The round yields :continue only when the walk waits on the world.
 
-  Ends done (data {:id :vehicle name}, plus :already true when aboard it already and the root job did not yet hold it; cause :already when it did), info vehicle.mounted, or
+  Ends done (data {:id :vehicle name}, plus :already true when aboard it already and the root job did not yet hold it; cause :already when it did), or
   condition-failed: :gone (no such entity in sight), :not-mountable, :occupied, :hand-full
   (a mob, with an item in hand that cannot be put away), :aboard-other (got on another vehicle on the way), or
   nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed twice),
@@ -108,11 +108,9 @@
 (defn stop!
   "End the call without a seat: kind and reason, data the vehicle id and more."
   [c id kind reason & [more]]
-  (ctx/emit! c :vehicle.mount_refused :warn (merge {:id id :reason reason :text (str "cannot mount entity " id ": " (name reason))} more))
-  (ctx/end c kind reason (merge {:id id} more)))
+  (ctx/end c kind reason (merge {:id id :text (str "cannot mount entity " id ": " (name reason))} more)))
 
 (defn done! [c result]
-  (ctx/emit! c :vehicle.mounted :info (assoc result :text (str "aboard " (:vehicle result))))
   (ctx/end c :done nil result))
 
 (defn ^:async round [c]

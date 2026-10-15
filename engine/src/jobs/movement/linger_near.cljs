@@ -15,7 +15,7 @@
   (pushed away, or at the start) it walks back with a go-to child (:ways #{:walk :clear-seal}).
   Ends with a result:
   - {:lingered true :reason \"waited\"} when :wait-s of time in range has been waited, with the body in range.
-  - {:status :stopped :lingered false :reason :unreachable :why <go-to's reason>} (warn linger.unreachable) when go-to
+  - {:status :stopped :lingered false :reason :unreachable :why <go-to's reason>} when go-to
     does not arrive three times in a row.
   Only time held in range counts (500 ms per round, kept in job memory): walking back and time the job was
   preempted add nothing, and a resume checks the range again before it can end. A cut leaves nothing to undo; a caller whose wait
@@ -77,8 +77,9 @@
         (ctx/update-mem! c assoc :blocked blocked)
         (if (< blocked max-blocked)
           :continue
-          (do (ctx/emit! c :linger.unreachable :warn {:text (str "cannot get within " range " of " (pr-str pos))})
-              (finish! c :nothing-possible :unreachable {:lingered false :why (when (not= :done (:kind r)) (contract/cause-key r))})))))))
+          (finish! c :nothing-possible :unreachable
+                   {:lingered false :why (when (not= :done (:kind r)) (contract/cause-key r))
+                    :text (str "cannot get within " range " of " (pr-str pos))}))))))
 
 (defn ^:async round
   "One bounded step: in range, end when the waited time is up, else hold still and count the wait; out of range,

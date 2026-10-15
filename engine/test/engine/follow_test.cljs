@@ -108,7 +108,7 @@
               {:keys [p out eng] :as s} (await (follow {:entities [(steve 10)]} {:player "Steve" :lost-s 3} 20 1000 vanish))]
           (is (= {:reason :lost :last-seen {:x 10 :y 64 :z 0}} (ended @out)))
           (is (every? #{{:x 10 :y 64 :z 0}} (move-targets eng)) "only the last-seen cell is walked to")
-          (is (has-event? s :follow.lost)))))))
+          (is (not (has-event? s :follow.lost)) "the ending carries it"))))))
 
 (deftest a-player-who-is-never-there-is-absent-after-two-seconds
   (async done
@@ -117,7 +117,7 @@
         (let [{:keys [clock out] :as s} (await (follow {} {:player "Steve"} 10 500))]
           (is (= {:reason :absent} (ended @out)))
           (is (<= 2000 (- @clock 1000000)))
-          (is (has-event? s :follow.absent)))))))
+          (is (not (has-event? s :follow.absent)) "the ending carries it"))))))
 
 (deftest not-yet-absent-within-the-grace
   (async done
@@ -133,7 +133,7 @@
         (let [{:keys [out p] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 10 500))]
           (is (= {:reason :unreachable} (ended @out)))
           (is (= gts/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up")
-          (is (has-event? s :follow.unreachable)))))))
+          (is (not (has-event? s :follow.unreachable)) "the ending carries it"))))))
 
 (deftest one-blocked-go-to-ends-it-in-one-tick
   (async done
@@ -142,7 +142,7 @@
         (let [{:keys [out] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 1 500))]
           (is (= {:reason :unreachable} (ended @out)))
           (is (= gts/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up")
-          (is (has-event? s :follow.unreachable)))))))
+          (is (not (has-event? s :follow.unreachable)) "the ending carries it"))))))
 
 (deftest a-far-player-is-walked-to-within-the-round
   (async done
@@ -156,9 +156,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (await (follow {:entities [(steve 150)] :floor [-30 -10 160 10]} {:player "Steve" :radius 200} 1 500))]
-          (is (< 5 (self-x p)) (str "legs on toward the player, at " (self-x p)))
-          (is (not (has-event? s :follow.unreachable))))))))
+        (let [{:keys [p]} (await (follow {:entities [(steve 150)] :floor [-30 -10 160 10]} {:player "Steve" :radius 200} 1 500))]
+          (is (< 5 (self-x p)) (str "legs on toward the player, at " (self-x p))))))))
 
 (deftest the-out-of-range-count-is-against-where-the-target-stands-after-the-walk
   (is (= 0 (follow/next-out 2 1 {:x 0 :y 64 :z 0} {:x 30 :y 64 :z 0} 3)) "blocked resets")
