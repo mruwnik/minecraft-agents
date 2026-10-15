@@ -5,6 +5,7 @@
 ;; out (no escalation), and a cut escalation's holes stay in the :tidy ledger (restore-broken puts them back).
 ;; It notes and puts back only holes in another's zone, claim or plan (owner Q139): the put-back cases dig through
 ;; another's plan with :ignore-zones?; in plain natural ground its holes stay and no put-back event comes.
+;; Card 8e26161d: with :escalate false a shut-in body ends :shut-in true; open ground never does.
 ;; Pit mass: stone x 10..22, z 10..22, y 0..3 (top feet y 4), a 1x1 shaft at x 16, z 16 from y 0 up.
 {:defaults
  {:tags [:movement :access]
@@ -183,10 +184,18 @@
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none}}} :within-s 60 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :result :data {:arrived false :escalation {:step :none}}}}]}
+  {:name "escalate-false-in-a-pit-says-it-is-shut-in"
+   ;; card 8e26161d: a walk that may not escalate (withdraw, craft, gather pass :escalate false) from inside a pit names the cause
+   :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :shut-in true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 60 :until {:source :job :kind :result :data {:arrived false}}}]
+   :after [[:block [16 0 16] "air"] [:block [17 1 16] "stone"] [:body-near [16.5 0 16.5] 1]]}
   {:name "open-ground-tower-never-escalates"
    ;; open plot, a 5-high stone column whose top no walk reaches: the body is not shut in, so nothing is built or dug
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [24 0 16] [24 4 16] "stone"]]
    :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 5 16] :range 0})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated} :for-s 60 :until {:source :job :kind :result :data {:arrived false}}}]}]}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 60 :until {:source :job :kind :result :data {:arrived false}}}
+            {:no-event {:source :job :kind :result :data {:shut-in true}} :for-s 60 :until {:source :job :kind :result :data {:arrived false}}}]}]}

@@ -1,0 +1,31 @@
+;; Card 59c9ce99: the planner prices a climb's fall exposure (the height over the floor below against the health): a vine climb at full health
+;; is taken (a fall of up to 20 hp's worth is not refused at 20 hp), and a body low on health takes no fall on the way.
+;; Stone tower x 20, z 16, y 0..5 or 0..11, vines on its west face (x 19, facing the tower), the goal on top of it.
+;; Should-succeed: 6-high and 12-high tower climbed at full health. Should-fail (control): hurt to 8 hp the body takes no fall damage on the 12-high
+;; tower (it heals first or gives up; either way no fall).
+{:defaults
+ {:tags [:movement :go-to :planner :climb]
+  :time :any
+  :plot {:height 16}
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "six-high-vines-are-climbed"
+   :blocks [[:fill [20 0 16] [20 5 16] "stone"] [:fill [19 0 16] [19 5 16] "vine[east=true]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 6 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 90 :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [20.5 6 16.5] 2]]}
+  {:name "twelve-high-vines-are-climbed-at-full-health"
+   :blocks [[:fill [20 0 16] [20 11 16] "stone"] [:fill [19 0 16] [19 11 16] "vine[east=true]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 12 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 90 :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [20.5 12 16.5] 2]]}
+  {:name "hurt-body-takes-no-fall-on-the-twelve-high-vines"
+   :blocks [[:fill [20 0 16] [20 11 16] "stone"] [:fill [19 0 16] [19 11 16] "vine[east=true]"]]
+   :act [[:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]
+         [:job (jobs.movement.go-to {:pos #at [20 12 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result} :within-s 110 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 110 :until {:source :job :kind :result}}]
+   :limit-s 130}]}

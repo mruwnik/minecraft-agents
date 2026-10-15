@@ -1,0 +1,34 @@
+;; Card 617586af: go-to weighs a stair up against a long priced walk. A goal 8+ above the feet, :escalate on and a first plan whose priced cost
+;; (dark, danger, tolls) exceeds 3 x 3 s x the stair steps: the stair escalation runs first, once. Stone mass x 2..61, y 0..13; the body at
+;; the west end of a 40-cell tunnel (feet y 0), a climbing corridor at its east end and a return corridor (feet y 10) to the goal 10 east and
+;; 10 above the body; foreign zones over the tunnel and the return corridor toll them (:zone-tolls): a walk of about 100 cells against a 10-step stair.
+;; Should-succeed: the stair is dug (go-to.escalated :stair) and the body arrives. Should-fail (control): :escalate false walks the long way, nothing is dug.
+{:defaults
+ {:tags [:movement :go-to :planner]
+  :time :any
+  :plot {:length 64 :height 16}
+  :blocks [[:fill [2 0 2] [61 13 29] "stone"]
+           [:fill [3 0 16] [44 1 16] "air"]]
+  :zones [{:name "tunnel" :min [3 0 16] :max [44 0 16] :owner "SomeoneElse"}
+          {:name "top" :min [16 10 16] :max [54 10 16] :owner "SomeoneElse"}]
+  :body {:at [4.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 200}
+ :cases
+ [{:name "stair-up-instead-of-the-long-tolled-walk"
+   :blocks [[:fill [45 1 16] [45 3 16] "air"] [:fill [46 2 16] [46 4 16] "air"] [:fill [47 3 16] [47 5 16] "air"]
+            [:fill [48 4 16] [48 6 16] "air"] [:fill [49 5 16] [49 7 16] "air"] [:fill [50 6 16] [50 8 16] "air"]
+            [:fill [51 7 16] [51 9 16] "air"] [:fill [52 8 16] [52 10 16] "air"] [:fill [53 9 16] [53 11 16] "air"]
+            [:fill [54 10 16] [54 11 16] "air"] [:fill [14 10 16] [54 11 16] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1 :zone-tolls true})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [14.5 10 16.5] 2.5]]}
+  {:name "escalate-false-walks-the-long-way"
+   :blocks [[:fill [45 1 16] [45 3 16] "air"] [:fill [46 2 16] [46 4 16] "air"] [:fill [47 3 16] [47 5 16] "air"]
+            [:fill [48 4 16] [48 6 16] "air"] [:fill [49 5 16] [49 7 16] "air"] [:fill [50 6 16] [50 8 16] "air"]
+            [:fill [51 7 16] [51 9 16] "air"] [:fill [52 8 16] [52 10 16] "air"] [:fill [53 9 16] [53 11 16] "air"]
+            [:fill [54 10 16] [54 11 16] "air"] [:fill [14 10 16] [54 11 16] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1 :zone-tolls true :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 180 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 180 :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [14.5 10 16.5] 2.5]]}]}

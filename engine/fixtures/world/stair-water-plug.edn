@@ -1,0 +1,32 @@
+;; Card fec59488: a cut the stair dug that now touches seen water is plugged with a building block at once (stair.plugged, stop :hazard),
+;; and mine stops digging with its head in water (mine.flooded, ends :flooded) instead of digging on.
+;; Stone mass x 8..24, z 8..24, y 0..9; the stair goes down east from (10 10 16): step k lands on feet (10+k, 10-k) and cuts feet..feet+2.
+;; Should-succeed: water in a sealed pocket beside step 3's cut ((13 7 17)) is met: stair.plugged, the cut cell is not left open;
+;; mine, put in a water-filled shaft beside coal, ends :flooded and digs nothing.
+;; Should-fail (control): the same stair without the water runs to the end (stair.done, no plug).
+{:defaults
+ {:tags [:access :mining :water]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "stair-plugs-the-cut-that-opens-onto-water"
+   :blocks [[:set [13 7 17] "water"]]
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
+   :expect [{:event {:source :job :kind :stair.plugged} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :stair.done} :for-s 120 :until {:source :job :kind :stair.plugged}}]
+   :after [[:not-block [13 7 16] "air"]]}
+  {:name "control-stair-without-water-is-not-plugged"
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
+   :expect [{:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stair.plugged} :for-s 140 :until {:source :job :kind :stair.done}}]}
+  {:name "mine-with-its-head-in-water-ends-flooded"
+   :blocks [[:fill [16 0 16] [16 2 16] "water"] [:set [17 0 16] "coal_ore"] [:set [17 1 16] "coal_ore"]]
+   :body {:at [16.5 0 16.5] :yaw 270 :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :fetch false})]]
+   :expect [{:event {:source :job :kind :mine.flooded} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:reason :flooded}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :mine.flooded}}]
+   :after [[:block [17 0 16] "coal_ore"] [:block [17 1 16] "coal_ore"]]}]}

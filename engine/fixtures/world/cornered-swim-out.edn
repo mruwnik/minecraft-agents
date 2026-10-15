@@ -1,0 +1,26 @@
+;; Card fb183e73: a bare body in water with a drowned near swims to the nearest seen dry stand (cornered option :swim-out, first in the order)
+;; instead of fist-fighting it. Stone block x 3..30, z 9..23, y 0..2 (top feet y 3) with a lake carved in it, x 4..14, z 10..22, water y 0..2 (the surface is
+;; level with the shore). The drowned is NoAI and helmeted (it never hurts, no sun burn) and stands beside the body.
+;; Should-succeed: the bare body walks (go-to step, slot :swim-out) to the shore and never fights it (the drowned is still alive).
+;; Should-fail (control): with an iron sword the fight wins, so the body kills it and does not take the swim-out step.
+{:defaults
+ {:tags [:hostile :survival :cornered :water]
+  :time :any
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :blocks [[:fill [3 0 9] [30 2 23] "stone"]
+           [:fill [4 0 10] [14 2 22] "water"]]
+  :body {:at [8.5 1 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "bare-body-swims-to-the-shore-and-does-not-fight"
+   :act [[:summon "drowned" [9.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.step-speed :data {:slot :swim-out}} :within-s 40}]
+   :after [[:body-far [8.5 1 16.5] 3] [:entities "type=drowned,tag=wt" [[3 0 9] [30 6 23]] 1]]
+   :limit-s 60}
+  {:name "armed-body-that-wins-fights-instead-of-swimming-out"
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:summon "drowned" [9.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :job :kind :retreat.step-speed :data {:slot :swim-out}} :for-s 40}]
+   :after [[:entities "type=drowned,tag=wt" [[3 0 9] [30 6 23]] 0]]
+   :limit-s 60}]}

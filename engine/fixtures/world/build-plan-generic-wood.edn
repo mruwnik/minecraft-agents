@@ -1,0 +1,35 @@
+;; Cards a3fe349e (generic wood names), f5c60c61 (an oak plank fetch fells oak, not whatever log is nearest): jobs.build.from-plan.
+;; A plan want of `planks` (also `logs`, `wooden_stairs` ...) is met by any species; one species is chosen per plan (the one carried most) and the
+;; result says which (:wood). A species name (oak_planks) stays exact.
+;; Should-succeed: planks wanted, birch_planks carried: built in birch, nothing fetched; oak_planks wanted with a birch log column nearer and an oak
+;; column farther: the oak is felled, the birch column stands.
+;; Should-fail: oak_planks wanted, only birch_planks carried, :fetch false: stops short naming oak_planks, nothing placed.
+{:defaults
+ {:tags [:build :fetch] :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "generic-planks-are-built-in-the-carried-species"
+   :body {:inventory [["birch_planks" 4]]}
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [14 0 14] #at [15 0 14]] :want "planks"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 60 :until {:source :job :kind :build.done}}]
+   :after [[:block [14 0 14] "birch_planks"] [:block [15 0 14] "birch_planks"] [:item "birch_planks" 2]]}
+  {:name "species-name-stays-exact-and-stops-short"
+   :body {:inventory [["birch_planks" 4]]}
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [14 0 14] #at [15 0 14]] :want "oak_planks"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor" :fetch false})]]
+   :expect [{:event {:source :job :kind :build.short :message [:contains "oak_planks"]} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 30}]
+   :after [[:not-block [14 0 14] "birch_planks"] [:not-block [14 0 14] "oak_planks"] [:item "birch_planks" 4]]
+   :limit-s 60}
+  {:name "oak-planks-fetch-fells-oak-and-spares-the-nearer-birch"
+   :blocks [[:fill [19 0 16] [19 3 16] "birch_log"]
+            [:fill [24 0 14] [24 3 14] "oak_log"]]
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [14 0 14] #at [15 0 14]] :want "oak_planks"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
+            {:event {:source :job :kind :build.done :data {:missing 0}} :within-s 140 :of-job true}]
+   :after [[:block [14 0 14] "oak_planks"] [:block [15 0 14] "oak_planks"] [:block [19 0 16] "birch_log"] [:block [19 3 16] "birch_log"]]}]}
