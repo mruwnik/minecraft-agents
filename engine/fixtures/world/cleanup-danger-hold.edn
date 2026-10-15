@@ -4,7 +4,6 @@
 ;; Control: without the skeleton the same cleanup walks over and takes the block back (cleanup-walk.edn has the walk itself).
 {:defaults
  {:tags [:cleanup :access :hostile] :time :any
-  :mobs :keep
   :plot {:height 12}
   :blocks [[:set [6 0 8] "cobblestone"]]
   :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}]}}]

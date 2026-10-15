@@ -26,8 +26,8 @@
    :after [[:not-block [14 0 14] "birch_planks"] [:not-block [14 0 14] "oak_planks"] [:item "birch_planks" 4]]
    :limit-s 60}
   {:name "oak-planks-fetch-fells-oak-and-spares-the-nearer-birch"
-   :blocks [[:fill [19 0 16] [19 3 16] "birch_log"]
-            [:fill [24 0 14] [24 3 14] "oak_log"]]
+   :blocks [[:fill [19 0 16] [19 3 16] "birch_log"] [:set [19 4 16] "birch_leaves[persistent=true]"]
+            [:fill [24 0 14] [24 3 14] "oak_log"] [:set [24 4 14] "oak_leaves[persistent=true]"]]
    :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [14 0 14] #at [15 0 14]] :want "oak_planks"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}

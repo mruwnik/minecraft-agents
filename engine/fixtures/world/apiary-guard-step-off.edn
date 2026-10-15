@@ -19,4 +19,6 @@
    :after [[:block [14 -1 16] "campfire[lit=true]"] [:not-block [14 0 16] "campfire"]]}
   {:name "lava-at-x-plus-2-never-ends-on-the-lava"
    :blocks [[:set [16 0 16] "lava"]]
-   :after [[:block [14 -1 16] "campfire[lit=true]"] [:body-far [16.5 0 16.5] 1.2]]}]}
+   ;; the lava spreads to x+1, beside the fire: the sink's dig is refused (hazard), the fire is left as it was
+   :expect [{:event {:source :job :kind :stopped :data {:reason :refused}} :within-s 100 :of-job true}]
+   :after [[:block [14 0 16] "campfire[lit=true]"] [:body-far [16.5 0 16.5] 1.2]]}]}

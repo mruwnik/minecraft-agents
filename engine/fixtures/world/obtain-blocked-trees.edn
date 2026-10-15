@@ -16,7 +16,7 @@
             [:fill [25 8 16] [25 12 16] "oak_log"] [:fill [24 11 15] [26 13 17] "oak_leaves[persistent=true]"]]
    :body {:at [13.5 8 16.5]}
    :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "ended :no-tree ("]}} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "ended :none-seen (goal-cut-off)"]}} :within-s 80 :of-job true}]
    :after [[:block [25 8 16] "oak_log"] [:item "oak_log" 0]]}
   {:name "shut-in-at-night-with-a-tree-seen-waits-night-sheltered"
    :time :night

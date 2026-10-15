@@ -13,7 +13,7 @@
    :blocks [[:set [11 0 10] "oak_door[half=lower,facing=south]"] [:set [11 1 10] "oak_door[half=upper,facing=south]"]]
    :act [[:job (jobs.build.from-plan {:plan "$plan:front"})]]
    :expect [{:event {:source :job :kind :build.wrong :message [:contains "oak_door"]} :within-s 100 :of-job true}
-            {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+            {:event {:source :job :kind :stopped :data {:reason :wrong-blocks}} :within-s 100 :of-job true}]
    :after [[:block [11 0 10] "oak_door"] [:block [10 0 10] "dirt"] [:block [13 1 10] "dirt"] [:item "oak_door" 0]]}
   {:name "wrong-stone-in-the-outline-is-dug-and-replaced"
    :blocks [[:set [11 0 10] "stone"]]
