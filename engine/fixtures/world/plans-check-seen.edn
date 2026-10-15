@@ -1,6 +1,7 @@
 ;; Card 77da0ee5: plans.mjs check judges a plan against what the body has seen (its seen memory file, saved every :engine.perception/save-ms: 1000 here, polled until the face shows), not the world's chunks.
 ;; A stone mass x 10..22, y 0..3, z 12..20 with the body outside it to the west: its west face is in sight, its inside never is.
 ;; seen-face-cell-matches: a plan cell on the west face, wanted stone, is seen and matches. hidden-cell-is-unseen-not-matching: a plan cell deep inside the mass counts :unseen/unknown, never matching.
+;; built-cells-count-as-seen (card 335f6f3c): cells the body has just placed in plain view are seen at once, so the check reports them as matches, never :unknown.
 ;; check-without-body-refused: no --body, no answer from the world (:body-required).
 {:defaults
  {:tags [:build :tool :memory] :time :any
@@ -25,6 +26,16 @@
           {:evidence :seen-memory :score {:counts {:unknown 1} :checked {:seen 0 :unseen 1}}}]]
    :expect [{:no-event {:level :error} :for-s 3}]
    :after [[:body-near [4.5 0 16.5] 4]]}
+  {:name "built-cells-count-as-seen"
+   :body {:inventory [["dirt" 4]]}
+   :plans [{:id "mine" :metadata {:by "$body"} :parts [{:id "row" :cells [#at [6 0 15] #at [6 0 16] #at [6 0 17]] :want "dirt"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:mine"})]
+         [:await {:source :job :kind :build.done :data {:missing 0}} 60]
+         [:until [:cli "plans" ["--world" "$world" "check" "$plan:mine" "--body" "$body"]
+                  {:evidence :seen-memory :score {:counts {:match 3} :checked {:seen 3 :unseen 0}}}] 30]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:block [6 0 16] "dirt"]]
+   :limit-s 120}
   {:name "check-without-body-refused"
    :plans [{:id "face" :metadata {:by "tester"} :parts [{:id "face" :cells [#at [10 1 16]] :want [:any "stone"]}]}]
    :act [[:cli "plans" ["--world" "$world" "check" "$plan:face"] {:ok false :reason :body-required}]]

@@ -2,6 +2,7 @@
 ;; seen chest, puts it down beside the body and crafts. The body stands at the middle facing the chest (yaw turned by RCON so its
 ;; first sight sees it); 3 planks + 2 sticks make a wooden pickaxe at a table. The chest is at [14 0 19], no table on the plot.
 ;; Should-succeed: fetch.started, fetch.done, the pickaxe is carried. Should-fail: :fetch false ends craft.no-table, no pickaxe.
+;; Card c13758ed: a table put down from the inventory is reported in the result (:spent, :spent-at).
 {:defaults
  {:tags [:fetch :crafting] :time :any
   :plot {:height 8}
@@ -23,4 +24,10 @@
          [:job (jobs.items.craft {:item "wooden_pickaxe" :fetch false})]]
    :expect [{:event {:source :job :kind :craft.no-table} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :fetch.started} :for-s 30 :until {:source :job :kind :craft.no-table}}]
-   :after [[:item "wooden_pickaxe" 0] [:item "oak_planks" 3]]}]}
+   :after [[:item "wooden_pickaxe" 0] [:item "oak_planks" 3]]}
+  {:name "carried-table-is-placed-and-reported-spent"
+   :blocks [[:set [14 0 19] "stone"]]
+   :body {:inventory [["oak_planks" 3] ["stick" 2] ["crafting_table" 1]]}
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed :data {:spent [:any] :spent-at [:any]}} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 0]]}]}

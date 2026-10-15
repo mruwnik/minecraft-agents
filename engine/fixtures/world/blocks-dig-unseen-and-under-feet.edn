@@ -1,0 +1,39 @@
+;; Cards ec7aaf35 (an unseen target is not the stone guess), bdf979bd / 3b38404c / f6578081 (the block under the feet is dug from beside).
+;; unseen-dirt-needs-no-tool: the body faces north, a dirt cell lies behind it; blocks.dig :fetch false and no tool digs it (an unseen cell
+;; is not read as stone, which would wait :no-tool). A stone cell in the same place waits :no-tool (blocks-dig-place.edn).
+;; Slab x 12..20, z 12..20, y 0..2, the body on top (feet y 3). dig-under-feet-steps-aside: blocks.dig of the cell under the feet steps off its
+;; column to a side cell first (result :stepped-aside) and digs; the body stays up. from-plan-clear-cell-under-feet: a plan cell wanted
+;; :clear under the feet is dug the same way (done, not refused). Should-fail/control: :accept [:under-feet] digs from on top and the body drops one block.
+{:defaults
+ {:tags [:blocks :build] :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "unseen-dirt-needs-no-tool"
+   :blocks [[:set [16 0 19] "dirt"]]
+   :body {:yaw 180}
+   :act [[:job (jobs.blocks.dig {:pos #at [16 0 19] :fetch false})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true :reason :dug}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :no-tool}} :for-s 60 :until {:source :job :kind :blocks.dig.done}}]
+   :after [[:block [16 0 19] "air"] [:item "dirt" [:>= 1]]]}
+  {:name "dig-under-feet-steps-aside"
+   :blocks [[:fill [12 0 12] [20 2 20] "stone"]]
+   :body {:at [16.5 3 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [16 2 16]})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true :stepped-aside [:any]}} :within-s 80 :of-job true}]
+   :after [[:block [16 2 16] "air"] [:body-near [16.5 3 16.5] 2.5]]}
+  {:name "from-plan-clear-cell-under-feet"
+   :blocks [[:fill [12 0 12] [20 2 20] "stone"]]
+   :body {:at [16.5 3 16.5] :inventory [["iron_pickaxe" 1]]}
+   :plans [{:id "hole" :metadata {:by "$body"} :parts [{:id "cell" :cells [#at [16 2 16]] :want :clear}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:hole"})]]
+   :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :build.refused} :for-s 80 :until {:source :job :kind :build.done}}]
+   :after [[:block [16 2 16] "air"] [:body-near [16.5 3 16.5] 2.5]]}
+  {:name "accept-under-feet-digs-from-on-top"
+   :blocks [[:fill [12 0 12] [20 2 20] "stone"]]
+   :body {:at [16.5 3 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [16 2 16] :accept [:under-feet]})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 80 :of-job true}]
+   :after [[:block [16 2 16] "air"] [:body-near [16.5 2 16.5] 0.8]]}]}

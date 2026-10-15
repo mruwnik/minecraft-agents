@@ -1,4 +1,4 @@
-;; A place the server refuses (a sheep standing in the cell) ends the primitive with :failed and the refusal facts (card b3598176).
+;; A place the server refuses (a sheep standing in the cell) ends the primitive with :failed and the refusal facts (card b3598176); the job's result and done text carry the primitive's reason text as :why (card 02361248).
 {:defaults
  {:tags [:blocks :jobs]
   :body {:at [16.5 0 16.5] :inventory [["dirt" 8]]}
@@ -8,5 +8,5 @@
    :blocks [[:set [18 0 16] "stone"]]
    :act [[:summon "sheep" [18.5 0 17.5] "{NoAI:1b}"]
          [:job (jobs.blocks.place {:pos #at [18 0 17] :item "dirt"})]]
-   :expect [{:event {:source :job :kind :blocks.place.done :data {:placed false :reason :failed}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :blocks.place.done :data {:placed false :reason :failed :why [:contains "Server refused"]}} :within-s 30 :of-job true}]
    :after [[:block [18 0 17] "air"] [:item "dirt" 8]]}]}

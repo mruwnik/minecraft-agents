@@ -1,3 +1,4 @@
+;; Card 41419fb6: in a 1-wide tunnel (case 5) there are fewer than 3 step-off cells; the body still steps away from the lava (escalated walk) and the job says so.
 ;; Cards ba557bb5, abf946bb (seal block fetched from a seen chest): blocks.dig of the cell under the feet that lays hidden lava open seals it from the rim (:on-lava :seal, the
 ;; default) and goes on. Should fail: no block carried and :seal-fetch false stops :lava-unsealed, and the body steps clear of the
 ;; lava column. Stone mass x 8..24, z 8..24, y 0..9; lava under the dug cell (16 9 16).
@@ -35,4 +36,11 @@
    :act [[:job (jobs.blocks.dig {:pos #at [16 8 16]})]]
    :expect [{:event {:source :job :kind :blocks.dig.sealed} :within-s 100 :of-job true}
             {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 110 :of-job true}]
-   :after [[:not-block [17 8 16] "lava"] [:block [16 8 16] "air"]]}]}
+   :after [[:not-block [17 8 16] "lava"] [:block [16 8 16] "air"]]}
+  ;; card 41419fb6: 1-wide tunnel x 10..22 along z 16; the plug cell [16 0 16] has buried lava beside it; nothing to seal with: the body walks away down the tunnel
+  {:name "tunnel-no-seal-block-steps-away-from-the-lava"
+   :blocks [[:fill [10 0 16] [22 1 16] "air"] [:set [16 0 16] "stone"] [:set [16 0 17] "lava"]]
+   :body {:at [13.5 0 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [16 0 16] :seal-fetch false})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:reason :lava-unsealed :stepped-away true}} :within-s 100 :of-job true}]
+   :after [[:body-far [16.5 0 17.5] 3]]}]}
