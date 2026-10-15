@@ -25,30 +25,19 @@
 
 (defn listed? [c] (and (empty? (:slots c)) (nil? (:reflex c))))
 
-(defn note-queued
-  "Keep the time the job was queued in its memory before its first round refreshes the entry; never a wait."
-  [c]
-  (when (listed? c)
-    (let [v (ctx/view c)
-          kind (mem/job-kind (:root c))]
-      (when-not (:queued-t (mem/job-mem v (:root c) []))
-        (mem/update-job! (:store (:engine c)) (:root c) [] assoc :queued-t (:t (mem/latest v kind)))
-        nil))))
-
 (defn logged-out-meanwhile
   "The latest ok or cut :log-out entry written after this listed job was queued, or nil; a child or reflex job never
   asks."
   [c]
   (when (listed? c)
     (let [v (ctx/view c)
-          queued (or (:queued-t (mem/job-mem v (:root c) [])) (:t (mem/latest v (mem/job-kind (:root c)))))
+          queued (:queued-t (mem/job-mem v (:root c) []))
           out (mem/latest v :log-out)]
       (when (and queued out (> (:t out) queued) (#{"ok" "cut"} (:status (:data out))))
         out))))
 
 (def conditions
-  [[:fn note-queued]
-   [:fn #(when (= false (:offline-allowed (:args %))) (contract/impossible :offline-forbidden))]
+  [[:fn #(when (= false (:offline-allowed (:args %))) (contract/impossible :offline-forbidden))]
    [:fn #(when-not (sh/night? (:primitives %)) :not-night)]
    [:fn #(when (sh/log-out-unsupported? (ctx/view %)) (contract/impossible :log-out-unsupported))]])
 

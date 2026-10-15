@@ -122,7 +122,8 @@
 (deftest job-memory-is-one-forever-entry-under-job-id
   (let [[s clock] (store)]
     (mem/create-job! s "j7" {:species :oak})
-    (is (= {:args {:species :oak} :children {}} (mem/job-mem (mem/view s) "j7" [])))
+    (is (= {:args {:species :oak} :children {} :queued-t @clock} (mem/job-mem (mem/view s) "j7" []))
+        "the queue time is kept in the entry")
     (mem/update-job! s "j7" [] assoc :phase :fell)
     (mem/update-job! s "j7" [:fell] assoc :tree-base [12 64 -30])
     (mem/update-job! s "j7" [:fell :walk] assoc :tries 1)
