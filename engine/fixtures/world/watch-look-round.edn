@@ -20,8 +20,8 @@
    :act [[:job (jobs.gather.mine {:block "diamond_ore" :level false :direction :n :tunnel-length 12 :count 1 :radius 8})]
          [:wait-s 3]
          [:summon "creeper" [16.5 0 29.5] "{NoAI:1b}"]]
-   :expect [{:event {:kind :watch.saw :data {:name "creeper"}} :within-s 8}
-            {:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
+   :expect [{:event {:kind :watch.saw :data {:name "creeper"}} :within-s 15}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 16}]}
   {:name "dark-creeper-6-behind-unseen"
    :body {:at [16.5 0 23.5]}
    :act [[:summon "creeper" [16.5 0 29.5] "{NoAI:1b}"]

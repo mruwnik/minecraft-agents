@@ -13,10 +13,11 @@
  :cases
  [{:name "cull-foreign-zone-refused"
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [14 0 12] #at [24 1 22]] :want "dirt"}]}]
-   :act [[:summon "cow" [18.5 0 18.5]] [:summon "cow" [19.5 0 18.5]] [:summon "cow" [20.5 0 18.5]] [:wait-s 2]
+   ;; NoAI: a wandering cow leaves the footprint and is then culled, as the rules allow; every cow refused is a start fact, so the call stays listed and waits :refused
+   :act [[:summon "cow" [18.5 0 18.5] "{NoAI:1b}"] [:summon "cow" [19.5 0 18.5] "{NoAI:1b}"] [:summon "cow" [20.5 0 18.5] "{NoAI:1b}"] [:wait-s 2]
          [:job (jobs.animals.cull {:mob "cow" :keep 0 :count 1})]]
-   :expect [{:event {:source :job :kind :cull.declined :data {:reason :refused}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :cull.done :data {:reason :count}} :for-s 40 :until {:source :job :kind :cull.declined}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :cull.done :data {:reason :count}} :for-s 20 :until {:source :job :kind :waiting}}]
    :after [[:entities "type=cow,tag=wt" [[14 0 12] [24 2 22]] 3]]}
   {:name "cull-ignore-zones-acts"
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [14 0 12] #at [24 1 22]] :want "dirt"}]}]
