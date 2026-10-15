@@ -1868,6 +1868,9 @@
 (defn look-calls [world]
   (filterv #(= "look" (.-name %)) (.-calls world)))
 
+(defn wait-calls [world]
+  (filterv #(= "wait" (.-name %)) (.-calls world)))
+
 (deftest look-around-looks-once-then-waits-so-ticks-do-not-spin
   (async done
     (tu/run-async done
@@ -1876,13 +1879,17 @@
               world (.-world p)]
           (core/submit! eng '(repeat (jobs.movement.look-around)) {})
           (.hold world "wait")
+          (core/tick! eng)
+          (loop [i 0]
+            (when (and (< i 1000) (empty? (wait-calls world)))
+              (await (js/Promise. (fn [resolve] (js/setTimeout resolve 1))))
+              (recur (inc i))))
           (dotimes [_ 10]
             (core/tick! eng)
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 5))))
             (swap! clock + 250))
           (is (= 1 (count (look-calls world))) "the round is parked in its wait, so ticks start nothing")
-          (is (= [2000] (mapv #(.. % -args -ms)
-                                    (filter #(= "wait" (.-name %)) (.-calls world))))
+          (is (= [2000] (mapv #(.. % -args -ms) (wait-calls world)))
               "it waits :every-ms, default 2000"))))))
 
 (deftest a-cut-rejects-look-around-s-wait-at-once

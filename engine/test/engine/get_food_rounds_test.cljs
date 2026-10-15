@@ -19,12 +19,19 @@
             [jobs.survival.get-food :as get-food]))
 
 (defn setup
-  "step-ms: the engine's clock moves on by that much each time it is read (time passing while a round runs)."
+  "step-ms: the engine's clock moves on by that much each time it is read (time passing while a round runs); the
+  world's furnaces cook by the same fake time, 50 ms a tick."
   [world & {:keys [step-ms zones] :or {step-ms 0}}]
   (let [clock (atom 1000000)
+        carry (atom 0)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(swap! clock + step-ms)
+        now (fn []
+              (let [ticks (quot (swap! carry + step-ms) 50)]
+                (swap! carry - (* ticks 50))
+                (when (pos? ticks) (.advance (.-world p) ticks)))
+              (swap! clock + step-ms))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
@@ -673,15 +680,12 @@
    :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}]})
 
 (defn ^:async run-until-idle!
-  "Tick until the list is empty or n ticks, the world's furnaces cooking on a timer meanwhile."
-  [eng p n]
-  (let [timer (js/setInterval #(.advance (.-world p) 100) 20)]
-    (try
-      (loop [i 0]
-        (when (and (< i n) (seq (:list (core/state eng))))
-          (await (core/tick! eng))
-          (recur (inc i))))
-      (finally (js/clearInterval timer)))))
+  "Tick until the list is empty or n ticks."
+  [eng _p n]
+  (loop [i 0]
+    (when (and (< i n) (seq (:list (core/state eng))))
+      (await (core/tick! eng))
+      (recur (inc i)))))
 
 (deftest raw-chicken-next-to-a-furnace-is-cooked-and-eaten
   (async done
