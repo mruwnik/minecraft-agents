@@ -274,6 +274,17 @@
           (is (every? #(not= :away (:why %)) (remove #(> (- 64 (second (:cell %))) 2) skipped)) "only deep ones")
           (is (every? #(= "air" (block p %)) low)))))))
 
+(deftest go-to-stair-ending-on-the-goal-cell-is-no-duplicate-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 59 :z 0}} :blocks deep-pit
+                                                  :inventory [{:name "dirt" :count 2} {:name "iron_pickaxe" :count 1}]}
+                                             'jobs.movement.go-to {:pos [5 64 0] :range 1} []))]
+          (is (= {:arrived true} @out))
+          (is (empty? (events-of seen :go-to.escalation-stopped)))
+          (is (empty? (events-of seen :stair.stopped))))))))
+
 (deftest go-to-clears-a-door-out-of-a-sealed-room-and-shuts-it-behind
   (async done
     (tu/run-async done

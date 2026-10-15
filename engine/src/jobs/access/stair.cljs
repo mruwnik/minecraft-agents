@@ -339,9 +339,13 @@
           :else (give-up-fetch! c block limits e))))))
 
 (defn ^:async step!
-  "Walk into the cut step. :again, :continue while the walk waits, or a stop map."
+  "Walk into the cut step. :again, :continue while the walk waits, or a stop map. A step on the goal cell of a go-to up the
+  chain is the same call as that go-to (a duplicate), so it is walked to the cell's centre: the same place."
   [c next-feet]
-  (let [r (await (child/walk-into!* c :walk next-feet))]
+  (let [r (await (child/walk-into!* c :walk next-feet))
+        r (if (= :duplicate-call (when (= :condition-failed (:kind r)) (contract/cause-key r)))
+            (await (child/call-walk* c :walk-centre (update (child/walk-into-args :walk next-feet) :pos (fn [[x y z]] [(+ x 0.5) y (+ z 0.5)]))))
+            r)]
     (cond
       (= :continue r) :continue
       (and (:arrived (:data r)) (= next-feet (reach/standing-vec (:primitives c))))
