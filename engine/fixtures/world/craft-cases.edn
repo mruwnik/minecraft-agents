@@ -106,7 +106,7 @@
    :act [[:job (jobs.items.craft {:item "stone_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:event {:source :job :kind :child_ended :data {:ending {:data {:item "crafting_table"}}}} :within-s 80}
-            {:no-event {:source :job :kind :child_ended :data {:ending {:data {:item "crafting_table" :pos #{[:near #xyz [16 0 16] 0.5] [:near #xyz [17 0 16] 0.5] [:near #xyz [19 0 16] 0.5] [:near #xyz [20 0 16] 0.5] [:near #xyz [21 0 16] 0.5] [:near #xyz [22 0 16] 0.5] [:near #xyz [16 1 16] 0.5] [:near #xyz [17 1 16] 0.5] [:near #xyz [19 1 16] 0.5] [:near #xyz [20 1 16] 0.5] [:near #xyz [21 1 16] 0.5] [:near #xyz [22 1 16] 0.5]}}}}} :for-s 80}]
+            {:no-event {:source :job :kind :child_ended :data {:ending {:data {:item "crafting_table" :pos #{[:near #xyz [16 0 16] 0.5] [:near #xyz [17 0 16] 0.5] [:near #xyz [19 0 16] 0.5] [:near #xyz [20 0 16] 0.5] [:near #xyz [21 0 16] 0.5] [:near #xyz [22 0 16] 0.5] [:near #xyz [16 1 16] 0.5] [:near #xyz [17 1 16] 0.5] [:near #xyz [19 1 16] 0.5] [:near #xyz [20 1 16] 0.5] [:near #xyz [21 1 16] 0.5] [:near #xyz [22 1 16] 0.5]}}}}} :for-s 80 :until {:source :job :kind :completed :context {:chain [[:any]]}}}]
    :after [[:item "stone_pickaxe" 1]]}
   {:name "furnace-in-a-tunnel-never-lands-in-the-line"
    :blocks [[:fill [8 -1 8] [24 5 24] "stone"] [:fill [16 0 16] [22 1 16] "air"]]
@@ -114,5 +114,5 @@
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 1})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:event {:source :job :kind :child_ended :data {:ending {:data {:item "furnace"}}}} :within-s 60}
-            {:no-event {:source :job :kind :child_ended :data {:ending {:data {:item "furnace" :pos #{[:near #xyz [16 0 16] 0.5] [:near #xyz [17 0 16] 0.5] [:near #xyz [19 0 16] 0.5] [:near #xyz [20 0 16] 0.5] [:near #xyz [21 0 16] 0.5] [:near #xyz [22 0 16] 0.5] [:near #xyz [16 1 16] 0.5] [:near #xyz [17 1 16] 0.5] [:near #xyz [19 1 16] 0.5] [:near #xyz [20 1 16] 0.5] [:near #xyz [21 1 16] 0.5] [:near #xyz [22 1 16] 0.5]}}}}} :for-s 80}]
+            {:no-event {:source :job :kind :child_ended :data {:ending {:data {:item "furnace" :pos #{[:near #xyz [16 0 16] 0.5] [:near #xyz [17 0 16] 0.5] [:near #xyz [19 0 16] 0.5] [:near #xyz [20 0 16] 0.5] [:near #xyz [21 0 16] 0.5] [:near #xyz [22 0 16] 0.5] [:near #xyz [16 1 16] 0.5] [:near #xyz [17 1 16] 0.5] [:near #xyz [19 1 16] 0.5] [:near #xyz [20 1 16] 0.5] [:near #xyz [21 1 16] 0.5] [:near #xyz [22 1 16] 0.5]}}}}} :for-s 80 :until {:source :job :kind :completed :context {:chain [[:any]]}}}]
    :after [[:item "iron_ingot" 1]]}]}

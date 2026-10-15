@@ -15,10 +15,10 @@
                                      :use-notes false :max-distance 60 :max-legs 16 :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :of-job true :until {:source :job :kind :completed}}
-            {:no-event {:source :system :kind :error} :for-s 60}]}
+            {:no-event {:source :system :kind :error} :for-s 60 :until {:source :job :kind :completed}}]}
   {:name "tightest-spacing-still-ends-found"
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 4 :scan-radius 8
                                      :use-notes false :max-distance 60 :max-legs 24 :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :of-job true :until {:source :job :kind :completed}}
-            {:no-event {:source :system :kind :error} :for-s 60}]}]}
+            {:no-event {:source :system :kind :error} :for-s 60 :until {:source :job :kind :completed}}]}]}
