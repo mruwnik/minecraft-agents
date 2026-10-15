@@ -1,7 +1,8 @@
 (ns jobs.primitive
   "The acting primitives of engine.primitive as registry jobs: `job` wraps a table entry, which engine.registry lists
   as jobs.primitive.<kebab-case name> so agents and jobs call and quote each by name."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.primitive :as primitive]))
@@ -13,12 +14,14 @@
   {:place [:item] :steer [:decide] :jumpPlace [:item] :trade [:id :op]})
 
 (defn missing-args
-  "The condition of primitive k: nil when the args hold what the act needs, else the cause naming what is missing."
+  "The can-start? of primitive k: :ok when the args hold what the act needs, else :never :bad-args naming what is
+  missing."
   [k]
   (let [need (distinct (concat (get-in primitive/table [k :target]) (also-required k)))]
     (fn [c]
-      (when-let [missing (seq (remove #(some? (get (:args c) %)) need))]
-        (contract/impossible {:reason :bad-args :missing (vec missing)})))))
+      (if-let [missing (seq (remove #(some? (get (:args c) %)) need))]
+        (contract/never :bad-args (str "missing " (str/join ", " (map name missing))) :missing (vec missing))
+        (contract/ok :args "args given")))))
 
 (a/defargs settings
   {::time-s {:default 300 :doc "Seconds one primitive act may take before it gives up (:limit-reached); an offline act is the longest." :spec (a/num-in 0 nil)}})
@@ -56,7 +59,7 @@
   ending of its result (the result's fields are the ending's data)."
   [k sym]
   (let [{:keys [target quote-of ending]} (get primitive/table k)]
-    {:conditions [[:fn (missing-args k)]] :target target :args (a/declare! sym (args-data k))
+    {:can-start? (missing-args k) :target target :args (a/declare! sym (args-data k))
      :doc (str "The primitive " k " as a job: one act, which cannot be stopped midway. Takes the act's args (engine/README,"
                " Acting). Ends done when the act's status is a success, else with the ending its status maps to; the result"
                " fields are the ending's data.")

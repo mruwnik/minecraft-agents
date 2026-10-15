@@ -1,6 +1,7 @@
 (ns jobs.items.obtain.need
   "Whether a source would start: viability of the gather and tool sources, and the tool a mined need wants."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.get-tool :as get-tool]
             [jobs.items.obtain.base :refer [explore-setting makes? way?]]
@@ -31,7 +32,7 @@
          (let [need (with-block c (first needs))]
            (boolean (if (tools-wanted c names need)
                       (tool-viable? c names need)
-                      (nil? (ctx/child-wait c (gather-slot need) (:job need) (:args need)))))))))
+                      (= :ok (first (ctx/child-status c (gather-slot need) (:job need) (:args need))))))))))
 
 (defn explore-opts
   "The search options of :explore, or nil when it is off."
@@ -78,5 +79,5 @@
     (when need
       (if-let [tools (tools-wanted c names need)]
         (gather-held c tools 1)
-        (when-let [w (ctx/child-wait c (gather-slot need) (:job need) (:args need))]
-          (if (= [:reason] (keys w)) (:reason w) w))))))
+        (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
+          (when-not (= :ok (first s)) (contract/status-cause s)))))))

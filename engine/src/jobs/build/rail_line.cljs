@@ -176,14 +176,6 @@
   [c]
   (check-cache/cached c :planned #(planned c)))
 
-(defn trouble-cause
-  "The cause of a plan trouble, at the start and mid-run alike: no zone list read, or a plan missing or unreadable (it
-  may be saved or fixed later) is a plain cause (condition-failed); rail cells that are not one chain are impossible."
-  [trouble]
-  (if (#{:no-zones :plan} (:reason trouble))
-    (dissoc trouble :text)
-    (contract/impossible (dissoc trouble :text))))
-
 (defn plan-problem
   "The trouble of the plan: later for no zone list read, or a plan missing or unreadable (it may be saved or fixed
   later); never for rail cells that are not one chain."
@@ -303,10 +295,7 @@
   (let [{:keys [cells trouble]} (planned c)
         phase (:phase (ctx/mem c))]
     (cond
-      trouble (let [cause (trouble-cause trouble)]
-                (if-let [why (contract/impossible-cause cause)]
-                  (ctx/end c :impossible why)
-                  (ctx/end c :condition-failed cause)))
+      trouble (ctx/end c (if (#{:no-zones :plan} (:reason trouble)) :condition-failed :impossible) (dissoc trouble :text))
       (= :check phase) (finish! c cells)
       (= :switch phase) (await (switch-step! c cells))
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))

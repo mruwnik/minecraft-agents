@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.settings :as settings]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
@@ -138,10 +139,11 @@
     {:reason reason :killed (vec (:killed m)) :given-up (:given-up m {})}))
 
 (defn done?
-  "The targets killed against those seen, and the data so far. Never :done? itself: the fight ends with its event and data."
+  "The targets killed against those seen, and the data so far. Never :ok: the fight ends with its event and data."
   [c]
   (let [{:keys [killed seen]} (ctx/mem c)]
-    {:done? false :units :targets :done (count killed) :left (count (remove (set killed) seen)) :data (fight-data c :limit-reached)}))
+    (contract/later :fighting "the fight decides its end" :units :targets :done (count killed)
+                    :left (count (remove (set killed) seen)) :result (fight-data c :limit-reached))))
 
 (defn quote-of [c]
   (let [most (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s))]
