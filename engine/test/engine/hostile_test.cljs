@@ -84,8 +84,6 @@
 
 (def sword [{:name "iron_sword" :count 1}])
 
-(defn heard-skeleton [id x z] {:id id :name "skeleton" :kind "hostile" :visible false :pos {:x x :y 64 :z z}})
-
 (defn ^:async first-round-seeing
   "As first-round, over a body that sees through perception (the clock moving ms with every call, default 0)."
   ([spec world] (first-round-seeing spec world 0))
@@ -252,10 +250,10 @@
         (let [{:keys [seen]} (await (flight-round respond {:inventory sword :entities [(zombie 100 3 0)]}))]
           (is (= [{:mob "zombie" :decision :fight :pos {:x 3 :y 64 :z 0}}] (decided seen))
               "a seen mob: its place, one event for the whole encounter"))
-        (let [{:keys [eng seen]} (setup-seeing {:inventory sword :entities [(heard-skeleton 101 0.5 -5.5)]} [0 0])]
+        (let [{:keys [eng seen]} (setup-seeing {:inventory sword :entities [(zombie 101 0.5 -5.5)]} [0 0])]
           (core/submit! eng respond {})
           (await (core/tick! eng))
-          (is (= [{:mob "skeleton" :decision :fight :direction :north :band :near}] (decided seen))
+          (is (= [{:mob "zombie" :decision :fight :direction :north :band :near}] (decided seen))
               "a heard-only mob: what the sound tells, never its place"))))))
 
 ;; ------------------------------------------------------------- fight-back
@@ -339,18 +337,22 @@
   (into (dissoc closed-room "2,64,0" "2,65,0")
         (for [x (range -1 2) z (range -1 2)] [(str x ",67," z) "stone"])))
 
+(def roofed-passage
+  "The breached room with a hole in its west wall too: roofed, but walled two ways only, so no closed quarters (a groan counts)."
+  (dissoc breached-room "-2,64,0" "-2,65,0"))
+
 (deftest a-roofed-body-at-night-does-not-flee-for-a-mob-it-only-hears
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [heard (heard-skeleton 7 5.5 0.5)
+        (let [heard (zombie 7 0.5 -5.5)
               stay '(jobs.survival.respond-to-hostile {:stay-inside false})]
           (doseq [[world spec decision why]
                   [[{:time 14000 :entities [heard]} respond :flee "no roof: it flees"]
-                   [{:time 14000 :blocks breached-room :entities [heard]} respond :fight "roofed, heard only: it stays"]
-                   [{:time 14000 :blocks breached-room :entities [heard]} stay :flee "stay-inside off: it flees"]
-                   [{:time 1000 :blocks breached-room :entities [heard]} respond :flee "day: it flees"]]]
-            (let [{:keys [eng p]} (setup-seeing (assoc world :self {:health 5 :pos [0.5 64 0.5]} :inventory sword :pitch -80) nil 1000)]
+                   [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight "roofed, heard only: it stays"]
+                   [{:time 14000 :blocks roofed-passage :entities [heard]} stay :flee "stay-inside off: it flees"]
+                   [{:time 1000 :blocks roofed-passage :entities [heard]} respond :flee "day: it flees"]]]
+            (let [{:keys [eng p]} (setup-seeing (assoc world :self {:health 5} :inventory sword :pitch -80) nil 1000)]
               (perception/pass! (aget p "perception"))
               (swap! (fake/state p) assoc :pitch 0)
               (core/submit! eng spec {})
@@ -616,10 +618,21 @@
   (4 blocks toward the sound) on open floor outside it."
   (apply dissoc (tu/box 5 63 -2 9 66 2 "stone") (keys (tu/box 6 64 -1 8 65 1 "stone"))))
 
-(deftest hostile-near-holds-for-a-heard-zombie-only-once-a-look-sees-it
-  (let [holds-seeing #(boolean (when-hostile-near (:p (setup-seeing % nil)) {:data mem/empty-data :now 0} {}))]
-    (is (false? (holds-seeing {:blocks thin-stone-box :entities [(zombie 7.5 0.5)]})) "boxed in stone: heard, the look sees nothing")
-    (is (true? (holds-seeing {:entities [(zombie -6 0)]})) "in the open behind the body: the look sees it")))
+(defn tunnel-east
+  "Rock round a 1x2 tunnel along x (x -5..8, feet y 64) with the body in it; plugged at x 6 when plugged?."
+  [plugged?]
+  (cond-> (apply dissoc (tu/box -6 63 -2 9 66 2 "stone") (keys (tu/box -5 64 0 8 65 0 "air")))
+    plugged? (merge (tu/box 6 64 0 6 65 0 "stone"))))
+
+(deftest hostile-near-counts-a-groan-in-the-open-and-looks-in-closed-quarters
+  (let [holds-seeing #(boolean (when-hostile-near (:p (setup-seeing (assoc % :self {:pos [0.5 64 0.5]}) nil))
+                                                  {:data mem/empty-data :now 0} {}))]
+    (is (true? (holds-seeing {:blocks thin-stone-box :entities [(zombie 7.5 0.5)]}))
+        "in the open: a zombie heard in a box counts as seen (its rough spot has a way)")
+    (is (false? (holds-seeing {:blocks (tunnel-east true) :entities [(zombie 7.5 0.5)]}))
+        "in a tunnel, the zombie behind a plug: the look sees nothing")
+    (is (true? (holds-seeing {:blocks (tunnel-east false) :entities [(zombie 7.5 0.5)]}))
+        "in a tunnel, the zombie in it: seen, with a way")))
 
 (deftest hostile-near-sees-no-danger-while-the-body-is-dead
   (let [near (tu/fake-on-floor {:entities [(zombie 5 0)]})
@@ -1184,13 +1197,15 @@
 
 ;; ---- card 10a36e29: a flight from heard-only mobs that ends blocked mutes them, growing
 
+(def heard-wall (tu/box 5 64 -6 5 65 -1 "stone"))
+
 (defn mutes [eng] (mapv (comp :until :data) (mem/entries (mem/view (:store eng)) :heard-mute)))
 
 (deftest a-flight-from-a-heard-only-mob-that-ends-blocked-mutes-heard-mobs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup-seeing {:entities [(heard-skeleton 7 6.5 -3.5)]} [0 0] 1000)]
+        (let [{:keys [eng p]} (setup-seeing {:blocks heard-wall :entities [(zombie 6.5 -3.5)]} nil 1000)]
           (stuck-walks! p)
           (core/submit! eng respond {})
           (await (core/tick! eng))
@@ -1199,6 +1214,7 @@
 
 ;; ---- a body that would fight leaves a mob it only hears alone
 
+(defn heard-skeleton [id x z] {:id id :name "skeleton" :kind "hostile" :visible false :pos {:x x :y 64 :z z}})
 
 (defn heard-only-events [seen] (filterv #(= :hostile.heard-only (:kind %)) @seen))
 

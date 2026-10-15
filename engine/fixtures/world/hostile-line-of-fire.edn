@@ -73,11 +73,11 @@
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
    :after [[:block [20 0 16] "poppy"]]}
-  {:name "zombie-stone-box-quiet"
+;; Owner Q240: in the open a groan counts as seen (the rough spot 4 toward it, outside the box, has a way).
+  {:name "zombie-stone-box-heard-in-the-open-fires"
    :blocks [[:fill [20 0 14] [24 2 18] "stone" :hollow]]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
-   :after [[:entities "type=zombie,tag=wt" [[21 0 15] [23 1 17]] 1]]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
   ;; Card 876c2ac8 (fix 5aea0a88, owner Q78): a ranged mob only heard counts as a danger in the open, not in a tunnel.
   ;; Heard only = a clear arrow line but unseen: a sealed dark stone box (light 0) puts a skeleton beyond dark-sight (4) out of
   ;; sight while it is in the near hearing band (8; a heard ranged mob further off is no danger). The tunnel cases are a 1x2
@@ -100,5 +100,20 @@
    :blocks [[:fill [4 -1 4] [28 6 28] "stone"] [:fill [8 0 16] [26 1 16] "air"] [:set [10 0 16] "torch"] [:set [14 0 16] "torch"] [:set [18 0 16] "torch"] [:set [21 0 16] "torch"] [:set [24 0 16] "torch"]]
    :body {:at [12.5 0 16.5] :yaw -90}
    :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
+  ;; Owner Q240: in closed quarters a heard melee mob counts only once a look sees it. The body in a dark 1x2 tunnel, the
+  ;; zombie 7 east behind a stone plug: its rough spot (4 east, in the tunnel) has a way, but nothing is seen.
+  {:name "zombie-heard-behind-a-plug-in-a-tunnel-quiet"
+   :plot {:height 8}
+   :blocks [[:fill [4 -1 4] [28 6 28] "stone"] [:fill [8 0 16] [17 1 16] "air"] [:fill [19 0 16] [20 1 16] "air"]]
+   :body {:at [12.5 0 16.5]}
+   :act [[:summon "zombie" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
+   :after [[:entities "type=zombie,tag=wt" [[19 0 16] [20 1 16]] 1]]}
+  {:name "zombie-seen-in-a-lit-tunnel-fires"
+   :plot {:height 8}
+   :blocks [[:fill [4 -1 4] [28 6 28] "stone"] [:fill [8 0 16] [26 1 16] "air"] [:set [10 0 16] "torch"] [:set [14 0 16] "torch"] [:set [18 0 16] "torch"] [:set [21 0 16] "torch"] [:set [24 0 16] "torch"]]
+   :body {:at [12.5 0 16.5] :yaw -90}
+   :act [[:summon "zombie" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
 ]}

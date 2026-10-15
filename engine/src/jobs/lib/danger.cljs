@@ -3,7 +3,8 @@
   A melee mob is one when it has a walkable way to the body, a ranged mob when it has a line of fire; a mob walled off,
   across a pit, or with the body sealed in, is not.
   Candidates are the mobs the body knows of (known-hostiles): the perception's mob memory, seen or heard. A heard one
-  is judged by its direction and band (mob-pos), never its exact place; a heard melee mob is a danger only beside the body.
+  is judged by its direction and band (mob-pos), never its exact place; in closed quarters (closed-quarters?) a heard melee
+  mob counts only beside the body.
   The mobs of one query share block reads (reach/lookup) and walk proofs (reach.proofs)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
@@ -17,7 +18,8 @@
   {::hostile-radius {:default 8 :doc "Blocks within which a known hostile mob that can reach the body counts as a danger (the hostile-near trigger and go-to's cut check read it)." :spec (a/int-in 0 nil)}
    ::ranged-radius {:default 16 :doc "Blocks within which a known ranged mob with a line of fire counts as a danger." :spec (a/int-in 0 nil)}
    ::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :spec (a/int-in 1 nil)}
-   ::close-hearing {:default 2 :doc "Blocks within which a heard mob is loud enough to be beside the body (heard-close?)." :spec (a/num-in 0 nil)}})
+   ::close-hearing {:default 2 :doc "Blocks within which a heard mob is loud enough to be beside the body (heard-close?)." :spec (a/num-in 0 nil)}
+   ::quarters-reach {:default 3 :doc "Blocks within which a roof and walls every way make the body's place closed quarters (closed-quarters?)." :spec (a/int-in 1 nil)}})
 
 (defn seen-mob?
   "Whether the body has seen or heard hostile e: the seen or heard flag of a known-hostiles entry, else (raw entity)
@@ -33,14 +35,22 @@
   (let [s (.-seen e)]
     (if (some? s) (true? s) (true? (.-visible e)))))
 
-(defn in-tunnel?
-  "Whether the body's cell is in a tunnel by kind-at: solid over the head and solid at both ends of one horizontal
-  axis, at the feet and head cells."
+(defn quarters-reach [] (settings/get settings ::quarters-reach))
+
+(defn closed-quarters?
+  "Whether the body's cell [x y z] is in closed quarters by kind-at, where a sound alone does not show a mob is near: a
+  tunnel (solid over the head and at both ends of one horizontal axis, feet and head cells), or a small room or pocket
+  (solid over the head and a wall, solid at feet and head height, three of the four ways along the axes (a door may
+  open the fourth), all within quarters-reach). Outside or in a large cave it is not."
   [kind-at [x y z]]
-  (let [solid? #(keyword-identical? :solid (kind-at %1 %2 %3))]
-    (and (solid? x (+ y 2) z)
-         (or (and (solid? (dec x) y z) (solid? (inc x) y z) (solid? (dec x) (inc y) z) (solid? (inc x) (inc y) z))
-             (and (solid? x y (dec z)) (solid? x y (inc z)) (solid? x (inc y) (dec z)) (solid? x (inc y) (inc z)))))))
+  (let [solid? #(keyword-identical? :solid (kind-at %1 %2 %3))
+        r (range 1 (inc (quarters-reach)))
+        wall? (fn [[dx dz]] (some #(let [cx (+ x (* % dx)) cz (+ z (* % dz))] (and (solid? cx y cz) (solid? cx (inc y) cz))) r))]
+    (or (and (solid? x (+ y 2) z)
+             (or (and (solid? (dec x) y z) (solid? (inc x) y z) (solid? (dec x) (inc y) z) (solid? (inc x) (inc y) z))
+                 (and (solid? x y (dec z)) (solid? x y (inc z)) (solid? x (inc y) (dec z)) (solid? x (inc y) (inc z)))))
+        (and (some #(solid? x (+ y 1 %) z) r)
+             (<= 3 (count (filter wall? [[1 0] [-1 0] [0 1] [0 -1]])))))))
 
 (def band-distance
   "Blocks a heard mob's band stands for when a maths needs a place: half the near band's edge, twice it."
@@ -140,7 +150,8 @@
   :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own.
   :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
   :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land.
-  A melee mob heard but not seen is one only when heard close (heard-close?) and it could stand beside the body that way
+  A melee mob heard but not seen counts as seen (by its rough spot) outside or in a large cave; in closed quarters
+  (closed-quarters?) it is one only when heard close (heard-close?) and it could stand beside the body that way
   (beside-toward?): a heard mob in clear, lit sight is already seen (engine.perception), so a look would find nothing.
   A fusing creeper (hissing, seen or heard) within swell-range is always one; beyond it the usual tests apply."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
@@ -153,7 +164,7 @@
      (and ignore-heard? (not (seen-only? e))) false
      (combat/ranged? e)
      (and (or (not sight?) (seen-only? e) (<= (mob-distance p e) obs/near-band))
-          (or (not sight?) (seen-only? e) (not (in-tunnel? kind-at (reach/cell-of (u/pos-of (.-pos (.self p)))))))
+          (or (not sight?) (seen-only? e) (not (closed-quarters? kind-at (reach/cell-of (u/pos-of (.-pos (.self p)))))))
           (reach/line-of-fire? (or arrow-at (reach/lookup p reach/arrow-kind-of)) (mob-pos p e) (u/pos-of (.-pos (.self p)))))
      :else
      (and (or (seen-mob? e) (not sight?))
@@ -163,14 +174,14 @@
                     body (reach/cell-of from)]
                 (or (and (heard-close? p e)
                          (beside-toward? kind-at body (:direction (obs/rough-hearing from (u/pos-of (.-pos e))))))
-                    (and (or (seen-only? e) (not sight?))
+                    (and (or (seen-only? e) (not sight?) (not (closed-quarters? kind-at body)))
                          (if pr (proofs/proved-way? kind-at pr mob body) (reach/way? kind-at mob body))))))))))
 
 (defn danger?
   "Whether hostile e (JS entity) is a real danger to the body.
-  A ranged mob needs a line of fire, to have been seen or (heard only) to be in the near band, and, when the body is in a tunnel (in-tunnel?), to have been seen, not only heard
+  A ranged mob needs a line of fire, to have been seen or (heard only) to be in the near band, and, when the body is in closed quarters (closed-quarters?), to have been seen, not only heard
   (unless :sight? is false). A melee mob needs a walkable way to the body and, unless :sight? is false, to
-  have been seen (heard only: see danger-in?)."
+  have been sensed (heard only: see danger-in?)."
   ([p e] (danger? p e {}))
   ([p e opts] (danger-in? p (reach/lookup p) e opts)))
 
