@@ -55,9 +55,9 @@
 (def shelter-purposes #{:shelter :retreat-plug})
 
 (defn plan-cells
-  "The cells of entries l that lie on the footprint of a plan this body made (own-plans), when spare-own-plans? holds."
-  [l footprints own-plans spare-own-plans?]
-  (if-not spare-own-plans?
+  "The cells of entries l that lie on the footprint of a plan this body made (own-plans), when spare-own-builds holds."
+  [l footprints own-plans spare-own-builds]
+  (if-not spare-own-builds
     #{}
     (into #{} (comp (map :cell) (filter #(contains? own-plans (get footprints %)))) l)))
 
@@ -82,7 +82,7 @@
       (stranding? in cell) {:reason :stranding}
       :else
       (let [v (rules/may-dig? (-> (select-keys in [:block-at :feet :zones :footprints :shafts :claims :self :now :ignore-zones? :ledger])
-                                  (update :footprints #(if (:spare-own-plans? in) % (into {} (remove (comp (:own-plans in #{}) val)) %)))
+                                  (update :footprints #(if (:spare-own-builds in) % (into {} (remove (comp (:own-plans in #{}) val)) %)))
                                   (assoc :cell cell)))
             hazards (mapv hazard-reason (:hazards v))]
         (cond

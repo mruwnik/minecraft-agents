@@ -34,7 +34,7 @@
   (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}, also as a
   clear-path.done info or clear-path.stopped warn event.
   It does not put the blocks back: jobs.movement.go-to does that once through.
-  :by-hand: a block no carried tool harvests is dug bare-handed (slow, the drop is lost) instead of stopping :dig-waits
+  :need-drop false: a block no carried tool harvests is dug bare-handed (slow, the drop is lost) instead of stopping :dig-waits
   :no-tool; go-to's last resort when it has no pickaxe.")
 
 (a/defargs args
@@ -42,7 +42,7 @@
    :max-thick {:doc "the thickest wall it digs through, in blocks" :spec (a/int-in 0 nil) :default 3}
    :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :spec map? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :by-hand {:doc "dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default false}
+   :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default true}
    :spare-own-builds {:doc "a cell of a plan this body made is never dug (stops :footprint naming the plan); false: it may be" :spec boolean? :default true}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
@@ -167,7 +167,7 @@
   "One dig child call on the cell being dug (:digging {:cell :block :collect}, kept until the child ends, so a resumed
   call goes on with it). :again, :continue while the child waits on the world, or the ending."
   [c {:keys [cell block collect]}]
-  (let [hand? (and (:by-hand (:args c)) (not (tools/can-harvest? (:primitives c) block)))
+  (let [hand? (and (false? (:need-drop (:args c))) (not (tools/can-harvest? (:primitives c) block)))
         args {:pos cell :collect (and collect (not hand?)) :need-drop (not hand?) :fetch false
               :ignore-zones? (:ignore-zones? (:args c))}
         done! (fn [] (ctx/update-mem! c dissoc :digging))]

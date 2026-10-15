@@ -122,7 +122,7 @@
 
 (deftest the-footprint-of-a-plan-this-body-made-keeps-its-blocks-unless-told-otherwise
   (are [own-plans spare? result] (= result (:step (step :entries [(entry [1 64 0])] :block-at (lookup [1 64 0] "dirt")
-                                                        :footprints {[1 64 0] "farm"} :own-plans own-plans :spare-own-plans? spare?)))
+                                                        :footprints {[1 64 0] "farm"} :own-plans own-plans :spare-own-builds spare?)))
     #{"farm"} true :finish
     #{"farm"} false :dig
     #{"other"} false :finish

@@ -64,7 +64,7 @@
   (:no-floor-below).
 
   A block on the footprint of a plan this body made is the plan's: its entry is dropped (cleanup.plan-cell) and the cell
-  never dug, unless :spare-own-plans? is false.
+  never dug, unless :spare-own-builds is false.
 
   An unowned entry (:job nil, no :near) out of reach is walked to only when safe, else held with the reason: :unarmed / :low-health (no weapon carried,
   or health under jobs.lib.body/risky-min-health: ::hold-unarmed?), :far-below (more than jobs.lib.ledger/max-below under the feet),
@@ -101,7 +101,7 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :spec (a/num-in 0 nil) :default u/bucket-reach}
    :keep-at-night? {:doc "a shelter's block (:shelter, :retreat-plug) stays all night; false takes it back at night too" :spec boolean? :default true}
-   :spare-own-plans? {:doc "a block on the footprint of a plan this body made is the plan's, not scaffold: its entry is dropped and never dug" :spec boolean? :default true}
+   :spare-own-builds {:doc "a block on the footprint of a plan this body made is the plan's, not scaffold: its entry is dropped and never dug" :spec boolean? :default true}
    :danger-radius {:doc "a walk is not made while a real danger is this close to the body, or a known hostile this close to the cell walked to: the cell is held :danger" :spec (a/num-in 0 nil) :default 16}
    :leg-s {:doc "a walk goes in legs of this many seconds; the danger is weighed again after each" :spec (a/num-in 0.1 120) :default 6}
    :give-up {:doc "walks ending out of reach, or failed digs, after which a cell is held" :spec (a/int-in 1 nil) :default 2}})
@@ -172,7 +172,7 @@
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :hostile-near? (hostile-near? (:primitives c)) :night? (sh/night? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
-            :spare-own-plans? (:spare-own-plans? (:args c))
+            :spare-own-builds (:spare-own-builds (:args c))
             :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))
             :max-below (ledger/max-below) :roof-height (roof-height)
             :died-near? (died-near-of (ctx/view c)) :walk-hold (walk-hold-of (:primitives c))
@@ -363,7 +363,7 @@
   dropped entries (one cleanup.dropped info each). The ledger after."
   [c l picked]
   (let [{:keys [footprints own-plans]} (access/zone-input c)
-        planned (plan-cells (filterv #(picked (:cell %)) l) footprints own-plans (:spare-own-plans? (:args c)))
+        planned (plan-cells (filterv #(picked (:cell %)) l) footprints own-plans (:spare-own-builds (:args c)))
         {:keys [ledger removed dropped]} (ledger/settle (filterv #(not (planned (:cell %))) l) #(picked (:cell %)) (access/sensed-at (:primitives c) nil))]
     (when (not= ledger l) (ledger/remember! c ledger))
     (doseq [cell planned]

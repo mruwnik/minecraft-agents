@@ -56,7 +56,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (run-door wall nil {:heading :east :max-thick 3 :by-hand true}))]
+        (let [r (await (run-door wall nil {:heading :east :max-thick 3 :need-drop false}))]
           (is (= [:done [3 64 0]] [(:status r) (:through r)]) (pr-str r))
           (is (= 4 (count (:dug r))) "two blocks high, two thick, bare-handed"))))))
 
@@ -158,8 +158,8 @@
       (fn ^:async t []
         (let [plan (shape/with-author {:id "hut" :parts [{:id "w" :cells [[1 64 0] [1 65 0] [2 64 0] [2 65 0]] :want "stone"}]} "Fake")
               world (assoc wall :plans {"hut" plan})
-              r (await (run-door world nil {:heading :east :max-thick 3 :by-hand true}))
-              r2 (await (run-door world nil {:heading :east :max-thick 3 :spare-own-builds false :by-hand true}))]
+              r (await (run-door world nil {:heading :east :max-thick 3 :need-drop false}))
+              r2 (await (run-door world nil {:heading :east :max-thick 3 :spare-own-builds false :need-drop false}))]
           (is (= [:stopped :footprint "hut"] [(:status r) (:reason r) (:plan r)]) (pr-str r))
           (is (= :done (:status r2)) (pr-str r2)))))))
 

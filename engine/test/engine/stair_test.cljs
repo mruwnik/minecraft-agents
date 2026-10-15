@@ -1164,7 +1164,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} (assoc east :fetch false :by-hand true) (fn [_])))]
+        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} (assoc east :fetch false :need-drop false) (fn [_])))]
           (is (= :done (:status @out)) (pr-str @out))
           (is (nil? (waiting s)))
           (is (seq (digs p)) "dug bare-handed"))))))

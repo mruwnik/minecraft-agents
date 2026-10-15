@@ -95,11 +95,11 @@
         :else (assoc r :reason :water-unplugged)))))
 
 (defn by-hand?
-  "Whether block is dug bare-handed: :by-hand asks for it, or the fetch of a tool for it failed (the way out must open
+  "Whether block is dug bare-handed: `:need-drop false` asks for it, or the fetch of a tool for it failed (the way out must open
   even with no pickaxe to be had)."
   [c block]
   (and (tools/needs-tool-to-clear? (:primitives c) block)
-       (or (:by-hand (:args c))
+       (or (false? (:need-drop (:args c)))
            (mem/tool-failed? c block))))
 
 (defn lacks-tool?
@@ -108,7 +108,7 @@
   (and (not (by-hand? c block)) (tools/needs-tool-to-clear? (:primitives c) block)))
 
 (defn drop-room?
-  "Room for block's drop, or no drop to keep: a :by-hand dig with no tool that harvests it loses it."
+  "Room for block's drop, or no drop to keep: a :need-drop false dig with no tool that harvests it loses it."
   [c block]
   (or (by-hand? c block)
       (blocks/room-for? (:primitives c) (blocks/item-name {:block block}))))
