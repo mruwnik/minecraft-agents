@@ -5,9 +5,11 @@
 # Both project words use the one shadow-cljs project in dashboard/ (engine builds write to engine/out); `dashboard test` is the :dashboard-test build.
 #
 # Every cljs compile in this repo goes through here: it queues for one of MC_COMPILE_SLOTS (default 3) machine-wide compile
-# slots (/tmp/mc-compile.lock, then .1, .2: taken here, so never wrap this in flock), one compile per checkout, and runs `npx shadow-cljs compile|release <build>` in dashboard/. The shadow-cljs CLI
-# connects to the checkout's long-lived `shadow-cljs server` when one runs (no JVM per compile, ~2 s instead of ~30 s); this
-# script starts that server first, detached, when it is not running and memory allows.
+# slots (/tmp/mc-compile.lock, then .1, .2: taken here, so never wrap this in flock), one compile per checkout, and runs `npx shadow-cljs compile|release <build>` in dashboard/.
+# In the main checkout the shadow-cljs CLI connects to its long-lived `shadow-cljs server` (warm: ~10 s instead of ~20-50 s); this script
+# starts that server first, detached, when it is not running and memory allows. A git worktree (fixers, integration, bisect) runs no server:
+# its compiles are rarely within an idle time of each other, so each is a one-shot JVM run under a tools/res-slot `server` slot
+# (memory floor, max; taken before the compile queue, waits up to RES_SLOT_MAX_WAIT_MS, default 45 min, then exits 75).
 #
 #   --priority  jump the queue: ahead of every waiting normal compile (it still waits for the compile now running).
 #               For the owner's UI rebuilds (dashboard ui/server) and nothing else.
@@ -17,14 +19,12 @@
 #
 # Queue: a ticket file <lane>-<ns>-<pid> per waiter in /tmp/mc-compile.queue (lane 0 priority, 1 normal; content "<wait|ready> <dir>"),
 # polled every 0.2 s, so order is priority lane first, then arrival. A waiter first takes its checkout's lock
-# (dashboard/.shadow-cljs/compile.lock) once no earlier ticket is for the same checkout, starts or restarts the server there
+# (dashboard/.shadow-cljs/compile.lock) once no earlier ticket is for the same checkout, starts or restarts the main server
 # (never while holding a compile slot) and marks the ticket ready; then it takes a free slot once fewer than MC_COMPILE_SLOTS
 # ready tickets are ahead of it. Dead waiters' tickets are pruned. Running under a process that holds the lock (an ancestor with the lock file open, e.g.
 # `flock /tmp/mc-compile.lock tools/compile ...`) would wait for itself for ever: it exits 2 at once instead.
 # Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
-# A server started outside the main checkout (a git worktree: integration batches, test copies) runs under a `server` slot of
-# tools/res-slot (held for the server's life, so its JVM counts against the memory floor; kind apart from compiles, max 4); a start queues for a slot up to RES_SLOT_MAX_WAIT_MS (default 45 min, a status line every MC_COMPILE_WAIT_LINE_S=60 s), then exits 75 (retry).
-# Every server stops itself after an idle time without a compile: MC_COMPILE_SERVER_IDLE_S (default 150) for a worktree, MC_COMPILE_MAIN_IDLE_S (1800) for the main checkout (tools/compile-idle-watch, started with it: kills only that pid with that start time, never during a compile; the next compile restarts it).
+# The main server stops itself after MC_COMPILE_MAIN_IDLE_S (1800) without a compile (tools/compile-idle-watch, started with it: kills only that pid with that start time, never during a compile; the next compile restarts it).
 # A waiter holding its checkout writes last-use.compiling, so its server is not stopped while it waits for a slot.
 # A build that prints an :undeclared-var, :undeclared-ns or :fn-arity warning exits 1 (shadow-cljs itself exits 0).
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
@@ -41,7 +41,7 @@ usage() { echo "usage: tools/compile <engine|dashboard> <build>... [--priority] 
 project=$1; shift
 case "$project" in engine|dashboard) ;; *) usage ;; esac
 dir="$repo/dashboard"   # one shadow-cljs project (dashboard/shadow-cljs.edn) holds both; one server per checkout
-lane=1; verb=compile; stop=0; builds=(); extra=()
+args=("$@"); lane=1; verb=compile; stop=0; builds=(); extra=()
 while [ $# -gt 0 ]; do
   a=$1; shift
   case "$a" in
@@ -59,6 +59,7 @@ done
 [ "$project" = dashboard ] && for i in "${!builds[@]}"; do [ "${builds[$i]}" = test ] && builds[$i]=dashboard-test; done
 
 available_mb() { awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo; }
+worktree=0; [ "$(cd "$repo" && git rev-parse --git-dir 2>/dev/null)" = "$(cd "$repo" && git rev-parse --git-common-dir 2>/dev/null)" ] || worktree=1
 server_pid() { local p; p=$(cat "$dir/.shadow-cljs/server.pid" 2>/dev/null) && [ -n "$p" ] && kill -0 "$p" 2>/dev/null && echo "$p"; }
 
 # Deadlock guard: an ancestor process holding the lock file open (flock(1) wrapping us, or an inherited fd) means we would wait for ourselves.
@@ -84,35 +85,22 @@ start_server() {
   fi
   echo "tools/compile: starting the shadow-cljs server" >&2
   # the background subshell must drop the lock fds (7, 9) too, or it holds the lock until the server dies
-  slot=(); loops=300
-  idle=${MC_COMPILE_MAIN_IDLE_S:-1800}
-  [ "$(cd "$repo" && git rev-parse --git-dir)" = "$(cd "$repo" && git rev-parse --git-common-dir)" ] || { idle=${MC_COMPILE_SERVER_IDLE_S:-150}
-    loops=-1 # waiting for a slot is bounded by res-slot's own max wait, not by this loop
-    slot=(env RES_SLOT_MAX_WAIT_MS=${RES_SLOT_MAX_WAIT_MS:-2700000} "$repo/tools/res-slot" server --); }
   # The server is shared by every agent: double fork so it is no descendant of the caller's shell, and drop the agent label
   # (LIVE_TESTS_AGENT_ID), so agent-usage attributes it to no agent (agent_reap of the starter must not kill it). The idle watcher stops it.
   rm -f "$dir/.shadow-cljs/launch.pid"
-  ( (exec 7>&- 9>&-; echo "$BASHPID" > "$dir/.shadow-cljs/launch.pid"; cd "$dir" && exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 "${slot[@]}" npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) & )
-  last_line=$SECONDS
-  for ((i=0; loops < 0 || i < loops; i++)); do
+  ( (exec 7>&- 9>&-; echo "$BASHPID" > "$dir/.shadow-cljs/launch.pid"; cd "$dir" && exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) & )
+  for ((i=0; i < 300; i++)); do
     p=$(server_pid) && [ -s "$dir/.shadow-cljs/nrepl.port" ] && [ -s "$dir/.shadow-cljs/http.port" ] && break
     bg=$(cat "$dir/.shadow-cljs/launch.pid" 2>/dev/null)
-    if [ -n "$bg" ] && ! kill -0 "$bg" 2>/dev/null && grep -q '^res-slot: busy' "$dir/.shadow-cljs/server.log" 2>/dev/null; then
-      echo "tools/compile: no free server slot for a worktree server, retry later ($(grep '^res-slot: busy' "$dir/.shadow-cljs/server.log" | tail -n1))" >&2
-      exit 75
-    fi
     if [ -n "$bg" ] && ! kill -0 "$bg" 2>/dev/null && ! server_pid >/dev/null; then break; fi
-    if [ "$loops" -lt 0 ] && [ $((SECONDS - last_line)) -ge "${MC_COMPILE_WAIT_LINE_S:-60}" ] && w=$(grep '^res-slot: waiting' "$dir/.shadow-cljs/server.log" 2>/dev/null | tail -n1) && [ -n "$w" ]; then
-      last_line=$SECONDS; echo "tools/compile: queued for a server slot: ${w#res-slot: }" >&2
-    fi
     sleep 0.5
   done
   server_pid >/dev/null || { echo "tools/compile: the shadow-cljs server did not start (see $dir/.shadow-cljs/server.log)" >&2; exit 1; }
-  # idle watcher: a server must not outlive its use (a worktree's holds a server slot; every JVM holds ~2 GB)
+  # idle watcher: a server must not outlive its use (every JVM holds ~2 GB)
   touch "$dir/.shadow-cljs/last-use"
   sp=$(server_pid)
   ( (exec 7>&- 9>&-; exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 "$repo/tools/compile-idle-watch" "$sp" "$(awk '{print $22}' "/proc/$sp/stat")" "$dir/.shadow-cljs/last-use" \
-    "$idle" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) & )
+    "${MC_COMPILE_MAIN_IDLE_S:-1800}" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) & )
   sleep 3
 }
 
@@ -127,6 +115,11 @@ restart_if_stale() {
   kill -0 "$p" 2>/dev/null && { echo "tools/compile: the old server (pid $p) did not stop" >&2; exit 1; }
   return 0
 }
+
+# a worktree compile holds its JVM's memory slot from before it queues until it ends
+if [ "$worktree" = 1 ] && [ "$stop" = 0 ] && [ -z "${MC_COMPILE_IN_SLOT:-}" ]; then
+  MC_COMPILE_IN_SLOT=1 RES_SLOT_MAX_WAIT_MS=${RES_SLOT_MAX_WAIT_MS:-2700000} exec "$repo/tools/res-slot" server -- "$0" "$project" "${args[@]}"
+fi
 
 mkdir -p "$queue" "$dir/.shadow-cljs"
 exec 7>>"$dir/.shadow-cljs/compile.lock"
@@ -154,8 +147,7 @@ while :; do
   if [ "$own" = 0 ] && [ "$same" = 0 ] && flock -n 7; then
     own=1
     echo $$ > "$dir/.shadow-cljs/last-use.compiling"
-    restart_if_stale
-    server_pid >/dev/null || start_server
+    [ "$worktree" = 1 ] || { restart_if_stale; server_pid >/dev/null || start_server; }
     touch "$dir/.shadow-cljs/last-use"
     echo "ready $dir" > "$ticket"
     continue

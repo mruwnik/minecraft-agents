@@ -7,6 +7,8 @@ export MC_COMPILE_LOCK="$T/lock" MC_COMPILE_QUEUE="$T/queue"
 fail=0
 # gone PID [DEADLINE_S]: poll until PID is dead (rc 0) or the deadline passes (rc 1); a bounded wait, not a fixed sleep
 gone() { local i; for ((i=0; i<${2:-20}*10; i++)); do kill -0 "$1" 2>/dev/null || return 0; sleep 0.1; done; return 1; }
+# seen FILE PATTERN [DEADLINE_S]: poll until FILE holds PATTERN
+seen() { local i; for ((i=0; i<${3:-20}*10; i++)); do grep -q "$2" "$1" 2>/dev/null && return 0; sleep 0.1; done; return 1; }
 check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: want [$3] got [$2]"; fail=1; fi; }
 
 # Fake repo: tools copied in, stub npx, a live "server" pid so no server start.
@@ -85,7 +87,8 @@ check "retry: gave up after 3 tries" "$(wc -l < "$T/npx.log")" 3
 # a named failing file ("File: path:l:c"): changed during the wait -> retried at once; unchanged -> fails after the wait, no retry
 : > "$T/bad.cljs"
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\nn=$(wc -l < "%s/npx.log")\n[ "$n" -ge "$OK_AT" ] && exit 0\necho "------ WARNING #1 - :undeclared-var ---"\necho " File: %s/bad.cljs:3:4"\n' "$T" "$T" "$T" > "$T/bin/npx"
-: > "$T/npx.log"; ( sleep 1; echo x >> "$T/bad.cljs" ) & out=$(OK_AT=2 MC_COMPILE_RETRY_S=20 MC_COMPILE_POLL_S=1 timeout 30 "$T/repo/tools/test-engine" engine.a-test 2>&1); check "named file changed: retried rc" "$?" 0
+: > "$T/npx.log"; : > "$T/te.out"; ( seen "$T/te.out" 'foreign edit in flight'; sleep 0.2; echo x >> "$T/bad.cljs" ) &
+OK_AT=2 MC_COMPILE_RETRY_S=20 MC_COMPILE_POLL_S=1 timeout 30 "$T/repo/tools/test-engine" engine.a-test > "$T/te.out" 2>&1; check "named file changed: retried rc" "$?" 0
 check "named file changed: compiled twice" "$(wc -l < "$T/npx.log")" 2
 : > "$T/npx.log"; out=$(OK_AT=99 MC_COMPILE_RETRY_S=2 MC_COMPILE_POLL_S=1 timeout 30 "$T/repo/tools/test-engine" engine.a-test 2>&1); check "named file unchanged: rc" "$?" 1
 check "named file unchanged: no retry" "$(wc -l < "$T/npx.log")" 1
@@ -105,42 +108,35 @@ check "golden need from goldenMb" "$(grep -cF -e "RES-SLOT tests --need $gmb --"
 mv "$T/repo/tools/res-slot.real" "$T/repo/tools/res-slot"
 timeout 5 "$T/repo/tools/test-engine" >/dev/null 2>&1; check "no args usage exit" "$?" 2
 
-# a worktree's server start waits for a compile slot without holding the global compile lock
+# a worktree runs no server: each compile is a one-shot JVM under a res-slot `server` slot, taken before the compile lock
 git init -q "$T/main" && git -C "$T/main" -c user.name=t -c user.email=t@t commit -q --allow-empty -m x && git -C "$T/main" worktree add -q "$T/wt" 2>/dev/null
 mkdir -p "$T/wt/tools" "$T/wt/dashboard/.shadow-cljs"
 cp "$TOOLS/compile" "$TOOLS/compile-idle-watch" "$T/wt/tools/"
 printf '#!/bin/sh\nsleep 4\necho "res-slot: busy"\nexit 75\n' > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
-MC_COMPILE_MIN_START_MB=0 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & WP=$!
+"$T/wt/tools/compile" engine test >/dev/null 2>&1 & WP=$!
 sleep 1.5
 flock -n "$MC_COMPILE_LOCK" true; check "lock free while a worktree waits for a slot" "$?" 0
 wait $WP; check "worktree without a slot exits 75" "$?" 75
 
-# a worktree's server start queues for a slot (long default wait, periodic status line) and succeeds once one frees
-printf '#!/bin/sh\nshift\necho "$RES_SLOT_MAX_WAIT_MS" > "%s/maxwait"\necho "res-slot: waiting for server (6/6 slots in use)" >&2\nwhile [ ! -e "%s/release" ]; do sleep 0.1; done\nexec "$@"\n' "$T" "$T" > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
+# the slot wait is long by default, res-slot's own wait lines reach the caller, and the compile runs inside the slot once one frees
+printf '#!/bin/sh\n[ "$1 $2" = "server --" ] || exit 9\nshift 2\necho "$RES_SLOT_MAX_WAIT_MS" > "%s/maxwait"\necho "res-slot: waiting for server (6/6 slots in use)" >&2\nwhile [ ! -e "%s/release" ]; do sleep 0.1; done\necho held > "%s/slot"\n"$@"; rc=$?\nrm "%s/slot"\nexit $rc\n' "$T" "$T" "$T" "$T" > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
 rm -f "$T/wt/dashboard/.shadow-cljs/"*
-printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\n' > "$T/bin/npx"
-MC_COMPILE_MIN_START_MB=0 MC_COMPILE_WAIT_LINE_S=0 timeout 60 "$T/wt/tools/compile" engine test >"$T/q.out" 2>&1 & QP=$!
-for _ in $(seq 1 100); do grep -q 'queued for a server slot' "$T/q.out" && break; sleep 0.1; done
-grep -q 'queued for a server slot: waiting for server' "$T/q.out"; check "queued compile prints the slot line" "$?" 0
+printf '#!/bin/sh\necho "npx $* slot=$(cat %s/slot 2>/dev/null)" >> "%s/wt-npx.log"\n' "$T" "$T" > "$T/bin/npx"
+timeout 60 "$T/wt/tools/compile" engine test >"$T/q.out" 2>&1 & QP=$!
+for _ in $(seq 1 100); do grep -q 'res-slot: waiting' "$T/q.out" && break; sleep 0.1; done
+grep -q 'res-slot: waiting for server' "$T/q.out"; check "queued worktree compile shows the slot wait" "$?" 0
 touch "$T/release"; wait $QP; check "queued compile succeeds once a slot frees" "$?" 0
-check "worktree server waits 45 min for a slot by default" "$(cat "$T/maxwait")" 2700000
-kill "$(cat "$T/wt/dashboard/.shadow-cljs/server.pid")" 2>/dev/null; rm -f "$T/release"
-
-# a worktree's server stops after an idle time (no compile): the slot frees; a compile within the time keeps it
-printf '#!/bin/sh\nshift\nexec "$@"\n' > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
-rm -f "$T/wt/dashboard/.shadow-cljs/"*
-printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\n' > "$T/bin/npx"
-export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_SERVER_IDLE_S=3 MC_COMPILE_IDLE_POLL_S=1
-timeout 30 "$T/wt/tools/compile" engine test >/dev/null 2>&1; check "worktree compile rc" "$?" 0
-WSRV=$(cat "$T/wt/dashboard/.shadow-cljs/server.pid")
-sleep 1; kill -0 "$WSRV" 2>/dev/null; check "worktree server alive right after a compile" "$?" 0
-gone "$WSRV"; check "worktree server gone after the idle time" "$?" 0
-unset MC_COMPILE_MIN_START_MB MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
+check "worktree compile waits 45 min for a slot by default" "$(cat "$T/maxwait")" 2700000
+check "worktree compile runs once, inside the slot" "$(cat "$T/wt-npx.log")" "npx shadow-cljs compile test slot=held"
+check "worktree compile starts no server" "$(ls "$T/wt/dashboard/.shadow-cljs" | grep -c -E 'server.pid|launch.pid')" 0
+check "worktree slot freed after the compile" "$(ls "$T/slot" 2>/dev/null | wc -l)" 0
+rm -f "$T/release" "$T/wt-npx.log"
+printf '#!/bin/sh\nshift 2\nexec "$@"\n' > "$T/wt/tools/res-slot"; chmod +x "$T/wt/tools/res-slot"
 
 # the main checkout's server stops after its own (longer) idle time too, with no server slot
 mkdir -p "$T/main/tools" "$T/main/dashboard/.shadow-cljs"
 cp "$TOOLS/compile" "$TOOLS/compile-idle-watch" "$T/main/tools/"
-export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_MAIN_IDLE_S=3 MC_COMPILE_SERVER_IDLE_S=1000 MC_COMPILE_IDLE_POLL_S=1
+export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_MAIN_IDLE_S=3 MC_COMPILE_IDLE_POLL_S=1
 printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; echo "ppid=$(ps -o ppid= -p $$ | tr -d " ") label=${LIVE_TESTS_AGENT_ID:-none} shared=${COMPILE_SHARED:-0}" > .shadow-cljs/launch.env; exec sleep 300;; esac\n' > "$T/bin/npx"
 LIVE_TESTS_AGENT_ID=fixer-x timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1; check "main compile rc" "$?" 0
 # the shared server is detached from the caller: no agent label, not a child of the compile script, marked shared
@@ -166,10 +162,9 @@ kill -0 "$NEW" 2>/dev/null; check "clj change starts a new server" "$?" 0
 timeout 30 "$T/main/tools/compile" engine test >/dev/null 2>&1
 check "no second restart without a new change" "$(cat "$T/main/dashboard/.shadow-cljs/server.pid")" "$NEW"
 kill "$(cat "$T/main/dashboard/.shadow-cljs/server.pid")" 2>/dev/null
-unset MC_COMPILE_MIN_START_MB MC_COMPILE_MAIN_IDLE_S MC_COMPILE_SERVER_IDLE_S MC_COMPILE_IDLE_POLL_S
+unset MC_COMPILE_MIN_START_MB MC_COMPILE_MAIN_IDLE_S MC_COMPILE_IDLE_POLL_S
 
 # N compiles run at once (MC_COMPILE_SLOTS), one per checkout. The stub compile logs start/end <checkout> and holds until go-<checkout> exists.
-seen() { local i; for ((i=0; i<${3:-20}*10; i++)); do grep -q "$2" "$1" 2>/dev/null && return 0; sleep 0.1; done; return 1; }
 printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\nk=$(basename "$(dirname "$PWD")")\necho "start $k" >> "%s/par.log"\nwhile [ ! -e "%s/go-$k" ]; do sleep 0.1; done\necho "end $k" >> "%s/par.log"\n' "$T" "$T" "$T" > "$T/bin/npx"
 export MC_COMPILE_MIN_START_MB=0 MC_COMPILE_SLOTS=2
 : > "$T/par.log"
@@ -184,28 +179,25 @@ check "a second compile of a busy checkout waits for it" "$(grep -c "start repo"
 touch "$T/go-repo"; wait $P1; check "first compile rc" "$?" 0
 wait $P3; check "queued same-checkout compile rc" "$?" 0
 check "queued same-checkout compile ran after" "$(grep -c "start repo" "$T/par.log")" 2
-kill "$(cat "$T/wt/dashboard/.shadow-cljs/server.pid")" 2>/dev/null
-rm -f "$T/go-repo" "$T/go-wt" "$T/wt/dashboard/.shadow-cljs/server.pid" "$T/main/dashboard/.shadow-cljs/server.pid"
+rm -f "$T/go-repo" "$T/go-wt" "$T/main/dashboard/.shadow-cljs/server.pid"
 
-# a compile waiting for a slot starts its server first (never while holding a slot) and keeps it alive past the idle time
-export MC_COMPILE_SLOTS=1 MC_COMPILE_SERVER_IDLE_S=1 MC_COMPILE_MAIN_IDLE_S=1 MC_COMPILE_IDLE_POLL_S=1
+# a main compile waiting for a slot starts its server first (never while holding a slot) and keeps it alive past the idle time
+export MC_COMPILE_SLOTS=1 MC_COMPILE_MAIN_IDLE_S=1 MC_COMPILE_IDLE_POLL_S=1
 : > "$T/par.log"
 timeout 60 "$C" engine test >/dev/null 2>&1 & P1=$!
 seen "$T/par.log" "start repo"
 timeout 60 "$T/main/tools/compile" engine test >/dev/null 2>&1 & P2=$!
 timeout 60 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & P3=$!
 seen "$T/main/dashboard/.shadow-cljs/server.pid" .; check "a queued compile starts its server before it gets a slot" "$?" 0
-seen "$T/wt/dashboard/.shadow-cljs/server.pid" .
-MS=$(cat "$T/main/dashboard/.shadow-cljs/server.pid" 2>/dev/null); WS=$(cat "$T/wt/dashboard/.shadow-cljs/server.pid" 2>/dev/null)
+MS=$(cat "$T/main/dashboard/.shadow-cljs/server.pid" 2>/dev/null)
 sleep 3
 kill -0 "$MS" 2>/dev/null; check "a queued main compile's server outlives the idle time" "$?" 0
-kill -0 "$WS" 2>/dev/null; check "a queued worktree compile's server outlives the idle time" "$?" 0
 touch "$T/go-repo" "$T/go-main" "$T/go-wt"
 wait $P1; check "slot holder rc" "$?" 0
 wait $P2; check "queued main compile rc" "$?" 0
 wait $P3; check "queued worktree compile rc" "$?" 0
-kill "$MS" "$WS" 2>/dev/null
-unset MC_COMPILE_MIN_START_MB MC_COMPILE_SLOTS MC_COMPILE_SERVER_IDLE_S MC_COMPILE_MAIN_IDLE_S MC_COMPILE_IDLE_POLL_S
+kill "$MS" 2>/dev/null
+unset MC_COMPILE_MIN_START_MB MC_COMPILE_SLOTS MC_COMPILE_MAIN_IDLE_S MC_COMPILE_IDLE_POLL_S
 
 # the idle watcher kills only the server it was started for (pid + start time), and never while a compile runs
 W="$TOOLS/compile-idle-watch"
