@@ -15,7 +15,7 @@
 
 (def doc
   "Empty a chest minecart and take the cart: walk within reach (jobs.lib.near/go-near!), open it and move every stack into the bag
-  (jobs.storage.withdraw's primitives, entity form), then break it (a jobs.combat.attack child) and pick up what falls (a
+  (a jobs.storage.withdraw-entity child), then break it (a jobs.combat.attack child) and pick up what falls (a
   jobs.forestry.collect-drops child, radius 4 round the cart): the cart item, and the stacks the bag had no room for.
   The cart is :id (an entity id) or the nearest chest_minecart within :radius of :near (default the body). It starts
   only when no real danger is near (jobs.lib.danger) and a cart is in sight (conditions :danger, :gone; start only). A cart in
@@ -97,18 +97,14 @@
   {:uses {:job-time [5 20 (settings/get settings ::job-time-s)]}})
 
 (defn ^:async empty-cart!
-  "Move every stack of the cart into the bag. A transfer that moves nothing (no room) ends it with :full."
+  "Move every stack of the cart into the bag (a jobs.storage.withdraw-entity child): \"ok\", :continue while it waits, else
+  the status that stopped it. A bag too full for a stack is noted as :full."
   [c id]
-  (let [seen (await (ctx/act c :inspectContainer (clj->js {:entity id})))]
+  (let [r (await (child/run!* c :empty 'jobs.storage.withdraw-entity {:id id}))]
     (cond
-      (not= "ok" (.-status seen)) (.-status seen)
-      :else (loop [stacks (vec (stock/stacks->items (.-items seen)))]
-              (if-let [[name n] (first stacks)]
-                (let [r (await (ctx/act c :transfer (clj->js {:entity id :direction "withdraw" :item name :count n})))]
-                  (if (and (= "ok" (.-status r)) (pos? (.-moved r)))
-                    (recur (rest stacks))
-                    (do (ctx/update-mem! c assoc :full true) "ok")))
-                "ok")))))
+      (= :continue r) :continue
+      (= :done (:kind r)) (do (when (:full (:data r)) (ctx/update-mem! c assoc :full true)) "ok")
+      :else (name (contract/cause-key r)))))
 
 (defn ^:async break-cart!
   "Attack the cart until it is gone: :broken, :continue (the child waits) or :cannot-break."
@@ -151,6 +147,7 @@
               :else
               (let [e (if (:emptied mem) "ok" (await (empty-cart! c id)))]
                 (cond
+                  (= :continue e) :continue
                   (= "missing" e) (stop! c :gone "the cart is gone")
                   (not= "ok" e) (stop! c :unreachable (str "cannot open the cart: " e))
                   :else

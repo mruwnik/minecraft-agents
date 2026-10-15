@@ -25,7 +25,7 @@
   A body that holds none of the food first gets it (a jobs.items.obtain child, unless :fetch is false); when none can
   be got the job ends :no-food with the fetch's kind and cause as :why. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
   it), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
-  jobs.animals.lead-to (doors left open for the animal and shut afterwards). After each leg the animal is looked at:
+  jobs.animals.lead-to (doors left open for the animal and shut afterwards); the go-to child of a leg plans its walk again after the leg was planned here). After each leg the animal is looked at:
   unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it and the first look of the wait emits info
   escort.waiting (both positions, the distance); unseen for 3 s the body walks back toward where it was last seen (up to
   12 blocks) and then ends :lost (an allowed adult within 10 blocks takes its place at once); seen more than 7 behind and not
