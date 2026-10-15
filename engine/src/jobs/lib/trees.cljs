@@ -29,7 +29,7 @@
 
 (def log-names
   "The overworld log blocks (the stem woods are not logs)."
-  (mapv #(str % "_log") ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "mangrove" "cherry"]))
+  (mapv #(str % "_log") ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "mangrove" "cherry" "pale_oak"]))
 
 (def species
   "Every species a sapling grows (the logs' species and the two stem woods)."

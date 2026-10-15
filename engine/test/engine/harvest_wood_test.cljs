@@ -226,7 +226,7 @@
 
 (deftest the-sapling-list-is-derived-from-the-species-table
   (is (= (set (map trees/sapling-of trees/species)) (set ps/saplings)))
-  (is (every? (set trees/species) ["oak" "mangrove" "crimson" "warped"])))
+  (is (every? (set trees/species) ["oak" "mangrove" "crimson" "warped" "pale_oak"])))
 
 (defn ^:async ticks-of
   "Run harvest-wood with args for n ticks over one oak of 3 logs and a sapling carried: the :stopped events' reasons
