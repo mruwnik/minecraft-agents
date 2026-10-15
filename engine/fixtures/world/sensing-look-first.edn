@@ -18,13 +18,13 @@
   {:name "search-default-max-legs-reaches-a-far-target"
    :blocks [[:set [56 0 16] "emerald_block"]]
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 60 :timeout-s 150})]]
+                                     :use-notes false :max-distance 60 :spend {:job-time 150}})]]
    :expect [{:event {:source :job :kind :search.done :data {:reason :found}} :within-s 160 :of-job true}
             {:no-event {:source :job :kind :search.not-found} :for-s 160 :until {:source :job :kind :search.done}}]
    :limit-s 170}
   {:name "search-with-nothing-ends-distance-not-legs"
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 6 :scan-radius 8
-                                     :use-notes false :max-distance 14 :timeout-s 100})]]
+                                     :use-notes false :max-distance 14 :spend {:job-time 100}})]]
    :expect [{:event {:source :job :kind :search.not-found :data {:why :distance}} :within-s 110 :of-job true}
             {:no-event {:source :job :kind :search.done} :for-s 110 :until {:source :job :kind :search.not-found}}]
    :limit-s 120}
