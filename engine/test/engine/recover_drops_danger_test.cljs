@@ -258,12 +258,12 @@
         blocks (merge (into {} (map (fn [[x y z]] [(str x "," y "," z) "stone"])) stone-cell)
                       (into {} (map (fn [[x y z]] [(str x "," y "," z) "dirt"])) plug-cells)
                       (:blocks spec))
-        {:keys [eng seen]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} spec {:blocks blocks}))]
+        {:keys [eng seen p]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} spec {:blocks blocks}))]
     (ledger/write! (:store eng) (into (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}) plug-cells)
                                       extra-entries))
     (die! eng {:pos dt/death-pos :inventory pile})
     (core/submit! eng job {})
-    {:eng eng :seen seen}))
+    {:eng eng :seen seen :p p}))
 
 (deftest the-seal-cleanup-takes-back-only-blocks-near-the-pile
   (async done
@@ -275,6 +275,23 @@
           (await (run-until-empty eng 40))
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng)))
           (is (= [far] (mapv :cell (ledger/open-entries (mem/view (:store eng))))) "the far scaffold block is still there"))))))
+
+(deftest an-unseen-seal-is-walked-up-to-before-it-is-taken-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (sealed-run [] {:self {:pos {:x -25 :y 64 :z 0}}})
+              walk-leg! recover-drops/walk-leg!]
+          (tu/seeing-within p 6)
+          (set! recover-drops/walk-leg! (fn [_ _]
+                                          (set! recover-drops/walk-leg! walk-leg!)
+                                          [{:kind :done :data {:arrived false :why :goal-enclosed}}]))
+          (await (run-until-empty eng 60))
+          (set! recover-drops/walk-leg! walk-leg!)
+          (is (= ["cleanup removed 2, dropped 0 not ours, 0 left"]
+                 (take 1 (keep #(some->> (:text %) (re-find #"cleanup removed.*")) @seen)))
+              "the first cleanup saw the plug and took it back")
+          (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
 
 ;; ------------------------------------------------------------ night in a shelter
 

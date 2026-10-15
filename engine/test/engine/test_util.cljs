@@ -106,6 +106,18 @@
     (aset p "sensedAt" (fn [pos] (if (looked?) (.blockAt p pos) #js {:unknown true})))
     p))
 
+(defn seeing-within
+  "p whose sensing reads only blocks within r of the body's current position; a farther cell is {:unknown true}, as
+  one never seen (a look around reveals nothing beyond r)."
+  [p r]
+  (let [near? (fn [pos] (let [s (.-pos (.self p))]
+                          (<= (js/Math.hypot (- (.-x pos) (.-x s)) (- (.-y pos) (.-y s)) (- (.-z pos) (.-z s))) r)))]
+    (aset p "sensedAt" (fn [pos] (if (near? pos) (.blockAt p pos) #js {:unknown true})))
+    (aset p "seenBlockAt" (fn [pos] (if (near? pos)
+                                      (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
+                                      #js {:unknown true :pos pos})))
+    p))
+
 (defn short-walks!
   "Make the fake's walks end early, as a steer that timed out after ticks ticks (the fake walks about 0.2 blocks a tick):
   a go-near! toward a target farther than that ends :partial. Only the first n walks when n is given."

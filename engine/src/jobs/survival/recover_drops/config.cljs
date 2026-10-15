@@ -13,6 +13,7 @@
    ::max-blocked-retries {:default 3 :doc "Walks of one trip that did not arrive before it is given up as :unreachable." :spec (a/int-in 1 nil)}
    ::wet-danger {:default 30 :doc "Points of route danger added for a pile in water or lost to drowning (a swim with the air running out); 10 cost each." :spec (a/num-in 0 nil)}
    ::seal-radius {:default 4 :doc "Scaffold blocks this body placed within this many blocks of the pile (a flee seal) are taken back when they keep it out of reach." :spec (a/num-in 0 nil)}
+   ::seal-sight {:default 4 :doc "The body walks to within this many blocks of the nearest own seal block, to see it, before the seal is taken back." :spec (a/num-in 0 nil)}
    ::deep-drop {:default 8 :doc "A pile this many blocks or more below the body, within ::deep-reach aside, is reached by a stair down (jobs.access.tunnel) once the walk did not arrive." :spec (a/int-in 1 nil)}
    ::deep-reach {:default 24 :doc "How far aside of a deep pile the walk goes on before the stair down is cut." :spec (a/num-in 0 nil)}
    ::stair-step-s {:default 3 :doc "Seconds one block of a stair down and its run is reckoned to take, against the despawn window left." :spec (a/num-in 0 nil)}
@@ -22,6 +23,8 @@
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
 
 (defn seal-radius [] (settings/get settings ::seal-radius))
+
+(defn seal-sight [] (settings/get settings ::seal-sight))
 
 (defn killer-guard-ms [] (settings/get settings ::killer-guard-ms))
 
