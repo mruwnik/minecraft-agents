@@ -455,16 +455,21 @@
 
 (defn unroofed-cell
   "{:cell :closed?}: the first cell a walker flood from pos {:x :y :z} (doors shut, within room-cells) reaches with no
-  block seen within room-roof cells over it ({:x :y :z}, nil when every cell is roofed), and whether the flood closed."
-  [p {:keys [x y z]}]
-  (let [kind-at (fn [cx cy cz]
-                  (let [b (u/seen-block p {:x cx :y cy :z cz})]
-                    (if (and b (openable? (.-name b))) :solid (kind-of b))))
-        roofed? (fn [cx cy cz] (some #(let [b (u/seen-block p {:x cx :y (+ cy %) :z cz})] (and b (not= :open (kind-of b))))
-                                     (range 2 7)))
-        {:keys [cells closed?]} (flood-visit (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells)
-        c (.find cells (fn [c] (not (roofed? (aget c 0) (aget c 1) (aget c 2)))))]
-    {:cell (when c {:x (aget c 0) :y (aget c 1) :z (aget c 2)}) :closed? closed?}))
+  block seen within room-roof cells over it ({:x :y :z}, nil when every cell is roofed), and whether the flood closed.
+  shut, a set of [x y z] cells, counts as solid."
+  ([p pos] (unroofed-cell p pos nil))
+  ([p {:keys [x y z]} shut]
+   (let [kind-at (fn [cx cy cz]
+                   (let [b (u/seen-block p {:x cx :y cy :z cz})]
+                     (cond
+                       (contains? shut [cx cy cz]) :solid
+                       (and b (openable? (.-name b))) :solid
+                       :else (kind-of b))))
+         roofed? (fn [cx cy cz] (some #(let [b (u/seen-block p {:x cx :y (+ cy %) :z cz})] (and b (not= :open (kind-of b))))
+                                      (range 2 7)))
+         {:keys [cells closed?]} (flood-visit (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells)
+         c (.find cells (fn [c] (not (roofed? (aget c 0) (aget c 1) (aget c 2)))))]
+     {:cell (when c {:x (aget c 0) :y (aget c 1) :z (aget c 2)}) :closed? closed?})))
 
 (defn escape-cell
   "Where a walker at pos {:x :y :z} gets out of a room with a hole (room* nil, doors shut): unroofed-cell's cell when the

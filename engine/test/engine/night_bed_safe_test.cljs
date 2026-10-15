@@ -15,6 +15,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.reach :as reach]
+            [jobs.survival.night.doorway :as doorway]
             [jobs.lib.shelter :as sh]))
 
 (def far-bed {:x 40 :y 64 :z 0})
@@ -223,3 +224,25 @@
     (is (contains? (:cells (reach/room* p {:x 13 :y 64 :z 13})) [11 64 11]) "a seen-free cell beside the feet over an unseen floor is a room cell, and the room goes on from it")
     (is (= {:x 11 :y 64 :z 12} (sh/bed-to-use p v 48 (constantly true))))
     (is (true? (sh/night-holds? p v {} (constantly true))))))
+
+
+(def roofed-room
+  "A stone room of x 10..12, z 0..1 (walls y 64..65, roof y 66 over those cells only), a doorway in the north wall at 11 -1."
+  (let [inside? (fn [x z] (and (<= 10 x 12) (<= 0 z 1)))]
+    (dissoc (merge (into {} (for [x (range 9 14) y [64 65] z (range -1 3) :when (not (inside? x z))] [(str x "," y "," z) "stone"]))
+                   (into {} (for [x (range 10 13) z [0 1]] [(str x ",66," z) "stone"])))
+            "11,64,-1" "11,65,-1")))
+
+(def overhang-beside-gap
+  "roofed-room with its east wall open two wide (13 64..65, z 0..1, unroofed) and one-wide gap at 14 64 0 between two
+  stones: a roof edge beside a gap, not a room closed but for a doorway."
+  (-> (apply dissoc roofed-room (for [y [64 65] z [0 1]] (str "13," y "," z)))
+      (assoc "11,64,-1" "stone" "11,65,-1" "stone" "14,64,-1" "stone" "14,64,1" "stone")))
+
+(defn home-p [blocks]
+  (:p (setup {:floor [0 0 20 20] :self {:pos {:x 10.5 :y 64 :z 0.5}} :time st/night :sees-all true :blocks blocks})))
+
+(deftest only-a-doorway-the-night-can-fill-leaves-a-home-closed
+  (is (true? (doorway/closed-home? (home-p roofed-room))) "the north doorway is the roof's only way out")
+  (is (false? (doorway/closed-home? (home-p overhang-beside-gap))) "shutting the gap leaves the roof's open side")
+  (is (true? (doorway/closed-home? (home-p (assoc roofed-room "11,64,-1" "stone" "11,65,-1" "stone")))) "a shut room"))

@@ -1006,6 +1006,23 @@
           (await (tu/run-until-empty eng 40))
           (is (every? #(= "air" (block-at p %)) filled) "and the next try opens it"))))))
 
+(deftest a-doorway-that-stays-stuck-is-warned-once-and-retried-quietly
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (await (doorway-shut-early))
+              fail-walk (fn [_ k _ _] (when (= :doorway-open k) {:kind :nothing-possible :data {}}))
+              try-once! (fn ^:async once []
+                          (mem/forget! (:store eng) :doorway-open-failed)
+                          (core/submit! eng (list 'jobs.survival.night {}) {})
+                          (await (with-child-log #(tu/run-until-empty eng 40) fail-walk)))]
+          (await (try-once!))
+          (await (try-once!))
+          (await (try-once!))
+          (is (= 1 (count (st/emitted seen :night.doorway-stuck))) "three failed tries, one warning")
+          (mem/forget! (:store eng) :doorway-open-failed)
+          (is (night-holds-now? eng p) "still tried again once the wait lapses"))))))
+
 (deftest a-filled-doorway-cell-someone-else-changed-is-left-alone
   (async done
     (tu/run-async done

@@ -38,8 +38,8 @@
   "By day: dig the cells the night filled in a doorway (sh/doorway-to-open: still holding a block it put there), after a
   walk within reach of the first, and walk over the drop. No zone check: it takes out only blocks this body put there.
   Entries seen holding none of their blocks are forgotten (sh/fill-gone?); a cell it could not open (the walk or the dig
-  failed) is warned night.doorway-stuck and marked :doorway-open-failed, so the night trigger tries it again once that
-  lapses."
+  failed) is marked :doorway-open-failed, so the night trigger tries it again once that lapses, and warned
+  night.doorway-stuck once per cell and cause (walk or dig; :doorway-stuck-warned, a day)."
   [c cells]
   (let [arrived (await (walk! c :doorway-open (first cells) 3))]
     (if (= :continue arrived)
@@ -56,10 +56,13 @@
           (let [held (keep #(when (sh/still-filled? (:primitives c) (:data %)) (:cell (:data %))) (ctx/entries c :doorway-filled))
                 stuck (filterv (set held) cells)]
             (ctx/forget-where! c :doorway-filled (partial sh/fill-gone? (:primitives c)))
-            (when (seq stuck)
-              (doseq [cell stuck] (ctx/remember! c :doorway-open-failed {:cell cell} sh/doorway-open-failed-policy))
-              (ctx/emit! c :night.doorway-stuck :warn {:cells stuck :arrived arrived
-                                                       :text (str "could not open the doorway it filled at " (pr-str stuck) "; trying again later")})))
+            (doseq [cell stuck] (ctx/remember! c :doorway-open-failed {:cell cell} sh/doorway-open-failed-policy))
+            (let [cause (if arrived :dig :walk)
+                  new-stuck (filterv (fn [cell] (not-any? #(= {:cell cell :cause cause} (:data %)) (ctx/entries c :doorway-stuck-warned))) stuck)]
+              (when (seq new-stuck)
+                (doseq [cell new-stuck] (ctx/remember! c :doorway-stuck-warned {:cell cell :cause cause} sh/doorway-filled-policy))
+                (ctx/emit! c :night.doorway-stuck :warn {:cells new-stuck :arrived arrived
+                                                         :text (str "could not open the doorway it filled at " (pr-str new-stuck) "; trying again quietly")}))))
           :again))))
 
 (defn ^:async pick-up-drop!

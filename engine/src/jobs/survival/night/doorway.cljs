@@ -21,20 +21,27 @@
   [{:keys [x y z] :as cell}]
   (cons cell (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] {:x (+ x dx) :y y :z (+ z dz)})))
 
+(defn shut-by
+  "The first doorway (sh/doorway?, not the feet, passing ok?) among the cells round e whose two cells [d, d above] shut the
+  room: the flood from the feet has no unroofed cell once they are solid. An overhang beside a gap has one."
+  [p feet e ok?]
+  (first (filter #(and (not= feet %) (sh/doorway? p %) (ok? %)
+                       (nil? (:cell (reach/unroofed-cell p feet #{[(:x %) (:y %) (:z %)] [(:x %) (inc (:y %)) (:z %)]}))))
+                 (around e))))
+
 (defn closed-home?
-  "Whether the body stands in a home closed to the night but for a doorway: every cell of its room is roofed, or the
-  roof ends in a doorway (sh/doorway?) or beside one. Under an overhang or a lone roof it ends on open ground: false."
+  "Whether the body stands in a home closed to the night but for a doorway: every cell of its room is roofed, or one
+  doorway (sh/doorway?) shuts it so that every cell is (shut-by). Under an overhang or a lone roof: false."
   [p]
   (let [feet (sh/feet p)
         cell (:cell (reach/unroofed-cell p feet))]
-    (or (nil? cell)
-        (and (not= feet cell) (boolean (some #(and (not= feet %) (sh/doorway? p %)) (around cell)))))))
+    (or (nil? cell) (some? (shut-by p feet cell any?)))))
 
 (defn gap
-  "The cells [feet head] that shut the room around the body: the doorway (sh/doorway?) where the room's flood first
-  leaves the roof (reach/unroofed-cell, closed flood or not: a walled yard is open to the night too), or the one beside that cell, those still free; nil when the room is shut, the way out is no
-  doorway (open ground), the body or a seen animal or mob stands in it, the place is refused, or this doorway was tried
-  tonight (job memory :doorway-tried)."
+  "The cells [feet head] that shut the room around the body: the doorway where the room's flood first leaves the roof
+  (reach/unroofed-cell, closed flood or not: a walled yard is open to the night too) or beside that cell that shuts the
+  room (shut-by), those still free; nil when the room is shut, no doorway shuts it (open ground), the body or a seen
+  animal or mob stands in it, the place is refused, or this doorway was tried tonight (job memory :doorway-tried)."
   [c]
   (let [p (:primitives c)
         feet (sh/feet p)
@@ -42,7 +49,7 @@
         free? (fn [{:keys [x y z] :as cell}]
                 (and (#{"air" "cave_air"} (u/seen-name p cell)) (not (pillar/mob-in @seen [x y z]))))]
     (when-let [e (:cell (reach/unroofed-cell p feet))]
-      (when-let [d (first (filter #(and (free? %) (not= feet %) (sh/doorway? p %)) (around e)))]
+      (when-let [d (shut-by p feet e free?)]
         (when-not (or (contains? (:doorway-tried (ctx/mem c)) d)
                       (access/trespass-refusal (access/rules-input c) :place d))
           (seq (filter free? [d (update d :y inc)])))))))
