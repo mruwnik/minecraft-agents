@@ -22,7 +22,7 @@
   are ignored.
   Ends :done with {:enchanted true :item :slot :level-cost :levels-spent :lapis-spent :enchants [{:name
   :level}] :xp-level :hint {:enchant :level}|nil}, measured from what is carried and the body's level after the
-  window closed. Info enchant.done.
+  window closed, and a :text.
   A give-up warns enchant.gave-up and ends with {:enchanted false :item :levels-spent n :lapis-spent n}.
   Impossible: :bad-args (no item name). Conditions (a listed root job waits): :no-item and :no-lapis (not carried, :fetch false), :too-few-levels
   (no level at all). A failed fetch ends as {:reason :need} with its ending as the :because. Condition-failed in the
@@ -100,7 +100,7 @@
   "Counts only (the round ends the call with its data)."
   [c]
   (let [n (if (:enchanted (ctx/mem c)) 1 0)]
-    {:done? false :units :items :done n :left (- 1 n)}))
+    (contract/later :enchanting "enchant: the round ends the call" :units :items :done n :left (- 1 n))))
 
 (defn quote-of [_c]
   (let [walk (settings/get settings ::walk-s)
@@ -183,17 +183,15 @@
   [c r offer]
   (let [result {:enchanted true :slot (inc (:choice r)) :level-cost (:level-cost offer) :levels-spent (:levelsSpent r)
                 :lapis-spent (:lapisSpent r) :enchants (:enchants r) :xp-level (:xpLevel r) :hint (:hint offer)}]
-    (ctx/emit! c :enchant.done :info (assoc result :item (:item (:args c)) :text (str "enchanted " (:item (:args c)))))
     (ctx/update-mem! c assoc :enchanted true)
-    (finish! c :done nil result)))
+    (finish! c :done nil (assoc result :text (str "enchanted " (:item (:args c)))))))
 
 (defn resumed!
   "The attempt noted before the call found its item enchanted: report it, spending unknown."
   [c]
   (let [{:keys [slot level-cost]} (:attempt (ctx/mem c))
         result {:enchanted true :resumed true :slot slot :level-cost level-cost :enchants nil}]
-    (ctx/emit! c :enchant.done :info (assoc result :item (:item (:args c)) :text (str "enchanted " (:item (:args c)) " (found done after a restart)")))
-    (finish! c :done nil result)))
+    (finish! c :done nil (assoc result :text (str "enchanted " (:item (:args c)) " (found done after a restart)")))))
 
 (def failed-reasons {"enchant-stalled" "window-stalled" "not-confirmed" "not-confirmed" "item-not-returned" "not-confirmed"})
 

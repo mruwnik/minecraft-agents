@@ -63,7 +63,9 @@
   (let [p (:primitives c)
         r (places/resolve-set (ctx/view c) #(u/block-name p %) (standing c) (:args c))
         set? (and (not (:reason r)) (= (:pos r) (mem/place (ctx/view c) (:name r))))]
-    {:done? set? :units :places :left (if set? 0 1)}))
+    (if set?
+      (contract/ok :set (str "place " (:name r) " is at " (pr-str (:pos r))) :units :places :done 1 :left 0 :result {:name (:name r) :pos (:pos r)})
+      (contract/later :not-set (str "place " (or (:name r) (:name (:args c))) " not at the cell asked") :units :places :done 0 :left 1))))
 
 (defn quote-of [_c] {:uses {:job-time [0 0 1]}})
 

@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [jobs.lib.checks :as checks]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
@@ -36,7 +37,7 @@
 (defn done?
   "Never done before the round has run: the items are not known to be worth it."
   [c]
-  {:done? false :units :items :done (:collected (ctx/mem c) 0)})
+  (contract/later :collecting "pick-up-loose: the round ends the call" :units :items :done (:collected (ctx/mem c) 0)))
 
 (defn names-of [items] (vec (distinct (keep #(some-> (.-item %) .-name) items))))
 

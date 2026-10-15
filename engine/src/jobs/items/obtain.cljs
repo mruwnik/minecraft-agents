@@ -117,16 +117,31 @@
 
 (defn can-start? [c] (contract/all [(checks/never-with (bad-args c)) (checks/later-with (no-source c))]))
 
+(defn held-name
+  "The name of names carried most of in inventory inv, else the first."
+  [inv names]
+  (or (holds (into {} (map (juxt :name :count)) inv) names) (first names)))
+
 (defn done?
-  "The count carried, and no tree a cut left half felled (the round fells it whole first)."
+  "The count carried, no tree a cut left half felled and no child under way (the round fells it whole first, a craft
+  picks its table up)."
   [c]
   (let [{:keys [start] :as m} (ctx/mem c)
-        have (carried-of (u/inventory (:primitives c)) (names-of (:args c)))
-        n (:count (:args c))]
-    (if start
-      {:done? (and (>= have (:target start)) (not (get-in m [:gather :tree]))) :units :items :done (max 0 (- have (:have start))) :left (max 0 (- (:target start) have))
-       :data (merge {:got (max 0 (- have (:have start))) :tried (:tried m)} (wanted-fields (:args c)))}
-      {:done? false :units :items :done 0 :left n :data {:got 0}})))
+        inv (u/inventory (:primitives c))
+        names (names-of (:args c))
+        have (carried-of inv names)
+        got (max 0 (- have (:have start 0)))
+        left (if start (max 0 (- (:target start) have)) (:count (:args c)))
+        data [:units :items :done (if start got 0) :left left]]
+    (cond
+      (or (nil? start) (pos? left))
+      (apply contract/later :short (str "obtain: " left " " (clojure.string/join "/" names) " to get") (conj data :result
+             (if start (merge {:got got :tried (:tried m)} (wanted-fields (:args c))) {:got 0})))
+
+      (or (get-in m [:gather :tree]) (checks/child-under-way? c))
+      (apply contract/later :wrapping-up "obtain: the count is carried, wrapping up" (conj data :result {:got got :item (held-name inv names)}))
+
+      :else (apply contract/ok :carried (str "obtained " got " " (held-name inv names)) (conj data :result {:got got :item (held-name inv names)})))))
 
 (def step-s "A guess of the seconds one craft step takes, walks included." 5)
 (def smelt-s "A guess of the seconds one smelt step takes per item, the furnace's 10 s and its fetches." 15)
@@ -196,7 +211,7 @@
             data (merge {:got got} (wanted-fields a))]
         (cond
           (get-in m [:gather :tree]) (await (finish-tree! c))
-          (>= have target) (ctx/end c :done nil {:got got :item (or (holds (into {} (map (juxt :name :count)) inv) names) (first names))})
+          (>= have target) (ctx/end c :done nil {:got got :item (held-name inv names)})
           (> (- now t) (* 1000 (stall-s c))) (ctx/end c :limit-reached {:line :job-time :reason :timeout} (assoc data :tried (:tried m)))
           (and (way? c :chest) (not (get-in m [:tried :chest])))
           (let [cs (candidates c names)

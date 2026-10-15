@@ -41,6 +41,8 @@
     (await (run-until-empty eng n))
     @out))
 
+(def carried-text "withdraw: everything wanted is carried")
+
 (deftest shortfall-lists-what-is-still-needed-in-order
   (let [items [{:name "bread" :count 3} {:name "dirt" :count 2} {:name "bread" :count 4}]]
     (are [wanted expected] (= expected (vec (wd/shortfall items wanted)))
@@ -58,7 +60,7 @@
               result (await (ending-of eng job {:chest chest :items {"bread" 16}} 8))]
           (is (= {"bread" 16} (inv p)))
           (is (= [{:name "bread" :count 20}] (chest-items p)))
-          (is (= {:kind :done} result)))))))
+          (is (= {:kind :done :data {:text carried-text}} result)))))))
 
 (deftest withdraw-with-enough-carried-moves-nothing
   (async done
@@ -67,7 +69,7 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "bread" :count 20}] :containers {"10,64,0" [{:name "bread" :count 32}]}})
               result (await (ending-of eng job {:chest chest :items {"bread" 16}} 4))]
           (is (zero? (count (calls p "transfer"))))
-          (is (= {:kind :done :cause :already} result)))))))
+          (is (= {:kind :done :cause :already :data {:text carried-text}} result)))))))
 
 (deftest withdraw-reports-what-the-chest-lacks
   (async done
@@ -168,7 +170,7 @@
         (let [{:keys [eng p]} (setup {:containers {"20,64,0" [{:name "bread" :count 9} {:name "stone_hoe" :count 3}]}})
               result (await (ending-of eng job {:chest {:x 20 :y 64 :z 0} :items (array-map "bread" 4 "stone_hoe" 2)} 1))]
           (is (= {"bread" 4 "stone_hoe" 2} (inv p)))
-          (is (= {:kind :done} result))
+          (is (= {:kind :done :data {:text carried-text}} result))
           (is (= 2 (count (calls p "transfer"))))
           (is (= 1 (count (tu/walked-to eng)))))))))
 
@@ -190,7 +192,7 @@
                        (await (impl token args))
                        #js {:status "timeout" :inventoryChange #js {"bread" 16}}))
           (let [result (await (ending-of eng job {:chest chest :items {"bread" 16}} 8))]
-            (is (= {:kind :done} result))
+            (is (= {:kind :done :data {:text carried-text}} result))
             (is (= {"bread" 16} (inv p)))
             (is (= 1 (count (calls p "transfer"))))))))))
 
@@ -204,7 +206,7 @@
           (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
           (let [result (await (ending-of eng job {:items {"bread" 5}} 12))]
             (is (= {"bread" 5} (inv p)))
-            (is (= {:kind :done} result))))))))
+            (is (= {:kind :done :data {:text carried-text}} result))))))))
 
 (deftest withdraw-reports-the-carried-counts-and-lists-the-need-as-items
   (async done

@@ -399,9 +399,13 @@
 (defn done?
   "Done when :free slots are free; a run that acted and was cut still has its walk away and its summary to do."
   [c]
-  (let [left (slots-short c)]
-    {:done? (and (zero? left) (not (:acted (ctx/mem c))))
-     :units :slots :done (u/free-slots (:primitives c)) :left left}))
+  (let [left (slots-short c)
+        free (u/free-slots (:primitives c))
+        data [:units :slots :done free :left left :result {:tossed (vec (:tossed (ctx/mem c))) :free free}]]
+    (cond
+      (pos? left) (apply contract/later :short (str "make-room: " left " slot(s) short") data)
+      (:acted (ctx/mem c)) (apply contract/later :wrapping-up "make-room: room made, the walk away and summary to do" data)
+      :else (apply contract/ok :room (str free " free") data))))
 
 (defn quote-of
   "Time for the steps the missing slots take (one each at best); frees up to the missing slots, none at worst."

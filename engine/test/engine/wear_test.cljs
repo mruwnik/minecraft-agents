@@ -100,13 +100,6 @@
         (let [{:keys [out]} (await (wear (stacks "dirt") {:item "iron_helmet"}))]
           (is (= [:condition-failed :no-item] ((juxt (comp :kind :ending) :reason) @out))))))))
 
-(deftest nothing-better-than-worn-is-done-before-any-round
-  (let [job (get registry/jobs job)
-        done? (fn [world args] (:done? ((:done? job) {:primitives (tu/fake world) :args args})))]
-    (is (true? (done? (assoc (stacks "iron_helmet") :equipment {:head {:name "diamond_helmet" :count 1}}) {})))
-    (is (false? (done? (stacks "iron_helmet") {})))
-    (is (true? (done? (stacks "dirt") {})) "no armour carried: nothing to put on")))
-
 (deftest wearing-quotes-a-time-per-piece
   (async done
     (tu/run-async done

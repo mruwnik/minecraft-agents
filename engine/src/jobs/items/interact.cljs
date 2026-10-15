@@ -12,7 +12,7 @@
   entity in sight, walk into reach (a go-to child, range 2, no escalation), interact. It yields :continue only when
   the walk waits on the world. Quote: A, a click and the walks.
 
-  Ends with info items.interact.done and data {:used true|false :id :item}. The primitive's status :used is done.
+  Ends with data {:used true|false :id :item :text}. The primitive's status :used is done.
   Impossible: :bad-args (no :id). Condition-failed: :gone (no such entity in sight), :no-item, :full, :cannot. Nothing-possible:
   :unreachable (the walk failed twice, data :why), :no-effect, :out-of-reach, :failed.")
 
@@ -45,7 +45,7 @@
   "Counts only (the round ends the call with its data): whether the click was made."
   [c]
   (let [used (if (:used (ctx/mem c)) 1 0)]
-    {:done? false :units :uses :done used :left (- 1 used)}))
+    (contract/later :not-used "interact: the round ends the call" :units :uses :done used :left (- 1 used))))
 
 (defn quote-of [_c]
   (let [click (settings/get settings ::click-s)
@@ -60,16 +60,15 @@
 (def condition-statuses "Click statuses that are a fact about the call, not a failed try." #{:no-item :full :cannot})
 
 (defn finish!
-  "Info and the ending: done when used, condition-failed for a fact, else nothing-possible."
+  "The ending, its text in the data: done when used, condition-failed for a fact, else nothing-possible."
   [c id item reason & [more]]
   (let [used (= :used reason)]
-    (ctx/emit! c :items.interact.done :info
-               {:used used :id id :item item :reason reason
-                :text (str (if used "used " "did not use ") (or item "the empty hand") " on entity " id
-                           (when-not used (str ": " (name reason))))})
     (ctx/end c (cond used :done (or (= :gone reason) (condition-statuses reason)) :condition-failed :else :nothing-possible)
              (when-not used reason)
-             (merge {:used used :id id :item item} more))))
+             (merge {:used used :id id :item item
+                     :text (str (if used "used " "did not use ") (or item "the empty hand") " on entity " id
+                                (when-not used (str ": " (name reason))))}
+                    more))))
 
 (defn ^:async round [c]
   (let [{:keys [id item]} (:args c)]

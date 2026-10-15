@@ -51,8 +51,11 @@
   "Nothing to put on (a refused item is not done)."
   [c]
   (let [{:keys [ok put]} (plan-of c)
-        left (count put)]
-    {:done? (and ok (zero? left)) :units :pieces :left left}))
+        left (count put)
+        data [:units :pieces :done 0 :left left :result {:worn []}]]
+    (if (and ok (zero? left))
+      (apply contract/ok :worn "nothing better to wear" data)
+      (apply contract/later :to-wear (if ok (str left " armour piece(s) to put on") (str "cannot wear " (:item (:args c)))) data))))
 
 (defn ^:async quote-of [c]
   (let [n (count (:put (plan-of c)))

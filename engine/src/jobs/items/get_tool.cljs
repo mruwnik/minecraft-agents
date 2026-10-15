@@ -89,12 +89,17 @@
 (defn can-start? [c] (contract/all [(checks/never-with (bad-args c)) (no-source c)]))
 
 (defn done?
-  "A tool that does the work is carried (or none is needed); a bad call is not done."
+  "A tool that does the work is carried (or none is needed) and the obtain that got it is over; a bad call is not done."
   [c]
   (let [p (:primitives c)
         names (tools-for p (:args c))
-        got (and (not (map? names)) (or (empty? names) (some? (carried-tool p names))))]
-    {:done? (boolean got) :units :tools :done (if got 1 0) :left (if got 0 1)}))
+        tool (when-not (map? names) (carried-tool p names))
+        result (cond (map? names) nil (empty? names) {:needed false} tool {:tool tool})
+        data [:units :tools :done (if result 1 0) :left (if result 0 1) :result result]]
+    (cond
+      (nil? result) (apply contract/later :no-tool "no tool that does the work is carried" data)
+      (checks/child-under-way? c) (apply contract/later :wrapping-up (str "get-tool: " tool " carried, the obtain wraps up") data)
+      :else (apply contract/ok :carried (if tool (str "carrying " tool) "no tool needed") data))))
 
 (defn ^:async quote-of
   "Nothing for a tool carried or none needed, else the obtain's quote (too expensive when the obtain would be refused)."

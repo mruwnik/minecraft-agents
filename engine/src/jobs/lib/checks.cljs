@@ -57,6 +57,12 @@
 (defn never-with "Like later-with, :never." [m]
   (if m (never-of (cause-text m) m) (holds)))
 
+(defn child-under-way?
+  "Whether a child of this job yielded and has not ended: its goal may hold while the child still wraps up (a craft
+  picking its table up), so done? waits for it."
+  [c]
+  (boolean (seq (:children (ctx/mem c)))))
+
 (defn chest-known
   "Later :no-chest until the call's :chest or the known :chest place is there."
   [c]

@@ -43,7 +43,9 @@
   "Done when nothing is recorded under the name."
   [c]
   (let [gone? (= :no-such-place (:reason (places/resolve-forget (ctx/view c) (:name (:args c)))))]
-    {:done? gone? :units :places :left (if gone? 0 1)}))
+    (if gone?
+      (contract/ok :forgotten (str "no place " (:name (:args c)) " recorded") :units :places :done 1 :left 0 :result {:name (:name (:args c))})
+      (contract/later :recorded (str "place " (:name (:args c)) " recorded") :units :places :done 0 :left 1))))
 
 (defn quote-of [_c] {:uses {:job-time [0 0 1]}})
 

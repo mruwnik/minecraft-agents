@@ -61,17 +61,28 @@
 
 (def defaults {:spend {:job-time ::time-s :wall-time ::wall-time-s}})
 
-(defn reached
-  "done? for a :stock against the chest's stock {name n} (nil: unknown, never reached)."
+(defn reached?
+  "Whether the chest's stock {name n} holds every :stock entry (nil: unknown, never reached)."
   [{:keys [stock]} chest-stock]
-  {:done? (boolean (and chest-stock (every? (fn [[item n]] (>= (get chest-stock item 0) n)) stock)))})
+  (boolean (and chest-stock (every? (fn [[item n]] (>= (get chest-stock item 0) n)) stock))))
 
 (defn chest-stock-of
   "{name n} the chest is booked to hold, or nil when unknown."
   [c]
   (some->> (storage/chest-of (ctx/view c) (:args c)) storage/cell-of (get (stock/stock-of (ctx/view c)))))
 
-(defn done? [c] (reached (:args c) (chest-stock-of c)))
+(defn done?
+  "The chest's booked stock holds every :stock entry and no pass is under way (a pass ends itself once it has stored
+  what it made)."
+  [c]
+  (let [{:keys [stock]} (:args c)
+        chest-stock (chest-stock-of c)
+        left (count (remove (fn [[item n]] (>= (get chest-stock item 0) n)) stock))
+        data [:units :stock-entries :done (- (count stock) left) :left left]]
+    (cond
+      (not (reached? (:args c) chest-stock)) (apply contract/later :short (str "kitchen: " left " stock entries short") data)
+      (:todo (ctx/mem c)) (apply contract/later :pass-under-way "kitchen: stocked, the pass goes on" data)
+      :else (apply contract/ok :stocked "kitchen: the chest is stocked" data))))
 
 (def steps [:smelt :take :bake :deposit])
 (def jobs {:smelt 'jobs.items.smelt :take 'jobs.storage.withdraw :bake 'jobs.items.craft :deposit 'jobs.storage.deposit})

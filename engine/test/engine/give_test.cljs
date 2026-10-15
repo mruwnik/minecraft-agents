@@ -108,11 +108,10 @@
                  [{:player "Steve" :item "bread"} 5 {}]]
                 (fn ^:async one [[args given left]]
                   (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)]) args 12 true))]
-                    (is (= {:given given} @out))
+                    (is (= {:given given :text (str "gave " given)} @out))
                     (is (= 1 (count (tu/walked-to (:eng s)))))
                     (is (= 1 (count (calls p "toss"))))
-                    (is (= left (inv p)))
-                    (is (has-event? s :give.done))))))))))
+                    (is (= left (inv p)))))))))))
 
 (deftest nothing-carried-gives-nothing
   (async done
@@ -215,8 +214,7 @@
                                                 {:player "Steve" :item "bread" :count 5} 60 false
                                                 #(late-drop % held) (appear-two-ticks-after-toss held)))]
           (is (= {:given 0 :reason :not-taken :returned 5} @out) "waited for the drop, then took it back")
-          (is (= 1 (count (calls p "collect"))))
-          (is (not (has-event? s :give.done))))))))
+          (is (= 1 (count (calls p "collect")))))))))
 
 (deftest a-drop-that-never-appears-is-unconfirmed-after-three-seconds
   (async done
@@ -252,9 +250,8 @@
         (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
                                                 {:player "Steve" :item "bread" :count 5} 20 false
                                                 nil (stray-bread-and-player-takes-the-drop)))]
-          (is (= {:given 5} @out) "the player took the toss; the stray bread is not it")
-          (is (empty? (calls p "collect")) "the body does not walk to the stray")
-          (is (has-event? s :give.done)))))))
+          (is (= {:given 5 :text "gave 5"} @out) "the player took the toss; the stray bread is not it")
+          (is (empty? (calls p "collect")) "the body does not walk to the stray"))))))
 
 (deftest the-walk-and-the-toss-are-one-call
   (async done

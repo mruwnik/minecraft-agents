@@ -65,7 +65,9 @@
 
 (defn done? [c]
   (let [n (got c) want (:count (:args c))]
-    {:done? (>= n want) :units :fish :done n :left (max 0 (- want n)) :data {:got n}}))
+    (if (>= n want)
+      (contract/ok :caught (str "caught " n " fish") :units :fish :done n :left 0 :result {:got n})
+      (contract/later :fishing (str "caught " n " of " want " fish") :units :fish :done n :left (- want n) :result {:got n}))))
 
 (defn time-limit "Seconds the call may fish." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))

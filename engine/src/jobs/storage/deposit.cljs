@@ -98,7 +98,8 @@
   "Counts only: the end of the call is the round's, which offers the chest to the :chest place first."
   [c]
   (let [left (reduce + 0 (vals (spare-items c)))]
-    {:done? false :units :items :done (:moved (ctx/mem c) 0) :left left}))
+    (contract/later :depositing (str "deposit: " left " spare item(s)") :units :items :done (:moved (ctx/mem c) 0) :left left
+                    :result {:moved (:moved (ctx/mem c) 0)})))
 
 (defn quote-of
   "Time for the walk and one transfer a name; the chest takes what is spare, up to the free slots it has."
@@ -112,7 +113,7 @@
 (defn end!
   "ctx/end, but done when the units of done? meet the call's :least."
   [c kind cause data]
-  (let [{:keys [done left]} (done? c)]
+  (let [{:keys [done left]} (nth (done? c) 2)]
     (least/end! c kind cause data done (+ done left))))
 
 (defn stop!

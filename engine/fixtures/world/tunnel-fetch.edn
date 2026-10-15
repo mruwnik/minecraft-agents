@@ -14,7 +14,7 @@
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:iron_pickaxe\",count:1}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.items.equip {:item "iron_pickaxe"})]]
-   :expect [{:event {:source :job :kind :equip.done :data {:item "iron_pickaxe"}} :within-s 70 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:item "iron_pickaxe"}} :within-s 70 :of-job true}]
    :after [[:item "iron_pickaxe" 1]]}
   {:name "equip-fetch-false-waits-no-item-chest-untouched"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:iron_pickaxe\",count:1}]}"]]

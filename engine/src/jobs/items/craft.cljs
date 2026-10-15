@@ -81,7 +81,8 @@
         have (storage/carried (u/inventory (:primitives c)) item)
         start (:start (ctx/mem c) have)
         made (max 0 (- have start))]
-    {:done? false :units :items :done made :left (max 0 (- count made))}))
+    (contract/later :crafting (str "craft: " made " of " count " " item) :units :items :done made :left (max 0 (- count made))
+                    :result {:made made})))
 
 (defn quote-of
   "P: the cheapest recipe for :count more of :item from what is carried. It uses its ingredients (net of the item

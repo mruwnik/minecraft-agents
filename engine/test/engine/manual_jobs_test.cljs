@@ -105,7 +105,7 @@
           (is (= :stopped (:status result)))
           (is (= :gone (:reason result)))
           (is (empty? (calls p "interact")))
-          (is (= 1 (count (kinds seen :items.interact.done)))))))))
+          (is (= "did not use the empty hand on entity 99: gone" (:text result))))))))
 
 (deftest interact-stops-with-the-primitives-status
   (async done

@@ -1,6 +1,7 @@
 (ns jobs.storage.withdraw
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -60,6 +61,8 @@
 (def can-start? checks/chest-known)
 (def can-run? checks/chest-known)
 
+(def carried-text "withdraw: everything wanted is carried")
+
 (defn done?
   "Everything wanted is carried; :done counts the carried items toward the wanted ones."
   [c]
@@ -67,7 +70,9 @@
         items (:items (:args c))
         left (reduce + 0 (map second (shortfall inv items)))
         want (reduce + 0 (vals items))]
-    {:done? (zero? left) :units :items :done (- want left) :left left}))
+    (if (zero? left)
+      (contract/ok :carried carried-text :units :items :done want :left 0)
+      (contract/later :short (str "withdraw: " left " item(s) short") :units :items :done (- want left) :left left))))
 
 (defn quote-of
   "Time for the walk and one transfer a name short; yields up to the shortfall, none when the chest lacks it."
@@ -82,7 +87,7 @@
 (defn end!
   "ctx/end, but done when the items carried toward the wanted meet the call's :least."
   [c kind cause data]
-  (let [{:keys [done left]} (done? c)]
+  (let [{:keys [done left]} (nth (done? c) 2)]
     (least/end! c kind cause data done (+ done left))))
 
 (defn stop!
@@ -177,7 +182,7 @@
         chest (some-> (first (:open (deposit/chests c))) deposit/cell-pos)
         short (shortfall (u/inventory (:primitives c)) items)]
     (cond
-      (empty? short) (ctx/end c :done nil)
+      (empty? short) (ctx/end c :done nil {:text carried-text})
       (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
       :else
       (let [w (await (deposit/walk! c chest))]

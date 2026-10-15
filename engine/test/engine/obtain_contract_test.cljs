@@ -129,6 +129,6 @@
         c (fn [m inventory] {:primitives (tu/fake {:inventory inventory}) :root "j1" :slots [] :args {:item "oak_log" :count 3}
                              :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data m}]}}})})
         d (done? (c {:start {:have 1 :target 4} :tried [:craft]} [{:name "oak_log" :count 3}]))]
-    (is (= {:done? false :done 2 :left 1 :data {:got 2 :tried [:craft] :item "oak_log"}}
-           (select-keys d [:done? :done :left :data])))
-    (is (= {:got 0} (:data (done? (c {} [])))) "before the start")))
+    (is (= [:later {:done 2 :left 1 :result {:got 2 :tried [:craft] :item "oak_log"}}]
+           [(first d) (select-keys (nth d 2) [:done :left :result])]))
+    (is (= {:got 0} (:result (nth (done? (c {} [])) 2))) "before the start")))

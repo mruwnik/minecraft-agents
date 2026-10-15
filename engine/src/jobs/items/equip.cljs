@@ -12,7 +12,7 @@
 (def doc
   "Hold a carried item in the main hand (:hand \"main\", default) or the off-hand (:hand \"off\"). Needs the item
   carried; a missing one is fetched (jobs.lib.need) unless :fetch is false. done? holds when it is held there.
-  Ends :done {:item :hand}. Impossible: :bad-args (no :item), :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
+  Ends :done {:item :hand :text}. Impossible: :bad-args (no :item), :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
   the :because. Nothing-possible :failed (the server did not take it, data :equip the primitive's status; warn
   equip.refused). Quote: A, a fixed time.")
 
@@ -65,11 +65,15 @@
   (contract/all [(checks/never-with (problem c)) (checks/never-with (unknown c)) (checks/later-with (lacking c))]))
 
 (defn done?
-  "The item is in the hand asked for."
+  "The item is in the hand asked for and no fetch of it is under way."
   [c]
   (let [{:keys [item hand]} (:args c)
-        held (and (some? item) (= item (held-in (:primitives c) hand)))]
-    {:done? held :units :items :left (if held 0 1)}))
+        held (and (some? item) (= item (held-in (:primitives c) hand)))
+        data [:units :items :done (if held 1 0) :left (if held 0 1) :result {:item item :hand hand}]]
+    (cond
+      (not held) (apply contract/later :not-held (str item " is not in the " hand " hand") data)
+      (checks/child-under-way? c) (apply contract/later :wrapping-up (str "holding " item ", the fetch wraps up") data)
+      :else (apply contract/ok :held (str "holding " item) data))))
 
 (defn quote-of [_c]
   (let [t (settings/get settings ::equip-s)]
@@ -96,6 +100,5 @@
       (let [r (await (ctx/act c :equip (clj->js {:item item :dest (dests hand)})))
             status (.-status r)]
         (if (= "equipped" status)
-          (do (ctx/emit! c :equip.done :info {:item item :hand hand :text (str "holding " item)})
-              (ctx/end c :done nil {:item item :hand hand}))
+          (ctx/end c :done nil {:item item :hand hand :text (str "holding " item)})
           (refuse! c :nothing-possible :failed (str "cannot hold " item ": " status) {:item item :equip status}))))))

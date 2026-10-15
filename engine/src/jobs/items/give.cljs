@@ -23,7 +23,7 @@
   A player farther than :reach is walked to (doors :shut). In reach the body looks at the player's head and tosses.
   The item entities of that name within 10 blocks of the toss spot that were not there before are the drop.
   After the toss:
-  - The drop is gone once seen: done {:given n} (info give.done).
+  - The drop is gone once seen: done {:given n :text}.
   - The drop is never seen within 3 s: done {:given tossed :unconfirmed true} (info give.unconfirmed).
   - The drop still lies after :wait-s: it is collected back, never left as litter. Done {:given (tossed - back)
     :returned back} when some was taken (the call's :least, default 1), else nothing-possible :not-taken (info
@@ -88,7 +88,7 @@
   [c]
   (let [n (given-so-far c)
         want (or (:count (:args c)) (:had (ctx/mem c)))]
-    {:done? false :units :items :done n :left (max 0 (- (or want n) n))}))
+    (contract/later :giving (str "give: " n " given") :units :items :done n :left (max 0 (- (or want n) n)) :result {:given n})))
 
 (defn quote-of [c]
   (let [n (or (:count (:args c)) 1)
@@ -223,8 +223,7 @@
       (empty? lying)
       (if collecting
         (returned! c given back)
-        (do (ctx/emit! c :give.done :info {:text (str "gave " tossed)})
-            (gave! c tossed :short nil)))
+        (gave! c tossed :short {:text (str "gave " tossed)}))
 
       (and (not collecting) (< since (* 1000 wait-s)))
       (await (idle! c))

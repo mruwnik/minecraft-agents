@@ -468,7 +468,8 @@
         wanted (if (:batch m)
                  (transduce (map #(:wanted % 0)) + 0 (vals (:batch m)))
                  (- (:count (:owed m) 0) (:base (:owed m) 0)))]
-    {:done? false :units :items :done smelted :left (max 0 (- wanted smelted))}))
+    (contract/later :smelting (str "smelt: " smelted " of " wanted " smelted") :units :items :done smelted :left (max 0 (- wanted smelted))
+                    :result {:smelted smelted})))
 
 (defn quote-items
   "The items a quote is made for: the :item list, the one item, or the raw foods and ores carried."

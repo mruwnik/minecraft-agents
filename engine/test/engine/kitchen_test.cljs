@@ -95,7 +95,7 @@
           (is (= 9 (get (inv s) "wheat")) "the bread is not taken out, the wheat not baked"))))))
 
 (deftest done-reads-the-booked-chest-stock
-  (are [chest-stock stock done] (= done (:done? (kitchen/reached {:stock stock} chest-stock)))
+  (are [chest-stock stock done] (= done (kitchen/reached? {:stock stock} chest-stock))
     {"bread" 20} {"bread" 16} true
     {"bread" 15} {"bread" 16} false
     nil {"bread" 16} false

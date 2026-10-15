@@ -131,7 +131,7 @@
   (let [st (state c)
         items (:items (:args c))
         n (count (filter #(had? (:carried st) (:worn st) %) items))]
-    {:done? false :units :items :done n :left (- (count items) n)}))
+    (contract/later :kitting (str "get-kit: " n " of " (count items) " item(s) had") :units :items :done n :left (- (count items) n))))
 
 (defn quote-of
   "A guess of the seconds each missing item takes."

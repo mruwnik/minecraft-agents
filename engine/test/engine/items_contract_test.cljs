@@ -45,7 +45,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:kind :done :data {:item "iron_pickaxe" :hand "main"}}
+        (is (= {:kind :done :data {:item "iron_pickaxe" :hand "main" :text "holding iron_pickaxe"}}
                (select-keys (await (ending-of (stacks "iron_pickaxe") 'jobs.items.equip {:item "iron_pickaxe"})) [:kind :data])))
         (is (= {:kind :done} (select-keys (await (ending-of (assoc (stacks "iron_pickaxe") :self {:held "iron_pickaxe"})
                                                              'jobs.items.equip {:item "iron_pickaxe"})) [:kind]))
@@ -60,7 +60,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (merge {:entities [(cow 7 2)]} (stacks "wheat"))]
-          (is (= {:kind :done :data {:used true :id 7 :item "wheat"}}
+          (is (= {:kind :done :data {:used true :id 7 :item "wheat" :text "used wheat on entity 7"}}
                  (select-keys (await (ending-of world 'jobs.items.interact {:id 7 :item "wheat"})) [:kind :data])))
           (is (= {:kind :condition-failed :cause :gone} (kc (await (ending-of world 'jobs.items.interact {:id 99})))))
           (is (= {:kind :condition-failed :cause :no-item}

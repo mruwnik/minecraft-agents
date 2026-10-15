@@ -57,7 +57,7 @@
   "The source chests looked at so far; ends by the round, which also needs a last deposit."
   [c]
   (let [pending (count (remove (set (:empty (ctx/mem c))) (map storage/cell-of (:from (:args c)))))]
-    {:done? false :units :chests :done (- (count (:from (:args c))) pending) :left pending}))
+    (contract/later :hauling (str "haul: " pending " chest(s) to empty") :units :chests :done (- (count (:from (:args c))) pending) :left pending)))
 
 (defn quote-of
   "Per source chest ::chest-s; at most the time default."

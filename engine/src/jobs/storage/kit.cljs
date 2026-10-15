@@ -166,7 +166,7 @@
   [c]
   (let [left (count (needs (u/inventory (:primitives c)) (:args c)))
         all (inc (count (:tools (:args c))))]
-    {:done? false :units :kinds :done (- all left) :left left}))
+    (contract/later :stocking (str "kit: " left " kind(s) short") :units :kinds :done (- all left) :left left)))
 
 (defn quote-of
   "A walk and a visit per kind."
@@ -178,7 +178,7 @@
 (defn end!
   "ctx/end, but done when the units of done? meet the call's :least."
   [c kind cause data]
-  (let [{:keys [done left]} (done? c)]
+  (let [{:keys [done left]} (nth (done? c) 2)]
     (least/end! c kind cause data done (+ done left))))
 
 (defn give-up!

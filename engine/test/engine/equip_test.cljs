@@ -45,7 +45,7 @@
       (fn ^:async t []
         (let [{:keys [p out]} (await (equip (stacks "stone_pickaxe" "iron_pickaxe") {:item "iron_pickaxe"}))]
           (is (= "iron_pickaxe" (held p)))
-          (is (= {:status :done :item "iron_pickaxe" :hand "main"} @out)))))))
+          (is (= {:status :done :item "iron_pickaxe" :hand "main" :text "holding iron_pickaxe"} @out)))))))
 
 (deftest holds-a-carried-item-in-the-off-hand
   (async done
@@ -54,14 +54,14 @@
         (let [{:keys [p out]} (await (equip (stacks "shield") {:item "shield" :hand "off"}))]
           (is (= "shield" (off-hand p)))
           (is (nil? (held p)))
-          (is (= {:status :done :item "shield" :hand "off"} @out)))))))
+          (is (= {:status :done :item "shield" :hand "off" :text "holding shield"} @out)))))))
 
 (deftest an-item-already-in-hand-is-done-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (equip (assoc (stacks "iron_pickaxe") :self {:held "iron_pickaxe"}) {:item "iron_pickaxe"}))]
-          (is (= {:status :done :already? true} @out)))))))
+          (is (= {:status :done :already? true :item "iron_pickaxe" :hand "main" :text "holding iron_pickaxe"} @out)))))))
 
 (deftest a-missing-item-is-a-failed-condition
   (async done
@@ -98,7 +98,7 @@
           (core/submit! (:eng s) (list job {:item "wooden_pickaxe"}) {})
           (await (ft/run-ticks s 40))
           (is (= "wooden_pickaxe" (held (:p s))))
-          (is (= ["wooden_pickaxe"] (mapv :item (ft/events-of s :equip.done))))
+          (is (= ["holding wooden_pickaxe"] (mapv :text (ft/events-of s :completed))))
           (is (empty? (ft/chest-items s [-2 64 3]))))))))
 
 (deftest fetch-with-nothing-to-get-ends-the-call-need
@@ -109,7 +109,7 @@
           (core/submit! (:eng s) (list job {:item "wooden_pickaxe"}) {})
           (await (ft/run-ticks s 40))
           (is (nil? (held (:p s))))
-          (is (empty? (ft/events-of s :equip.done)))
+          (is (empty? (ft/events-of s :completed)))
           (is (empty? (:list (core/state (:eng s)))) "the call ended, it does not wait for the item"))))))
 
 (deftest fetch-false-opts-out-and-the-job-waits-without-touching-the-chest
@@ -123,5 +123,5 @@
           (is (empty? (ft/events-of s :fetch.started)))
           (is (empty? (ft/inspects s)))
           (is (seq (ft/chest-items s [-2 64 3])))
-          (is (empty? (ft/events-of s :equip.done)))
+          (is (empty? (ft/events-of s :completed)))
           (is (seq (ft/listed s)) "the job waits on its condition"))))))
