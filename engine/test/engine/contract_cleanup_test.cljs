@@ -234,6 +234,25 @@
           (is (= [[:cleanup :nothing-possible] [:cleanup :nothing-possible] [:cleanup :nothing-possible]] (:log @world)))
           (is (= [{:kind :nothing-possible :let-go true}] (mapv #(select-keys (:data %) [:kind :let-go]) (job-ev seen :stopped)))))))))
 
+(def waits-for-the-world
+  {:conditions []
+   :round (fn [c] (ctx/end c :nothing-possible :stuck))
+   :cleanup (fn [c _]
+              (swap! clock + 1000)
+              (when-not (:timer @world)
+                (swap! world assoc :timer true)
+                (js/setTimeout #(swap! world assoc :freed true) 0))
+              (if (:freed @world) (ctx/end c :done nil {:let-go true}) :continue))})
+
+(deftest a-drained-cleanup-lets-the-world-change-between-its-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup-reflex {'waits waits-for-the-world} '(waits))]
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [{:kind :nothing-possible :let-go true}]
+                 (mapv #(select-keys (:data %) [:kind :let-go :cleanup]) (job-ev seen :stopped)))))))))
+
 (def yields
   {:conditions []
    :round (fn [_] (log! :round) :continue)

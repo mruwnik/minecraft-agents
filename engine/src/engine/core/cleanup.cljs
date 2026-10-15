@@ -159,12 +159,19 @@
         (await (step eng def c ctx-below)))
     e))
 
+(defn next-tick
+  "One physics step of wall clock: a macrotask, so packets and timers run (the world can change) between steps."
+  [eng]
+  (js/Promise. (fn [ok] (js/setTimeout ok (settings/physics-ms (:primitives eng))))))
+
 (defn ^:async drain
-  "Step the closing frame of c until its cleanups have run or the round is cut: for a frame whose caller cannot come
-  back for the rest (a reflex root, the driver's slot job, a call-child child)."
+  "Step the closing frame of c, a tick between steps, until its cleanups have run or the round is cut: for a frame
+  whose caller cannot come back for the rest (a reflex root, the driver's slot job, a call-child child)."
   [eng def c ctx-below]
-  (let [r (await (step eng def c ctx-below))]
-    (if (and (= :continue r) (owner? eng (:token c))) (await (drain eng def c ctx-below)) r)))
+  (let [r (await (step eng def c ctx-below))
+        more? (and (= :continue r) (owner? eng (:token c)))]
+    (when more? (await (next-tick eng)))
+    (if (and more? (owner? eng (:token c))) (await (drain eng def c ctx-below)) r)))
 
 (defn ^:async close-now
   "close, run to its end within this round (drain)."
