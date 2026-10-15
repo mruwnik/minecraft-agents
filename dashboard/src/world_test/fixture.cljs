@@ -545,16 +545,16 @@
                 (str "effect give " body " " effect " " (or seconds 600) " " (or amp 0) " true")))
         (cond-> spawnpoint (conj (str "spawnpoint " body " " (xyz-str (abs-pos origin spawnpoint))))))))
 
-(def hurt-flush-ms
-  "Longer than the engine's hurt merge window (engine.hurt/window-ms 1000) plus the log write."
-  1500)
-
 (declare reply-pos)
 
 (defn start-hurt
-  "The setup error when the events logged while the case set up show the body suffocating (it stood in a block), else nil."
-  [events]
-  (when-let [e (some #(when (and (= :hurt (:kind %)) (some #{"suffocation"} (get-in % [:data :causes]))) %) events)]
+  "The setup error when the events logged while the case set up show the body suffocating (it stood in a block), else nil.
+  A hurt whose merge window began before parked-at (ms) is a hit from the body's login, not from the start."
+  [parked-at events]
+  (when-let [e (some #(when (and (= :hurt (:kind %)) (some #{"suffocation"} (get-in % [:data :causes]))
+                                 (>= (get-in % [:data :since-ms] 0) parked-at))
+                        %)
+                     events)]
     (str "the body was hurt by suffocation at the start (" (get-in e [:data :amount]) " damage): it stood inside a block")))
 
 (defn start-check-command [body] (str "data get entity " body " Pos"))

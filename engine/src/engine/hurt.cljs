@@ -49,15 +49,15 @@
             amount (:amount pending)]
         (emit! {:source :body :kind :hurt :level :info
                 :amount amount :hits (:hits pending) :causes causes
-                :health (:health pending) :food (:food pending)
+                :health (:health pending) :food (:food pending) :since-ms (:since-ms pending)
                 :text (str "hurt " amount " by " (if (seq causes) (str/join ", " causes) "an unknown cause")
                            " (health " (:health pending) ")")})))))
 
 (defn record!
   "One raw hurt body event m (keyword map). The first hit of a window starts it; later hits add into it; at the
-  window's end flush! emits one event with the total, the hit count, the causes and the last health."
+  window's end flush! emits one event with the total, the hit count, the causes, the last health and when the window started (:since-ms)."
   [eng emit! m]
-  (let [add (fn [p] (-> (or p {:amount 0 :hits 0 :causes []})
+  (let [add (fn [p] (-> (or p {:amount 0 :hits 0 :causes [] :since-ms (js/Date.now)})
                         (update :amount + (or (:amount m) 0))
                         (update :hits inc)
                         (update :causes #(cond-> % (cause m) (conj (cause m))))

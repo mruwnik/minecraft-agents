@@ -1401,13 +1401,6 @@
                            :else (.then (send [tp]) (fn [_] (.then (sleep 300) #(check (dec retries))))))))))]
       (check 16))))
 
-(defn await-hurt-flush!
-  "Sleeps the rest of the body's hurt merge window since parked-at (ms): a hit taken at login, before the park, is logged up to
-  that long later and would be read as a suffocation at the start. io: {:sleep ms->promise, :now -> ms}."
-  [{:keys [sleep now]} parked-at]
-  (let [left (- f/hurt-flush-ms (- (now) parked-at))]
-    (if (pos? left) (sleep left) (js/Promise.resolve nil))))
-
 (defn build-plot!
   "Sends the plot's setup and block commands (idempotent), then checks the replies: a plot whose chunks were not loaded
   yet is built again after a pause, up to 3 times. Resolves to nil when built, else to the failure message (a setup
@@ -1545,7 +1538,6 @@
                        (.then #(write-plans-settled! opts rc))
                        (.then #(reset! plan-files %))
                        (.then #(seed-shared! opts origin c))
-                       (.then #(await-hurt-flush! {:sleep sleep :now js/Date.now} @parked-at))
                        (.then #(reset! setup-cursor (log-cursor (events-file opts))))
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))
@@ -1555,7 +1547,7 @@
                        (.then #(reset! pre-register {:offset (log-cursor (events-file opts)) :from-ms (js/Date.now)}))
                        (.then #(when register (ev/emit! (ev/phase :register)) (put-register! opts register origin)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
-                       (.then (fn [] (when-let [why (f/start-hurt (read-events-from (events-file opts) @setup-cursor))] (throw (js/Error. why)))))
+                       (.then (fn [] (when-let [why (f/start-hurt @parked-at (read-events-from (events-file opts) @setup-cursor))] (throw (js/Error. why)))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then (fn []
                                 (let [t0 (js/Date.now)

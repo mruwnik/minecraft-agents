@@ -86,3 +86,15 @@
           (hit! s {:health 16 :amount 2 :damageType "fall"})
           (await (settle))
           (is (= 2 (count (hurt-events s)))))))))
+
+(deftest the-hurt-event-says-when-its-window-started
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {})
+              before (js/Date.now)]
+          (hurt/set-window! (:eng s) window-ms)
+          (hit! s {:health 17 :amount 3 :damageType "fall"})
+          (await (settle))
+          (let [e (first (hurt-events s))]
+            (is (<= before (:since-ms e) (- (js/Date.now) window-ms)) "stamped at the first hit, not at the flush")))))))
