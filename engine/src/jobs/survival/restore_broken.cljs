@@ -165,7 +165,8 @@
   "No :tidy entry waits; the cells put back so far against the entries waiting."
   [c]
   (let [left (count (tidy/entries c))]
-    {:done? (zero? left) :units :cells :done (count (:restored (ctx/mem c))) :left left}))
+    (checks/goal (zero? left) [:restored "every broken cell is back"] [:owed (str left " cells to put back")]
+                 {:units :cells :done (count (:restored (ctx/mem c))) :left left})))
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-cell) (count (tidy/entries c)))]

@@ -1,0 +1,63 @@
+(ns engine.survival-can-start-test
+  "can-start? of the survival jobs asked directly over a fake body: the status kind and reason each fact gives."
+  (:require [cljs.test :refer [deftest is are]]
+            [engine.memory :as mem]
+            [engine.registry :as registry]
+            [engine.shelter-test :as st]
+            [engine.test-util :as tu]))
+
+(defn start-of
+  "[kind reason] of job's can-start? over a fake body (world), places/entries [[kind data policy] ..] written first."
+  [job world args & [entries]]
+  (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
+    (doseq [[kind data policy] entries] (mem/write! store kind data policy))
+    (tu/kind-reason ((:can-start? (get registry/jobs job))
+                     {:primitives (tu/seeing-all (tu/fake world)) :view (fn [] (mem/view store)) :root 1 :slots [] :args args}))))
+
+(def home {:pos {:x 12 :y 64 :z 0}})
+(def far-home {:pos {:x 300 :y 64 :z 0}})
+
+(deftest go-home-start-facts
+  (are [world entries expected] (= expected (start-of 'jobs.survival.go-home world {:limit 100} entries))
+    {:time st/noon} [] [:later :no-home]
+    {:time st/night} [[:home home mem/place-policy]] [:later :night]
+    {:time st/noon} [[:home far-home mem/place-policy]] [:later :too-far]
+    {:time st/noon} [[:home home mem/place-policy]] [:ok :daytime]))
+
+(deftest set-spawn-start-facts
+  (are [world args expected] (= expected (start-of 'jobs.survival.set-spawn world args))
+    {:time st/night} {:bed {:x 3 :y 64 :z 0}} [:later :night]
+    {:time st/noon} {} [:later :no-bed]
+    {:time st/noon} {:bed {:x 3 :y 64 :z 0}} [:ok :daytime]))
+
+(deftest dig-niche-starts-by-night-only
+  (are [world expected] (= expected (start-of 'jobs.survival.dig-niche world {}))
+    {:time st/noon} [:later :day]
+    {:time st/night} [:ok :night]))
+
+(deftest fight-back-needs-a-hostile-in-range
+  (are [world expected] (= expected (start-of 'jobs.survival.fight-back world {:range 4 :ranged-range 16 :leash 20 :skip []}))
+    {} [:later :no-target]
+    {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} [:ok :target]))
+
+(deftest get-food-rests-after-a-too-dangerous-call-while-fragile-and-empty-handed
+  (let [entry [[:food-too-dangerous {:why :creeper} {:cap 1 :ttl 3600000}]]
+        args {:explore false}]
+    (are [self inventory expected] (= expected (start-of 'jobs.survival.get-food {:self self :inventory inventory :time st/noon} args entry))
+      {:food 5 :health 2} [] [:later :too-dangerous]
+      {:food 5 :health 20} [] [:ok :food-to-try]
+      {:food 5 :health 2} [{:name "bread" :count 1}] [:ok :food-to-try])))
+
+(defn done-of
+  "[kind reason] of job's done? over a fake body, asked before the call starts or once it runs (its :contract :call written)."
+  [job world args running?]
+  (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
+    (mem/write! store :home home mem/place-policy)
+    (when running? (mem/write! store (mem/job-kind "1") {:contract {:call {:spend {}}}} {:cap 1 :ttl :forever}))
+    (tu/kind-reason ((:done? (get registry/jobs job))
+                     {:primitives (tu/seeing-all (tu/fake world)) :view (fn [] (mem/view store)) :root "1" :slots [] :args args}))))
+
+(deftest a-goal-the-round-wraps-up-holds-only-before-the-start
+  (are [job world args] (= [[:ok] [:later]] [(take 1 (done-of job world args false)) (take 1 (done-of job world args true))])
+    'jobs.survival.go-home {:time st/noon :self {:pos {:x 12.5 :y 64 :z 0.5}}} {}
+    'jobs.survival.respond-to-hostile {:time st/noon} {:range 4 :ranged-range 16}))

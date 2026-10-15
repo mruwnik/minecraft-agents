@@ -291,10 +291,10 @@
 
 (deftest eat-is-done-when-fed
   (let [job (get registry/jobs 'jobs.survival.eat)
-        done? (fn [food] (:done? ((:done? job) {:primitives (tu/fake {:self {:food food} :inventory [{:name "bread" :count 2}]})
+        done? (fn [food] (first ((:done? job) {:primitives (tu/fake {:self {:food food} :inventory [{:name "bread" :count 2}]})
                                                 :args {:until 18}})))]
-    (is (false? (done? 10)))
-    (is (true? (done? 18)))))
+    (is (= :later (done? 10)))
+    (is (= :ok (done? 18)))))
 
 (deftest eat-is-done-when-the-last-food-is-eaten
   (async done

@@ -85,7 +85,8 @@
 
 (defn done? [c]
   (let [left (max 0 (- (:until (:args c)) (food-of c)))]
-    {:done? (and (nil? (refusal c)) (zero? left)) :units :food :left left}))
+    (checks/goal (and (nil? (refusal c)) (zero? left)) [:fed "ate up to the wanted food"] [:hungry (str left " food points to eat")]
+                 {:units :food :left left})))
 
 (defn no-food [c] (if (carried-best c) (contract/ok :food "food carried") (contract/later :no-food "no edible food carried")))
 

@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [jobs.lib.checks :as checks]
+            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
             [jobs.lib.places :as places]
@@ -51,7 +52,9 @@
 
 (defn at-home? [c] (let [pos (place c)] (boolean (and pos (<= (u/dist (u/self-pos c) pos) arrive-range)))))
 
-(defn done? [c] (let [d (at-home? c)] {:done? d :units :visits :done (if d 1 0) :left (if d 0 1)}))
+(defn done? [c]
+  (let [d (and (not (started/running? c)) (at-home? c))]
+    (checks/goal d [:home "already home"] [:away "not home"] {:units :visits :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [c]
   (let [pos (place c)

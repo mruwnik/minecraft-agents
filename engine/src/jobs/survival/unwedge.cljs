@@ -35,7 +35,7 @@
 
 (defn done? [c]
   (let [wedged (some? (breath/wedged-cell (:primitives c)))]
-    {:done? (not wedged) :units :cells :left (if wedged 1 0)}))
+    (checks/goal (not wedged) [:free "the feet cell is free"] [:wedged "wedged in a block"] {:units :cells :left (if wedged 1 0)})))
 
 (defn ^:async block!
   "Give up on cell: warn once, remember it so the trigger stays quiet there. Resolves the nothing-possible ending."

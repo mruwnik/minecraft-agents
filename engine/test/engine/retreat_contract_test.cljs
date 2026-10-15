@@ -40,7 +40,8 @@
               c {:primitives (tu/fake {}) :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}}]
           (is (nil? (:check def)))
           (is (= {:spend {:job-time :jobs.survival.retreat/time-s}} (:defaults def)))
-          (is (= {:done? false :units :hostiles :done 0 :left 0} ((:done? def) c)))
+          (is (= [:later :fleeing] (tu/kind-reason ((:done? def) c))))
+          (is (= {:units :hostiles :done 0 :left 0} (select-keys (nth ((:done? def) c) 2) [:units :done :left])))
           (is (nil? (contract/quote-problem (await ((:quote-of def) c))))))))))
 
 (deftest a-whole-flight-ends-done-with-who-it-fled

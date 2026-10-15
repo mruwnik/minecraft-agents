@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
+            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -79,14 +80,15 @@
     (contract/ok :bed "a bed to use, put down or fetch")))
 
 (defn can-start?
-  "Night, and by night a bed (a room flood fill) to use, put down or fetch."
+  "Night, and by night a bed (a room flood fill) to use, put down or fetch. Not cond/and: bed-status is skipped by day,
+  where its flood fill would run for nothing."
   [c]
   (let [n (contract/asked c (checks/night :not-night))]
     (if (= :ok (first n)) (contract/all [n (contract/asked c bed-status)]) n)))
 
 (defn done? [c]
-  (let [d (sh/sleeping? (:primitives c))]
-    {:done? d :units :sleeps :done (if d 1 0) :left (if d 0 1)}))
+  (let [d (and (not (started/running? c)) (sh/sleeping? (:primitives c)))]
+    (checks/goal d [:sleeping "already asleep"] [:awake "not asleep"] {:units :sleeps :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [c]
   (let [bed (bed-to-use c)

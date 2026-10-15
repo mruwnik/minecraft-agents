@@ -164,7 +164,8 @@
 (defn done?
   "No ranged mob has a line of fire to the body; the cells placed so far."
   [c]
-  {:done? (empty? (ranged-dangers c)) :units :cells :done (count (:placed (ctx/mem c)))})
+  (checks/goal (empty? (ranged-dangers c)) [:covered "no ranged mob has a line of fire"] [:in-fire "a ranged mob has a line of fire"]
+               {:units :cells :done (count (:placed (ctx/mem c)))}))
 
 (defn quote-of [_c] {:uses {:job-time [0 3 30]}})
 

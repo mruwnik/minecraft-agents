@@ -97,9 +97,9 @@
           (is (= [] (vec (.. p -world -calls)))))))))
 
 (deftest a-wedged-body-is-not-done-and-a-free-one-is
-  (let [done? (fn [world] (:done? ((:done? (get registry/jobs unwedge)) {:primitives (tu/fake world) :args {}})))]
-    (is (false? (done? {:blocks {"0,64,0" "sand"}})))
-    (is (true? (done? {})))))
+  (let [done? (fn [world] (tu/kind-reason ((:done? (get registry/jobs unwedge)) {:primitives (tu/fake world) :args {}})))]
+    (is (= [:later :wedged] (done? {:blocks {"0,64,0" "sand"}})))
+    (is (= [:ok :free] (done? {})))))
 
 (deftest unwedge-keeps-two-ways-the-side-step-and-the-dig
   (is (= [:step :dig] (:ways (get registry/jobs unwedge)))))

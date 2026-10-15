@@ -7,3 +7,9 @@
   "f of the call, at its start only; nil once it began."
   [f]
   (fn [c] (when-not (ctx/frozen-call c) (f c))))
+
+(defn running?
+  "Whether c's call has started its rounds: a done? asked before the start sees the would-be call (:quote-call) in
+  ctx/frozen-call, so that alone cannot tell."
+  [c]
+  (and (nil? (:quote-call c)) (some? (ctx/frozen-call c))))

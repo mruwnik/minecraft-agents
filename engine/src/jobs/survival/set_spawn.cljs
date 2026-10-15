@@ -60,7 +60,8 @@
   "The spawn is already set at the bed and the call recorded it (a call that ended reports its own end)."
   [c]
   (let [d (and (:ended (ctx/mem c)) (spawn-here? c))]
-    {:done? (boolean d) :units :spawns :done (if d 1 0) :left (if d 0 1)}))
+    (checks/goal d [:spawn-set "the spawn is set at the bed"] [:spawn-unset "the spawn is not set at the bed"]
+                 {:units :spawns :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [_c]
   (let [s (settings/get settings ::click-s)]

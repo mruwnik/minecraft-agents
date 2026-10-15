@@ -161,7 +161,7 @@
   "The hostiles fled against those still chasing: a flight is never done before it has run."
   [c]
   (let [m (ctx/mem c)]
-    {:done? false :units :hostiles :done (count (:fled m)) :left (count (:chasers m))}))
+    (contract/later :fleeing "a flight is not done before it has run" :units :hostiles :done (count (:fled m)) :left (count (:chasers m)))))
 
 (defn quote-of
   "A flight has to find out how long the mobs chase: time (0, ::mean-s, ##Inf)."

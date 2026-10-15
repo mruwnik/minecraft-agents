@@ -126,7 +126,8 @@
   "Air at the head and, after a swim, solid ground under the feet."
   [c]
   (let [needs (needs-air? c)]
-    {:done? (not needs) :units :cells :left (if needs 1 0)}))
+    (checks/goal (not needs) [:air "air at the head, on solid ground"] [:no-air "still short of air or ground"]
+                 {:units :cells :left (if needs 1 0)})))
 
 (defn quote-of [_c] {:uses {:job-time [1 10 60]}})
 

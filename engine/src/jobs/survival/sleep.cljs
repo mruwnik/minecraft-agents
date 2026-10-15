@@ -5,6 +5,8 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [jobs.lib.child :as child]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.started :as started]
             [jobs.lib.cond :as cond]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
@@ -125,7 +127,9 @@
 
 (def defaults {:spend {:job-time ::time-s}})
 
-(defn done? [c] (let [d (sh/sleeping? (:primitives c))] {:done? d :units :sleeps :done (if d 1 0) :left (if d 0 1)}))
+(defn done? [c]
+  (let [d (and (not (started/running? c)) (sh/sleeping? (:primitives c)))]
+    (checks/goal d [:sleeping "already asleep"] [:awake "not asleep"] {:units :sleeps :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [c]
   (let [bed (bed-of c)

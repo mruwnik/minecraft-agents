@@ -109,7 +109,8 @@
   "Out: not burning and no poured water left to scoop."
   [c]
   (let [out? (not (or (body-burning? c) (poured c)))]
-    {:done? out? :units :fires :left (if out? 0 1)}))
+    (checks/goal out? [:out "not burning, no water left to scoop"] [:burning "still burning or water to scoop"]
+                 {:units :fires :left (if out? 0 1)})))
 
 (defn quote-of [_c] {:uses {:job-time [0 5 60]}})
 

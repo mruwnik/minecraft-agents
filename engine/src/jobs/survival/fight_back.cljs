@@ -101,7 +101,7 @@
   "The hostiles killed against those in range."
   [c]
   (let [n (count (in-range c))]
-    {:done? false :units :hostiles :done (count (:killed (ctx/mem c))) :left n}))
+    (contract/later :fighting (str n " hostiles in range") :units :hostiles :done (count (:killed (ctx/mem c))) :left n)))
 
 (defn quote-of [_c] {:uses {:job-time [0 10 60]}})
 

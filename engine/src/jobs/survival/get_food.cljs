@@ -272,7 +272,7 @@
 (defn done?
   "Fed (fed?); the food points still wanted."
   [c]
-  {:done? (fed? c) :units :food :left (max 0 (- foods/top-up-food (food-level c)))})
+  (checks/goal (fed? c) [:fed "fed"] [:hungry "not fed"] {:units :food :left (max 0 (- foods/top-up-food (food-level c)))}))
 
 (defn quote-of [_c]
   {:uses {:job-time [0 90 ##Inf]}})

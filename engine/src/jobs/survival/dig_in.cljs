@@ -8,6 +8,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
+            [jobs.lib.started :as started]
             [jobs.lib.cond :as cond]
             [jobs.lib.choose :as choose]
             [jobs.lib.pace :as pace]
@@ -163,8 +164,9 @@
   "Shut in already, before this call placed anything, or once it ended (a call that placed blocks reports its own end)."
   [c]
   (let [m (ctx/mem c)
-        done (and (sheltered? c) (or (:ended m) (empty? (:placed m))))]
-    {:done? (boolean done) :units :shelters :done (if done 1 0) :left (if done 0 1)}))
+        done (and (sheltered? c) (or (:ended m) (and (empty? (:placed m)) (not (started/running? c)))))]
+    (checks/goal done [:sheltered "shut in"] [:exposed "not shut in"]
+                 {:units :shelters :done (if done 1 0) :left (if done 0 1)})))
 
 (defn quote-of [c]
   (let [p (:primitives c)

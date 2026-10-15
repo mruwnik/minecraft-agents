@@ -99,7 +99,7 @@
   (let [pile (:inventory (:data (dth/current-death c)))
         total (reduce + 0 (map :count pile))
         n (if (:baseline (ctx/mem c)) (pl/recovered-items c pile) 0)]
-    {:done? false :units :items :done n :left (- total n)}))
+    (contract/later :recovering (str n " of " total " items back") :units :items :done n :left (- total n))))
 
 (defn ^:async quote-of
   "The walk to the pile as go-to quotes it, then ::cfg/collect-s at the pile; at most the despawn window left."

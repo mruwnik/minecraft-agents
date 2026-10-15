@@ -4,6 +4,8 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.started :as started]
             [jobs.lib.child :as child]
             [jobs.survival.retreat-doors :as retreat-doors]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -129,9 +131,10 @@
       (contract/ok :night "night, or in a shelter"))))
 
 (defn done?
-  "Already sheltered with nothing for the night to do (asked before the start only; the round ends the night)."
+  "Already sheltered with nothing for the night to do: only before the start, the round ends a night it began."
   [c]
-  {:done? (boolean (:shelter (quiet-night c))) :units :nights})
+  (checks/goal (and (not (started/running? c)) (boolean (:shelter (quiet-night c))))
+               [:sheltered "sheltered, nothing for the night to do"] [:night "the night is not over"] {:units :nights}))
 
 (defn quote-of
   "The time left of the night (jobs.time.wait-for-day's quote), a bed possibly ending it at once, and ::morning-s on top."

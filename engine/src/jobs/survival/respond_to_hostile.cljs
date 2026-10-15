@@ -1,6 +1,8 @@
 (ns jobs.survival.respond-to-hostile
   (:require [jobs.lib.choose :as choose]
             [engine.args :as a]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.started :as started]
             [jobs.lib.body :as body]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -278,11 +280,11 @@
 
 
 (defn done?
-  "Done once no real danger is near and the retreat is not hiding."
+  "No real danger near and the retreat not hiding, before the start only: the round ends an encounter it began."
   [c]
   (let [n (count (near c))
-        clear? (and (zero? n) (not (hiding? c)))]
-    {:done? clear? :units :hostiles :done 0 :left n}))
+        clear? (and (not (started/running? c)) (zero? n) (not (hiding? c)))]
+    (checks/goal clear? [:clear "no danger near"] [:danger (str n " dangers near")] {:units :hostiles :done 0 :left n})))
 
 (defn quote-of
   "Find-out: an encounter lasts as long as the danger stays."

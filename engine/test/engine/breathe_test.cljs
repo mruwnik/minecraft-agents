@@ -1519,7 +1519,7 @@
   (await (sc/ending-of #(tu/seeing-all (tu/fake world)) (list breathe args))))
 
 (deftest a-body-with-air-is-done-already
-  (is (true? (:done? (b/done? {:primitives (tu/fake {}) :args defaults})))))
+  (is (= [:ok :air] (tu/kind-reason (b/done? {:primitives (tu/fake {}) :args defaults})))))
 
 (deftest a-body-that-found-air-ends-done
   (async done
