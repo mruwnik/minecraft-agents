@@ -32,6 +32,15 @@
 
 (def fence-ring (ring "oak_fence" [64]))
 
+(deftest litter-inside-the-fence-is-no-step
+  (let [floor (into {} (for [x (range 5) z (range 5)] [[x 64 z] "leaf_litter"]))]
+    (is (:closed? (check (merge fence-ring floor))))))
+
+(deftest ground-beside-the-fence-top-is-a-way-in
+  (let [r (check (assoc fence-ring [6 64 2] "stone"))]
+    (is (false? (:closed? r)))
+    (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in}] (:leaks r)))))
+
 (defn without [cells & ks] (apply dissoc cells ks))
 
 ;; ------------------------------------------------------------------ what the ring is made of
@@ -183,8 +192,8 @@
   [cells]
   (into cells (for [x (range -3 8) z (range -3 8) y [63 64] :when (or (#{-3 7} x) (#{-3 7} z))] [[x y z] :unloaded])))
 
-(deftest a-low-wall-with-unseen-ground-beyond-is-still-a-leak
-  (is (= :leak (:reason (check (unseen-border (ring "stone" [64])))))))
+(deftest a-low-wall-with-unseen-ground-beyond-waits-for-a-look
+  (is (= :unloaded (:reason (check (unseen-border (ring "stone" [64])))))))
 
 (def divider
   "A fence line across the closed ring at x 2, z 0..4, with its middle cell given by value (nil: a gap)."
@@ -198,6 +207,12 @@
   (are [cells] (= :unloaded (:reason (check (assoc cells [4 64 4] :unloaded))))
     (divider nil)
     (divider ["oak_fence_gate" {:open true}])))
+
+(deftest a-one-block-divider-inside-is-no-climb-while-a-cell-is-unseen
+  (let [stone-line (into {} (for [z (range 1 4)] [[2 64 z] "stone"]))
+        r (check (assoc (merge fence-ring stone-line) [4 64 4] :unloaded) {:at {:x 0 :y 64 :z 2}})]
+    (is (= :unloaded (:reason r)))
+    (is (= [:unloaded] (distinct (map :why (:leaks r)))))))
 
 (deftest a-one-block-wall-all-round-is-climbed-over
   (let [r (check (ring "stone" [64]))]

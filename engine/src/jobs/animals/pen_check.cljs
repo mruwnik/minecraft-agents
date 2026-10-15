@@ -32,7 +32,7 @@
     :remembered-total when more).
   - :gate-drops (only when found) lists {:gate :from :to :drop}: a gate whose side of the pen is cut off by a drop of more than 1 block (animals will not step down 2).
   - :gates lists every fence gate in or beside those cells with :open?.
-  - :animals lists the livestock on those cells (or up to 3 above one: a ledge inside the fence) as {:kind :id :pos [x y z]}, :animals-in counts them, so a loss can be dated from the log.")
+  - :animals lists the livestock on those cells (or up to 3 above one: a ledge inside the fence) as {:kind :id :pos [x y z]}, :animals-in counts them, so a loss can be dated from the log. Only animals in view are listed: :unseen-cells counts the inside cells known from memory only, :animals-complete? is false while any.")
 
 (a/defargs args
   {:at {:doc "feet cell [x y z] or {:x :y :z} of a spot inside the pen (the floor's top, where the animal's feet are)" :spec ::a/pos :default nil}
@@ -117,6 +117,12 @@
   (when-let [{:keys [gate drop]} (first gate-drops)]
     (str "; gate at [" (:x gate) " " (:y gate) " " (:z gate) "] has a drop of " drop " inside, animals will not step down")))
 
+(defn animal-coverage
+  "{:unseen-cells :animals-complete?}: the inside cells the answer reads from memory only, where an animal would not be listed."
+  [{:keys [inside remembered]}]
+  (let [n (count (filter inside remembered))]
+    {:unseen-cells n :animals-complete? (zero? n)}))
+
 (defn ^:async read-pen! [c]
   (let [{:keys [at max-cells]} (:args c)
         box (:box (pen-box c))
@@ -130,7 +136,7 @@
       :partial :continue
       :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)
       (let [rows (animals/in-pen-rows (:primitives c) checked animal-radius)
-            result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)})
+            result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)} (animal-coverage checked))
             result (assoc result :text (if (:closed? result)
                                          (str "pen closed, " (:cells result) " cells" (gate-drop-text result))
                                          (str "pen not closed: " (name (:reason result)) (leak-text result) (gate-drop-text result))))]

@@ -43,7 +43,7 @@
 
 (def passes
   "Names an animal walks through: no collision."
-  #{"air" "cave_air" "void_air" "water" "bubble_column" "short_grass" "tall_grass" "fern" "large_fern" "dead_bush"
+  #{"air" "cave_air" "void_air" "water" "bubble_column" "short_grass" "tall_grass" "short_dry_grass" "tall_dry_grass" "leaf_litter" "wildflowers" "pink_petals" "bush" "fern" "large_fern" "dead_bush"
     "seagrass" "tall_seagrass" "kelp" "kelp_plant" "vine" "glow_lichen" "snow" "cobweb" "light" "structure_void"
     "lily_pad" "sugar_cane" "redstone_wire" "rail" "powered_rail" "detector_rail" "activator_rail" "lever" "tripwire"
     "tripwire_hook" "string" "ladder" "torch" "wall_torch" "redstone_torch" "redstone_wall_torch"
@@ -320,10 +320,11 @@
         (some->> (first-where #(barrier-both-sides? world (key-at %) 2)) (hash-map :why :gap :index)))))
 
 (defn climb-at
-  "The leak {:pos :why :climb} of the first wall top path climbs over, or nil. For a fill that ended on unseen cells:
+  "The leak {:pos :why :climb} of the first fence, wall or gate top path climbs over (a one-block step is a divider
+  the animals cross inside), or nil. For a fill that ended on unseen cells:
   a gap or an open gate on the path may be an inner chokepoint, so only a look at the unseen cells can tell."
   [path]
-  (when-let [i (first (filter #(ridge? path %) (range (count path))))]
+  (when-let [i (first (filter #(and (ridge? path %) (:perch? (nth path %))) (range (count path))))]
     (let [[x y z] (:key (nth path i))] {:pos {:x x :y y :z z} :why :climb})))
 
 (defn perch-entry
@@ -331,6 +332,35 @@
   [path]
   (when-let [i (first (filter #(and (:perch? (nth path %)) (not (:perch? (get path (dec %))))) (range (count path))))]
     (let [{[x _ z] :key s :s} (nth path i)] {:x x :y (dec (floor-cell s)) :z z})))
+
+(defn open-ground?
+  "True when the ground seed ({:key :s}) stands on, walked without climbing fence tops, spreads over more than
+  limit cells: a field, not a pocket the pen's own fences wall in."
+  [{:keys [cell] :as world} seed limit]
+  (let [walled (assoc world :cell (fn [x y z] (let [c (cell x y z)] (if (and c (> (:hi c) 1)) (assoc c :hi 3) c))))]
+    (boolean (:truncated? (fill walled [seed] nil limit)))))
+
+(defn perch-ins
+  "Leaks {:pos :why :perch-in} of the pen's fences, walls and gates (a cell higher than a block beside an inside
+  cell) that open ground outside lies within a block of the top of: an animal steps onto the top there and drops in.
+  world is a fresh one: cells read here are no unloaded leaks."
+  [{:keys [cell max-drop] :as world} seen]
+  (let [inside-cols (into #{} (map (fn [[x _ z]] [x z])) (keys seen))
+        limit (+ 50 (* 2 (count seen)))
+        open (memoize #(open-ground? world %1 limit))]
+    (->> (keys seen)
+         (mapcat (fn [[x y z]]
+                   (for [[dx dz] orthogonal
+                         :let [fx (+ x dx) fz (+ z dz) c (cell fx y fz)]
+                         :when (and c (> (:hi c) 1) (not (:hazard? c)) (not (:unloaded? c))
+                                    (not (contains? inside-cols [fx fz])))
+                         :let [t (+ y (:hi c)) ox (+ fx dx) oz (+ fz dz)]
+                         :when (and (not (contains? inside-cols [ox oz]))
+                                    (some #(and (not (:perch? %)) (<= (- t 1 eps) (:s %) (+ t max-drop eps)) (open %))
+                                          (surfaces-in world ox oz (floor-cell (- t 1)) (floor-cell (+ t max-drop)))))]
+                     {:pos {:x fx :y y :z fz} :why :perch-in})))
+         (sort-by (juxt (comp :x :pos) (comp :y :pos) (comp :z :pos)))
+         vec)))
 
 (defn leak-at
   "The leak {:pos :why} on path, a path that ends outside. With box? a wall top stood on is the answer (the
@@ -446,6 +476,7 @@
                     (seq exits) (keep #(leak-at world (conj (path-to seen (:from %)) {:key (:to %) :s (:top %) :perch? (:perch? %)}) true) exits)
                     (and truncated? (not box)) (keep identity [(leak-at world (path-to seen end) false)])
                     (and (not box) (seq @(:unloaded world))) (keep identity [(climb-at (path-to seen (last (:order fill))))])
+                    (not box) (perch-ins (make-world block-at sealed blocks) seen)
                     :else [])]
         {:world world
          :fill fill
@@ -474,7 +505,7 @@
   a :box for exact crossings), :unloaded (a needed cell was not loaded or seen, the start's floor too) or :no-start (the start is no floor).
   :inside is a set of [x y z] feet cells. For a leaky pen without a box it is what the pen encloses with its leaks
   shut, or empty when that does not close it.
-  :leaks is [{:pos {:x :y :z} :why}], :why one of :open-gate :gap :climb :open :unloaded.
+  :leaks is [{:pos {:x :y :z} :why}], :why one of :open-gate :gap :climb :perch-in :open :unloaded.
   :gate-drops is [{:gate :from :to :drop}]: a gate whose side of the pen is cut off from the rest by a drop of more than 1."
   [{:keys [max-cells] :or {max-cells default-max-cells} :as opts}]
   (let [opts (assoc opts :max-cells max-cells :sealed #{} :blocks (volatile! {}))

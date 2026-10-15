@@ -87,6 +87,11 @@
         (let [{:keys [event]} (await (run-job {} (world {})))]
           (is (= :no-pen (:reason event))))))))
 
+(deftest animals-are-complete-only-when-every-inside-cell-is-in-view
+  (let [checked {:inside #{[1 64 1] [2 64 1]} :remembered [[1 64 1] [9 64 9]]}]
+    (is (= {:unseen-cells 1 :animals-complete? false} (pen-check/animal-coverage checked)))
+    (is (= {:unseen-cells 0 :animals-complete? true} (pen-check/animal-coverage (assoc checked :remembered []))))))
+
 (deftest the-event-and-result-list-the-animals-seen-inside
   (async done
     (tu/run-async done
