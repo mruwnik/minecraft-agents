@@ -22,7 +22,7 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]
-            [jobs.movement.go-to.tuning :refer [max-blocked]]
+            [jobs.movement.go-to.tuning :as tuning :refer [max-blocked]]
             [jobs.movement.go-to.way-steps :as ways]))
 
 (def max-escalations 3)
@@ -272,17 +272,24 @@
 
 (def max-route-digs "Cells a :dig-route escalation digs at most." 16)
 
+(defn route-cells
+  "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal
+  (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most max-route-digs, falls of at most 3),
+  in walking order, every one escape/diggable?, :guess on a cell not seen (read as rock); [] when nothing is left to
+  dig, nil when no such route."
+  [p from goal may-dig? own?]
+  (let [block-at (escape/block-at-of p)
+        cells (:dig (dig-route/route block-at from goal {:max-digs max-route-digs :dig-s cost/dig-cost
+                                                         :step-s (:cost (cost/walk-cost {:distance 1}))}))]
+    (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells))
+      (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells))))
+
 (defn dig-way
-  "{:step :dig-route :cells [{:cell :block}]}: the cheapest cells to dig for a walk from feet cell from down or across
-  into goal (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most max-route-digs, falls of
-  at most 3), in walking order, every one escape/diggable?, :guess on a cell not seen (read as rock); else nil."
+  "{:step :dig-route :cells (route-cells)} when there are cells to dig, else nil."
   [p from goal may-dig? {:keys [own? skip]}]
   (when-not (skip :dig-route)
-    (let [block-at (escape/block-at-of p)
-          cells (:dig (dig-route/route block-at from goal {:max-digs max-route-digs :dig-s cost/dig-cost
-                                                           :step-s (:cost (cost/walk-cost {:distance 1}))}))]
-      (when (and (seq cells) (every? #(escape/diggable? block-at may-dig? own? %) cells))
-        {:step :dig-route :cells (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells)}))))
+    (when-let [cells (seq (route-cells p from goal may-dig? own?))]
+      {:step :dig-route :cells (vec cells)})))
 
 (defn goal-way
   "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to
@@ -622,20 +629,19 @@
             (note-holes! c [dug]))
           o)))))
 
-(def max-route-replans "Routes a :dig-route escalation plans again, as its looks show guessed cells otherwise, before it fails." 8)
-
-(defn replan-route!
-  "Plan the :dig-route escalation again from the feet into goal pos with what the body sees now (dig-way): :again, or
-  the escalation fails :no-route when none is left or it planned max-route-replans times."
+(defn ^:async replan-route!
+  "Plan the :dig-route escalation again from the feet into goal pos with what the body sees now (route-cells): :again,
+  the walk on (escalated!) when nothing is left to dig, or the escalation fails :no-route when no route is left or it
+  planned tuning/max-route-replans times."
   [c pos cell]
   (let [m (ctx/mem c)
         n (inc (:route-replans m 0))
-        e (when (<= n max-route-replans)
-            (dig-way (:primitives c) (end/feet-cell c) (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c)
-                     {:own? (own-placed-fn c) :skip (skips c)}))]
-    (if e
-      (do (ctx/update-mem! c #(-> % (assoc-in [:escalation :cells] (:cells e)) (assoc :route-replans n))) :again)
-      (escalation-failed! c pos {:step :dig-route :reason :no-route :cell cell}))))
+        cells (when (<= n (tuning/max-route-replans))
+                (route-cells (:primitives c) (end/feet-cell c) (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c) (own-placed-fn c)))]
+    (cond
+      (nil? cells) (await (escalation-failed! c pos {:step :dig-route :reason :no-route :cell cell}))
+      (empty? cells) (await (escalated! c pos (:escalation m) true))
+      :else (do (ctx/update-mem! c #(-> % (assoc-in [:escalation :cells] cells) (assoc :route-replans n))) :again))))
 
 (defn ^:async dig-route-round!
   "One round of digging a :dig-route escalation's cells in walking order (route-cell!); a cell already open is passed,

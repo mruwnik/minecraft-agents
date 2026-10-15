@@ -1294,3 +1294,55 @@
     (is (= [true true false] (map #(fetch? (assoc flat :inventory (picks %))) [0 1 2])))
     (is (false? (fetch? (merge {:blocks room :inventory (picks 1)} in-room))) "shut in: no walk to a tool")
     (is (= [true false] (map #(:fetch (second (esc/escalation-job {:step :stair :heading :east :steps 2} nil false false true %))) [true false])))))
+
+(def below-pocket
+  "Stone x -20..20, y 55..63 under a body on top at [0 64 0], with a 1x2 pocket at [3 60 0]: the goal no door or stair leads
+  down to, reached by a :dig-route of [2 63 0] [3 63 0] [3 62 0]."
+  (apply dissoc (box -20 55 -20 20 63 20 "stone") ["3,60,0" "3,61,0"]))
+
+(defn ^:async dig-route-run!
+  "go-to into below-pocket's goal for a body carrying inventory over blocks; {:out :p :seen :digs}, digs the args of each
+  jobs.blocks.dig call. sense (fn [p]) replaces the fake's omniscient sensing when given."
+  [blocks inventory sense]
+  (let [{:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks :inventory inventory})
+        digs (atom [])
+        out (atom :not-done)
+        dig-round (get-in eng [:jobs 'jobs.blocks.dig :round])
+        eng (-> eng
+                (assoc-in [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [3 60 0] :range 0}))
+                (assoc-in [:jobs 'jobs.blocks.dig :round] (fn [c] (swap! digs conj (:args c)) (dig-round c))))]
+    (some-> sense (apply [p]))
+    (core/submit! eng '(recording-parent) {})
+    (await (tick-out! eng 1000))
+    {:out out :p p :seen seen :digs digs}))
+
+(deftest a-dig-route-s-digs-fetch-a-pickaxe-as-fetch-tool-says
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pick {:name "stone_pickaxe" :count 1}
+              one (await (dig-route-run! below-pocket [pick] nil))
+              two (await (dig-route-run! below-pocket [pick pick] nil))]
+          (is (= [true true] (map (comp :arrived deref :out) [one two])))
+          (is (= #{true} (set (map :fetch @(:digs one)))) "one pickaxe: its breaking is no stop")
+          (is (= #{false} (set (map :fetch @(:digs two)))) "a spare pickaxe: no fetch"))))))
+
+(deftest a-dig-route-cell-a-look-leaves-unseen-is-dug-and-the-lava-behind-it-sealed
+  ;; [3 62 0] stays unseen until dug whatever the body looks at (occluded, too old); lava at [4 62 0] beside it shows only
+  ;; once that cell is dug: a player mining digs into unknown rock, the dig child seals what it opens
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (assoc below-pocket "4,62,0" "lava")
+              sense (fn [p]
+                      (let [sensed (.-sensedAt p)]
+                        (aset p "sensedAt" (fn [q] (let [cell [(.-x q) (.-y q) (.-z q)]]
+                                                     (if (and (#{[3 62 0] [4 62 0]} cell) (not= "air" (block p [3 62 0])))
+                                                       #js {:unknown true}
+                                                       (sensed q)))))))
+              {:keys [out p seen]} (await (dig-route-run! blocks [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 4}] sense))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [3 60 0] (feet p)))
+          (is (= "air" (block p [3 62 0])) "dug as guessed rock")
+          (is (= "cobblestone" (block p [4 62 0])) "the lava it laid open is sealed")
+          (is (seq (events-of seen :blocks.dig.sealed))))))))

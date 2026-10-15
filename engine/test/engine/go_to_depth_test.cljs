@@ -426,7 +426,29 @@
         (let [{:keys [out p] :as s} (await (climb! (assoc in-loop :blocks rock-loop :inventory [{:name "stone_pickaxe" :count 1}]) {:pos across :range 0}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated))))
+          (is (empty? (gt/events-of s :go-to.escalation-stopped)) "the goal's cell, guessed rock and seen open, leaves nothing to dig: no failed route")
           (is (= [0 64 6] (mapv js/Math.floor (gt/at p)))))))))
+
+;; The loop's corridors cut in solid rock, with bedrock two high at z 3 in the line between them: the dig route is planned
+;; through the bedrock as guessed rock and planned again round it once a look shows it.
+(def bedrock-loop
+  (apply dissoc (merge (box -3 60 -3 43 67 9 "stone") {"0,64,3" "bedrock" "0,65,3" "bedrock"})
+         (for [[x z] (concat (for [x (range 41) z [0 6]] [x z]) (for [z (range 1 6)] [40 z])) y [64 65]] (str x "," y "," z))))
+
+(deftest a-dig-route-cell-a-look-shows-otherwise-plans-the-route-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc in-loop :blocks bedrock-loop :inventory [{:name "stone_pickaxe" :count 1}])
+              {:keys [out p] :as s} (await (climb! world {:pos across :range 0}))
+              capped (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 0}
+                              #(climb! world {:pos across :range 0})))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [0 64 6] (mapv js/Math.floor (gt/at p))))
+          (is (= ["bedrock" "bedrock"] (map #(.-name (.blockAt p (clj->js %))) [{:x 0 :y 64 :z 3} {:x 0 :y 65 :z 3}])))
+          (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated))))
+          (is (some #(= [:dig-route :no-route] ((juxt :step :reason) %)) (gt/events-of capped :go-to.escalation-stopped))
+              "no replan left: the route ends :no-route"))))))
 
 (deftest the-long-way-is-walked-on-request-under-the-sky-or-within-the-bound
   (async done

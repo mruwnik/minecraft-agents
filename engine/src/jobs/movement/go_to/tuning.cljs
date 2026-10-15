@@ -32,8 +32,10 @@
    :jobs.movement.go-to.tuning/waypoint-gain {:default 2 :doc "Blocks (across) a waypoint must lie nearer a guessed column goal than the body, and a waypoint walk must bring the body nearer, not to be a miss." :spec (a/num-in 1 nil)}
    :jobs.movement.go-to.tuning/quote-most-factor {:default 3 :doc "A go-to quote's most time for a found route: this many times the planner's seconds (replans, doors, escalation)." :spec (a/num-in 1 nil)}
    :jobs.movement.go-to.tuning/quote-unseen-factor {:default 2 :doc "A go-to quote's mean counts each block still to go past a partial route (or with no route, when the call may change the world) as this many walked blocks of unseen terrain (jobs.lib.cost.planner/walk-floor each)." :spec (a/num-in 0 nil)}
+   :jobs.movement.go-to.tuning/max-route-replans {:default 8 :doc "Times a go-to's :dig-route escalation plans its route again, as looks show cells it guessed were rock otherwise, before it fails :no-route." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/way-looks {:default [[6 1] [3 4]] :doc "The looks taken in turn before each waypoint walk: [blocks ahead toward the goal, blocks under the feet] (ahead and a little down: a slope up; close and steeply down: a slope or drop below an edge)." :spec (a/coll-of (a/pred "a pair [ahead down] of numbers >= 0" #(and (sequential? %) (= 2 (count %)) (every? (fn [n] (and (number? n) (>= n 0))) %))))}})
 
+(defn max-route-replans [] (settings/get settings :jobs.movement.go-to.tuning/max-route-replans))
 (defn max-cut-restarts [] (settings/get settings :jobs.movement.go-to.tuning/max-cut-restarts))
 (defn max-cut-resets [] (settings/get settings :jobs.movement.go-to.tuning/max-cut-resets))
 (defn cut-progress [] (settings/get settings :jobs.movement.go-to.tuning/cut-progress))
