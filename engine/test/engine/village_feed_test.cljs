@@ -155,11 +155,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (feed {:entities [(villager 2)] :inventory bread} {:villager "v-1"} 60
-                                         (fn [p]
-                                           (taking p (fn [_] nil))
-                                           (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "unreachable" :gained #js []})))))]
-          (is (= :litter (:reason @out))))))))
+        (let [{:keys [out seen]} (await (feed {:entities [(villager 2)] :inventory bread} {:villager "v-1"} 60
+                                              (fn [p]
+                                                (taking p (fn [_] nil))
+                                                (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "unreachable" :gained #js []})))))]
+          (is (= :litter (:reason @out)))
+          (is (some #(and (= :child_started (:kind %)) (= :collect (:slot %))) @seen) "the drop is collected back by a collect-drops child"))))))
 
 (deftest no-food-carried-with-fetch-off-feeds-nothing
   (async done
