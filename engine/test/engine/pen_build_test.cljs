@@ -73,7 +73,7 @@
           (is (= [] (:leaks result)))
           (is (= 8 (get-in result [:built :placed])))
           (is (= "oak_fence_gate" (h/block-at p 3 64 2)))
-          (is (= 1 (count (kinds-of seen :pen-build.done))))
+          (is (= 1 (count (kinds-of seen :completed))))
           (is (empty? (kinds-of seen :pen-build.leaky))))))))
 
 ;; ---------------------------------------------------------------- the contract
@@ -141,8 +141,7 @@
           (is (= [{:pos {:x 3 :y 64 :z 4} :why :gap}] (:leaks result)))
           (is (= "air" (h/block-at p 3 64 4)) "nothing is placed that the plan does not ask for")
           (is (= 1 (count warns)))
-          (is (= (:leaks result) (:leaks (first warns))))
-          (is (empty? (kinds-of seen :pen-build.done))))))))
+          (is (= (:leaks result) (:leaks (first warns)))))))))
 
 (deftest an-open-gate-is-a-leak
   (async done
@@ -211,7 +210,7 @@
     {:places (count (h/calls p "place"))
      :declined (mapv #(select-keys % [:plan :reason]) (kinds-of seen :pen-build.declined))
      :waits (mapv #(select-keys % [:reason :why]) (kinds-of seen :waiting))
-     :done (count (kinds-of seen :pen-build.done))
+     :done (count (kinds-of seen :completed))
      :listed (:list (core/state eng))}))
 
 (deftest a-sound-pen-places-nothing-and-is-done
@@ -221,7 +220,7 @@
         (let [r (await (declines (spec kit built-pen) {"pen" (ring-plan)} {:plan "pen"}))]
           (is (= 0 (:places r)))
           (is (= [] (:declined r)))
-          (is (= 0 (:done r)) "ended by done? before any round: no pen-build.done event")
+          (is (= 1 (:done r)) "ended by done? before any round: one completion, nothing placed")
           (is (empty? (:listed r))))))))
 
 (deftest a-built-but-leaky-pen-is-worked-so-the-leak-is-reported
@@ -314,7 +313,7 @@
           (dotimes [_ 40] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (every? #(= "oak_fence" (h/block-at p (first %) (second %) (nth % 2))) fenced-ring))
           (is (= "oak_fence_gate" (h/block-at p 3 64 2)))
-          (is (= 1 (count (kinds-of seen :pen-build.done))))
+          (is (= 1 (count (kinds-of seen :completed))))
           (is (empty? (:list (core/state eng)))))))))
 
 (deftest a-pen-is-built-and-checked-in-one-round

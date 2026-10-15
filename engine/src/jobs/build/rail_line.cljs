@@ -6,6 +6,7 @@
             [engine.contract :as contract]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
+            [jobs.lib.started :as started]
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.lib.placement :as placement]
@@ -34,7 +35,7 @@
   Needs: the plan, a zone list (unless :ignore-zones?), and the items for every cell still to build carried (unless
   :all-carried false). Returns, as the data of its ending, {:ok? :breaks :hazards :built {:placed :missing :short
   :given-up :wrong :refused}}. :hazards lists falling beds (gravel, sand).
-  Endings: done when the line is sound (info rail-build.done; a line sound already is done at once, placed 0);
+  Endings: done when the line is sound (a line sound already is done at once, placed 0);
   nothing-possible :broken when it is not (one warn rail-build.broken with :breaks {:pos :why} (:gap :shape :unlit
   :lit-brake :no-bed :blocked :wet :no-buffer :launch-trap :unloaded; at most 12) and what the build left (:refused
   :given-up :short)).
@@ -209,10 +210,17 @@
 (def can-run? plan-problem)
 
 (defn done?
-  "Done when the line is sound; else the cells placed and the cells still owed."
+  "Ok when the line is sound; else later, with the cells placed and the cells still owed."
   [c]
-  (let [{:keys [cells trouble]} (judged-plan c)]
-    {:done? (boolean (and (not trouble) (sound? c cells))) :units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))}))
+  (let [{:keys [cells trouble]} (judged-plan c)
+        proof (when-not trouble (rail/judge-line cells (block-at c)))
+        plan (:plan (:args c))
+        placed (get-in (ctx/mem c) [:built :placed] 0)]
+    (checks/goal (boolean (and proof (empty? (plan/owed cells)) (:ok? proof) (or (:built (ctx/mem c)) (not (started/running? c)))))
+                 [:sound (str "rail line " plan " is sound, " (count (filter rail/rail-cell? cells)) " rails, placed " placed)]
+                 [:owed (str "rail line " plan " is not sound")]
+                 {:units :cells :done placed :left (if trouble 0 (count (plan/owed cells)))
+                  :result (when proof (assoc proof :built (:built (ctx/mem c))))})))
 
 (defn ^:async quote-of [c]
   (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :reach :give-up :accept :ignore-zones?]))) [:uses :yields]))
@@ -281,16 +289,16 @@
         proof (rail/judge-line cells at)
         rails (count (filter rail/rail-cell? cells))
         left (plan/left-text built)]
-    (if (:ok? proof)
-      (ctx/emit! c :rail-build.done :info {:plan plan :cells rails :placed (:placed built)
-                                           :text (str "rail line " plan " is sound, " rails " rails, placed " (:placed built))})
+    (when-not (:ok? proof)
       (ctx/emit! c :rail-build.broken :warn
                  {:plan plan :breaks (vec (take (max-breaks) (:breaks proof))) :breaks-total (count (:breaks proof))
                   :refused (:refused built) :given-up (:given-up built) :short (:short built)
                   :text (str "rail line " plan " is broken: "
                              (str/join ", " (map break-text (take (max-breaks) (:breaks proof))))
                              (when (seq left) (str "; " left)))}))
-    (ctx/end c (if (:ok? proof) :done :nothing-possible) (when-not (:ok? proof) :broken) (assoc proof :built built))))
+    (ctx/end c (if (:ok? proof) :done :nothing-possible) (when-not (:ok? proof) :broken)
+             (cond-> (assoc proof :built built)
+               (:ok? proof) (assoc :text (str "rail line " plan " is sound, " rails " rails, placed " (:placed built)))))))
 
 (defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)

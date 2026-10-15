@@ -78,7 +78,7 @@
             (is (= "powered_rail" (h/block-at p 3 64 0)) label)
             (is (true? (:powered (props p [3 64 0]))) label)
             (is (= "east_west" (:shape (props p [0 64 0]))) label)
-            (is (= 1 (count (h/events-of seen :rail-build.done))) label)
+            (is (= 1 (count (h/events-of seen :completed))) label)
             (is (empty? (h/events-of seen :rail-build.broken)) label)))))))
 
 (deftest a-lever-is-switched-on-after-the-build
@@ -152,7 +152,7 @@
                                               {"line" plan} [])
                 _ (core/submit! eng (list job {:plan "line"}) {})]
             (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
-            (is (= 0 (count (h/events-of seen :rail-build.done))) (str "ended by done? before any round " (pr-str pos)))
+            (is (= 1 (count (h/events-of seen :completed))) (str "ended by done? before any round " (pr-str pos)))
             (is (= 0 (count (h/events-of seen :rail-build.declined))) (pr-str pos))
             (is (= 0 (count (h/calls p "place"))) (pr-str pos))
             (is (empty? (:list (core/state eng))) (pr-str pos))))))))
@@ -276,7 +276,7 @@
           (dotimes [_ 120] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (every? #(= "rail" (h/block-at p % 64 0)) [0 1 28 29]))
           (is (every? #(= "powered_rail" (h/block-at p % 64 0)) [2 3 4 5 24 25 26 27]))
-          (is (= 1 (count (h/events-of seen :rail-build.done))))
+          (is (= 1 (count (h/events-of seen :completed))))
           (is (empty? (:list (core/state eng)))))))))
 
 ;; ---------------------------------------------------------------- corners and slopes: the head-first builder
@@ -351,7 +351,7 @@
             (is (true? (:ok? result)) label)
             (is (= [] (:breaks result)) label)
             (is (= {} (get-in result [:built :given-up])) label)
-            (is (= 1 (count (h/events-of seen :rail-build.done))) label)
+            (is (= 1 (count (h/events-of seen :completed))) label)
             (is (empty? (h/events-of seen :rail-build.broken)) label)))))))
 
 (deftest the-corner-and-the-slope-come-out-as-the-layout-wants-them
@@ -543,7 +543,7 @@
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (dotimes [_ 160] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (= ["east_west" "south_west" "north_south"] (mapv #(shape-of p %) [[18 64 0] [19 64 0] [19 64 1]])))
-          (is (= 1 (count (h/events-of seen :rail-build.done))))
+          (is (= 1 (count (h/events-of seen :completed))))
           (is (empty? (:list (core/state eng)))))))))
 
 ;; ---------------------------------------------------------------- the wait reason

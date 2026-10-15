@@ -8,6 +8,7 @@
             [jobs.lib.apiary :as apiary]
             [jobs.lib.look :as look]
             [jobs.lib.checks :as checks]
+            [jobs.lib.started :as started]
             [jobs.build.from-plan :as from-plan]
             [jobs.lib.pen :as pen]
             [jobs.build.from-plan.plan :as plan]
@@ -30,7 +31,7 @@
   :fetch false). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
   :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start.
   The pen ends with the body outside and the gate shut.
-  Endings: done when the pen holds (info pen-build.done); nothing-possible with the :reason as cause when it does not
+  Endings: done when the pen holds; nothing-possible with the :reason as cause when it does not
   (one warn pen-build.leaky naming the leaks {:pos :why} (:gap :open-gate :climb :open :unloaded; at most 12) and what
   the build left (:refused, :given-up, :short)); nothing-possible :inside when the body cannot get out of the finished
   pen. An ending of the builder's can-start? (no data: :no-items, :no-zones) is this job's; a builder that ended
@@ -204,11 +205,25 @@
   [c cells]
   (not (inside? (barrier-box cells) (u/self-pos c))))
 
+(defn result-of
+  "The data of the call's ending: the pen's summary, what was built and the shut-gate cause when it did not end done."
+  [c answer]
+  (cond-> (assoc answer :built (:built (ctx/mem c)))
+    (:shut (ctx/mem c)) (assoc :shut (:shut (ctx/mem c)))))
+
 (defn done?
-  "Done when nothing is owed, the pen holds and the body is outside it; else the cells still owed."
+  "Ok when nothing is owed, the pen holds and the body is outside it; else later, with the cells placed and still owed."
   [c]
-  (let [{:keys [cells trouble]} (judged-plan c)]
-    {:done? (boolean (and (not trouble) (sound? c cells) (outside? c cells))) :units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))}))
+  (let [{:keys [cells trouble]} (judged-plan c)
+        plan (:plan (:args c))
+        answer (when-not trouble (pen/summary (read-pen c cells)))
+        holds? (boolean (and (not trouble) (empty? (plan/owed cells)) (:closed? answer) (outside? c cells)
+                             (or (:built (ctx/mem c)) (not (started/running? c)))))]
+    (checks/goal holds?
+                 [:holds (str "pen of " plan " holds, " (:cells answer) " cells, placed " (get-in (ctx/mem c) [:built :placed] 0))]
+                 [:owed (str "pen of " plan " is not finished")]
+                 {:units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))
+                  :result (when answer (result-of c answer))})))
 
 (defn ^:async quote-of [c]
   (select-keys (await (ctx/quote c 'jobs.build.from-plan (build-args c))) [:uses :yields]))
@@ -224,13 +239,10 @@
   (let [plan (:plan (:args c))
         built (:built (ctx/mem c))
         answer (pen/summary (read-pen c cells))
-        result (cond-> (assoc answer :built built)
-                 (:shut (ctx/mem c)) (assoc :shut (:shut (ctx/mem c))))
+        result (result-of c answer)
         left (plan/left-text built)]
     (if (:closed? answer)
-      (do (ctx/emit! c :pen-build.done :info {:plan plan :cells (:cells answer) :placed (:placed built)
-                                              :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))})
-          (ctx/end c :done nil result))
+      (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))))
       (do (ctx/emit! c :pen-build.leaky :warn
                      (merge {:plan plan :reason (:reason answer) :leaks (:leaks answer)
                              :refused (:refused built) :given-up (:given-up built) :short (:short built)

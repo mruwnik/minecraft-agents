@@ -29,7 +29,7 @@
    :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [14 0 14] #at [15 0 14]] :want "oak_planks"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
-            {:event {:source :job :kind :build.done :data {:missing 0}} :within-s 140 :of-job true}]
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 140 :of-job true}]
    :after [[:block [14 0 14] "oak_planks"] [:block [15 0 14] "oak_planks"]]}
   {:name "fetch-false-names-the-short-item"
    :blocks [[:fill [24 0 14] [24 3 14] "oak_log"]]
@@ -55,5 +55,5 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.build.from-plan {:plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :fetch.done} :within-s 80 :of-job true}
-            {:event {:source :job :kind :build.done :data {:missing 0}} :within-s 130 :of-job true}]
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 130 :of-job true}]
    :after [[:block [18 -1 16] "cobblestone"]]}]}

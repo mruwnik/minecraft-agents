@@ -58,11 +58,11 @@
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [17 0 17] #at [20 2 20]] :want "dirt"}]}]
    :act [[:job (jobs.build.clear-box {:from #at [18 0 18] :to #at [19 1 19]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :clear-box.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
    :after [[:block [18 0 18] "dirt"] [:block [19 1 19] "dirt"]]}
   {:name "clear-box-free-outside-the-plan"
    :blocks [[:fill [18 0 18] [19 1 19] "dirt"]]
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [26 0 26] #at [28 2 28]] :want "dirt"}]}]
    :act [[:job (jobs.build.clear-box {:from #at [18 0 18] :to #at [19 1 19]})]]
-   :expect [{:event {:source :job :kind :clear-box.done :data {:dug [:>= 1]}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:dug [:>= 1]}} :within-s 60 :of-job true}]
    :after [[:not-block [18 1 18] "dirt"]]}]}

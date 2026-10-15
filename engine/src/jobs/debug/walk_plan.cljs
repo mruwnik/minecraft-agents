@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [clojure.set :as set]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]))
 
@@ -40,7 +41,7 @@
 (defn done?
   "Never done before it runs: a walk has no state that can hold before it."
   [_c]
-  {:done? false :units :walks :done 0 :left 1})
+  (checks/goal false nil [:unwalked "the plan is not walked"] {:units :walks :done 0 :left 1}))
 
 (defn finish!
   "Hand result over (ctx/result!), emit it as a :walk-plan.result event (info when arrived, else warn)."

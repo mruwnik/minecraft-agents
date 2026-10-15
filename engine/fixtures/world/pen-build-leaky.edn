@@ -16,8 +16,8 @@
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
-   :expect [{:event {:source :job :kind :pen-build.done} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :pen-build.leaky} :for-s 80 :until {:source :job :kind :pen-build.done}}]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :pen-build.leaky} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 12] "oak_fence"]]}
   {:name "ring-with-a-gap-is-leaky"
    :plans [{:id "ring" :metadata {:by "$body"}
@@ -30,7 +30,7 @@
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
    :expect [{:event {:source :job :kind :pen-build.leaky :data {:reason :leak :leaks [{:why :gap}]}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :pen-build.done} :for-s 80 :until {:source :job :kind :pen-build.leaky}}]
+            {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :pen-build.leaky}}]
    :after [[:not-block [10 0 12] "oak_fence"] [:item "oak_fence" 2]]}
   ;; Card f84912c5: with the fences carried (8, the ring needs 7 and a gate) the pen is placed from the bag at once; nothing is fetched
   ;; or searched for first (no obtain.exploring).
@@ -42,6 +42,6 @@
                     {:id "w" :box [#at [10 0 11] #at [10 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [12 0 11] #at [12 0 11]] :want "oak_fence_gate"}]}]
    :act [[:job (jobs.build.pen {:plan "$plan:ring"})]]
-   :expect [{:event {:source :job :kind :pen-build.done} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :obtain.exploring} :for-s 80 :until {:source :job :kind :pen-build.done}}]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :obtain.exploring} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 11] "oak_fence"] [:block [12 0 11] "oak_fence_gate"]]}]}

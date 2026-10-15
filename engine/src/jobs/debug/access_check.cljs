@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -67,7 +68,7 @@
 (defn done?
   "Never done before it runs: it reports."
   [_c]
-  {:done? false :units :cells :done 0 :left 0})
+  (checks/goal false nil [:unchecked "the cells are not checked"] {:units :cells :done 0 :left 0}))
 
 (defn feet-cell [c]
   (let [{:keys [x y z]} (u/self-pos c)]

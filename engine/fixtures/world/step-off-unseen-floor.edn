@@ -10,10 +10,10 @@
  :cases
  [{:name "steps-off-on-unseen-floor-and-clears-the-cell"
    :act [[:job (jobs.build.clear-box {:from #at [12 -1 12] :to #at [12 -1 12]})]]
-   :expect [{:event {:source :job :kind :clear-box.done :data {:dug 1}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:dug 1}} :within-s 60 :of-job true}]
    :after [[:block [12 -1 12] "air"]]}
   {:name "never-steps-onto-lava-floor"
    :blocks [[:fill [10 -1 10] [14 -1 14] "lava"] [:fill [12 -1 12] [15 -1 12] "stone"]]
    :act [[:job (jobs.build.clear-box {:from #at [12 -1 12] :to #at [12 -1 12]})]]
-   :expect [{:event {:source :job :kind :clear-box.done} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:not-block [12 -1 12] "stone"] [:body-near [13.5 0 12.5] 3.5]]}]}

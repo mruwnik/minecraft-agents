@@ -153,10 +153,16 @@
 (def can-start? (checks/all bad-args no-zones all-refused))
 (def can-run? no-zones)
 
+(declare result-of)
+
 (defn done?
-  "Done when every cell is loaded and nothing is left to dig; else the cells dug this call and the cells left to dig."
+  "Ok when every cell is loaded and nothing is left to dig; else later, with the cells dug this call, the cells left to dig
+  and the result so far."
   [c]
-  {:done? (and (not (box-error (:args c))) (empty? (pending-all c))) :units :cells :done (:dug (ctx/mem c) 0) :left (if (box-error (:args c)) 0 (count (pending c)))})
+  (checks/goal (and (not (box-error (:args c))) (empty? (pending-all c)))
+               [:cleared "nothing is left to dig"] [:owed "cells are left to dig"]
+               {:units :cells :done (:dug (ctx/mem c) 0) :left (if (box-error (:args c)) 0 (count (pending c)))
+                :result (when-not (box-error (:args c)) (result-of c))}))
 
 (defn quote-of [c]
   (let [p (:primitives c)
@@ -232,22 +238,22 @@
         reason (if (= 1 (count counts)) (key (first counts)) :nothing-dug)]
     [reason (str "nothing dug: " (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) counts))))]))
 
+(defn result-of
+  "The data of the call's ending: what is dug, skipped, kept and wet so far."
+  [c]
+  (let [everything (named c)
+        keep (:keep (:args c) [])]
+    {:dug (:dug (ctx/mem c) 0) :skipped (:skipped (ctx/mem c) {})
+     :kept (count (filter (fn [[_ n]] (and (not (fluids n)) (not (air n)) (kept? keep n))) everything))
+     :fluids (frequencies (filter fluids (map second everything)))}))
+
 (defn finish!
   "The ending of a run with no cell left to work. Done when it dug enough (or had nothing to skip); else the cause is
   the skip reason(s)."
   [c]
-  (let [mem (ctx/mem c)
-        everything (named c)
-        keep (:keep (:args c) [])
-        kept (count (filter (fn [[_ n]] (and (not (fluids n)) (not (air n)) (kept? keep n))) everything))
-        wet (frequencies (filter fluids (map second everything)))
-        skipped (:skipped mem {})
-        dug (:dug mem 0)
-        result {:dug dug :skipped skipped :kept kept :fluids wet}]
-    (ctx/emit! c :clear-box.done :info {:dug dug :skipped (count skipped)
-                                        :text (str "dug " dug ", skipped " (count skipped))})
+  (let [{:keys [dug skipped] :as result} (result-of c)]
     (if (or (empty? skipped) (common/enough? c dug (+ dug (count skipped))))
-      (ctx/end c :done nil result)
+      (ctx/end c :done nil (assoc result :text (str "dug " dug ", skipped " (count skipped))))
       (let [[reason text] (if (pos? dug) [:partial (str "dug " dug ", skipped " (count skipped))] (nothing-dug skipped))]
         (ctx/end c (if (condition-skips reason) :condition-failed :nothing-possible) reason (assoc result :text text))))))
 

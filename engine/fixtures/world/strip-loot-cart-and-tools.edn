@@ -50,7 +50,7 @@
    :body {:at [11.5 0 16.5] :yaw 180 :inventory [["cobblestone" 64] ["oak_planks" 96] ["chest" 4] ["furnace" 2] ["crafting_table" 1]
                                                  ["white_bed" 1] ["oak_door" 1] ["torch" 2]]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:base"})]]
-   :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 280 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 280 :of-job true}]
    :after [[:block [9 0 9] "chest"] [:block [13 0 10] "furnace[facing=west]"] [:block [9 0 11] "crafting_table"] [:block [11 0 12] "oak_door"]]
    :limit-s 300}
   {:name "field-base-short-materials-gives-up-without-building-it-all"
@@ -59,6 +59,6 @@
    :body {:at [11.5 0 16.5] :yaw 180 :inventory [["cobblestone" 4]]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:base" :fetch false})]]
    :expect [{:event {:source :job :kind #{:build.gave-up :waiting :stopped}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :build.done :data {:missing 0}} :for-s 60}]
+            {:no-event {:source :job :kind :completed :data {:missing []}} :for-s 60}]
    :after [[:not-block [9 0 9] "chest"]]
    :limit-s 150}]}

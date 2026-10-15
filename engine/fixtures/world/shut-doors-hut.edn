@@ -17,17 +17,17 @@
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "wall" :cells [#at [14 0 16] #at [15 0 16] #at [17 0 16] #at [18 0 16]] :want [:any "oak_planks"]}
                                                        {:id "door" :cells [#at [16 0 16]] :want [:any "oak_door"]}]}]
    :act [[:job (jobs.maintenance.shut-doors {:unrecorded? true})]]
-   :expect [{:event {:source :job :kind :shut-doors.done :data {:shut 1 :left []}} :within-s 70 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 70 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"]]}
   {:name "default-run-leaves-an-unrecorded-door"
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "door" :cells [#at [16 0 16]] :want [:any "oak_door"]}]}]
    :act [[:job (jobs.maintenance.shut-doors)]]
-   :expect [{:event {:source :job :kind :shut-doors.done :data {:shut 0 :left []}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:shut 0 :left []}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=true]"]]
    :limit-s 60}
   {:name "unrecorded-door-outside-own-plans-left-open"
    :act [[:job (jobs.maintenance.shut-doors {:unrecorded? true})]]
-   :expect [{:event {:source :job :kind :shut-doors.done :data {:shut 0 :left []}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:shut 0 :left []}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=true]"]]
    :limit-s 60}
   ;; a recorded open door with a cow stuck in its cell: the run stops (animal in the way) but keeps the entry; once the cow is gone the
@@ -39,6 +39,6 @@
          [:await {:source :job :kind :shut-doors.stopped} 60]
          [:rcon "kill @e[type=cow,tag=wt,$BOX]"]]
    :expect [{:event {:source :job :kind :shut-doors.stopped} :within-s 60}
-            {:event {:source :job :kind :shut-doors.done :data {:shut 1 :left []}} :within-s 120}]
+            {:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 120}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"]]
    :limit-s 140}]}

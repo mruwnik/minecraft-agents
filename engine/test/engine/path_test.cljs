@@ -42,10 +42,9 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory shovel :blocks four})
               result (await (child-outcome eng job box 1))]
-          (is (= {:pathed 4 :skipped {}} result))
+          (is (= {:pathed 4 :skipped {}} (dissoc result :text)))
           (is (= ["dirt_path"] (distinct (map #(block-at p %) (path/cells box)))))
-          (is (= 4 (count (calls p "useOn"))))
-          (is (= 1 (count (kinds seen :path.done)))))))))
+          (is (= 4 (count (calls p "useOn")))))))))
 
 (deftest path-leaves-a-path-alone-and-skips-what-is-not-pathable
   (async done
@@ -62,7 +61,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:inventory shovel :blocks (assoc four "1,64,1" "cobblestone")})
               result (await (child-outcome eng job box 8))]
-          (is (= {:pathed 3 :skipped {{:x 1 :y 63 :z 1} :covered}} result)))))))
+          (is (= {:pathed 3 :skipped {{:x 1 :y 63 :z 1} :covered}} (dissoc result :text))))))))
 
 (deftest path-digs-ground-cover-then-shovels
   (async done
@@ -70,7 +69,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory shovel :blocks (assoc four "1,64,1" "short_grass")})
               result (await (child-outcome eng job box 14))]
-          (is (= {:pathed 4 :skipped {}} result))
+          (is (= {:pathed 4 :skipped {}} (dissoc result :text)))
           (is (= 1 (count (calls p "dig"))))
           (is (= "dirt_path" (block-at p {:x 1 :y 63 :z 1}))))))))
 
@@ -133,7 +132,7 @@
             (await running))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (run-until-empty eng 12))
-          (is (= {:pathed 4 :skipped {}} @out))
+          (is (= {:pathed 4 :skipped {}} (dissoc @out :text)))
           (is (= ["dirt_path"] (distinct (map #(block-at p %) (path/cells box))))))))))
 
 (defn zone [min max] {:name "farm" :owner "Miles" :min min :max max})
@@ -159,9 +158,9 @@
           (is (= [:no-zones] (map :reason (kinds seen :waiting))))
           (is (empty? (calls p "useOn"))))
         (let [{:keys [eng]} (setup {:inventory shovel :blocks four} (ew/of-data {} {} nil))]
-          (is (= {:pathed 4 :skipped {}} (await (child-outcome eng job (assoc box :ignore-zones? true) 1)))))
+          (is (= {:pathed 4 :skipped {}} (dissoc (await (child-outcome eng job (assoc box :ignore-zones? true) 1)) :text))))
         (let [{:keys [eng]} (setup {:inventory shovel :blocks four} (ew/of-data {} {} [(zone [1 60 1] [2 70 2])]))]
-          (is (= {:pathed 4 :skipped {}} (await (child-outcome eng job (assoc box :ignore-zones? true) 1)))))))))
+          (is (= {:pathed 4 :skipped {}} (dissoc (await (child-outcome eng job (assoc box :ignore-zones? true) 1)) :text))))))))
 
 (deftest path-skips-the-refused-cell-and-paths-the-rest
   (async done
@@ -169,7 +168,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory shovel :blocks four} (ew/of-data {} {} [(zone [2 60 2] [2 70 2])]))
               result (await (child-outcome eng job box 8))]
-          (is (= {:pathed 3 :skipped {{:x 2 :y 63 :z 2} :not-permitted}} result))
+          (is (= {:pathed 3 :skipped {{:x 2 :y 63 :z 2} :not-permitted}} (dissoc result :text)))
           (is (= "grass_block" (block-at p {:x 2 :y 63 :z 2}))))))))
 
 (deftest path-with-every-cell-already-a-path-is-done-with-nothing-pathed
@@ -178,7 +177,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory shovel :blocks (zipmap (keys four) (repeat "dirt_path"))})
               result (await (child-outcome eng job box 2))]
-          (is (= {:already? true} result) "already done: ended by done? before any round, no data")
+          (is (= {:pathed 0 :skipped {} :already? true} (dissoc result :text)) "already done: ended by done? before any round")
           (is (empty? (calls p "useOn"))))))))
 
 (deftest path-skips-cells-when-the-shovel-is-lost-mid-run

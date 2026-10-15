@@ -147,11 +147,13 @@
 (def can-start? (checks/refusing :placeable "the cell takes the block" problem))
 
 (defn done?
-  "Done when the cell already holds one of the wanted blocks."
+  "Ok when the cell already holds one of the wanted blocks; else later."
   [c]
   (let [{:keys [pos items error]} (parse c)
-        n (if (and (not error) (some #{(b/target-name (:primitives c) pos "air")} items)) 1 0)]
-    {:done? (= 1 n) :units :blocks :done n :left (- 1 n)}))
+        held (when-not error (some #{(b/target-name (:primitives c) pos "air")} items))]
+    (checks/goal (some? held) [:already "the cell holds the block"] [:empty "the cell is to fill"]
+                 {:units :blocks :done (if held 1 0) :left (if held 0 1)
+                  :result (when held {:placed false :pos pos :item held :reason :already})})))
 
 (defn quote-of [c]
   (let [{:keys [pos items error]} (parse c)

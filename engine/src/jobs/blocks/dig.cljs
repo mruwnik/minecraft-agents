@@ -183,10 +183,16 @@
 
 (def can-start? (checks/all bad-args not-loaded refused no-tool-unfetched))
 
-(defn done? [c]
+(defn done?
+  "Ok when the cell is air and no dug block of this call is still to seal or collect (the round ends with the
+  wrap-up); else later."
+  [c]
   (let [{:keys [pos error]} (b/parse (:args c))
-        air? (boolean (and (not error) (some-> (b/target-name (:primitives c) pos b/hidden-guess) b/air)))]
-    {:done? air? :units :blocks :done (if air? 1 0) :left (if air? 0 1)}))
+        block (when-not error (b/target-name (:primitives c) pos b/hidden-guess))
+        air? (boolean (and block (b/air block) (not (:dug (b/mem-for c pos)))))]
+    (checks/goal air? [:already-clear "the cell is air"] [:solid "the cell is still to dig"]
+                 {:units :blocks :done (if air? 1 0) :left (if air? 0 1)
+                  :result (when air? {:dug false :pos pos :block block :reason :already-clear})})))
 
 (defn quote-of [c]
   (let [{:keys [pos]} (b/parse (:args c))

@@ -1,6 +1,7 @@
 (ns jobs.maintenance.shut-doors
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.pass :as pass]
@@ -26,7 +27,7 @@
   warn. A block that cannot be reached is dropped at once. A block the body stands in the column of, or whose walk was
   interrupted (:walk-interrupted, info only), is left and keeps its entry the same way. A block an animal stands in
   (:animal-in-the-way, info only) keeps its entry untouched and no failure counts, so the trigger tries again at once.
-  Needs nothing. Ends :done with info shut-doors.done {:shut n :left []} when every block was shut (or none stood
+  Needs nothing. Ends :done with {:shut n :left []} when every block was shut (or none stood
   open); with any left, nothing-possible :left with warn shut-doors.stopped, data {:shut n :left [{:cell :reason}]}.
   Spends :time (default ::time-s).")
 
@@ -112,17 +113,19 @@
 (defn finish! [c shut left]
   (let [result {:shut shut :left left}]
     (if (empty? left)
-      (do (ctx/emit! c :shut-doors.done :info (assoc result :text (str "shut " shut " left open by a walk")))
-          (ctx/end c :done nil result))
+      (ctx/end c :done nil (assoc result :text (str "shut " shut " left open by a walk")))
       (let [text (str "shut " shut " left open by a walk, gave up on " (count left))
             level (if (every? #(= :walk-interrupted (:reason %)) left) :info :warn)]
         (ctx/emit! c :shut-doors.stopped level (assoc result :text text))
         (ctx/end c :nothing-possible :left (assoc result :text text))))))
 
 (defn done?
-  "Done when no block seen left open stands within :radius; else the doors shut so far."
+  "Ok when no block seen left open stands within :radius; else later, with the doors shut so far and the blocks left."
   [c]
-  {:done? (empty? (targets c [])) :units :doors :done (:shut (ctx/mem c) 0)})
+  (let [open (targets c [])
+        shut (:shut (ctx/mem c) 0)]
+    (checks/goal (empty? open) [:shut (str "shut " shut " left open by a walk")] [:open (str (count open) " blocks stand open")]
+                 {:units :doors :done shut :left (count open) :result {:shut shut :left []}})))
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-door) (count (targets c [])))]

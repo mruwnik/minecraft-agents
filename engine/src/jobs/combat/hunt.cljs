@@ -209,13 +209,14 @@
 (def can-run? checks/low-health)
 
 (defn done?
-  "The animals killed against the count asked, and the data so far. Never :done? itself: the hunt ends with its event and data."
+  "Later, with the animals killed against the count asked and the data so far: the hunt ends itself with its event and data."
   [c]
   (let [killed (if-let [ks (kinds c)]
                  (reduce + (map #(get-in (ctx/mem c) [:kinds % :killed] 0) ks))
                  (:killed (ctx/mem c) 0))]
-    {:done? false :units :animals :done killed :left (max 0 (- (* (:count (:args c)) (count (or (kinds c) [1]))) killed))
-     :data {:killed killed}}))
+    (checks/goal false nil [:hunting "the hunt is on"]
+                 {:units :animals :done killed :left (max 0 (- (* (:count (:args c)) (count (or (kinds c) [1]))) killed))
+                  :result {:killed killed}})))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 20 (:count (:args c) 1)) ##Inf]}})

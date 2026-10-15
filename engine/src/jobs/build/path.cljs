@@ -163,11 +163,15 @@
 (def can-start? (checks/all bad-args no-zones all-refused shovel-lacking))
 (def can-run? no-zones)
 
+(declare result-of)
+
 (defn done?
-  "Done when every cell is a path; else the cells pathed this call and the cells left to path."
+  "Ok when every cell is a path; else later, with the cells pathed this call, the cells left to path and the result so far."
   [c]
   (let [cs (valid-cells c)]
-    {:done? (boolean (and (seq cs) (every? #(= "dirt_path" (u/seen-name (:primitives c) %)) cs))) :units :cells :done (count (:pathed (ctx/mem c))) :left (if cs (count (pending c)) 0)}))
+    (checks/goal (boolean (and (seq cs) (every? #(= "dirt_path" (u/seen-name (:primitives c) %)) cs)))
+                 [:pathed "every cell is a path"] [:owed "cells are left to path"]
+                 {:units :cells :done (count (:pathed (ctx/mem c))) :left (if cs (count (pending c)) 0) :result (result-of c)})))
 
 (defn quote-of [c]
   (let [cs (try (cells (:args c)) (catch :default _ nil))
@@ -220,10 +224,8 @@
   the skip reason(s)."
   [c]
   (let [{:keys [pathed skipped] :as result} (result-of c)]
-    (ctx/emit! c :path.done :info {:pathed pathed :skipped (count skipped)
-                                   :text (str "pathed " pathed ", skipped " (count skipped))})
     (if (or (empty? skipped) (common/enough? c pathed (+ pathed (count skipped))))
-      (ctx/end c :done nil result)
+      (ctx/end c :done nil (assoc result :text (str "pathed " pathed ", skipped " (count skipped))))
       (let [[reason text] (if (pos? pathed) [:partial (str "pathed " pathed ", skipped " (count skipped))] (nothing-pathed skipped))]
         (ctx/end c (if (condition-skips reason) :condition-failed :nothing-possible) reason (assoc result :text text))))))
 

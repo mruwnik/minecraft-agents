@@ -43,7 +43,7 @@
       (fn ^:async t []
         (let [e (await (ending-of (cbt/setup {:blocks cbt/eight}) cbt/job cbt/box 40))]
           (is (= :done (:kind e)))
-          (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} (:data e))))
+          (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} (dissoc (:data e) :text))))
         (is (= {:kind :done :cause :already} (kc (await (ending-of (cbt/setup {}) cbt/job cbt/one 10)))) "an empty box: nothing to do")
         (let [e (await (ending-of (cbt/setup {:blocks {"1,64,1" "bedrock"}}) cbt/job cbt/one 10))]
           (is (= {:kind :condition-failed :cause :cannot} (kc e)) "nothing dug, the cell can never be dug")
@@ -74,7 +74,7 @@
       (fn ^:async t []
         (let [e (await (ending-of (pt/setup {:inventory pt/shovel :blocks pt/four}) path pt/box 10))]
           (is (= :done (:kind e)))
-          (is (= {:pathed 4 :skipped {}} (:data e))))
+          (is (= {:pathed 4 :skipped {}} (dissoc (:data e) :text))))
         (let [e (await (ending-of (pt/setup {:inventory pt/shovel :blocks (assoc pt/four "1,64,1" "cobblestone")}) path pt/box 10))]
           (is (= {:kind :done :cause nil} (kc e)) "a partial run carries its counts"))
         (let [e (await (ending-of (pt/setup {:inventory pt/shovel :blocks {"1,63,1" "stone"}}) path

@@ -30,7 +30,7 @@
    :body {:inventory [["dirt" 4]]}
    :plans [{:id "mine" :metadata {:by "$body"} :parts [{:id "row" :cells [#at [6 0 15] #at [6 0 16] #at [6 0 17]] :want "dirt"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:mine"})]
-         [:await {:source :job :kind :build.done :data {:missing 0}} 60]
+         [:await {:source :job :kind :completed :data {:missing []}} 60]
          [:until [:cli "plans" ["--world" "$world" "check" "$plan:mine" "--body" "$body"]
                   {:evidence :seen-memory :score {:counts {:match 3} :checked {:seen 3 :unseen 0}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 3}]

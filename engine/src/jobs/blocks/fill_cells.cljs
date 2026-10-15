@@ -103,9 +103,12 @@
 (def can-start? need)
 
 (defn done?
+  "Ok when no cell is owed; else later, with the cells mended and the cells left."
   [c]
-  (let [left (count (owed c))]
-    {:done? (zero? left) :units :cells :done (:mended (ctx/mem c) 0) :left left}))
+  (let [left (owed c)
+        mended (:mended (ctx/mem c) 0)]
+    (checks/goal (empty? left) [:filled "no cell is owed"] [:owed (str (count left) " cells are owed")]
+                 {:units :cells :done mended :left (count left) :result {:mended mended :left left}})))
 
 (defn quote-of
   [c]

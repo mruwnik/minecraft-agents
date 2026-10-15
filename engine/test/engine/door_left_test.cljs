@@ -148,7 +148,7 @@
           (is (not (open? p gate-cell)))
           (is (seq (tu/walked-to eng)) "it walked back")
           (is (= [] (opened eng)))
-          (is (= 1 (:shut (first (filter #(= :shut-doors.done (:kind %)) @seen))))))))))
+          (is (= 1 (:shut (first (filter #(= :completed (:kind %)) @seen))))))))))
 
 (deftest a-gate-shut-out-of-sight-is-walked-to-and-looked-at-not-ended-already
   (async done
@@ -175,7 +175,7 @@
           (core/submit! eng '(jobs.maintenance.shut-doors) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 5))
           (is (open? p gate-cell))
-          (is (nil? (first (filter #(= :shut-doors.done (:kind %)) @seen))) "nothing left open: done before any round"))))))
+          (is (= :already (:cause (first (filter #(= :completed (:kind %)) @seen)))) "nothing left open: done before any round"))))))
 
 (deftest an-unreachable-left-gate-is-given-up-with-one-warn
   (async done
@@ -280,7 +280,7 @@
           (is (empty? (:list (core/state eng))) "one tick: the job ended")
           (is (not (open? p gate-cell)))
           (is (not (open? p gate2-cell)))
-          (is (= 2 (:shut (first (filter #(= :shut-doors.done (:kind %)) @seen))))))))))
+          (is (= 2 (:shut (first (filter #(= :completed (:kind %)) @seen))))))))))
 
 (deftest a-block-given-up-ends-the-run-stopped-with-the-others-shut
   (async done
@@ -294,7 +294,7 @@
           (is (empty? (:list (core/state eng))))
           (is (open? p gate-cell))
           (is (not (open? p gate2-cell)))
-          (is (empty? (filter #(= :shut-doors.done (:kind %)) @seen)) "partial is not done")
+          (is (empty? (filter #(= :completed (:kind %)) @seen)) "partial is not done")
           (let [e (first (filter #(= :shut-doors.stopped (:kind %)) @seen))]
             (is (= 1 (:shut e)))
             (is (= [[5 64 0]] (mapv :cell (:left e)))))
@@ -345,7 +345,7 @@
           (await (tick-until s #(not (open? p gate-cell)) 60))
           (is (not (open? p gate-cell)) "shut by the reflex after the body stepped off"))))))
 
-(defn done-event [seen] (first (filter #(= :shut-doors.done (:kind %)) @seen)))
+(defn done-event [seen] (first (filter #(= :completed (:kind %)) @seen)))
 
 (defn run-shut! [{:keys [eng] :as s} args ticks]
   (core/submit! eng (list 'jobs.maintenance.shut-doors args) {})
@@ -375,7 +375,7 @@
           (is (true? (hs/door-open? p)) "no record, default: untouched")
           (await (run-shut! s {:unrecorded? true} 20))
           (is (true? (hs/door-open? p)) "not near home and no plan of the body's: untouched")
-          (is (nil? (done-event seen)) "nothing of its own left open: done before any round"))))))
+          (is (= :already (:cause (done-event seen))) "nothing of its own left open: done before any round"))))))
 
 (deftest an-unrecorded-own-door-that-stays-open-is-not-reported-done
   (async done

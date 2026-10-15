@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [engine.chat :as chat]
             [engine.ctx :as ctx]
+            [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]))
 
 (def doc
@@ -44,7 +45,7 @@
 (defn done?
   "Never done before it runs: a report has no state that can hold before it."
   [_c]
-  {:done? false :units :reports :done 0 :left 1})
+  (checks/goal false nil [:unsent "the report is not sent"] {:units :reports :done 0 :left 1}))
 
 
 (defn quote-of

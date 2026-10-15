@@ -47,7 +47,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks eight})
               result (await (child-outcome eng job {:from (:to box) :to (:from box)} 40))]
-          (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} result))
+          (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} (dissoc result :text)))
           (is (= [65 65 65 65 64 64 64 64] (dug-ys p)))
           (is (= ["air"] (distinct (map #(block-at p %) [{:x 1 :y 65 :z 1} {:x 2 :y 64 :z 2}])))))))))
 
@@ -58,10 +58,9 @@
         (let [{:keys [eng p seen]} (setup {:blocks {"1,65,1" "chest" "2,65,1" "red_bed" "1,65,2" "water"
                                                     "2,65,2" "glass" "1,64,1" "dirt"}})
               result (await (child-outcome eng job (assoc box :keep ["glass"]) 20))]
-          (is (= {:dug 1 :skipped {} :kept 3 :fluids {"water" 1}} result))
+          (is (= {:dug 1 :skipped {} :kept 3 :fluids {"water" 1}} (dissoc result :text)))
           (is (= ["chest" "red_bed" "water" "glass" "air"]
-                 (mapv #(block-at p %) [{:x 1 :y 65 :z 1} {:x 2 :y 65 :z 1} {:x 1 :y 65 :z 2} {:x 2 :y 65 :z 2} {:x 1 :y 64 :z 1}])))
-          (is (= 1 (count (kinds seen :clear-box.done)))))))))
+                 (mapv #(block-at p %) [{:x 1 :y 65 :z 1} {:x 2 :y 65 :z 1} {:x 1 :y 65 :z 2} {:x 2 :y 65 :z 2} {:x 1 :y 64 :z 1}]))))))))
 
 (deftest clear-box-skips-bedrock-as-cannot
   (async done
@@ -69,7 +68,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:blocks {"1,64,1" "bedrock"}})
               result (await (child-outcome eng job one 8))]
-          (is (= {:dug 0 :skipped {{:x 1 :y 64 :z 1} :cannot} :kept 0 :fluids {}} result))
+          (is (= {:dug 0 :skipped {{:x 1 :y 64 :z 1} :cannot} :kept 0 :fluids {}} (dissoc result :text)))
           (is (= 1 (count (kinds seen :clear-box.skipped)))))))))
 
 (deftest clear-box-skips-a-refused-dig-after-two-tries
@@ -78,7 +77,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"1,64,1" "dirt"}})]
           (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "timeout"}))
-          (is (= {:dug 0 :skipped {{:x 1 :y 64 :z 1} :refused} :kept 0 :fluids {}} (await (child-outcome eng job one 8))))
+          (is (= {:dug 0 :skipped {{:x 1 :y 64 :z 1} :refused} :kept 0 :fluids {}} (dissoc (await (child-outcome eng job one 8)) :text)))
           (is (= 2 (count (calls p "dig")))))))))
 
 (deftest clear-box-skips-an-unreachable-cell
@@ -87,7 +86,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"9,55,1" "dirt"}})
               args {:from {:x 9 :y 55 :z 1} :to {:x 9 :y 55 :z 1}}]
-          (is (= {:dug 0 :skipped {{:x 9 :y 55 :z 1} :unreachable} :kept 0 :fluids {}} (await (child-outcome eng job args 20))))
+          (is (= {:dug 0 :skipped {{:x 9 :y 55 :z 1} :unreachable} :kept 0 :fluids {}} (dissoc (await (child-outcome eng job args 20)) :text)))
           (is (empty? (calls p "dig"))))))))
 
 (deftest clear-box-equips-the-cheapest-matching-tool-once
@@ -141,7 +140,7 @@
             (await running))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (run-until-empty eng 40))
-          (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} @out)))))))
+          (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} (dissoc @out :text))))))))
 
 (deftest clear-box-walks-toward-a-box-in-unloaded-chunks-then-digs
   (async done
@@ -160,7 +159,7 @@
           (is (empty? (calls p "dig")))
           (swap! (fake/state p) assoc :unloaded #{})
           (await (run-until-empty eng 12))
-          (is (= {:dug 2 :skipped {} :kept 0 :fluids {}} @out)))))))
+          (is (= {:dug 2 :skipped {} :kept 0 :fluids {}} (dissoc @out :text))))))))
 
 (defn act-trail
   "[[name x] ...] of the moveTo and dig calls in order."
@@ -177,7 +176,7 @@
               {:keys [eng p]} (setup {:blocks {"1,63,1" "dirt" "2,63,1" "dirt" "1,62,1" "stone" "2,62,1" "stone"}
                                       :self {:pos {:x 1.5 :y 64 :z 1.5}}})
               result (await (child-outcome eng job args 20))]
-          (is (= {:dug 2 :skipped {} :kept 0 :fluids {}} result))
+          (is (= {:dug 2 :skipped {} :kept 0 :fluids {}} (dissoc result :text)))
           (is (= [["dig" 2] ["dig" 1]] (act-trail p))
               "picking up the first cell's drop walked the body off the cell under foot, so no step-off is needed"))))))
 
@@ -189,7 +188,7 @@
               {:keys [eng p]} (setup {:blocks {"1,63,1" "dirt"}
                                       :self {:pos {:x 1.5 :y 64 :z 1.5}}})
               result (await (child-outcome eng job args 20))]
-          (is (= {:dug 1 :skipped {} :kept 0 :fluids {}} result))
+          (is (= {:dug 1 :skipped {} :kept 0 :fluids {}} (dissoc result :text)))
           (is (= ["steer" "dig"] (map first (act-trail p))) "walked off through go-to, then dug"))))))
 
 ;; ------------------------------------------------------------------ zones and footprints
@@ -245,7 +244,7 @@
               args {:from {:x 9 :y 64 :z 1} :to {:x 9 :y 64 :z 1}}]
           (.override (.-world p) "steer"
                      (fn [token a impl] (ew/set-zones! w [(assoc farm-zone :min [9 64 1] :max [9 64 1])]) (impl token a)))
-          (is (= {:dug 0 :skipped {{:x 9 :y 64 :z 1} :zone} :kept 0 :fluids {}} (await (child-outcome eng job args 8))))
+          (is (= {:dug 0 :skipped {{:x 9 :y 64 :z 1} :zone} :kept 0 :fluids {}} (dissoc (await (child-outcome eng job args 8)) :text)))
           (is (empty? (calls p "dig"))))))))
 
 (deftest a-hazard-not-accepted-is-tried-twice-then-skipped
@@ -313,7 +312,7 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
           (await (core/tick! eng))
-          (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} @out) "one tick, one call of the child"))))))
+          (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} (dissoc @out :text)) "one tick, one call of the child"))))))
 
 (deftest a-dig-declined-not-loaded-waits-without-counting-a-try
   (async done
