@@ -73,7 +73,7 @@
         (is (= {:kind :condition-failed :cause :no-item}
                (kc (await (ending-of {:entities [{:id 5 :name "Steve" :kind "player" :pos {:x 3 :y 64 :z 0}}]}
                                      'jobs.items.give {:player "Steve" :item "bread"})))))
-        (is (= {:kind :condition-failed :cause :bad-args}
+        (is (= {:kind :impossible :cause :bad-args}
                (kc (await (ending-of {} 'jobs.items.give {:item "bread"})))))))))
 
 (deftest enchant-ends-with-the-fact-that-stopped-it

@@ -13,20 +13,22 @@
             [engine.memory :as mem]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
-            [jobs.lib.storage :as storage]))
+            [jobs.lib.storage :as storage]
+            [jobs.storage.least :as least]))
 
 (def doc
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
   and armour (saplings included) and the body's 3-day food reserve (jobs.lib.cost/food-reserve) in inventory order.
   :keep leaves at least that many of a name carried. :free ends the call, clean, once that many slots are free. With explicit :items the reserve is ignored.
   Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (condition).
-  Ends done when nothing is left to put away (also at once when nothing is). The data of every other ending is
+  Ends done when nothing is left to put away (also at once when nothing is), or at any other ending when at least the
+  call's :least items are put in (:all wants every one). The data of every other ending is
   {:gave-up true :moved n}, n the items put in; the report counts the items still to put away.
   - condition-failed :refused {:zones [..] :claims [..]}: a chest in another owner's zone or claim that does not allow :put,
     checked before the walk and again before the transfer (one deposit.refused warn, nothing put in). :ignore-zones? skips it.
-  - condition-failed :unreachable (go-to could not arrive), :missing (no container at the chest; a recorded :chest place is
-    retracted, one chest_missing warn) or :no-chest: at once.
-  - nothing-possible, the cause the transfer status (:full, :nothing-moved, ..): after three failed transfers in a row
+  - condition-failed :missing (no container at the chest; a recorded :chest place is retracted, one chest_missing warn)
+    or :no-chest: at once.
+  - nothing-possible, the cause the transfer status (:unreachable, :full, :nothing-moved, ..): after three failed transfers in a row
     (warn chest_unusable).
   Memory: a :chest argument that took at least one item and finished clean, not in another body's zone or claim, is offered to the :chest place. It is
   recorded when none is recorded or the recorded one is gone, never over a different live one (place.kept
@@ -73,7 +75,7 @@
 (defn time-s [] (settings/get settings ::time-s))
 
 (def target [:chest])
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:least :all :spend {:time ::time-s}})
 
 (defn no-chest
   "A chest is known; else the cause {:reason :no-chest}."
@@ -112,15 +114,21 @@
         t (+ walk (* (count spare) (settings/get settings ::take-s)))]
     {:uses {:time [(* (count spare) (settings/get settings ::take-s)) t (max t (time-s))]}}))
 
+(defn end!
+  "ctx/end, but done when the units of done? meet the call's :least."
+  [c kind cause data]
+  (let [{:keys [done left]} (done? c)]
+    (least/end! c kind cause data done (+ done left))))
+
 (defn stop!
   "End with kind and cause: {:gave-up true :moved n}, n the items put in so far."
   [c kind cause]
-  (ctx/end c kind cause {:gave-up true :moved (:moved (ctx/mem c) 0)}))
+  (end! c kind cause {:gave-up true :moved (:moved (ctx/mem c) 0)}))
 
 (defn status-stop!
-  "stop! for a status that is not ok: a chest that is not there or not reachable is a fact, any other status a failure."
+  "stop! for a status that is not ok: a chest that is not there is a fact, any other status (no route included) a failure."
   [c status]
-  (stop! c (if (#{"missing" "unreachable"} status) :condition-failed :nothing-possible) (keyword status)))
+  (stop! c (if (= "missing" status) :condition-failed :nothing-possible) (keyword status)))
 
 (defn give-up!
   "u/fail!: :again until the third failure in a row, then end nothing-possible with the cause (a warn of kind first)."
@@ -141,7 +149,7 @@
   (let [fields (access/refusal-fields [verdict])
         refused (select-keys fields [:zones :claims])]
     (ctx/emit! c :deposit.refused :warn (assoc fields :text (str "deposit refused: " (access/refusal-text fields))))
-    (ctx/end c :condition-failed (assoc refused :reason :refused) (assoc refused :gave-up true))))
+    (end! c :condition-failed (assoc refused :reason :refused) (assoc refused :gave-up true))))
 
 (defn cell-pos [cell] (zipmap [:x :y :z] cell))
 

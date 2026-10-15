@@ -115,13 +115,6 @@
           (is (= {:status :stopped :reason :blocked :cell [0 64 1]} (select-keys r [:status :reason :cell])))
           (is (= "chest" (bd/block-at (:p env) [0 64 1]))))))))
 
-(deftest bad-args-keep-the-call-from-starting
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (world)
-              waits (await (bd/waiting-after env (list job {:axis :x :side :from}) 3))]
-          (is (= :bad-args (:reason waits))))))))
 
 (deftest section-cells-run-lowest-row-first-with-the-centre-bottom-last
   (let [cells (seal/section [0 64 0] :x 3 3)]

@@ -112,7 +112,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:containers {"10,64,0" full-chest} :unreachable ["10,64,0"]})
               result (await (child-outcome eng job kit-args 8))]
-          (is (= {:kind :condition-failed :cause :unreachable :gave-up true :short {"hoe" 2 :food 12}} result))
+          (is (= {:kind :nothing-possible :cause :unreachable :gave-up true :short {"hoe" 2 :food 12}} result))
           (is (some #(= :kit.gave-up (:kind %)) @seen)))))))
 
 (deftest kit-gives-up-when-withdraw-does

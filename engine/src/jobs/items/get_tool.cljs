@@ -17,7 +17,7 @@
   Ways: :chest, :craft (the obtain's craft and smelt ways) and :gather; a fetch for a mine leaves :gather out, so a
   mine never starts another gather.
 
-  Bad args (also an unknown :block) end condition-failed :bad-args {:why} (warn get-tool.declined).
+  Bad args (also an unknown :block) are impossible :bad-args {:why}.
   Conditions (before it starts): the obtain's failed condition (no source:
   {:reason :no-source :any-of [..]}, nothing seen to get one from, with :explore false).
   Ends :done {:tool name} only with the tool carried ({:needed false} for a block the hand harvests); else the
@@ -83,7 +83,7 @@
         (when-not (ctx/check-child (assoc c :wait w) :obtain 'jobs.items.obtain (obtain-args c names))
           (or (:cause @w) (:reason @w) :no-source))))))
 
-(def conditions [[:fn no-source]])
+(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))] [:fn no-source]])
 
 (defn done?
   "Never done before its round: the round's ending names the tool, which a caller's repeat check reads."
@@ -103,8 +103,6 @@
   (let [p (:primitives c)
         names (tools-for p (:args c))]
     (cond
-      (map? names) (do (ctx/emit! c :get-tool.declined :warn {:reason :bad-args :text (str "items.get-tool " (:error names))})
-                       (ctx/end c :condition-failed (bad-args c) {:text (str "items.get-tool " (:error names))}))
       (empty? names) (ctx/end c :done nil {:needed false})
       (carried-tool p names) (ctx/end c :done nil {:tool (carried-tool p names)})
       :else

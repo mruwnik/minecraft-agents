@@ -12,7 +12,7 @@
   the walk waits on the world. Quote: A, a click and the walks.
 
   Ends with info items.interact.done and data {:used true|false :id :item}. The primitive's status :used is done.
-  Condition-failed: :bad-args (no :id), :gone (no such entity in sight), :no-item, :full, :cannot. Nothing-possible:
+  Impossible: :bad-args (no :id). Condition-failed: :gone (no such entity in sight), :no-item, :full, :cannot. Nothing-possible:
   :unreachable (the walk failed twice, data :why), :no-effect, :out-of-reach, :failed.")
 
 (a/defargs args
@@ -35,7 +35,7 @@
   (when-not (pos-int? (:id (:args c)))
     {:reason :bad-args :why "items.interact needs a positive entity :id"}))
 
-(def conditions [[:fn problem]])
+(def conditions [[:fn (fn [c] (some-> (problem c) contract/impossible))]])
 
 (defn done?
   "Counts only (the round ends the call with its data): whether the click was made."

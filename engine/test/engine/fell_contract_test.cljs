@@ -116,7 +116,7 @@
               {:keys [end]} (await (fm/with-zones zones #(fell-ending ft/tall 'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10} 120)))]
           (is (= {:kind :condition-failed :cause :refused} (kc end))))
         (let [{:keys [end]} (await (fell-ending ft/tall 'jobs.forestry.fell-from-pillar {} 20))]
-          (is (= {:kind :condition-failed :cause :bad-args} (kc end))))))))
+          (is (= {:kind :impossible :cause :bad-args} (kc end))))))))
 
 (deftest a-pillar-with-no-log-in-reach-is-taken-back-and-the-tree-left
   (async done

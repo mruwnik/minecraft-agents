@@ -132,15 +132,11 @@
       (stop! c :torch-failed {:child o :cell spot}))))
 
 (defn ^:async loot! [c id]
-  (let [args {:id id}
-        r (await (ctx/call-child c :cart 'jobs.strip.loot-cart args))]
-    (case r
-      :continue :continue
-      :declined (stop! c :cart-failed {:child (:reason (b/child-wait c :cart 'jobs.strip.loot-cart args)) :id id})
-      (let [res (ctx/child-result c :cart)]
-        (if (= :stopped (:status res))
-          (stop! c :cart-failed {:child (:reason res) :id id})
-          :again)))))
+  (let [e (await (ctx/call c :cart 'jobs.strip.loot-cart {:id id}))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) :again
+      :else (stop! c :cart-failed {:child (contract/cause-key e) :id id}))))
 
 (defn carts
   "The ids of chest minecarts in sight within 2 cells of the segment."

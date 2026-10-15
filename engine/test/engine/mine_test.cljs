@@ -185,11 +185,15 @@
             (is (finished? again))
             (is (every? #(= "dirt" %) (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))))))))))
 
-(deftest the-check-declines-with-no-block-named
-  (let [{:keys [eng p]} (start {:world {:blocks sand-patch}})]
-    (core/submit! eng (spec {}) {})
-    (is (nil? (core/tick! eng)))
-    (is (zero? (count (.-calls (.-world p)))))))
+(deftest a-call-with-no-block-named-is-impossible-and-touches-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:world {:blocks sand-patch}})]
+          (core/submit! eng (spec {}) {})
+          (await (core/tick! eng))
+          (is (empty? (:list (core/state eng))))
+          (is (zero? (count (.-calls (.-world p))))))))))
 
 (deftest with-no-tunnel-and-nothing-seen-it-looks-around-and-ends-none
   (async done

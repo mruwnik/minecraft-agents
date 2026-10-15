@@ -336,11 +336,11 @@
 (defn ^:async walk-away!
   "Walk up to :away blocks back from spot, where the items were thrown (a go-to child), so they are not picked up
   again; no walk when no cell behind it can be stood on. Best effort: a walk that does not arrive is not retried. The
-  walk is run to its end (child/run!); the spot is forgotten whatever the result."
+  walk is run to its end (child/run!*); the spot is forgotten whatever the result."
   [c {:keys [at dir]}]
   (let [goal (away-goal (:primitives c) at (:away (:args c)) dir)
         r (when goal
-            (await (child/run! c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+            (await (child/run!* c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (ctx/forget-where! c :make-room-tossed (constantly true))
     r))
 

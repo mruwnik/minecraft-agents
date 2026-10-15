@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.pace :as pace]
             [jobs.lib.storage :as storage]
+            [jobs.storage.least :as least]
             [jobs.lib.util :as u]
             [jobs.storage.deposit :as deposit]
             [jobs.storage.withdraw]))
@@ -18,11 +19,12 @@
   restart takes the same load again without doubling it; the chests and the bag are the rest of the state.
   Needs (conditions): a main chest (:to, else the storage group, so a known :chest place), else :no-chest; some :from, else :no-source.
   Sources that are in the storage group are not meant: withdraw may then take from the group's other chests.
-  Ends done {:trips n :moved {name n}} once every source is empty (or holds only :keep); n counts the deposits. The data of
+  Ends done {:trips n :moved {name n}} once every source is empty (or holds only :keep), or at any other ending when at
+  least the call's :least items are moved (default :all: only a clean finish); n counts the deposits. The data of
   every other ending has :trips and :moved so far (and :gave-up true):
-  - condition-failed :refused {:zones :claims} (a source in another's zone), :unreachable, :bag-full (nothing to deposit yet
+  - condition-failed :refused {:zones :claims} (a source in another's zone), :bag-full (nothing to deposit yet
     no room to take), or the child's cause (:missing, ..);
-  - nothing-possible :to-full (deposit found no room and could not place a chest), else the child's cause.")
+  - nothing-possible :unreachable (no route to a source), :to-full (deposit found no room and could not place a chest), else the child's cause.")
 
 (a/defargs args
   {:from {:doc "[x y z] or {:x :y :z} of each chest to empty" :spec (a/coll-of ::a/pos) :default []}
@@ -37,7 +39,7 @@
 (defn time-s [] (settings/get settings ::time-s))
 
 (def target [:from])
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:least :all :spend {:time ::time-s}})
 
 (defn no-source [c]
   (when (empty? (:from (:args c))) {:reason :no-source}))
@@ -79,11 +81,16 @@
 
 (defn progress-data [c] (select-keys (ctx/mem c) [:trips :moved]))
 
+(defn end!
+  "ctx/end, but done when the items moved to the main storage meet the call's :least (:all never: the total is unknown)."
+  [c kind cause data]
+  (least/end! c kind cause data (reduce + 0 (vals (:moved (ctx/mem c)))) nil))
+
 (defn stop!
   "End with kind and cause, the trips and what moved so far as the data (and the extra fields)."
   ([c kind cause] (stop! c kind cause {}))
   ([c kind cause more]
-   (ctx/end c kind cause (merge {:gave-up true} (progress-data c) more))))
+   (end! c kind cause (merge {:gave-up true} (progress-data c) more))))
 
 (defn finish!
   [c]
@@ -124,7 +131,7 @@
     (cond
       refusal (let [fields (select-keys (access/refusal-fields [refusal]) [:zones :claims])]
                 (stop! c :condition-failed (assoc fields :reason :refused) fields))
-      (= :unreachable w) (stop! c :condition-failed :unreachable)
+      (= :unreachable w) (stop! c :nothing-possible :unreachable)
       w w
       :else
       (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))

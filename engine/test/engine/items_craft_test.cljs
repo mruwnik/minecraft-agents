@@ -129,7 +129,19 @@
                              (await (impl token args))
                              #js {:status "cannot" :reason "boom"}))
               result (await (child-outcome eng job {:item "oak_planks" :count 4} 8))]
-          (is (= {:made 4 :status :stopped :reason :cannot :detail "boom"} result)))))))
+          (is (= {:made 4 :status :done :detail "boom"} result) "all the :count made: the later stop does not matter"))))))
+
+(deftest craft-a-cannot-after-enough-made-for-the-least-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 1}]})
+              _ (.override (.-world p) "craft"
+                           (fn ^:async f [token args impl]
+                             (await (impl token args))
+                             #js {:status "cannot" :reason "boom"}))
+              result (await (child-outcome eng job {:item "oak_planks" :count 8 :least 4} 8))]
+          (is (= {:made 4 :status :done} (select-keys result [:made :status]))))))))
 
 (deftest craft-an-unknown-item-cannot
   (async done
@@ -146,7 +158,7 @@
         (let [[result p _ eng] (await (craft {:inventory [{:name "oak_planks" :count 4} {:name "oak_log" :count 1}]}
                                        {:item "oak_planks" :count 4}))]
           (is (= {"oak_planks" 8} (inv p)))
-          (is (= {:made 4 :status :done} result)))))))
+          (is (= {:made 4 :status :done} (select-keys result [:made :status]))))))))
 
 (deftest craft-gives-up-on-an-unreachable-table
   (async done

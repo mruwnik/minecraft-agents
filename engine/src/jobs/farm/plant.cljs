@@ -1,5 +1,6 @@
 (ns jobs.farm.plant
-  (:require [engine.settings :as settings]
+  (:require [engine.contract :as contract]
+            [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
             [jobs.farm.common :as common]
@@ -31,7 +32,7 @@
   cell standing bare is sown with the seed of the crop the plan wants there, when it is carried. Zones and the footprints
   of other active plans are asked before choosing a cell and again before the place; a cell another owner's zone or a
   plan refuses is left bare (one plant.declined warn, :reason :refused, names it), :ignore-zones? true skips the check.
-  Refused before it starts, as failed conditions: {:reason :bad-args :why}, {:reason :no-zones} (no zone list read, unless
+  Refused before it starts: impossible {:reason :bad-args :why}; failed conditions {:reason :no-zones} (no zone list read, unless
   :ignore-zones?), {:reason :plan-trouble :why} (the plan is missing, unreadable or has no crop cells), :refused
   (every bare cell is refused), :food-reserve (a food-crop seed is carried but the reserve keeps it, with :seed :held :kept
   :reserve-points; nothing is fetched), {:reason :need ..} (no seed, :fetch false) and :nothing-to-do (no bare cell; a
@@ -204,7 +205,7 @@
   (let [{:keys [box plan]} (:args c)]
     (cond
       (:started (ctx/mem c)) nil
-      (and (nil? box) (nil? plan)) {:reason :bad-args :why "plant needs :box or :plan"}
+      (and (nil? box) (nil? plan)) (contract/impossible {:reason :bad-args :why "plant needs :box or :plan"})
       :else (or (common/no-zones c :plant.declined "plant")
                 (if plan (plan-problem c) (box-problem c))))))
 

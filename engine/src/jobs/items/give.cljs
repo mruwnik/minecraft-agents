@@ -1,5 +1,6 @@
 (ns jobs.items.give
-  (:require [engine.settings :as settings]
+  (:require [engine.contract :as contract]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -11,7 +12,7 @@
 (def doc
   "Walk to the player :player, toss them :count of :item (everything carried when nil) and confirm the drop was
   taken. Needs the item carried and the player in sight. Quote: A, walks, the toss and the wait.
-  Conditions (a listed root job waits): :bad-args (a player and an item name are needed) and :no-item (nothing is
+  Impossible: :bad-args (a player and an item name are needed). Conditions (a listed root job waits): :no-item (nothing is
   carried before the toss; warn give.no-item when it turns up in the round). Ends before the toss as a failed
   condition with data {:given 0}:
   - :gone, the player is not seen within :radius for 2 s (info give.gone).
@@ -73,7 +74,7 @@
     (when (and (string? item) (nil? (:tossed (ctx/mem c))) (zero? (storage/carried (u/inventory (:primitives c)) item)))
       {:reason :no-item :item item})))
 
-(def conditions [[:fn problem] [:fn lacking]])
+(def conditions [[:fn (fn [c] (some-> (problem c) contract/impossible))] [:fn lacking]])
 
 (defn given-so-far
   "Items given and not taken back so far."

@@ -1,6 +1,7 @@
 (ns engine.till-test
   "jobs.farm.till against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.contract :as contract]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -405,8 +406,8 @@
           (is (= 1 (count (:list (core/state eng)))) "still waiting")
           (is (= "chest" (block-at p {:x -2 :y 64 :z 3}))))))))
 
-(deftest problem-refuses-bad-args-with-bad-args-and-a-why
-  (are [args] (let [w (till/problem (counting-ctx {:inventory hoe} args (atom {})))]
+(deftest problem-refuses-bad-args-as-impossible-with-bad-args-and-a-why
+  (are [args] (let [w (contract/impossible-cause (till/problem (counting-ctx {:inventory hoe} args (atom {}))))]
                 (and (= :bad-args (:reason w)) (string? (:why w))))
     {}
     {:from {:x 0 :y 63 :z 0}}

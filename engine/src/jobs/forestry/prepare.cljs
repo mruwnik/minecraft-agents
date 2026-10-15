@@ -59,7 +59,7 @@
   body looks around once from where it stands (again after moving over 3 blocks) before the check decides.
   Ends :done with data {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped
   :wet :refused} (info prepare.done) when it cleared, soiled, planted or dammed a cell. With none of those, it ends
-  nothing-possible :refused when cells were skipped, else condition-failed with the worst blocked state.
+  condition-failed :refused when cells were skipped, else with the worst blocked state.
   Quote: time only.")
 
 (a/defargs settings
@@ -343,7 +343,7 @@
                                                     (count (:wet result)) (count (:refused result))))))
     (cond
       (pos? (+ (:cleared result) (:soiled result) (:planted result) (:dammed result))) (ctx/end c :done nil result)
-      (seq (:refused result)) (ctx/end c :nothing-possible :refused result)
+      (seq (:refused result)) (ctx/end c :condition-failed :refused result)
       :else (ctx/end c :condition-failed (or (blocked-reason states) {:reason :nothing-to-do}) result))))
 
 (defn ^:async step [c]

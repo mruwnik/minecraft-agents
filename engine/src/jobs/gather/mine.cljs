@@ -45,7 +45,7 @@
   skipped when a seen neighbour is lava, or water unless :wet; lava on top counts as seen (it drips); a face never seen is no hazard. Without perception the body sees nothing and only
   tunnels.
 
-  Conditions: :moved-since-submit, :no-block, :no-zones (no zone list and not :ignore-zones?: one warn mine.declined; also
+  Impossible: :no-block. Conditions: :moved-since-submit, :no-zones (no zone list and not :ignore-zones?: one warn mine.declined; also
   mid-run, which ends the run), :low-health (jobs.lib.body/too-hurt; a started run holds still :low-health until it heals)
   and :refused (every seen target refused by zones, claims or plans: one warn mine.declined {:reason :refused :zones :plans}).
 
@@ -244,7 +244,7 @@
 
 (def conditions
   [[:fn (at-start away)]
-   [:fn (fn [c] (when-not (:block (:args c)) {:reason :no-block}))]
+   [:fn (fn [c] (when-not (:block (:args c)) (contract/impossible {:reason :no-block})))]
    [:fn no-zones]
    [:fn (at-start (fn [c] (body/too-hurt (:primitives c))))]
    [:fn (at-start all-refused)]])

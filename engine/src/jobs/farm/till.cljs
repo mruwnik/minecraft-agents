@@ -1,5 +1,6 @@
 (ns jobs.farm.till
-  (:require [engine.settings :as settings]
+  (:require [engine.contract :as contract]
+            [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
@@ -27,7 +28,7 @@
   digs).
   With :for-plan (the id of the plan the cells belong to) that plan's own footprint does not refuse a cell. Zones
   and the footprints of other plans are checked when a cell is chosen and again before the hoe or cover dig.
-  Refused before it starts, as failed conditions (with a till.declined warn for the zone ones): {:reason :bad-args :why},
+  Refused before it starts: impossible {:reason :bad-args :why}; failed conditions (with a till.declined warn for the zone ones)
   {:reason :no-zones} (no zone list read, unless :ignore-zones?), {:reason :refused :zones ..} (every tillable cell is
   refused) and the hoe above.
   Ends with data {:tilled n :skipped {pos reason}}: done when it tilled some (the least accepted is :least, cells) or had
@@ -163,7 +164,7 @@
   (let [cs (try (cells (:args c))
                 (catch :default e (ex-message e)))]
     (if (string? cs)
-      {:reason :bad-args :why cs}
+      (contract/impossible {:reason :bad-args :why cs})
       (let [in (access/zone-input c {:except (:for-plan (:args c))})
             refuse (when-not (or (started? c) (:ignore-zones? in))
                      (fn [pos] (let [v (rules/social-verdict :dig (assoc in :cell (access/cell pos)))]

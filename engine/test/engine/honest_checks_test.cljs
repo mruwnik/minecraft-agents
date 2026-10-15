@@ -59,10 +59,7 @@
 
 (deftest bad-argument-checks-say-why-they-decline
   (are [job reason] (= reason (waiting-reason job {}))
-    'jobs.items.bake :no-chest
-    'jobs.items.craft :bad-args
-    'jobs.items.enchant :bad-args
-    'jobs.items.give :bad-args))
+    'jobs.items.bake :no-chest))
 
 (deftest log-out-says-why-it-declines
   (are [args reason] (= reason (waiting-reason 'jobs.survival.log-out args))
@@ -86,7 +83,6 @@
 
 (deftest survival-and-maintenance-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
-    'jobs.gather.mine {} :no-block
     'jobs.survival.get-food {} :not-hungry
     'jobs.survival.night {} :not-night
     'jobs.survival.recover-drops {} :no-drops

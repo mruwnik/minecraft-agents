@@ -10,7 +10,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
-            [jobs.lib.storage :as storage]))
+            [jobs.lib.storage :as storage]
+            [jobs.storage.least :as least]))
 
 (def doc
   "Turn the store chest's wheat into bread. Walks to the chest, finds a crafting table within :table-radius of it,
@@ -19,7 +20,7 @@
   Only whole loaves are made. At most three stacks of wheat are taken per trip, and empty slots are left for the
   bread. Bread is never tossed: what cannot be put away stays carried.
   One call is the whole bake (it yields :continue only while a child waits on the world); every step starts from the inventory and the chest, so a cut loses nothing.
-  Needs (condition, at the start only): a known chest, else :no-chest. Ends done with data {:baked n :deposited n}; with
+  Needs (condition, at the start only): a known chest, else :no-chest. Ends done with data {:baked n :deposited n} (also at any other ending when at least the call's :least loaves were baked); with
   nothing baked it is done only when :keep loaves are carried or were taken from the chest, else nothing-possible
   {:reason :no-wheat} (info bake.nothing). A crafting table not near the chest is fetched (jobs.lib.need) when :fetch is
   on. Every other ending has the same data, after a warn (bake.no-table, bake.gave-up,
@@ -45,7 +46,7 @@
 
 (def target [:chest])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:least :all :spend {:time ::time-s}})
 
 (defn no-chest
   "A chest is known."
@@ -95,7 +96,8 @@
 (defn end!
   "End with kind and cause; the data is the counts (and the extra fields)."
   ([c kind cause] (end! c kind cause nil))
-  ([c kind cause more] (ctx/end c kind cause (merge (counts c) more))))
+  ([c kind cause more] (let [data (merge (counts c) more)]
+                         (least/end! c kind cause data (:baked data) nil))))
 
 (defn stop!
   "Warn of event and end condition-failed with cause."

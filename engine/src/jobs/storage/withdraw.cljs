@@ -8,6 +8,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.storage.deposit :as deposit]
+            [jobs.storage.least :as least]
             [jobs.lib.storage :as storage]))
 
 (def doc
@@ -15,16 +16,16 @@
   each name in :items is carried. What is short is re-derived from the inventory before each take, so a cut or
   restart loses nothing.
   Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (condition).
-  Ends done when everything is carried (also at once when it already is). The data of every other ending has :gave-up and
+  Ends done when everything is carried (also at once when it already is), or when at least the call's :least items
+  toward the wanted ones are carried at any other ending (:all wants every one). The data of every other ending has :gave-up and
   :short {name n}, what is still missing; the report counts the items carried toward the wanted ones.
   - condition-failed :chest-lacks {:gave-up false :held {name n} :short}: the chest, and the next ones of the group, hold
     none of what is short (info withdraw.short says so in words); some of the names may have been taken.
   - condition-failed :refused {:zones [..] :claims [..]}: a chest in another owner's zone or claim that does not allow
     :take, checked before the walk and again before the transfer (one withdraw.refused warn, nothing taken).
     :ignore-zones? true skips the check.
-  - condition-failed :unreachable (go-to could not arrive) or :missing (no container at the chest; a recorded :chest
-    place is retracted, one chest_missing warn): at once.
-  - nothing-possible, the cause the inspect or transfer status (:full, :nothing-moved, ..): after three failed attempts
+  - condition-failed :missing (no container at the chest; a recorded :chest place is retracted, one chest_missing warn): at once.
+  - nothing-possible, the cause the inspect or transfer status (:unreachable, :full, :nothing-moved, ..): after three failed attempts
     in a row (warn withdraw.gave-up).
   Storage group: with no :chest, or a :chest of the group (jobs.lib.storage/group), a chest that lacks what is short
   is followed by the next one; :chest-lacks is reported only once the last has been looked into.
@@ -52,7 +53,7 @@
 (defn time-s [] (settings/get settings ::time-s))
 
 (def target [:chest])
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:least :all :spend {:time ::time-s}})
 
 (defn no-chest
   "A chest is known; else the cause {:reason :no-chest}."
@@ -81,16 +82,22 @@
     {:uses {:time [(* (count short) (settings/get settings ::take-s)) t (max t (time-s))]}
      :yields {:items (into {} (map (fn [[name n]] [name [0 n n]])) short)}}))
 
+(defn end!
+  "ctx/end, but done when the items carried toward the wanted meet the call's :least."
+  [c kind cause data]
+  (let [{:keys [done left]} (done? c)]
+    (least/end! c kind cause data done (+ done left))))
+
 (defn stop!
   "End with kind and cause: the data says :gave-up (else the job could go on) and the shortfall."
   ([c kind cause short] (stop! c kind cause short {}))
   ([c kind cause short more]
-   (ctx/end c kind cause (merge {:gave-up true :short (into {} short)} more))))
+   (end! c kind cause (merge {:gave-up true :short (into {} short)} more))))
 
 (defn status-stop!
-  "stop! for a status that is not ok: a chest that is not there or not reachable is a fact, any other status a failure."
+  "stop! for a status that is not ok: a chest that is not there is a fact, any other status (no route included) a failure."
   [c status short]
-  (stop! c (if (#{"missing" "unreachable"} status) :condition-failed :nothing-possible) (keyword status) short))
+  (stop! c (if (= "missing" status) :condition-failed :nothing-possible) (keyword status) short))
 
 (defn give-up!
   "u/fail!: :again until the third failure in a row, then end nothing-possible with the status as the cause."
@@ -125,7 +132,7 @@
   (let [fields (access/refusal-fields [verdict])
         refused (select-keys fields [:zones :claims])]
     (ctx/emit! c :withdraw.refused :warn (assoc fields :text (str "withdraw refused: " (access/refusal-text fields))))
-    (ctx/end c :condition-failed (assoc refused :reason :refused) (assoc refused :gave-up true))))
+    (end! c :condition-failed (assoc refused :reason :refused) (assoc refused :gave-up true))))
 
 (defn ^:async take!
   "Inspect the chest in reach and take the first short name the chest holds: :again, or :done."
@@ -147,7 +154,7 @@
                         (if (seq others)
                           :again
                           (do (ctx/emit! c :withdraw.short :info {:short lacking :held held :text (lacks-text (map first short) held (:taken (ctx/mem c)))})
-                              (ctx/end c :condition-failed :chest-lacks {:gave-up false :held held :short lacking}))))
+                              (end! c :condition-failed :chest-lacks {:gave-up false :held held :short lacking}))))
           (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
           :else
           (let [[name n] pick

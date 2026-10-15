@@ -12,7 +12,7 @@
 (def doc
   "Hold a carried item in the main hand (:hand \"main\", default) or the off-hand (:hand \"off\"). Needs the item
   carried; a missing one is fetched (jobs.lib.need) unless :fetch is false. done? holds when it is held there.
-  Ends :done {:item :hand}. Impossible: :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :bad-args (no :item), :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
+  Ends :done {:item :hand}. Impossible: :bad-args (no :item), :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
   the :because. Nothing-possible :failed (the server did not take it, data :equip the primitive's status; warn
   equip.refused). Quote: A, a fixed time.")
 
@@ -58,7 +58,7 @@
     (when (and item (not (carried? p item)) (not= item (held-in p hand)) (not (fetch/parse-arg fetch)))
       {:reason :no-item :item item})))
 
-(def conditions [[:fn problem] [:fn unknown] [:fn lacking]])
+(def conditions [[:fn (fn [c] (some-> (problem c) contract/impossible))] [:fn unknown] [:fn lacking]])
 
 (defn done?
   "The item is in the hand asked for."

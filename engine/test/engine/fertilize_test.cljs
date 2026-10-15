@@ -88,7 +88,8 @@
         (let [{:keys [eng p]} (setup {:inventory meal :blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}})]
           (.override (.-world p) "useOn"
                      (fn ^:async f [_ _ _] #js {:status "unchanged" :consumed 0}))
-          (is (= {:used 0 :status :stopped :reason :refused} (await (child-outcome eng job {} 10))))
+          (is (= {:used 0 :status :stopped :reason :refused :kind :condition-failed}
+                 (let [r (await (tu/child-outcome eng job {} 10))] (assoc (dissoc r :ending) :kind (get-in r [:ending :kind])))))
           (is (= 1 (count (calls p "useOn")))))))))
 
 (deftest fertilize-at-touches-only-that-crop

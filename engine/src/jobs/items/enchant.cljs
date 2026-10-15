@@ -1,5 +1,6 @@
 (ns jobs.items.enchant
-  (:require [engine.settings :as settings]
+  (:require [engine.contract :as contract]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -23,7 +24,7 @@
   :level}] :xp-level :hint {:enchant :level}|nil}, measured from what is carried and the body's level after the
   window closed. Info enchant.done.
   A give-up warns enchant.gave-up and ends with {:enchanted false :item :levels-spent n :lapis-spent n}.
-  Conditions (a listed root job waits): :bad-args, :no-item and :no-lapis (not carried, :fetch false), :too-few-levels
+  Impossible: :bad-args (no item name). Conditions (a listed root job waits): :no-item and :no-lapis (not carried, :fetch false), :too-few-levels
   (no level at all). A failed fetch ends as {:reason :need} with its ending as the :because. Condition-failed in the
   round: :no-table, :not-a-table, :no-item, :already-enchanted (every copy carried is enchanted), :not-enchantable,
   :no-lapis, :too-few-levels (the offers cost more), :no-offer (the :slot has none), :no-offer-within-cost,
@@ -89,7 +90,7 @@
     (when (zero? (or (some-> (.self (:primitives c)) .-experience .-level) 0))
       {:reason :too-few-levels :need 1})))
 
-(def conditions [[:fn problem] [:fn lacking] [:fn unaffordable]])
+(def conditions [[:fn (fn [c] (some-> (problem c) contract/impossible))] [:fn lacking] [:fn unaffordable]])
 
 (defn done?
   "Counts only (the round ends the call with its data)."

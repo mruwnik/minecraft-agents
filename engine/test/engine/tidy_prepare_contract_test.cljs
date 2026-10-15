@@ -72,13 +72,13 @@
               e (await (ending-of eng tidy {:plan "nope"} 20 ft/run-until-empty))]
           (is (= {:kind :condition-failed :cause {:reason :plan-trouble :why "no such plan"}} (kc e))))))))
 
-(deftest tidy-that-refuses-every-stray-is-nothing-possible-not-done
+(deftest tidy-that-refuses-every-stray-is-condition-failed-not-done
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (ft/start (ft/hazard-world [3 64 2 "water"]) {"h" ft/hazard-plan})
               e (await (ending-of eng tidy {:plan "h" :accept #{}} 200 ft/run-until-empty))]
-          (is (= {:kind :nothing-possible :cause :refused} (kc e)))
+          (is (= {:kind :condition-failed :cause :refused} (kc e)))
           (is (= 0 (get-in e [:data :dug])))
           (is (= 1 (count (get-in e [:data :refused])))))))))
 

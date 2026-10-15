@@ -1,5 +1,6 @@
 (ns jobs.forestry.fell-from-pillar
-  (:require [engine.args :as a]
+  (:require [engine.contract :as contract]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.forestry.fell-tree.log :as log]
@@ -71,7 +72,7 @@
 (defn bad-args [c]
   (when-not (base c) {:reason :bad-args :why "no :base: the tree's lowest log"}))
 
-(def conditions [[:fn bad-args]])
+(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))]])
 
 (defn done? [_c] {:done? false :units :trees :done 0 :left 1})
 

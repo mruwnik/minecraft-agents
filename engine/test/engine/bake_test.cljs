@@ -102,7 +102,7 @@
       (fn ^:async t []
         (let [[result _ seen] (await (bake {:inventory [{:name "wheat" :count 3}] :containers {"10,64,0" [{:name "bread" :count 8}]} :blocks beside} {}
                                            (fn [p] (.override (.-world p) "transfer" (fn [_ _ _] (js/Promise.resolve #js {:status "unreachable"}))))))]
-          (is (= :condition-failed (:kind result)))
+          (is (= :nothing-possible (:kind result)))
           (is (= :unreachable (:reason result)))
           (is (contains? (kinds seen) :bake.withdraw-failed))
           (is (not (contains? (kinds seen) :bake.done))))))))

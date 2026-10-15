@@ -15,6 +15,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.storage :as storage]
+            [jobs.storage.least :as least]
             [jobs.storage.withdraw]
             [jobs.lib.foods :as foods]))
 
@@ -27,10 +28,10 @@
   One call is the whole kit: it yields :continue only while a child waits on the world. Each step works out the needs from the inventory and the plan from the inspected chest, and hands the plan to
   jobs.storage.withdraw as carry-at-least targets.
   Needs (condition, at the start only): a known chest unless the kit is complete, else :no-chest. Ends done with data {:gave-up false :short {}} when the kit is
-  complete. Every other ending has :short, what is still lacking keyed by the kind string or :food, and :gave-up:
+  complete, or at any other ending when at least the call's :least kinds are complete (:all wants every one). Every other ending has :short, what is still lacking keyed by the kind string or :food, and :gave-up:
   - condition-failed :chest-lacks {:gave-up false}: the chest could not supply it (and :missing {kind text} when the craft
     phase found no way);
-  - after failed attempts {:gave-up true}: condition-failed :unreachable or :missing, or nothing-possible with the
+  - after failed attempts {:gave-up true}: condition-failed :missing, or nothing-possible with the
     inspect status or the withdraw's cause; a withdraw or craft child that stopped passes its kind and cause up;
     a chest that refuses (zone or claim) ends at once condition-failed :refused {:zones :claims}.
   Quote: a walk and a visit per kind; done? counts the kinds complete.
@@ -67,7 +68,7 @@
 
 (def target [:chest])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:least :all :spend {:time ::time-s}})
 
 (defn kind-of?
   "Does item name belong to tool kind: equal to it or ending in _kind."
@@ -176,27 +177,33 @@
         t (* kinds (settings/get settings ::kind-s))]
     {:uses {:time [0 t (max t (settings/get settings ::time-s))]}}))
 
+(defn end!
+  "ctx/end, but done when the units of done? meet the call's :least."
+  [c kind cause data]
+  (let [{:keys [done left]} (done? c)]
+    (least/end! c kind cause data done (+ done left))))
+
 (defn give-up!
-  "u/fail!, and when it gives up end with the reason (a chest that is not there or not reachable is a failed condition)
+  "u/fail!, and when it gives up end with the reason (a chest that is not there is a failed condition, no route is nothing-possible)
   and what is short."
   [c reason short]
   (let [r (u/fail! c :kit.gave-up (str "kit gave up: " reason))]
     (if (= :done r)
-      (ctx/end c (if (#{"unreachable" "missing"} reason) :condition-failed :nothing-possible) (keyword reason)
+      (end! c (if (= "missing" reason) :condition-failed :nothing-possible) (keyword reason)
                {:gave-up true :short short})
       :again)))
 
 (defn refused!
   "End at once with the withdraw child's refusal e and what is short: another's chest does not get asked three times."
   [c e short]
-  (ctx/end c :condition-failed {:reason :refused} (merge {:gave-up true :short short} (select-keys (:data e) [:zones :claims]))))
+  (end! c :condition-failed {:reason :refused} (merge {:gave-up true :short short} (select-keys (:data e) [:zones :claims]))))
 
 (defn child-stop!
   "End like the child that stopped, with what is short."
   [c e short]
   (if (= :refused (contract/cause-key e))
     (refused! c e short)
-    (ctx/end c (:kind e) (:cause e) {:gave-up true :short short})))
+    (end! c (:kind e) (:cause e) {:gave-up true :short short})))
 
 (defn finish!
   "Done when nothing is short, else condition-failed :chest-lacks; more is data."
@@ -205,7 +212,7 @@
    (let [data (merge {:gave-up false :short short} more)]
      (if (empty? short)
        (ctx/end c :done nil data)
-       (ctx/end c :condition-failed :chest-lacks data)))))
+       (end! c :condition-failed :chest-lacks data)))))
 
 (defn result-of
   "A child's ending e as the result absorb reads: its data, with :reason the cause when it did not end done."

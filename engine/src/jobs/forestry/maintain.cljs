@@ -279,11 +279,11 @@
   "Step 1: one collect-drops call while a sweep is owed. :again, :continue while it waits."
   [c]
   (when-let [species (:collect (ctx/mem c))]
-    (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
+    (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops
                                    {:radius (:collect-radius (:args c))
                                     :filter (vec (distinct (mapcat forestry/drop-filter species)))
                                     :holes (:holes (ctx/mem c))}))]
-      (when (= :done r) (ctx/update-mem! c dissoc :collect))
+      (when (not= :continue r) (ctx/update-mem! c dissoc :collect))
       (if (= :continue r) :continue :again))))
 
 (defn fell-slot [pos] (keyword (str "fell-" (:x pos) "-" (:y pos) "-" (:z pos))))
@@ -333,7 +333,7 @@
                   (leave! c pos :refused :why (second bad) :log (first bad))
                   :again)
           :else
-          (let [r (await (ctx/call-child c (fell-slot pos) 'jobs.forestry.fell-tree (fell-args c pos species)))]
+          (let [r (await (ctx/call c (fell-slot pos) 'jobs.forestry.fell-tree (fell-args c pos species)))]
             (when (not= :continue r) (finished-felling! c pos species))
             (if (= :continue r) :continue :again))))
 

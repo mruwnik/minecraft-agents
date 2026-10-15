@@ -908,7 +908,7 @@
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])]
           (await (get-tool! s {:block "not_a_block"} 5))
-          (is (= 1 (count (events-of s :get-tool.declined))))
+          (is (= [:bad-args] (stopped-reasons s)))
           (is (empty? (inspects s))))))))
 
 ;; ------------------------------------------------------------------ the gather source

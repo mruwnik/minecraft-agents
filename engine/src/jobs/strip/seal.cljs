@@ -1,5 +1,6 @@
 (ns jobs.strip.seal
-  (:require [engine.args :as a]
+  (:require [engine.contract :as contract]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as b]
@@ -26,7 +27,7 @@
   keeps its view. A container in the section is never dug (:blocked). Zones, claims and plans are the place rules'.
 
   Ends :done {:placed n} (0 = already shut; strip.seal.done, info). Else strip.seal.stopped (warn) with data {:placed n
-  :cell [x y z] :short n :why}: condition-failed :bad-args, :refused (zones, claims, plans), :blocked (a container in
+  :cell [x y z] :short n :why}: impossible :bad-args; condition-failed :refused (zones, claims, plans), :blocked (a container in
   the section); nothing-possible :no-blocks (:short names the cells still open), :unreachable, :wrong-side. Spends
   :time (default ::time-s).")
 
@@ -83,7 +84,7 @@
       (nil? axis) {:reason :bad-args :why "needs :axis :x or :z"}
       (nil? side) {:reason :bad-args :why "needs :side :from or :to"})))
 
-(def conditions [[:fn bad-args]])
+(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))]])
 
 (def kinds
   "The kind of ending each stop reason is."

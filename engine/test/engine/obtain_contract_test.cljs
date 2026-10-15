@@ -68,13 +68,13 @@
               e (await (ending-of s 'jobs.items.obtain {:item "iron_ingot" :ways #{:craft :gather} :explore false} 10))]
           (is (= {:kind :condition-failed :cause :no-source} (kc e)) "a chain with a smelt step needs the smelt way"))))))
 
-(deftest bad-args-are-condition-failed
+(deftest bad-args-are-impossible
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (f/bare []) [])
               e (await (ending-of s 'jobs.items.obtain {:any-of []} 5))]
-          (is (= {:kind :condition-failed :cause :bad-args} (kc e))))))))
+          (is (= {:kind :impossible :cause :bad-args} (kc e))))))))
 
 (deftest get-tool-carried-is-done-with-the-tool-and-none-to-be-had-is-the-obtains-cause
   (async done
@@ -93,7 +93,7 @@
           (is (= {:kind :condition-failed :cause :no-source} (kc e))))
         (let [s (f/start (f/bare []) [])
               e (await (ending-of s 'jobs.items.get-tool {:block "not_a_block"} 5))]
-          (is (= {:kind :condition-failed :cause :bad-args} (kc e))))))))
+          (is (= {:kind :impossible :cause :bad-args} (kc e))))))))
 
 (deftest a-gather-that-brings-in-nothing-is-nothing-possible-with-what-was-tried
   (async done

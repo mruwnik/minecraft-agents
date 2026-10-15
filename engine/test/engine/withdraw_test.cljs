@@ -80,6 +80,15 @@
                   :data {:gave-up false :held {} :short {"bread" 11 "stone_hoe" 2}}} result))
           (is (some #(= :withdraw.short (:kind %)) @seen)))))))
 
+(deftest withdraw-with-a-least-met-by-what-the-chest-held-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[least kind] [[3 :done] [:all :condition-failed]]]
+          (let [{:keys [eng]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]}})
+                result (await (ending-of eng job {:chest chest :items {"bread" 16} :least least} 8))]
+            (is (= kind (:kind result)) (str ":least " least))))))))
+
 (deftest withdraw-names-the-reason-and-the-held-items-when-the-chest-lacks-them
   (async done
     (tu/run-async done
@@ -109,7 +118,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]} :unreachable ["10,64,0"]})
               result (await (ending-of eng job {:chest chest :items {"bread" 3}} 8))]
-          (is (= {:kind :condition-failed :cause :unreachable :data {:gave-up true :short {"bread" 3}}} result))
+          (is (= {:kind :nothing-possible :cause :unreachable :data {:gave-up true :short {"bread" 3}}} result))
           (is (some #(= :withdraw.gave-up (:kind %)) @seen))
           (is (= [] (:list (core/state eng)))))))))
 

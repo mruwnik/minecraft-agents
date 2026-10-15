@@ -1,5 +1,6 @@
 (ns jobs.items.craft
   (:require [clojure.string :as str]
+            [jobs.storage.least :as least]
             [engine.args :as a]
             [jobs.items.shortfall :as craft]
             [jobs.items.recipes :as recipes]
@@ -28,7 +29,7 @@
   left, and the carried or a fetched table is put down).
   The count carried at the start is kept in memory and the target is that plus :count, so a cut or a partial
   batch loses nothing.
-  Needs: an item name (condition :bad-args).
+  Needs: an item name (impossible :bad-args).
   Ends :done with {:made n}, the number of items gained (plus :spent, :spent-at and a :text when it put a table down).
   Stopping short it ends with :made as well: condition-failed with the cause :need (data :short {name n}, an ingredient
   ran out, and :alternatives), :no-table, :not-a-table, :unreachable or :full (the bag is full and one
@@ -62,7 +63,7 @@
 
 (def target [:item])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:least :all :spend {:time ::time-s}})
 
 (defn bad-args
   "The cause when no item name is given."
@@ -70,7 +71,7 @@
   (when-not (string? (:item (:args c)))
     {:reason :bad-args :why "no item name"}))
 
-(def conditions [[:fn bad-args]])
+(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))]])
 
 (defn done?
   "Progress only: the round that sees the target carried also picks up a table it put down and ends."
@@ -132,16 +133,17 @@
 (defn finish!
   "Keep the ending in memory (a cut during the table pick-up goes on with it) and return it: done with the made count, or
   the stop extra names by its :reason (a condition-failed or nothing-possible ending, extra's other fields and the made
-  count as data)."
+  count as data); a stop with at least the call's :least items made is done (:all wants the whole :count)."
   [c made extra]
   (let [placed (spent/log c)
         reason (:reason extra)
         data (cond-> (merge {:made made} (dissoc extra :reason))
                (seq placed) (merge (spent/summary placed) {:text (spent/text placed "crafting table")}))
+        total (:count (:args c))
         e (cond
             (nil? reason) (ctx/end c :done nil data)
-            (condition-reasons reason) (ctx/end c :condition-failed (cond-> {:reason reason} (:short extra) (assoc :short (:short extra))) data)
-            :else (ctx/end c :nothing-possible reason data))]
+            (condition-reasons reason) (least/end! c :condition-failed (cond-> {:reason reason} (:short extra) (assoc :short (:short extra))) data made total)
+            :else (least/end! c :nothing-possible reason data made total))]
     (ctx/update-mem! c assoc :ended e)
     e))
 

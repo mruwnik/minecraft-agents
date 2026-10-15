@@ -1,5 +1,6 @@
 (ns jobs.items.obtain
-  (:require [engine.args :as a]
+  (:require [engine.contract :as contract]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.items.obtain.base :refer [args-error carried-of holds makes? max-gap-ms max-inspections names-of tried! wanted-fields way?]]
@@ -47,7 +48,7 @@
   - Nothing else: nothing-possible :no-source; a gather whose last fruitless run could not walk to or from its source
     (walk-causes: :zone-exit, :not-home, :unreachable ..) ends nothing-possible with that cause instead.
 
-  Bad args end condition-failed :bad-args {:why} (warn obtain.declined).
+  Bad args are impossible :bad-args {:why}.
   Conditions (before it starts): no source {:reason :no-source :why text :item|:any-of} (:why: what
   each way lacks; an unseen oak_log names other species of log seen) when no usable chest that might hold it is seen
   (with chests allowed, checked once the round has looked around), no craft chain makes it from what is carried, and
@@ -114,7 +115,7 @@
       (when-not (and (= :no-source (:reason cause)) (way? c :chest) (not (look/surveyed? c)))
         cause))))
 
-(def conditions [[:fn no-source]])
+(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))] [:fn no-source]])
 
 (defn done?
   "The count carried, and no tree a cut left half felled (the round fells it whole first)."
@@ -174,11 +175,6 @@
         have (carried-of inv names)
         now (ctx/now c)]
     (cond
-      (bad-args c)
-      (let [cause (bad-args c)]
-        (ctx/emit! c :obtain.declined :warn {:reason :bad-args :text (str "items.obtain " (:why cause))})
-        (ctx/end c :condition-failed cause (assoc (wanted-fields a) :text (str "items.obtain " (:why cause)))))
-
       (survey-first? c names)
       (do (await (look/survey! c))
           (if-let [cause (source-cause c)]

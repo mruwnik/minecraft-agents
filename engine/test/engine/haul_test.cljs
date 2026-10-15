@@ -129,7 +129,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:containers two-sources :unreachable ["10,64,0"]})
               result (await (wt/ending-of eng 'jobs.storage.haul {:from [[10 64 0]]} 30))]
-          (is (= {:kind :condition-failed :cause :unreachable} (select-keys result [:kind :cause]))))))))
+          (is (= {:kind :nothing-possible :cause :unreachable} (select-keys result [:kind :cause]))))))))
 
 (deftest haul-stops-refused-for-a-source-in-another-agents-zone
   (async done

@@ -37,7 +37,7 @@
   The sweep goes top-down, nearest first. It ends by collecting the drops within the field's extent plus 4 blocks
   (jobs.forestry.collect-drops as a child).
   Ends :done with data {:dug n :collected n :kept [...] :wrong [...] :refused [...]} (info tidy.done); over a tidy
-  field it digs nothing and is done. When strays were found, none dug and some refused, it ends nothing-possible
+  field it digs nothing and is done. When strays were found, none dug and some refused, it ends condition-failed
   :refused with the same data.
   Condition-failed {:reason :plan-trouble :why text} (one tidy.declined warn naming the plan and the reason) while the
   plan is missing, unreadable or has no cells (in :part), and while no zone list has been read.
@@ -279,7 +279,7 @@
                                               (if (and (zero? (:dug result)) (empty? refused)) "nothing to dig" (str "dug " (:dug result)))
                                               (when (seq refused) (str ", refused " (count refused))))})
     (if (and (zero? (:dug result)) (seq refused))
-      (ctx/end c :nothing-possible :refused result)
+      (ctx/end c :condition-failed :refused result)
       (ctx/end c :done nil result))))
 
 (defn settle-digging!

@@ -118,7 +118,7 @@
             "nothing unripe: nothing to do")
         (let [env (ft/setup {:inventory ft/meal :blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}})]
           (.override (.-world (:p env)) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :consumed 0}))
-          (is (= :nothing-possible (:kind (await (ending-of env fertilize {} 10)))) "an unripe crop, none fertilized"))
+          (is (= :condition-failed (:kind (await (ending-of env fertilize {} 10)))) "an unripe crop, none fertilized"))
         (is (= {:kind :condition-failed :cause {:reason :need :item "bone_meal"}}
                (kc (await (ending-of (ft/setup {:blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}}) fertilize {:fetch false} 5)))))
         (is (= {:kind :condition-failed :cause {:reason :no-zones}}

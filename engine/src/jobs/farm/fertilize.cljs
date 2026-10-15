@@ -22,7 +22,7 @@
   Refused before it starts, as failed conditions: {:reason :no-zones} (no zone list read, unless :ignore-zones?) and
   {:reason :need :item \"bone_meal\"} (none carried, targets left, :fetch false).
   Ends when :max uses are spent, the bone meal runs out or no unripe crop is left, with data {:used n}: done when it used
-  some (at least :least, uses) or when no unripe crop was there; nothing-possible :refused when crops were there and none
+  some (at least :least, uses) or when no unripe crop was there; condition-failed :refused when crops were there and under :least
   took bone meal (zones, unreachable, the crop refused). done? counts the uses and the targets left.")
 
 (a/defargs args
@@ -129,8 +129,10 @@
     (ctx/emit! c :fertilize.done :info {:used used :text (str "fertilized with " used " bone meal")})
     (cond
       (and (pos? used) (common/enough? c used (min (:max (:args c)) (+ used left)))) (ctx/end c :done nil {:used used})
-      (pos? used) (ctx/end c :nothing-possible (if (has-meal? (:primitives c)) :refused :need) {:used used})
-      (pos? left) (ctx/end c :nothing-possible :refused {:used 0})
+      (pos? used) (if (has-meal? (:primitives c))
+                    (ctx/end c :condition-failed :refused {:used used})
+                    (ctx/end c :nothing-possible :need {:used used}))
+      (pos? left) (ctx/end c :condition-failed :refused {:used 0})
       :else (ctx/end c :done nil {:used 0}))))
 
 (defn ^:async fertilize-one!

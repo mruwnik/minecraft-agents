@@ -89,7 +89,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (equip (stacks "dirt") {}))]
-          (is (= :not-done @out) "refused before it starts"))))))
+          (is (= [:impossible :bad-args] [(get-in @out [:ending :kind]) (:reason @out)]) "refused before it starts"))))))
 
 (deftest a-bad-hand-is-refused-at-submit
   (is (re-find #"jobs.items.equip :hand must be one of \"main\", \"off\", got \"foot\""
