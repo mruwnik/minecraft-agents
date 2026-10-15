@@ -15,6 +15,8 @@
 
 (def require-here node/require-here)
 
+(defn kind-reason "A status [kind text data] as [kind reason]." [[kind _ data]] [kind (:reason data)])
+
 (defonce made-dirs (atom []))
 
 (defonce remove-dirs-on-exit

@@ -149,13 +149,14 @@
   (is (re-find #"jobs.access.toggle :state must be one of .*, got :ajar"
                (expr/problem registry/jobs (list 'jobs.access.toggle {:pos at :state :ajar})))))
 
-(deftest an-unloaded-cell-is-a-failed-condition-not-loaded
+(defn waiting-reason [seen] (:reason (first (kinds seen :waiting))))
+
+(deftest an-unloaded-cell-waits-not-loaded
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [result p]} (await (run (assoc (world "oak_door" {:open false}) :unloaded ["3,64,0"]) {:pos at :state :open}))]
-          (is (= [:stopped :not-loaded] ((juxt :status :reason) result)))
-          (is (= :condition-failed (:kind (:ending result))))
+        (let [{:keys [seen p]} (await (run (assoc (world "oak_door" {:open false}) :unloaded ["3,64,0"]) {:pos at :state :open}))]
+          (is (= :not-loaded (waiting-reason seen)))
           (is (empty? (calls p "useOn"))))))))
 
 (deftest the-body-standing-in-a-door-is-not-shut-in-but-may-open-it
@@ -168,12 +169,12 @@
                                    (assoc-in [:blocks "3,65,0"] "oak_door")
                                    (assoc-in [:states "3,65,0"] {:open true}))
                                {:pos (assoc at :y 65) :state :closed}))]
-          (is (= :standing-in (get-in shut [:result :reason])))
-          (is (= :standing-in (get-in upper [:result :reason])) "the door's upper half")
+          (is (= :standing-in (waiting-reason (:seen shut))))
+          (is (= :standing-in (waiting-reason (:seen upper))) "the door's upper half")
           (is (empty? (calls (:p shut) "useOn")))
           (is (= :changed (:reason (:result open)))))))))
 
-(deftest naming-the-upper-half-of-a-door-whose-lower-half-is-at-the-heads-fails-standing-in
+(deftest naming-the-upper-half-of-a-door-whose-lower-half-is-at-the-heads-waits-standing-in
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -184,8 +185,8 @@
                     (assoc-in [:states "3,65,0"] {:open true :half "lower"})
                     (assoc-in [:blocks "3,66,0"] "oak_door")
                     (assoc-in [:states "3,66,0"] {:open true :half "upper"}))
-              {:keys [result p]} (await (run w {:pos (assoc at :y 66) :state :closed}))]
-          (is (= :standing-in (:reason result)))
+              {:keys [seen p]} (await (run w {:pos (assoc at :y 66) :state :closed}))]
+          (is (= :standing-in (waiting-reason seen)))
           (is (empty? (calls p "useOn"))))))))
 
 ;; ------------------------------------------------------------------ gave up after one click

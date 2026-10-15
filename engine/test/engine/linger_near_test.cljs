@@ -42,15 +42,12 @@
 
 (defn self-x [p] (.-x (.-pos (.self p))))
 
-(defn refusal "The reason of a status that is not :ok, else nil." [[kind _ data]]
-  (when-not (= :ok kind) (:reason data)))
-
 (deftest condition-wants-a-pos-and-a-positive-wait
-  (are [args cause] (= cause (refusal (linger-near/bad-args {:args args})))
-    {:pos {:x 1 :y 64 :z 0} :wait-s 5} nil
-    {:pos {:x 1 :y 64 :z 0} :wait-s 0} :bad-args
-    {:pos {:x 1 :y 64 :z 0}} :bad-args
-    {:wait-s 5} :bad-args))
+  (are [args cause] (= cause (tu/kind-reason (linger-near/bad-args {:args args})))
+    {:pos {:x 1 :y 64 :z 0} :wait-s 5} [:ok :args]
+    {:pos {:x 1 :y 64 :z 0} :wait-s 0} [:never :bad-args]
+    {:pos {:x 1 :y 64 :z 0}} [:never :bad-args]
+    {:wait-s 5} [:never :bad-args]))
 
 (deftest within-range-it-holds-still-and-ends-after-the-wait
   (async done

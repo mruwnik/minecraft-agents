@@ -1,7 +1,6 @@
 (ns jobs.access.cleanup
   (:require [engine.settings :as settings]
             [engine.args :as a]
-            [engine.contract :as contract]
             [engine.game :as game]
             [engine.memory :as mem]
             [jobs.access.cleanup.step :refer [centre distance plan-cells blocker next-step]]

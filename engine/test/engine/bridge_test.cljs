@@ -7,6 +7,8 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.fake :as fake]
+            [engine.library-test :as lt]
+            [engine.sense-test :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
@@ -197,6 +199,13 @@
           (is (empty? (calls p "place")))
           (is (empty? (the-ledger eng)))
           (is (= [:zone "keep-out"] ((juxt :reason :zone) (first (of-kind seen :waiting))))))))))
+
+(deftest bad-args-are-never-at-the-start
+  (let [c (fn [args zones] (assoc (st/stub-ctx (:p (lt/setup {:self {:x 0.5 :y 64 :z 0.5} :blocks {"0,63,0" "stone"} :zones zones}))) :args args))]
+    (are [args zones expected] (= expected (tu/kind-reason (bridge/start-fact (c args zones))))
+      {:heading :east :length 0} [] [:never :bad-args]
+      {:heading :up :length 3} [] [:never :bad-args]
+      {:heading :east :length 200} [] [:never :bad-args])))
 
 (deftest a-ceiling-ahead-refuses-before-any-placement
   (async done

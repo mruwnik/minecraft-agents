@@ -1,6 +1,5 @@
 (ns jobs.explore.search
-  (:require
-            [engine.settings :as settings]
+  (:require [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
             [engine.contract :as contract]

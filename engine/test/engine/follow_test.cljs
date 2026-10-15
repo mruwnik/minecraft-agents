@@ -61,15 +61,12 @@
      (await (run-ticks s n step #(before-tick s %)))
      s)))
 
-(defn refusal "The reason of a status that is not :ok, else nil." [[kind _ data]]
-  (when-not (= :ok kind) (:reason data)))
-
 (deftest follow-condition-wants-a-player-name
-  (are [args cause] (= cause (refusal (follow/bad-args {:args args})))
-    {:player "Steve"} nil
-    {:player nil} :bad-args
-    {} :bad-args
-    {:player 5} :bad-args))
+  (are [args cause] (= cause (tu/kind-reason (follow/bad-args {:args args})))
+    {:player "Steve"} [:ok :args]
+    {:player nil} [:never :bad-args]
+    {} [:never :bad-args]
+    {:player 5} [:never :bad-args]))
 
 (defn ended "The result fields a test reads of the follow's ending." [out]
   (select-keys out [:reason :last-seen]))

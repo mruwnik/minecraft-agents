@@ -1,6 +1,5 @@
 (ns jobs.movement.follow
   (:require [engine.args :as a]
-            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]

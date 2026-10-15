@@ -1,6 +1,7 @@
 (ns jobs.access.toggle
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.checks :as checks]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -117,7 +118,9 @@
           (contract/later :standing-in "standing in the door" :pos pos :block (.-name b))
           :else (contract/ok :ready "nothing to wait for"))))))
 
-(def can-start? waits)
+(def can-start? checks/always)
+
+(def can-run? waits)
 
 (defn done?
   "Whether the block is in the wanted state already."

@@ -21,8 +21,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.access.stock :as stock]
-            [jobs.lib.walk :as walk]
-            [jobs.lib.world :as known]))
+            [jobs.lib.walk :as walk]))
 
 (def doc
   "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
