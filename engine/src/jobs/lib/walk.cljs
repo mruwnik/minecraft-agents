@@ -246,12 +246,12 @@
 (def torch-placed-policy "Body memory of the torches walks placed (:torch-placed {:cell :by}), for a tidy-up." {:cap 64 :ttl :forever})
 
 (defn ^:async see-lit!
-  "Look at cell [x y z] (a floor a torch lights) until the body sees it (a sight pass, then see, the gate's: a pass takes in
+  "Look at cell [x y z] (a floor a torch lights) until the body sees it (a full-effort sight pass, then see, the gate's: a pass takes in
   any point of the floor's top, a glance only its centre), at most light-wait-ms: true when seen."
   [c see [x y z :as cell]]
   (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))
   (loop [waited 0]
-    (look/see! c)
+    (look/see! c (look/search-effort))
     (cond
       (some? (see cell)) true
       (>= waited (light-wait-ms)) false
