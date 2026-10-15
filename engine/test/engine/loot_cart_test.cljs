@@ -69,6 +69,16 @@
           (is (empty? (cart-ids p)))
           (is (= {"iron_ingot" 3 "rail" 16 "bread" 2 "chest_minecart" 1} (inv p))))))))
 
+(deftest a-full-bag-that-gains-nothing-ends-bag-full-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:entities [(cart 50 [2 64 0] :drops [] :items [])]})
+              _ (.override (.-world p) "inspectContainer" (fn [_ _ _] #js {:status "ok" :items #js [#js {:name "iron_ingot" :count 3}]}))
+              _ (.override (.-world p) "transfer" (fn [_ _ _] #js {:status "full" :moved 0}))
+              result (await (child-outcome eng job {:id 50} 12))]
+          (is (= [:stopped :bag-full 0] ((juxt :status :reason :collected) result))))))))
+
 (deftest a-cart-that-will-not-break-ends-nothing-possible
   (async done
     (tu/run-async done

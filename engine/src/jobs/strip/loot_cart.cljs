@@ -22,7 +22,8 @@
   another owner's zone or claim is refused (:ignore-zones? true skips that). Broken-and-gone carts are not looked for again:
   a restart re-reads the world and goes on from there.
   Ends :done {:collected n :items {name n}} (what came into the bag, counted from the inventory at the start), with :full true
-  when the bag had no room for a stack. Else condition-failed :gone (the cart vanished) or :refused (zones), nothing-possible
+  when the bag had no room for a stack. Else condition-failed :gone (the cart vanished), :refused (zones) or :bag-full (no
+  room for anything: nothing gained), nothing-possible
   :unreachable (go-near! cannot arrive, or the cart is out of reach) or :cannot-break (the attack gave up, the cart is still
   there), with :why, :collected and :items as data. Spends :time (default ::job-time-s).")
 
@@ -55,7 +56,7 @@
   (let [now (stock/stacks->items (u/inventory (:primitives c)))]
     (into {} (keep (fn [[k n]] (let [d (- n (get (:before (ctx/mem c)) k 0))] (when (pos? d) [k d])))) now)))
 
-(def kinds "The kind of ending each stop reason is." {:gone :condition-failed :refused :condition-failed :unreachable :nothing-possible :cannot-break :nothing-possible})
+(def kinds "The kind of ending each stop reason is." {:bag-full :condition-failed :gone :condition-failed :refused :condition-failed :unreachable :nothing-possible :cannot-break :nothing-possible})
 
 (defn items-data
   "The gained items as the job's data; extra is merged in."
@@ -63,17 +64,20 @@
   (let [items (gained c)]
     (merge {:collected (reduce + 0 (vals items)) :items items} (when (:full (ctx/mem c)) {:full true}) extra)))
 
-(defn looted!
-  "The cart is broken and its drops collected: done? holds, so the engine ends the call."
-  [c]
-  (ctx/update-mem! c assoc :looted true)
-  (or (ctx/done c) :continue))
-
 (defn stop!
   "End with the kind of reason and a :why in words."
   [c reason why & [extra]]
   (ctx/emit! c :loot-cart.stopped :warn {:reason reason :text (str "loot-cart stopped: " why)})
   (ctx/end c (kinds reason) reason (items-data c (merge {:why why} extra))))
+
+(defn looted!
+  "The cart is broken and its drops collected: done? holds, so the engine ends the call; a full bag that gained nothing
+  ends :bag-full."
+  [c]
+  (if (and (:full (ctx/mem c)) (empty? (gained c)))
+    (stop! c :bag-full "the bag had no room for anything in the cart")
+    (do (ctx/update-mem! c assoc :looted true)
+        (or (ctx/done c) :continue))))
 
 (def can-start?
   (cond/and (checks/refusing :no-danger "no danger near"
