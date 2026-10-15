@@ -1362,7 +1362,7 @@
               [no] (events-of s :mine.no-shaft)
               second-done (second (events-of s :mine.done))]
           (is (= {:shaft "s" :reason :unreachable} (select-keys no [:shaft :reason])))
-          (is (not= [4 60 0] (:origin (:tunnel second-done))) "no tunnel dug from the stair bottom as if it were the branch start")
+          (is (not= "east" (:heading (:tunnel second-done))) "the usual descent does not dig the shaft's branch from the stair bottom")
           (is (not (re-find #"branch 2" (str (:text second-done)))))
           (is (= 1 (get-in (last (mem/entries (mem/view (:store (:eng s))) :mine/shafts)) [:data "s" :n])) "the branch that was not dug is not recorded"))))))
 
