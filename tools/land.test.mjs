@@ -261,3 +261,30 @@ test('merge-master keeps git\'s own error when the merge fails without a conflic
     assert.equal(fs.existsSync(path.join(repo, '.git/commit-lock')), false)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
+
+test('-h/--help print usage and exit 0, an unknown flag exits 2, and none of them lands or creates anything', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'fixed\n')
+    for (const flag of ['-h', '--help']) {
+      const r = run(wt, 'land.sh', flag)
+      assert.equal(r.status, 0, r.stderr)
+      assert.match(r.stdout, /Usage/)
+      const w = run(repo, 'fixer-worktree.sh', flag)
+      assert.equal(w.status, 0, w.stderr)
+      assert.match(w.stdout, /Usage/)
+      const c = spawnSync(path.join(tools, 'commit-mine'), [flag], { cwd: repo, encoding: 'utf8' })
+      assert.equal(c.status, 0, c.stderr)
+      assert.match(c.stdout, /Usage/)
+    }
+    const bad = run(wt, 'land.sh', '--bogus')
+    assert.equal(bad.status, 2)
+    assert.match(bad.stderr, /Usage/)
+    assert.equal(run(repo, 'fixer-worktree.sh', '--bogus').status, 2)
+    assert.equal(spawnSync(path.join(tools, 'commit-mine'), ['--bogus'], { cwd: repo, encoding: 'utf8' }).status, 2)
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'one\n')
+    assert.equal(fs.existsSync(wt), true)
+    assert.equal(git(repo, 'branch', '--list', `fix/${CARD}`).stdout.trim() !== '', true)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
