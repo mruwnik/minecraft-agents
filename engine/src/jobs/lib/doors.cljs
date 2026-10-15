@@ -49,6 +49,14 @@
   [view by]
   (some? (mem/latest view (mem/job-kind (first (str/split (str by) #"/"))))))
 
+(defn recorded
+  "The :opened entries' data in view at least open-ms old, minus those a :leave-open walk of a job that still lives left on purpose."
+  [view open-ms]
+  (->> (mem/entries view :opened)
+       (filter (fn [{:keys [t]}] (>= (- (:now view) t) open-ms)))
+       (map :data)
+       (remove #(and (false? (:shut? %)) (owner-live? view (:by %))))))
+
 (defn left-open
   "The blocks the walker opened to shut again (:opened entries in view, not those a :leave-open walk of a job that still
   lives left on purpose) that
@@ -57,16 +65,25 @@
   ([p view args open-ms] (left-open p view args open-ms open-block))
   ([p view {:keys [radius]} open-ms read]
     (let [self (self-pos p)]
-      (->> (mem/entries view :opened)
-           (filter (fn [{:keys [t]}] (>= (- (:now view) t) open-ms)))
-           (map :data)
-           (remove #(and (false? (:shut? %)) (owner-live? view (:by %))))
+      (->> (recorded view open-ms)
            (keep (fn [{:keys [cell by fails]}]
                    (when-let [o (read p cell)]
                      (assoc o :by by :fails (or fails 0) :dist (distance self cell)))))
            (filter #(<= (:dist %) radius))
            (sort-by :dist)
            (reduce (fn [acc o] (if (some #(= (:cell o) (:cell %)) acc) acc (conj acc o))) [])))))
+
+(defn unseen-recorded
+  "The cells of the :opened entries within radius that the body has never seen, as {:x :y :z} nearest first: whether they
+  stand open is not known."
+  [p view {:keys [radius]}]
+  (let [self (self-pos p)]
+    (->> (recorded view 0)
+         (map :cell)
+         (filter #(<= (distance self %) radius))
+         (filter #(look/unseen? p [%]))
+         (distinct)
+         (sort-by #(distance self %)))))
 
 (defn holds?
   "Whether a block a walk left open has stood so for :open-s, within :radius, with the body out of its column."

@@ -1,9 +1,11 @@
 (ns jobs.maintenance.shut-doors
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
+            [jobs.lib.pace :as pace]
             [jobs.lib.pass :as pass]
             [jobs.lib.doors :as doors]
             [jobs.lib.access :as access]
@@ -21,7 +23,7 @@
   open on purpose are left alone while that walk's job lives (once it is gone, they count).
   One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never:
   it opens nothing on the way), then shuts it as the walker does (pass/shut-column!). An animal in the cell is waited
-  out, never pushed. A block that cannot be reached, that the body stands in the column of, or that is not shut after
+  out, never pushed. A recorded block the body still has not seen after the look is left as :unseen (entry untouched). A block that cannot be reached, that the body stands in the column of, or that is not shut after
   :tries clicks fails this run (shut-doors.gave-up, warn the first time); its entry is kept, stamped afresh so the
   trigger waits :open-s and a later run tries again, until :attempts runs have failed: then it is dropped with a last
   warn. A block that cannot be reached is dropped at once. A block the body stands in the column of, or whose walk was
@@ -120,22 +122,36 @@
         (ctx/end c :nothing-possible :left (assoc result :text text))))))
 
 (defn done?
-  "Ok when no block seen left open stands within :radius; else later, with the doors shut so far and the blocks left."
+  "Ok when no block seen left open stands within :radius and none was given up on; a :look at the recorded blocks never
+  seen; else later, with the doors shut so far and the blocks left."
   [c]
   (let [open (targets c [])
+        given-up (count (:left (ctx/mem c)))
+        unseen (when (and (empty? open) (zero? given-up)) (doors/unseen-recorded (:primitives c) (ctx/view c) (:args c)))
         shut (:shut (ctx/mem c) 0)]
-    (checks/goal (empty? open) [:shut (str "shut " shut " left open by a walk")] [:open (str (count open) " blocks stand open")]
-                 {:units :doors :done shut :left (count open) :result {:shut shut :left []}})))
+    (if (seq unseen)
+      (contract/look :gate-unseen "a block a walk opened was never seen" :look-at (vec unseen))
+      (checks/goal (and (empty? open) (zero? given-up)) [:shut (str "shut " shut " left open by a walk")]
+                   [:open (str (+ (count open) given-up) " blocks stand open")]
+                   {:units :doors :done shut :left (+ (count open) given-up) :result {:shut shut :left []}}))))
 
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-door) (count (targets c [])))]
     {:uses {:job-time [0 t (* 3 t)]}}))
 
-(defn ^:async round [c]
-  (loop [shut 0 left []]
+(defn ^:async step!
+  "Shut the nearest target not given up on, or end the run when none is left."
+  [c]
+  (let [m (ctx/mem c)
+        left (:left m [])]
     (if-let [target (first (targets c left))]
       (if-let [reason (await (shut-once! c target))]
-        (recur shut (conj left (give-up! c target reason)))
-        (do (ctx/update-mem! c assoc :shut (inc shut))
-            (recur (inc shut) left)))
-      (finish! c shut left))))
+        (do (ctx/update-mem! c assoc :left (conj left (give-up! c target reason))) :again)
+        (do (ctx/update-mem! c update :shut (fnil inc 0)) :again))
+      (finish! c (:shut m 0) (into left (map (fn [cell] {:cell (cell-key cell) :reason :unseen})
+                                             (doors/unseen-recorded (:primitives c) (ctx/view c) (:args c))))))))
+
+(defn ^:async round
+  "One door per step, a pace between, so a cancel or an interrupt cuts between doors."
+  [c]
+  (await (pace/steps! c #(step! c))))

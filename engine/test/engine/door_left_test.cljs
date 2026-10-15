@@ -149,7 +149,7 @@
           (is (= [] (opened eng)))
           (is (= 1 (:shut (first (filter #(= :completed (:kind %)) @seen))))))))))
 
-(deftest a-gate-shut-out-of-sight-is-walked-to-and-looked-at-not-ended-already
+(deftest a-gate-shut-out-of-sight-is-walked-to-and-left-unseen-not-ended-already
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -165,6 +165,21 @@
           (is (= [] (opened eng)) "the entry dropped once it saw the gate shut")
           (is (not (open? p gate-cell)))
           (is (empty? (filter #(= :shut-doors.gave-up (:kind %)) @seen))))))))
+
+(deftest a-recorded-gate-the-body-has-not-seen-is-left-unseen-not-ended-already
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup (gate-world true 8 0))]
+          (aset p "seenBlockAt" (fn [pos] #js {:unknown true :pos pos}))
+          (aset p "sensedAt" (fn [_] #js {:unknown true}))
+          (remember-opened! s)
+          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (await (tick-until s #(empty? (:list (core/state eng))) 10))
+          (is (nil? (first (filter #(= :completed (:kind %)) @seen))) "an unseen gate is not already shut")
+          (is (= [{:cell [5 64 0] :reason :unseen}]
+                 (:left (first (filter #(= :shut-doors.stopped (:kind %)) @seen)))) "still unseen after the look: left, not done")
+          (is (= [gate-cell] (mapv :cell (opened eng))) "the entry is kept"))))))
 
 (deftest a-gate-the-walker-did-not-open-is-left-alone
   (async done
