@@ -38,7 +38,8 @@
   its :because. :fetch false skips all of it. Starts only with an item some furnace cooks (impossible :not-smeltable, the job leaves the queue;
   an output such as cooked_chicken names its input). Quote: the cook time of the count (a furnace; half in the other
   two), the input and fuel items, the product; open-ended when no furnace is given or seen.
-  The default :spend :time is ::time-s for the walk and fetches plus the cook of the count (10 s an item, a stack when nil).
+  The default :spend :time is ::time-s for the walk and fetches plus the cook of the count (10 s an item, a stack when nil);
+  the default :elapsed is that plus ::away-s, for other jobs done while it cooks.
   Ends :done with {:smelted n :wanted n}: :wanted is the count this job loaded and :smelted what came of it; input
   already in the furnace and the output already there do not count. A give-up warns (smelt.gave-up) and ends with the
   cause named and the same data (0 of N is never :done):
@@ -62,6 +63,7 @@
 
 (a/defargs settings
   {::time-s {:default 600 :doc "Seconds the call may take besides the cook of its count (the walk and the fetches); the default time spend is this plus the cook, 10 s an item." :spec (a/num-in 0 nil)}
+   ::away-s {:default 1800 :doc "Seconds the call may last from its start beyond its time spend: other jobs the body does while the furnace cooks (the default :elapsed spend is the time spend plus this)." :spec (a/num-in 0 nil)}
    ::slack-ms {:default 2000 :doc "Slack added to a wait for the furnace, in ms." :spec (a/int-in 0 nil)}
    ::grace-ms {:default 6000 :doc "How long a furnace may look unlit after a load before it counts as stuck, in ms." :spec (a/int-in 0 nil)}
    ::recheck-ms {:default 6000 :doc "How often the furnace is looked at again, in ms." :spec (a/int-in 0 nil)}
@@ -434,7 +436,12 @@
   (let [n (* (or count 64) (if (coll? item) (clojure.core/count item) 1))]
     (+ (settings/get settings ::time-s) (/ (settings/ticks->ms (* n (sp/cook-ticks "furnace"))) 1000))))
 
-(def defaults {:spend {:time default-time}})
+(defn default-elapsed
+  "The call's default :spend :elapsed: its default time plus ::away-s."
+  [args]
+  (+ (default-time args) (settings/get settings ::away-s)))
+
+(def defaults {:spend {:time default-time :elapsed default-elapsed}})
 
 (defn not-smeltable
   "At the call's start: impossible when the :item is one no furnace cooks, else nil."

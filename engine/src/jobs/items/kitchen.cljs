@@ -53,11 +53,12 @@
 
 (a/defargs settings
   {::time-s {:default 1800 :doc "Seconds a kitchen pass may last: the smelts, the bake and the deposit." :spec (a/num-in 0 nil)}
+   ::elapsed-s {:default 3600 :doc "Seconds a kitchen pass may last from its start, the waits on the furnace's cook and other jobs meanwhile included." :spec (a/num-in 0 nil)}
    ::food-s {:default 10 :doc "Seconds a quote counts for each raw food carried: its time in the furnace." :spec (a/num-in 0 nil)}})
 
 (def target [:stock])
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:time ::time-s :elapsed ::elapsed-s}})
 
 (defn reached
   "done? for a :stock against the chest's stock {name n} (nil: unknown, never reached)."

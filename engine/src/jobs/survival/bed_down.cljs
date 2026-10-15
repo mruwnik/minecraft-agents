@@ -34,6 +34,7 @@
 
 (a/defargs settings
   {::time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched (an obtain may take its own 600 without a change), the sleep." :spec (a/num-in 0 nil)}
+   ::elapsed-s {:default 1800 :doc "Seconds a bed-down may last from its start, the jobs that run between its rounds included." :spec (a/num-in 0 nil)}
    ::walk-speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn bed-permit
@@ -53,7 +54,7 @@
   (or (some-> (:bed (:args c)) places/parse-pos :pos)
       (sh/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c))))
 
-(def defaults {:spend {:time ::time-s}})
+(def defaults {:spend {:time ::time-s :elapsed ::elapsed-s}})
 
 (def target [])
 

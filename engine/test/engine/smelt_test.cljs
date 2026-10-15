@@ -266,13 +266,18 @@
           (is (= 64 (:smelted (first (of-kind seen :smelt.done)))))
           (is (empty? (of-kind seen :job.limit-reached))))))))
 
-(deftest the-default-time-budget-covers-the-cook-of-the-count
-  (let [time-of #(get-in (contract/freeze {:defaults (contract/resolve-settings smelt/defaults (partial settings/get smelt/settings) %)} % nil)
-                         [:spend :time])]
+(deftest the-default-budgets-cover-the-cook-of-the-count
+  (let [spend-of #(get-in (contract/freeze {:defaults (contract/resolve-settings smelt/defaults (partial settings/get smelt/settings) %)} % nil)
+                          [:spend])
+        time-of (comp :time spend-of)
+        elapsed-of (comp :elapsed spend-of)]
     (is (< 640 (time-of {:item "raw_iron" :count 64})))
     (is (< 640 (time-of {:item "raw_iron"})) "no count: up to a stack")
     (is (< (time-of {:item "raw_iron" :count 3}) (time-of {:item "raw_iron" :count 64})))
-    (is (= 5 (time-of {:count 64 :spend {:time 5}})) "a given time stays")))
+    (is (= 5 (time-of {:count 64 :spend {:time 5}})) "a given time stays")
+    (is (< (time-of {:item "raw_iron" :count 64}) (elapsed-of {:item "raw_iron" :count 64}))
+        "the elapsed time also leaves room for other jobs while it cooks")
+    (is (< (elapsed-of {:item "raw_iron" :count 3}) (elapsed-of {:item "raw_iron" :count 64})))))
 
 (deftest a-check-that-wakes-early-finds-the-cook-unfinished-and-waits-again
   (async done
