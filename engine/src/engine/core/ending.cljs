@@ -125,13 +125,26 @@
        (catch :default e
          (if (contract/passes-through? e) (throw e) [nil e]))))
 
+(defn least-met?
+  "Whether done?'s answer d counts units at least the call's :least (default 1; :all: none left)."
+  [c d]
+  (let [least (:least (ctx/frozen-call c) 1)]
+    (and (number? (:done d)) (:units d)
+         (if (= :all least) (zero? (:left d 0)) (>= (:done d) least)))))
+
 (defn with-progress
   "Limit ending e (or nil) with done?'s count in its report, and done?'s :data (the job's result so far) as the data of
-  a :limit-reached ending without its own; a done? that throws leaves e as it is."
+  a :limit-reached ending without its own; a :limit-reached ending whose done? counts the call's :least units is :done
+  (the limit in its report). A done? that throws leaves e as it is."
   [def c e]
   (if-let [d (when e (try (done-now def c) (catch :default _ nil)))]
-    (cond-> (update e :report merge (contract/progress d))
-      (and (= :limit-reached (:kind e)) (not (:data e)) (seq (:data d))) (assoc :data (:data d)))
+    (let [e (update e :report merge (contract/progress d))]
+      (cond
+        (and (= :limit-reached (:kind e)) (least-met? c d))
+        (-> (contract/ending :done nil (or (:data e) (:data d))) (assoc :report (assoc (:report e) :limit (:cause e))))
+
+        (and (= :limit-reached (:kind e)) (not (:data e)) (seq (:data d))) (assoc e :data (:data d))
+        :else e))
     e))
 
 (defn finish

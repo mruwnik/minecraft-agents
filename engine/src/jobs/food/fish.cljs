@@ -16,12 +16,12 @@
   A body with no rod gets one first (jobs.lib.need, unless :fetch is false).
   Ends with the data {:got n :text}, info fish.caught per fish, and the ending:
   - :done: :count fish (cod, salmon, tropical fish, pufferfish) came in, or the call's :least (default 1, :all = :count)
-    before any stop below.
+    before any stop below, or when the time ends it (the engine's rule: report :limit).
   Before the first cast it waits (conditions) on :no-rod (none carried and :fetch false) and :no-water (no seen water with a bank
   within :radius).
   - :condition-failed :no-water (the water gone mid-run), or a failed rod fetch (the cause names the rod, :because the fetch's ending).
   - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (:max-misses casts in a row caught nothing).
-  - :limit-reached: the call's :spend :time (default ::time-s) is used up; the engine ends it, with {:got}.
+  - :limit-reached: the call's :spend :time (default ::time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
   Resumes from the carried fish: the goal is the count carried at the first round plus :count.")
 
 (a/defargs args

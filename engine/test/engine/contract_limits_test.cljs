@@ -83,11 +83,11 @@
         (let [{:keys [eng seen]} (setup {'counted counted
                                          'top {:conditions []
                                                :round (fn ^:async top [c]
-                                                        (let [e (await (ctx/call c :kid 'counted {}))]
+                                                        (let [e (await (ctx/call c :kid 'counted {:least 6}))]
                                                           (if (= :continue e)
                                                             :continue
                                                             (do (swap! world assoc :kid-ending e) (ctx/end c :done nil)))))}})]
-          (core/submit! eng '(counted) {})
+          (core/submit! eng '(counted {:least 6}) {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= :limit-reached (:kind (stopped seen))))
           (is (= {:units :cells :done 5 :left 3}
@@ -100,10 +100,23 @@
               "a child's too")
           (is (= {:dug [1 2]} (:data (:kid-ending @world))))
           (swap! world assoc :done-throws 3)
-          (core/submit! eng '(counted) {})
+          (core/submit! eng '(counted {:least 6}) {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= :limit-reached (:kind (:data (second (job-ev seen :stopped)))))
               "a done? that throws does not hide the limit"))))))
+
+(deftest a-limit-with-the-least-done-ends-done-with-the-limit-in-the-report
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'counted counted})]
+          (core/submit! eng '(counted {:least 5}) {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (let [d (:data (first (job-ev seen :completed)))]
+            (is (= :done (:kind d)))
+            (is (= [1 2] (:dug d)))
+            (is (= {:line :time :spend 5} (:limit (:report d)))))
+          (is (= 1 (count (job-ev seen :limit_reached))) "the limit is still told"))))))
 
 ;; ---------------------------------------------------------------- handed down
 

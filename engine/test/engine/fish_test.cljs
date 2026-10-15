@@ -61,13 +61,26 @@
     (is (= {:kind :nothing-possible :cause :no-bite} (ending 3)))
     (is (= {:kind :nothing-possible :cause :no-bite} (ending :all)))))
 
-(deftest the-budget-ends-fishing-with-the-fish-got
+(defn ^:async budget-run [misses]
+  (let [{:keys [eng p clock]} (lt/setup (world [rod] {:catch ["cod"] :misses misses}))
+        casts (atom 0)
+        _ (.override (.-world p) "fish" (fn [token a impl] (when (< 1 (swap! casts inc)) (swap! clock + 50000)) (impl token a)))]
+    (await (tu/child-outcome eng 'jobs.food.fish {:count 50 :max-misses 1000 :cast-s 10 :spend {:time 40}} 120))))
+
+(deftest a-budget-end-with-fish-caught-is-done-at-the-least
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (lt/setup (world [rod] {:catch ["cod"] :misses 1}))
-              _ (.override (.-world p) "fish" (fn [token a impl] (swap! clock + 15000) (impl token a)))
-              res (await (tu/child-outcome eng 'jobs.food.fish {:count 50 :max-misses 1000 :spend {:time 40}} 120))]
+        (let [res (await (budget-run 0))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (pos? (:got res)) (pr-str res)))))))
+
+(deftest a-budget-end-with-no-fish-is-limit-reached
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [res (await (budget-run 1000))]
           (is (= :stopped (:status res)) (pr-str res))
           (is (= :time (:reason res)) (pr-str res))
-          (is (contains? res :got) (pr-str res)))))))
+          (is (= 0 (:got res)) (pr-str res)))))))
+
