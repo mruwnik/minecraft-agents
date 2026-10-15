@@ -855,7 +855,8 @@
     (is (= 2 (start-x (open-line (range 0 6) (range 0 6) {[3 64 0] fluid}))) fluid)))
 
 (deftest open-start-stops-at-the-skip-cap
-  (is (= mine-tunnel/max-open-skip (start-x (open-line (range 0 (+ mine-tunnel/max-open-skip 10)) (range 0 (+ mine-tunnel/max-open-skip 10)))))))
+  (let [n (mine-tunnel/max-open-skip)]
+    (is (= n (start-x (open-line (range 0 (+ n 10)) (range 0 (+ n 10))))))))
 
 (deftest open-start-steps-down-a-stair-but-not-past-the-drop-bound
   (let [descending (fn [{:keys [x y z]}]

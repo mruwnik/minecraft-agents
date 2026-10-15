@@ -16,7 +16,13 @@
    :useful? {:doc "list the workstations, storage, beds and ores seen (each with its :distance); excludes :block-names" :spec boolean? :default false}
    :properties? {:doc "include nearby block state properties" :spec boolean? :default false}
    :at {:doc "optional exact block position [x y z] or {:x :y :z}" :spec ::a/pos :default nil}})
+(a/defargs settings
+  {::time-s {:default 10 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
+
 (def target [:at])
+
+(def defaults {:spend {:time ::time-s}})
+(defn done? "An act with no goal state: a look is never done before it is made." [_c] {:done? false})
 (defn quote-of [_c] {:uses {:time [0 0 1]}})
 (def useful-names #{"crafting_table" "furnace" "blast_furnace" "smoker" "chest" "trapped_chest" "barrel" "ender_chest"
                     "enchanting_table" "anvil" "brewing_stand" "ancient_debris"})

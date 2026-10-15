@@ -378,9 +378,12 @@
     (ctx/update-mem! c dissoc :swap)))
 
 (a/defargs settings
-  {::step-s {:default 3 :doc "Seconds a quote counts for one deposit call, swap or toss." :spec (a/num-in 0 nil)}})
+  {::time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::step-s {:default 3 :doc "Seconds a quote counts for one deposit call, swap or toss." :spec (a/num-in 0 nil)}})
 
 (def target [:free])
+
+(def defaults {:spend {:time ::time-s}})
 
 (def conditions
   "None: a bag with room is already done, one with nothing to spare ends nothing-possible after looking."

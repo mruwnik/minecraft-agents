@@ -460,7 +460,7 @@
     (is (= :no-target (search/no-target {:args {:target []}})))
     (is (nil? (search/no-target {:args {:target "diamond_block"}}))))
   (with-redefs [ctx/frozen-call (constantly {:least 1})]
-    (is (nil? (search/no-target {:args {:target nil}})) "a started call runs on")))
+    (is (nil? ((second (first search/conditions)) {:args {:target nil}})) "a started call runs on")))
 
 (deftest ore-the-body-has-not-seen-is-neither-found-nor-noted
   (async done

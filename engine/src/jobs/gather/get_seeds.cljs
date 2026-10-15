@@ -181,10 +181,11 @@
 (def conditions [[:fn no-source] [:fn chest-trouble] [:fn no-zones] [:fn nothing-in-range]])
 
 (defn done?
-  "Progress only: the round that carries the goal ends the job."
+  "The goal fixed by the first round (:count more than were carried) is carried; the seeds got and still wanted."
   [c]
-  (let [goal (or (:goal (ctx/mem c)) (+ (carried c) (:count (:args c))))]
-    {:done? false :units :items :done (max 0 (- (:count (:args c)) (- goal (carried c)))) :left (max 0 (- goal (carried c)))}))
+  (let [goal (or (:goal (ctx/mem c)) (+ (carried c) (:count (:args c))))
+        left (max 0 (- goal (carried c)))]
+    {:done? (and (some? (:goal (ctx/mem c))) (zero? left)) :units :items :done (max 0 (- (:count (:args c)) left)) :left left}))
 
 (defn quote-of [c]
   (let [{:keys [item count] :as a} (:args c)

@@ -91,6 +91,15 @@
           (is (= :done (:kind e)))
           (is (= #{"diamond_hoe"} (set (map #(.-item (.-args %)) (tt/calls (:p env) "useOn"))))))))))
 
+(deftest till-over-cells-that-are-all-farmland-is-done-without-acting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (tt/setup {:inventory tt/hoe :blocks (zipmap (keys tt/four) (repeat "farmland"))})
+              e (await (ending-of env till tt/box 20))]
+          (is (= {:kind :done :cause nil} (kc e)))
+          (is (empty? (tt/calls (:p env) "useOn"))))))))
+
 (deftest till-partial-run-is-done-only-when-it-meets-least
   (async done
     (tu/run-async done

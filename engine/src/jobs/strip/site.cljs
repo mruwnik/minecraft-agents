@@ -69,11 +69,11 @@
    :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::time-s {:default 7200 :doc "Seconds a strip of one site may take: base, descent, every segment, trips and the haul." :spec (a/num-in 0 nil)}})
+  {::time-s {:default 7200 :doc "Seconds a strip of one site may take: base, descent, every segment, trips and the haul." :spec (a/num-in 0 nil)}
+   ::max-sites {:default 4 :doc "Sites kept in memory; finished ones go first once there are more." :spec (a/int-in 1 nil)}})
 
 (def kind :strip/sites)
 (def policy {:cap 1 :ttl :forever})
-(def max-sites 4)
 (def trip-reasons #{:bag-full :food-short :no-torches :no-tool})
 (def settled #{:stripped :sealed :skipped})
 (def condition-reasons "Stop reasons that end condition-failed: a fact of the base, the bag or the site. The rest are nothing-possible."
@@ -83,11 +83,11 @@
 (defn site [c] (get (sites c) (:site (:args c))))
 
 (defn save!
-  "Write the site's state as (f state & xs); sites finished earlier go once there are more than max-sites."
+  "Write the site's state as (f state & xs); sites finished earlier go once there are more than ::max-sites."
   [c f & xs]
   (let [id (:site (:args c))
         all (update (sites c) id #(apply f % xs))
-        old (take (- (count all) max-sites) (filter #(= :done (:phase (all %))) (remove #{id} (keys all))))]
+        old (take (- (count all) (settings/get settings ::max-sites)) (filter #(= :done (:phase (all %))) (remove #{id} (keys all))))]
     (ctx/remember! c kind (apply dissoc all old) policy)))
 
 (defn vec3 [v] (let [{:keys [x y z]} (a/cell v)] [x y z]))

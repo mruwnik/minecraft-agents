@@ -62,7 +62,12 @@
                  (let [spare (- (get held n 0) (get reserve n 0))]
                    (when (pos? spare) [n spare])))))))
 
+(a/defargs settings
+  {::time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
+
 (def target [:at])
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn problem
   "The cause {:reason :no-zones} while no zone list has been read, else nil."

@@ -19,11 +19,12 @@
             [jobs.lib.watch :as watch]))
 
 (a/defargs settings
-  {::open-skip-drop {:default 3 :doc "The most blocks the strip tunnel's start steps down while it skips open cells on its line (a stair); the tunnel then runs at that level." :spec (a/int-in 0 nil)}})
+  {::max-open-skip {:default 64 :doc "The most open cells the strip tunnel skips along its line before it starts." :spec (a/int-in 0 nil)}
+   ::open-skip-drop {:default 3 :doc "The most blocks the strip tunnel's start steps down while it skips open cells on its line (a stair); the tunnel then runs at that level." :spec (a/int-in 0 nil)}})
 
 (def passable "Blocks a body walks through in a tunnel cell: air and torches (never dug)." #{"air" "cave_air" "torch" "wall_torch"})
 
-(def max-open-skip 64)
+(defn max-open-skip [] (settings/get settings ::max-open-skip))
 
 (defn open-skip-drop [] (settings/get settings ::open-skip-drop))
 
@@ -38,7 +39,7 @@
     (loop [p cell n 0]
       (let [q (ahead p) down (update q :y dec)]
         (cond
-          (>= n max-open-skip) p
+          (>= n (max-open-skip)) p
           (open? q) (recur q (inc n))
           (and (passable (name-at q)) (open? down) (<= (- (:y cell) (:y down)) (or max-drop (open-skip-drop)))) (recur down (inc n))
           :else p)))))

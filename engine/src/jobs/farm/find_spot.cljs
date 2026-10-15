@@ -35,7 +35,8 @@
    :walk {:doc "walk to the best spot (finding and walking are separate; a parent can walk)" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::water-reach {:default 4 :doc "Blocks from water within which farmland is hydrated." :spec (a/int-in 0 nil)}
+  {::time-s {:default 30 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::water-reach {:default 4 :doc "Blocks from water within which farmland is hydrated." :spec (a/int-in 0 nil)}
    ::sky-extra {:default 8 :doc "Extra blocks of sky checked above a spot." :spec (a/int-in 0 nil)}})
 (defn water-reach [] (settings/get settings ::water-reach))
 
@@ -175,7 +176,11 @@
   (:found (scan-rows p a from {:next-ring 0 :found []} ##Inf)))
 
 (def target [:center :w :h])
+
+(def defaults {:spend {:time ::time-s}})
 (def conditions [])
+
+(defn done? "An act with no goal state: a spot search is never done before it is made." [_c] {:done? false})
 
 (defn quote-of [c]
   (let [{:keys [range walk]} (merge (into {} (map (fn [[k v]] [k (:default v)])) args) (:args c))]

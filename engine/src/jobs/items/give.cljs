@@ -42,7 +42,8 @@
    :wait-s {:doc "how long a drop may lie before it is taken back" :spec (a/num-in 0 nil) :default 6}})
 
 (a/defargs settings
-  {::grace-ms {:default 2000 :doc "How long the job waits before it acts on what it sees, in ms." :spec (a/int-in 0 nil)}
+  {::time-s {:default 60 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::grace-ms {:default 2000 :doc "How long the job waits before it acts on what it sees, in ms." :spec (a/int-in 0 nil)}
    ::idle-ms {:default 500 :doc "Wait while there is nothing to do, in ms." :spec (a/int-in 0 nil)}
    ::walk-leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-blocked {:default 3 :doc "Blocked attempts before the job gives up." :spec (a/int-in 0 nil)}
@@ -59,6 +60,8 @@
 (defn head-height [] (settings/get settings ::head-height))
 
 (def target [:player :item :count])
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn problem
   "The cause {:reason :bad-args} unless a player name and an item name are given."

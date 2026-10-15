@@ -1,5 +1,6 @@
 (ns jobs.forestry.maintain
-  (:require [engine.args :as a]
+  (:require [jobs.lib.started :as started]
+            [engine.args :as a]
             [jobs.lib.access.rules :as rules]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -258,18 +259,17 @@
   cell or a bare one has its sapling carried; else the cells that hold it back, with a look first while one was never
   seen. The cells are read once per check-cache window; the round says (warns) what is wrong with each."
   [c]
-  (when-not (ctx/frozen-call c)
-    (let [field (planned c)]
-      (if (:trouble field)
-        {:reason :plan-trouble :why (:trouble field)}
-        (let [cells (field-cells field)
-              unseen? (look/unseen? (:primitives c) cells)
-              read #(classes-of c (:trees field))
-              classes (if unseen? (read) (check-cache/cached c :classes read))]
-          (when-not (or (seq (ripe-cells c classes))
-                        (seq (plantable c (owed-cells c classes))))
-            (cond-> (or (blocked-reason c classes) {:reason :nothing-to-do})
-              (and unseen? (not (look/surveyed? c :near))) contract/look-first)))))))
+  (let [field (planned c)]
+    (if (:trouble field)
+      {:reason :plan-trouble :why (:trouble field)}
+      (let [cells (field-cells field)
+            unseen? (look/unseen? (:primitives c) cells)
+            read #(classes-of c (:trees field))
+            classes (if unseen? (read) (check-cache/cached c :classes read))]
+        (when-not (or (seq (ripe-cells c classes))
+                      (seq (plantable c (owed-cells c classes))))
+          (cond-> (or (blocked-reason c classes) {:reason :nothing-to-do})
+            (and unseen? (not (look/surveyed? c :near))) contract/look-first))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -456,13 +456,13 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(def conditions [[:fn not-ready]])
+(def conditions [[:fn (started/at-start not-ready)]])
 
 (defn done?
-  "Never done before the round says so: the cells left are classified at each step."
+  "Counts only (a standing job): the trees felled and planted this call."
   [c]
   (let [m (ctx/mem c)]
-    {:done? false :units :trees :done (+ (:felled m 0) (:planted m 0)) :left 1}))
+    {:done? false :units :trees :done (+ (:felled m 0) (:planted m 0))}))
 
 (defn quote-of [_c]
   {:uses {:time [1 60 (settings/get settings ::time-s)]}})

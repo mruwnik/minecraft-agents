@@ -178,10 +178,11 @@
 (def conditions [[:fn problem]])
 
 (defn done?
-  "Counts only (the round ends the call with its data): the cells tilled this call and the cells left to till."
+  "Every cell is farmland (a skipped cell is not); the cells tilled this call and the cells left to till."
   [c]
-  (let [cs (try (cells (:args c)) (catch :default _ nil))]
-    {:done? false :units :cells :done (count (:tilled (ctx/mem c))) :left (if cs (count (pending c)) 0)}))
+  (let [cs (try (cells (:args c)) (catch :default _ nil))
+        open (count (remove #(= "farmland" (u/seen-name (:primitives c) %)) cs))]
+    {:done? (and (seq cs) (zero? open)) :units :cells :done (count (:tilled (ctx/mem c))) :left (if cs (count (pending c)) 0)}))
 
 (defn quote-of [c]
   (let [cs (try (cells (:args c)) (catch :default _ nil))

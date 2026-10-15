@@ -212,7 +212,8 @@
 (def conditions [[:fn problem]])
 
 (defn done?
-  "Counts only (the round ends the call with its data): the cells sown this call and the bare cells left."
+  "Counts only: no bare cell is not a planted field (cells may be unseen or untilled), and the round names which. The cells
+  sown this call and the bare cells left."
   [c]
   {:done? false :units :cells :done (:planted (ctx/mem c) 0) :left (count (unsown c))})
 

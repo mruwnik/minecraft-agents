@@ -1,5 +1,6 @@
 (ns jobs.strip.corridor
-  (:require [engine.args :as a]
+  (:require [jobs.lib.started :as started]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -77,9 +78,8 @@
 (defn not-now
   "Why a trip does not start: a real danger near, or no food and none to eat."
   [c]
-  (when-not (ctx/frozen-call c)
-    (cond (danger-near? c) :danger
-          (trip/food-short? c) :food-short)))
+  (cond (danger-near? c) :danger
+        (trip/food-short? c) :food-short))
 
 (def failed-conditions "Stop reasons that end condition-failed: a fact of the body or the world. The rest are nothing-possible."
   #{:bag-full :food-short :no-torches :no-tool :spawner :refused})
@@ -268,12 +268,13 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(def conditions [[:fn bad-segment] [:fn not-now]])
+(def conditions [[:fn bad-segment] [:fn (started/at-start not-now)]])
 
 (defn done?
-  "Never done before the round says so: the targets left are read from the seen blocks at each step."
+  "Counts only: the end of the segment is the round's, which looks at its end and reports what it kept.
+  The cells dug."
   [c]
-  {:done? false :units :cells :done (count (:dug (ctx/mem c))) :left 1})
+  {:done? false :units :cells :done (count (:dug (ctx/mem c)))})
 
 (defn quote-of [c]
   (let [{:keys [from to]} (seg-of (:segment (:args c)))]

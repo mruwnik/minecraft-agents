@@ -20,9 +20,12 @@
   {:item {:doc "the armour piece to wear; nil wears the best carried piece for each slot" :spec a/item? :default nil}})
 
 (a/defargs settings
-  {::piece-s {:default 0.5 :doc "Seconds to put one armour piece on (the quote)." :spec (a/num-in 0 nil)}})
+  {::time-s {:default 10 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::piece-s {:default 0.5 :doc "Seconds to put one armour piece on (the quote)." :spec (a/num-in 0 nil)}})
 
 (def target [:item])
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn plan-of
   "armour/plan for c: worn pieces and carried item names read from the body."

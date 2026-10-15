@@ -1,5 +1,6 @@
 (ns jobs.explore.search
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.started :as started]
+            [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
             [engine.contract :as contract]
@@ -198,9 +199,9 @@
 (defn no-target
   "At the call's start: the cause :no-target while no target is named."
   [c]
-  (when (and (not (ctx/frozen-call c)) (empty? (targets c))) :no-target))
+  (when (empty? (targets c)) :no-target))
 
-(def conditions [[:fn no-target]])
+(def conditions [[:fn (started/at-start no-target)]])
 
 (defn done?
   "The targets found against :count. Never :done? itself: the search ends with its event and data."

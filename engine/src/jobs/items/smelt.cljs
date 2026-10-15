@@ -1,5 +1,6 @@
 (ns jobs.items.smelt
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.started :as started]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -59,7 +60,8 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::slack-ms {:default 2000 :doc "Slack added to a wait for the furnace, in ms." :spec (a/int-in 0 nil)}
+  {::time-s {:default 600 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::slack-ms {:default 2000 :doc "Slack added to a wait for the furnace, in ms." :spec (a/int-in 0 nil)}
    ::grace-ms {:default 6000 :doc "How long a furnace may look unlit after a load before it counts as stuck, in ms." :spec (a/int-in 0 nil)}
    ::recheck-ms {:default 6000 :doc "How often the furnace is looked at again, in ms." :spec (a/int-in 0 nil)}
    ::fetch-fuels {:default ["coal" "charcoal"] :doc "Fuel items fetched first when :fuel is nil, the first preferred." :spec (a/coll-of a/item?)}
@@ -424,14 +426,16 @@
 
 (def target [:item])
 
+(def defaults {:spend {:time ::time-s}})
+
 (defn not-smeltable
   "At the call's start: impossible when the :item is one no furnace cooks, else nil."
   [c]
   (let [item (:item (:args c))]
-    (when (and item (not (coll? item)) (not (ctx/frozen-call c)) (not (sp/smeltable? (sp/input-of item (carried c)))))
+    (when (and item (not (coll? item)) (not (sp/smeltable? (sp/input-of item (carried c)))))
       (contract/impossible {:reason :not-smeltable :item item}))))
 
-(def conditions [[:fn not-smeltable]])
+(def conditions [[:fn (started/at-start not-smeltable)]])
 
 (defn done?
   "What was smelted against what the load asked, in items. Never :done? itself: the round ends the job."

@@ -1,5 +1,6 @@
 (ns jobs.items.get-tool
-  (:require [engine.args :as a]
+  (:require [jobs.lib.started :as started]
+            [engine.args :as a]
             ["minecraft-data" :as minecraft-data]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -58,7 +59,10 @@
 
 (def ways [:chest :craft :gather])
 
-(def defaults {:ways (set ways)})
+(a/defargs settings
+  {::time-s {:default 600 :doc "Seconds a tool may take to get (the obtain it runs has its own cut)." :spec (a/num-in 0 nil)}})
+
+(def defaults {:ways (set ways) :spend {:time ::time-s}})
 
 (defn ways-of [c] (set (or (:ways (ctx/frozen-call c)) (:ways (:args c)) (:ways defaults))))
 
@@ -78,17 +82,20 @@
   [c]
   (let [p (:primitives c)
         names (tools-for p (:args c))]
-    (when-not (or (ctx/frozen-call c) (map? names) (empty? names) (carried-tool p names))
+    (when-not (or (map? names) (empty? names) (carried-tool p names))
       (let [w (atom nil)]
         (when-not (ctx/check-child (assoc c :wait w) :obtain 'jobs.items.obtain (obtain-args c names))
           (or (:cause @w) (:reason @w) :no-source))))))
 
-(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))] [:fn no-source]])
+(def conditions [[:fn (fn [c] (some-> (bad-args c) contract/impossible))] [:fn (started/at-start no-source)]])
 
 (defn done?
-  "Never done before its round: the round's ending names the tool, which a caller's repeat check reads."
-  [_c]
-  {:done? false :units :tools :done 0 :left 1})
+  "A tool that does the work is carried (or none is needed); a bad call is not done."
+  [c]
+  (let [p (:primitives c)
+        names (tools-for p (:args c))
+        got (and (not (map? names)) (or (empty? names) (some? (carried-tool p names))))]
+    {:done? (boolean got) :units :tools :done (if got 1 0) :left (if got 0 1)}))
 
 (defn ^:async quote-of
   "Nothing for a tool carried or none needed, else the obtain's quote (too expensive when the obtain would be refused)."

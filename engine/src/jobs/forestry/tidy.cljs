@@ -21,10 +21,9 @@
   fell-tree digs no log of.
   Ends :done {:tidied n} (plus :replant-owed k when k felled trunks were not replanted: no seen ground, or plant-sapling
   would not run; their replant debts stay owed) after :max-trees trunks or when none is left in sight. With nothing to tidy
-  it ends condition-failed :nothing-to-tidy. A fell child that ends for want of a tool, blocks or food (a need, a limit,
+  (done? true once the first round has looked round) it ends done {:tidied 0}. A fell child that ends for want of a tool, blocks or food (a need, a limit,
   :hungry, :night-sheltered) ends the job with that ending (:tidied n in its data), done when trunks were tidied first;
   a trunk it cannot reach is left. A missing axe, a pillar's blocks or a sapling are fetched by the children (:fetch).
-  Nothing to tidy is a condition, true once the first round has looked round.
   Quote: time by the trunks to fell, at most :max-trees.")
 
 (a/defargs settings
@@ -183,19 +182,14 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(defn nothing-to-tidy
-  "The cause :nothing-to-tidy while none is tidied or chosen, no trunk is in sight and the body has looked round."
-  [c]
-  (let [m (ctx/mem c)]
-    (when (and (zero? (:tidied m 0)) (not (:tree m)) (look/surveyed? c) (empty? (leftovers c)))
-      {:reason :nothing-to-tidy})))
-
-(def conditions [[:fn nothing-to-tidy]])
+(def conditions [])
 
 (defn done?
-  "Never done before the round says so: the trunks left are read at each step."
+  "No trunk is chosen or in sight and the body has looked round; the trunks tidied and the ones in sight."
   [c]
-  {:done? false :units :trunks :done (:tidied (ctx/mem c) 0) :left 1})
+  (let [m (ctx/mem c)
+        left (count (leftovers c))]
+    {:done? (and (not (:tree m)) (look/surveyed? c) (zero? left)) :units :trunks :done (:tidied m 0) :left left}))
 
 (defn quote-of [c]
   (let [k (or (:max-trees (:args c)) (settings/get settings ::max-trees))]

@@ -1,5 +1,6 @@
 (ns jobs.forestry.prepare
-  (:require [engine.args :as a]
+  (:require [jobs.lib.started :as started]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -123,24 +124,28 @@
               {:reason reason :cells (vec (sort (map (comp maintain/cell-vec :pos) cells)))}))
           blocked-states)))
 
+(defn states-of
+  "The cell states of the field: read afresh while a cell was never seen, else once per check-cache window."
+  [c field cells]
+  (let [read #(field/assessments c field)]
+    (if (look/unseen? (:primitives c) cells) (read) (check-cache/cached c :states read))))
+
 (defn not-ready
   "Why the job does not start: nil while a step can be taken on a planned cell, and once it has begun (its finishing
   round must run). The field is assessed once per check-cache window; the round says (warns) what is wrong with
   each cell."
   [c]
-  (when-not (ctx/frozen-call c)
-    (let [field (field/planned c)]
-      (if (:trouble field)
-        {:reason :plan-trouble :why (:trouble field)}
-        (let [cells (maintain/field-cells field)
-              read #(field/assessments c field)
-              states (if (look/unseen? (:primitives c) cells) (read) (check-cache/cached c :states read))]
-          (when (empty? (field/todo c states))
-            (if-let [due (seq (vals (:recede (ctx/mem c))))]
-              {:reason :receding :ready-at (apply min due)}
-              (cond-> (or (blocked-reason states) {:reason :nothing-to-do})
-                (and (or (some #(= :unloaded (:state %)) (vals states)) (look/unseen? (:primitives c) cells))
-                     (not (look/surveyed? c :near))) contract/look-first))))))))
+  (let [field (field/planned c)]
+    (if (:trouble field)
+      {:reason :plan-trouble :why (:trouble field)}
+      (let [cells (maintain/field-cells field)
+            states (states-of c field cells)]
+        (when (empty? (field/todo c states))
+          (if-let [due (seq (vals (:recede (ctx/mem c))))]
+            {:reason :receding :ready-at (apply min due)}
+            (cond-> (or (blocked-reason states) {:reason :nothing-to-do})
+              (and (or (some #(= :unloaded (:state %)) (vals states)) (look/unseen? (:primitives c) cells))
+                   (not (look/surveyed? c :near))) contract/look-first)))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -375,12 +380,21 @@
 
 (def defaults {:spend {:time ::time-s}})
 
-(def conditions [[:fn not-ready]])
+(def conditions [[:fn (started/at-start not-ready)]])
 
 (defn done?
-  "Never done before the round says so: the cells left are assessed at each step."
+  "Every cell of the field is seen and in its state: nothing to work, nothing held back or receding; the cells worked
+  and the cells still to work."
   [c]
-  {:done? false :units :cells :done (reduce + (map #(% (ctx/mem c) 0) [:cleared :soiled :planted :dammed])) :left 1})
+  (let [field (field/planned c)
+        worked (reduce + (map #(% (ctx/mem c) 0) [:cleared :soiled :planted :dammed]))]
+    (if (:trouble field)
+      {:done? false :units :cells :done worked}
+      (let [cells (maintain/field-cells field)
+            states (states-of c field cells)
+            todo (field/todo c states)]
+        {:done? (and (empty? todo) (empty? (:recede (ctx/mem c))) (nil? (blocked-reason states)) (not (look/unseen? (:primitives c) cells)))
+         :units :cells :done worked :left (count todo)}))))
 
 (defn quote-of [_c]
   {:uses {:time [1 60 (settings/get settings ::time-s)]}

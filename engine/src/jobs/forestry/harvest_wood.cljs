@@ -1,5 +1,6 @@
 (ns jobs.forestry.harvest-wood
-  (:require [engine.args :as a]
+  (:require [jobs.lib.started :as started]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -192,20 +193,21 @@
 (defn sheltered
   "The fell child's night cause before the job starts: the trees are outside the shelter."
   [c]
-  (when-not (ctx/frozen-call c)
-    (fell-tree/sheltered (assoc c :args (fell-args (:args c))))))
+  (fell-tree/sheltered (assoc c :args (fell-args (:args c)))))
 
 (defn no-tree-to-fell
   "tree-cause while the next tree is still to be felled; the other phases are the children's."
   [c]
   (when (= :fell (:phase (ctx/mem c) :fell)) (tree-cause c)))
 
-(def conditions [[:fn sheltered] [:fn no-tree-to-fell]])
+(def conditions [[:fn (started/at-start sheltered)] [:fn no-tree-to-fell]])
 
 (defn done?
-  "Never done before the round says so: the plant phase follows the felling."
+  "Counts only: the plant phase follows the felling, so the round ends the call. The logs got this call."
   [c]
-  {:done? false :units :logs :done (max 0 (- (logs-carried c) (:logs-before (ctx/mem c) (logs-carried c)))) :left (or (:count (:args c)) 1)})
+  (let [got (max 0 (- (logs-carried c) (:logs-before (ctx/mem c) (logs-carried c))))
+        want (:count (:args c))]
+    (cond-> {:done? false :units :logs :done got} want (assoc :left (max 0 (- want got))))))
 
 (defn ^:async quote-of [c]
   (let [e (await (fell-tree/quote-of (assoc c :args (fell-args (:args c)))))

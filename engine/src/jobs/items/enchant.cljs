@@ -46,12 +46,15 @@
    :fetch {:doc "get a missing item or lapis (jobs.lib.need): true, a set of kinds or a map of limits; false stops with :no-item / :no-lapis" :spec fetch/option? :default true}})
 
 (a/defargs settings
-  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+  {::time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::walk-s {:default 10 :doc "Seconds the walk to the table takes (the quote)." :spec (a/num-in 0 nil)}
    ::visit-s {:default 5 :doc "Seconds the offers and the enchant take at the table (the quote)." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 
 (def target [:item :table :slot :choice])
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn problem
   "The cause {:reason :bad-args} when no item name is given."

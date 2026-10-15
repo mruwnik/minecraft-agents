@@ -98,7 +98,7 @@
 (def sapling {:name "oak_sapling" :count 2})
 (defn part-cut [x] (apply dissoc (lt/tree x 0 "oak" 4) (map #(fm/k x % 0) [64])))
 
-(deftest tidy-ends-done-with-the-count-and-nothing-to-tidy-is-condition-failed
+(deftest tidy-ends-done-with-the-count-and-nothing-to-tidy-is-done-with-none
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -108,8 +108,7 @@
           (is (= {:tidied 1} (:data e))))
         (let [s (lt/setup {:blocks (fm/ground [[6 0]])})
               e (await (ending-of s tidy {:radius 12} 150))]
-          (is (= {:kind :condition-failed :cause :nothing-to-tidy} (kc e)))
-          (is (nil? (:data e)) "a failed condition, not a round's ending"))))))
+          (is (= :done (:kind e)) "done at once, not a failed condition"))))))
 
 (deftest tidy-with-no-axe-and-no-fetch-ends-with-the-fell-ending-not-forever
   (async done

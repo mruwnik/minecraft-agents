@@ -20,7 +20,8 @@
    :item {:doc "the item to hold for the click; nil: the empty hand" :spec a/item? :default nil}})
 
 (a/defargs settings
-  {::reach {:default 2.5 :doc "How near the body stands to act on its target, in blocks." :spec (a/num-in 0 nil)}
+  {::time-s {:default 60 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::reach {:default 2.5 :doc "How near the body stands to act on its target, in blocks." :spec (a/num-in 0 nil)}
    ::max-walks {:default 2 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
    ::click-s {:default 0.5 :doc "Seconds one click takes (the quote)." :spec (a/num-in 0 nil)}
    ::walk-s {:default 10 :doc "Seconds one walk into reach takes (the quote)." :spec (a/num-in 0 nil)}})
@@ -28,6 +29,8 @@
 (defn max-walks [] (settings/get settings ::max-walks))
 
 (def target [:id :item])
+
+(def defaults {:spend {:time ::time-s}})
 
 (defn problem
   "The cause {:reason :bad-args} when there is no entity id."

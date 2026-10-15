@@ -84,13 +84,12 @@
         (let [{:keys [p]} (await (outcome {:blocks (merge (fm/ground [[6 0] [7 0]]) (branched 7 66))} {:radius 12}))]
           (is (= [] (fm/digs p))))))))
 
-(deftest nothing-to-tidy-stops-with-that-reason
+(deftest nothing-to-tidy-is-done-with-none-tidied
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (outcome {:blocks (fm/ground [[6 0]])} {:radius 12}))]
-          (is (= :stopped (:status out)))
-          (is (= :nothing-to-tidy (:reason out))))))))
+          (is (= {:status :done} (select-keys out [:status :tidied]))))))))
 
 (deftest the-logs-of-a-felled-trunk-are-collected
   (async done

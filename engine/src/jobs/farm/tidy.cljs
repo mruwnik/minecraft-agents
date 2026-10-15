@@ -325,9 +325,16 @@
 (def conditions [[:fn plan-problem]])
 
 (defn done?
-  "Never done before the round says so: the strays left are read at each step."
+  "Counts only: the round ends the call, reporting the kept and wrong blocks it found. The strays dug and still in the
+  plan's cells."
   [c]
-  {:done? false :units :strays :done (:dug (ctx/mem c) 0) :left 1})
+  (let [{:keys [answer trouble]} (planned c)
+        dug (:dug (ctx/mem c) 0)]
+    (if trouble
+      {:done? false :units :strays :done dug}
+      (let [cells (work-cells (:cells answer) (:part (:args c)))]
+        {:done? false :units :strays :done dug
+         :left (count (:dig (strays cells #(tr/world-block (:primitives c) %))))}))))
 
 (defn quote-of [_c]
   {:uses {:time [1 30 (settings/get settings ::time-s)]}

@@ -57,7 +57,8 @@
 (def conditions [])
 
 (a/defargs settings
-  {::walk-s-per-block {:default 0.4 :doc "Seconds a quote counts to walk one block to a drop." :spec (a/num-in 0 nil)}
+  {::max-settle-waits {:default 10 :doc "Checks of a hole drop that still moves before it counts as settled." :spec (a/int-in 0 nil)}
+   ::walk-s-per-block {:default 0.4 :doc "Seconds a quote counts to walk one block to a drop." :spec (a/num-in 0 nil)}
    ::dig-max-cells {:default 16 :doc "The most cells :dig digs to reach one drop; a dearer route leaves it." :spec (a/int-in 0 nil)}
    ::dig-margin {:default 3 :doc "How far outside the box round the body and the drop the dig route may wander, in blocks." :spec (a/int-in 0 nil)}
    ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}
@@ -119,16 +120,16 @@
 
 (defn deep? [c item] (boolean (and (.-pos item) (> (- (feet-y c) (second (item-cell item))) 1))))
 
-(def max-settle-waits 10)
+(defn max-settle-waits [] (settings/get settings ::max-settle-waits))
 
 (defn settling?
   "Whether a hole drop is still moving: its cell differs from the one noted for its id in job memory (noted now, at most
-  max-settle-waits times); judged where it comes to rest, not mid-fall."
+  ::max-settle-waits times); judged where it comes to rest, not mid-fall."
   [c item]
   (let [id (.-id item)
         cell (item-cell item)
         {:keys [cell-seen n] :or {n 0}} (get-in (ctx/mem c) [:settle id])
-        moving? (and (not= cell cell-seen) (< n max-settle-waits))]
+        moving? (and (not= cell cell-seen) (< n (max-settle-waits)))]
     (when moving?
       (ctx/update-mem! c assoc-in [:settle id] {:cell-seen cell :n (inc n)}))
     moving?))

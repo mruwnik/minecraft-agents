@@ -49,7 +49,11 @@
   {::time-s {:default 1800 :doc "Seconds a kitchen pass may last: the smelts, the bake and the deposit." :spec (a/num-in 0 nil)}
    ::food-s {:default 10 :doc "Seconds a quote counts for each raw food carried: its time in the furnace." :spec (a/num-in 0 nil)}})
 
+(def target [])
+
 (def defaults {:spend {:time ::time-s}})
+
+(defn done? "A standing job with no goal state." [_c] {:done? false})
 
 (def steps [:smelt :bake :deposit])
 (def jobs {:smelt 'jobs.items.smelt :bake 'jobs.items.bake :deposit 'jobs.storage.deposit})
