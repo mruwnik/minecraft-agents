@@ -53,7 +53,7 @@
   :no-blocks when only a step cell was left and no pillar block is carried;
   :no-air (data :air-radius, :cap why no cap was dug: :no-cap :unseen :not-natural :protected :gravity :too-slow :dig-failed,
   :pocket why no pocket gave air: :off :made-near :no-block :afloat :no-wall :too-slow :dig-failed :step-failed :made :not-tried;
-  the text names both) or :no-way-out (with a warn) after three failed tries in the run, or many passes. It never holds still while afloat.
+  the text names both) or :no-way-out after three failed tries in the run, or many passes. It never holds still while afloat.
   The air search is jobs.survival.breathe.air. Quote: a few seconds to a minute.
   Memory: one :breathe entry per run; :breathe-pocket per pocket made.")
 
@@ -341,12 +341,11 @@
       (ctx/update-mem! c assoc :noted true))))
 
 (defn fail!
-  "One failed try in this run: :again until u/max-failures, then the warn kind and nothing possible with cause cause."
-  [c kind cause text]
+  "One failed try in this run: :again until u/max-failures, then nothing possible with cause cause."
+  [c cause text]
   (if-not (u/count-fail! c)
     :again
-    (do (ctx/emit! c kind :warn {:tries (u/max-failures) :text text})
-        (ctx/end c :nothing-possible cause {:text text}))))
+    (ctx/end c :nothing-possible cause {:text text :tries (u/max-failures)})))
 
 (defn fail-air!
   "fail! for :no-air: the stop says how far air was searched and why no pocket and no cap gave air."
@@ -356,8 +355,7 @@
     (let [fields {:air-radius (:air-radius (:args c)) :cap (:cap (ctx/mem c) :no-cap) :pocket (:pocket (ctx/mem c) :not-tried)}
           text (str "drowning and no air within reach (none seen within " (:air-radius fields) "; pocket: " (name (:pocket fields))
                     "; cap: " (name (:cap fields)) ")")]
-      (ctx/emit! c :no_air :warn (assoc fields :tries (u/max-failures) :text text))
-      (ctx/end c :nothing-possible :no-air (assoc fields :text text)))))
+      (ctx/end c :nothing-possible :no-air (assoc fields :tries (u/max-failures) :text text)))))
 
 (defn ^:async pass!
   "One look at the world and one try. :again or :held for another pass, else :done (perhaps stopped)."
@@ -386,7 +384,7 @@
               (and drowning? ok) :again
               (= :dug ok) (do (ctx/update-mem! c dissoc :failures) :again)
               drowning? (fail-air! c)
-              :else (fail! c :no_way_out :no-way-out "could not dig out of the block"))))))))
+              :else (fail! c :no-way-out "could not dig out of the block"))))))))
 
 (defn ^:async round [c]
   (loop [i 0]

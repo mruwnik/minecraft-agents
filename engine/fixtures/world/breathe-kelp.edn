@@ -15,12 +15,12 @@
    :blocks [[:fill [16 0 16] [16 2 16] "kelp_plant"] [:set [16 3 16] "kelp[age=25]"]]
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 50}
-            {:no-event {:source :job :kind :no_air} :for-s 50 :until {:source :reflex :kind :ended}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 50 :until {:source :reflex :kind :ended}}]
    :after [[:body-near [16.5 4 16.5] 2.5]]}
   ;; card 8fad6e13: the swim primitive counts a head in seagrass as under water too
   {:name "tall-seagrass-column-swims-up"
    :blocks [[:set [16 2 16] "tall_seagrass[half=lower]"] [:set [16 3 16] "tall_seagrass[half=upper]"]]
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 50}
-            {:no-event {:source :job :kind :no_air} :for-s 50 :until {:source :reflex :kind :ended}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 50 :until {:source :reflex :kind :ended}}]
    :after [[:body-near [16.5 4 16.5] 2.5]]}]}

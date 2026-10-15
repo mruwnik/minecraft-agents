@@ -292,7 +292,7 @@
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "gives up in one run")
-          (is (= 1 (count (filter #(= :extinguish_stuck (:kind %)) @seen))))
+          (is (empty? (of-kind seen :extinguish_stuck)) "the ending carries it")
           (is (= :stuck (stopped-reason seen)) "ends stopped, not completed"))))))
 
 (deftest does-not-pour-water-into-lava
@@ -541,7 +541,7 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= :stuck (stopped-reason seen)))
-          (is (= 1 (count (of-kind seen :extinguish_stuck)))))))))
+          (is (empty? (of-kind seen :extinguish_stuck))))))))
 
 (defn setup-blocked
   "A body on fire beside a fire cell (or in world), every raw moveTo blocked, go-to replaced by (step c p n) for its
@@ -571,7 +571,6 @@
           (is (= [] (:list (core/state eng))))
           (is (= 1 @go-tos))
           (is (= 1 (count (calls p "moveTo"))) "one blocked step, then go-to, not three stalled walks")
-          (is (= [] (of-kind seen :extinguish_stuck)))
           (is (= 1 (count (of-kind seen :completed)))))))))
 
 (deftest in-lava-ringed-by-lava-a-blocked-step-covers-the-lava-before-the-go-to
@@ -593,7 +592,6 @@
           (is (= (repeat (extinguish/max-covers) "cobblestone") (mapv (comp :item call-args) (calls p "place"))))
           (is (= 1 @go-tos))
           (is (= 1 (count (calls p "moveTo"))) "one blocked step")
-          (is (= [] (of-kind seen :extinguish_stuck)))
           (is (= 1 (count (of-kind seen :completed)))))))))
 
 (deftest a-go-to-that-is-still-working-is-not-a-failure
@@ -608,7 +606,6 @@
           (await (run-until-empty eng many))
           (is (= [] (:list (core/state eng))))
           (is (= 6 @go-tos) "continued five times, arrived on the sixth")
-          (is (= [] (of-kind seen :extinguish_stuck)))
           (is (= 1 (count (of-kind seen :completed)))))))))
 
 (deftest a-go-to-that-fails-ends-stopped-stuck-with-its-reason
@@ -622,7 +619,7 @@
           (is (= :stuck (stopped-reason seen)))
           (is (= (u/max-failures) @go-tos) "each failed go-to counts once")
           (is (= 1 (count (calls p "moveTo"))) "after a blocked step, later passes go straight to go-to")
-          (is (re-find #"walled in" (:text (first (of-kind seen :extinguish_stuck))))))))))
+          (is (re-find #"walled in" (:text (first (of-kind seen :stopped))))))))))
 
 (deftest failures-scattered-between-arrivals-do-not-stop-a-run-that-is-escaping
   (async done
@@ -635,7 +632,6 @@
                                                              (ctx/end c :nothing-possible :unreachable {:arrived false :text "walled in"}))))]
           (await (run-until-empty eng 10))
           (is (= 6 @go-tos))
-          (is (= [] (of-kind seen :extinguish_stuck)))
           (is (= 1 (count (of-kind seen :completed)))))))))
 
 (deftest a-go-to-that-arrives-with-the-fire-still-on-is-bounded

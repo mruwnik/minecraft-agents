@@ -149,7 +149,8 @@
           (is (= [] (:list (core/state eng))))
           (is (= ["swim" "swim" "swim"] (call-names p)) "three tries in the one run")
           (is (= [[:stopped :no-air]] (ended seen)))
-          (is (= 1 (count (of-kind seen :no_air)))))))))
+          (is (empty? (of-kind seen :no_air)) "the ending carries it")
+          (is (every? some? ((juxt :air-radius :cap :pocket) (first (of-kind seen :stopped))))))))))
 
 (def side-args (assoc defaults :radius 1))
 
@@ -176,7 +177,8 @@
           (await (one-run! eng side-args))
           (is (= [] (:list (core/state eng))))
           (is (= [[:stopped :no-air]] (ended seen)))
-          (is (= 1 (count (of-kind seen :no_air)))))))))
+          (is (empty? (of-kind seen :no_air)) "the ending carries it")
+          (is (every? some? ((juxt :air-radius :cap :pocket) (first (of-kind seen :stopped))))))))))
 
 (deftest enclosed-run-digs-the-head-block-then-the-one-above-and-steps-out
   (async done
@@ -200,7 +202,7 @@
           (is (= [] (:list (core/state eng))))
           (is (= ["dig" "dig" "dig"] (call-names p)) "three tries in the one run, no moveTo")
           (is (= [[:stopped :no-way-out]] (ended seen)))
-          (is (= 1 (count (of-kind seen :no_way_out)))))))))
+          (is (empty? (of-kind seen :no_way_out)) "the ending carries it"))))))
 
 (deftest enclosed-digs-that-work-but-leave-the-head-enclosed-are-progress-not-failures
   (async done
@@ -736,7 +738,7 @@
           (await (core/tick! eng))
           (is (= 1 @swims) "the cut round acts no more")
           (is (= {:x 0 :y 64 :z 0} (core/self-pos p)) "still under water")
-          (is (empty? (of-kind seen :no_air)) "a cut is not a failed try")
+          (is (not-any? #{[:stopped :no-air]} (ended seen)) "a cut is not a failed try")
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (core/tick! eng))
           (is (= 2 @swims) "the refire swims up")
@@ -1260,7 +1262,7 @@
                          #js {:status "timeout"})))
           (await (one-run! eng defaults))
           (is (<= top (js/Math.floor (:y (core/self-pos p)))) "swam to the top")
-          (is (empty? (of-kind seen :no_air)) "a swim that rose is not a failed try")
+          (is (not-any? #{[:stopped :no-air]} (ended seen)) "a swim that rose is not a failed try")
           (is (>= (count (filter #{"swim"} (call-names p))) 5)))))))
 
 (defn crossing-world
@@ -1321,7 +1323,7 @@
         (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks (drag-tunnel)
                                            :states {"3,64,0" {:drag true} "3,65,0" {:drag true}}})]
           (await (one-run! eng (assoc defaults :air-radius 8)))
-          (is (empty? (of-kind seen :no_air)) "the go-to leg routes round the column")
+          (is (not-any? #{[:stopped :no-air]} (ended seen)) "the go-to leg routes round the column")
           (is (= [[:completed nil]] (ended seen)))
           (is (not (.-inWater (.self p)))))))))
 
@@ -1385,7 +1387,7 @@
                                        #js {:status "timeout"}))))))
           (await (one-run! eng (assoc defaults :reach 20)))
           (is @pulled "drowned a second time")
-          (is (empty? (of-kind seen :no_air)) "rises below the first surfacing are progress")
+          (is (not-any? #{[:stopped :no-air]} (ended seen)) "rises below the first surfacing are progress")
           (is (< 4 @n) "swam up again"))))))
 
 (deftest a-bank-never-seen-is-looked-for-before-the-run-stops-afloat

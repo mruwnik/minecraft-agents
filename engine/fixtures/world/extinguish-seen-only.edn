@@ -1,6 +1,6 @@
 ;; Card ad8e1b18: jobs.survival.extinguish looks for water only where it has seen it. The body burns on a fire in a closed 3x3x2
 ;; room (stone x 8..12, z 14..18, y 0..2 round it); a pool [13 -1 15]-[14 -1 17] lies just behind the east wall, 4 blocks away,
-;; and is never in view: the job knows no water and no cell to go to in the shut room (extinguish_stuck), and the body stays out of the pool.
+;; and is never in view: the job knows no water and no cell to go to in the shut room (stopped :stuck), and the body stays out of the pool.
 {:defaults
  {:tags [:survival :fire :sensing] :time :any
   :plot {:height 6}
@@ -12,5 +12,5 @@
   :limit-s 40}
  :cases
  [{:name "water-behind-a-wall-is-not-known"
-   :expect [{:event {:source :job :kind :extinguish_stuck} :within-s 25}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :stuck}} :within-s 25}]
    :after [[:body-far [13.5 -1 16.5] 2.5]]}]}

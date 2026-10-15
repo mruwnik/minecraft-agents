@@ -38,7 +38,7 @@
      Otherwise it holds still (:burning-wait): emits info extinguish_wait once, eats when food is under 18 and food is carried
      (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends :limit-reached :still-burning.
   A walk that is blocked (boxed in, perhaps by its own covers) goes through a go-to from then on (it pillars, stairs or digs
-  out when shut in); a go-to still working is not a failure. Three failures (no safe cell, or a go-to that fails, with its reason) give an extinguish_stuck warning and end :nothing-possible :stuck.
+  out when shut in); a go-to still working is not a failure. Three failures (no safe cell, or a go-to that fails, with its reason) end :nothing-possible :stuck.
   Still burning after max-passes passes ends :limit-reached :still-burning. Never yields :continue (only a cut round returns it, unseen).
   The cover blocks are the call's :use :blocks (default the carried :cover fillers of jobs.lib.choose).
   Memory: writes :extinguish {:pos :cause} each pass (cap 20, one hour),
@@ -344,12 +344,11 @@
     (await (stand-wait! c))))
 
 (defn stuck!
-  "One failed walk: :again until u/max-failures in a row, then a warn and stopped :stuck."
+  "One failed walk: :again until u/max-failures in a row, then stopped :stuck."
   [c text]
   (if-not (u/count-fail! c)
     :again
-    (do (ctx/emit! c :extinguish_stuck :warn {:tries (u/max-failures) :text text})
-        (ctx/end c :nothing-possible :stuck {:text text}))))
+    (ctx/end c :nothing-possible :stuck {:text text :tries (u/max-failures)})))
 
 (defn ^:async move!
   "An emergency step to pos (range 0). The walk's status."

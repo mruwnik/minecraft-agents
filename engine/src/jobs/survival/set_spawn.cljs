@@ -14,9 +14,9 @@
   server answers \"respawn point set\".
   Needs a bed: the :bed argument, else the remembered :bed within :bed-radius (forgotten with a bed_missing warn when its block is seen to be gone), else a bed the body sees.
   Conditions (at the start only): not night (at night the sleep job sets it), else condition-failed :night; a bed, else :no-bed.
-  Done at once (:already) when the :spawn-bed it writes is recorded at the bed. Done {:spawn pos} when the server set the point, or at once with a spawn_unchanged event and :why :unchanged when the spawn is already
+  Done at once (:already) when the :spawn-bed it writes is recorded at the bed. Done {:spawn pos} when the server set the point, or at once with :why :unchanged when the spawn is already
   known at that bed (jobs.lib.shelter/spawn-known?: :spawn-bed or :spawn-set near it, not reset since). A click that did not set it
-  is nothing-possible :not-set {:why reason}, with a spawn_not_set warn. Writes :spawn-bed {:pos bed} (cap 1, forever),
+  is nothing-possible :not-set {:why reason}. Writes :spawn-bed {:pos bed} (cap 1, forever),
   which jobs.survival.sleep also writes, and :home at the bed unless a live :home is recorded.
   Quote: time of one click and walk; done 1 spawn.")
 
@@ -75,8 +75,7 @@
       (sh/spawn-known? (ctx/view c) bed (ctx/now c))
       (do (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
           (places/offer! c :home bed)
-          (ctx/emit! c :spawn_unchanged :info {:pos bed :text "the respawn point is already at this bed"})
-          (ctx/end c :done nil {:spawn bed :why :unchanged}))
+          (ctx/end c :done nil {:spawn bed :why :unchanged :text "the respawn point is already at this bed"}))
       :else
       (let [e (await (ctx/call c :use 'jobs.blocks.use-on {:pos bed :see true}))]
         (cond
@@ -85,5 +84,5 @@
                                   (places/offer! c :home bed)
                                                           (ctx/end c :done nil {:spawn bed}))
           :else (let [why (get-in e [:data :reason] (contract/cause-key e))]
-                  (ctx/emit! c :spawn_not_set :warn {:pos bed :text (str "clicking the bed did not set the respawn point: " (name (or why :unknown)))})
-                  (ctx/end c :nothing-possible :not-set {:why why :pos bed})))))))
+                  (ctx/end c :nothing-possible :not-set
+                           {:why why :pos bed :text (str "clicking the bed did not set the respawn point: " (name (or why :unknown)))})))))))

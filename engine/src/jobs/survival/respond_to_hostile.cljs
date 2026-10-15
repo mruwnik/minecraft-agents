@@ -333,6 +333,5 @@
           (let [n (if (= before (signature c after)) (inc unchanged) 0)]
             (if (>= n (max-unchanged))
               (do (mute-heard! c hs)
-                  (ctx/emit! c :no_response :warn {:text (str "the hostile is still near and nothing changed in " n " tries")})
                   (ctx/end c :nothing-possible :no_response {:text (str "a hostile is still near and " n " tries changed nothing")}))
               (do (await (pace/pace!)) (recur n false)))))))))

@@ -42,7 +42,7 @@
         (let [{:keys [eng p seen]} (await (run-set-spawn bed-world {} #(know-bed! % bed)))]
           (is (= [bed] (mapv st/arg-pos (calls p "useOn"))))
           (is (= [{:pos bed}] (entries eng :spawn-bed)))
-          (is (= [] (emitted seen :spawn_not_set))))))))
+          (is (= [nil] (mapv :why (emitted seen :completed)))))))))
 
 (deftest set-spawn-makes-the-bed-home-unless-a-home-is-set
   (async done
@@ -122,8 +122,8 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (await (run-set-spawn {:time noon :blocks {"6,64,0" "respawn_anchor"}} {:bed bed} (constantly nil)))]
           (is (= [] (entries eng :spawn-bed)))
-          (is (= 1 (count (emitted seen :spawn_not_set))))
-          (is (re-find #"did not set the respawn point" (:text (first (emitted seen :spawn_not_set))))))))))
+          (is (= [[:not-set :cannot]] (mapv (juxt :reason :why) (emitted seen :stopped))))
+          (is (re-find #"did not set the respawn point" (:text (first (emitted seen :stopped))))))))))
 
 (deftest set-spawn-skips-a-remembered-bed-beyond-the-bed-radius
   (is (= :no-bed (wait-reason {:time noon :blocks {"90,64,0" "red_bed"}} far-bed))))
@@ -156,5 +156,5 @@
           (core/submit! eng '(jobs.survival.set-spawn) {})
           (await (run-until-empty eng 6))
           (is (= 0 (count (calls p "useOn"))))
-          (is (= 1 (count (emitted seen :spawn_unchanged))))
+          (is (= [:unchanged] (mapv :why (emitted seen :completed))))
           (is (= [{:pos bed}] (entries eng :spawn-bed))))))))

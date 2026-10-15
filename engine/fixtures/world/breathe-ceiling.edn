@@ -2,7 +2,7 @@
 ;; Air is looked for only in the own column and in cells the body has seen, never through stone.
 ;; seen-pocket-is-gone-to: a water tunnel with a ceiling and an air pocket 6 blocks down it, in line of sight: a go-to child (slot :air) takes the body there, the ceiling is not dug.
 ;; The tunnel lies 9+ blocks from the shaft cases (the body remembers the cells of an earlier case on the shared plot); the body faces it (:yaw 270, east), since it sees only its view cone.
-;; Shaft cases (1x1 water column, 4 deep, a cap at y 4, an air chimney over it): dirt cap is dug; planks cap stops :no_air :cap :not-natural.
+;; Shaft cases (1x1 water column, 4 deep, a cap at y 4, an air chimney over it): dirt cap is dug; planks cap stops :no-air :cap :not-natural.
 ;; A sand cap is not a live case: set over water it falls at once (:gravity is in breathe-test).
 ;; unseen-pocket-is-not-chosen: a sealed air pocket 5 blocks off behind stone is never gone to (no :air child); the cap over the shaft is dug instead.
 ;; Live risk: whether the body remembers the water cells of a tunnel it has swum (the seen-pocket case).
@@ -21,7 +21,7 @@
    :body {:at [6.5 1 6.5] :yaw 270}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :child_started :data {:slot :air}} :within-s 40}
-            {:no-event {:source :job :kind :no_air} :for-s 40}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 40}]
    :after [[:body-near [13.5 2 6.5] 4] [:block [8 4 6] "stone"] [:block [13 4 6] "stone"]]}
   ;; should fail (as a go-to): the pocket is behind stone and was never seen, the cap is dug instead
   {:name "unseen-pocket-is-not-chosen"
@@ -33,7 +33,7 @@
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:no-event {:source :job :kind :child_started :data {:slot :air}} :for-s 30}
-            {:no-event {:source :job :kind :no_air} :for-s 30}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 30}]
    :after [[:not-block [16 4 16] "dirt"] [:body-near [16.5 3 16.5] 3]]}
   ;; card 7c2712c5: a seen pocket of air joined to the body by no water or air (a glass window shows it) is not swum to; the cap is dug
   {:name "seen-pocket-behind-glass-is-not-gone-to"
@@ -45,7 +45,7 @@
    :body {:at [16.5 1 16.5] :yaw 270}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:no-event {:source :job :kind :child_started :data {:slot :air}} :for-s 30}
-            {:no-event {:source :job :kind :no_air} :for-s 30}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 30}]
    :after [[:not-block [16 4 16] "dirt"] [:block [17 0 16] "glass"] [:body-near [16.5 3 16.5] 3]]}
   ;; card 7c2712c5: a two-cell dirt cap is dug on one budget of the air left
   {:name "two-cell-dirt-cap-is-dug-within-the-air"
@@ -54,7 +54,7 @@
             [:fill [16 6 16] [16 8 16] "air"]]
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:no-event {:source :job :kind :no_air} :for-s 40}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 40}
             {:no-event {:source :body :kind :died} :for-s 40}]
    :after [[:not-block [16 4 16] "dirt"] [:not-block [16 5 16] "dirt"]]}
   {:name "dirt-cap-is-dug"
@@ -63,7 +63,7 @@
             [:fill [16 5 16] [16 8 16] "air"]]
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:no-event {:source :job :kind :no_air} :for-s 30}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 30}]
    :after [[:not-block [16 4 16] "dirt"] [:body-near [16.5 3 16.5] 3]]}
   ;; should fail: a cap the body did not find is a build, never dug
   {:name "planks-cap-stops-not-natural"
@@ -71,6 +71,6 @@
             [:set [16 4 16] "oak_planks"]
             [:fill [16 5 16] [16 8 16] "air"]]
    :body {:at [16.5 1 16.5]}
-   :expect [{:event {:source :job :kind :no_air :data {:cap :not-natural}} :within-s 60}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-air :cap :not-natural}} :within-s 60}
             {:event {:source :job :kind :stopped :data {:reason :no-air :cap :not-natural}} :within-s 60}]
    :after [[:block [16 4 16] "oak_planks"]]}]}

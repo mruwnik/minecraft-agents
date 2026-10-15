@@ -3,7 +3,7 @@
 ;; Should-succeed: deep-open-column (28 deep, several swims of the 3 s bound, none counted a failed try); dark-sealed-column (the air pocket above is sealed and dark, the body swims up
 ;; the own column unseen); deep-dirt-cap (swim up 12 cells to a dirt cap, dig it); magma-neighbour (the capped own column is dug, the neighbour column over magma that reaches air is never entered);
 ;; go-air-routes-round-magma (a seen air pocket behind a drag column in a 3 wide tunnel is gone to round it).
-;; Should-fail: magma-between-is-not-crossed (planks cap, the only air column lies behind a drag column: stops :no_air, never crosses).
+;; Should-fail: magma-between-is-not-crossed (planks cap, the only air column lies behind a drag column: stops :no-air, never crosses).
 ;; Live risk: magma over water makes a bubble column only after a block update; the magma cases check the stop or the dug cap, not the column state.
 {:defaults
  {:tags [:survival :water] :time :any
@@ -23,7 +23,7 @@
    :limit-s 120
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 100}
-            {:no-event {:source :job :kind :no_air} :for-s 100 :until {:source :reflex :kind :ended}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 100 :until {:source :reflex :kind :ended}}]
    :after [[:body-near [16.5 28 16.5] 3]]}
   {:name "dark-sealed-column"
    :plot {:height 16}
@@ -33,7 +33,7 @@
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
-            {:no-event {:source :job :kind :no_air} :for-s 60 :until {:source :reflex :kind :ended}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 60 :until {:source :reflex :kind :ended}}]
    :after [[:body-near [16.5 11 16.5] 3]]}
   {:name "deep-dirt-cap"
    :plot {:height 18}
@@ -43,7 +43,7 @@
             [:fill [16 13 16] [16 14 16] "air"]]
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:no-event {:source :job :kind :no_air} :for-s 60 :until {:source :reflex :kind :ended}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 60 :until {:source :reflex :kind :ended}}]
    :after [[:not-block [16 12 16] "dirt"] [:body-near [16.5 12.5 16.5] 3]]}
   {:name "magma-neighbour-is-not-entered"
    :blocks [[:fill [16 0 16] [16 3 16] "water"]
@@ -54,7 +54,7 @@
             [:fill [17 4 16] [17 8 16] "air"]]
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:no-event {:source :job :kind :no_air} :for-s 40 :until {:source :reflex :kind :ended}}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 40 :until {:source :reflex :kind :ended}}
             {:no-event {:source :body :kind :died} :for-s 40 :until {:source :reflex :kind :ended}}]
    :after [[:not-block [16 4 16] "dirt"] [:body-near [16.5 3 16.5] 3]]}
   {:name "magma-between-is-not-crossed"
@@ -65,7 +65,7 @@
             [:fill [16 4 16] [16 8 16] "air"]]
    :body {:at [14.5 1 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:event {:source :job :kind :no_air :data {:cap :not-natural}} :within-s 60}
+            {:event {:source :job :kind :stopped :data {:reason :no-air :cap :not-natural}} :within-s 60}
             {:no-event {:source :body :kind :died} :for-s 60}]
    :after [[:block [14 4 16] "oak_planks"] [:body-far [16.5 2 16.5] 1.2]]}
   {:name "go-air-routes-round-magma"
@@ -75,6 +75,6 @@
    :body {:at [6.5 1 16.5] :yaw 270}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :child_started :data {:slot :air}} :within-s 40}
-            {:no-event {:source :job :kind :no_air} :for-s 40 :until {:source :reflex :kind :ended}}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 40 :until {:source :reflex :kind :ended}}
             {:no-event {:source :body :kind :died} :for-s 40}]
    :after [[:body-near [19.5 3 16.5] 4]]}]}
