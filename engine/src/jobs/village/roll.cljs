@@ -34,9 +34,9 @@
   A workstation item, wanted item or cell that is missing or bad is impossible (:bad-args). A cell the body has not seen
   asks for a look at the start; the round then walks to it (go-to child) and ends condition-failed :cell-unseen when it
   still cannot be seen there.
-  Every step re-reads the world and the saved count: a restart that finds the workstation missing places it first, so a cut
-  between the break and the placing leaves nothing behind. The workstation stands at :pos when the job ends, except after
-  :place-failed or :dig-failed (a child stopped).")
+  Every step re-reads the world and the saved count: a restart that finds the workstation missing places it first. The
+  cleanup export places a workstation the call broke however it ends, a cut included, so the workstation stands at :pos
+  when the job ends, except after :place-failed (a child stopped; the cleanup's failure is its :cleanup).")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid" :spec string? :default nil}
@@ -233,6 +233,7 @@
   [c]
   (let [{:keys [pos fetch]} (:args c)
         slot (keyword (str "dig-" (rolls c)))
+        _ (when-not (:broken (ctx/mem c)) (stamp! c :broken))
         r (await (child! c slot 'jobs.blocks.dig {:pos pos :collect true :fetch fetch} :dig-failed))]
     (if-not (ending-or-wait? r)
       (do (ctx/update-mem! c #(-> % (update :rolls (fnil inc 0)) (assoc :broken (ctx/now c))))
@@ -310,6 +311,17 @@
                         (do (ctx/update-mem! c dissoc :placed)
                             (await (dig! c))))
           :else r)))))
+
+(defn ^:async cleanup
+  "However the call ends: a workstation this call broke and did not place back is placed (stepping off its cell first).
+  Done, or the place child's failure."
+  [c _]
+  (let [{:keys [pos]} (:args c)
+        block (u/seen-name (:primitives c) pos)]
+    (if-not (and (:broken (ctx/mem c)) block (b/air block))
+      (ctx/end c :done nil)
+      (let [r (if (on-cell? c pos) (await (clear-cell! c pos)) (await (place! c)))]
+        (if (= :again r) (await (cleanup c nil)) r)))))
 
 (defn ^:async round
   "The whole search: steps (a pace between) until found or stopped; it yields while the villager or a child waits."

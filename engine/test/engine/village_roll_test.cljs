@@ -326,3 +326,26 @@
               result (await (child-outcome env {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :claim-s 5} 300))]
           (is (= :still-employed (:reason result)))
           (is (= "lectern" (workstation (:p env)))))))))
+
+(deftest a-roll-cut-after-the-break-places-the-workstation-back-in-its-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (bd/setup {:entities [(librarian [(offer "paper")])] :zones []
+                                               :inventory [{:name "lectern" :count 1}]
+                                               :blocks {ws-key "lectern" "2,63,0" "stone"}})
+              cut (atom false)]
+          (rolls-offers! p [[(offer "paper")]])
+          (add-watch (fake/state p) :cut
+                     (fn [_ _ _ w]
+                       (when (and (not @cut) (not= "lectern" (get-in w [:blocks ws-pos])))
+                         (reset! cut true)
+                         (core/cancel! eng (first (:list (core/state eng)))))))
+          (core/submit! eng (list job {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :claim-s 5}) {})
+          (loop [i 0]
+            (when (and (< i 300) (seq (:list (core/state eng))))
+              (swap! clock + 700)
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (is @cut "the cut came after the break")
+          (is (= "lectern" (workstation p)) "the cleanup put it back"))))))
