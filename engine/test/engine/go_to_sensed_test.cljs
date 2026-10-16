@@ -586,13 +586,14 @@
           (is (= {:arrived true} out) (pr-str (last seen))))))))
 
 (defn record-moves!
-  "Keeps in atom a every raw moveTo and every steer tick's controls of the world {:p p} (steer ticks as [:steer controls x])."
-  [a]
+  "Keeps in atom a every raw moveTo and every steer tick's controls of the world {:p p} (steer ticks as [:steer controls x]); on-steer, when given, is called with p at every steer."
+  [a & [on-steer]]
   (fn [{:keys [p]}]
     (let [w (.-world p)]
       (.override w "moveTo" (fn [token args impl] (swap! a conj [:move-to]) (impl token args)))
       (.override w "steer"
                  (fn [token args impl]
+                   (when on-steer (on-steer p))
                    (let [d (.-decide args)
                          args' (js/Object.defineProperty (js/Object.assign #js {} args) "decide"
                                                          #js {:value (fn [pose] (let [r (d pose)] (swap! a conj [:steer (js->clj (.-controls r)) (.-x pose)]) r))})]
@@ -679,6 +680,46 @@
                                           :blocks (assoc (slime-pit slime-floor) "1,59,0" "lava")}
                           {:look [1 59 0]} (record-moves! acts)))
           (is (empty? (filter #(get-in % [1 "sneak"]) @acts))))))))
+
+(deftest lava-seen-beside-the-landing-holds-back-the-look-over-the-edge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [acts (atom [])]
+          (await (run-job look-from-afar {:self {:pos {:x -2.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true
+                                          :blocks (assoc (slime-pit slime-floor) "2,59,0" "lava")}
+                          {:look [2 59 0]} (record-moves! acts)))
+          (is (empty? (filter #(get-in % [1 "sneak"]) @acts))))))))
+
+(deftest a-hostile-that-comes-during-the-walk-to-the-takeoff-holds-back-the-lean
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [acts (atom [])
+              zombie (fake/entity-in {:id 1 :name "zombie" :kind "hostile" :pos [-3 60 0]})
+              walked (atom false)
+              come (fn [p] (when-not @walked (reset! walked true) (swap! (fake/state p) update :entities conj zombie)))]
+          (await (run-job look-from-afar {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)}
+                          {} (record-moves! acts come)))
+          (is (seq @acts) "the walk to the takeoff steered")
+          (is (empty? (filter #(get-in % [1 "sneak"]) @acts))))))))
+
+(defn look-args
+  "A job that looks over the drop from afar and puts the args its takeoff walk was given in atom walk."
+  [walk]
+  {:round (fn ^:async look-args-round [c]
+            (ctx/update-mem! c assoc :probe-drops [{:from [-1 60 0] :floor [1 55 0]}])
+            (await (gth/look-at-drops! c))
+            (reset! walk (get-in (ctx/mem c) [:child-args :lip]))
+            (ctx/end c :done nil))})
+
+(deftest the-walk-to-the-takeoff-cell-spends-no-health-so-it-never-looks-at-a-drop-itself
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walk (atom nil)]
+          (await (run-job (look-args walk) {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)} {}))
+          (is (= {:health 0} (:spend @walk)) (pr-str @walk)))))))
 
 (deftest go-to-refuses-a-drop-onto-one-slime-block-ringed-by-stone
   (async done

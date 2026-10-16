@@ -112,21 +112,23 @@
          {:from [(.-x a) (.-y a) (.-z a)] :floor [(.-x b) (dec (.-y b)) (.-z b)]})))
 
 (defn lip-unsafe?
-  "Whether looking over the edge of drop is held back: a hostile the body knows of near the lip, or lava seen in the drop's column."
+  "Whether looking over the edge of drop is held back: a hostile the body knows of near the lip, or lava seen in the drop's column or beside it."
   [c {:keys [from floor]}]
   (let [p (:primitives c)
         [fx fy fz] from
         [tx ty tz] floor]
     (or (seq (danger-q/hostiles-near-way p {:x fx :y fy :z fz} (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))
-        (some #(some-> (u/seen-block p {:x tx :y % :z tz}) .-name (= "lava")) (range ty (inc fy))))))
+        (some (fn [[dx dz]] (some #(some-> (u/seen-block p {:x (+ tx dx) :y % :z (+ tz dz)}) .-name (= "lava")) (range ty (inc fy))))
+              [[0 0] [1 0] [-1 0] [0 1] [0 -1]]))))
 
 (defn ^:async at-lip-cell!
   "Whether the body stands on the takeoff cell [x y z] of a drop, walking there with a go-to child if it does not (the lean
-  is a straight steer, which goes off any edge on the way)."
+  is a straight steer, which goes off any edge on the way). The child may spend no health, so it never meets the budget
+  and never looks at a drop itself (refused? needs no :max-damage)."
   [c [x y z]]
   (let [pos (u/self-pos c)]
     (or (= [x y z] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
-        (:arrived (:data (await (child/run!* c :lip 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal}})))))))
+        (:arrived (:data (await (child/run!* c :lip 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal} :spend {:health 0}})))))))
 
 (defn ^:async look-at-drops!
   "A drop the budget refuses may be priced by what the body has not looked at: a bounce counts only on a pad in view
@@ -141,8 +143,9 @@
             [fx _ fz] from
             [tx _ tz] floor
             lip (fn [f t] (+ f 0.5 (* lip-reach (compare t f))))]
-        (ctx/update-mem! c update :drops-looked (fnil conj []) drop)
-        (when arrived?
+        (when-not (and arrived? (lip-unsafe? c drop))
+          (ctx/update-mem! c update :drops-looked (fnil conj []) drop))
+        (when (and arrived? (not (lip-unsafe? c drop)))
           (await (lean-to! c (lip fx tx) (lip fz tz)))
           (await (dig-look/look-at! c floor))
           (look/see! c)
