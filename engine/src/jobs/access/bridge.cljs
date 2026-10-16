@@ -57,7 +57,7 @@
    :heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :length {:doc "blocks in the row, 1 to 64" :spec (a/int-in 1 64) :default 1}
    :item {:doc "the block to bridge with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :ignore-zones? :shared
    :fetch {:doc "get missing blocks with jobs.items.obtain instead of ending :too-few-blocks (false: end); a set of kinds or a map of limits counts as true" :spec need/option? :default true}})
 
 (a/defargs settings

@@ -68,7 +68,7 @@
    :fetch {:doc "get the blocks with jobs.items.obtain when none is carried at the start, and walk back (false: end :too-few-blocks); a set of kinds or a map of limits counts as true" :spec need/option? :default true}
    :height {:doc "blocks to rise, 1 to 64 (the short form of :y: the feet's y at the start plus this)" :spec (a/int-in 1 64) :default 1}
    :y {:doc "the y the feet end at; nil: the start's y plus :height" :spec (a/int-in -64 320) :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :ignore-zones? :shared
    :mob-waits {:doc "how many looks, ::mob-step-ms apart, to wait for a mob to leave the cell; nil: ::mob-waits (an escape from danger passes 0)" :spec (a/int-in 0 nil) :default nil}})
 
 (a/defargs settings

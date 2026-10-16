@@ -39,7 +39,7 @@
 (a/defargs args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :spec ::a/pos :default nil}
    :items {:doc "{item-name count}: carry at least this many of each name" :spec (a/map-of string? number?) :default {}}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (defn shortfall
   "[[name n] ...] in the order of items: n is the target minus the total

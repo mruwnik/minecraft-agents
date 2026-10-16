@@ -56,7 +56,7 @@
    :width {:doc "cells across the corridor" :spec (a/int-in 1 9) :default 3}
    :height {:doc "cells up the corridor" :spec (a/int-in 1 9) :default 3}
    :fetch {:doc "get the blocks to close with (jobs.lib.need): true, a set of kinds or a map of limits; false (or without :item) stops :no-blocks" :spec need/option? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (def loose #"(^|_)(rail|torch|fence|fence_gate|ladder|lantern|button|lever|carpet|sign|banner|pressure_plate)$|^cobweb$")
 

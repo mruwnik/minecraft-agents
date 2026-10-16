@@ -58,7 +58,7 @@
    :fetch {:doc "get a crafting table (jobs.lib.need) when a craft finds none; false ends no-table" :spec boolean? :default true}
    :craft-tiers {:doc "tool tiers to craft, in order; iron or diamond only when listed" :spec (a/coll-of (a/or-of string? keyword?)) :default ["stone" "wooden"]}
    :radius {:doc "how far to look for a crafting table" :spec (a/num-in 0 nil) :default 32}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds a kit may last: the walks, the chest visits and the crafts." :spec (a/num-in 0 nil)}

@@ -62,7 +62,7 @@
    :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :spec boolean? :default true}
    :fetch {:doc "get the items still to place with jobs.lib.need before the build: true, a set of kinds or a map of limits; false (or without :item) waits :short" :spec need/option? :default true}
    :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :spec (a/or-of (a/int-in 0 nil) false?) :default 1}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 ;; ------------------------------------------------------------------ the plan
 

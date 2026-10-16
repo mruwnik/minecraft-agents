@@ -71,7 +71,7 @@
    :swim-range {:doc "blocks from the run's start no swim leg goes beyond" :spec (a/num-in 0 nil) :default 96}
    :max-legs {:doc "swim legs one run makes at most" :spec (a/int-in 1 nil) :default 6}
    :pocket {:doc "with no air seen, make a dry pocket: dig into the wall beside the body, step in and plug the opening with a carried block" :spec boolean? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds getting air and out of the water may take." :spec (a/num-in 0 nil)}

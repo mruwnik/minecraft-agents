@@ -54,7 +54,7 @@
    :take {:doc "classes taken: :wood :cobweb :rail :ore" :spec (a/coll-of #{:wood :cobweb :rail :ore}) :default [:wood :cobweb :rail :ore]}
    :spawner {:doc "a spawner in the segment: :light lights its spawn box and leaves it, :break lights it and digs it, :seal stops the trip :spawner, :skip leaves it unlit" :spec #{:light :break :seal :skip} :default :light}
    :want-free {:doc "free slots under which the trip turns back; nil: jobs.lib.trip/want-free" :spec (a/int-in 0 36) :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (defn seg-of
   "The segment of the :segment arg: a map as given, an id string \"x-27-290:-180..-160\" read back (its ends taken as closed)."

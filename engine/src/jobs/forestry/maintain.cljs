@@ -59,7 +59,7 @@
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
    :collect-radius {:doc "how far from where the body stands the drops of a felled tree are collected, in blocks" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get a missing sapling (passed to plant-sapling; see its :fetch): true, a set of kinds or a map of limits; false skips a bare cell whose sapling is not carried" :spec need/option? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (defn fetching?
   "Whether :fetch lets the job get a missing sapling."

@@ -49,7 +49,7 @@
    :center {:doc "centre of the search; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
    :radius {:doc "hives within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 12}
    :max {:doc "hives to harvest in one run, at most" :spec (a/int-in 1 nil) :default 8}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :ignore-zones? :shared
    :fetch {:doc "get a tool that is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits with :no-tool" :spec need/option? :default true}})
 
 (a/defargs settings

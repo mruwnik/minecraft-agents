@@ -49,7 +49,7 @@
   {:water-radius {:doc "on fire, water within this many blocks is walked into" :spec (a/num-in 0 nil) :default 6}
    :step {:doc "candidate cells lie within this many blocks (horizontally) of the body" :spec (a/num-in 0 nil) :default 4}
    :scan-radius {:doc "fire, lava and magma within this many blocks count as hazards" :spec (a/num-in 0 nil) :default 8}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (def hazards #{"lava" "fire" "soul_fire" "magma_block" "campfire" "soul_campfire"})
 (def passable #{"air" "cave_air" "water" "short_grass" "tall_grass" "grass" "snow"})

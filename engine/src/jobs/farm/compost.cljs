@@ -30,7 +30,7 @@
    :items {:doc "item names to feed; every compostable thing carried except seeds and food when nil" :spec (a/coll-of a/item?) :default nil}
    :keep {:doc "{item count} reserves never fed" :spec (a/map-of string? number?) :default {}}
    :times {:doc "bone meal to take before done" :spec (a/int-in 1 nil) :default 1}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (def compostable
   "Everything a composter accepts, any chance."

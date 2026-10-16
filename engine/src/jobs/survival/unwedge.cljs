@@ -28,7 +28,7 @@
   Quote: a few passes of ::pass-s.")
 
 (a/defargs args
-  {:ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+  {:ignore-zones? :shared})
 
 (def target [])
 (def ways [:step :dig])

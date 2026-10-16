@@ -110,7 +110,7 @@
    :radius {:doc "animals within this many blocks of where the body started the run are fetched" :spec (a/num-in 0 nil) :default 24}
    :method {:doc "how animals are brought: :lead (each on a lead), :lure (following the food in hand), :auto (a lead when one is carried or can be crafted from a carried slime ball, else the food)" :spec #{:auto :lead :lure} :default :auto}
    :fetch {:doc "get the food when none is carried and the run lures (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
+   :ignore-zones? :shared})
 
 (def leading
   "The phases in which the animal is on the lead and the walk is the body's own: watched before each step, bound

@@ -33,7 +33,7 @@
    :to {:doc "the chest to fill; the storage group (the :chest place first) when nil" :spec ::a/pos :default nil}
    :keep {:doc "item names left in the source chests" :spec (a/coll-of string?) :default []}
    :make-chests? {:doc "when the main storage is full, put a new chest beside it (deposit's :make-chests?)" :spec boolean? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 900 :doc "Seconds a haul may last: every walk, bag load and deposit." :spec (a/num-in 0 nil)}

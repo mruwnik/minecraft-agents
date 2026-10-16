@@ -84,7 +84,7 @@
    :hand-clear-ms {:doc "a block the carried tools cannot harvest is dug by hand, once a block to roof with is in hand, when the hand breaks it within this many ms (stone by hand takes 7500)" :spec (a/int-in 0 nil) :default 10000}
    :on-lava {:doc ":seal: lava the dig lays open in or beside the hole is filled with a carried block; :stop: the dig is given up (:fluid-adjacent)" :spec #{:seal :stop} :default :seal}
    :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; ends :no-blocks when too few blocks are carried" :spec boolean? :default false}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (def gate-take-back-range
   "A cheap seal block this near a planned gate is taken back with the dear ones: it would box the gate in."

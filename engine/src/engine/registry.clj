@@ -2,7 +2,8 @@
   "Compile time: find every job namespace under the jobs/ source directory, check its exports, and emit the job
   registry; read the default trigger set (triggers/defaults.edn) and emit the trigger registry, and the engine
   hooks (hooks.edn). See README.md, Jobs and Triggers."
-  (:require [clojure.edn :as edn]
+  (:require [engine.args :as args]
+            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.reader :as reader]
@@ -125,7 +126,7 @@
         (assoc base
                :ns-doc (ns-doc forms)
                :doc (when (string? doc) doc)
-               :args (def-value "args" forms)))
+               :args (some-> (def-value "args" forms) args/expand)))
       (catch Exception e
         (assoc base :error (str "unreadable: " (ex-message e)))))))
 

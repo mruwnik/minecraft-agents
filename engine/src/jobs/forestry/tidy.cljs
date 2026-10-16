@@ -38,7 +38,7 @@
   {:species {:doc "log species; any when nil" :spec a/name? :default nil}
    :radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
    :max-trees {:doc "trunks to fell at most; the settings' tidy max-trees when nil" :spec (a/int-in 1 nil) :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :ignore-zones? :shared
    :fetch {:doc "get a missing axe, pillar blocks or sapling (passed to fell-tree and plant-sapling; see their :fetch)" :spec need/option? :default true}})
 
 (def air #{"air" "cave_air" "void_air"})

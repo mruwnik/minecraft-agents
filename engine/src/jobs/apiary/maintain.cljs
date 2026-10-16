@@ -47,7 +47,7 @@
    :target {:doc "bees wanted in the area (babies count); nil: no breeding" :spec (a/int-in 0 nil) :default nil}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
    :keep {:doc "{item-name count}: how many of honeycomb or honey_bottle deposit leaves carried" :spec (a/map-of a/item? (a/int-in 0 nil)) :default {}}
-   :ignore-zones? {:doc "act regardless of zones and claims (passed to guard and harvest); the rules of the game allow it" :spec boolean? :default false}
+   :ignore-zones? :shared
    :fetch {:doc "get a carpet, campfire or harvest tool that is not carried (passed to guard and harvest, jobs.lib.need): true, a set of kinds or a map of limits; false skips the step" :spec need/option? :default true}})
 
 (def steps [:guard :harvest :breed :deposit])

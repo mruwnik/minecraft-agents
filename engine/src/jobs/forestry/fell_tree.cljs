@@ -73,7 +73,7 @@
    :fetch {:doc "get an axe when none is carried, and the dirt or cobblestone a pillar needs (jobs.lib.need): true, a set of kinds or a map of limits; false chops by hand and ends a tree needing a pillar :need" :spec need/option? :default true}
    :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
    :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (def approach-range
   "Blocks from a tree's base the search for the tree to fell counts as reaching it: approach!'s looser range."

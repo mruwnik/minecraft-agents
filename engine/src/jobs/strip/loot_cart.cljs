@@ -30,7 +30,7 @@
   {:id {:doc "entity id of the chest minecart; nil: the nearest one to :near" :spec number? :default nil}
    :near {:doc "[x y z] or {:x :y :z} the search for the cart is centred on; the body when nil" :spec ::a/pos :default nil}
    :radius {:doc "blocks round :near the cart is searched for, and round the cart that drops are collected" :spec (a/num-in 0 nil) :default 4}
-   :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds a loot may take before it ends." :spec (a/num-in 0 nil)}})

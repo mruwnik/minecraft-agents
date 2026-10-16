@@ -70,7 +70,7 @@
    :fetch {:doc "get what a trip lacks: food (jobs.survival.get-food, tried once per trip) and, passed to strip.seal, the blocks to seal with; true, a set of kinds or a map of limits; false stops :food-short and :no-blocks" :spec need/option? :default true}
    :smelt {:doc "false leaves the raw ore carried to the base raw" :spec boolean? :default true}
    :haul {:doc "false leaves the loot in the base chests" :spec boolean? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 7200 :doc "Seconds a strip of one site may take: base, descent, every segment, trips and the haul." :spec (a/num-in 0 nil)}

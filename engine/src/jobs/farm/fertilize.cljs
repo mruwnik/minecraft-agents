@@ -36,7 +36,7 @@
    :grass {:doc "fertilize open grass blocks instead of crops" :spec boolean? :default false}
    :max {:doc "bone meal uses, at most" :spec (a/int-in 1 nil) :default 16}
    :fetch {:doc "get missing bone meal (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :need" :spec need/option? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (def ripe-age crops/ripe-age)
 

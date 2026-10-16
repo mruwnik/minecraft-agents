@@ -39,7 +39,7 @@
    :center {:doc "where :radius is measured from; the body's own spot when nil" :spec ::a/pos :default nil}
    :skip {:doc "keys (uuids, else ids) of animals never to leash" :spec (a/coll-of (a/or-of string? number?)) :default []}
    :fetch {:doc "get a lead when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-lead; a failed fetch ends :need" :spec need/option? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 30 :doc "Seconds of working, fetching included, before leashing gives up." :spec (a/num-in 0 nil)}

@@ -47,7 +47,7 @@
    :center {:doc "centre of the search; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
    :radius {:doc "fires within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 16}
    :max {:doc "actions (sinks and carpets) in one run, at most" :spec (a/int-in 1 nil) :default 12}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :ignore-zones? :shared
    :fetch {:doc "get a carpet or campfire that is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits with :no-carpet / :no-campfire" :spec need/option? :default true}})
 
 (defn permitted?

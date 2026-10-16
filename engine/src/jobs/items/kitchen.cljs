@@ -51,7 +51,7 @@
    :reserve {:doc "{item count}: never used, carried or in the chest (wheat for bait, seed)" :spec (a/map-of string? number?)
              :default {"wheat" 2}}
    :fetch {:doc "get a crafting table when none is seen or carried (jobs.items.craft's fetch); false skips take and bake then" :spec boolean? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds a kitchen pass may last: the smelts, the bake and the deposit." :spec (a/num-in 0 nil)}

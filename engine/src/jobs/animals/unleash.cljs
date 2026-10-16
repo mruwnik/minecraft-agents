@@ -46,7 +46,7 @@
    :animal {:doc "uuid (or id) of the one animal to free; any when nil" :spec (a/or-of string? number?) :default nil}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 8}
    :collect {:doc "pick up the leads afterwards" :spec boolean? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds from the start of the call before unleashing gives up; a walk to the animal and the collect of the lead (10 s at most) fit." :spec (a/num-in 0 nil)}

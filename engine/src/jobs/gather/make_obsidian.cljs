@@ -29,7 +29,7 @@
 (a/defargs args
   {:count {:doc "obsidian to get" :spec (a/int-in 1 nil) :default 1}
    :radius {:doc "how far from the body to look for lava, obsidian and water" :spec (a/num-in 1 nil) :default 24}
-   :ignore-zones? {:doc "act regardless of zones and claims (the walks and the mine child); the rules of the game allow it" :spec boolean? :default false}
+   :ignore-zones? :shared
    :fetch {:doc "get a bucket when no bucket is carried, and the mine child's pickaxe, with jobs.lib.need: true, a set of kinds or a map of limits; false waits :no-bucket" :spec need/option? :default true}})
 
 (a/defargs settings

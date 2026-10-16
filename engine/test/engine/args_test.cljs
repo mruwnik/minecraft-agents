@@ -37,6 +37,12 @@
   (is (= {:pos nil :range 1 :doors :shut :risk {:min-health 12 :max-damage 4 :at nil}}
          (:args (expr/parse reg (list job {:risk {:min-health 12}}))))))
 
+(deftest a-shared-entry-is-the-same-in-every-job-that-names-it
+  (let [entry #(get-in registry/jobs [% :args :ignore-zones?])]
+    (is (= {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec 'boolean?}
+           (select-keys (entry 'jobs.items.smelt) [:doc :default :spec])))
+    (is (= (entry 'jobs.items.smelt) (entry 'jobs.farm.tend)))))
+
 (deftest positions-conform-at-any-depth
   (is (= {:x 1 :y 2 :z 3} (:pos (:args (expr/parse reg (list job {:pos [1 2 3]}))))))
   (is (= {:x 1 :y 2 :z 3} (get-in (expr/parse reg (list job {:risk {:at [1 2 3]}})) [:args :risk :at]))))

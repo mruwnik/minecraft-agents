@@ -54,7 +54,7 @@
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent}}
    :reach {:doc "cells whose centre is this close to the eye are dug without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
    :give-up {:doc "failed walks, failed digs or hazard-blocked tries after which a cell is refused" :spec (a/int-in 1 nil) :default 3}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the sweep of the drops." :spec (a/num-in 0 nil)}})

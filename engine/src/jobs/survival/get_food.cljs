@@ -80,7 +80,7 @@
    :spare-pens {:doc "never hunt animals in a closed enclosure, nor those in a zone or plan of the body's own but by the :pen way (false: a job asked to get food may take them all)" :spec boolean? :default true}
    :keep-adults {:doc "adults of a kind in sight that are never hunted, so they can breed (hunted only when ::kept-lifted-below lifts it)" :spec (a/int-in 0 nil) :default 2}
    :off-limits {:doc "animal kinds never hunted; nil: the jobs.lib.animal-spare/off-limits setting" :spec (a/or-of (a/pred "nil" nil?) (a/coll-of a/item?)) :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (def harvest-items
   "What the drops of a harvest or a kill may be called."

@@ -39,7 +39,7 @@
    :target {:doc "villagers wanted (babies count); nil: no breeding" :spec (a/int-in 2 nil) :default nil}
    :roles {:doc "profession roles to hold: [{:profession name :pos workstation-cell :trade name?}], each rolled when nobody holds it" :spec (a/coll-of map?) :default []}
    :radius {:doc "villagers within this many blocks of the body count" :spec (a/int-in 1 96) :default 48}
-   :ignore-zones? {:doc "act regardless of zones and claims (passed to the repair); the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (def jobs
   {:repair 'jobs.build.from-plan

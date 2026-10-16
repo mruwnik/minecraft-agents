@@ -61,7 +61,7 @@
    :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
    :fetch {:doc "get a missing input, fuel or furnace (jobs.lib.need): true, a set of kinds or a map of limits; false ends with the reason" :spec need/option? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds the call may take besides the cook of its count (the walk and the fetches); the default time spend is this plus the cook, 10 s an item." :spec (a/num-in 0 nil)}

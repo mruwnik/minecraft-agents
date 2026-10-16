@@ -52,7 +52,7 @@
    :free {:doc "stop once this many inventory slots are free; all of it when nil" :spec (a/int-in 0 nil) :default nil}
    :make-chests? {:doc "when every storage chest is full, put a new one beside them (carried, else fetched and crafted); false stops with reason all-chests-full" :spec boolean? :default true}
    :fetch-chests? {:doc "a new chest may be fetched or crafted when none is carried; false places only a carried one (no-chest-item otherwise)" :spec boolean? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (defn to-deposit
   "The next carried stack to put away and how many of it: {:stack s :count n}

@@ -45,7 +45,7 @@
    :center {:doc "centre of a square of cells at its y; with :radius" :spec ::a/pos :default nil}
    :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :spec (a/int-in 0 7) :default nil}
    :fetch {:doc "get a shovel when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :no-tool" :spec need/option? :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}

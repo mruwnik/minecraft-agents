@@ -79,7 +79,7 @@
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent}}
    :headroom {:doc "{species cells} overriding the table of growth space above a planted cell (the cell included)" :spec (a/map-of a/name? (a/int-in 1 nil)) :default {}}
    :collect-radius {:doc "how far from where the body stands the drops are collected, in blocks" :spec (a/num-in 0 nil) :default 8}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 ;; ------------------------------------------------------------------ notes
 
