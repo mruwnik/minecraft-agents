@@ -209,6 +209,21 @@
             (is (= 1 (count (calls (:p r) "useOn"))) nm))
           (is (= :changed (:reason (:result open)))))))))
 
+(defn holes [w cells] (update w :blocks #(apply dissoc % (map (fn [[x z]] (str x ",63," z)) cells))))
+
+(deftest the-step-out-of-a-door-cell-takes-only-a-cell-with-a-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (world "oak_door" {:open true} 3 0)
+              one (await (run (holes w [[4 0] [2 0] [3 1]]) {:pos at :state :closed}))
+              none (await (run (holes w [[4 0] [2 0] [3 1] [3 -1]]) {:pos at :state :closed}))
+              end (.-pos (.self (:p one)))]
+          (is (= :changed (:reason (:result one))))
+          (is (= [3 -1] [(js/Math.floor (.-x end)) (js/Math.floor (.-z end))]) "steps onto the one cell with a floor")
+          (is (= {:status :stopped :reason :unreachable} (head (:result none) [:status :reason])))
+          (is (empty? (calls (:p none) "useOn"))))))))
+
 ;; ------------------------------------------------------------------ gave up after one click
 
 (deftest a-click-that-changes-nothing-is-given-up-once

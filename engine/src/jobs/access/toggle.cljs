@@ -3,6 +3,7 @@
             [engine.args :as a]
             [jobs.lib.ready :as ready]
             [jobs.lib.click :as click]
+            [jobs.lib.solid :as solid]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [engine.contract :as contract]
@@ -181,13 +182,14 @@
       :else (give-up! c :unreachable pos state (str "cannot walk within reach of " block " at " (pr-str pos)) {:block block}))))
 
 (defn free-sides
-  "The cells beside the body's own whose feet and head are open air,."
+  "The cells beside the body's own whose feet and head are open air and whose floor is a seen solid block."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)
         [bx by bz] (map #(js/Math.floor %) [x y z])
         open? (fn [cx cy cz] (some-> (u/block-at (:primitives c) {:x cx :y cy :z cz}) .-name click/air?))]
     (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-          :when (and (open? (+ bx dx) by (+ bz dz)) (open? (+ bx dx) (inc by) (+ bz dz)))]
+          :when (and (open? (+ bx dx) by (+ bz dz)) (open? (+ bx dx) (inc by) (+ bz dz))
+                     (solid/solid? (some-> (u/block-at (:primitives c) {:x (+ bx dx) :y (dec by) :z (+ bz dz)}) .-name)))]
       {:x (+ bx dx) :y by :z (+ bz dz)})))
 
 (defn ^:async step-out! [c pos state block]
