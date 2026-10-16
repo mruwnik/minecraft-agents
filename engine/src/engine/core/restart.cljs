@@ -3,6 +3,7 @@
   resolve dropped or stripped of stale args."
   (:require [engine.core.base :refer [emit! empty-state job-of reflex-text remove-listed state trigger-def]]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.expr :as expr]
             [engine.memory :as mem]
             [clojure.string :as str]))
@@ -41,11 +42,11 @@
 
 (defn stale-keys
   "The arg keys of job sym that its registry entry no longer declares, at any level, sorted; a key of a group is its
-  path [group key]; nil when none."
+  path [group key]; nil when none. The call keys (engine.contract/call-keys) are no job args."
   [registry sym args]
   (let [entry (get registry sym)]
     (when (contains? entry :args)
-      (seq (map (fn [[path _]] (if (next path) path (first path))) (a/unknown (:args entry) args))))))
+      (seq (map (fn [[path _]] (if (next path) path (first path))) (a/unknown (:args entry) (apply dissoc args (keys contract/call-keys))))))))
 
 (defn strip-keys
   "args without the stale keys ks (keys or [group key] paths)."
