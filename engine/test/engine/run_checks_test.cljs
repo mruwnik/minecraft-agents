@@ -104,3 +104,28 @@
           (is (nil? (:leaf-rounds @world)))
           (is (nil? (core/exclusive-job eng)))
           (is (= [:dark] (mapv :reason (filter #(= :stopped (:kind %)) @seen)))))))))
+
+(deftest a-trigger-fires-only-when-its-jobs-checks-pass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [k [:can-start? :safe? :fit?]]
+          (reset! world {})
+          (let [triggers {:r {:name :r :job '(reflex) :persistence :retry :when (fn [_ _ _] true)}}
+                {:keys [eng seen]} (setup {'reflex (assoc (leaf k) :round (count-round :reflex-rounds))
+                                           'other {:round (count-round :other-rounds)}}
+                                          triggers)]
+            (core/submit! eng '(other) {})
+            (core/register-reflex! eng {:trigger :r})
+            (await (core/tick! eng))
+            (is (nil? (:reflex-rounds @world)) (str k " held"))
+            (is (= 1 (:other-rounds @world)) (str k " cuts nothing: the listed job runs"))
+            (is (empty? (filter #(= [:reflex :fired] [(:source %) (:kind %)]) @seen)))
+            (is (= :dark (:reason (core/held-trigger eng :r))) (str k " shows held with the reason"))
+            (is (= 1 (count (filter #(= [:reflex :held] [(:source %) (:kind %)]) @seen))))
+            (await (core/tick! eng))
+            (is (= 1 (count (filter #(= [:reflex :held] [(:source %) (:kind %)]) @seen))) "told once")
+            (swap! world assoc :go true)
+            (await (core/tick! eng))
+            (is (= 1 (:reflex-rounds @world)) (str k " fires once the check passes"))
+            (is (nil? (core/held-trigger eng :r)))))))))

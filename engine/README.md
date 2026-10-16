@@ -388,11 +388,11 @@ trigger is a fn plus one line:
 ```
 
 The **register** is an ordered vector of entries `{:id :trigger :job :args :persistence :cooldown-s :level :backoff :builtin?}`.
-Each tick the engine fires the first entry whose `:when` holds and which is not muted or cooling down.
+Each tick the engine fires the first entry whose `:when` holds, which is not muted or cooling down and whose job would start: its `can-start?`, `can-run?`, `safe?` and `fit?` say neither `:later` nor `:never` (asked every tick through `check-cache`). A trigger held by them cuts nothing; `GET /triggers` shows `:held` with the reason, and info `reflex.held` tells it once per reason.
 
 - A firing reflex cuts a running listed job (which stays listed and runs again once no reflex holds the body). It cuts a
   running reflex job only if it sits above that one. A reflex whose job is running does not fire again.
-- A reflex job runs one round. Its check is never asked: the trigger is its check. A `:continue` counts as `:declined`
+- A reflex job runs one round. Its checks are asked before it fires (above), never again once it runs. A `:continue` counts as `:declined`
   (warn `reflex.continued`, once per reflex an hour). On `:done`, `:declined` (also an info `reflex.declined`) or a throw it is removed. If the trigger
   still holds it fires again as a new instance, subject to persistence. So a reflex job must return `:done` or `:declined`
   at the top of its round when there is nothing to do. Combinators follow this: `any`, `seq` and `repeat` return `:declined`

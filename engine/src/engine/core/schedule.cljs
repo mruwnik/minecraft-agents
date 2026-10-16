@@ -6,7 +6,7 @@
             [engine.core.attention :refer [request-attention!]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
-            [engine.core.ending :refer [clear-asked!]]
+            [engine.core.ending :refer [clear-asked! run-status]]
             [engine.core.cleanup :as cleanup]
             [engine.core.activity :refer [check-body-idle! check-idle! restart-body-idle! section-level sections]]
             [engine.core.list-edits :refer [submit!]]
@@ -41,6 +41,11 @@
   "Why listed job id waits: the reason map of its last declining check, or nil while its check passes."
   [eng id]
   (some-> (:waiting eng) deref (get id)))
+
+(defn held-trigger
+  "Why trigger id is held: the reason map of the start check of its job that declined, or nil."
+  [eng id]
+  (some-> (:held-triggers eng) deref (get id)))
 
 (defn check-passes?
   "Whether listed instance id would start now (ctx/check-status; a job closing for its cleanup always would). Its wait reason is told once with
@@ -113,6 +118,37 @@
   (let [paused (paused-reflexes eng)]
     (or (some #(paused (:id %)) order) (first (vals paused)))))
 
+(defn trigger-status
+  "The status entry's job would start with now: its start and run checks as one (contract/all), over a ctx of the job
+  as it would be fired. A check that throws holds the trigger."
+  [eng entry]
+  (try (let [node (expr/parse (:jobs eng) (:job entry))
+             inst {:id (str "trigger:" (name (:id entry))) :spec node :reflex (:id entry)}
+             [def args] (job-of eng inst)
+             c (check-ctx eng inst args)]
+         (contract/all [(ctx/check-status c def) (run-status def c)]))
+       (catch :default e
+         (emit! eng {:source :system :kind :error :level :warn :reflex (:id entry)
+                     :text (str "check of trigger " (name (:id entry)) " threw: " e)})
+         (contract/later :check-threw (str e)))))
+
+(defn startable-trigger?
+  "Whether the job of firing entry would start (trigger-status says neither :later nor :never). A held trigger is kept
+  for /triggers, and told once per reason as reflex.held."
+  [eng entry]
+  (let [id (:id entry)
+        [kind :as s] (trigger-status eng entry)
+        ok? (not (#{:later :never} kind))
+        r (when-not ok? (contract/status-cause s))
+        before (get @(:held-triggers eng) id)]
+    (if ok?
+      (swap! (:held-triggers eng) dissoc id)
+      (when (not= before r)
+        (swap! (:held-triggers eng) assoc id r)
+        (emit! eng {:source :reflex :kind :held :level :info :reflex id :data r
+                    :text (str "trigger " (name id) " held: " (:text r))})))
+    ok?))
+
 (defn fire! [eng entry h]
   (let [id (new-id! eng)
         node (expr/parse (:jobs eng) (:job entry))
@@ -147,8 +183,9 @@
         before @(:deferred eng)
         since #(get before (:id %) t)
         held-off? #(and (under-section? eng h %) (< (- t (since %)) (wait-cap-ms (:level %))))
-        [held [entry]] (split-with held-off? (filter #(preempts? order h %) firing))
+        [held [entry]] (split-with held-off? (filter #(and (preempts? order h %) (startable-trigger? eng %)) firing))
         section (some-> (sections eng (:token h)) last :section)]
+    (swap! (:held-triggers eng) select-keys (map :id firing))
     (reset! (:deferred eng) (into {} (map (fn [e] [(:id e) (since e)])) held))
     (doseq [e held :when (not (contains? before (:id e)))]
       (emit! eng {:source :reflex :kind :deferred :level :info :reflex (:id e) :urgency (:level e) :job (:id h)

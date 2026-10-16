@@ -221,6 +221,7 @@
       (core/live? (:position changes) t) (assoc :moved (select-keys (:position changes) [:value :until]))
       (and cooldown-until (> cooldown-until t)) (assoc :cooling-until cooldown-until)
       stopped? (assoc :stopped? true)
+      (core/held-trigger eng id) (assoc :held (core/held-trigger eng id))
       (:since bo) (assoc :backing-off (select-keys bo [:since :until :fruitless :last])))))
 
 (defn triggers-view

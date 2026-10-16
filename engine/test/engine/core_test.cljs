@@ -1422,7 +1422,7 @@
     (ctx/update-mem! c assoc :n n)
     (if (>= n 2) (done c) :continue)))
 
-(deftest a-reflex-job-runs-its-round-even-when-its-check-declines
+(deftest a-trigger-whose-jobs-check-declines-is-held-and-cuts-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1431,8 +1431,9 @@
           (core/submit! eng '(count) {})
           (core/register-reflex! eng {:trigger :gated})
           (dotimes [_ 2] (await (core/tick! eng)))
-          (is (= ["j2" "j3"] (ran seen)) "the trigger fired the job twice and its check was never asked")
-          (is (= {} (job-mem eng "j1")) "the listed job waits"))))))
+          (is (= ["j1" "j1"] (ran seen)) "the trigger did not fire: the listed job kept the body")
+          (is (= {:n 2} (job-mem eng "j1")))
+          (is (some? (core/held-trigger eng :gated))))))))
 
 (def flag-b (atom true))
 
@@ -1447,27 +1448,21 @@
   (let [s (setup)]
     (update s :eng assoc :triggers (merge triggers declining-reflexes))))
 
-(deftest a-reflex-combinator-whose-children-decline-stops-and-refires-only-after-its-cooldown
+(deftest a-reflex-combinator-whose-children-decline-is-held-until-they-pass
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [trigger [:gated-any :gated-seq :gated-repeat]]
-          (let [{:keys [eng seen clock]} (declined-setup)]
+          (let [{:keys [eng seen]} (declined-setup)]
             (reset! flag false)
             (core/register-reflex! eng {:trigger trigger})
             (await (core/tick! eng))
-            (is (= ["j1"] (ran seen)) (str trigger " fired"))
-            (is (nil? (get-in (core/state eng) [:instances "j1"])) (str trigger " is gone"))
-            (is (= [{:outcome :stopped :reason :not-ready}]
-                   (->> @seen (filter #(= [:reflex :ended trigger] [(:source %) (:kind %) (:reflex %)]))
-                        (mapv #(select-keys % [:outcome :reason]))))
-                "one reflex.ended, stopped with the child's wait")
-            (is (nil? (core/tick! eng)) "cooling down: it does not fire again")
-            (swap! clock + 9000)
-            (is (nil? (core/tick! eng)) "still cooling down")
-            (swap! clock + 1000)
+            (is (empty? (ran seen)) (str trigger " held"))
+            (is (empty? (filter #(= [:reflex :fired] [(:source %) (:kind %)]) @seen)))
+            (is (some? (core/held-trigger eng trigger)))
+            (reset! flag true)
             (await (core/tick! eng))
-            (is (= ["j1" "j2"] (ran seen)) (str trigger " fires again after the cooldown"))))))))
+            (is (= ["j1"] (ran seen)) (str trigger " fires once the child's check passes"))))))))
 
 
 (def expr-registry
@@ -1824,12 +1819,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [outcomes (fn [seen] (mapv :outcome (reflex-events seen :ended)))]
-          (testing "stopped: a combinator whose children decline"
-            (let [{:keys [eng seen]} (declined-setup)]
-              (reset! flag false)
-              (core/register-reflex! eng {:trigger :gated-any})
-              (await (core/tick! eng))
-              (is (= [:stopped] (outcomes seen)))))
           (testing "failed"
             (let [{:keys [eng seen]} (setup)]
               (core/register-reflex! eng {:trigger :boom})
