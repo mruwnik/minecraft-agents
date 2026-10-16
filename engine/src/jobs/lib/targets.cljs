@@ -44,7 +44,7 @@
   "A search over targets of the world costed as go-to's plans are (wworld/costed-world: known dangers and darkness; opts
   :dangers and :dark, default true)."
   [c pw targets range key {:keys [dangers dark] :or {dangers true dark true}}]
-  {:key key :t (js/Date.now)
+  {:key key :t (wsearch/now c)
    :plan (let [policy (wworld/body-policy c)]
            (planner/create-plan (.-snapshot pw) (query c targets range)
                                 (wplan/with-drops
@@ -84,7 +84,7 @@
        (let [who [(:primitives c) tag]
              k [(wworld/body-cell c) targets range]
              kept (get @searches who)
-             search (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) wsearch/search-max-age-ms))
+             search (if (and (= k (:key kept)) (< (- (wsearch/now c) (:t kept)) wsearch/search-max-age-ms))
                       kept
                       (new-search c pw targets range k opts))
              ^js p (:plan search)

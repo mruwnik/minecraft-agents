@@ -1,7 +1,8 @@
 (ns jobs.lib.walk.search
   "The walk driver's budgeted search (go-to): one bounded slice of search a round, kept per body over the rounds, with the
   known land and the goal flood kept for one goal."
-  (:require [engine.heap :as heap]
+  (:require [engine.ctx :as ctx]
+            [engine.heap :as heap]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.walk.plan :as wplan]
@@ -123,6 +124,11 @@
   the hp it began with; the walk's watch replans when the damage ahead is more than the body may spend."
   2)
 
+(defn now
+  "The engine clock of ctx c (ms); the wall clock for a bare ctx without a memory view."
+  [c]
+  (if (:view c) (ctx/now c) (js/Date.now)))
+
 (defn goal-flood!
   "The body's kept goal flood memo for searches of to within range (goal-floods), a new one when it held another goal or
   is older than search-max-age-ms. mask: the pathWorld's wworld/unknown-key (a masked flood leaks at unseen cells)."
@@ -130,10 +136,10 @@
   (let [who (:primitives c)
         k [to range weight (policy-key policy) walls mask]
         kept (get @goal-floods who)]
-    (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) search-max-age-ms))
+    (if (and (= k (:key kept)) (< (- (now c) (:t kept)) search-max-age-ms))
       (:memo kept)
       (let [memo #js {}]
-        (swap! goal-floods assoc who {:key k :t (js/Date.now) :memo memo})
+        (swap! goal-floods assoc who {:key k :t (now c) :memo memo})
         memo))))
 
 (defn search-key [c to range weight policy walls & [pw]]
@@ -153,7 +159,7 @@
   planner's stopAtEdge, so one toward a goal that is unloaded names the first loaded-edge node it expands as its frontier
   and ends after a sweep of the land round it, not after searching all loaded land."
   [c walled to range weight policy key known & [flood]]
-  {:key key :t (js/Date.now) :walled walled :r nil :unlimited nil :air-used (:air-used policy) :health (:health policy)
+  {:key key :t (now c) :walled walled :r nil :unlimited nil :air-used (:air-used policy) :health (:health policy)
    :goal-unloaded (goal-unloaded? (.-snapshot walled) to)
    :edge-stop (some? known)
    :limited (planner/create-plan (.-snapshot walled) (wplan/plan-query c to range)
@@ -170,11 +176,11 @@
   policy: this call's; its :air-used (seconds of air used now, nil with the head out) past the search's own by more than
   air-drift, or its :health (hp now under water) below the search's own by more than health-drift: a new search plans
   with the air or hp left."
-  [kept k ^js pw to {:keys [air-used health]}]
+  [c kept k ^js pw to {:keys [air-used health]}]
   (and (= k (:key kept))
        (<= (- (or air-used 0) (or (:air-used kept) 0)) air-drift)
        (or (nil? health) (nil? (:health kept)) (<= (- (:health kept) health) health-drift))
-       (< (- (js/Date.now) (:t kept)) search-max-age-ms)
+       (< (- (now c) (:t kept)) search-max-age-ms)
        (not (and (:goal-unloaded kept) (not (goal-unloaded? (.-snapshot pw) to))))))
 
 (defn ^:async run-search!
@@ -245,7 +251,7 @@
         k (search-key c to range weight policy walls pw)
         kept (get @searches who)
         known (when frontier (known-cells! c to range))
-        fresh? (not (go-on? kept k pw to policy))
+        fresh? (not (go-on? c kept k pw to policy))
         search (if-not fresh?
                  kept
                  (new-search c (wworld/with-walls pw walls) to range weight policy k known (goal-flood! c to range weight policy walls (wworld/unknown-key pw))))

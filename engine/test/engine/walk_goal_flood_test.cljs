@@ -106,3 +106,14 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= "goal-cut-off" (await (calls 12 [[0 0]] identity))) "drops of 10 are in the default budget: they land, and no way leads up")))))
+
+(deftest a-kept-flood-ages-by-the-engine-clock
+  (let [p (tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        t (atom 1000)
+        c {:primitives p :view (fn [] {:now @t})}
+        flood #(wsearch/goal-flood! c [20 71 20] 0 walk/default-weight nil nil)
+        memo (flood)]
+    (reset! t (+ 1000 wsearch/search-max-age-ms -1))
+    (is (identical? memo (flood)) "just under the age: kept")
+    (reset! t (+ 1000 wsearch/search-max-age-ms))
+    (is (not (identical? memo (flood))) "at the age: a new flood")))

@@ -157,10 +157,10 @@
 (deftest a-resumed-search-ends-once-the-air-ran-down-past-its-plan
   (let [k [:same-key]
         kept {:key k :t (js/Date.now) :air-used 7}]
-    (is (wsearch/go-on? kept k nil [0 0 0] {:air-used 7.75}) "a bubble more used: the plan's air still holds")
-    (is (not (wsearch/go-on? kept k nil [0 0 0] {:air-used 8.5})) "two bubbles more used: a new search plans with the air left")
-    (is (not (wsearch/go-on? (dissoc kept :air-used) k nil [0 0 0] {:air-used 8.5})) "begun with the head out, now 8.5 s used")
-    (is (wsearch/go-on? (dissoc kept :air-used) k nil [0 0 0] {}) "never under water")))
+    (is (wsearch/go-on? {} kept k nil [0 0 0] {:air-used 7.75}) "a bubble more used: the plan's air still holds")
+    (is (not (wsearch/go-on? {} kept k nil [0 0 0] {:air-used 8.5})) "two bubbles more used: a new search plans with the air left")
+    (is (not (wsearch/go-on? {} (dissoc kept :air-used) k nil [0 0 0] {:air-used 8.5})) "begun with the head out, now 8.5 s used")
+    (is (wsearch/go-on? {} (dissoc kept :air-used) k nil [0 0 0] {}) "never under water")))
 
 (deftest a-search-key-ignores-the-health-a-drowning-body-loses
   (let [c {:primitives (tu/fake {:self {:pos [4.5 64 8.5]}})}
@@ -175,9 +175,9 @@
 (deftest a-resumed-search-ends-once-the-body-lost-more-than-one-drowning-hit
   (let [k [:same-key]
         kept {:key k :t (js/Date.now) :air-used 15 :health 10}]
-    (is (wsearch/go-on? kept k nil [0 0 0] {:air-used 15 :health 8}) "one hit (2 hp) lost: the plan's lethal line still holds")
-    (is (not (wsearch/go-on? kept k nil [0 0 0] {:air-used 15 :health 6})) "two hits lost: a new search plans with the hp left")
-    (is (wsearch/go-on? kept k nil [0 0 0] {:air-used 15 :health 10.5}) "healed a little: the plan was the more careful")))
+    (is (wsearch/go-on? {} kept k nil [0 0 0] {:air-used 15 :health 8}) "one hit (2 hp) lost: the plan's lethal line still holds")
+    (is (not (wsearch/go-on? {} kept k nil [0 0 0] {:air-used 15 :health 6})) "two hits lost: a new search plans with the hp left")
+    (is (wsearch/go-on? {} kept k nil [0 0 0] {:air-used 15 :health 10.5}) "healed a little: the plan was the more careful")))
 
 ;; a search that goes on from the same cell (no fresh start) is no gave-up for max-searching rounds; a leg call is bounded in time
 (deftest a-leg-call-whose-search-goes-on-ends-once-its-leg-seconds-passed
