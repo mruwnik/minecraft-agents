@@ -1,14 +1,13 @@
 (ns engine.animal-contract-test
   "food.fish, animals.shear and combat.hunt as contract jobs: they export the contract, quote validly, and end with a
   kind and a cause (0 of N is never done)."
-  (:require [cljs.test :refer [deftest is async use-fixtures]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.events :as events]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
             [engine.seek-contract-test :as seek]
-            [engine.lit-support :as lit]
             [engine.test-util :as tu]
             [jobs.animals.breed :as breed]
             [jobs.animals.leash :as leash]
@@ -17,8 +16,6 @@
             [jobs.combat.hunt :as hunt]
             [jobs.food.fish :as fish]
             [jobs.lib.world-files :as world]))
-
-(use-fixtures :once lit/fixture)
 
 (defn job [sym] (get registry/jobs sym))
 

@@ -1,7 +1,6 @@
 (ns engine.apiary-harvest-test
   "jobs.apiary.harvest against the fake world."
-  (:require [engine.lit-support :as lit]
-            [cljs.test :refer [deftest is async use-fixtures]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -11,8 +10,6 @@
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [jobs.apiary.harvest :as harvest]))
-
-(use-fixtures :once lit/fixture)
 
 (deftest the-comb-face-is-the-side-the-body-stands-on
   (let [hive {:x 2 :y 66 :z 0}]

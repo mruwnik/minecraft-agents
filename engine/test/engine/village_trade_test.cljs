@@ -1,7 +1,6 @@
 (ns engine.village-trade-test
   "jobs.village.trade against the fake world."
-  (:require [engine.lit-support :as lit]
-            [cljs.test :refer [deftest is are async use-fixtures]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -10,8 +9,6 @@
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
             [jobs.village.trade :as trade]))
-
-(use-fixtures :once lit/fixture)
 
 (def clock
   "One clock for every engine of a test run; each tick moves it on, so a backoff pause ends."

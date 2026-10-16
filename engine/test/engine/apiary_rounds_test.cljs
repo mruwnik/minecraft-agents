@@ -1,14 +1,11 @@
 (ns engine.apiary-rounds-test
   "The apiary jobs run as one whole attempt: a single tick of the engine works every fire or hive."
-  (:require [cljs.test :refer [deftest is async use-fixtures]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.apiary-guard-test :as g]
             [engine.apiary-harvest-test :as h]
             [engine.apiary-maintain-test :as m]
             [engine.core :as core]
-            [engine.lit-support :as lit]
             [engine.test-util :as tu]))
-
-(use-fixtures :once lit/fixture)
 
 (defn two-fires [inventory]
   (let [a (g/fire-world {:inventory inventory})

@@ -1,7 +1,6 @@
 (ns engine.village-breed-test
   "jobs.village.breed against the fake world."
-  (:require [engine.lit-support :as lit]
-            [cljs.test :refer [deftest is are async use-fixtures]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.events :as events]
             [engine.ctx :as ctx]
@@ -9,8 +8,6 @@
             [engine.hostile-test :as h]
             [engine.registry :as registry]
             [engine.test-util :as tu]))
-
-(use-fixtures :once lit/fixture)
 
 (def job 'jobs.village.breed)
 

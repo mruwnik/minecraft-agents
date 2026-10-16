@@ -1,7 +1,6 @@
 (ns engine.village-roll-test
   "jobs.village.roll against the fake world: a villager that re-picks its offers when its workstation is broken and placed again."
-  (:require [engine.lit-support :as lit]
-            [cljs.test :refer [deftest is are async use-fixtures]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.blocks-dig-test :as bd]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -13,8 +12,6 @@
             [jobs.lib.look :as look]
             [engine.test-util :as tu]
             [jobs.village.roll :as roll]))
-
-(use-fixtures :once lit/fixture)
 
 (def job 'jobs.village.roll)
 

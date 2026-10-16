@@ -87,6 +87,13 @@
     village-maintain/safe? {:plan "hut-part"} :ok
     village-maintain/safe? {:plan "far-part"} :later))
 
+(deftest by-day-a-place-whose-light-is-unseen-is-no-reason-to-wait
+  (let [c (-> (rt/ctx-of (assoc rt/open-night :time st/noon))
+              (assoc :args {:box far-box})
+              (assoc-in [:engine :world] (world/of-data plans {})))]
+    (is (= :ok (first (tend/safe? c))))
+    (is (= :ok (first (unleash/safe? c))))))
+
 (deftest a-pen-reached-by-plan-is-judged-at-its-box
   (are [part expected] (= expected (status tend/safe? {:plan "pens" :part part}))
     "hut" :ok

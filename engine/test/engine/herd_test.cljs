@@ -1,7 +1,6 @@
 (ns engine.herd-test
   "jobs.animals.herd against the fake world: a 5x5 pen (fence ring x 10..16, z 0..6) with a gate in its west wall."
-  (:require [engine.lit-support :as lit]
-            [cljs.test :refer [deftest is async use-fixtures]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -20,8 +19,6 @@
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [engine.test-util :as tu]))
-
-(use-fixtures :once lit/fixture)
 
 (def job 'jobs.animals.herd)
 

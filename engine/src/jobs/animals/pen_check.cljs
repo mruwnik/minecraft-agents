@@ -55,7 +55,7 @@
 
 (def safe?
   "Not exposed at the middle of the pen box (:box, else the box of :plan), else at :at."
-  (ready/safe-at (fn [c] (if-let [box (:box (pen-box c))] (animals/box-middle box) (some-> (:at (:args c)) a/cell)))))
+  (ready/safe-at-by-night (fn [c] (if-let [box (:box (pen-box c))] (animals/box-middle box) (some-> (:at (:args c)) a/cell)))))
 (def fit? ready/ok)
 
 

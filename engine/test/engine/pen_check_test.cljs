@@ -1,7 +1,6 @@
 (ns engine.pen-check-test
   "jobs.animals.pen-check against the fake world."
-  (:require [engine.lit-support :as lit]
-            [cljs.test :refer [deftest is are async use-fixtures]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.build-from-plan-test :as b]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -12,8 +11,6 @@
             [engine.test-util :as tu]
             [jobs.animals.pen-check :as pen-check]
             [jobs.lib.pen :as pen]))
-
-(use-fixtures :once lit/fixture)
 
 (def job 'jobs.animals.pen-check)
 

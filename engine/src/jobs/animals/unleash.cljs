@@ -67,7 +67,7 @@
 
 (def target [:mob :animal])
 
-(def safe? ready/safe-here)
+(def safe? ready/safe-here-by-night)
 (def fit? ready/ok)
 
 

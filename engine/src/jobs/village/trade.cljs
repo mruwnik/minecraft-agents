@@ -49,7 +49,7 @@
 
 (def target [:villager :buy])
 
-(def safe? ready/safe-here)
+(def safe? ready/safe-here-by-night)
 (def fit? ready/ok)
 
 

@@ -306,7 +306,7 @@
 
 (def target [:box :center])
 
-(def safe? (ready/safe-at apiary/area-cell))
+(def safe? (ready/safe-at-by-night apiary/area-cell))
 (def fit? ready/fit?)
 
 

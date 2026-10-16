@@ -1,7 +1,6 @@
 (ns engine.breed-test
   "jobs.lib.animals and jobs.animals.breed against the fake world."
-  (:require [engine.lit-support :as lit]
-            [cljs.test :refer [deftest is async use-fixtures]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.backoff :as backoff]
             [engine.core :as core]
             [engine.hostile-test :as h]
@@ -12,8 +11,6 @@
             [engine.fake :as fake]
             [engine.look-support :as ls]
             [engine.test-util :as tu]))
-
-(use-fixtures :once lit/fixture)
 
 (defn ent
   ([id name x] (ent id name x {}))

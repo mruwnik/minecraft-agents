@@ -1,8 +1,7 @@
 (ns engine.apiary-guard-test
   "jobs.apiary.guard against the fake world."
-  (:require [engine.lit-support :as lit]
-            [engine.child-ends :as ce]
-            [cljs.test :refer [deftest is are async use-fixtures]]
+  (:require [engine.child-ends :as ce]
+            [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -12,8 +11,6 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.apiary.guard :as guard]))
-
-(use-fixtures :once lit/fixture)
 
 (defn setup
   "The engine over the fake world; with floor? the walk-floor ground under it, for the walks of go-to."

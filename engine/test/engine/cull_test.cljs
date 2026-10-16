@@ -1,18 +1,15 @@
 (ns engine.cull-test
   "jobs.animals.cull against the fake world."
-  (:require [cljs.test :refer [deftest is are async use-fixtures]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.fake :as fake]
             [engine.look-support :as ls]
-            [engine.lit-support :as lit]
             [engine.test-util :as tu]
             [jobs.animals.cull :as cull]
             [jobs.lib.animals :as animals]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
-
-(use-fixtures :once lit/fixture)
 
 (defn spec [args] (list 'jobs.animals.cull args))
 

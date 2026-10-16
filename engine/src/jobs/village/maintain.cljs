@@ -223,7 +223,7 @@
     (let [mid (fn [i] (js/Math.floor (/ (+ (apply min (map #(nth % i) ps)) (apply max (map #(nth % i) ps))) 2)))]
       {:x (mid 0) :z (mid 2)})))
 
-(def safe? (ready/safe-at plan-middle))
+(def safe? (ready/safe-at-by-night plan-middle))
 (def fit? ready/fit?)
 
 (defn done?

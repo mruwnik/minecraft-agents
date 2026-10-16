@@ -61,7 +61,7 @@
 
 (def safe?
   "Not exposed at the middle of the bound: its :box, else :center."
-  (ready/safe-at (fn [{{:keys [box center]} :args}] (cond box (animals/box-middle box) center {:x (:x center) :z (:z center)}))))
+  (ready/safe-at-by-night (fn [{{:keys [box center]} :args}] (cond box (animals/box-middle box) center {:x (:x center) :z (:z center)}))))
 (def fit? ready/fit?)
 
 

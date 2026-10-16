@@ -1,17 +1,14 @@
 (ns engine.apiary-maintain-test
   "jobs.apiary.maintain against the fake world."
   (:require [engine.contract :as contract]
-            [cljs.test :refer [deftest is async use-fixtures]]
+            [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
             [engine.fake :as fake]
-            [engine.lit-support :as lit]
             [engine.test-util :as tu]
             [jobs.apiary.maintain :as maintain]))
-
-(use-fixtures :once lit/fixture)
 
 (defn inv [& pairs] (mapv (fn [[n c]] {:name n :count c}) (partition 2 pairs)))
 
@@ -164,7 +161,7 @@
         (doseq [[label args w reason]
                 [["no target" {} {:inventory carpet-and-flowers :entities bees} :no-target]
                  ["at target" {:target 2} {:inventory carpet-and-flowers :entities bees} :at-target]
-                 ["night" {:target 4} {:inventory carpet-and-flowers :entities bees :time 15000} :night]
+                 ["night" {:target 4 :checks {:safe? '(always)}} {:inventory carpet-and-flowers :entities bees :time 15000} :night]
                  ["rain" {:target 4} {:inventory carpet-and-flowers :entities bees :raining true} :raining]
                  ["no flowers" {:target 4 :fetch false} {:inventory (inv "white_carpet" 1) :entities bees} :no-food]
                  ["one bee" {:target 4} {:inventory carpet-and-flowers :entities [(bee 1 3)]} :too-few-adults]]]

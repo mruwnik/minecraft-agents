@@ -1,7 +1,6 @@
 (ns engine.lead-to-test
   "jobs.animals.lead-to against the fake world."
-  (:require [engine.lit-support :as lit]
-            [cljs.test :refer [deftest is are async use-fixtures]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -19,8 +18,6 @@
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.test-util :as tu]))
-
-(use-fixtures :once lit/fixture)
 
 (defn cow [id x & [more]]
   (merge {:id id :uuid (str "u" id) :name "cow" :kind "passive" :pos {:x x :y 64 :z 0}} more))

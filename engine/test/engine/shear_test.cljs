@@ -1,15 +1,12 @@
 (ns engine.shear-test
   "jobs.animals.shear against the fake world."
-  (:require [engine.lit-support :as lit]
-            [cljs.test :refer [deftest is async use-fixtures]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [engine.fake :as fake]
             [engine.look-support :as ls]
             [engine.test-util :as tu]))
-
-(use-fixtures :once lit/fixture)
 
 (defn sheep [id x & [more]]
   (merge {:id id :uuid (str "u" id) :name "sheep" :kind "passive" :pos {:x x :y 64 :z 0}} more))

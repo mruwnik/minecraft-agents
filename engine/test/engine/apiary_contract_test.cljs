@@ -1,18 +1,15 @@
 (ns engine.apiary-contract-test
   "apiary.guard and apiary.harvest as contract jobs: they export the contract, quote validly, wait on their start facts
   and end with a kind and a cause."
-  (:require [cljs.test :refer [deftest is async use-fixtures]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.apiary-guard-test :as g]
             [engine.apiary-harvest-test :as h]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.events :as events]
             [engine.registry :as registry]
-            [engine.lit-support :as lit]
             [engine.test-util :as tu]
             [jobs.lib.world-files :as world]))
-
-(use-fixtures :once lit/fixture)
 
 (defn job [sym] (get registry/jobs sym))
 

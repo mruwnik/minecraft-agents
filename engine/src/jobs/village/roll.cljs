@@ -75,7 +75,7 @@
 
 (def target [:villager :pos])
 
-(def safe? (ready/safe-at (fn [c] (a/cell (:pos (:args c))))))
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
 (def fit? ready/fit?)
 
 

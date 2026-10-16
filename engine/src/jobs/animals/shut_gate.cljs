@@ -190,7 +190,7 @@
 
 (def safe?
   "Not exposed at the gate of the plan nearest to the body."
-  (ready/safe-at (fn [c] (some-> (nearest c (first (watched-cells c))) a/cell))))
+  (ready/safe-at-by-night (fn [c] (some-> (nearest c (first (watched-cells c))) a/cell))))
 (def fit? ready/ok)
 
 
