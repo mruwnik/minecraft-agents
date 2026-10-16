@@ -587,13 +587,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [east-wall (into {} (for [y [65 66] z (range -6 7)] [(str "6," y "," z) "stone"]))
+        (let [east-wall (into {} (for [y (range 65 69) z (range -6 7)] [(str "6," y "," z) "bedrock"]))
               {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                            :blocks (merge (lake -6 5 6) (bank 6 8 6) east-wall (bank -10 -7 6))})]
           (await (one-run! eng small-args))
           (is (= [[:completed nil]] (ended seen)))
-          (is (neg? (:x (core/self-pos p))) "the failed east target excluded that way: it landed west")
-          (is (pos? (unreachable-count seen)) "the east try failed first"))))))
+          (is (neg? (:x (core/self-pos p))) "the walled east bank is no shore (a wall two above the water is climbable, higher is not): it landed west")
+          (is (zero? (unreachable-count seen)) "no go-to was spent on the walled bank"))))))
 
 (deftest legal-headings-go-outward-only-and-skip-failed-ones
   (let [h (fn [pos failed] (b/legal-headings pos {:x 0 :z 0} failed))]
