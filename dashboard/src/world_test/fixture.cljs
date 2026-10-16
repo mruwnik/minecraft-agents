@@ -667,6 +667,11 @@
                            v))
                  form))
 
+(defn resolve-expect-refs
+  "Case c with \"$plan:<id>\" resolved inside its :expect (event and :no-event data), as in setup and args."
+  [c prefix]
+  (cond-> c (:expect c) (update :expect resolve-plan-refs prefix)))
+
 (defn resolve-body-refs
   "Replaces \"$body\" in every string of form with the name of the body running the case (a plan's :metadata :by names
   its own maker whatever probe body runs it) and \"$tag\" with its lowercase shared tag (a marker name no other shard shares)."

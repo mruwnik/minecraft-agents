@@ -1492,7 +1492,7 @@
   [opts c i run register stop! start!]
   (let [grid (f/case-grid c)
         origin (f/plot-origin grid i)
-        rc (f/resolve-tags c origin)
+        rc (-> (f/resolve-tags c origin) (f/resolve-expect-refs (plan-prefix opts)))
         started (js/Date.now)
         plan-files (atom [])
         t-start (atom nil)
