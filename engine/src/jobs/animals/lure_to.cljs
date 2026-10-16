@@ -59,7 +59,7 @@
    :radius {:doc "animals within this many blocks of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
    :watch-radius {:doc "how far from the body the lured animal is looked for" :spec (a/num-in 0 nil) :default 64}
    :fetch {:doc "get the food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
-   :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts" :spec string? :default nil}
+   :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts; one already at the destination ends the job at once (done? :ok)" :spec string? :default nil}
    :include-penned? {:doc "also lure animals standing in a closed pen" :default false :spec boolean?}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
@@ -115,12 +115,27 @@
   (let [most (time-limit c)]
     {:uses {:job-time [0 (min most 60) most]}}))
 
+(declare at-destination?)
+
+(defn named-there
+  "The animal the :uuid start names when it already stands at the destination before the lure chose one."
+  [c]
+  (let [{:keys [uuid mob watch-radius]} (:args c)]
+    (when (and uuid (not (str/blank? uuid)) (nil? (:animal (ctx/mem c))))
+      (let [found (filterv #(str/starts-with? (str (animals/key-of %)) uuid) (animals/adults (:primitives c) mob watch-radius))]
+        (when (and (= 1 (count found)) (at-destination? c (first found)))
+          (first found))))))
+
 (defn done?
-  "Later with whether the animal arrived: the run ends itself, after it put the food away."
+  "Ok when the named animal already stands at the destination before the start; else later with whether the animal
+  arrived: the run ends itself, after it put the food away."
   [c]
   (let [arrived? (= :arrived (:ending (ctx/mem c)))]
-    (contract/later :luring (if arrived? "the animal arrived" "the animal is on its way") :units :animals
-                    :done (if arrived? 1 0) :left (if arrived? 0 1) :result {:animal (:animal (ctx/mem c))})))
+    (if-let [a (named-there c)]
+      (contract/ok :arrived "the named animal is already at the destination" :units :animals :done 1 :left 0
+                   :result {:animal (animals/key-of a)})
+      (contract/later :luring (if arrived? "the animal arrived" "the animal is on its way") :units :animals
+                      :done (if arrived? 1 0) :left (if arrived? 0 1) :result {:animal (:animal (ctx/mem c))}))))
 
 (defn skipped-text
   "What kept the animals seen within radius from being lured: babies, those on a lead, the zone rules."

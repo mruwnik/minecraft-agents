@@ -1,8 +1,10 @@
 (ns engine.lure-to-test
   "jobs.animals.lure-to against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.expr :as expr]
+            [engine.registry :as registry]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
             [engine.hunt-test :as hunt-test]
@@ -39,6 +41,20 @@
 (defn cow-of [{:keys [p]} id] (first (filter #(= id (:id %)) (fake/entities p))))
 (defn count-of [{:keys [p]} item]
   (reduce + (map :count (filter #(= item (:name %)) (js->clj (.-inventory (.self p)) :keywordize-keys true)))))
+
+(defn ctx-of
+  "A ctx of lure-to in a seen world, args over its defaults, its memory m."
+  [world args m]
+  {:primitives (tu/seeing-all (tu/fake world)) :args (second (expr/leaf registry/jobs 'jobs.animals.lure-to (merge {:mob "cow" :pos goal} args)))
+   :root "j" :slots [] :id "j" :engine {:warned (atom #{})} :emit (fn [& _]) :sym 'jobs.animals.lure-to
+   :view (fn [] {:now 1000 :data {:entries {(mem/job-kind "j") [{:t 1000 :data m}]}}})})
+
+(deftest done-is-ok-for-the-named-animal-already-at-the-spot-before-the-start
+  (are [world args m expected] (= expected (tu/kind-reason (lure-to/done? (ctx-of world args m))))
+    {:entities [(cow 1 30)]} {:uuid "u1"} {} [:ok :arrived]
+    {:entities [(cow 1 3)]} {:uuid "u1"} {} [:later :luring]
+    {:entities [(cow 1 30)]} {} {} [:later :luring]
+    {:entities [(cow 1 30)]} {:uuid "u1"} {:animal "u1"} [:later :luring]))
 
 (deftest lures-the-cow-to-the-spot-and-puts-the-food-away
   (async done
