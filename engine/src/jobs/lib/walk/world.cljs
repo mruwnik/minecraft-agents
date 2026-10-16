@@ -10,6 +10,7 @@
             [engine.path.space :as space]
             [engine.ctx :as ctx]
             [jobs.lib.breath :as breath]
+            [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.placement :as placement]
@@ -141,12 +142,19 @@
 
 (defn with-dark
   "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at ..} (nil: pw). A dark
-  cell costs cost/dark-factor times its own seconds more."
-  [pw dark]
+  cell costs cost/dark-factor of kit ({:weapon :equipment}; nil: the floor) times its own seconds more."
+  [pw dark kit]
   (if (nil? dark)
     pw
     #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :tolls (.-tolls pw)
-         :dark #js {:at (:at dark) :factor (cost/dark-factor)}}))
+         :dark #js {:at (:at dark) :factor (if kit (cost/dark-factor kit) (cost/dark-factor))}}))
+
+(defn kit-of
+  "{:weapon :equipment} of the body: its best default weapon (jobs.lib.combat) and the armour worn."
+  [c]
+  (let [p (:primitives c)]
+    {:weapon (combat/best-weapon p combat/default-weapons)
+     :equipment (cost/equipment-of (.-equipment (.self p)))}))
 
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the dangers the body knows of now (dangers?, jobs.lib.threats)
@@ -154,7 +162,7 @@
   [c pw {:keys [dangers? dark?]}]
   (cond-> pw
     dangers? (with-dangers (threats/planner-dangers c))
-    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}))))
+    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (kit-of c))))
 
 (def avoid-factor
   "How many times a cell's own cost an avoided cell costs more (the planner's options.avoid.factor): a detour is taken

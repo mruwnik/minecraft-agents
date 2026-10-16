@@ -104,7 +104,7 @@
 (def light-cost value/light-cost)
 (def per-danger value/per-danger)
 (defn per-dark [] (value/per-dark))
-(defn dark-factor [] (value/dark-factor))
+(defn dark-factor ([] (value/dark-factor)) ([kit] (value/dark-factor kit)))
 
 (def farm-tolls tolls/farm-tolls)
 (def zone-tolls tolls/zone-tolls)

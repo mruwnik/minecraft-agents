@@ -39,6 +39,7 @@
   (:require [engine.args :as a]
             ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
+            [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.foods :as foods]
@@ -54,6 +55,8 @@
                 :doc "One block climbed past the first on a detour (stairs or a pillar back out of a drop, or up to a ledge), in seconds."}
    ::per-dark {:default 0.3 :spec (a/num-in 0 nil)
                :doc "One block walked in the dark, on top of per-block: a dark block costs twice a lit one."}
+   ::dark-mob-chance {:default 0.002 :spec (a/num-in 0 nil)
+                      :doc "Chance a mob that reaches the body is spawned for each dark block it walks: the expected hp a zombie costs its kit, times this, is added to per-dark."}
    ::walk-blocks-per-s {:default 2.9 :spec (a/num-in 0.1 nil)
                         :doc "Walking speed with slack for detours (4.3 flat out, 1.5x the way), blocks a second."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
@@ -385,9 +388,13 @@
 (defn per-block [] (settings/get settings ::per-block))
 (defn per-dark [] (settings/get settings ::per-dark))
 (defn dark-factor
-  "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): per-dark over per-block."
-  []
-  (/ (per-dark) (per-block)))
+  "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): per-dark over per-block
+  (the floor). With a kit {:weapon :equipment} the hp a zombie would cost it (fight/fight-damage, capped at 20) times
+  ::dark-mob-chance and hp-seconds is added to per-dark: a bare body pays more than an armed, armoured one."
+  ([] (/ (per-dark) (per-block)))
+  ([kit]
+   (let [hurt (min 20 (fight/fight-damage (assoc kit :mobs [{:name "zombie" :distance 0 :hits 0}])))]
+     (+ (dark-factor) (/ (* hurt (settings/get settings ::dark-mob-chance) health/hp-seconds) (per-block))))))
 (def per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." health/hp-seconds)
 (defn walk-blocks-per-s [] (settings/get settings ::walk-blocks-per-s))
 (def lethal-causes ["lava" "fire" "burn" "void" "out_of_world"])

@@ -188,3 +188,11 @@
 (deftest dig-cost-is-the-item-base-s-dig-term
   (is (< (cost/dig-cost "dirt") (cost/dig-cost "stone") (cost/dig-cost "obsidian")))
   (is (nil? (cost/dig-cost "bedrock")) "never dug"))
+
+(deftest dark-factor-grows-with-the-danger-to-the-kit
+  (let [floor (cost/dark-factor)
+        unarmed (cost/dark-factor {:weapon nil :equipment nil})
+        sword (cost/dark-factor {:weapon "iron_sword" :equipment nil})
+        armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set})]
+    (is (< (js/Math.abs (- 1 floor)) 1e-9) "the bare factor is the flat floor")
+    (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
