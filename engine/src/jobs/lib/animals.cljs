@@ -60,7 +60,8 @@
   [c kind job-name action es]
   (let [{:keys [allowed refusal]} (gate/judge c kind job-name action (map cell-of es) {:own-plans-ok? true})
         ok (set allowed)]
-    (ctx/update-mem! c #(if refusal (assoc % :refusal refusal) (dissoc % :refusal)))
+    (when (:token c) ; done? asks this in a check, which holds no token and writes nothing
+      (ctx/update-mem! c #(if refusal (assoc % :refusal refusal) (dissoc % :refusal))))
     (filterv #(contains? ok (cell-of %)) es)))
 
 (defn refusal

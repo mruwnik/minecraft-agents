@@ -1,7 +1,7 @@
 (ns jobs.lib.ready
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed (the estimate of jobs.lib.cost/exposure is
-  above ::risk-limit; :look while the light there is unseen, :never when nothing lowers it) or a danger is near
+  above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when nothing lowers it) or a danger is near
   (threatened); fit? is :later below the risky health; ok never refuses."
   (:require [engine.args :as a]
             [engine.contract :as contract]
@@ -12,6 +12,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
+            [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
             [jobs.lib.storage :as storage]))
 
@@ -37,7 +38,7 @@
       (and (sh/night? p) (sh/safe-from-night? p) (not (sh/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
-      (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
+      (contains? lowered-by :look) ((if (look/surveyed? c :near) contract/later contract/look) :exposed (str "light at " where " not seen") :look-at look-at)
       (contains? lowered-by :dawn) (contract/later :exposed (str "dark at " where " until dawn") :lowered-by lowered-by :chance chance)
       :else (contract/never :exposed (str "exposed at " where ", nothing lowers it") :chance chance))))
 

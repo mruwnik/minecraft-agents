@@ -139,7 +139,7 @@
 
 (def call-cap "Acts allowed per round (the fake clock moves 50 ms with each)." 1500)
 (def long-running-cap "Acts allowed per round for a job in long-running: its cut-off is expected, so stop early." 200)
-(def read-cap "Calls allowed since the last act: a loop over reads never awaits, so only a count stops it." 60000)
+(def read-cap "Calls allowed since the last act: a loop over reads never awaits, so only a count stops it." 600000)
 (def max-rounds 12)
 
 (def round-caps

@@ -97,6 +97,15 @@
             (is (empty? (calls-of s "interact")))
             (is (empty? (events-of s :shear.gave-up)))))))))
 
+(deftest a-job-waiting-below-its-food-floor-throws-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:floor {:food 6}} {:self {:food 2} :inventory shears :entities [(sheep 1 2)]} 3))]
+          (is (empty? (events-of s :error)))
+          (is (empty? (:failed (core/state (:eng s)))))
+          (is (empty? (calls-of s "interact"))))))))
+
 (deftest gives-up-on-unreachable-sheep
   (async done
     (tu/run-async done
