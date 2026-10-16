@@ -18,7 +18,7 @@
   {:name "body-off-the-line-column-is-too-far"
    :blocks [[:fill [11 4 11] [13 5 13] "air"] [:set [12 6 12] "sea_lantern"]]
    :body {:at [12.5 4 12.5]}
-   :act [[:job (jobs.access.tunnel {:target #at [16 1 16] :max-length 6 :keep true})]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 1 16] :max-length 3 :keep true})]]
    :expect [{:event {:source :job :kind :tunnel.stopped :data {:reason :too-far}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :tunnel.step} :for-s 30 :until {:source :job :kind :tunnel.stopped}}]
    :after [[:body-near [12.5 4 12.5] 2] [:not-block [15 1 16] "air"]]}]}

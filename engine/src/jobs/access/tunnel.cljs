@@ -27,7 +27,7 @@
 
 (def doc
   "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
-  at feet height. The target itself is left. A nil zone list ends condition-failed :no-zones before anything is done.
+  at feet height. The target itself is left. With no zone list read the job waits (:no-zones) until one is.
   Before the first step it stocks torches when under 8 are carried (jobs.access.stock/torches!: info torch.stocked, or warn torch.no-stock and it goes on dark).
 
   The way is one straight line along a heading through the target's column:
@@ -52,7 +52,7 @@
 
   Every line refused by a zone, claim or plan waits (:refused) while all are refused. Else no
   valid line ends before any walk or dig with the reason all judged lines share (:hazard
-  :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded :no-zones). :too-far: no line fits within :max-length.
+  :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded). :too-far: no line fits within :max-length.
   :no-approach: the headings differ, with :headings giving each one's reason.
 
   Then the body walks to the entry (a go-to child planning no deeper than 16 below the lower of body and entry; failing: :walk-in-failed, nothing possible) and the stair child cuts
