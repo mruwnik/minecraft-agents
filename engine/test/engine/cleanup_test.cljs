@@ -883,3 +883,18 @@
           (is (= [] @digs))
           (is (= 3 (js/Math.floor (.-x (.-pos (.self p))))) "the body stayed where it was")
           (is (= [:danger] (mapv :reason (:open @out)))))))))
+
+(deftest as-a-reflex-it-works-after-its-look-around-instead-of-declining
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"0,64,0" "dirt"})
+                                                 :entries [(entry [0 64 0])]})
+              _ (tu/seeing-after-look p)]
+          (core/register-reflex! eng {:trigger :scaffold-left :args {} :job (list job {})})
+          (loop [i 0]
+            (swap! (:clock s) + 500)
+            (await (core/tick! eng))
+            (when (< i 60) (recur (inc i))))
+          (is (empty? (filter #(= :declined (:kind %)) @seen)) "a reflex job is not told to continue")
+          (is (= [] (the-ledger eng)) "the scaffold is taken back"))))))

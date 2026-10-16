@@ -13,6 +13,7 @@
   :limit-s 60}
  :cases
  [{:name "s1-steps-to-free-side-1"
+   :blocks [[:set [17 -1 16] "stone"]]
    :act [[:summon "falling_block" [16.5 4 16.5] "{BlockState:{Name:\"minecraft:sand\"},Time:1}"]]
    :expect [{:event {:source :reflex :kind :fired} :within-s 15}
             {:event {:source :reflex :kind :ended} :within-s 30}

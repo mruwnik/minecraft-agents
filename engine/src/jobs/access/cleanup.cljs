@@ -398,8 +398,10 @@
 (defn ^:async round [c]
   (let [zones (known/zones c)
         n (atom 0)]
-    (if (and (not (:started (ctx/mem c))) (empty? (offered-now c)))
-      (or (await (look/survey! c)) (ctx/end c :done nil nil)) ; a block behind the body is not seen until it looks
+    ;; a block behind the body is not seen until it looks; a reflex may not yield, so it goes on in the same round
+    (if (and (not (:started (ctx/mem c))) (empty? (offered-now c))
+             (not (and (await (look/survey! c)) (seq (offered-now c)))))
+      (ctx/end c :done nil nil)
       (do (ctx/update-mem! c assoc :started true)
           (await (pace/steps! c #(if (<= (max-passes) (swap! n inc))
                                    (ctx/end c :nothing-possible :too-many-passes {:text "cleanup did not settle"})
