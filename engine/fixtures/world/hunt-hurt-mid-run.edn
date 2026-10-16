@@ -1,6 +1,6 @@
-;; Card e7945a33: start-only conditions are checked once, at the start. A hunt whose body is hurt below the risky-job health floor while the walk
-;; to the cow goes on waits :low-health (it is a wait, the call goes on); it never ends condition-failed. Cow NoAI 22 blocks off.
-;; Should-succeed: waiting :low-health, then the job is still listed and later completes or is still waiting. Should-fail: no stopped event.
+;; Start-only conditions are checked once, at the start. A hunt hurt below the risky-job health floor during its walk to the cow (22 blocks off, NoAI)
+;; is never ended condition-failed. The health check is asked at resume, not between the steps of one round, so the walk and
+;; the swing may finish before it waits :low-health (that wait is pinned in hunt-test). Should-succeed: the hurt lands; should-fail: a condition-failed stop.
 {:defaults
  {:tags [:animals :hunt :conditions]
   :time :day
@@ -8,11 +8,11 @@
   :body {:at [4.5 0 16.5] :inventory [["iron_sword" 1]] :settle-s 2}
   :limit-s 90}
  :cases
- [{:name "hurt-below-the-floor-mid-walk-waits-low-health-not-condition-failed"
+ [{:name "hurt-below-the-floor-mid-walk-is-not-ended-condition-failed"
    :act [[:summon "cow" [26.5 0 16.5] "{NoAI:1b}"]
          [:job (jobs.combat.hunt {:mob "cow" :count 1 :keep 0})]
          [:await {:source :job :kind :round_started} 20]
          [:rcon "damage $BODY 16 minecraft:generic"]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 30 :of-job true}
+   :expect [{:event {:source :body :kind :hurt} :within-s 10}
             {:no-event {:source :job :kind :stopped :data {:kind :condition-failed}} :for-s 30 :of-job true}]
    :limit-s 60}]}
