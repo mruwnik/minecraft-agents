@@ -21,8 +21,9 @@ esac
 
 if [ "${1-}" = --remove ]; then
   valid "${2-}"
-  wt=$root/fix-$2
-  git -C "$repo" worktree remove --force "$wt"
+  # Found by its branch, so a worktree cut under an older root is removed too.
+  wt=$(git -C "$repo" worktree list --porcelain | awk -v b="refs/heads/fix/$2" '/^worktree /{p=substr($0,10)} $0=="branch "b{print p}')
+  git -C "$repo" worktree remove --force "${wt:-$root/fix-$2}"
   git -C "$repo" branch -D "fix/$2" >/dev/null
   exit
 fi
