@@ -96,7 +96,7 @@
     a frontier walk once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
     ever in the call) passes what the goal is worth (:tour-worth, default jobs.lib.cost/tour-worth of the goal's straight
     blocks at the call's start): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
-  - A walk stuck or off its plan at a cell is a go-to.walker-fault warn; the next plans of the call cost that cell
+  - A walk stuck or off its plan at a cell is a :walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
     A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck).
   - :dig-out: a body sealed in its own shelter (a :shelter entry) by day, when the walk finds no way, leaves it first (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); never at night.

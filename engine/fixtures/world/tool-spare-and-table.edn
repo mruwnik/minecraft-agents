@@ -2,8 +2,8 @@
 ;; A stair down with the last, worn stone pickaxe gets a spare first (info tool.spare) and the table it needs stands in a side
 ;; niche, not in a step of the stair, and is dug up again; with nothing to make one from it warns tool.no-spare and goes on. A worn iron
 ;; pickaxe or axe gets the cheapest tool that does the job (stone). fell-tree does the same for its axe. A craft with the body standing
-;; across a cell edge puts its table in a cell outside the body's box. obtain raw_iron whose last pickaxe breaks mid-mine crafts a new one
-;; and goes on. Stone mass x 2..30, z 8..24, y -8..9 (surface y 10; deep enough for a 13-step stair); the body starts on top at (10 10 16).
+;; across a cell edge puts its table in a cell outside the body's box. obtain raw_iron with a worn last pickaxe crafts a stone spare before the first dig
+;; (breaks mid-dig: access-pickaxe-tools, restore-broken-wear). Stone mass x 2..30, z 8..24, y -8..9 (surface y 10; deep enough for a 13-step stair); the body starts on top at (10 10 16).
 {:defaults
  {:tags [:tools :mine :access] :time :any
   :plot {:height 24}
@@ -41,8 +41,8 @@
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 90 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "stone_pickaxe" 1]]}
-  ;; the spare step makes a stone pickaxe before the mine (tool.spare), so the worn last pick is replaced before it can break
-  {:name "obtain-raw-iron-last-pick-breaks-new-one-crafted"
+  ;; the spare step makes a stone pickaxe before the mine (tool.spare), so the worn last pick never breaks
+  {:name "obtain-with-a-worn-last-pick-gets-a-spare-first"
    :blocks [[:set [23 10 16] "iron_ore"] [:set [23 10 18] "iron_ore"]
             [:set [12 10 14] "torch"] [:set [20 10 14] "torch"] [:set [16 10 18] "torch"]]
    :body {:at [12.5 10 16.5] :inventory [["stone_pickaxe[damage=130]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}

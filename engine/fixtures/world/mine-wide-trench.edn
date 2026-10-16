@@ -1,7 +1,6 @@
 ;; jobs.gather.mine, ore across a 2-wide 5-deep trench in the line (card 61a0396f item 4): the ore at x 22 is in view from
 ;; the open cut [16..19]. Underground and dark an ore is out of sight beyond 4 blocks (sensing like a player's: light rule in
-;; engine.perception, :near 4): the ore 3 blocks from the cut's end is seen and dug from there (drop on the far side, left
-;; behind); an ore 7 blocks from the cut's end (trench extended, x 26) is never targeted (the tunnel stops at the trench,
+;; engine.perception, :near 4): the ore 3 blocks from the cut's end is seen and dug from there (its drop is picked up from the cut); an ore 7 blocks from the cut's end (trench extended, x 26) is never targeted (the tunnel stops at the trench,
 ;; :no-floor); a torch at the cut's end lights the near ore, which is seen from the start.
 ;; Stone mass x 2..30, z 8..24, y -6..6; body in a 1x2 cell at [16 0 16] facing east, stone pickaxe.
 {:defaults

@@ -50,7 +50,7 @@
   target's own column counts as a last run step. The shortest valid line wins, among those whose entry is within 24 blocks of the body if any (the body does not walk to a far surface entry when it stands in a line underground). Among equals one that leaves the
   floor under the body's start uncut wins, then the entry nearest the body.
 
-  Every line refused by a zone, claim or plan fails the condition :refused. Else no
+  Every line refused by a zone, claim or plan waits (:refused) while all are refused. Else no
   valid line ends before any walk or dig with the reason all judged lines share (:hazard
   :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded :no-zones). :too-far: no line fits within :max-length.
   :no-approach: the headings differ, with :headings giving each one's reason.

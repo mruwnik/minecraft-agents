@@ -62,7 +62,7 @@
   (when (< (:hang-walks (ctx/mem c) 0) max-hang-walks) (hanging-cell c pos)))
 
 (defn note-fault!
-  "A walk that failed at the walker is a bug to see (a go-to.walker-fault warn) and a cell to keep the next plans off
+  "A walk that failed at the walker is a bug to see (a :walker-fault warn) and a cell to keep the next plans off
   (mem :fault-cells, at most max-fault-cells; a new call starts with none): the walks go round it when there is a way.
   The warn asks for no attention: the call goes on, and its give-up is the notice."
   [c {:keys [status] :as result}]

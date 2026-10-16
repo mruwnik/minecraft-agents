@@ -88,4 +88,4 @@
    :act [[:job (jobs.gather.mine {:block "stone" :count 2 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :trip.deposited :data {:free [:>= 5]}} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 95 :of-job true}]
-   :after [[:item "raw_iron" 5] [:item "coal" 3]]}]}
+   :after [[:item "raw_iron" 5] [:item "coal" 3] [:item "gravel" 0] [:item "tuff" 0]]}]}

@@ -29,7 +29,7 @@
    :body {:inventory [["beef" 2] ["coal" 2]]}
    :expect [{:event {:source :job :kind :holding} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 60}]
-   :after [[:body-near [12.5 0 12.5] 5]]
+   :after [[:body-near [12.5 0 12.5] 4]]
    :limit-s 80}
   {:name "hold-leaves-reserved-bait-carrots-alone"
    :body {:inventory [["carrot" 6]]}
