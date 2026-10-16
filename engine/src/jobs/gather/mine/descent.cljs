@@ -56,11 +56,16 @@
   [c]
   (and (contains? #{nil :none} (shaft-state c)) (descent-wanted? c)))
 
+(defn shaft-under-way?
+  "Whether a shaft descent is under way (walking to its top, down its stair, or to its branch)."
+  [c]
+  (and (not (false? (:shaft (:args c)))) (contains? #{:going :down :walking} (shaft-state c))))
+
 (defn shaft-due?
   "Whether the descent goes by a mineshaft: it is due and :shaft is not false, or a shaft descent is under way."
   [c]
   (and (not (false? (:shaft (:args c))))
-       (or (contains? #{:going :down :walking} (shaft-state c))
+       (or (shaft-under-way? c)
            (and (nil? (shaft-state c)) (descent-wanted? c)))))
 
 (defn no-stone!

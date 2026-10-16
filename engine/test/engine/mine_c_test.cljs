@@ -175,6 +175,18 @@
           (is (re-find #"via shaft s \(stair 4 steps to y 60\), branch 1 east" (:text e)))
           (is (= [0 64 0] (feet s))))))))
 
+(deftest stone-seen-from-the-shaft-stair-does-not-end-the-descent-before-the-shaft-is-used
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [soil-over-rock (merge (cells "stone" (range -3 15) (range 50 62) (range -4 5))
+                                    (dissoc (cells "dirt" (range -3 15) (range 62 68) (range -4 5)) "0,64,0" "0,65,0"))
+              world {:blocks soil-over-rock :drops {"stone" "cobblestone"} :inventory (into pickaxe [{:name "torch" :count 8}])}
+              s (await (zoned {:block "stone" :count 3 :mend false} world (ew/of-data {"s" shaft-plan} {} []) 400))
+              [shaft] (events-of s :mine.shaft)]
+          (is (= "s" (:shaft shaft)) "the stair reached stone, the shaft was still taken")
+          (is (re-find #"via shaft s" (:text (done-event s)))))))))
+
 (deftest a-body-inside-a-half-dug-shaft-continues-it-from-where-it-stands
   (async done
     (tu/run-async done

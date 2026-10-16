@@ -4,7 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.gather.mine.descent :refer [descent-wanted? descend-due? descend-round! shaft-due? shaft-top-here? shaft-round!]]
+            [jobs.gather.mine.descent :refer [descent-wanted? descend-due? descend-round! shaft-due? shaft-under-way? shaft-top-here? shaft-round!]]
             [jobs.gather.mine.drops :refer [collect! dig-cell!]]
             [jobs.gather.mine.end :refer [end-run to-mend! wrap-up! home-round!]]
             [jobs.gather.mine.mend :refer [mend-round!]]
@@ -400,6 +400,7 @@
                                      (to-mend! c :gave-up))
       (nil? looked) (do (await (look-around! c)) :again)
       (= :searching pos) :again
+      (shaft-under-way? c) (await (shaft-round! c))
       (and (some? pos) (way-floor c [pos])) (do (skip! c pos) :again)
       (and (some? pos) (last-exit? c pos)) (do (ctx/emit! c :mine.spared-exit :info {:pos (access/cell pos) :text (str "mine leaves " (str/join "," (access/cell pos)) ": it is the body's last way out")})
                                                (skip! c pos) :again)
