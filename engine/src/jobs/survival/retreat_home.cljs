@@ -102,8 +102,8 @@
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach/room plus :start and :home?): the home's (home
   {:x :y :z} or nil) and those behind the doors the body has seen (starts), at most max-rooms, the home first then the
   nearest; and {:dropped [{:at [x y z] :own? :why}]}, the cells that are none: :run-failed (a run to it failed this
-  flight), :not-closed, :unseen (a cell of the room not seen yet), or :unjudged (a door side not judged this flight beyond the fresh ones it may flood now; the
-  home is always judged)."
+  flight), :not-closed, :unseen (a cell of the room not seen yet), or :unjudged (a door side not judged this flight beyond the fresh ones
+  it may flood now; the home is always judged)."
   ([c home] (survey c home js/Infinity))
   ([c home fresh]
    (let [p (:primitives c)

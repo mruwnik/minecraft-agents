@@ -30,6 +30,7 @@
             {:no-event {:source :body :kind :died} :for-s 30}]
    :limit-s 45}
   {:name "hurt-body-flees-in-short-legs-from-a-mob-it-cannot-see-hit"
+   ;; no blocks carried: with some, the early refuge (pillar/seal) comes before any flee step (retreat-flee-choices)
    :body {:effects [] :inventory []}
    :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :hostile.decided :data {:decision :flee}} 15]

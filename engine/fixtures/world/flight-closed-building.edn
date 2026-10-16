@@ -18,19 +18,27 @@
  :cases
  [{:name "runs-into-a-foreign-closed-building-and-shuts-the-door"
    :body {:at [16.5 0 17.5] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~25.5"] [:wait-s 1]
+   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~25.5"] [:until-pos {:x-min 15 :x-max 18 :z-min 24 :z-max 27} 10]
          [:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.home :data {:own? false}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:body-near [16.5 0 16.5] 3.5]]}
   {:name "own-home-ahead-of-a-chaser-beside-the-door"
    :body {:at [16.5 0 17.5] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~25.5"] [:wait-s 1]
+   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~25.5"] [:until-pos {:x-min 15 :x-max 18 :z-min 24 :z-max 27} 10]
          [:job (jobs.memory.set-place {:name :home :pos #at [16 0 16]})]
          [:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.home :data {:own? true}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:body-near [16.5 0 16.5] 3.5]]}
+  ;; a329f9e7: a hut seen only from outside (a cell of the room unseen) is judged :unseen, not trusted as a refuge nor dropped for good: the flight goes elsewhere
+  {:name "hut-seen-only-from-outside-is-not-run-into"
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [16 0 16]})]
+         [:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.target} :within-s 25}
+            {:no-event {:source :job :kind :retreat.home} :for-s 30}
+            {:no-event {:source :job :kind :retreat.door-shut} :for-s 30}]
+   :after [[:body-far [16.5 0 16.5] 3.5]]}
   ;; card 659f5e6d: a creeper chasing from afar is not led to the door (it would follow and blow the door, chest and bed): no run into the hut
   {:name "creeper-far-behind-the-body-is-not-led-into-the-hut"
    :act [[:summon "creeper" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
@@ -41,7 +49,7 @@
   ;; 31887403: :home in the far corner of the hut, 7 cells from the door: the door is still shut on the way in
   {:name "own-home-in-the-far-corner-still-shuts-the-door"
    :body {:at [16.5 0 17.5] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~25.5"] [:wait-s 1]
+   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~25.5"] [:until-pos {:x-min 15 :x-max 18 :z-min 24 :z-max 27} 10]
          [:job (jobs.memory.set-place {:name :home :pos #at [13 0 13]})]
          [:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.home :data {:own? true}} :within-s 25}
