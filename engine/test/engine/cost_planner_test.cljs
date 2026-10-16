@@ -90,10 +90,12 @@
     (is (= seen (.-landingSeen (wplan/with-drops #js {} {} seen))))
     (is (nil? (.-landingSeen (wplan/with-drops #js {} {}))))))
 
-(deftest landing-seen-takes-what-the-body-sees-or-feels-now
-  (let [answers {0 #js {:visible true} 1 #js {:felt true} 2 #js {:visible false :ageMs 5000} 3 #js {:unknown true} 4 nil}
+(deftest landing-seen-takes-what-the-body-saw-lately
+  (let [answers {0 #js {:visible true} 1 #js {:felt true} 2 #js {:visible false :ageMs 5000} 3 #js {:visible false :ageMs 60000}
+                 4 #js {:unknown true} 5 nil}
         seen (wworld/landing-seen #js {:sensedAt (fn [^js pos] (get answers (.-x pos)))})]
-    (is (= [true true false false false] (mapv #(seen % 64 0) (range 5))) "seen, felt; remembered, unknown, unloaded are not")
+    (is (= [true true true false false false] (mapv #(seen % 64 0 false) (range 6))) "seen, felt, seen lately; an old memory, unknown, unloaded are not")
+    (is (= [true true true true true false] (mapv #(seen % 64 0 true) (range 6))) "as a wall of the pad: any block the body has a read of, hidden ones taken for rock")
     (is (nil? (wworld/landing-seen #js {})) "no perception: nil, the planner reads the snapshot")))
 
 (deftest air-profile-follows-the-helmet

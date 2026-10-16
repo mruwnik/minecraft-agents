@@ -562,3 +562,18 @@
                                                      (fn [{:keys [p]}] (swap! (fake/state p) assoc :light-default [0 0]))))]
           (is (= {:arrived true} out) (pr-str (last seen)))
           (is (= [:fill-gap] (steps seen))))))))
+
+(defn slime-shaft
+  "Stone x -12..2, y 54..59, z -4..4 with a 1x1 shaft at x 1 (slime at y 55, the shaft cells over it walled h high), the body on top (feet y 60): a 4-block drop whose pad shows only from the lip."
+  [h]
+  (-> (merge (box -12 54 -4 2 59 4 "stone") {"1,55,0" "slime_block"})
+      (as-> w (apply dissoc w (for [y (range 56 60)] (str "1," y ",0"))))
+      (as-> w (apply dissoc w (for [x [0 1 2] z [-1 0 1] y (range (+ 56 h) 60) :when (not (and (= x 1) (= z 0)))] (str x "," y "," z))))))
+
+(deftest go-to-takes-a-slime-shaft-drop-walled-to-the-bounce
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :blocks (slime-shaft 4)}
+                                                   {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+          (is (= {:arrived true} out) (pr-str (last seen))))))))

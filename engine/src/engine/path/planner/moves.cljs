@@ -66,9 +66,10 @@
         (and (neg? land) (not ^boolean (.bouncePad s x (if (== (.stateAt s x y z) sup) y (dec y)) z fall16))) 1
         :else land)))
 
-  ;; the body sees the block at x y z now (options.landingSeen; none: every block)
-  (landSeen [s x y z]
-    (or (nil? (.-land-seen s)) (true? (.call ^js (.-land-seen s) nil x y z))))
+  ;; the body sees the block at x y z now (options.landingSeen; none: every block); wall? asks it as a wall of the pad,
+  ;; which a hidden block may be taken for
+  (landSeen [s x y z wall?]
+    (or (nil? (.-land-seen s)) (true? (.call ^js (.-land-seen s) nil x y z wall?))))
 
   ;; a bounce off the block at x y z after a fall of fall16 stays on the pad (base/pad-cells): it and the 8 blocks round it
   ;; are bouncing blocks or (round it) walls up to the bounce's peak, and the body sees each
@@ -76,14 +77,14 @@
     (some? (pad-cells (fn [bx by bz]
                         (let [id (.stateAt s bx by bz)
                               land (if (== id UNLOADED) nil (.get ^js (.-land-factors s) id))]
-                          (and (some? land) (neg? land) ^boolean (.landSeen s bx by bz))))
+                          (and (some? land) (neg? land) ^boolean (.landSeen s bx by bz false))))
                       (fn [bx by bz] (.wallAt s bx by bz))
                       x y z (/ fall16 16))))
 
   ;; a seen block at x y z with a whole collision top
   (wallAt [s x y z]
     (let [id (.stateAt s x y z)]
-      (and (not (== id UNLOADED)) (>= (aget (.-tbl-top s) id) WHOLE) ^boolean (.landSeen s x y z))))
+      (and (not (== id UNLOADED)) (>= (aget (.-tbl-top s) id) WHOLE) ^boolean (.landSeen s x y z true))))
 
   ;; walk off an edge into the first standable cell below the neighbour column, or into water of any depth up to maxWaterDrop
   ;; (the fall is cancelled there). A tight cell at either end: the body falls straight down from the crossing point, which

@@ -366,17 +366,23 @@
 
 (defn body-name [c](.-username (.self (:primitives c))))
 
+(def landing-memory-ms "How long after the body saw a block it still counts as seen for a landing: a look over an edge outlasts the head turning back." 30000)
+
 (defn landing-seen
-  "The planner's options.landingSeen for the body of primitives p: (fn [x y z]) true when the body sees or feels the block
-  there now, so a bounce is priced only on a pad in view (a remembered or unknown block is not); nil without a perception."
+  "The planner's options.landingSeen for the body of primitives p: (fn [x y z wall?]) true when the body sees or feels the
+  block, or saw it landing-memory-ms ago or less, so a bounce is priced only on a pad it has looked at (an older memory
+  or an unknown block is not); nil without a perception. As a wall of the pad (wall?) a block the body has not seen counts too, taken for rock as everywhere
+  (jobs.lib.access/hidden-guess): the walls of a 1x1 shaft face away from the edge a body drops from. An unloaded
+  block never counts."
   [p]
   (when (some? (.-sensedAt p))
     (let [memo (js/Map.)]
-      (fn [x y z]
-        (let [k (str x "," y "," z)]
+      (fn [x y z wall?]
+        (let [k (str x "," y "," z "," (boolean wall?))]
           (if (.has memo k)
             (.get memo k)
             (let [^js b (u/sensed p {:x x :y y :z z})
-                  seen (boolean (and b (or (true? (.-visible b)) (true? (.-felt b)))))]
+                  seen (boolean (and b (or wall? (true? (.-visible b)) (true? (.-felt b))
+                                   (and (not (true? (.-unknown b))) (<= (or (.-ageMs b) js/Infinity) landing-memory-ms)))))]
               (.set memo k seen)
               seen)))))))

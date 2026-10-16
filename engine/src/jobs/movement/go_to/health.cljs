@@ -12,7 +12,9 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as health]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.foods :as foods]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
@@ -84,6 +86,35 @@
           (await (child/pause! c (/ wait-ms 1000) :healing))))
     :continue))
 
+(def look-drop-min "Blocks of a drop from which its landing is looked at before the way is judged too dear." 4)
+
+(def lip-reach "How far from the middle of its cell toward a drop the body steps to look over the edge (its box still stands on the cell)." 0.44)
+
+(defn drops
+  "The drops of look-drop-min blocks or more in steps (a planner path's JS steps), as {:from cell :floor the cell under the landing}."
+  [steps]
+  (vec (for [[a b] (partition 2 1 (some-> steps array-seq))
+             :when (>= (- (.-y a) (.-y b)) look-drop-min)]
+         {:from [(.-x a) (.-y a) (.-z a)] :floor [(.-x b) (dec (.-y b)) (.-z b)]})))
+
+(defn ^:async look-at-drops!
+  "A drop the budget refuses may be priced by what the body has not looked at: a bounce counts only on a pad in view
+  (landing-seen), and a floor far below shows only from the lip. Once per drop of the probed way, steps to the lip and
+  looks at the floor: true when it did (the walk plans again)."
+  [c]
+  (let [m (ctx/mem c)
+        {:keys [from floor] :as drop} (first (remove (set (:drops-looked m)) (:probe-drops m)))]
+    (when drop
+      (ctx/update-mem! c update :drops-looked (fnil conj []) drop)
+      (let [[fx _ fz] from
+            [tx _ tz] floor
+            lip (fn [f t] (+ f 0.5 (* lip-reach (compare t f))))]
+        ;; raw moveTo kept: a step inside the body's own cell, as jobs.lib.seal/centre!
+        (await (ctx/act c :moveTo #js {:pos #js {:x (lip fx tx) :y (second from) :z (lip fz tz)} :range 0.05}))
+        (await (dig-look/look-at! c floor))
+        (look/see! c)
+        true))))
+
 (defn ^:async probe-plan!
   "Whether a whole way exists for the body that may spend all but 1 hp (:max-damage still capping): the hp it costs, or nil
   when there is none. A refusal of the budget in a search that finds no whole way anyway (:damage-refused is only a move the
@@ -97,6 +128,7 @@
         within (await (wplan/plan-within! c (wworld/path-world (:primitives c)) [(:x pos) (:y pos) (:z pos)] range walk/default-weight policy))
         ^js r (:r within)]
     (when (= "found" (.-status r))
+      (ctx/update-mem! c assoc :probe-drops (drops (some-> r .-path .-steps)))
       (or (some-> r .-path .-cost .-damage) 0))))
 
 (defn ^:async probe!
@@ -120,7 +152,10 @@
   [c pos range]
   (let [{:keys [min-health]} (wworld/walk-settings c)
         planned (await (probe! c pos range))]
-    (when planned
+    (cond
+      (not planned) nil
+      (await (look-at-drops! c)) :again
+      :else
       (let [now (ctx/now c)
             st (heal-state (ctx/mem c) now)
             body (cond-> (body-of c) (:ate st) (assoc :carried-food false))

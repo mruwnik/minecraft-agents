@@ -13,7 +13,7 @@
      :time :players [username] :raining :thundering :blocks {[x y z] name} :unloaded #{pos} :ages {pos n} :states {pos {prop v}}
      :entities [{:id :name :kind :pos [x y z] ...}] (flags kebab-case: :leashed-to-me :in-love :break-at ...)
      :inventory [{:name :count}] :equipment {part stack} :containers {pos [stack]} :drops :chat [{:message :to}]
-     :recipes :unreachable :no-path #{pos} :furnaces :enchant-tables :controls :yaw :pitch :offline :settling
+     :recipes :unreachable :no-path #{pos} :furnaces :enchant-tables :controls :yaw :pitch :exact-eye :offline :settling
      :view-chunks n (spec :viewChunks; the pathWorld loads only the chunk columns within n chunks of the body's, as a
      server's view distance does: land the body walked away from unloads; nil loads every column) ...}
   The helpers state, set-block!, remove-block!, add-entity!, entities, self, swap-self! and add-item! are how tests
@@ -204,6 +204,7 @@
          :next-entity-id 1000
          :offline false
          :controls {}
+         :exact-eye (:exact-eye spec false)
          :yaw (:yaw spec 0)
          :pitch (:pitch spec 0)
          :skip-night (:skipNight spec true)
