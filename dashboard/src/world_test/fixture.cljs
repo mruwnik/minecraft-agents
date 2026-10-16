@@ -315,6 +315,25 @@
       (some #(and (:no-event %) (not (number? (:for-s %)))) (:expect c)) (conj ":no-event expectations need :for-s")
       (not (or (nil? (:idle-grace-s c)) (and (number? (:idle-grace-s c)) (pos? (:idle-grace-s c))))) (conj ":idle-grace-s must be a positive number of seconds"))))
 
+(defn kinds-in-text
+  "Every keyword name in source text (`;;` comments cut) plus, for JS, every quoted word: an upper bound of the event kinds the file can emit."
+  [text]
+  (into #{} (map second) (re-seq #"[:'\"]([a-zA-Z][\w.*!?<>=+/-]*)" (str/replace text #";;.*" ""))))
+
+;; Kinds the engine builds at run time, so no literal names them.
+(def computed-kinds #"^trip\..+|.+_missing$|.+\.trespass-last-resort$")
+
+(defn unknown-kinds
+  "The event kinds the case names in a pattern with :source :job, :reflex or :trigger (an :event, :no-event, :count-event,
+  :from-event, :until or :await pattern) that no source emits: not in known (kind names), not a computed kind."
+  [c known]
+  (->> (tree-seq coll? seq (dissoc c :id :file))
+       (filter #(and (map? %) (#{:job :reflex :trigger} (:source %))))
+       (mapcat #(let [k (:kind %)] (if (set? k) k [k])))
+       (filter keyword?)
+       (remove #(let [n (subs (str %) 1)] (or (known n) (re-find computed-kinds n))))
+       distinct))
+
 (defn file-cases
   "The cases of one fixture file's text: a single case map, or {:defaults {...} :cases [...]}. Each case gets :id
   \"<stem>/<name>\" and :file; a case with problems carries them under :problems."

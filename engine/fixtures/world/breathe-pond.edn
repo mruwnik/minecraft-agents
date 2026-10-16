@@ -46,7 +46,7 @@
    :body {:at [18.5 2 15.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
-            {:no-event {:source :job :kind :no_shore} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
+            {:no-event {:source :reflex :kind :ended :data {:outcome :stopped}} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
    :after [[:body-near [22.5 4 15.5] 4]]}
   {:name "equal-shores-walled-first-ledge-east"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]
@@ -65,7 +65,7 @@
    :body {:at [12.5 2 13.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
-            {:no-event {:source :job :kind :no_shore} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
+            {:no-event {:source :reflex :kind :ended :data {:outcome :stopped}} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
    :after [[:body-near [8.5 4 13.5] 4]]}
   {:name "ledge-east-slab-lands"
    :blocks [[:fill [21 4 11] [21 5 20] "air"] [:fill [21 3 11] [21 3 20] "stone_slab[type=bottom]"]]

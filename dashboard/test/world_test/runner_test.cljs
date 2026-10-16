@@ -334,6 +334,14 @@
   (is (true? (:allow-time (r/parse-args #js ["--allow-time" "--time-log" "f.log"]))))
   (is (nil? (:allow-time (r/parse-args #js [])))))
 
+(defn check-in-repo
+  "r/check-fixtures with the repository root (the tests run in dashboard/) as the source tree the event kinds come from."
+  [paths]
+  (let [old (.. js/process -env -WORLD_TEST_REPO)]
+    (set! (.. js/process -env -WORLD_TEST_REPO) (path/resolve ".."))
+    (try (r/check-fixtures paths)
+         (finally (if old (set! (.. js/process -env -WORLD_TEST_REPO) old) (js-delete (.-env js/process) "WORLD_TEST_REPO"))))))
+
 (deftest check-reports-one-result-per-case-and-names-broken-files
   (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-check-"))
         good (str "{:name \"ok\" :plot {:height 4} :body {:at [1 1 1]} :time :any\n"
@@ -343,7 +351,7 @@
     (spit! "a-good.edn" good)
     (spit! "b-empty.edn" no-check)
     (spit! "c-broken.edn" "{:name \"x\" :plot {")
-    (let [res (r/check-fixtures [dir])
+    (let [res (check-in-repo [dir])
           by-id (into {} (map (juxt :id identity)) res)]
       (fs/rmSync dir #js {:recursive true :force true})
       (is (= 3 (count res)))
@@ -746,14 +754,26 @@
         spit! (fn [n s] (fs/writeFileSync (path/join dir n) s))]
     (spit! "a-op.edn" (case-str "bad" ":no-such-op"))
     (spit! "b-dup.edn" (str "{:cases [" (case-str "same" ":wait-s") " " (case-str "same" ":wait-s") "]}"))
-    (let [res (r/check-fixtures [dir])]
+    (let [res (check-in-repo [dir])]
       (fs/rmSync dir #js {:recursive true :force true})
       (is (= [:fail] (distinct (map :status (filter #(= "a-op/bad" (:id %)) res)))))
       (is (some #(and (= "b-dup/same" (:id %)) (= :fail (:status %)) (re-find #"repeated" (:why %))) res)
           "a case name used twice in one file fails"))))
 
+(deftest check-fails-a-job-event-kind-that-no-source-emits
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-check-"))
+        case-str (fn [n kind] (str "{:name \"" n "\" :plot {:height 4} :body {:at [1 1 1]} :time :any"
+                                   " :expect [{:event {:source :job :kind " kind "} :within-s 5}]}"))]
+    (fs/writeFileSync (path/join dir "a-kind.edn") (str "{:cases [" (case-str "known" ":stopped") " " (case-str "stale" ":no.such.kind.anywhere") "]}"))
+    (let [res (check-in-repo [dir])
+          by-id (into {} (map (juxt :id identity)) res)]
+      (fs/rmSync dir #js {:recursive true :force true})
+      (is (= :pass (:status (by-id "a-kind/known"))))
+      (is (= :fail (:status (by-id "a-kind/stale"))))
+      (is (re-find #"no.such.kind.anywhere" (:why (by-id "a-kind/stale")))))))
+
 (deftest every-real-world-fixture-parses-and-validates
-  (let [res (r/check-fixtures ["../engine/fixtures/world"])
+  (let [res (check-in-repo ["../engine/fixtures/world"])
         bad (remove #(= :pass (:status %)) res)]
     (is (seq res))
     (is (empty? bad) (str (count bad) " fixture cases fail: " (pr-str (map (juxt :id :why) (take 5 bad)))))))

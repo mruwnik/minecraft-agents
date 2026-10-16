@@ -28,6 +28,5 @@
    :act [[:summon "zombie" [12.5 0 12.5] "{NoAI:1b,Invulnerable:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 2]
          [:job (jobs.combat.attack {:targets "zombie" :no-damage-hits 1000 :spend {:job-time 8}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :limit-reached :killed []}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :attack.timeout} :for-s 40 :until {:source :job :kind :stopped}}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :limit-reached :killed []}} :within-s 40 :of-job true}]
    :limit-s 60}]}
