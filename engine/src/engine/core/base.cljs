@@ -174,7 +174,7 @@
   "Run write! (a fsutil/write-edn! of file) and record the save. A failed write
   emits a warn memory.save-failed event with the error, then rethrows."
   [eng file write!]
-  (let [saved (try
+  (when-let [saved (try
                 (write!)
                 (catch :default e
                   (emit! eng {:source :memory :kind :save-failed :level :warn
@@ -190,8 +190,11 @@
     (reset! (:save-stats eng) empty-save-stats)
     (emit! eng (merge {:source :memory :kind :save-stats :level :info} stats))))
 
-(defn save-memory! [eng]
-  (save-file! eng (mem/file (:dir eng)) #(mem/save! (:store eng))))
+(defn save-memory!
+  "Write the memory when it changed since the last write; force? (on stop) writes anyway."
+  ([eng] (save-memory! eng false))
+  ([eng force?]
+   (save-file! eng (mem/file (:dir eng)) #(mem/save! (:store eng) force?))))
 
 (defn job-memory
   "Job id's memory, without the engine's :contract tally and :queued-t."

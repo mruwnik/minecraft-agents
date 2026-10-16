@@ -351,7 +351,7 @@ Tuning numbers live in one global map, read by anyone. A namespace under `jobs/`
 
 ## Memory
 
-One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:entries {kind [entry]} :policies {kind policy}}`.
+One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:entries {kind [entry]} :policies {kind policy}}`. The engine rewrites it only when the swept data changed since the last write (always on stop).
 
 - An **entry** is `{:t wall-clock-ms :wt world-time :age world-ticks :data ...}` (`:age` when known), newest last. **Kinds** are an open vocabulary: `:hurt`, `:died`,
   `:chat`, `:restart`, `:bed`, `:chest`, `:home`, `:looked`, `:moved`, `:picked-up`, `:fed`, `:slept`, `:shelter`, `:threat`,

@@ -179,11 +179,16 @@
   (swap! store update :data remove-entries kind #(pred (:data %))))
 
 (defn save!
-  "Sweep, then write memory.edn. Returns {:bytes :ms} of the write."
-  [store]
-  (let [{:keys [dir now live-jobs]} @store
-        s (swap! store update :data sweep (now) (when live-jobs (live-jobs)))]
-    (fsu/write-edn! (file dir) (:data s))))
+  "Sweep, then write memory.edn unless the swept data equals what was last written (force? writes anyway).
+  Returns {:bytes :ms} of the write, nil when skipped."
+  ([store] (save! store false))
+  ([store force?]
+   (let [{:keys [dir now live-jobs]} @store
+         data (:data (swap! store update :data sweep (now) (when live-jobs (live-jobs))))]
+     (when (or force? (not= data (:saved @store)))
+       (let [written (fsu/write-edn! (file dir) data)]
+         (swap! store assoc :saved data)
+         written)))))
 
 (defn create-job!
   "The memory of a newly listed instance: {:args args :children {} :queued-t now}; :queued-t stays when the entry's

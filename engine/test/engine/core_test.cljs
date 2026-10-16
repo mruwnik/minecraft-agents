@@ -1733,7 +1733,7 @@
               file (path/join dir "memory.edn")]
           (fs/rmSync file #js {:force true})
           (fs/mkdirSync (path/join file "blocker") #js {:recursive true}) ; a rename onto it fails
-          (is (thrown? js/Error (core/save-memory! eng)))
+          (is (thrown? js/Error (core/save-memory! eng true)))
           (let [[e & more] (memory-events seen :save-failed)]
             (is (empty? more))
             (is (= "memory.edn" (:file e)))

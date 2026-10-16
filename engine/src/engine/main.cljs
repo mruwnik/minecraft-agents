@@ -227,7 +227,7 @@
                                  (stop-ticks) (takeover/close! eng) (some-> control .close)
                                  ((:close event-socket)) (core/shutdown! eng)
                                  (await saved)
-                                 (core/save-memory! eng)
+                                 (core/save-memory! eng true)
                                  (await (.close p))
                                  (release)))})
         (catch :default e

@@ -172,3 +172,17 @@
     (mem/write! s :died {})
     (is (not (contains? (mem/latest (mem/view s) :died) :age)))
     (is (nil? (:age (mem/view s))))))
+
+(deftest save-writes-only-when-the-memory-changed-unless-forced
+  (let [[s _ dir] (store)
+        f (path/join dir "memory.edn")]
+    (mem/write! s :bed {:n 1})
+    (is (some? (mem/save! s)) "first save writes")
+    (fs/unlinkSync f)
+    (is (nil? (mem/save! s)) "unchanged: no write")
+    (is (not (fs/existsSync f)))
+    (mem/write! s :bed {:n 2})
+    (is (some? (mem/save! s)) "changed: written")
+    (fs/unlinkSync f)
+    (is (some? (mem/save! s true)) "forced: written although unchanged")
+    (is (fs/existsSync f))))
