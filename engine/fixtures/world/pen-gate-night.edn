@@ -1,7 +1,7 @@
 ;; Gates and a body shut in for the night. Card 4bf8de7b: (B) a by-hand use-on on a gate in a night shelter is not held silently: it
 ;; ends at once :night-sheltered naming the :at-night :go override, and with :at-night :go it walks out and clicks; (C) the pen-gate
 ;; reflex, with the body shut in a room for the night, cannot reach an own-pen gate left open 6 blocks away: its give-up warn names
-;; the blocker instead of a bare "unreachable", and the gate stays open.
+;; the blocker instead of a bare "unreachable", and the gate stays open (the east wall is glass so the body sees the gate).
 ;; Night room: stone x 14..18, z 14..18, roof y 2, torch inside, a door in the east wall at [18 0 16]. Gate in a fence line at [24 0 16].
 ;; Should-succeed: use-on :at-night :go walks out and opens the gate. Should-fail: the default use-on stops :night-sheltered with the gate
 ;; shut; the reflex's shut-gate gives up naming a blocker, gate open.
@@ -25,7 +25,7 @@
    :after [[:block [24 0 16] "oak_fence_gate[open=true]"]]}
   {:name "reflex-shut-gate-from-a-sealed-room-names-the-blocker"
    :register [{:trigger :pen-gate}]
-   :blocks [[:set [18 0 16] "stone"] [:set [18 1 16] "stone"] [:set [24 0 16] "oak_fence_gate[facing=east,open=true]"]]
+   :blocks [[:fill [18 0 14] [18 1 18] "glass"] [:set [24 0 16] "oak_fence_gate[facing=east,open=true]"]]
    :plans [{:id "pen" :parts [{:id "gate" :cells [#at [24 0 16]] :want [:any "oak_fence_gate"]}]}]
    :expect [{:event {:source :job :kind :shut-gate.gave-up :data {:cell #at [24 0 16] :blocker [:any]}} :within-s 70}]
    :after [[:block [24 0 16] "oak_fence_gate[open=true]"]]}]}

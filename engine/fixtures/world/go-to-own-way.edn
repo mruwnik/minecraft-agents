@@ -34,10 +34,10 @@
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 230 :of-job true}
             {:count-event {:source :job :kind :go-to.escalated} :for-s 230 :at-most 1}]
    :after [[:not-block [58 21 16] "granite"] [:not-block [59 21 16] "granite"] [:body-near [61.5 22 16.5] 3]]}
-  ;; should-stop: the same caps with :escalate false are not dug
-  {:name "capped-mouth-without-escalation-is-not-dug"
+  ;; should-stop: the same caps with :ways #{:walk} are not dug
+  {:name "capped-mouth-without-the-stair-way-is-not-dug"
    :blocks [[:set [55 19 16] "air"] [:set [56 20 16] "air"] [:set [57 21 16] "air"] [:set [58 21 16] "granite"] [:set [59 21 16] "granite"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [61 22 16] :range 1 :escalate false})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [61 22 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :go-to.own-way :data {:take true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 120 :of-job true}]
    :after [[:block [58 21 16] "granite"] [:block [59 21 16] "granite"]]
