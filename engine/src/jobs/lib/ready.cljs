@@ -11,8 +11,8 @@
             [jobs.lib.cond :as lcond]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
-            [jobs.lib.shelter :as sh]
-            [triggers.survival.hostile-near :as hostile-near]))
+            [jobs.lib.danger :as danger]
+            [jobs.lib.shelter :as sh]))
 
 (a/defargs settings
   {::risk-limit {:default 0.001 :spec (a/num-in 0 nil)
@@ -46,7 +46,7 @@
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the same radii and options)."
   [c]
-  (if (check-cache/cached c ::threatened #(hostile-near/hostile-near (:primitives c) (ctx/view c) {}))
+  (if (check-cache/cached c ::threatened #(danger/hostile-near? (:primitives c) (ctx/view c) {}))
     (contract/later :hostile-near "a hostile is near")
     (contract/ok :no-hostile-near "no hostile near")))
 

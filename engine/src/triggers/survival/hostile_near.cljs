@@ -1,7 +1,6 @@
 (ns triggers.survival.hostile-near
   "The hostile-near trigger: a real danger is near."
-  (:require [jobs.lib.danger :as danger-q]
-            [jobs.lib.body :as body]))
+  (:require [jobs.lib.danger :as danger-q]))
 
 (def defaults {})
 
@@ -19,6 +18,4 @@
   A danger reflex: it never cools down by default (:persistence :retry) and its job is never backed off.
   An agent may set :persistence :cooldown with :cooldown-s, or :backoff, in its own entry."
   [world memory args]
-  (boolean (and (not (body/dead? memory))
-                (danger-q/danger-near? world (:radius args (danger-q/hostile-radius)) (:ranged-radius args (danger-q/ranged-radius))
-                                       {:sight? (:visible-only args true) :ignore-heard? (body/heard-muted? memory)}))))
+  (danger-q/hostile-near? world memory args))

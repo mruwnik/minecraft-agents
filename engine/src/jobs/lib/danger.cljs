@@ -9,6 +9,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.entity-observations :as obs]
+            [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.proofs :as proofs]
@@ -235,3 +236,11 @@
   [p]
   (let [known (known-hostiles p 64 {})]
     (if (.-knownMobs p) known (filterv seen-mob? known))))
+
+(defn hostile-near?
+  "Whether the hostile-near trigger would hold (triggers.survival.hostile-near; args :radius, :ranged-radius,
+  :visible-only): a dead body sees no danger, heard mobs are muted while jobs.lib.body/heard-muted?."
+  [world memory args]
+  (boolean (and (not (body/dead? memory))
+                (danger-near? world (:radius args (hostile-radius)) (:ranged-radius args (ranged-radius))
+                              {:sight? (:visible-only args true) :ignore-heard? (body/heard-muted? memory)}))))
