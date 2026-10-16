@@ -374,3 +374,10 @@
             (is (every? #(identical? e %) thrown))
             (is (nil? (:booked @world)) "not booked as a failed step")))))))
 
+
+(deftest a-quotes-pause-adds-to-its-job-time-against-wall-time
+  (let [state {:call {:spend {:wall-time 10}} :started-ms 0 :ran-ms 0}
+        crossed (fn [uses] (map first (contract/most-crossings state {:uses uses} {} 0 0)))]
+    (is (= [{:line :wall-time :spend 10}] (crossed {:job-time [6 6 6] :wall-time [6 6 6]})))
+    (is (empty? (crossed {:job-time [6 6 6] :wall-time [3 3 3]})))
+    (is (= [{:line :wall-time :spend 10}] (crossed {:job-time [12 12 12]})))))

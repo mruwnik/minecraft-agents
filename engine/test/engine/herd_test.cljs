@@ -377,13 +377,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :spend {:job-time 40}})
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3 {:pin true})]})) {:target 1 :spend {:wall-time 100}})
               opened (atom false)]
           (on-step-when! s #(gate-open? s) #(reset! opened true))
           (await (run-ticks s 400))
           (is @opened "the gate was opened")
           (is (stopped? s))
-          (is (= [:job-time] (mapv :reason (events-of s :stopped))) "the engine's limit ends it")
+          (is (= [:wall-time] (mapv :reason (events-of s :stopped))) "the engine's limit ends it")
           (is (empty? (on-lead s)) "the animal is let go")
           (is (not (gate-open? s)))
           (is (empty? (held-entries s))))))))

@@ -121,12 +121,13 @@
 
 (a/defargs settings
   {::pace-ms {:default 100 :doc "A step that changed nothing and took less than this is followed by a pause of settle-ms." :spec (a/int-in 0 nil)}
-   ::job-time-s {:default 900 :doc "Seconds a herd run may take." :spec (a/num-in 0 nil)}})
+   ::job-time-s {:default 900 :doc "Seconds a herd run may take, pauses not counted." :spec (a/num-in 0 nil)}
+   ::wall-time-s {:default 1800 :doc "Seconds a herd run may last from its start, its pauses included." :spec (a/num-in 0 nil)}})
 (defn pace-ms [] (settings/get settings ::pace-ms))
 
 (def target [:mob :box])
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 (defn box-sides
   "The box's lengths in cells along x and z that a gate's axis could run, only the :gate's when it stands beside a side."

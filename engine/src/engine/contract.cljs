@@ -340,7 +340,7 @@
                   (for [k [:job-time :wall-time :health :food]
                         :let [s (get spend k)]
                         :when s]
-                    (over {:line k :spend s} (most (get uses (if (and (= :wall-time k) (not (:wall-time uses))) :job-time k))) (- s (get u k 0))))
+                    (over {:line k :spend s} (if (= :wall-time k) (some->> [(:job-time uses) (:wall-time uses)] (keep most) seq (reduce +)) (most (get uses k))) (- s (get u k 0))))
                   (for [[k what] [[:items :item] [:wear :tool]]
                         [n s] (get spend k)]
                     (over {:line k what n :spend s} (most (get-in uses [k n])) (- s (get-in u [k n] 0))))))))
