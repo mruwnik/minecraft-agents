@@ -3,7 +3,7 @@
 # tools/land.sh lands it back on the checkout of that branch.
 # Usage: tools/fixer-worktree.sh [--base <branch>] <card8> | --remove <card8> | --checkout <existing-branch> <dir>
 # --checkout makes a long-lived checkout (e.g. ../minecraft-agents-jc on job-contract) with the same shared links.
-# Prints the worktree path (last line). Dir: $FIXER_WT_ROOT (default ~/.claude/jobs/worktrees)/fix-<card8>.
+# Prints the worktree path (last line). Dir: $FIXER_WT_ROOT (default ~/worktrees)/fix-<card8>; not under ~/.claude, whose files the Write tool refuses.
 # Shared with the main checkout by symlink, so tools and tests there write to the same place: node_modules, worlds/ (bodies, plans, zones),
 # state/, textures/ and the frozen pathfinding fixtures. Blueprints stay per checkout (tracked files): bodies started from the worktree
 # need --worlds <main>/worlds --blueprints <main>/blueprints. No builds here; a worktree runs no shadow-cljs server (tools/compile).
@@ -11,7 +11,7 @@ set -euo pipefail
 
 # The main checkout (source of the shared links), whichever checkout this script runs from.
 repo=$(dirname "$(cd "$(dirname "$0")" && git rev-parse --path-format=absolute --git-common-dir)")
-root=${FIXER_WT_ROOT:-$HOME/.claude/jobs/worktrees}
+root=${FIXER_WT_ROOT:-$HOME/worktrees}
 usage="Usage: $0 [--base <branch>] <card8> | --remove <card8> | --checkout <branch> <dir> (card8 = 8 hex chars)"
 valid() { [[ "${1-}" =~ ^[0-9a-f]{8}$ ]] || { echo "$usage" >&2; exit 1; }; }
 case "${1-}" in

@@ -46,7 +46,7 @@ foreign-staged, large-deletion >= 500).
     tools/fixer-worktree.sh --remove <card8>   # abandon: removes worktree and branch
     tools/land.sh [--rebased-ok]               # from the worktree
 
-A fixer's own checkout (`$FIXER_WT_ROOT`, default `~/.claude/jobs/worktrees/fix-<card8>`). `node_modules`, `worlds/`, `state/`, `textures/` and the pathfinding fixtures are symlinks to the main checkout's, so tools and tests there write to the shared data; nothing is built until the first `tools/compile` there. `land.sh` takes the commit lock, rebases onto the main checkout's branch and fast-forwards it, then removes the worktree. Exit 3: it had to rebase, so rerun your tests and land again; 1: conflict (aborted) or dirty tree; 4: the main checkout has uncommitted edits to a file the landing changes. Tested by `land.test.mjs`.
+A fixer's own checkout (`$FIXER_WT_ROOT`, default `~/worktrees/fix-<card8>`; not under `~/.claude`, whose files the Write tool refuses). `node_modules`, `worlds/`, `state/`, `textures/` and the pathfinding fixtures are symlinks to the main checkout's, so tools and tests there write to the shared data; nothing is built until the first `tools/compile` there. `land.sh` takes the commit lock, rebases onto the main checkout's branch and fast-forwards it, then removes the worktree. Exit 3: it had to rebase, so rerun your tests and land again; 1: conflict (aborted) or dirty tree; 4: the main checkout has uncommitted edits to a file the landing changes. Tested by `land.test.mjs`.
 
 ### ledger
 
