@@ -205,6 +205,9 @@
     nil :ok
     outside :later))
 
+(deftest safe-at-by-night-judges-a-column-goal-at-its-surface
+  (is (= :never (with-redefs [sh/block-light-at (constantly 0)] (kind (ready/safe-at-by-night (constantly {:x 4 :z 0})) tunnel)))))
+
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))
 

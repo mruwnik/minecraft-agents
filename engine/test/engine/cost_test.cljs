@@ -225,7 +225,7 @@
 (deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end
   (let [night (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}})
         day (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
-        seen (fn [p block sky] (with-redefs [sh/block-light-at (constantly block) sh/sky-light-at (constantly sky) sh/walk-leaves-shelter? (constantly nil)]
+        seen (fn [p block sky] (with-redefs [sh/seen-cell? (constantly true) sh/block-light-at (constantly block) sh/sky-light-at (constantly sky) sh/walk-leaves-shelter? (constantly nil)]
                                  (cost/exposure p {:x 15 :y 64 :z 0})))]
     (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [[15 64 0]]}
            (cost/exposure night {:x 15 :y 64 :z 0}))

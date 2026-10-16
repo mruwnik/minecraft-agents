@@ -146,6 +146,17 @@
   (is (not (sh/buried-by-column? (seen-fake {:time night :blocks (stone-above 5 3)}))) "air over the head")
   (is (not (sh/buried-by-column? (tu/fake {:time night :blocks (stone-above 2 1)}))) "nothing seen without a perception"))
 
+(deftest buried-at-reads-raw-light-only-at-the-body-and-judges-a-goal-by-what-it-has-seen
+  (let [raw-p (tu/fake {:pitch -80 :time night :blocks (stone-above 2 1)})
+        _ (swap! (fake/state raw-p) merge dark)
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
+        p (perception/wrap raw-p per)]
+    (perception/pass! per)
+    (are [cell expected] (= expected (sh/buried-at? p cell))
+      {:x 0 :y 64 :z 0} true
+      {:x 30 :y 64 :z 0} false
+      {:x 0 :y 64 :z 1} false)))
+
 (deftest a-roofed-body-logs-out-for-a-sleeper-from-the-register
   (async done
     (tu/run-async done

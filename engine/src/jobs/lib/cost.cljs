@@ -121,7 +121,7 @@
          cell [(:x to) (:y to) (:z to)]
          seen (fn [c] (let [[x y z] c
                             at {:x x :y y :z z}]
-                        (when-let [block (sh/block-light-at p at)] {:block block :sky (or (sh/sky-light-at p at) 0)})))
+                        (when-let [block (and (sh/seen-cell? p at) (sh/block-light-at p at))] {:block block :sky (or (sh/sky-light-at p at) 0)})))
          open-sky (fn [_] {:block 0 :sky 15})
          leaves? (sh/walk-leaves-shelter? p shelter to 1)
          [light night?] (if leaves? [open-sky true] [seen (sh/night? p)])

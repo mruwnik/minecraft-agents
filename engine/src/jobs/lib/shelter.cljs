@@ -75,15 +75,25 @@
    (let [above (look/seen-block p {:x x :y (+ y 2) :z z})]
      (boolean (and above (not (:unknown above)) (solid/solid? (:name above)))))))
 
+(defn seen-cell?
+  "Whether the body has seen the cell (its light data is no sight of it)."
+  [p cell]
+  (let [b (look/seen-block p cell)]
+    (boolean (and b (not (:unknown b))))))
+
 (defn buried-at?
-  "Whether the cell is underground: no sky light at it and the cell over it. A cell at 0 is sealed from the sky, so the
-  night changes nothing there. A ravine, shaft or cave mouth keeps sky light and stays unsafe. Without light data,
-  buried-by-column? decides."
+  "Whether the cell is underground. At the body's own feet: no sky light at it and the cell over it (a cell at 0 is
+  sealed from the sky, so the night changes nothing there; a ravine, shaft or cave mouth keeps sky light and stays
+  unsafe), else buried-by-column? decides. Any other cell is buried only when the body has seen it and the block two
+  over it (raw light there is no sight of it)."
   [p {:keys [x y z] :as cell}]
-  (let [lights (keep #(sky-light-at p %) [cell {:x x :y (inc y) :z z}])]
-    (if (empty? lights)
-      (buried-by-column? p cell)
-      (every? zero? lights))))
+  (let [own (feet p)
+        lights (when (= [x y z] [(:x own) (:y own) (:z own)])
+                 (keep #(sky-light-at p %) [cell {:x x :y (inc y) :z z}]))]
+    (cond
+      (seq lights) (every? zero? lights)
+      (= cell own) (buried-by-column? p cell)
+      :else (and (seen-cell? p cell) (buried-by-column? p cell)))))
 
 (defn buried?
   "The body is underground (buried-at? its feet)."

@@ -73,8 +73,9 @@
                     (let [p (:primitives c)
                           feet (sh/feet p)
                           at (f c)
-                          to (if at (update-vals (assoc at :y (or (:y at) (:y feet))) js/Math.floor) feet)]
-                      (and (sh/night? p) (not (and (sh/buried? p) (sh/buried-at? p to))))))]
+                          to (cond (nil? at) feet
+                                   (:y at) (update-vals at js/Math.floor))]
+                      (and (sh/night? p) (not (and to (sh/buried? p) (sh/buried-at? p to))))))]
     (with-meta (fn [c] (if (by-night? c) (at c) (threatened c)))
       {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))})))
 
