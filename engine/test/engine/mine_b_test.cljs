@@ -483,6 +483,13 @@
           (is (= [:tunnel-length] (mapv :reason (tunnel-ends s))) (pr-str (map :text (tunnel-ends s))))
           (is (= "air" (block-at s 2 64 1)) "nothing sealed into the stair"))))))
 
+(deftest stay-level-takes-the-cell-over-a-stair-steps-head-for-its-own-air
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (stay-run side-cave [[:stair-way {:dim "overworld" :floors [[2 62 1]]}]]))]
+          (is (= [:tunnel-length] (mapv :reason (tunnel-ends s))) (pr-str (map :text (tunnel-ends s)))))))))
+
 (deftest stay-level-takes-the-air-of-its-own-earlier-tunnel-for-no-breach
   (async done
     (tu/run-async done

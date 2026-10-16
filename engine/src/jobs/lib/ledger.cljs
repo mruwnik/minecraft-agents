@@ -221,12 +221,12 @@
            [(+ x (* k dx)) y (+ z (* k dz))]))))
 
 (defn own-cells
-  "The cells of the passages this body cut itself in its dimension: feet and head of each step of its stairs (memory :stair-way) and of its tunnels (:tunnel-way), as [x y z]."
+  "The cells of the passages this body cut itself in its dimension: feet, head and the cell over the head (a step cuts it) of each step of its stairs (memory :stair-way) and of its tunnels (:tunnel-way), as [x y z]."
   [c]
   (let [dim (.-dimension (.self (:primitives c)))
         here? #(= dim (:dim (:data %)))
         stairs (for [e (ctx/entries c :stair-way) :when (here? e)
-                     [x y z] (:floors (:data e)) dy [1 2]]
+                     [x y z] (:floors (:data e)) dy [1 2 3]]
                  [x (+ y dy) z])
         tunnels (for [e (ctx/entries c :tunnel-way) :when (here? e)
                       :let [{[x y z] :origin [dx dz] :delta :keys [steps]} (:data e)]
