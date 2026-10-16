@@ -4,7 +4,9 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.animals.tend :as tend]
             [jobs.lib.animals :as animals]
+            [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
@@ -38,6 +40,10 @@
   - :nothing-possible :food-out (the food ran out below :least fed), :unreachable (one was given up as unreachable)
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
 
+  With :box (or :plan and :part, the pen of a plan part as tend reads it) the body knows a pen: when fewer than two adults
+  stand near it first walks to the middle of the box (once), and when it ends inside the box it walks back out to where it
+  started (go-to shuts the gate behind it).
+
   Animals follow a body holding their food, so the hand is given back. Before the first feeding the job notes
   what the hand holds. When it ends, however (the cleanup), it equips that item again if still carried, else empties the hand. :hand is
   :restored, :emptied or :full (no free slot: the food stays in hand, warn breed.hand-full). There is no :hand
@@ -54,6 +60,9 @@
    :count {:doc "animals to feed" :spec (a/int-in 1 nil) :default 2}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food; a failed fetch ends :need" :spec need/option? :default true}
+   :box {:doc "a known pen {:min :max} to walk to when the animals are not in view, and to leave at the end" :spec a/box? :default nil}
+   :plan {:doc "id of a plan of the body's world; with :part, the known pen is that part's :box" :spec a/name? :default nil}
+   :part {:doc "with :plan, the id of the pen part" :spec a/name? :default nil}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -292,6 +301,38 @@
         (= :done (:kind e)) :again
         :else (await (no-food! c e))))))
 
+(defn pen-box
+  "The known pen's box ({:min :max}): :box, else the box of the plan part; nil when neither is known."
+  [c]
+  (or (:box (:args c)) (:box (:args (tend/pen-of c)))))
+
+(defn pen-cell
+  "The [x z] cell of pos, as go-to takes it."
+  [{:keys [x z]}]
+  [(js/Math.floor x) (js/Math.floor z)])
+
+(defn ^:async walk-to-pen!
+  "Walk to the middle of the known pen, once; the cell the body started from is kept for the way out. Resolves to
+  :continue while the walk goes on, else :again."
+  [c box]
+  (when-not (:from (ctx/mem c))
+    (ctx/update-mem! c assoc :from (pen-cell (u/self-pos c))))
+  (let [r (await (child/call-walk* c :pen {:pos (tend/look-pos box) :range 3}))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c assoc :pen-walked true) :again))))
+
+(defn ^:async leave-pen!
+  "Walk back to where the run started when it ends with the body inside the known pen. Resolves to :continue while the
+  walk goes on, else the ending r."
+  [c r]
+  (let [box (pen-box c)
+        from (:from (ctx/mem c))]
+    (if-not (and box from (animals/in-box? box (u/self-pos c)))
+      r
+      (let [w (await (child/call-walk* c :leave {:pos from :range 1}))]
+        (if (= :continue w) :continue r)))))
+
 (defn ^:async step
   "One walk or feeding, or the end."
   [c]
@@ -301,6 +342,8 @@
         cands (candidates c)]
     (cond
       (>= (count (:fed m)) n) (await (finish! c :fed))
+      (and (not (:pen-walked m)) (pen-box c) (not (animals/in-box? (pen-box c) (u/self-pos c)))
+           (< (count (animals/adults (:primitives c) mob (:radius (:args c)))) 2)) (await (walk-to-pen! c (pen-box c)))
       (and (empty? cands) (empty? (:fed m)) (not (look/surveyed? c))) (await (look/survey! c)) ; animals count only while in view
       (nil? food) (await (fetch-food! c))
       (or (empty? cands) (and (empty? (:fed m)) (< (count (animals/adults (:primitives c) mob (:radius (:args c)))) 2))) (await (finish! c (out-reason c)))
@@ -310,6 +353,12 @@
   "The whole attempt: walk and feed until the job ends."
   [c]
   (animals/reserve-bait! c (:mob (:args c)))
-  (loop []
-    (let [r (await (step c))]
-      (if (= :again r) (recur) r))))
+  (if-let [r (:ending (ctx/mem c))]
+    (await (leave-pen! c r))
+    (let [r (loop []
+              (let [r (await (step c))]
+                (if (= :again r) (recur) r)))]
+      (if (contract/ending? r)
+        (do (ctx/update-mem! c assoc :ending r)
+            (await (leave-pen! c r)))
+        r))))

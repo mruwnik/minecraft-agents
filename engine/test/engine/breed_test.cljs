@@ -416,6 +416,21 @@
           (is (pos? (count (h/calls (:p s) "steer"))))
           (is (false? (gate-open? s))))))))
 
+(def known-pen {:min {:x 7 :y 64 :z -7} :max {:x 19 :y 64 :z 7}})
+
+(deftest breed-walks-to-a-known-pen-out-of-view-feeds-and-leaves-it-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow" :box known-pen}
+                                 {:inventory (wheat 2) :blocks (pen-blocks true) :states {"6,64,0" {:open false :facing "east"}}
+                                  :entities [(cow 1 19 {:pos {:x 19 :y 64 :z 1}}) (cow 2 19 {:pos {:x 19 :y 64 :z -1}})]} 40))
+              x (.-x (.-pos (.self (:p s))))]
+          (is (= :fed (:reason (done-event s))))
+          (is (= 2 (count (interacts s))))
+          (is (< x 6) "back outside the pen")
+          (is (false? (gate-open? s))))))))
+
 (deftest breed-declines-when-the-pen-has-no-gate
   (async done
     (tu/run-async done
