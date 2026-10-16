@@ -259,16 +259,13 @@
       (let [[item n] (apply max-key val have)] {:item item :count n}))))
 
 (defn gap-floor
-  "The floor cell of the 1-cell gap a refused jump crosses to land on stand cell landing, or nil: the cell before the
-  landing (along a cardinal line) has an open floor, the cell before that stands on a solid one."
-  [block-at landing]
-  (first (for [d cardinals
-               :let [gap (ahead landing d -1)
-                     floor (up gap -1)
-                     takeoff (ahead landing d -2)]
-               :when (and (passable? (block-at gap)) (passable? (block-at floor))
-                          (passable? (block-at takeoff)) (solid? (block-at (up takeoff -1))))]
-           floor)))
+  "The floor cell of the 1-cell gap a refused jump crosses from stand cell takeoff to land on stand cell landing, or nil:
+  takeoff and landing lie 2 apart on a cardinal line and the gap between is the planner's word, so a dark gap is no
+  blocker."
+  [landing takeoff]
+  (let [[dx _ dz] (map - takeoff landing)]
+    (when (and (= 2 (+ (Math/abs dx) (Math/abs dz))) (zero? (* dx dz)))
+      (up (add landing [(/ dx 2) 0 (/ dz 2)]) -1))))
 
 (defn max-door [] (settings/get settings ::max-door))
 

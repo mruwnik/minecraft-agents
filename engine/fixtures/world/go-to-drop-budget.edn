@@ -58,7 +58,7 @@
    :after [[:body-near [22.5 0 16.5] 2]]}
   ;; card e753a3ca: a hay bale landing cuts fall damage to a fifth, so the 9 drop (hay top y 1) fits the budget of 5 that the same drop onto stone would not
   {:name "hay-landing-9-drop-at-floor-14-arrives"
-   :blocks [[:fill [18 0 12] [26 0 20] "hay_block"]]
+   :blocks [[:fill [16 0 12] [26 0 20] "hay_block"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 1 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 14}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 1 16.5] 2.5]]}]}

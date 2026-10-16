@@ -166,8 +166,11 @@
 (defn with-beyond
   "within with :beyond, the policy's refusal of the path a search without the limits found (wide), when it found one."
   [within pw policy wide]
-  (cond-> within
-    (= "found" (.-status wide)) (assoc :beyond (executor/refusal policy (plan-steps pw wide)))))
+  (let [steps (when (= "found" (.-status wide)) (plan-steps pw wide))
+        refusal (some->> steps (executor/refusal policy))
+        from (when refusal (some (fn [[prev s]] (when (= (:at refusal) [(:x s) (:y s) (:z s)]) prev)) (map vector steps (rest steps))))]
+    (cond-> within
+      refusal (assoc :beyond (cond-> refusal from (assoc :from [(:x from) (:y from) (:z from)]))))))
 
 (defn beyond-needed?
   "Whether a search within the walker's limits that found no whole path leaves a search without them to run: only when
@@ -274,7 +277,7 @@
        (cond-> {:status :searching :replans replans} fresh (assoc :fresh true))
 
        beyond
-       {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :replans replans}
+       {:status :no-path :reason :abilities :kind (:kind beyond) :at (:at beyond) :from (:from beyond) :replans replans}
 
        (contains? #{"goal-enclosed" "goal-cut-off"} (some-> r .-reason))
        {:status :no-path :reason (keyword (.-reason r)) :replans replans}

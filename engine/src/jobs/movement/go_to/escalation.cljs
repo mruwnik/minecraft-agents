@@ -175,8 +175,8 @@
   (let [p (:primitives c)
         {:keys [item]} (escape/pillar-item p)
         cell (when (and (= :abilities (some-> (:reason result) keyword)) (= :gap-low-ceiling (some-> (:kind result) keyword))
-                        (not (skip :fill-gap)) item (:at result))
-               (escape/gap-floor (escape/block-at-of p) (:at result)))]
+                        (not (skip :fill-gap)) item (:at result) (:from result))
+               (escape/gap-floor (:at result) (:from result)))]
     (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
       {:step :fill-gap :cell cell :item item})))
 
@@ -491,7 +491,7 @@
   (if (escalate? c tries result)
     (do (ctx/update-mem! c assoc :dive-climb (dive? c result)
                          :give-up {:tries tries :status status
-                                   :result (select-keys result [:status :reason :kind :cells :near :one-way :at :dip :rise :move :why :step :partial])})
+                                   :result (select-keys result [:status :reason :kind :cells :near :one-way :at :from :dip :rise :move :why :step :partial])})
         (await (escalate! c pos nil)))
     (end/give-up! c pos tries status result
                   (when (and (not (sh/sheltered-in c))

@@ -546,3 +546,19 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:result :was-open} (await (await-open-from 90))) "facing away (west): turned to the door, then read open")))))
+
+(def long-gap-tunnel
+  "A 2-high tunnel (x 0..20, y 64..65, z 0) in stone, its floor at y 63 broken at x 14 down to y 62: a gap too far off to see in the dark."
+  (apply dissoc (box -2 60 -2 22 67 2 "stone")
+         "14,63,0" "14,62,0"
+         (for [x (range 0 21) y [64 65]] (str x "," y ",0"))))
+
+(deftest go-to-fills-a-gap-under-a-low-ceiling-it-has-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x 1.5 :y 64 :z 0.5}} :blocks long-gap-tunnel :inventory [{:name "dirt" :count 5}]}
+                                                     {:pos [19 64 0] :range 0}
+                                                     (fn [{:keys [p]}] (swap! (fake/state p) assoc :light-default [0 0]))))]
+          (is (= {:arrived true} out) (pr-str (last seen)))
+          (is (= [:fill-gap] (steps seen))))))))
