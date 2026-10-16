@@ -1,5 +1,6 @@
 (ns jobs.village.feed
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.cond :as cond]
             [engine.contract :as contract]
@@ -82,6 +83,10 @@
         {:reason :need :any-of foods :count left}))))
 
 (def target [:villager])
+
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
+
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 

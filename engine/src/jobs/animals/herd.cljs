@@ -1,5 +1,6 @@
 (ns jobs.animals.herd
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [jobs.lib.animals :as animals]
@@ -127,6 +128,10 @@
 (defn pace-ms [] (settings/get settings ::pace-ms))
 
 (def target [:mob :box])
+
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
+
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 

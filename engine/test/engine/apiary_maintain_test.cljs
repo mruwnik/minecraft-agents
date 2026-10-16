@@ -1,14 +1,17 @@
 (ns engine.apiary-maintain-test
   "jobs.apiary.maintain against the fake world."
   (:require [engine.contract :as contract]
-            [cljs.test :refer [deftest is async]]
+            [cljs.test :refer [deftest is async use-fixtures]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
             [engine.fake :as fake]
+            [engine.lit-support :as lit]
             [engine.test-util :as tu]
             [jobs.apiary.maintain :as maintain]))
+
+(use-fixtures :once lit/fixture)
 
 (defn inv [& pairs] (mapv (fn [[n c]] {:name n :count c}) (partition 2 pairs)))
 

@@ -1,6 +1,7 @@
 (ns engine.pen-gate-test
   "The pen-gate trigger (triggers.animals.pen-gate) and jobs.animals.shut-gate against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.lit-support :as lit]
+            [cljs.test :refer [deftest is are async use-fixtures]]
             [engine.core :as core]
             [engine.events :as events]
             [engine.memory :as mem]
@@ -14,6 +15,8 @@
             [jobs.lib.world-files :as world]))
 
 ;; ------------------------------------------------------------------ plans
+
+(use-fixtures :once lit/fixture)
 
 (def gate-want [:any "oak_fence_gate" "spruce_fence_gate"])
 

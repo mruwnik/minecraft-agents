@@ -1,7 +1,8 @@
 (ns engine.village-contract-test
   "village.feed, village.trade and village.roll as contract jobs: they export the contract, quote validly, and end with a
   kind and a cause (a partial run is never done)."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.lit-support :as lit]
+            [cljs.test :refer [deftest is are async use-fixtures]]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
@@ -13,6 +14,8 @@
             [engine.seek-contract-test :as seek]
             [engine.test-util :as tu]
             [engine.village-trade-test :as vt]))
+
+(use-fixtures :once lit/fixture)
 
 (defn job [sym] (get registry/jobs sym))
 

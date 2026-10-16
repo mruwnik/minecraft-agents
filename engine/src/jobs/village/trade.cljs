@@ -1,5 +1,6 @@
 (ns jobs.village.trade
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -47,6 +48,10 @@
   15)
 
 (def target [:villager :buy])
+
+(def safe? ready/safe-here)
+(def fit? ready/ok)
+
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 

@@ -1,11 +1,14 @@
 (ns engine.unleash-test
   "jobs.animals.unleash against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.lit-support :as lit]
+            [cljs.test :refer [deftest is async use-fixtures]]
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.look-support :as ls]
             [engine.fake :as fake]
             [engine.test-util :as tu]))
+
+(use-fixtures :once lit/fixture)
 
 (defn animal [id x & [more]]
   (merge {:id id :uuid (str "u" id) :name "cow" :kind "passive" :pos {:x x :y 64 :z 0}} more))

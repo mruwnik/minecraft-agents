@@ -1,5 +1,6 @@
 (ns jobs.apiary.guard
-  (:require [engine.contract :as contract]
+  (:require [jobs.lib.ready :as ready]
+            [engine.contract :as contract]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -304,6 +305,10 @@
         (do (abandon! c fire :on-fire) :again)))))
 
 (def target [:box :center])
+
+(def safe? (ready/safe-at apiary/area-cell))
+(def fit? ready/fit?)
+
 
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
 

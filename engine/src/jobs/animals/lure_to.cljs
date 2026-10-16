@@ -1,5 +1,6 @@
 (ns jobs.animals.lure-to
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -75,6 +76,10 @@
 (def max-equips "Tries to get the food into the hand before the job ends :no-hold." 3)
 
 (def target [:mob :pos])
+
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
+
 
 (def defaults {:spend {:job-time ::timeout-s}})
 

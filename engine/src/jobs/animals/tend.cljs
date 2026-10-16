@@ -1,5 +1,6 @@
 (ns jobs.animals.tend
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
@@ -198,6 +199,12 @@
         :else {:args (assoc (:herd found) :box (corner-box (:box found)))}))))
 
 (defn with-pen [c pen] (update c :args merge (:args pen)))
+
+(def safe?
+  "Not exposed at the middle of the pen: its :box, else the box of its plan part."
+  (ready/safe-at (fn [c] (some-> (or (:box (:args (pen-of c))) (:box (:args c))) animals/box-middle))))
+(def fit? ready/fit?)
+
 
 (defn pen-key [c]
   (let [{:keys [plan part box]} (:args c)]

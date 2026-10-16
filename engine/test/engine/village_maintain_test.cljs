@@ -1,6 +1,7 @@
 (ns engine.village-maintain-test
   "jobs.village.maintain against the fake world; its children are recording stubs, found by job name."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.lit-support :as lit]
+            [cljs.test :refer [deftest is are async use-fixtures]]
             [engine.core :as core]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -8,6 +9,8 @@
             [engine.hostile-test :as h]
             [engine.test-util :as tu]
             [jobs.village.maintain :as maintain]))
+
+(use-fixtures :once lit/fixture)
 
 (def job 'jobs.village.maintain)
 (def children {:repair 'jobs.build.from-plan :breed 'jobs.village.breed :roll 'jobs.village.roll})

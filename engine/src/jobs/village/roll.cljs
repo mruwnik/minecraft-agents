@@ -1,5 +1,6 @@
 (ns jobs.village.roll
-  (:require [engine.contract :as contract]
+  (:require [jobs.lib.ready :as ready]
+            [engine.contract :as contract]
             [engine.settings :as settings]
             [engine.args :as a] [jobs.lib.need :as need]
             [engine.ctx :as ctx]
@@ -73,6 +74,10 @@
 (defn want-of [args] (or (:want args) (:trade args)))
 
 (def target [:villager :pos])
+
+(def safe? (ready/safe-at (fn [c] (a/cell (:pos (:args c))))))
+(def fit? ready/fit?)
+
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

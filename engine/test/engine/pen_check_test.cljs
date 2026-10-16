@@ -1,6 +1,7 @@
 (ns engine.pen-check-test
   "jobs.animals.pen-check against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.lit-support :as lit]
+            [cljs.test :refer [deftest is are async use-fixtures]]
             [engine.build-from-plan-test :as b]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -11,6 +12,8 @@
             [engine.test-util :as tu]
             [jobs.animals.pen-check :as pen-check]
             [jobs.lib.pen :as pen]))
+
+(use-fixtures :once lit/fixture)
 
 (def job 'jobs.animals.pen-check)
 
@@ -98,7 +101,7 @@
                   {:id 8 :name "sheep" :kind "passive" :pos [3.5 64 1.5]}
                   {:id 9 :name "cow" :kind "passive" :pos [8.5 64 2.5]}
                   {:id 10 :name "zombie" :kind "hostile" :pos [1.5 64 1.5]}]
-              {:keys [event]} (await (run-job {:at [2 64 2]} (assoc (world {}) :entities es)))]
+              {:keys [event]} (await (run-job {:at [2 64 2] :checks {:safe? (quote (always))}} (assoc (world {}) :entities es)))]
           (is (= 2 (:animals-in event)))
           (is (= [{:kind "cow" :id 7 :pos [2.5 64 2.5]} {:kind "sheep" :id 8 :pos [3.5 64 1.5]}]
                  (sort-by :id (:animals event)))))))))

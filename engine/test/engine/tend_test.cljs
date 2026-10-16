@@ -1,6 +1,7 @@
 (ns engine.tend-test
   "jobs.animals.tend against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.lit-support :as lit]
+            [cljs.test :refer [deftest is are async use-fixtures]]
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.fake :as fake]
@@ -8,6 +9,8 @@
             [engine.test-util :as tu]
             [jobs.animals.tend :as tend]
             [jobs.lib.world-files :as ew]))
+
+(use-fixtures :once lit/fixture)
 
 (def box {:min {:x 0 :y 60 :z -5} :max {:x 8 :y 70 :z 5}})
 

@@ -1,5 +1,6 @@
 (ns jobs.village.breed
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a] [jobs.lib.need :as need]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -71,6 +72,10 @@
   {:pop (count vs) :kids (count (remove adult? vs))})
 
 (def target [:target])
+
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
+
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

@@ -1,10 +1,10 @@
 ;; Gates and a body shut in for the night. Card 4bf8de7b: (B) a by-hand use-on on a gate in a night shelter is not held silently: it
 ;; waits :exposed (go-to's safe? at night), and with a :checks {:safe? (not (threatened))} override it walks out and clicks; (C) the pen-gate
-;; reflex, with the body shut in a room for the night, cannot reach an own-pen gate left open 6 blocks away: its give-up warn names
-;; the blocker instead of a bare "unreachable", and the gate stays open (the east wall is glass so the body sees the gate).
+;; reflex, with the body shut in a room for the night, does not start for an own-pen gate left open 6 blocks away (shut-gate's safe? is
+;; exposed there); a gate inside the room is shut.
 ;; Night room: stone x 14..18, z 14..18, roof y 2, torch inside, a door in the east wall at [18 0 16]. Gate in a fence line at [24 0 16].
-;; Should-succeed: use-on with the :checks override walks out and opens the gate. Should-fail: the default use-on waits :exposed with the gate
-;; shut; the reflex's shut-gate gives up naming a blocker, gate open.
+;; Should-succeed: use-on with the :checks override walks out and opens the gate; the reflex shuts the gate inside the room. Should-fail: the default
+;; use-on waits :exposed with the gate shut; the reflex does not start shut-gate for the far gate, gate open.
 {:defaults
  {:tags [:animals :pen-gate :night]
   :time :night
@@ -32,9 +32,16 @@
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 70 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2.5]]}
-  {:name "reflex-shut-gate-from-a-sealed-room-names-the-blocker"
+  {:name "reflex-does-not-leave-the-room-at-night-for-an-open-gate"
    :register [{:trigger :pen-gate}]
-   :blocks [[:fill [18 0 14] [18 1 18] "glass"] [:set [24 0 16] "oak_fence_gate[facing=east,open=true]"]]
+   :blocks [[:set [24 0 16] "oak_fence_gate[facing=east,open=true]"]]
    :plans [{:id "pen" :parts [{:id "gate" :cells [#at [24 0 16]] :want [:any "oak_fence_gate"]}]}]
-   :expect [{:event {:source :job :kind :shut-gate.gave-up :data {:cell #at [24 0 16] :blocker [:any]}} :within-s 70}]
-   :after [[:block [24 0 16] "oak_fence_gate[open=true]"]]}]}
+   :expect [{:no-event {:source :job :kind :shut-gate.gave-up} :for-s 30}]
+   :after [[:block [24 0 16] "oak_fence_gate[open=true]"] [:body-near [16.5 0 16.5] 2]]}
+  {:name "reflex-shuts-an-open-gate-inside-the-room-at-night"
+   :register [{:trigger :pen-gate}]
+   :blocks [[:set [17 0 15] "oak_fence_gate[facing=east,open=true]"]]
+   :body {:at [15.5 0 17.5] :settle-s 2 :effects [["resistance" 900 4]]}
+   :plans [{:id "pen" :parts [{:id "gate" :cells [#at [17 0 15]] :want [:any "oak_fence_gate"]}]}]
+   :expect [{:event {:source :job :kind :completed} :within-s 60}]
+   :after [[:block [17 0 15] "oak_fence_gate[open=false]"]]}]}

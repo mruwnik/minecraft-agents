@@ -1,7 +1,8 @@
 (ns engine.seen-pen-test
   "The pen readers of jobs.animals.herd read what the body sees or remembers. A pen cell it has not seen is unknown:
   the job goes and looks at it; only a cell seen as open ends :no-pen."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.lit-support :as lit]
+            [cljs.test :refer [deftest is async use-fixtures]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
@@ -11,6 +12,8 @@
             [engine.test-util :as tu]
             [jobs.animals.herd-pen :as hp]
             [jobs.animals.herd-run :as hr]))
+
+(use-fixtures :once lit/fixture)
 
 (defn coarse-world
   "ht/world with sight rays 4 degrees apart: the fence stays in view and a pass costs a quarter."

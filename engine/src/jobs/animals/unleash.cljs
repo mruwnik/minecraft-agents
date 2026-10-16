@@ -1,5 +1,6 @@
 (ns jobs.animals.unleash
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -65,6 +66,10 @@
 (defn drop-wait-ms [] (settings/get settings ::drop-wait-ms))
 
 (def target [:mob :animal])
+
+(def safe? ready/safe-here)
+(def fit? ready/ok)
+
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

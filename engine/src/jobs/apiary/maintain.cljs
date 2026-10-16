@@ -1,5 +1,6 @@
 (ns jobs.apiary.maintain
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -268,6 +269,10 @@
 ;; ------------------------------------------------------------------ the contract
 
 (def target [:box :center])
+
+(def safe? (ready/safe-at apiary/area-cell))
+(def fit? ready/fit?)
+
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

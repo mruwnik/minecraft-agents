@@ -1,5 +1,6 @@
 (ns jobs.animals.shut-gate
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -186,6 +187,12 @@
       (contract/ok :plan "the plan is readable"))))
 
 (def can-start? can-run?)
+
+(def safe?
+  "Not exposed at the gate of the plan nearest to the body."
+  (ready/safe-at (fn [c] (some-> (nearest c (first (watched-cells c))) a/cell))))
+(def fit? ready/ok)
+
 
 (defn done?
   "Ok once no watched gate is open or unread (the gates shut so far and none left as its result); before the start the

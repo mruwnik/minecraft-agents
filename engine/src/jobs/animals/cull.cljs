@@ -1,5 +1,6 @@
 (ns jobs.animals.cull
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
@@ -57,6 +58,12 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def target [:mob :box :center])
+
+(def safe?
+  "Not exposed at the middle of the bound: its :box, else :center."
+  (ready/safe-at (fn [{{:keys [box center]} :args}] (cond box (animals/box-middle box) center {:x (:x center) :z (:z center)}))))
+(def fit? ready/fit?)
+
 
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds a cull may take." :spec (a/num-in 0 nil)}})

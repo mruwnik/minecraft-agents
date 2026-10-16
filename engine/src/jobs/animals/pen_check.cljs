@@ -1,5 +1,6 @@
 (ns jobs.animals.pen-check
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -51,6 +52,12 @@
       :else {})))
 
 (def target [:at :box :plan])
+
+(def safe?
+  "Not exposed at the middle of the pen box (:box, else the box of :plan), else at :at."
+  (ready/safe-at (fn [c] (if-let [box (:box (pen-box c))] (animals/box-middle box) (some-> (:at (:args c)) a/cell)))))
+(def fit? ready/ok)
+
 
 (a/defargs settings
   {::job-time-s {:default 30 :doc "Seconds a pen check may take besides the look at its cells; the default time spend is this plus ::cell-s a cell the fill may visit." :spec (a/num-in 0 nil)}

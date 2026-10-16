@@ -1,5 +1,6 @@
 (ns jobs.animals.shear
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -62,6 +63,10 @@
   (some #(= "shears" (:name %)) (u/inventory (:primitives c))))
 
 (def target [:color])
+
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
+
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

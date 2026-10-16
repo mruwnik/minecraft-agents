@@ -1,5 +1,6 @@
 (ns jobs.animals.lead-to
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -168,6 +169,10 @@
   (false? (fence-block? c)))
 
 (def target [:mob :pos :fence])
+
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
+
 
 (def defaults {:spend {:job-time ::timeout-s}})
 

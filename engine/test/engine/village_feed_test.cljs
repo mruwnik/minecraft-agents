@@ -1,6 +1,7 @@
 (ns engine.village-feed-test
   "jobs.village.feed against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [engine.lit-support :as lit]
+            [cljs.test :refer [deftest is are async use-fixtures]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
@@ -11,6 +12,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.village.feed :as feed]))
+
+(use-fixtures :once lit/fixture)
 
 (def job 'jobs.village.feed)
 

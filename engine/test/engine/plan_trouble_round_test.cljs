@@ -1,7 +1,8 @@
 (ns engine.plan-trouble-round-test
   "A plan that goes bad between the engine's can-run? and the round is plan trouble for the next check to report
   (a wait, or impossible): the round does not end the call."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [engine.lit-support :as lit]
+            [cljs.test :refer [deftest is async use-fixtures]]
             [engine.build-from-plan-test :as bfp]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -15,6 +16,8 @@
             [engine.tend-test :as tt]
             [engine.test-util :as tu]
             [jobs.lib.world-files :as ew]))
+
+(use-fixtures :once lit/fixture)
 
 (defn ^:async alive-after-plan-loss?
   "Submit form on eng; the first can-run? of the job sym drops the plans of the world store w after it answers. True

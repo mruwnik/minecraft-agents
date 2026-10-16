@@ -1,5 +1,6 @@
 (ns jobs.apiary.harvest
-  (:require [engine.contract :as contract]
+  (:require [jobs.lib.ready :as ready]
+            [engine.contract :as contract]
             [engine.settings :as settings]
             [jobs.lib.game-facts :as facts]
             [engine.args :as a]
@@ -243,6 +244,10 @@
         :again))))
 
 (def target [:box :center])
+
+(def safe? (ready/safe-at apiary/area-cell))
+(def fit? ready/fit?)
+
 
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
 
