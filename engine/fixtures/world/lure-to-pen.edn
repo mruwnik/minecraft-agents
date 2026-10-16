@@ -22,8 +22,10 @@
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:item "wheat" [:>= 4]]]}
-  ;; card 55f8b368: the bait is put away on arrival, so the penned cow does not follow the body back out through the gate
+  ;; card 55f8b368: the bait is put away on arrival even with a full inventory (35 other items, so unequip finds no free slot: another item is
+  ;; taken in hand), so the penned cow does not follow the body back out through the gate
   {:name "penned-cow-stays-when-the-body-walks-out"
+   :body {:at [12.5 0 16.5] :yaw 270 :inventory [["wheat" 4] ["stick" 1] ["coal" 1] ["iron_ingot" 1] ["gold_ingot" 1] ["diamond" 1] ["emerald" 1] ["bone" 1] ["string" 1] ["feather" 1] ["flint" 1] ["leather" 1] ["paper" 1] ["clay_ball" 1] ["brick" 1] ["apple" 1] ["bread" 1] ["carrot" 1] ["potato" 1] ["beetroot" 1] ["sugar" 1] ["egg" 1] ["gunpowder" 1] ["redstone" 1] ["lapis_lazuli" 1] ["quartz" 1] ["slime_ball" 1] ["ink_sac" 1] ["glowstone_dust" 1] ["blaze_rod" 1] ["ender_pearl" 1] ["cooked_beef" 1] ["cooked_porkchop" 1] ["melon_slice" 1] ["spider_eye" 1] ["rotten_flesh" 1]] :effects [["resistance" 900 4]]}
    :act [[:summon "cow" [10.5 0 18.5]]
          [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]
          [:await {:source :job :kind :completed :data {:reason :arrived :in-box true}} 150]
