@@ -127,7 +127,7 @@
   earlier takes this call: \"took bread 3; no more bread in the chests (the last holds dirt 2)\"."
   ([names held] (lacks-text names held {}))
   ([names held taken]
-   (let [holds (if (empty? held) "empty" (str "holds " (str/join ", " (map (fn [[n k]] (str n " " k)) (sort held)))))]
+   (let [holds (if (empty? held) "holds nothing" (str "holds " (str/join ", " (map (fn [[n k]] (str n " " k)) (sort held)))))]
      (if (empty? taken)
        (str "no " (str/join ", " names) " in this chest (" holds ")")
        (str "took " (str/join ", " (map (fn [[n k]] (str n " " k)) (sort taken)))
@@ -160,8 +160,9 @@
                         (when (seq others) (deposit/mark-full! c chest))
                         (if (seq others)
                           :again
-                          (do (ctx/emit! c :withdraw.short :info {:short lacking :held held :text (lacks-text (map first short) held (:taken (ctx/mem c)))})
-                              (end! c :condition-failed :chest-lacks {:gave-up false :held held :short lacking}))))
+                          (let [text (lacks-text (map first short) held (:taken (ctx/mem c)))]
+                            (ctx/emit! c :withdraw.short :info {:short lacking :held held :text text})
+                            (end! c :condition-failed :chest-lacks {:gave-up false :held held :short lacking :text text}))))
           (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
           :else
           (let [[name n] pick

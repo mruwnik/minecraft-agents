@@ -78,7 +78,8 @@
               result (await (ending-of eng job {:chest chest :items (array-map "bread" 16 "stone_hoe" 2)} 8))]
           (is (= {"bread" 5} (inv p)))
           (is (= {:kind :condition-failed :cause :chest-lacks
-                  :data {:gave-up false :held {} :short {"bread" 11 "stone_hoe" 2}}} result))
+                  :data {:gave-up false :held {} :short {"bread" 11 "stone_hoe" 2}
+                         :text "took bread 5; no more bread, stone_hoe in the chests (the last holds nothing)"}} result))
           (is (some #(= :withdraw.short (:kind %)) @seen)))))))
 
 (deftest withdraw-with-a-least-met-by-what-the-chest-held-is-done
@@ -179,7 +180,8 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]}})
               result (await (ending-of eng job {:chest chest :items (array-map "bread" 16)} 1))]
-          (is (= {:kind :condition-failed :cause :chest-lacks :data {:gave-up false :held {} :short {"bread" 11}}} result)))))))
+          (is (= {:kind :condition-failed :cause :chest-lacks :data {:gave-up false :held {} :short {"bread" 11}
+                                                                :text "took bread 5; no more bread in the chests (the last holds nothing)"}} result)))))))
 
 (deftest withdraw-counts-what-moved-before-a-transfer-timed-out
   (async done
