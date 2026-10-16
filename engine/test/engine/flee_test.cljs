@@ -1,7 +1,7 @@
 (ns engine.flee-test
   "A flight is one whole attempt: retreat runs until the mobs stop chasing (follow range, out of line, no way), leaves
   :threat entries in body memory and tells the agent when one mob keeps chasing; respond-to-hostile never yields."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.ctx :as ctx]
             [engine.registry :as registry]
             [engine.settings :as settings]
@@ -1127,6 +1127,11 @@
   (is (= {:from [0 64 0] :to [-40 64 3] :distance 40 :mobs ["zombie 7"] :ended :far
           :text "fled 40 blocks from zombie 7: [0 64 0] -> [-40 64 3]; it stopped chasing (far)"}
          (retreat-flight/fled-notice {:x 0.4 :y 64 :z 0.2} {:x -39.6 :y 64 :z 3.4} [{:mob "zombie" :id 7}] :far 16)))
+  (are [ended tail] (= (str "fled 40 blocks from zombie 7: [0 64 0] -> [-40 64 3]; " tail)
+                       (:text (retreat-flight/fled-notice {:x 0 :y 64 :z 0} {:x -40 :y 64 :z 3} [{:mob "zombie" :id 7}] ended 16)))
+    :hidden "the body is hidden from it (hidden)"
+    :keeps-off "it kept up, no ground was gained (keeps-off)"
+    :cannot-escape "no way of escaping was left (cannot-escape)")
   (async done
     (tu/run-async done
       (fn ^:async t []

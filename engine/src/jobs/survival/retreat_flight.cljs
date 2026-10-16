@@ -238,6 +238,12 @@
   [prev from]
   (or (:from (:data prev)) from))
 
+(def not-chased-text
+  "How a flight that ended with a chaser still on says so; any other end is a chaser that stopped."
+  {:hidden "the body is hidden from it"
+   :keeps-off "it kept up, no ground was gained"
+   :cannot-escape "no way of escaping was left"})
+
 (defn fled-notice
   "Pure: the hostile.fled fields for a flight that moved the body from `from` to `to` ({:x :y :z}) away from the mobs
   fled ([{:mob :id}]), ended why; nil when it moved less than far blocks."
@@ -248,7 +254,7 @@
     (when (and d (>= d far))
       {:from (at from) :to (at to) :distance d :mobs names :ended ended
        :text (str "fled " d " blocks from " (str/join ", " names) ": " (at from) " -> " (at to)
-                  "; it stopped chasing (" (name ended) ")")})))
+                  "; " (or (not-chased-text ended) "it stopped chasing") " (" (name ended) ")")})))
 
 (defn end-flight!
   "Write a :threat entry per mob fled (jobs.lib.threats; one per mob, its last way out) and end the flight: done with
