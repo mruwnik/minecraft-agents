@@ -33,13 +33,16 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
-        p (tu/fake (update (dissoc spec :cone? :zones :plans) :blocks #(merge (ground (or ground-r 64)) %)))
+        p (tu/fake (update (dissoc spec :cone? :zones :plans :seen-r) :blocks #(merge (ground (or ground-r 64)) %)))
         _ (.override (.-world p) "wait" (fn [token a impl] (swap! clock + (.-ms a)) (impl token a)))
         p (if (:cone? spec)
             (let [w (perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))]
               (.setOwner p "Fake")
               w)
-            (tu/seeing-all p))
+            (let [p (tu/seeing-all p)]
+              ;; the body has seen only what lies near it, unless the case says it saw farther earlier
+              (aset p "seenBlocks" (fn [q] (.blocks p (doto (js/Object.assign #js {} q) (aset "radius" (min (.-radius q) (:seen-r spec 24)))))))
+              p))
         store (notes/open {:world-dir dir :body "Fake" :emit (fn [_])})
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (assoc (world/of-data (:plans spec {}) {} (:zones spec [])) :notes store)
@@ -217,6 +220,22 @@
                                 {:entities [{:id 3 :uuid "u3" :name "cow" :kind "passive" :pos {:x 30.5 :y 64 :z 0.5}}]}))]
           (is (= [{:what "cow" :pos [30 64 0] :id "u3"}] (:found (found-of s))))
           (is (some #(= [:seen "cow" "u3"] ((juxt :kind :what :id) %)) (file-notes s))))))))
+
+(deftest a-target-seen-beyond-the-scan-radius-is-found-without-a-leg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 60} {:blocks diamond :seen-r 64}))]
+          (is (= [{:what "diamond_block" :pos [45 64 3]}] (:found (found-of s))))
+          (is (= [] (walks s))))))))
+
+(deftest a-target-seen-beyond-the-distance-bound-is-not-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 30 :max-legs 1} {:blocks diamond :seen-r 64}))]
+          (is (nil? (found-of s)))
+          (is (= [] (:found (not-found-of s)))))))))
 
 (deftest nothing-within-the-distance-ends-not-found-with-the-coverage
   (async done
