@@ -41,7 +41,7 @@ Builds (in `dashboard/shadow-cljs.edn`, which holds the engine and dashboard bui
 
 **Compiling: `tools/compile <engine|dashboard> <build>... [--priority] [--release]`** (repo root). Every cljs compile goes
 through it. It queues for one of 3 machine-wide compile slots (`/tmp/mc-compile.lock*`, never wrap it in `flock`; one compile per checkout) and compiles against the main checkout's long-lived
-`shadow-cljs server` (both project words use it), which it starts when missing; a git worktree runs no server, each compile is a one-shot JVM under a res-slot `server` slot. `--priority` is for the owner's UI rebuilds, agents never use it.
+`shadow-cljs server` (both project words use it), which it starts when missing; a git worktree compiles in a warm pool slot (`~/.cache/mc-compile-pool/<i>`, `MC_COMPILE_POOL_SIZE` 2, 0 = off: sources rsynced in, output rsynced back, one compile per slot), else as a one-shot JVM under a res-slot `server` slot. `--priority` is for the owner's UI rebuilds, agents never use it.
 `--release` runs `shadow-cljs release`. `MC_COMPILE_LOG=1` prints lock wait and compile time. `tools/compile engine --stop`
 stops the server.
 

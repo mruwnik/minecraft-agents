@@ -7,8 +7,8 @@
 # Every cljs compile in this repo goes through here: it queues for one of MC_COMPILE_SLOTS (default 3) machine-wide compile
 # slots (/tmp/mc-compile.lock, then .1, .2: taken here, so never wrap this in flock), one compile per checkout, and runs `npx shadow-cljs compile|release <build>` in dashboard/.
 # In the main checkout the shadow-cljs CLI connects to its long-lived `shadow-cljs server` (warm: ~10 s instead of ~20-50 s); this script
-# starts that server first, detached, when it is not running and memory allows. A git worktree (fixers, integration, bisect) runs no server:
-# its compiles are rarely within an idle time of each other, so each is a one-shot JVM run under a tools/res-slot `server` slot
+# starts that server first, detached, when it is not running and memory allows. A git worktree (fixers, integration, bisect) compiles in a pool slot
+# (see Pool below); with no slot it is a one-shot JVM run under a tools/res-slot `server` slot
 # (memory floor, max; taken before the compile queue, waits up to RES_SLOT_MAX_WAIT_MS, default 45 min, then exits 75).
 #
 #   --priority  jump the queue: ahead of every waiting normal compile (it still waits for the compile now running).
@@ -59,7 +59,7 @@ done
 [ "$project" = dashboard ] && for i in "${!builds[@]}"; do [ "${builds[$i]}" = test ] && builds[$i]=dashboard-test; done
 
 available_mb() { awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo; }
-worktree=0; [ "$(cd "$repo" && git rev-parse --git-dir 2>/dev/null)" = "$(cd "$repo" && git rev-parse --git-common-dir 2>/dev/null)" ] || worktree=1
+worktree=0; [ -n "${MC_COMPILE_IN_POOL:-}" ] || [ "$(cd "$repo" && git rev-parse --git-dir 2>/dev/null)" = "$(cd "$repo" && git rev-parse --git-common-dir 2>/dev/null)" ] || worktree=1
 server_pid() { local p; p=$(cat "$dir/.shadow-cljs/server.pid" 2>/dev/null) && [ -n "$p" ] && kill -0 "$p" 2>/dev/null && echo "$p"; }
 
 # Deadlock guard: an ancestor process holding the lock file open (flock(1) wrapping us, or an inherited fd) means we would wait for ourselves.
@@ -115,6 +115,74 @@ restart_if_stale() {
   kill -0 "$p" 2>/dev/null && { echo "tools/compile: the old server (pid $p) did not stop" >&2; exit 1; }
   return 0
 }
+
+# Pool: a worktree compile runs in one of MC_COMPILE_POOL_SIZE (default 2; 0 = off) warm checkout-shaped copies under MC_COMPILE_POOL_DIR
+# (default ~/.cache/mc-compile-pool/<i>), each with its own server run by this same script as if it were a main checkout. Under the slot's
+# .pool.lock (held for the whole compile, so two compiles never share a slot) the worktree's sources are rsynced in (--delete, by content, changed
+# files get a fresh mtime so shadow and the macro-restart check see them), the compile runs there, and the builds' output dirs are rsynced back.
+# No free slot within MC_COMPILE_POOL_WAIT_S (60), a slot whose server is down with memory below MIN_START_MB, or a failed sync fall back to the one-shot JVM below.
+pool_dir=${MC_COMPILE_POOL_DIR:-$HOME/.cache/mc-compile-pool}
+pool_size=${MC_COMPILE_POOL_SIZE:-2}
+
+# build output paths (relative to dashboard/) of the given builds, from dashboard/shadow-cljs.edn
+pool_outputs() {
+  awk -v want=" $* " '
+    /^ *\{?:[A-Za-z0-9-]+ \{:target/ { s=$0; sub(/^ *\{?:/, "", s); sub(/ .*/, "", s); cur=s }
+    index(want, " " cur " ") { l=$0; while (match(l, /:output-(dir|to) "[^"]*"/)) { v=substr(l, RSTART, RLENGTH); sub(/^[^"]*"/, "", v); sub(/"$/, "", v); print v; l=substr(l, RSTART+RLENGTH) } }' "$dir/shadow-cljs.edn"
+}
+
+# sets slot to a free slot dir and holds its .pool.lock on fd 8 (affine slot first); 1 when none frees up in time
+pool_pick() {
+  local i s order=() deadline=$((SECONDS + ${MC_COMPILE_POOL_WAIT_S:-60}))
+  for ((i = 0; i < pool_size; i++)); do
+    if [ "$(cat "$pool_dir/$i/.last" 2>/dev/null)" = "$repo" ]; then order=("$i" "${order[@]}"); else order+=("$i"); fi
+  done
+  while :; do
+    for i in "${order[@]}"; do
+      s=$pool_dir/$i
+      mkdir -p "$s"; exec 8>>"$s/.pool.lock"
+      if flock -n 8; then slot=$s; return 0; fi
+      exec 8>&-
+    done
+    [ "$SECONDS" -lt "$deadline" ] || return 1
+    sleep 0.5
+  done
+}
+
+pool_compile() {
+  local slot p code out o
+  pool_pick || return 1
+  p=$(cat "$slot/dashboard/.shadow-cljs/server.pid" 2>/dev/null)
+  if { [ -z "$p" ] || ! kill -0 "$p" 2>/dev/null; } && [ "$(available_mb)" -lt "$MIN_START_MB" ]; then
+    exec 8>&-; return 1
+  fi
+  mkdir -p "$slot/dashboard/.shadow-cljs"
+  [ -d "$slot/dashboard/.shadow-cljs/builds" ] || "$repo/tools/seed-shadow-cache.sh" "$slot" >/dev/null 2>&1
+  rsync -rlpc --delete --exclude .git --exclude .claude --exclude .shadow-cljs --exclude docs --exclude worlds --exclude state --exclude textures --exclude viaproxy --exclude blueprints \
+    --exclude /engine/out --exclude /dashboard/out --exclude /tools/view/web/cljs --exclude .pool.lock --exclude .last "$repo/" "$slot/" || { exec 8>&-; return 1; }
+  echo "$repo" > "$slot/.last"
+  echo "tools/compile: pool slot $slot" >&2
+  # fd 8 is closed for the compile: a server it starts must not inherit the slot lock
+  # slot paths in the output (warning "File:" lines, which test-engine checks for edits) are shown as the worktree's
+  MC_COMPILE_IN_POOL=1 MC_COMPILE_MAIN_IDLE_S=${MC_COMPILE_POOL_IDLE_S:-900} "$slot/tools/compile" "$project" "${args[@]}" 8>&- 2>&1 | sed -u "s|$slot|$repo|g"
+  code=${PIPESTATUS[0]}
+  if [ "$code" = 0 ]; then
+    out=$(pool_outputs "${builds[@]}")
+    [ -z "${extra[1]:-}" ] || out="$out"$'\n'"$(sed -E 's/^\{:output-dir "(.*)"\}$/\1/' <<<"${extra[1]}")"
+    for o in $out; do
+      case "$o" in /*) continue ;; esac
+      [ -e "$slot/dashboard/$o" ] || continue
+      mkdir -p "$(dirname "$dir/$o")"
+      if [ -d "$slot/dashboard/$o" ]; then rsync -a --delete "$slot/dashboard/$o/" "$dir/$o/"; else rsync -a "$slot/dashboard/$o" "$dir/$o" && sed -i "s|$slot/dashboard|$dir|g" "$dir/$o"; fi
+    done
+  fi
+  exec 8>&-
+  exit $code
+}
+if [ "$worktree" = 1 ] && [ "$stop" = 0 ] && [ "$pool_size" -gt 0 ] && [ -z "${MC_COMPILE_IN_SLOT:-}" ]; then
+  pool_compile
+  echo "tools/compile: no pool slot; compiling one-shot" >&2
+fi
 
 # a worktree compile holds its JVM's memory slot from before it queues until it ends
 if [ "$worktree" = 1 ] && [ "$stop" = 0 ] && [ -z "${MC_COMPILE_IN_SLOT:-}" ]; then

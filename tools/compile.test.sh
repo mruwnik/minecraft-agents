@@ -3,7 +3,7 @@
 set -uo pipefail
 TOOLS="$(cd "$(dirname "$0")" && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-export MC_COMPILE_LOCK="$T/lock" MC_COMPILE_QUEUE="$T/queue"
+export MC_COMPILE_LOCK="$T/lock" MC_COMPILE_QUEUE="$T/queue" MC_COMPILE_POOL_SIZE=0   # the pool has its own section below
 fail=0
 # gone PID [DEADLINE_S]: poll until PID is dead (rc 0) or the deadline passes (rc 1); a bounded wait, not a fixed sleep
 gone() { local i; for ((i=0; i<${2:-20}*10; i++)); do kill -0 "$1" 2>/dev/null || return 0; sleep 0.1; done; return 1; }
@@ -198,6 +198,35 @@ wait $P2; check "queued main compile rc" "$?" 0
 wait $P3; check "queued worktree compile rc" "$?" 0
 kill "$MS" 2>/dev/null
 unset MC_COMPILE_MIN_START_MB MC_COMPILE_SLOTS MC_COMPILE_MAIN_IDLE_S MC_COMPILE_IDLE_POLL_S
+
+# pool: a worktree compile runs in a slot copy (sources rsynced in, output rsynced back), one compile per slot, one-shot fallback
+export MC_COMPILE_POOL_DIR="$T/pool" MC_COMPILE_POOL_SIZE=1 MC_COMPILE_MIN_START_MB=0 MC_COMPILE_POOL_WAIT_S=1
+printf '{:builds\n {:test {:target :node-test\n         :output-to "../engine/out/test.cjs"\n         :output-dir "../engine/out/test"}}}\n' > "$T/wt/dashboard/shadow-cljs.edn"
+mkdir -p "$T/wt/engine/src" "$T/wt/engine/out"
+echo one > "$T/wt/engine/src/a.cljs"; echo two > "$T/wt/engine/src/gone.cljs"
+printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\necho "$PWD $(cat ../engine/src/a.cljs) $(ls ../engine/src | tr "\\n" " ")" >> "%s/pool-npx.log"\nmkdir -p ../engine/out/test; echo "built $PWD" > ../engine/out/test/x.js; echo "$PWD" > ../engine/out/test.cjs\ncase $PWD in */pool/*) while [ -e "%s/hold" ]; do sleep 0.1; done;; esac\n' "$T" "$T" > "$T/bin/npx"
+timeout 60 "$T/wt/tools/compile" engine test >"$T/pool.out" 2>&1; check "pool compile rc" "$?" 0
+check "pool: compiled in the slot with the worktree's sources" "$(cat "$T/pool-npx.log")" "$T/pool/0/dashboard one a.cljs gone.cljs "
+check "pool: output dir copied back" "$(cat "$T/wt/engine/out/test/x.js")" "built $T/pool/0/dashboard"
+check "pool: output-to copied back, slot path replaced" "$(cat "$T/wt/engine/out/test.cjs")" "$T/wt/dashboard"
+rm "$T/wt/engine/src/gone.cljs"; echo three > "$T/wt/engine/src/a.cljs"; : > "$T/pool-npx.log"
+timeout 60 "$T/wt/tools/compile" engine test >/dev/null 2>&1
+check "pool: changed and deleted sources follow the worktree" "$(cat "$T/pool-npx.log")" "$T/pool/0/dashboard three a.cljs "
+PSRV=$(cat "$T/pool/0/dashboard/.shadow-cljs/server.pid"); kill -0 "$PSRV" 2>/dev/null; check "pool: slot server stays warm" "$?" 0
+# one compile per slot: while one holds it, a second finds no slot within the wait and compiles one-shot
+touch "$T/hold"
+timeout 60 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & H=$!
+seen "$T/pool-npx.log" "three" 5; sleep 0.5
+printf '#!/bin/sh\nshift 2\nexec "$@"\n' > "$T/wt/tools/res-slot"
+out=$(timeout 60 "$T/wt/tools/compile" engine test 2>&1); check "pool busy: fallback rc" "$?" 0
+check "pool busy: says one-shot" "$(grep -c 'compiling one-shot' <<<"$out")" 1
+rm "$T/hold"; wait $H; check "pool: holder finished" "$?" 0
+kill "$PSRV" 2>/dev/null
+# no server in the slot and too little memory to start one: one-shot
+rm -rf "$T/pool"
+out=$(MC_COMPILE_MIN_START_MB=99999999 timeout 60 "$T/wt/tools/compile" engine test 2>&1); check "pool low memory: fallback rc" "$?" 0
+check "pool low memory: says one-shot" "$(grep -c 'compiling one-shot' <<<"$out")" 1
+export MC_COMPILE_POOL_SIZE=0; unset MC_COMPILE_POOL_DIR MC_COMPILE_MIN_START_MB MC_COMPILE_POOL_WAIT_S
 
 # the idle watcher kills only the server it was started for (pid + start time), and never while a compile runs
 W="$TOOLS/compile-idle-watch"
