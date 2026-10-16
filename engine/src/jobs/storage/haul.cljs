@@ -14,12 +14,12 @@
             [jobs.storage.withdraw]))
 
 (def doc
-  "Move the contents of the :from chests to the main storage in bag loads. Loop: carried goods are deposited first
-  (jobs.storage.deposit: everything but tools, armour and the food reserve) once the bag is down to its last free slot
+  "Move the contents of the :from chests to the main storage in bag loads. Loop: the hauled goods (only what the takes brought, not other carried goods) are deposited first
+  (jobs.storage.deposit) once the bag is down to its last free slot
   or no source holds anything more; else walk to the next source chest, inspect it, take one bag load (one slot is
   left free; jobs.storage.withdraw as carry-at-least targets), repeat. The targets are saved before the take, so a
   restart takes the same load again without doubling it; the chests and the bag are the rest of the state.
-  Needs (can-start?): a main chest (:to, else the storage group, so a known :chest place), else :no-chest; some :from, else :no-source.
+  Needs (can-start? and can-run?): a main chest (:to, else the storage group, so a known :chest place), else :no-chest; some :from, else :no-source.
   Sources that are in the storage group are not meant: withdraw may then take from the group's other chests.
   Ends done {:trips n :moved {name n}} once every source is empty (or holds only :keep), or at any other ending when at
   least the call's :least items are moved (default :all: only a clean finish); n counts the deposits. The data of
@@ -57,7 +57,25 @@
 
 (defn can-start? [c] (contract/all [(checks/cause-status :later (no-source c)) (checks/cause-status :later (no-chest c))]))
 
+(def can-run? can-start?)
+
 (defn progress-data [c] (select-keys (ctx/mem c) [:trips :moved]))
+
+(defn totals
+  "{name n} carried over all stacks."
+  [inv]
+  (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} inv))
+
+(defn hauled-keep
+  "{name n} for deposit's :keep: what is carried beyond the hauled count stays with the body."
+  [inv hauled]
+  (let [carried (totals inv)]
+    (into {} (map (fn [[n k]] [n (max 0 (- (get carried n 0) k))])) hauled)))
+
+(defn spare-hauled
+  "The next hauled stack to put away (deposit/to-deposit), or nil."
+  [inv hauled]
+  (when (seq hauled) (deposit/to-deposit inv (keys hauled) (hauled-keep inv hauled))))
 
 (defn done?
   "Ok when every source chest was looked at, nothing spare is carried and no child is under way."
@@ -68,7 +86,7 @@
     (cond
       (or (pos? pending) (empty? (:from (:args c)))) (apply contract/later :hauling text data)
       (checks/child-under-way? c) (apply contract/later :wrapping-up text data)
-      (deposit/to-deposit (u/inventory (:primitives c)) nil) (apply contract/later :hauling "haul: a last deposit to do" data)
+      (spare-hauled (u/inventory (:primitives c)) (:hauled (ctx/mem c))) (apply contract/later :hauling "haul: a last deposit to do" data)
       :else (apply contract/ok :hauled text data))))
 
 (defn quote-of
@@ -78,19 +96,16 @@
         t (* n (settings/get settings ::chest-s))]
     {:uses {:job-time [(/ t 4) t (max t (time-s))]}}))
 
-(defn totals
-  "{name n} carried over all stacks."
-  [inv]
-  (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} inv))
+(defn load-stacks
+  "The chest stacks [{:name :count}] of one bag load: the first ones (one slot each) that fit in slots, minus the kept names."
+  [stacks keep slots]
+  (->> stacks (remove #(some #{(:name %)} keep)) (take slots)))
 
 (defn load-plan
-  "{name target}: carry-at-least targets that take one bag load from the chest stacks [{:name :count}]: the first
-  stacks (one slot each) that fit in slots, minus the kept names."
+  "{name target}: carry-at-least targets that take the load-stacks."
   [stacks keep slots inv]
-  (->> stacks
-       (remove #(some #{(:name %)} keep))
-       (take slots)
-       (reduce (fn [m {:keys [name count]}] (update m name #(+ (or % (storage/carried inv name)) count))) {})))
+  (reduce (fn [m {:keys [name count]}] (update m name #(+ (or % (storage/carried inv name)) count)))
+          {} (load-stacks stacks keep slots)))
 
 (defn end!
   "ctx/end, but done when the items moved to the main storage meet the call's :least (:all never: the total is unknown)."
@@ -117,19 +132,23 @@
       (stop! c (:kind e) (:cause e) (dissoc (:data e) :gave-up :moved :short :trips)))))
 
 (defn ^:async dump!
-  "Deposit the carried goods; counts the trip and what moved. With nothing moved it is the end, or :bag-full."
+  "Deposit the hauled goods (only what the takes brought); counts the trip and what moved. With nothing moved it is the end, or :bag-full."
   [c pending]
   (let [before (totals (u/inventory (:primitives c)))
+        hauled (:hauled (ctx/mem c))
         {:keys [to make-chests? ignore-zones?]} (:args c)
         e (await (ctx/call c :deposit 'jobs.storage.deposit
-                           (cond-> {:make-chests? make-chests? :ignore-zones? ignore-zones?} to (assoc :chest to))))
+                           (cond-> {:make-chests? make-chests? :ignore-zones? ignore-zones?
+                                    :items (vec (keys hauled)) :keep (hauled-keep (u/inventory (:primitives c)) hauled)}
+                             to (assoc :chest to))))
         after (totals (u/inventory (:primitives c)))
         gone (into {} (keep (fn [[n k]] (let [d (- k (get after n 0))] (when (pos? d) [n d])))) before)]
     (cond
       (= :continue e) :continue
       (not= :done (:kind e)) (child-stop! c e)
       (empty? gone) (if (empty? pending) (finish! c) (stop! c :condition-failed :bag-full))
-      :else (do (ctx/update-mem! c #(-> % (update :trips (fnil inc 0)) (update :moved (partial merge-with +) gone)))
+      :else (do (ctx/update-mem! c #(-> % (update :trips (fnil inc 0)) (update :moved (partial merge-with +) gone)
+                                       (update :hauled (fn [h] (into {} (filter (comp pos? val)) (merge-with - h gone))))))
                 (u/progress! c)
                 :again))))
 
@@ -150,18 +169,18 @@
             targets (when (= "ok" (.-status seen)) (load-plan stacks (:keep (:args c)) (dec free) inv))]
         (if (empty? targets)
           (do (ctx/update-mem! c update :empty (fnil conj []) cell) :again)
-          (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets}) :again))))))
+          (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets :taken (apply merge-with + (map (fn [{:keys [name count]}] {name count}) (load-stacks stacks (:keep (:args c)) (dec free))))}) :again))))))
 
 (defn ^:async take!
   "Take the saved load; the intent goes once the take is done. A chest that lacks part of it (:chest-lacks) is not a stop:
   the load is what the chest still held."
-  [c {:keys [chest targets]}]
+  [c {:keys [chest taken] :as intent}]
   (let [e (await (ctx/call c :take 'jobs.storage.withdraw
-                           {:chest (deposit/cell-pos chest) :items targets :ignore-zones? (:ignore-zones? (:args c))}))]
+                           {:chest (deposit/cell-pos chest) :items (:targets intent) :ignore-zones? (:ignore-zones? (:args c))}))]
     (cond
       (= :continue e) :continue
       (not (or (= :done (:kind e)) (false? (get-in e [:data :gave-up])))) (child-stop! c e)
-      :else (do (ctx/update-mem! c dissoc :intent) (u/progress! c) :again))))
+      :else (do (ctx/update-mem! c (fn [m] (-> m (dissoc :intent) (update :hauled (partial merge-with +) taken)))) (u/progress! c) :again))))
 
 (defn ^:async step!
   "One move: the saved take, a deposit, the end, or the next look: :again, :continue or :done."
@@ -170,7 +189,7 @@
         inv (u/inventory (:primitives c))
         free (u/free-slots (:primitives c))
         pending (remove (set (:empty m)) (map storage/cell-of (:from (:args c))))
-        spare? (deposit/to-deposit inv nil)]
+        spare? (spare-hauled inv (:hauled m))]
     (cond
       (:intent m) (await (take! c (:intent m)))
       (and spare? (or (<= free 1) (empty? pending))) (await (dump! c pending))

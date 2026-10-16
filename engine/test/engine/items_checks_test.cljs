@@ -165,7 +165,7 @@
     {:items ["iron_pickaxe" "iron_helmet"] :wear true} {} [:later :kitting]
     'jobs.storage.haul {} {:from [cell]} {:empty [cell]} [:ok :hauled]
     'jobs.storage.haul {} {:from [cell]} {} [:later :hauling]
-    'jobs.storage.haul {:inventory [{:name "oak_log" :count 5}]} {:from [cell]} {:empty [cell]} [:later :hauling]
+    'jobs.storage.haul {:inventory [{:name "oak_log" :count 5}]} {:from [cell]} {:empty [cell] :hauled {"oak_log" 5}} [:later :hauling]
     'jobs.storage.haul {} {:from [cell]} {:empty [cell] :children {:deposit {}}} [:later :wrapping-up]))
 
 (deftest give-is-ok-once-the-toss-is-confirmed-taken

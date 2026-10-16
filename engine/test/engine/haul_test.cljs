@@ -11,6 +11,7 @@
             [engine.test-util :as tu :refer [child-outcome run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
+            [jobs.lib.util :as u]
             [jobs.storage.haul :as haul]))
 
 (defn start
@@ -53,15 +54,28 @@
           (is (empty? (get cs [10 64 4])))
           (is (= 80 (count (get cs [20 64 0])))))))))
 
-(deftest haul-with-a-full-bag-deposits-before-it-takes
+(deftest haul-with-a-bag-full-of-other-goods-stops-bag-full-and-keeps-them
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory (stacks "x" 35) :containers {"10,64,0" (stacks "a" 5) "20,64,0" []}})
-              result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]]} 60))]
-          (is (= "deposit" (direction (first (transfers p)))))
-          (is (= 40 (count (get (containers p) [20 64 0]))))
-          (is (= 2 (:trips result))))))))
+              result (await (wt/ending-of eng 'jobs.storage.haul {:from [[10 64 0]]} 30))]
+          (is (= {:kind :condition-failed :cause :bag-full} (select-keys result [:kind :cause])))
+          (is (empty? (transfers p)))
+          (is (empty? (get (containers p) [20 64 0]))))))))
+
+(deftest haul-deposits-only-what-it-took-not-other-carried-goods
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "oak_sapling" :count 4} {:name "a0" :count 2}]
+                                      :containers {"10,64,0" (stacks "a" 3) "20,64,0" []}})
+              result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]]} 60))
+              main (get (containers p) [20 64 0])]
+          (is (= :done (:status result)))
+          (is (= {"a0" 5 "a1" 5 "a2" 5} (:moved result)))
+          (is (= 15 (reduce + (map :count main))))
+          (is (= {"oak_sapling" 4 "a0" 2} (select-keys (haul/totals (u/inventory p)) ["oak_sapling" "a0"]))))))))
 
 (deftest haul-leaves-the-kept-names-in-the-source
   (async done
