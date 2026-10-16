@@ -1,5 +1,5 @@
 ;; Card 7c28955e: gather.mine reads the faces of a cut cell as the body senses them. Lava (or water) in rock beside the tunnel line, never in
-;; view from the tunnel, is not a hazard the miner can know; it digs on and ends done. Lava directly above a cell it is about to cut stops it.
+;; view from the tunnel, is not a hazard the miner can know; it digs on and ends done. Lava directly above a cell it is about to cut is seen (it drips): the stair seals it and the mine goes on.
 ;; Stone mass x 2..30, z 8..30, y 0..6, a 1x2 tunnel cell at the body (x 16..19), iron ore at x 24. Resistance and fire resistance keep the probe alive.
 {:defaults
  {:tags [:mine :sensing :jobs] :time :any
@@ -18,8 +18,8 @@
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1]]}
-  {:name "lava-over-a-cell-about-to-be-cut-stops-the-mine"
+  {:name "lava-over-a-cell-about-to-be-cut-is-sealed-and-the-mine-goes-on"
    :blocks [[:set [21 2 16] "lava"]]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
-   :expect [{:event {:source :job :kind :stopped} :within-s 100 :of-job true}]
-   :after [[:item "raw_iron" 0]]}]}
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
+   :after [[:item "raw_iron" 1]]}]}
