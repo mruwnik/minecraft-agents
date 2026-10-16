@@ -11,6 +11,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
             [jobs.lib.foods :as foods]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
 
@@ -169,7 +170,7 @@
   "One obtain child round in slot: :continue, or the stop (stop-of) of the child's ending when it ended without the item
   (nil when it got it)."
   [c slot item n]
-  (let [e (await (ctx/call c slot 'jobs.items.obtain (obtain-args c item n)))]
+  (let [e (await (need/call! c slot (quote jobs.items.obtain) (obtain-args c item n)))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) nil

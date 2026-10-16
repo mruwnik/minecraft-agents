@@ -1,8 +1,7 @@
 (ns jobs.lib.need
   "A contract job's way to get what it lacks: call the fetch job as a child under the caller's remainder (ctx/call) and
   read its ending. tool!, item! and blocks! resolve to :continue while the child waits on the world, else to the ending
-  to return or read (a fetch job whose own start check says :later, e.g. night, is not called: the caller waits
-  with that reason): :done as the child gave it; any other with the cause {:reason :need|:tool|:free-slots ..} naming
+  to return or read (call! is the call alone): :done as the child gave it; any other with the cause {:reason :need|:tool|:free-slots ..} naming
   what was wanted, the child's ending as its :because, the kind kept (a limit stays a limit). A duplicate call is
   the engine's refusal. Options {:slot :how :explore} pass on to the fetch job.
 
@@ -19,6 +18,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]))
 
 ;; ------------------------------------------------------------------ the :fetch arg and its limits
@@ -152,6 +152,16 @@
   (let [{:keys [x y z]} (u/self-pos c)]
     [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
 
+(defn ^:async call!
+  "ctx/call of a fetch child, but a child not yet started whose start check says :later for a readiness reason
+  (jobs.lib.ready/wait-reasons: night, exposure, a hostile near, low health) is not called: the caller waits with that
+  reason (:continue), where the child would end condition-failed and read as a failed fetch."
+  [c slot job args]
+  (let [s (when (nil? (get-in (ctx/mem c) [:children slot])) (ctx/child-status c slot job args))]
+    (if (and (= :later (first s)) (contains? ready/wait-reasons (:reason (nth s 2))))
+      (do (some-> (:child-wait c) (reset! (contract/status-cause s))) :continue)
+      (await (ctx/call c slot job args)))))
+
 (defn ^:async fetch!
   [c job args cause-reason wanted {:keys [slot how explore return? minutes for-plan]}]
   (let [slot (or slot :need)
@@ -167,10 +177,8 @@
       (do
         (when (and fresh? return? (not (:need/return (ctx/mem c))))
           (ctx/update-mem! c assoc :need/return {:cell (feet c)}))
-        (let [later (when fresh? (let [s (ctx/child-status c slot job args)] (when (= :later (first s)) s)))
-              e (if later
-                  (do (some-> (:child-wait c) (reset! (contract/status-cause later))) :continue)
-                  (ending-for (await (ctx/call c slot job args)) cause-reason wanted))]
+        (let [r (await (call! c slot job args))
+              e (if (= :continue r) :continue (ending-for r cause-reason wanted))]
           (when (= :done (:kind e))
             (ctx/update-mem! c #(cond-> (assoc % :need/done {:want want :have (counts c (got-names wanted e))})
                                   (:need/return %) (assoc-in [:need/return :back] true))))

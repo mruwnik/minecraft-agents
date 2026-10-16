@@ -7,6 +7,7 @@
             [engine.game :as game]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost.weapon :as weapon]
+            [jobs.lib.need :as need]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -122,7 +123,7 @@
       (empty? names) (ctx/end c :done nil {:needed false})
       (carried-tool p names) (ctx/end c :done nil {:tool (carried-tool p names)})
       :else
-      (let [e (await (ctx/call c :obtain 'jobs.items.obtain (obtain-args c names)))
+      (let [e (await (need/call! c :obtain 'jobs.items.obtain (obtain-args c names)))
             tool (carried-tool p names)
             data (merge {:any-of names} (select-keys (:data e) [:tried :got :why]))]
         (cond

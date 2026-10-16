@@ -8,7 +8,8 @@
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
-            [jobs.items.obtain.table :refer [animal? gather-need]]))
+            [jobs.items.obtain.table :refer [animal? gather-need]]
+            [jobs.lib.need :as fetch-need]))
 
 (defn declined?
   "Whether child ending e is a refusal before it ran: a failed condition with no result of its own."
@@ -58,7 +59,7 @@
   while it runs, else the gather source fails."
   [c names need]
   (let [args (pickaxe-args c names need)
-        e (await (ctx/call c :pickaxe 'jobs.items.obtain args))]
+        e (await (fetch-need/call! c :pickaxe 'jobs.items.obtain args))]
     (cond
       (= :continue e) :continue
       (pickaxe-first? c names need) (tried! c :gather {:pickaxe (contract/cause-key e)})

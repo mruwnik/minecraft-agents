@@ -19,9 +19,9 @@
 (defn stopper
   "A fetch job: each round records its args and slot, then does (step c), which ends it :done (nil) or with the
   reason's ending (ending-of); :continue yields instead."
-  [seen step]
+  [seen step start]
   {:ways [:chest :craft :smelt :gather]
-  
+   :can-start? (fn [_] (or start (contract/ok :ready "ready")))
    :round (fn ^:async r [c]
             (swap! seen conj (assoc (:args c) :slot (peek (:slots c))))
             (let [s (step c)]
@@ -34,7 +34,7 @@
   "An engine with the caller job running (call-fn c) each round, obtain and get-tool as stoppers doing obtain-step and
   tool-step, and go-to as a walker that puts the body on its :pos. Each round's answer is appended to got; the caller
   ends on one other than :done."
-  [call-fn {:keys [obtain-step tool-step]}]
+  [call-fn {:keys [obtain-step obtain-start tool-step]}]
   (reset! got [])
   (let [obtain (atom [])
         tool (atom [])
@@ -47,8 +47,8 @@
                            (swap! walks conj (:args c))
                            (swap! (fake/state p) assoc-in [:self :pos] [(+ x 0.5) y (+ z 0.5)])
                            (ctx/end c :done nil)))}
-        jobs {'jobs.items.obtain (stopper obtain (or obtain-step (constantly nil)))
-              'jobs.items.get-tool (stopper tool (or tool-step (constantly nil)))
+        jobs {'jobs.items.obtain (stopper obtain (or obtain-step (constantly nil)) obtain-start)
+              'jobs.items.get-tool (stopper tool (or tool-step (constantly nil)) nil)
               'jobs.movement.go-to walker
               'caller {:args {}
                        :round (fn ^:async r [c]
@@ -91,6 +91,22 @@
         (is (= :condition-failed (:kind (last @got))) "no-source is a missing fact")
         (is (= {:reason :need :why :no-source :item "iron_ingot" :count 3} (:cause (last @got))))
         (is (= :no-source (contract/cause-key (:because (last @got)))))))))
+
+(deftest a-fetch-that-waits-for-dawn-is-not-called-but-another-later-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run! #(need/item! % "iron_ingot" 3)
+                             {:obtain-start (contract/later :dark "night above ground, waits for dawn")}))]
+          (is (empty? @(:obtain r)) "a readiness wait parks the caller without a call")
+          (is (= [:continue] @got) "the caller waits, no ending"))
+        (await (run! #(need/item! % "iron_ingot" 3) {:obtain-start (contract/later :no-source "no source")}))
+        (is (= {:reason :need :item "iron_ingot" :count 3} (select-keys (:cause (last @got)) [:reason :item :count]))
+            "any other later is called: the caller ends :need with the cause")
+        (let [r (await (run! #(need/call! % :direct 'jobs.items.obtain {:item "iron_ingot" :count 1})
+                             {:obtain-start (contract/later :exposed "dark until dawn")}))]
+          (is (empty? @(:obtain r)) "a job calling obtain itself parks the same way")
+          (is (= [:continue] @got)))))))
 
 (deftest a-full-bag-is-free-slots-and-a-limit-stays-a-limit
   (async done

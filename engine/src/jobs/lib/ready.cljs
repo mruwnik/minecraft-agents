@@ -19,6 +19,10 @@
   {::risk-limit {:default 0.001 :spec (a/num-in 0 nil)
                  :doc "Spawn chance per second (jobs.lib.cost/exposure) above which a place or the walk to it is exposed: a single dark cell is 0.005, a lit or sunlit one 0."}})
 
+(def wait-reasons
+  "The :reason of every :later these checkers give: a job that declines for one is waiting out the world, not failing."
+  #{:exposed :dark :hostile-near :low-health})
+
 (defn place-text [{:keys [x y z]}] (str x " " y " " z))
 
 (defn at-status
