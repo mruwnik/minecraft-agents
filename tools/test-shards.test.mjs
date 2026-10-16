@@ -5,7 +5,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -175,10 +175,23 @@ test('partOf: parts are balanced by weight, not by name position', () => {
 test('committed engine/test-weights.json: parts over the real namespaces are disjoint, cover all and are within 15% of each other', () => {
   const w = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'engine', 'test-weights.json'), 'utf8'))
   const nss = testNamespaces()
-  const parts = [1, 2, 3, 4].map((i) => partOf(nss, i, 4, w))
-  assert.deepEqual(parts.flat().sort(), [...nss].sort())
-  const loads = parts.map((p) => p.reduce((t, x) => t + (w[x] ?? 0), 0))
-  assert.ok(Math.max(...loads) <= Math.min(...loads) * 1.15, String(loads))
+  for (const n of [4, 6]) {
+    const parts = Array.from({ length: n }, (_, i) => partOf(nss, i + 1, n, w))
+    assert.deepEqual(parts.flat().sort(), [...nss].sort())
+    const loads = parts.map((p) => p.reduce((t, x) => t + (w[x] ?? 0), 0))
+    assert.ok(Math.max(...loads) <= Math.min(...loads) * 1.15, String(loads))
+  }
+})
+
+test('finishedNsMs: namespace times come from every shard that finished ok, a failed shard adds none', () => {
+  const line = (v, ms) => JSON.stringify({ var: `#'${v}`, ms })
+  const ok = { ok: true, lines: [line('a-test/x', 5), line('a-test/y', 7)] }
+  const bad = { ok: false, lines: [line('b-test/x', 9)] }
+  assert.deepEqual(finishedNsMs([ok, bad]), { 'a-test': 12 })
+})
+
+test('mergeWeights: fresh times replace old ones, old ones stay for namespaces not rerun, deleted namespaces drop', () => {
+  assert.deepEqual(mergeWeights({ a: 1, b: 2, gone: 3 }, { a: 10, c: 4 }, ['a', 'b', 'c']), { a: 10, b: 2, c: 4 })
 })
 
 test('parsePart: "i/N" with 1 <= i <= N, otherwise an error', () => {

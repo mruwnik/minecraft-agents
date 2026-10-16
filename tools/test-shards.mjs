@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Why JavaScript: a thin Node launcher (spawns the compiled test runner in shards, takes a machine-wide flock slot per shard); no engine behaviour.
 // Usage: tools/test-engine --full [--part i/N] [--shards N] [--slots M] [--slowest K]
-//  --part i/N: runs only part i (1-based) of N: a greedy longest-first split by the committed engine/test-weights.json (a function of names and that file alone, so parts never overlap or leave a gap); `--write-weights` copies engine/out/test-ns-ms.json there; timings are merged into test-ns-ms.json, the full-run timings file is left alone.
+//  --part i/N: runs only part i (1-based) of N: a greedy longest-first split by the committed engine/test-weights.json (a function of names and that file alone, so parts never overlap or leave a gap); `--write-weights` merges engine/out/test-ns-ms.json (written after any run, from the shards that passed) into it; with free memory for P shards, N=P parts of `--shards 1` balance best; timings are merged into test-ns-ms.json, the full-run timings file is left alone.
 //  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
 //  At most M shard processes run at once machine-wide (default: (MemAvailable - floorMb) / kinds.tests.needMb, 1..shardMax): each takes res-slot's 'tests' slot tests.<i> (i < M; slots above shardMax stay for targeted runs), so parallel agents cannot OOM the machine.
 //  Each shard is killed after runTimeoutS of its prior timing (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test.
@@ -61,6 +61,10 @@ export const nsMs = (lines) => {
   for (const r of parse(lines)) if (r.var) { const ns = r.var.replace(/^#'/, '').split('/')[0]; out[ns] = (out[ns] ?? 0) + r.ms }
   return out
 }
+
+// Times of the shards that finished ok: a run with one failing shard still refreshes the rest.
+export const finishedNsMs = (shards) => nsMs(shards.filter((s) => s.ok).flatMap((s) => s.lines))
+export const mergeWeights = (old, fresh, nss) => Object.fromEntries(nss.filter((x) => fresh[x] != null || old[x] != null).map((x) => [x, fresh[x] ?? old[x]]))
 
 const RES = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'res-slot.json'), 'utf8'))
 const FLOOR_MB = RES.floorMb, SHARD_MB = RES.kinds.tests.needMb // shared with tools/res-slot: floor kept for others; worst shard peak seen
@@ -147,7 +151,7 @@ const weightsFile = path.join(engine, 'test-weights.json')
 const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' }) } = {}) => {
   const argv = process.argv.slice(2)
   const opt = (name, d) => { const i = argv.indexOf(name); return i < 0 ? d : Number(argv[i + 1]) }
-  if (argv.includes('--write-weights')) return writeAtomic(weightsFile, JSON.stringify(readPrior(path.join(engine, 'out/test-ns-ms.json'))) + '\n')
+  if (argv.includes('--write-weights')) return writeAtomic(weightsFile, JSON.stringify(mergeWeights(readPrior(weightsFile), readPrior(path.join(engine, 'out/test-ns-ms.json')), testNamespaces())) + '\n')
   const shards = opt('--shards', 4), fixedSlots = opt('--slots', null), top = opt('--slowest', 15)
   const slotsNow = () => fixedSlots ?? memSlots(availableMb())
   fs.mkdirSync(slotDir(), { recursive: true })
@@ -177,11 +181,12 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
     return { i, nss, file, ...r }
   }))
   let bad = 0
-  const lines = []
+  const lines = [], finished = []
   for (const r of results) {
     const mine = fs.readFileSync(r.file, 'utf8').split('\n'); fs.unlinkSync(r.file)
     lines.push(...mine)
     const o = shardOutcome(r.code, mine)
+    finished.push({ ok: o.ok, lines: mine })
     if (o.ok) { console.log(`shard ${r.i}: ok (${r.nss.length} ns)`); continue }
     const log = `/tmp/mc-test-run-${process.pid}-shard-${r.i}.log`
     fs.writeFileSync(log, r.out)
@@ -189,7 +194,8 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   }
   cleanup()
   if (!part) fs.writeFileSync(timingFile, lines.filter(Boolean).join('\n') + '\n')
-  if (bad === 0 && parse(lines).some((r) => r.var)) writeAtomic(nsFile, JSON.stringify({ ...(part ? readPrior(nsFile) : {}), ...nsMs(lines) }))
+  const fresh = finishedNsMs(finished)
+  if (Object.keys(fresh).length) writeAtomic(nsFile, JSON.stringify({ ...(part ? readPrior(nsFile) : {}), ...fresh }))
   const peaks = parse(lines).filter((r) => r['peak-rss-kb']).map((r) => r['peak-rss-kb'])
   const tests = parse(lines).filter((r) => r.var).length
   console.log(`test-shards: ${tests} tests, wall ${((Date.now() - t0) / 1000).toFixed(0)} s, shard peak RSS MB: ${peaks.map((k) => Math.round(k / 1024)).join(' ')} (sum ${Math.round(peaks.reduce((a, b) => a + b, 0) / 1024)})`)
