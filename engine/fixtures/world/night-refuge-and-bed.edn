@@ -40,7 +40,7 @@
          [:until-rcon "data get entity $BODY SleepTimer" "data: (6[0-9]|[7-9][0-9]|[0-9]{3})s" 10]
          [:summon "zombie" [27.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
-         [:wait-s 8]
+         [:wait-s 8] ; hold: the reflex fights the zombie while the refuge stays up
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "zombie"] {:total 0}] 10]
          [:job (jobs.movement.go-to {:pos #xyz [8 0 16] :range 0})]]

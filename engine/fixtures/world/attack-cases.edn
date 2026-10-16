@@ -40,7 +40,7 @@
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}
   {:name "absent-wait-attacks-husk-that-turns-up"
    :act [[:job (jobs.combat.attack {:targets "husk" :absent :wait})]
-         [:wait-s 8]
+         [:wait-s 8] ; hold: the standing guard must be waiting, not started, when the husk turns up
          [:summon "husk" [12.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 60 :of-job true}]
    :after [[:entities "type=husk,tag=wt" [[0 0 0] [31 3 31]] 0]]}
@@ -114,7 +114,7 @@
          [:summon "chicken" [13.0 0 21.5] "{NoAI:1b}"] [:summon "chicken" [13.5 0 21.5] "{NoAI:1b}"] [:summon "chicken" [14.0 0 21.5] "{NoAI:1b}"]
          [:summon "chicken" [14.5 0 21.5] "{NoAI:1b}"] [:summon "chicken" [15.0 0 21.5] "{NoAI:1b}"] [:summon "chicken" [15.5 0 21.5] "{NoAI:1b}"]
          [:summon "chicken" [16.0 0 21.5] "{NoAI:1b}"] [:summon "chicken" [16.5 0 21.5] "{NoAI:1b}"] [:summon "chicken" [17.0 0 21.5] "{NoAI:1b}"]
-         [:wait-s 3]
+         [:until-seen {:entity "chicken" :min 9} 10]
          [:job (jobs.combat.attack {:targets "$entity-id:cow"})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :attack.gave-up} :for-s 90 :until {:source :job :kind :completed}}]

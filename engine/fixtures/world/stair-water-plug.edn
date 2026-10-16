@@ -35,7 +35,6 @@
    :blocks [[:set [13 7 17] "water"]]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
          [:await {:source :job :kind :stair.plugged} 120]
-         [:wait-s 3]
          [:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
    :expect [{:event {:source :job :kind :stair.plugged} :within-s 120 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :plugged}} :within-s 170 :of-job true}]

@@ -13,7 +13,7 @@
  :cases
  [{:name "unseen-killer-guard-skips-rests-then-fetches"
    :act [[:summon "skeleton" [27.5 0 26.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
-         [:wait-s 1]
+         [:until-seen {:entity "skeleton"} 10]
          [:rcon "damage $BODY 100 minecraft:arrow by @e[type=skeleton,tag=wt,$BOX,limit=1]"]
          [:rcon "kill @e[type=skeleton,tag=wt,$BOX]"]
          [:await {:source :body :kind :respawned} 30]]
