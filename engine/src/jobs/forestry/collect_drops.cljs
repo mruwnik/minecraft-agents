@@ -342,7 +342,16 @@
                 dig-why (when-not (#{nil :dug :continue} dug) dug)
                 walk (if (= :dug dug) (await (walk-down! c item)) walk)
                 why (if (= :dug dug) nil why)]
-            (let [collect! (fn [] (ctx/act c :collect (clj->js (cond-> {:id (.-id item)} hole? (assoc :maxDropDown 1)))))
+            (let [item-name (some-> (.-item item) .-name)
+                  held (fn [] (transduce (comp (filter #(= item-name (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
+                  collect! (fn ^:async collect* []
+                             (let [before (held)
+                                   r (await (ctx/act c :collect (clj->js (cond-> {:id (.-id item)} hole? (assoc :maxDropDown 1)))))
+                                   got (- (held) before)]
+                               ;; the act can answer unreachable for a drop that flew to the body meanwhile
+                               (if (and (= "unreachable" (.-status r)) (pos? got))
+                                 (clj->js {:status "ok" :gained [{:name item-name :count got}]})
+                                 r)))
                   r (when-not (or moving? (= :continue walk) (= :continue dug) why (= :unreachable walk)) (await (collect!)))
                   stuck? (and r (= "unreachable" (.-status r)))
                   dug2 (when (and stuck? (:dig (:args c))) (await (dig-to! c item)))

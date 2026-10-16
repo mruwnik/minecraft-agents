@@ -288,6 +288,21 @@
             (is (= [:unreachable] (mapv :reason (:left result))))
             (is (= [:unreachable] (mapv :reason (bd/left-drops seen))))))))))
 
+(deftest a-drop-picked-up-while-the-collect-action-answers-unreachable-is-collected-not-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks {"0,62,0" "stone"}})]
+          (drop! p [0 63 0] "dirt")
+          (.override (.-world p) "collect"
+                     (fn [token args impl]
+                       (impl token args)
+                       #js {:status "unreachable" :reason "no-path" :gained #js []}))
+          (let [result (await (tu/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+            (is (= 1 (bd/carried p "dirt")))
+            (is (= 1 (:collected result)))
+            (is (empty? (:left result)))))))))
+
 (deftest a-hole-drop-the-collect-action-calls-unreachable-is-dug-to-and-collected-again-with-dig-true
   (async done
     (tu/run-async done
