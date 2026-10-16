@@ -58,7 +58,8 @@
    :blocks [[:fill [0 -9 0] [31 -5 31] "stone"] [:fill [0 -4 0] [31 -1 31] "dirt"] [:fill [0 -4 0] [31 6 0] "dirt"] [:fill [0 -4 31] [31 6 31] "dirt"] [:fill [0 -4 0] [0 6 31] "dirt"] [:fill [31 -4 0] [31 6 31] "dirt"]]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.items.obtain {:item "cobblestone" :count 3 :explore true})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
+   :expect [{:event {:source :job :kind :stair.step} :within-s 150}
+            {:event {:source :job :kind :completed} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 150 :until {:source :job :kind :completed}}]
    :after [[:item "cobblestone" [:>= 3]]]
    :limit-s 170}]}

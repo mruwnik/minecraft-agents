@@ -26,8 +26,8 @@
   It ends :done with {:villagers n :target :steps {step summary}} when some step ran to its end
   and none was incomplete. A summary is the child's :reason, :placed, :missing, :fed, :rolled, :born and :count (a
   child that ended other than :done carries :stopped kind). A child that ended other than :done, declined or failed,
-  or a role without :pos, ends the pass nothing-possible :incomplete; a pass where no step ran
-  ends condition-failed :nothing-to-do; a child that reached a limit ends the pass limit-reached with it.
+  or a role without :pos, ends the pass nothing-possible :incomplete; a started pass where, by its end, no step ran
+  (the world changed under it) ends condition-failed :nothing-to-do; a child that reached a limit ends the pass limit-reached with it.
   The job names of breed and roll are used, not their internals: their args are as listed above.
   :ignore-zones? is passed to the repair.")
 

@@ -57,7 +57,7 @@
   the animal; the ending's :still-led is then false.
 
   Ends with a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
-  {:reason :animal key :still-led bool (when the leading ended, before cleanup) :at pos :gathered bool :text}. Reasons
+  {:reason :animal key :still-led bool (false: the cleanup let the animal go) :at pos :gathered bool :text}. Reasons
   and endings:
   - :tied, :unleashed: done.
   - :none (no animal seen within :radius), :lead-broke, :lost, :animal-stalled: as above.
