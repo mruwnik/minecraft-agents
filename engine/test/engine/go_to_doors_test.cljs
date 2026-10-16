@@ -682,8 +682,8 @@
               {:keys [eng clock seen]} (setup (pen-world true 3) [])
               pos {:x 20 :y 64 :z -3}
               twice {:round (fn ^:async twice-round [c]
-                              (cut/start-attempt! c pos)
-                              (cut/start-attempt! c pos)
+                              (await (cut/start-attempt! c pos))
+                              (await (cut/start-attempt! c pos))
                               (ctx/end c :done nil))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'twice twice))]
           (with-redefs [pen/check (fn [o] (swap! checks inc) (check o))]
@@ -699,9 +699,9 @@
         (let [{:keys [eng clock seen]} (setup (pen-world false 3) [])
               pos {:x 20 :y 64 :z -3}
               cut-at-gate {:round (fn ^:async cut-at-gate-round [c]
-                                    (cut/start-attempt! c pos)
+                                    (await (cut/start-attempt! c pos))
                                     (await (pass/open-block! c gate-cell true))
-                                    (cut/start-attempt! c pos)
+                                    (await (cut/start-attempt! c pos))
                                     (ctx/end c :done nil))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'cut-at-gate cut-at-gate))]
           (core/submit! eng '(cut-at-gate) {:range 0})

@@ -342,7 +342,7 @@
             spent? (and (cut-loop? state) (>= (:resets state) (max-cut-resets)))
             cycle? (and (cut-loop? state) (or spent? (seq (way-hostiles c pos))))]
         (await (torch/return-torch! c))
-        (start-attempt! c pos)
+        (await (start-attempt! c pos))
         (when (and (cut-loop? state) (not cycle?))
           (ctx/update-mem! c assoc :cuts 0 :ref (:closest state) :resets (inc (:resets state))))
         (if cycle?

@@ -51,7 +51,7 @@
     (> (:cost (cost/tour-cost (tour c) args))
        (or (:tour-worth args) (cost/tour-worth (:detour-from (ctx/mem c) 0) args)))))
 
-(defn start-attempt!
+(defn ^:async start-attempt!
   "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start
   again (but for the cut count, kept by note-restart!), and a saved escalation, or a pending one, is dropped when the body is already there (its holes, if any, are
   put back as after a made way). The open pen gate warning is checked at the call's first attempt, and again only
@@ -62,7 +62,7 @@
         opened (set (keep (comp :cell :data) (ctx/entries c :opened)))]
     (wworld/warn-bad-settings! c)
     (when (or (nil? (:pen-checked m)) (some #(not (contains? (:pen-checked m) %)) opened))
-      (pen-entry/warn-left-open! c pos (:doors (:args c))))
+      (await (pen-entry/warn-left-open! c pos (:doors (:args c)))))
     (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :waypoints-tried :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done :own-way-top :detour-from :tour-walks) (assoc :pen-checked opened :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
                           (not (:torch-fetching m)) (dissoc :torch-fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)

@@ -58,7 +58,7 @@
 (defn ^:async walk!
   "The walk to pos: :arrived, :continue, {:held reason} (go-to waits on a night shelter) or {:unreachable why}."
   [c pos see? at-night]
-  (let [[pens args] (b/walk-request c pos see? at-night)
+  (let [[pens args] (await (b/walk-request c pos see? at-night))
         [r held] (await (child/call-walk-reason* c :walk args))
         arrived? (and (= :done (:kind r)) (:arrived (:data r)))]
     (cond

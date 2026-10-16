@@ -164,11 +164,11 @@
        (str/join "; " (map (fn [{:keys [gates animals]}] (str animals " animals, gate " (str/join " " (map (fn [{:keys [x y z]}] [x y z]) gates)))) pens))
        "; :enter-pens true allows the walk through"))
 
-(defn walk-request
+(defn ^:async walk-request
   "[pens go-to-args] of the walk to pos: range 3, no escalation, and (unless the job's :enter-pens) keeping out of the
-  gates of the pens holding animals."
+  gates of the pens holding animals, after a look at the cells of those not yet seen."
   [c pos see? at-night]
-  (let [pens (when-not (:enter-pens (:args c)) (pen-entry/pens c))
+  (let [pens (when-not (:enter-pens (:args c)) (await (pen-entry/pens! c)))
         keep-out (vec (mapcat :gates pens))]
     [pens (cond-> {:pos pos :range 3 :see (boolean see?) :ways #{:walk :clear-seal} :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
             at-night (assoc :at-night at-night)
@@ -183,7 +183,7 @@
   an ending: go-to's when it did not end :done, else nothing-possible :out-of-reach, or go-to's :why (:unreachable)
   when it ended not having arrived."
   [c pos & [see? at-night]]
-  (let [[pens args] (walk-request c pos see? at-night)
+  (let [[pens args] (await (walk-request c pos see? at-night))
         [r] (await (child/call-walk-reason* c :walk args))
         arrived? (and (= :done (:kind r)) (:arrived (:data r)))]
     (cond
