@@ -1,14 +1,11 @@
 (ns engine.forestry-rounds-test
   "The forestry jobs run as one whole attempt: a single tick of the engine fells, collects and replants (no step per round)."
-  (:require [cljs.test :refer [deftest is async use-fixtures]]
-            [engine.lit-support :as lit]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.forest-maintain-test :as fm :refer [oak-world oak-cell digs places item]]
             [engine.harvest-test :as h]
             [engine.library-test :as lt]
             [engine.test-util :as tu]))
-
-(use-fixtures :once lit/fixture)
 
 (deftest fell-tree-fells-the-whole-tree-in-one-round
   (async done

@@ -497,7 +497,7 @@
 
 (defn plan-place "A tree cell of the plan, nil when it cannot be worked." [c] (some-> (planned c) :trees keys first))
 
-(def safe? (ready/safe-at plan-place))
+(def safe? (ready/safe-at-by-night plan-place))
 
 (def fit? ready/fit?)
 

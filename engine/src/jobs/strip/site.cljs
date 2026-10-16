@@ -43,7 +43,7 @@
           storage.haul from the base chests to the main storage (not with :haul false).
   The cleanup export puts :home and the respawn bed back to :was however the call ends (a cut included). The torches the
   corridor took back are carried.
-  Needs :site and :base (a new site also :at), else impossible :bad-args. Its safe? is ready/safe-at :at.
+  Needs :site and :base (a new site also :at), else impossible :bad-args. Its safe? is ready/safe-at-by-night :at.
   Ends :done with data {:segments {state n} :taken {class n} :hauled {item n} :smelted {raw-item n} :smelt-failed [{:furnace :reason}]},
   or condition-failed (:bad-plan :no-site :no-shears :no-torches :food-short :base-full, or :child-failed), nothing-possible
   (:unreachable when the walk down found no way, :trips-exhausted, :all-skipped with :skipped {reason n} when no segment was
@@ -450,7 +450,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at #(a/cell (:at (:args %)))))
+(def safe? (ready/safe-at-by-night #(a/cell (:at (:args %)))))
 
 (def fit? ready/fit?)
 

@@ -1,7 +1,6 @@
 (ns engine.loot-cart-test
   "jobs.strip.loot-cart against the fake world."
-  (:require [cljs.test :refer [deftest is are async use-fixtures]]
-            [engine.lit-support :as lit]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.blocks-dig-test :as bd]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -9,8 +8,6 @@
             [engine.fake :as fake]
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]))
-
-(use-fixtures :once lit/fixture)
 
 (defn setup [world]
   (let [clock (atom 1000000)

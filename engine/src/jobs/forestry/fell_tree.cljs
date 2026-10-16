@@ -55,7 +55,7 @@
 
   Conditions: :no-tree (none in sight after one look around from where it stands, the condition's look; data :radius,
   :species; a listed job waits; with :at and no log there it is impossible, data :at).
-  Its safe? is ready/safe-at :at with :at, else ready/safe-if-lit.
+  Its safe? is ready/safe-at-by-night :at with :at, else ready/safe-if-lit.
   Ends :done with {:base pos :logs n :axe why} of the tree it felled: n logs dug; :axe is :carried, :skipped-fetch-off,
   :skipped-small-tree or :none-found (fetch failed: chopped by hand). Condition-failed :no-tree when the look found none;
   limit-reached {:line :food :reason :hungry} when no food is carried and get-food found none; nothing-possible :tree-unreachable when every tree in sight proved out of

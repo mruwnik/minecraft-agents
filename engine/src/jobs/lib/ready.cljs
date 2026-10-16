@@ -91,9 +91,9 @@
   (with-meta (fn [c] (contract/all [(threatened c) (dark-sky c)])) {::exposure dark-sky}))
 
 (defn safe-at-or-if-lit
-  "The checker of a job that goes to the place (f c) when it has one, else roams: safe-at, or safe-if-lit when (f c) is nil."
+  "The checker of a job that goes to the place (f c) when it has one, else roams: safe-at-by-night, or safe-if-lit when (f c) is nil."
   [f]
-  (let [at (safe-at f)]
+  (let [at (safe-at-by-night f)]
     (with-meta (fn [c] (if (f c) (at c) (safe-if-lit c)))
       {::exposure (fn [c] (if (f c) ((::exposure (meta at)) c) (dark-sky c)))})))
 

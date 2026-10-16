@@ -45,7 +45,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s} :use {:blocks :seal}})
 
-(def safe? (ready/safe-at #(a/cell (:at (:args %)))))
+(def safe? (ready/safe-at-by-night #(a/cell (:at (:args %)))))
 
 (def fit? ready/ok)
 

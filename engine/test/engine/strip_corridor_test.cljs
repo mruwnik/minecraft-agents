@@ -1,13 +1,10 @@
 (ns engine.strip-corridor-test
   "jobs.strip.corridor: one mineshaft corridor segment stripped, in the fake world."
-  (:require [cljs.test :refer [deftest is async use-fixtures]]
-            [engine.lit-support :as lit]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [jobs.lib.strip :as strip]))
-
-(use-fixtures :once lit/fixture)
 
 (def job 'jobs.strip.corridor)
 (def seg {:y 64 :axis :x :line 0 :from 0 :to 12 :open-ends #{}})

@@ -1,8 +1,7 @@
 (ns engine.tidy-prepare-contract-test
   "jobs.farm.tidy and jobs.forestry.prepare as contract jobs: they export the contract and end with a kind and a cause
   (0 of N is never done; a partial run carries its counts)."
-  (:require [cljs.test :refer [deftest is async use-fixtures]]
-            [engine.lit-support :as lit]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -16,8 +15,6 @@
             [jobs.forestry.prepare :as prepare]
             [jobs.forestry.prepare-field :as field]
             [jobs.lib.look :as look]))
-
-(use-fixtures :once lit/fixture)
 
 (defn ^:async ending-of
   "Run job with args as a ctx/call child of a recording parent on eng, at most n ticks: the child's {:kind :cause :data}

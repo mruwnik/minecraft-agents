@@ -409,7 +409,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at (fn [c] (some-> (field/planned c) :trees keys first))))
+(def safe? (ready/safe-at-by-night (fn [c] (some-> (field/planned c) :trees keys first))))
 
 (def fit? ready/fit?)
 

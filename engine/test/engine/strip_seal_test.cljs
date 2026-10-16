@@ -1,12 +1,9 @@
 (ns engine.strip-seal-test
   "jobs.strip.seal: a 3x3 corridor cross-section blocked off from the base side, in the fake world."
-  (:require [cljs.test :refer [deftest is are async use-fixtures]]
-            [engine.lit-support :as lit]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.blocks-dig-test :as bd]
             [engine.test-util :as tu]
             [jobs.strip.seal :as seal]))
-
-(use-fixtures :once lit/fixture)
 
 (def job 'jobs.strip.seal)
 (def args {:at [0 64 0] :axis :x :side :from})

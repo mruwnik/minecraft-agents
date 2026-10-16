@@ -1,8 +1,7 @@
 (ns engine.fell-tree-test
   "jobs.forestry.fell-tree from a pillar: a trunk too tall to reach from the ground is felled from a pillar that is
   taken back (jobs.access.pillar, jobs.access.cleanup) before the job ends."
-  (:require [cljs.test :refer [deftest is async use-fixtures]]
-            [engine.lit-support :as lit]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -20,8 +19,6 @@
             [jobs.lib.trees :refer [axe-fetch-limits]]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]))
-
-(use-fixtures :once lit/fixture)
 
 (def tall {:blocks (lt/tree 6 0 "oak" 8) :inventory [{:name "dirt" :count 20}]})
 

@@ -61,7 +61,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at (fn [c] (a/cell (or (:at (:args c)) (:base (:args c)))))))
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (or (:at (:args c)) (:base (:args c)))))))
 
 (def fit? ready/fit?)
 

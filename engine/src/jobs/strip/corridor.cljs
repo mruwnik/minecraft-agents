@@ -35,7 +35,7 @@
   the rest outward from the :entry end, each with a carried tool of its kind (shears, axe, pickaxe). With no target left it
   walks to the far end (8 cells a step, so a spawner on the way is seen and lit) and looks round there, so crossings and new corridors come into view, then takes back the torches
   standing in the segment (the caller seals behind it).
-  It does not start (a skipped job) while the body is short of food (:food-short). Its safe? is ready/safe-at the end of the segment nearest :entry. A :segment that
+  It does not start (a skipped job) while the body is short of food (:food-short). Its safe? is ready/safe-at-by-night the end of the segment nearest :entry. A :segment that
   is neither a map nor a readable id is never possible (:bad-args).
   A spawner seen at any step stays in the result (the far end may be out of sight of it). A spawner follows :spawner: :light (default) hangs torches on the dark standable centre-line cells of the segment inside its
   spawn box (4 either side, 1 up or down; light 8), leaves the spawner and those torches, and lists it in :kept {:why :spawner :lit true};
@@ -280,7 +280,7 @@
           d (fn [v] (if entry (u/dist entry (cell v)) 0))]
       (cell (if (< (d to) (d from)) to from)))))
 
-(def safe? (ready/safe-at place))
+(def safe? (ready/safe-at-by-night place))
 
 (def fit? ready/fit?)
 

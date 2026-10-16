@@ -17,7 +17,7 @@
   (a jobs.storage.withdraw-entity child), then break it (a jobs.combat.attack child) and pick up what falls (a
   jobs.forestry.collect-drops child, radius 4 round the cart): the cart item, and the stacks the bag had no room for.
   The cart is :id (an entity id) or the nearest chest_minecart within :radius of :near (default the body). It starts
-  only when a cart is in sight (condition :gone; start only). Its safe? is ready/safe-at :near, else ready/safe-if-lit. A cart in
+  only when a cart is in sight (condition :gone; start only). Its safe? is ready/safe-at-by-night :near, else ready/safe-if-lit. A cart in
   another owner's zone or claim is refused (:ignore-zones? true skips that). Broken-and-gone carts are not looked for again:
   a restart re-reads the world and goes on from there.
   Ends :done {:collected n :items {name n}} (what came into the bag, counted from the inventory at the start), with :full true

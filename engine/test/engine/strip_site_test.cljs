@@ -3,8 +3,7 @@
   engine.strip-test (stem z-27-0:0..20 into x-27-20:-20..0 and x-27-20:0..20)."
   (:require [cljs.reader :as reader]
             [engine.contract :as contract]
-            [cljs.test :refer [deftest is async use-fixtures]]
-            [engine.lit-support :as lit]
+            [cljs.test :refer [deftest is async]]
             ["fs" :as fs]
             ["path" :as path]
             [engine.core :as core]
@@ -18,8 +17,6 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]))
-
-(use-fixtures :once lit/fixture)
 
 (def job 'jobs.strip.site)
 (def blueprint

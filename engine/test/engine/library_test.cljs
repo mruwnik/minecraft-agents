@@ -1,7 +1,6 @@
 (ns engine.library-test
   "The job and trigger library end to end against the fake world."
-  (:require [cljs.test :refer [deftest is are async use-fixtures]]
-            [engine.lit-support :as lit]
+  (:require [cljs.test :refer [deftest is are async]]
             ["fs" :as fs]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -20,8 +19,6 @@
             [jobs.lib.world-files :as ew]
             [jobs.movement.look-around :as look-around]
             [jobs.storage.deposit :as dep]))
-
-(use-fixtures :once lit/fixture)
 
 (defn setup
   ([world] (setup world (tu/tmp-dir)))
