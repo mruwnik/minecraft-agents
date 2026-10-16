@@ -291,10 +291,7 @@
                  (if (goal-of c)
                    (contract/all [(at c) (plug-hold c)])
                    (contract/ok :no-goal "no goal to judge")))
-      {:jobs.lib.ready/exposure (fn [c]
-                                  (if (sh/night? (:primitives c))
-                                    ((:jobs.lib.ready/exposure (meta at)) c)
-                                    (contract/ok :day "an unseen goal's light is no reason to wait by day")))})))
+      (meta at))))
 
 (def fit? ready/ok)
 

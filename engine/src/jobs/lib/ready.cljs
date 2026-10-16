@@ -67,9 +67,10 @@
   "The checker of a job that goes to the place (f c): at night above ground safe-at it, by day or underground only not
   threatened (an unseen place's light is no reason to wait, and darkness underground does not end at dawn)."
   [f]
-  (let [at (safe-at f)]
-    (with-meta (fn [c] (let [p (:primitives c)] (if (and (sh/night? p) (not (sh/buried? p))) (at c) (threatened c))))
-      (meta at))))
+  (let [at (safe-at f)
+        by-night? (fn [c] (let [p (:primitives c)] (and (sh/night? p) (not (sh/buried? p)))))]
+    (with-meta (fn [c] (if (by-night? c) (at c) (threatened c)))
+      {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))})))
 
 (def safe-at-chest
   "The checker of a job that goes to its chest (the :chest arg or the known :chest place)."
