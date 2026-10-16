@@ -186,12 +186,17 @@
         unseen? #(and far? (nil? (animals/find-by-key (:primitives c) (:mob (:args c)) (watch-radius) %)))]
     (into sensed (filter unseen?) (concat (:in-pen-start m) (:brought m)))))
 
+(defn pen-count-text
+  "\"2 of 3 in the pen\"; past the target, \"4 in the pen, 3 wanted\"."
+  [n target]
+  (if (> n target) (str n " in the pen, " target " wanted") (str n " of " target " in the pen")))
+
 (defn end-text
   "The ending text of the herd run: the count and why the others did not come."
   [c reason n]
   (let [{:keys [mob target radius]} (:args c)
         given-up (:given-up (ctx/mem c))]
-    (str "herd done: " (name reason) ", " n " of " target " in the pen"
+    (str "herd done: " (name reason) ", " (pen-count-text n target)
          (cond
            (seq given-up) (str " (given up: " (str/join ", " (map (fn [[k r]] (str k " " (name r))) given-up)) ")")
            (= :no-food reason) (str " (no " (str/join " or " (get animals/breeding-food mob)) " carried, none could be got)")

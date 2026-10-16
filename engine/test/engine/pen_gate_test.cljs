@@ -512,3 +512,8 @@
           (is (zero? (count (filter #(= :round_started (:kind %)) @(:seen s)))))
           (is (gate-open? (:p s) 2 64 0))
           (is (= :plan-trouble (:reason (last (filter #(= :waiting (:kind %)) @(:seen s)))))))))))
+
+(deftest shut-text-says-no-gate-open-instead-of-zero-shut
+  (are [n text] (= text (shut-gate/shut-text n))
+    0 "no gate open"
+    2 "2 gate(s) shut"))

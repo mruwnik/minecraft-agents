@@ -12,7 +12,7 @@
             [jobs.lib.cond :as cond]
             [jobs.animals.escort :as escort]
             [jobs.lib.watch :as watch]
-            [jobs.animals.herd-run :as hr :refer [adults after-shut! pen-box cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms transient-keys]]
+            [jobs.animals.herd-run :as hr :refer [adults after-shut! pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms transient-keys]]
             [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves min-depth on-gate? pen-refusal set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [food-first! leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
@@ -177,8 +177,8 @@
         data [:units :animals :done (count (:brought m)) :left (max 0 (- target inside))
               :result {:reason :brought :inside inside :target target}]]
     (if (and (nil? (:gate m)) (empty? (:led m)) (>= inside target))
-      (apply contract/ok :brought (str "herd done: " inside " of " target " in the pen") data)
-      (apply contract/later :herding (str inside " of " target " in the pen") data))))
+      (apply contract/ok :brought (str "herd done: " (pen-count-text inside target)) data)
+      (apply contract/later :herding (pen-count-text inside target) data))))
 
 (defn quote-of
   "Find-out: a minute an animal as the guess, no most."

@@ -87,6 +87,11 @@
     (let [done (into (set skip) (map :cell left))]
       (filterv #(= :unknown (hr/gate-state (:primitives c) %)) (remove done cells)))))
 
+(defn shut-text
+  "\"2 gate(s) shut\", or \"no gate open\" when this call shut none."
+  [shut]
+  (if (pos? shut) (str shut " gate(s) shut") "no gate open"))
+
 (defn nearest [c cells]
   (let [here (u/self-pos c)]
     (first (sort-by #(pg/distance here %) cells))))
@@ -96,7 +101,7 @@
   [c shut left]
   (let [result {:shut shut :left left}
         _ (ctx/update-mem! c assoc :shut shut)
-        text (str shut " gate(s) shut" (when (seq left) (str ", " (count left) " left open")))]
+        text (str (shut-text shut) (when (seq left) (str ", " (count left) " left open")))]
     (if (empty? left)
       (ctx/end c :done nil (assoc result :text text))
       (do (ctx/emit! c :shut-gate.stopped :warn (assoc result :text text))
@@ -203,7 +208,7 @@
         shut (:shut (ctx/mem c) 0)
         data [:units :gates :done shut :left (count open) :result {:shut shut :left []}]]
     (if (and (not trouble) (empty? open))
-      (apply contract/ok :shut (str shut " gate(s) shut") data)
+      (apply contract/ok :shut (shut-text shut) data)
       (apply contract/later :gates-open (str (count open) " gate(s) open") data))))
 
 (defn quote-of [_c]

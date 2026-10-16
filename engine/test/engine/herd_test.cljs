@@ -884,6 +884,10 @@
   (doseq [[before after escaped] [[3 3 0] [3 2 1] [2 0 2] [1 2 0]]]
     (is (= escaped (hr/escaped-count before after)) (str before " -> " after))))
 
+(deftest the-pen-count-text-never-reads-over-target-as-n-of-m
+  (doseq [[n target text] [[1 2 "1 of 2 in the pen"] [2 2 "2 of 2 in the pen"] [3 2 "3 in the pen, 2 wanted"]]]
+    (is (= text (hr/pen-count-text n target)))))
+
 (deftest a-cow-that-walks-out-through-the-open-gate-during-the-exit-is-counted-escaped
   (async done
     (tu/run-async done
