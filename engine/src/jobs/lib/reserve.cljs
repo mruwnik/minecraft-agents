@@ -75,7 +75,7 @@
         carried (carried-of inv)
         asked (concat (map (fn [[n k]] [n k 1]) (builtin c chooser inv carried))
                       (mapcat (fn [e] (map (fn [[n k]] [n k (:strength e 1)]) (units carried e)))
-                              (entries (ctx/view c))))]
+                              (remove #(zero? (:strength % 1)) (entries (ctx/view c)))))]
     (->> (group-by first asked)
          (mapcat (fn [[n rs]]
                    (loop [[[_ k s] & more] (sort-by #(- (nth % 2)) rs) left (carried n) out []]

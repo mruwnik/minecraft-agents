@@ -5,8 +5,7 @@
   caller's :fetch). `reserved` is the register's held units (jobs.lib.reserve) and a body's :choose/override entries {:chooser :tools :avoid [names] :prefer [names]}.
   (fillers-for c purpose amount) answers {:list [{:item name :count n}] :short n} the same way for the blocks a
   purpose places (:build :shelter :pillar :climb :cover :seal), in the purpose's order (common first). Zones judge cells, not items: the caller asks them for the cell it digs."
-  (:require [engine.ctx :as ctx]
-            [jobs.lib.blocks :as blocks]
+  (:require [jobs.lib.blocks :as blocks]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.reserve :as reserve]

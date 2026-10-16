@@ -10,11 +10,12 @@
 
 (defn body
   "A ctx holding items, with register entries (maps) at time 1000 and live job instances (ids)."
-  [items entries & {:keys [jobs]}]
+  [items entries & {:keys [jobs overrides]}]
   (let [add (fn [d kind data policy] (mem/add-entry d kind {:t 0 :data data} policy))
         data (as-> mem/empty-data d
                (reduce #(add %1 :reserve %2 reserve/policy) d entries)
-               (reduce #(add %1 (mem/job-kind %2) {} mem/job-policy) d jobs))]
+               (reduce #(add %1 (mem/job-kind %2) {} mem/job-policy) d jobs)
+               (reduce #(add %1 :choose/override %2 {:cap 20 :ttl :forever}) d overrides))]
     {:primitives (tu/fake {:inventory items}) :view (fn [] {:data data :now 1000})}))
 
 (deftest reserve-cost-is-value-times-odds
@@ -62,3 +63,26 @@
 
 (deftest a-strength-one-unit-is-never-for-sale
   (is (= ##Inf (reserve/price (body [(item "diamond" 3)] [{:item "diamond" :count 3 :strength 1}]) :tools "diamond" 1))))
+
+(deftest an-avoid-override-holds-its-names-for-its-chooser-only
+  (let [c (body [(item "diamond" 2)] [] :overrides [{:chooser :tools :avoid #{"diamond"}}])]
+    (is (= {"diamond" 2} (reserve/held c :tools)))
+    (is (= {} (reserve/held c :fillers)))))
+
+(deftest a-register-entry-on-a-built-in-name-does-not-add-to-it
+  (let [c (body [(item "golden_apple" 2)] [{:item "golden_apple" :count 1 :strength 0.5}])]
+    (is (= {"golden_apple" 2} (reserve/held c :tools)))
+    (is (= [{:name "golden_apple" :count 2 :strength 1}] (reserve/rows c :tools)))))
+
+(deftest a-missing-or-all-count-holds-everything-carried
+  (are [entry] (= {"diamond" 4} (reserve/held (body [(item "diamond" 4)] [(merge {:item "diamond"} entry)]) :tools))
+    {}
+    {:count :all}))
+
+(deftest a-built-in-unit-is-never-for-sale
+  (is (= ##Inf (reserve/price (body [(item "golden_apple" 2)] []) :tools "golden_apple" 1))))
+
+(deftest a-strength-zero-entry-is-free
+  (let [c (body [(item "diamond" 3)] [{:item "diamond" :count 3 :strength 0}])]
+    (is (= {} (reserve/held c :tools)))
+    (is (= 0 (reserve/price c :tools "diamond" 3)))))
