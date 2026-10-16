@@ -1,5 +1,5 @@
 ;; Card e7945a33: start-only conditions are checked once, at the start. A hunt whose body is hurt below the risky-job health floor while the walk
-;; to the cow goes on waits :low-health (it is a wait, the call goes on); it never ends condition-failed. Cow NoAI 16 blocks off.
+;; to the cow goes on waits :low-health (it is a wait, the call goes on); it never ends condition-failed. Cow NoAI 22 blocks off.
 ;; Should-succeed: waiting :low-health, then the job is still listed and later completes or is still waiting. Should-fail: no stopped event.
 {:defaults
  {:tags [:animals :hunt :conditions]
