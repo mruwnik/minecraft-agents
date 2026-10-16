@@ -6,7 +6,6 @@
             [jobs.lib.cond :as cond]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.blocks :as blocks]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
             [jobs.lib.access :as access]
@@ -14,7 +13,6 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.world :as known]))
@@ -401,13 +399,17 @@
       (fail-plant! c pos :unreachable))
     :again))
 
+(defn plant-args
+  "The args of the plant-sapling child for the cell at pos."
+  [c pos species]
+  (cond-> {:at pos :species species :for-plan (:plan (:args c))
+           :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+    (some? (:fetch (:args c))) (assoc :fetch (:fetch (:args c)))))
+
 (defn ^:async fetch-plant!
   "Plant at pos with jobs.forestry.plant-sapling, which fetches the sapling it lacks. :again, :continue while it waits."
   [c pos species]
-  (let [e (await (ctx/call c :plant 'jobs.forestry.plant-sapling
-                           (cond-> {:at pos :species species :for-plan (:plan (:args c))
-                                    :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                             (some? (:fetch (:args c))) (assoc :fetch (:fetch (:args c))))))]
+  (let [e (await (ctx/call c :plant 'jobs.forestry.plant-sapling (plant-args c pos species)))]
     (cond
       (= :continue e) :continue
       (= (forestry/sapling-of species) (u/seen-name (:primitives c) pos))
@@ -418,37 +420,18 @@
 
 (defn ^:async plant!
   "Step 3: plant at the nearest owed cell, those with the sapling carried first and the cells under the body last
-  (walking off one when it is the only one); a cell without its sapling is planted by a fetching child. :again,
-  :continue while the walk waits, or nil."
+  (walking off one when it is the only one), with a jobs.forestry.plant-sapling child. :again, :continue while the
+  child waits, or nil."
   [c classes]
   (let [under (body-cells c)
         have (u/carried-names (:primitives c))
         owed (sort-by #(vector (not (have (forestry/sapling-of (:species %)))) (contains? under (cell-vec (:pos %))))
                       (plantable c (owed-cells c classes)))]
     (when-let [{:keys [pos species]} (first owed)]
-      (let [item (forestry/sapling-of species)
-            fetch? (not (have item))
-            w (if fetch? :near (await (near/go-near! c pos 3 {:zone-tolls true})))]
-        (cond
-          (= :partial w) :continue
-          (= :blocked w) (do (fail-plant! c pos :unreachable) :again)
-          (contains? under (cell-vec pos)) (await (step-off! c pos))
-          :else
-          (if-let [why (place-refusal c pos)]
-            (do (leave! c pos :refused :why why)
-                :again)
-            (if fetch?
-              (await (fetch-plant! c pos species))
-              (let [outcome (await (blocks/place-cell! c pos item {:for-plan (:plan (:args c))
-                                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-                (case outcome
-                  :continue :continue
-                  (:placed :already) (do (ctx/update-mem! c bump :planted)
-                                         (ctx/forget-where! c forestry/replant-kind #(= pos (:pos %)))
-                                         :again)
-                  (:no-item :occupied) (do (fail-plant! c pos outcome) :again)
-                  :need (do (fail-plant! c pos :no-item) :again)
-                  (do (fail-plant! c pos :failed) :again))))))))))
+      (cond
+        (contains? under (cell-vec pos)) (await (step-off! c pos))
+        (place-refusal c pos) (do (leave! c pos :refused :why (place-refusal c pos)) :again)
+        :else (await (fetch-plant! c pos species))))))
 
 (defn finish!
   "Step 5: say what was done and end: done when it felled or planted, else nothing-possible :left or condition-failed."

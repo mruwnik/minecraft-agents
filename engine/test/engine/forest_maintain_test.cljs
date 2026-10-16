@@ -203,14 +203,14 @@
           (is (= {:felled 1 :planted 1 :left [] :bare []} (dissoc result :status :text)))
           (is (= [] (lt/debts eng)) "fell-tree's replant debt is cleared by the planting"))))))
 
-(deftest every-sapling-goes-in-through-the-place-job
+(deftest every-sapling-goes-in-through-the-plant-sapling-job
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start oak-world {"forest" oak-cell})]
           (await (tu/child-outcome eng job {:plan "forest"} 200))
           (is (= 1 (count (places p))))
-          (is (= 1 (count (ce/ends seen :placed)))))))))
+          (is (= {:x 3 :y 64 :z 0} (last (keep #(:pos (ce/data %)) (filter (comp #{:child_ended} :kind) @seen)))) "the plant-sapling child ended last, with the cell"))))))
 
 (deftest a-large-planned-tree-is-felled-and-replanted-cell-by-cell
   (async done
@@ -502,7 +502,7 @@
             (core/submit! (:eng s) (list job {:plan "forest"}) {})
             (await (ticks (:eng s) 6))
             (is (= 3 (count (places (:p s)))) status)
-            (is (= [{:pos {:x 3 :y 64 :z 0} :reason (keyword status)}] (warns (:seen s) :forest.left)) status)))))))
+            (is (= [{:pos {:x 3 :y 64 :z 0} :reason :no-sapling}] (map #(select-keys % [:pos :reason]) (warns (:seen s) :forest.left))) status)))))))
 
 ;; ------------------------------------------------------------------ restart
 
@@ -565,6 +565,12 @@
 (deftest maintain-hands-its-accept-to-the-fell-child
   (is (= #{:falling-block}
          (:accept (maintain/fell-args {:args {:accept #{:falling-block}}} {:x 3 :y 64 :z 0} "oak")))))
+
+(deftest maintain-plants-through-the-plant-sapling-child-with-its-plan-zones-and-fetch
+  (is (= {:at {:x 3 :y 64 :z 0} :species "oak" :for-plan "forest" :ignore-zones? true :fetch false}
+         (maintain/plant-args {:args {:plan "forest" :ignore-zones? true :fetch false}} {:x 3 :y 64 :z 0} "oak")))
+  (is (= {:at {:x 3 :y 64 :z 0} :species "oak" :for-plan "forest" :ignore-zones? false}
+         (maintain/plant-args {:args {:plan "forest"}} {:x 3 :y 64 :z 0} "oak"))))
 
 (deftest maintain-fells-a-tall-tree-from-a-pillar-unless-told-not-to
   (is (false? (maintain/too-tall? {:args {:max-logs 6 :pillar? true}} (range 9))))
