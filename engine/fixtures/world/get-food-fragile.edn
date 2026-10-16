@@ -1,5 +1,6 @@
 ;; survival.get-food and the :hungry trigger at hp 2 (fragile: health 6 or less) with no food carried: it walks out only on a calm
 ;; day (not at night, past the dawn grace, no hostile known within 40) and never past a known hostile that would likely kill it.
+;; The body faces east (yaw 270): the creepers are summoned east of it and a silent one is seen only in its view cone.
 ;; Hunger is drained by RCON (food 9-10), then `damage` sets hp 2.
 ;; Should-succeed: a calm day, a known chest of bread 24 blocks off: walked to and eaten from; raw beef is cooked at a known furnace
 ;; 24 blocks off.
@@ -12,7 +13,7 @@
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
              {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
-  :body {:at [4.5 0 16.5] :settle-s 2}
+  :body {:at [4.5 0 16.5] :yaw 270 :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
         [:rcon "damage $BODY 18 minecraft:generic"]]
   :limit-s 90}
