@@ -1136,6 +1136,16 @@
               e (done-event s)]
           (is (not (and (= :no-gate (:reason e)) (= :no-approach (:why e)))) (pr-str e)))))))
 
+(deftest a-floor-outside-the-gate-hidden-behind-a-rise-is-walked-to-not-given-up-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [rise (into {} (for [x (range -10 7) z (range -10 16) y [64]] [(str x "," y "," z) "dirt"]))
+              s (submit! (clock-on-wait! (h/setup-seeing (world {:self {:pos {:x 2 :y 65 :z 3}} :blocks rise :entities [(cow 1 3 3 {:pos {:x 3 :y 65 :z 3}})]}) nil)) {:target 1})
+              _ (await (run-ticks s 60))
+              e (done-event s)]
+          (is (not= :no-gate (:reason e)) (pr-str (select-keys e [:reason :cause :text]))))))))
+
 (deftest no-food-is-not-a-reason-to-decline
   (async done
     (tu/run-async done

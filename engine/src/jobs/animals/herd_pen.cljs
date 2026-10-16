@@ -299,6 +299,10 @@
          (filter #(sense/unknown? (:primitives c) %))
          first)))
 
+(def max-approach-walks "Walks nearer to an approach cell hidden from the body (behind a rise) before the pen is judged without it." 3)
+
+(defn centre [[x y z]] {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)})
+
 (defn ^:async survey-pen!
   "The pen is read in full: choose the gate and go to the leash phase, or end with the reason. An approach cell never
   seen is looked at first."
@@ -307,6 +311,10 @@
         {:keys [gate in out]} chosen
         unseen (when refuse (unseen-approach c extra))]
     (cond
+      (and unseen (not (u/within? (u/self-pos c) (centre unseen) (look-range))) (< (:approach-walks (ctx/mem c) 0) max-approach-walks))
+      (do (ctx/update-mem! c update :approach-walks (fnil inc 0))
+          (await (near/go-near! c (centre unseen) (look-range) {:doors :never :ways #{:walk :clear-seal}}))
+          :continue)
       unseen
       (do (await (sense/look-at! c unseen))
           (ctx/update-mem! c update :looked-pen (fnil conj []) unseen)
