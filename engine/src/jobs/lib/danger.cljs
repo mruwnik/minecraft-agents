@@ -145,6 +145,18 @@
 
 (def swell-range "Blocks within which a creeper swells and its blast reaches." 7)
 
+(defn open-cell-from
+  "The cell [x y z] of a heard mob's rough spot (mob-pos) when it is not rock; else the first non-solid cell outward from the body
+  along the same line, up to half obs/near-band beyond it; nil when the line is rock to there (no mob stands in rock)."
+  [kind-at body-pos rough]
+  (let [dx (- (:x rough) (:x body-pos)) dz (- (:z rough) (:z body-pos))
+        len (js/Math.hypot dx dz)
+        cell-at (fn [d] (reach/cell-of (assoc rough :x (+ (:x body-pos) (* d (/ dx len))) :z (+ (:z body-pos) (* d (/ dz len))))))
+        open? (fn [[x y z]] (not (keyword-identical? :solid (kind-at x y z))))]
+    (if (zero? len)
+      (reach/cell-of rough)
+      (->> (range len (+ len (/ obs/near-band 2) 1) 1) (map cell-at) (filter open?) first))))
+
 (defn danger-in?
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
   :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own.
@@ -169,12 +181,13 @@
      :else
      (and (or (seen-mob? e) (not sight?))
           (or (not way?)
-              (let [mob (reach/cell-of (mob-pos p e))
-                    from (u/pos-of (.-pos (.self p)))
-                    body (reach/cell-of from)]
+              (let [from (u/pos-of (.-pos (.self p)))
+                    body (reach/cell-of from)
+                    mob (if (seen-only? e) (reach/cell-of (mob-pos p e)) (open-cell-from kind-at from (mob-pos p e)))]
                 (or (and (heard-close? p e)
                          (beside-toward? kind-at body (:direction (obs/rough-hearing from (u/pos-of (.-pos e))))))
-                    (and (or (seen-only? e) (not sight?) (not (closed-quarters? kind-at body)))
+                    (and mob
+                         (or (seen-only? e) (not sight?) (not (closed-quarters? kind-at body)))
                          (if pr (proofs/proved-way? kind-at pr mob body) (reach/way? kind-at mob body))))))))))
 
 (defn danger?

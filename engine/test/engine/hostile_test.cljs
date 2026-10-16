@@ -360,6 +360,22 @@
               (await (core/tick! eng))
               (is (= decision (:decision (first (hostile-entries eng)))) why))))))))
 
+(def wide-room
+  "A 7x7 room around the body (interior -3..3), walls to y 66, roof at y 67, floor at y 63: too wide for closed quarters."
+  (into {} (for [x (range -4 5) z (range -4 5) y (range 63 68)
+                 :let [wall? (or (= 4 (Math/abs x)) (= 4 (Math/abs z)))]
+                 :when (or wall? (= y 63) (= y 67))]
+             [(str x "," y "," z) "stone"])))
+
+(deftest a-zombie-heard-behind-the-wall-of-a-roofed-room-is-no-danger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [time [1000 14000]]
+          (let [{:keys [p]} (setup-seeing {:time time :blocks wide-room :self {:health 20} :entities [(zombie 8 0)]} nil 1000)]
+            (perception/pass! (aget p "perception"))
+            (is (not (danger-q/danger-near? p 8 16 {})) (str "heard through the wall at time " time))))))))
+
 (deftest a-roofed-body-at-night-stays-in-for-a-phantom-it-sees-but-not-for-a-seen-zombie
   (are [entity stays?] (= stays? (let [p (tu/fake {:time 14000 :blocks breached-room :entities [entity]})]
                                    (respond-to-hostile/stay-under-roof? {:primitives p :args {:stay-inside true}}
