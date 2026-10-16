@@ -128,13 +128,14 @@
           (is (empty? (calls s "inspectContainer")))
           (is (true? (finished? s))))))))
 
-(deftest a-safe-apiary-with-nothing-ripe-declines-and-nothing-moves
+(deftest a-safe-apiary-with-nothing-ripe-is-done-already-and-nothing-moves
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [carpeted (-> (world {:inventory kit :level 2}) (update :blocks assoc "2,65,0" "white_carpet"))
               s (await (scenario {} carpeted 10))]
-          (is (nil? (done-event s)))
+          (is (= :already (:cause (done-event s))))
+          (is (= {:skipped :not-ripe} (step s :harvest)))
           (is (empty? (calls s "moveTo")))
           (is (empty? (calls s "place")))
           (is (empty? (calls s "useOn"))))))))
@@ -229,7 +230,7 @@
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (nil? (done-event s))))))))
 
-(deftest a-body-that-sees-nothing-even-after-looking-waits-with-its-reason
+(deftest a-body-that-sees-nothing-even-after-looking-finds-the-apiary-in-order
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -238,8 +239,7 @@
           (core/submit! (:eng s) (spec {:fetch false}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 10 700))
           (is (= 12 (count (calls s "look"))) "one look around, not one per run")
-          (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
-          (is (nil? (done-event s))))))))
+          (is (= :already (:cause (done-event s)))))))))
 
 (deftest a-fully-seen-idle-apiary-does-not-look
   (async done
@@ -325,3 +325,19 @@
     (is (= :no-tool (:skip (maintain/decide :harvest {:fetch #{:item}} facts))))
     (is (some? (:call (maintain/decide :breed {:target 4 :fetch #{:item}} facts))))
     (is (some? (:call (maintain/decide :harvest {:fetch #{:tool}} facts))))))
+
+(def tidy-facts
+  {:fires {:fires 1 :todo [] :left {}} :hives {:ripe 0 :todo [] :declined {}} :unsafe []
+   :tool nil :bees 4 :adults 2 :day true :raining false :flower nil :stored [] :reach 5})
+
+(deftest the-apiary-is-in-order-only-when-every-steps-part-of-the-goal-holds
+  (doseq [[args facts in-order?] [[{:target 4} tidy-facts true]
+                                  [{} tidy-facts true]
+                                  [{:target 6} tidy-facts false]
+                                  [{:target 6} (assoc tidy-facts :day false) false]
+                                  [{} (assoc tidy-facts :hives {:ripe 1 :todo [1] :declined {}}) false]
+                                  [{} (assoc tidy-facts :unsafe [[2 64 0]] :hives {:ripe 1 :todo [] :declined {}}) false]
+                                  [{} (assoc-in tidy-facts [:fires :todo] [[2 64 0]]) false]
+                                  [{:chest {:x 8 :y 64 :z 0}} (assoc tidy-facts :stored ["honeycomb"]) false]
+                                  [{:chest {:x 8 :y 64 :z 0}} tidy-facts true]]]
+    (is (= in-order? (maintain/in-order? args facts)) (pr-str args (select-keys facts [:day :hives :unsafe :stored])))))

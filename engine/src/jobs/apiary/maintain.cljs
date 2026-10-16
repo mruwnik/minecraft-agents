@@ -278,12 +278,39 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 
+(def in-order
+  "The skips that mean a step's part of the goal holds."
+  {:guard #{:safe :no-fire} :harvest #{:not-ripe} :breed #{:no-target :at-target} :deposit #{:no-chest :nothing-to-store}})
+
+(defn in-order?
+  "Whether every step's part of the goal holds over the facts: its decision is a skip that says so."
+  [args facts]
+  (every? #(contains? (in-order %) (:skip (decide % args facts))) steps))
+
+(defn report-of
+  "The report so far with the steps not reached booked as the skip that holds them."
+  [c facts]
+  (let [report (or (:report (ctx/mem c)) {})]
+    (into report (for [st steps :when (not (contains? report st))] [st {:skipped (:skip (decide st (:args c) facts))}]))))
+
 (defn done?
-  "Later with the steps run and left: which steps remain is decided from the facts at each step, so the pass ends
-  itself."
+  "Ok when the apiary is in order, wrap-up included (no fire unsafe or lacking a carpet, nothing ripe, bees at :target
+  or none wanted, nothing to store); before the start that is done :already. Part of the area never seen is looked at
+  first. Else later with the steps run and left."
   [c]
-  (let [ran (count (filter ran? (vals (:report (ctx/mem c)))))]
-    (contract/later :steps (str ran " steps run") :units :steps :done ran :left (count (:todo (ctx/mem c))))))
+  (let [ran (count (filter ran? (vals (:report (ctx/mem c)))))
+        left (count (:todo (ctx/mem c)))
+        facts (facts c)]
+    (cond
+      (not (in-order? (:args c) facts))
+      (contract/later :steps (str ran " steps run") :units :steps :done ran :left left)
+
+      (and (look/unseen? (:primitives c) (apiary/watched-cells c)) (not (look/surveyed? c :near)))
+      (contract/look :unseen "part of the apiary was never seen")
+
+      :else
+      (contract/ok :in-order "the apiary is in order" :units :steps :done ran :left 0
+                   :result {:target (:target (:args c)) :bees (:bees facts) :steps (report-of c facts)}))))
 
 (defn quote-of [_c]
   {:uses {:job-time [1 60 (settings/get settings ::job-time-s)]}})
