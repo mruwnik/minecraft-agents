@@ -10,6 +10,7 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.choose :as choose]
             [jobs.lib.need :as need]
+            [jobs.lib.pace :as pace]
             [jobs.lib.placement :as placement]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
@@ -218,10 +219,8 @@
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::max-walks {:default 2 :doc "Failed walks of one call before it ends :unreachable." :spec (a/int-in 0 nil)}
-   ::max-steps {:default 12 :doc "Walks, clears and fetches of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+   ::max-walks {:default 2 :doc "Failed walks of one call before it ends :unreachable." :spec (a/int-in 0 nil)}})
 (defn max-walks [] (settings/get settings ::max-walks))
-(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn unreachable
   "The nothing-possible :unreachable ending, why a keyword."
@@ -246,42 +245,41 @@
       (ctx/end c :condition-failed w))))
 
 (defn ^:async attempt!
-  "The whole place: fetch the item if due, clear a plant, walk into reach, place. A walk that fails or leaves the cell
-  out of reach is tried once more, then the call ends :unreachable."
-  [c pos items]
-  (loop [fails 0 steps 0]
-    (let [_ (await (b/see-target! c pos))
-          block (b/target-name (:primitives c) pos "air")
-          full (occupied-by c pos items)
-          already (some #{block} items)
-          lacking? (and (not full) (not already) (nil? (b/chosen c items)))
-          fetched (when (and lacking? (fetching? c) (< steps (max-steps))) (await (fetch! c items)))]
-      (cond
-        full (stop! c :condition-failed {:placed false :pos pos :item (first items) :reason :occupied :block full})
-        already (finish! c :done nil {:placed false :pos pos :item block :reason :already})
-        (>= steps (max-steps)) :continue
-        (= :done fetched) (recur fails (inc steps))
-        fetched fetched
-        (clears? c block)
-        (let [w (await (clear! c pos items))]
-          (if (= :cleared w) (recur fails (inc steps)) w))
-        (not (b/in-reach? c pos))
-        (let [w (await (b/walk!* c pos))]
-          (cond
-            (= :continue w) :continue
-            (= :arrived w) (recur fails (inc steps))
-            (>= (inc fails) (max-walks)) (unreachable c pos items (or (get-in w [:data :why]) (contract/cause-key w)))
-            :else (recur (inc fails) (inc steps))))
-        lacking? (finish! c :condition-failed (assoc (needs c items) :reason :need :pos pos)
-                          {:placed false :pos pos :item (first items) :reason :need})
-        :else
-        (or (refusal c)
-            (let [d (await (place! c pos items))]
-              (if (= :unreachable d)
-                (unreachable c pos items :out-of-reach)
-                d)))))))
+  "One step of the place: fetch the item if due, clear a plant, walk into reach, or place. A walk that fails or leaves
+  the cell out of reach is tried once more, then the call ends :unreachable. :again, :continue or the ending."
+  [c pos items fails]
+  (let [_ (await (b/see-target! c pos))
+        block (b/target-name (:primitives c) pos "air")
+        full (occupied-by c pos items)
+        already (some #{block} items)
+        lacking? (and (not full) (not already) (nil? (b/chosen c items)))
+        fetched (when (and lacking? (fetching? c)) (await (fetch! c items)))]
+    (cond
+      full (stop! c :condition-failed {:placed false :pos pos :item (first items) :reason :occupied :block full})
+      already (finish! c :done nil {:placed false :pos pos :item block :reason :already})
+      (= :done fetched) :again
+      fetched fetched
+      (clears? c block)
+      (let [w (await (clear! c pos items))]
+        (if (= :cleared w) :again w))
+      (not (b/in-reach? c pos))
+      (let [w (await (b/walk!* c pos))]
+        (cond
+          (= :continue w) :continue
+          (= :arrived w) :again
+          (>= (inc @fails) (max-walks)) (unreachable c pos items (or (get-in w [:data :why]) (contract/cause-key w)))
+          :else (do (swap! fails inc) :again)))
+      lacking? (finish! c :condition-failed (assoc (needs c items) :reason :need :pos pos)
+                        {:placed false :pos pos :item (first items) :reason :need})
+      :else
+      (or (refusal c)
+          (let [d (await (place! c pos items))]
+            (if (= :unreachable d)
+              (unreachable c pos items :out-of-reach)
+              d))))))
 
 (defn ^:async round [c]
   (let [{:keys [pos items]} (parse c)]
     (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
-    (await (attempt! c pos items))))
+    (let [fails (atom 0)]
+      (await (pace/steps! c #(attempt! c pos items fails))))))

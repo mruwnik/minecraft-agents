@@ -1,11 +1,11 @@
 (ns jobs.blocks.fill-cells
-  (:require [engine.settings :as settings]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
             [jobs.lib.look :refer [cell-of]]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
 
@@ -14,8 +14,8 @@
   carried building blocks, in that order). The caller has judged the cells (zones, claims); the job does not ask the rules
   again. Per step: the lowest cell that is not the body's feet or head (then the nearest) is walked to within :reach (one
   go-near child) and placed by a jobs.blocks.place child (:fetch false, :ignore-zones? true); when only the feet or head
-  cell is left, the body jump-places. Cells that no longer read air or water are done. A run of more than :max-steps
-  steps yields :continue and resumes.
+  cell is left, the body jump-places. Cells that no longer read air or water are done. It yields :continue only
+  when a child waits on the world.
 
   Needs the blocks carried; it fetches none. Condition, at the start only: {:reason :need :any-of [names]} when cells are
   owed and none of the blocks is carried.
@@ -32,9 +32,7 @@
    :max-failures {:doc "failed steps in a row before the job ends nothing-possible" :spec (a/int-in 1 nil) :default 6}})
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::max-steps {:default 40 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 1 nil)}})
-(defn max-steps [] (settings/get settings ::max-steps))
+  {::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def target [:cells])
 
@@ -102,6 +100,12 @@
 
 (def can-start? need)
 
+(defn enough?
+  "Whether no cell is left or the mended cells reach the call's :least."
+  [c]
+  (let [least (:least (ctx/frozen-call c) :all)]
+    (or (empty? (owed c)) (and (number? least) (>= (:mended (ctx/mem c) 0) least)))))
+
 (defn done?
   "Ok when no cell is owed; else later, with the cells mended and the cells left."
   [c]
@@ -118,32 +122,32 @@
      :done [0 n n]}))
 
 (defn finish!
-  "The ending: done when nothing is left or the mended cells reach :least, else kind and cause."
+  "The ending: done when enough is mended, else kind and cause."
   [c kind cause]
   (let [{:keys [mended]} (ctx/mem c)
-        mended (or mended 0)
-        left (owed c)
-        least (:least (ctx/frozen-call c) :all)
-        enough? (or (empty? left) (and (number? least) (>= mended least)))]
-    (if enough?
-      (ctx/end c :done nil {:mended mended :left left})
-      (ctx/end c kind cause {:mended mended :left left}))))
+        data {:mended (or mended 0) :left (owed c)}]
+    (if (enough? c)
+      (ctx/end c :done nil data)
+      (ctx/end c kind cause data))))
+
+(defn ^:async step!
+  "One cell: :again after it, :continue when the place child waits, or the ending."
+  [c]
+  (let [{:keys [failures]} (ctx/mem c)
+        names (wanted c)
+        cells (owed c)
+        item (when (seq cells) (blocks/pick c names))
+        pos (next-cell c cells)]
+    (cond
+      (empty? cells) (finish! c nil nil)
+      (>= (or failures 0) (:max-failures (:args c))) (finish! c :nothing-possible {:reason :failed})
+      (nil? item) (finish! c :condition-failed {:reason :need :any-of names})
+      :else
+      (let [r (if pos (await (place! c pos item)) (await (raise! c item)))]
+        (case r
+          :partial :continue
+          :placed (do (ctx/update-mem! c #(cond-> (update % :mended (fnil inc 0)) pos (assoc :failures 0))) :again)
+          (do (bump! c :failures) :again))))))
 
 (defn ^:async round [c]
-  (loop [steps 0]
-    (let [{:keys [failures]} (ctx/mem c)
-          names (wanted c)
-          cells (owed c)
-          item (when (seq cells) (blocks/pick c names))
-          pos (next-cell c cells)]
-      (cond
-        (empty? cells) (finish! c nil nil)
-        (>= (or failures 0) (:max-failures (:args c))) (finish! c :nothing-possible {:reason :failed})
-        (nil? item) (finish! c :condition-failed {:reason :need :any-of names})
-        (or (>= steps (max-steps)) (not (ctx/alive? c))) :continue
-        :else
-        (let [r (if pos (await (place! c pos item)) (await (raise! c item)))]
-          (case r
-            :partial :continue
-            :placed (do (ctx/update-mem! c #(cond-> (update % :mended (fnil inc 0)) pos (assoc :failures 0))) (recur (inc steps)))
-            (do (bump! c :failures) (recur (inc steps)))))))))
+  (await (pace/steps! c #(step! c))))

@@ -7,6 +7,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [engine.settings :as settings]
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [box]]
             [jobs.blocks.place :as place]
@@ -234,6 +235,14 @@
         (let [env (bd/setup {:self body :inventory cobble})]
           (is (await (bd/ended-in-one-tick? env (list job {:pos [12 64 0] :item "cobblestone"}))))
           (is (= "cobblestone" (bd/block-at (:p env) {:x 12 :y 64 :z 0}))))))))
+
+(deftest a-place-never-gives-the-round-back-for-its-step-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory cobble})]
+          (is (await (settings/with-settings {:jobs.blocks.place/max-steps 1}
+                       #(bd/ended-in-one-tick? env (list job {:pos [12 64 0] :item "cobblestone"}))))))))))
 
 (deftest a-walk-that-fails-twice-in-one-call-ends-unreachable
   (async done
