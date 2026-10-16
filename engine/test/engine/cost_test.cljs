@@ -2,6 +2,8 @@
   "jobs.lib.cost: one armour formula (vanilla's) under every calculator: fight cost, mob threat and the planner's rate."
   (:require [cljs.test :refer [deftest is are]]
             [engine.settings :as settings]
+            [engine.shelter-support :as st]
+            [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.survival.retreat :as retreat]))
 
@@ -211,3 +213,16 @@
         one (cost/spawn-chance [0 0 0])]
     (is (= (/ one 2) (cost/spawn-chance #{[0 0 0] [1 0 0]} {:light light})))
     (is (= (/ one 2) (cost/spawn-chance {:min [0 0 0] :max [1 0 0]} {:light light})))))
+
+(def open-night-chance (cost/spawn-chance [0 0 0] {:light (fn [_] {:block 0 :sky 15}) :night? true}))
+
+(deftest exposure-of-a-walk-out-of-shelter-is-the-open-sky-night-figure-lowered-by-dawn
+  (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone" "15,67,0" "stone"}})]
+    (is (= {:chance open-night-chance :lowered-by #{:dawn}} (cost/exposure p {:x 0 :y 64 :z 0} {:x 15 :y 64 :z 0})))))
+
+(deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end
+  (let [night (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}})
+        day (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}})]
+    (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{}} (cost/exposure day {:x 0 :y 64 :z 0} {:x 15 :y 64 :z 0}))
+        "an unseen cell by day is dark: only light lowers that, not dawn")
+    (is (= #{} (:lowered-by (cost/exposure night {:x 0 :y 64 :z 0} {:x 15 :y 64 :z 0}))) "an unseen cell is dark by day too: dawn changes nothing")))

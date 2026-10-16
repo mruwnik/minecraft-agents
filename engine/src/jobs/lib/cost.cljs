@@ -16,7 +16,8 @@
     value    item-value, reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth: a tour of
              frontiers against what its goal is worth; light-cost: a torch go-to places; dig-cost: the seconds a block takes to dig (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; spawn-chance: the chance a mob spawns at a cell or
-             over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark).
+             over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark); exposure: the chance a walk meets and
+             what lowers it ({:chance :lowered-by #{:dawn}}).
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; swim-profile: its swimH from Depth Strider on the boots; swim-factor: a swim block in walk blocks (a flight's water price); gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner).
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort
              (jobs.lib.cost.tolls).
@@ -32,6 +33,7 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.tolls :as tolls]
             [jobs.lib.cost.weapon :as weapon]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.cost.value :as value]))
 
 (def equipment-of armour/equipment-of)
@@ -105,6 +107,22 @@
 (def light-cost value/light-cost)
 (def per-danger value/per-danger)
 (def spawn-chance value/spawn-chance)
+
+(defn exposure
+  "{:chance :lowered-by} of the walk of p from `from` to `to` ({:x :y :z}): the mob spawn chance per second it meets and
+  what lowers it, data the readiness checks read (empty: nothing foreseeable does, so never). A walk that leaves shelter
+  (sh/walk-leaves-shelter?) meets the open-sky night figure, any other the spawn-chance at `to` from the light p has seen;
+  :dawn lowers a chance that night alone puts there. Lava and the like are not spawn chance. A crude stub."
+  [p _from to]
+  (let [cell [(:x to) (:y to) (:z to)]
+        seen (fn [c] (let [[x y z] c
+                           at {:x x :y y :z z}]
+                       (when-let [block (sh/block-light-at p at)] {:block block :sky (or (sh/sky-light-at p at) 0)})))
+        open-sky (fn [_] {:block 0 :sky 15})
+        [light night?] (if (sh/walk-leaves-shelter? p nil to 1) [open-sky true] [seen (sh/night? p)])
+        chance (spawn-chance cell {:light light :night? night?})]
+    {:chance chance
+     :lowered-by (if (and night? (> chance (spawn-chance cell {:light light :night? false}))) #{:dawn} #{})}))
 (defn per-dark [] (value/per-dark))
 (defn dark-factor ([] (value/dark-factor)) ([kit] (value/dark-factor kit)))
 
