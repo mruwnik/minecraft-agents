@@ -1,5 +1,6 @@
 (ns jobs.survival.plug-in
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -39,6 +40,10 @@
 (def target [])
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :ways #{:walls :pit :pocket}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 (def ways [:walls :pit :pocket])
 

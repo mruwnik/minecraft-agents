@@ -1,5 +1,6 @@
 (ns jobs.survival.retreat
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -145,6 +146,10 @@
 (def target [])
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 
 (defn done?

@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-in
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
             [jobs.lib.pen-gate :as pen-gate]
@@ -154,6 +155,10 @@
 (def target [])
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 
 (defn done?
