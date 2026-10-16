@@ -52,11 +52,24 @@
 (deftest a-plan-restricts-to-its-named-cases-and-a-fixture-name-takes-all
   (is (= #{"b/w" "b/e" "b/f" "b/g" "a/x"} (set (map :id (:cases (first (:cards report))))))))
 
-(deftest tickable-cards-need-all-named-cases-passing
+(deftest tickable-cards-need-all-named-cases-passing-flaky-is-not-a-pass
   (let [r (t/triage {:results [(ok "a/x") (ok "b/w") {:id "b/f" :file "b" :status :flaky}]
                      :previous [] :cards [(first board) {:id "c9" :column "live" :commits [] :description "live: b/w, b/f"}]
                      :ancestor? (constantly true)})]
-    (is (= ["c1" "c9"] (:tick r)))))
+    (is (= [] (:tick r)))
+    (is (= ["c1" "c9"] (:hold r)))))
+
+(def bug-description
+  "found 2 failing case(s) in fixture f.\n\n- f/one (day pass, fail)\n  first failing check: x\n  trace: /t/f__one.edn\n- f/two (day pass, fail)\n  first failing check: y\n\nGrouped per fixture.")
+
+(defn bug-card [notes] {:id "bug" :column "live" :commits [] :description bug-description :plan-notes notes})
+
+(deftest a-bug-card-ticks-only-when-all-cases-of-its-description-passed
+  (let [run (fn [results] (t/triage {:results results :previous [] :cards [(bug-card ["Live plan (cases):\nf/one"])]
+                                     :ancestor? (constantly true) :fixture-files #{"f"}}))]
+    (is (= {:tick [] :pending ["bug"]} (select-keys (run [(ok "f/one") (fail "f/two" {:event 1})]) [:tick :pending])))
+    (is (= [] (:tick (run [(ok "f/one")]))))
+    (is (= ["bug"] (:tick (run [(ok "f/one") (ok "f/two")]))))))
 
 (deftest new-failures-list-their-cards-and-existing-bug-cards
   (let [nb (into {} (map (juxt :id identity)) (:new-bugs report))]

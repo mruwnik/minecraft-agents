@@ -78,11 +78,16 @@
                         (map str/trim) (drop-while str/blank?) (take-while (complement str/blank?)))))
                plan-notes)))
 
+(defn description-case-lines
+  "A bug card's description lists its failing cases as '- fixture/case (...)' lines; those are cases the card owes, whatever its plan note names."
+  [description]
+  (vec (keep #(second (re-matches #"- (\S+/\S+) \(.*" %)) (str/split-lines (or description "")))))
+
 (defn card-plan-text
-  "The text a card's live plan lives in: with a 'Live plan (cases):' heading only the lines under it (extra-plan too); else its title, then each note's text from 'live plan' on (unit-test lists before it do not count); with no such note the description from its first line that mentions live (all of it when none does). :extra-plan is text the sweep agent adds by hand."
+  "The text a card's live plan lives in: with a 'Live plan (cases):' heading only the lines under it plus the cases its description lists (extra-plan too); else its title, then each note's text from 'live plan' on (unit-test lists before it do not count); with no such note the description from its first line that mentions live (all of it when none does). :extra-plan is text the sweep agent adds by hand."
   [{:keys [title description plan-notes extra-plan]}]
   (if-let [lines (seq (case-plan-lines plan-notes))]
-    (str/join "\n" (cons extra-plan lines))
+    (str/join "\n" (cons extra-plan (concat lines (description-case-lines description))))
     (let [from-live-plan (fn [n] (when-let [i (str/index-of (str/lower-case n) "live plan")] (subs n i)))
         notes (keep from-live-plan plan-notes)
         lines (str/split-lines (or description ""))
@@ -92,12 +97,12 @@
 
 (defn missing-cases
   "The refs (file/case, case may be cut short) on a card's 'Live plan (cases):' lines that name a fixture file of the run or one of known-files (fixture files in the repo) but match none of the run's cases; other slashed tokens are no case refs."
-  [{:keys [plan-notes]} cases known-files]
+  [{:keys [plan-notes description]} cases known-files]
   (let [ids (map (comp str/lower-case :id) cases)
         files (into (set known-files) (map :file) cases)]
     (vec (remove (fn [r] (some #(str/starts-with? % r) ids))
                  (filter #(and (str/includes? % "/") (files (first (str/split % #"/"))))
-                         (mapcat tokens (case-plan-lines plan-notes)))))))
+                         (mapcat tokens (concat (case-plan-lines plan-notes) (description-case-lines description))))))))
 
 (defn named-cases
   "Plan text + all classified cases -> the cases the plan names. A fixture token alone names all its cases; fixture/slug (slug may be cut short) or a bare slug of a named fixture's case narrows it to those."
@@ -115,13 +120,13 @@
     (vec (mapcat (fn [file] (let [sp (specific file)] (if (seq sp) sp (by-file file)))) (sort files)))))
 
 (defn verdict
-  "A named case that failed on a check -> :pending; no failure but an error, an inconclusive, a skipped known failure or a failure with no reason -> :hold; else :tick."
+  "A named case that failed on a check -> :pending; no failure but a flaky, an error, an inconclusive, a skipped known failure or a failure with no reason -> :hold; else :tick."
   [named]
   (let [real-fail? #(and (= :fail (:status %)) (not= "" (:sig %)))]
     (cond
       (empty? named) :no-plan
       (some real-fail? named) :pending
-      (some #(or (#{:inconclusive} (:class %)) (#{:error :fail :skipped-known} (:status %))) named) :hold
+      (some #(or (#{:inconclusive :flaky} (:class %)) (#{:error :fail :flaky :skipped-known} (:status %))) named) :hold
       :else :tick)))
 
 (def unskip-columns #{"testing" "live" "in_review"})
