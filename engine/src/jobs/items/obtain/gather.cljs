@@ -31,7 +31,8 @@
 (defn gather-failed!
   "A gather run that brought nothing. Trees seen but unreachable (:no-tree) with :explore on send the body to look
   elsewhere (bounded by [:explored key]); a mine that lost its pickaxe (:no-tool) that the pickaxe step can replace
-  goes to that step; neither counts as a fruitless run."
+  goes to that step; neither counts as a fruitless run. A stair that found no stone while stone is seen (behind
+  glass, bedrock) is :unreachable, not a missing source."
   [c names need why e]
   (cond
     (and (= :no-tree why) (explore-opts c) (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
@@ -40,7 +41,8 @@
     (and (= :no-tool why) (pickaxe-first? c names need)) :again
 
     :else
-    (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
+    (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))
+          why (if (and (= :no-stone-found why) (seen-of c need)) :unreachable why)]
       (ctx/update-mem! c assoc-in [:gather :fruitless] k)
       (when (>= k (fruitless-limit need e)) (tried! c :gather (or why :failed)))
       :again)))

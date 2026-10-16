@@ -646,7 +646,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (-> (world {}) (update :blocks dissoc chest-at)
+        (let [s (start (-> (world {}) (update :blocks dissoc chest-at stone-at)
                            (assoc :inventory [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 2} {:name "oak_log" :count 3}]))
                        [own-zone])
               n (atom 0)

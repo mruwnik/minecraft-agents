@@ -10,6 +10,7 @@
             [engine.obtain-iron-test :as oi]
             [engine.registry :as registry]
             [jobs.items.obtain :as obtain]
+            [jobs.lib.look :as look]
             [engine.test-util :as tu]))
 
 (defn export [sym k] (get-in registry/jobs [sym k] (constantly nil)))
@@ -157,3 +158,21 @@
               e (await (ending-of s 'jobs.items.obtain {:item "sugar_cane" :explore false} 60))]
           (is (= :done (:kind e)))
           (is (= {:got 1 :item "sugar_cane"} (select-keys (:data e) [:got :item]))))))))
+
+(def walled-in
+  "Bedrock round the body (a hollow box, one glass window) and a stone mass beyond: stone is seen but cannot be got to."
+  (merge (into {} (for [x (range -2 3) y (range 62 68) z (range -2 3)
+                        :when (or (= 2 (js/Math.abs x)) (= 2 (js/Math.abs z)) (= 62 y) (= 67 y))]
+                    [(str x "," y "," z) "bedrock"]))
+         (into {} (for [x (range -4 5) y (range 62 68) z (range 3 9)] [(str x "," y "," z) "stone"]))
+         {"0,65,2" "glass"}))
+
+(deftest seen-stone-that-cannot-be-reached-is-not-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (-> (f/bare [{:name "wooden_pickaxe" :count 1}]) (update :blocks merge walled-in)) [])
+              _ (is (seq (look/seen-blocks (:p s) {:names ["stone"] :radius 16 :max 1})) "the stone is seen through the window")
+              e (await (ending-of s 'jobs.items.obtain {:item "cobblestone" :count 4 :explore false} 120))]
+          (is (= {:kind :nothing-possible :cause :unreachable} (kc e)))
+          (is (re-find #"could not get to a source of" (get-in e [:cause :why]))))))))
