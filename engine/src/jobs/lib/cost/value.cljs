@@ -55,8 +55,10 @@
                 :doc "One block climbed past the first on a detour (stairs or a pillar back out of a drop, or up to a ledge), in seconds."}
    ::per-dark {:default 0.3 :spec (a/num-in 0 nil)
                :doc "One block walked in the dark, on top of per-block: a dark block costs twice a lit one."}
-   ::dark-mob-chance {:default 0.002 :spec (a/num-in 0 nil)
-                      :doc "Chance a mob that reaches the body is spawned for each dark block it walks: the expected hp a zombie costs its kit, times this, is added to per-dark."}
+   ::spawn-chance-per-s {:default 0.005 :spec (a/num-in 0 nil)
+                         :doc "Chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (jobs.lib.cost/spawn-chance)."}
+   ::dark-hurt-cap {:default 20 :spec (a/num-in 0 nil)
+                    :doc "Most hp a zombie is counted to cost the kit in the dark price: a body that loses more is no worse off priced."}
    ::walk-blocks-per-s {:default 2.9 :spec (a/num-in 0.1 nil)
                         :doc "Walking speed with slack for detours (4.3 flat out, 1.5x the way), blocks a second."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
@@ -387,14 +389,36 @@
 (defn trip [] (settings/get settings ::trip))
 (defn per-block [] (settings/get settings ::per-block))
 (defn per-dark [] (settings/get settings ::per-dark))
+(defn cells-of
+  "The cells of a place: a cell [x y z], a collection of cells, or a box {:min [x y z] :max [x y z]} (inclusive)."
+  [place]
+  (cond
+    (map? place) (let [[x0 y0 z0] (:min place) [x1 y1 z1] (:max place)]
+                   (for [x (range x0 (inc x1)) y (range y0 (inc y1)) z (range z0 (inc z1))] [x y z]))
+    (number? (first place)) [place]
+    :else place))
+
+(defn spawn-chance
+  "The chance per second a mob spawns at place (a cell, a set of cells or a {:min :max} box: the mean over its cells).
+  :light (cell -> {:block :sky} as the body saw it, nil or missing: unseen, dark) and :night?. A cell spawns only at block
+  light 0 and, by day, with no sky light."
+  ([place] (spawn-chance place nil))
+  ([place {:keys [light night?]}]
+   (let [cells (cells-of place)
+         spawns? (fn [cell] (let [{:keys [block sky] :or {block 0 sky 0}} (when light (light cell))]
+                              (and (zero? block) (or night? (zero? sky)))))]
+     (* (settings/get settings ::spawn-chance-per-s)
+        (/ (count (filter spawns? cells)) (max 1 (count cells)))))))
+
 (defn dark-factor
   "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): per-dark over per-block
-  (the floor). With a kit {:weapon :equipment} the hp a zombie would cost it (fight/fight-damage, capped at 20) times
-  ::dark-mob-chance and hp-seconds is added to per-dark: a bare body pays more than an armed, armoured one."
+  (the floor). With a kit {:weapon :equipment} the hp a zombie would cost it (fight/fight-damage, at most
+  ::dark-hurt-cap) times spawn-chance of a dark cell and hp-seconds is added: a bare body pays more than an armed,
+  armoured one."
   ([] (/ (per-dark) (per-block)))
   ([kit]
-   (let [hurt (min 20 (fight/fight-damage (assoc kit :mobs [{:name "zombie" :distance 0 :hits 0}])))]
-     (+ (dark-factor) (/ (* hurt (settings/get settings ::dark-mob-chance) health/hp-seconds) (per-block))))))
+   (let [hurt (min (settings/get settings ::dark-hurt-cap) (fight/fight-damage (assoc kit :mobs [{:name "zombie" :distance 0 :hits 0}])))]
+     (+ (dark-factor) (* hurt (spawn-chance [0 0 0]) health/hp-seconds)))))
 (def per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." health/hp-seconds)
 (defn walk-blocks-per-s [] (settings/get settings ::walk-blocks-per-s))
 (def lethal-causes ["lava" "fire" "burn" "void" "out_of_world"])

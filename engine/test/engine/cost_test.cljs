@@ -196,3 +196,18 @@
         armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set})]
     (is (< (js/Math.abs (- 1 floor)) 1e-9) "the bare factor is the flat floor")
     (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
+
+(deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
+  (let [lit (fn [block sky] (fn [_] {:block block :sky sky}))
+        dark (cost/spawn-chance [0 0 0] {:light (lit 0 0)})]
+    (is (pos? dark))
+    (is (= dark (cost/spawn-chance [0 0 0])) "a cell the body has not seen counts as dark")
+    (is (= 0 (cost/spawn-chance [0 0 0] {:light (lit 7 0)})) "a torch's light keeps mobs off")
+    (is (= 0 (cost/spawn-chance [0 0 0] {:light (lit 0 15)})) "open sky by day")
+    (is (= dark (cost/spawn-chance [0 0 0] {:light (lit 0 15) :night? true})) "open sky by night")))
+
+(deftest spawn-chance-of-an-area-is-the-mean-of-its-cells
+  (let [light (fn [[x]] (if (= x 0) {:block 0 :sky 0} {:block 14 :sky 0}))
+        one (cost/spawn-chance [0 0 0])]
+    (is (= (/ one 2) (cost/spawn-chance #{[0 0 0] [1 0 0]} {:light light})))
+    (is (= (/ one 2) (cost/spawn-chance {:min [0 0 0] :max [1 0 0]} {:light light})))))
