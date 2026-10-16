@@ -92,13 +92,23 @@
     (is (false? (settings/with-settings {::threats/fled-memory-ms 500} #(threats/fled-recently? v))))
     (is (false? (threats/fled-recently? (fled-view))))))
 
+(def skeleton-9 {:id 9 :name "skeleton" :kind "hostile" :pos {:x 10 :y 64 :z 0}})
+
 (deftest a-fled-mob-is-near-a-spot-within-the-radius-of-where-it-was-last-known
-  (let [v (fled-view 0 {:mob "skeleton" :pos {:x 10 :y 64 :z 0}})]
-    (are [spot near?] (= near? (threats/fled-near? v spot))
+  (let [v (fled-view 0 {:mob "skeleton" :id 9 :pos {:x 10 :y 64 :z 0}})
+        p (tu/fake-on-floor {:entities [skeleton-9]})]
+    (are [spot near?] (= near? (threats/fled-near? p v spot))
       {:x 12 :y 64 :z 0} true
       {:x 100 :y 64 :z 0} false)
-    (is (false? (settings/with-settings {::threats/fled-memory-ms 500} #(threats/fled-near? v {:x 12 :y 64 :z 0}))))))
+    (is (false? (settings/with-settings {::threats/fled-memory-ms 500} #(threats/fled-near? p v {:x 12 :y 64 :z 0}))))))
+
+(deftest a-fled-mob-the-client-no-longer-lists-is-not-near-anywhere
+  (let [v (fled-view 0 {:mob "creeper" :id 9 :pos {:x 10 :y 64 :z 0}})
+        p (tu/fake-on-floor {})]
+    (is (false? (threats/fled-near? p v {:x 12 :y 64 :z 0})))
+    (is (= [] (threats/listed-threats p (mem/entries v :threat))))))
 
 (deftest a-fled-mob-heard-only-is-placed-by-its-direction-and-band
-  (let [v (fled-view 0 {:mob "zombie" :direction :north :band :near :from {:x 0 :y 64 :z 0}})]
-    (is (true? (threats/fled-near? v {:x 0 :y 64 :z -5})))))
+  (let [v (fled-view 0 {:mob "zombie" :id 9 :direction :north :band :near :from {:x 0 :y 64 :z 0}})
+        p (tu/fake-on-floor {:entities [(assoc skeleton-9 :name "zombie")]})]
+    (is (true? (threats/fled-near? p v {:x 0 :y 64 :z -5})))))

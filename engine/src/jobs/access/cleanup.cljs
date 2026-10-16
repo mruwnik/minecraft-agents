@@ -145,8 +145,8 @@
         r (:danger-radius (:args c))
         [x y z] cell]
     (boolean (or (danger-q/nearest-danger p r {} {})
-                 (threats/fled-near? (ctx/view c) {:x x :y y :z z})
-                 (threats/fled-near? (ctx/view c) (u/self-pos c))
+                 (threats/fled-near? p (ctx/view c) {:x x :y y :z z})
+                 (threats/fled-near? p (ctx/view c) (u/self-pos c))
                  (some #(<= (u/dist (danger-q/mob-pos p %) {:x x :y y :z z}) r)
                        (danger-q/known-hostiles p (+ r (danger-q/known-scan)) {}))))))
 

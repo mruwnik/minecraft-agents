@@ -64,7 +64,7 @@
         ids (set (map #(.-id %) known))]
     (into (mapv #(danger-q/mob-pos p %) known)
           (comp (map :data) (remove #(ids (:id %))) (keep #(or (:pos %) (danger-q/rough-pos %))))
-          (threats/fresh-threats (ctx/view c)))))
+          (threats/listed-threats p (threats/fresh-threats (ctx/view c))))))
 
 (defn safe-home
   "Pure: the first of homes (positions: a closed room's cell, the home) the body at from is nearer to than every

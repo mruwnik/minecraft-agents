@@ -9,6 +9,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
@@ -96,7 +97,7 @@
   positions: a creeper three times, so the way away leans from it."
   [c chasing]
   (let [ids (set (map #(.-id %) chasing))]
-    (->> (ctx/since c :threat (- (ctx/now c) (cornered/lost-memory-ms)))
+    (->> (threats/listed-threats (:primitives c) (ctx/since c :threat (- (ctx/now c) (cornered/lost-memory-ms))))
          (map :data)
          (remove #(contains? ids (:id %)))
          (mapcat (fn [d] (when-let [pos (or (:pos d) (danger-q/rough-pos d))]

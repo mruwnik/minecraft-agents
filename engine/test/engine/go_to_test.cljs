@@ -1251,6 +1251,20 @@
             (is (= {:arrived true} @(:out s)) (pr-str args))
             (is (= 1 (count (events-of s :goal-in-danger))))))))))
 
+(deftest goal-danger-reads-a-remembered-creeper-spot-only-while-the-client-lists-the-creeper
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[entities arrived] [[[] true]
+                                    [[{:id 9 :uuid "u9" :name "creeper" :kind "hostile" :visible false :pos {:x 11 :y 64 :z 1}}] false]]]
+          (let [{:keys [eng] :as s} (setup {:blocks flat :entities entities})
+                out (atom :not-done)
+                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 0] :range 0 :goal-danger :end})))
+                _ (mem/write! (:store eng) :threat {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 11 :y 64 :z 1} :ended 1} threats/threat-policy)]
+            (core/submit! eng '(recording-parent) {})
+            (await (tick-out! eng 30))
+            (is (= arrived (:arrived @out)) (pr-str entities @out))))))))
+
 (deftest goal-danger-end-ignores-a-mob-far-from-the-goal
   (async done
     (tu/run-async done

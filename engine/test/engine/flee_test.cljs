@@ -166,7 +166,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (setup {:entities [(zombie 7 -5 {:chase {:speed 0.7}})]})
+        (let [s (setup {:entities [(zombie 7 -5 {:chase {:speed 0.7}})
+                                   {:id 9 :uuid "u9" :name "creeper" :kind "hostile" :visible false :pos {:x 8 :y 64 :z 0}}]})
               _ (mem/write! (:store (:eng s)) :threat {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 8 :y 64 :z 0} :ended :lost}
                             threats/threat-policy)
               _ (swap! (:clock s) + 10000)
@@ -175,6 +176,19 @@
           (is (some? target))
           (is (> (js/Math.abs (- (nth target 2) 0)) 3) "sideways: not east towards the creeper")
           (is (< (first target) 4) "and not towards it"))))))
+
+(deftest a-flight-ignores-the-spot-of-a-creeper-the-client-no-longer-lists
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(zombie 7 -5 {:chase {:speed 0.7}})]})
+              _ (mem/write! (:store (:eng s)) :threat {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 8 :y 64 :z 0} :ended :lost}
+                            threats/threat-policy)
+              _ (swap! (:clock s) + 10000)
+              {:keys [seen]} (await (run-job! s 'jobs.survival.retreat {}))
+              target (:target (first (filterv #(= :retreat.target (:kind %)) @seen)))]
+          (is (some? target))
+          (is (>= (first target) 4) "straight away from the zombie: the blown-up creeper's spot does not lean the way"))))))
 
 (deftest retreat-eats-one-bite-per-flee-step
   (async done
@@ -870,7 +884,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [calls (atom [])
-              s (setup {:entities [(zombie 7 6 {})]})
+              s (setup {:entities [(zombie 7 6 {}) {:id 99 :uuid "u99" :name "skeleton" :kind "hostile" :visible false :pos {:x -22 :y 64 :z 5}}]})
               _ (mem/write! (:store (:eng s)) :threat {:id 99 :mob "skeleton" :pos {:x -22 :y 64 :z 5} :ended :lost} threats/threat-policy)
               {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -20 :y 64 :z 0}}))]
           (is (not= [-20 64 0] (first-target seen)))

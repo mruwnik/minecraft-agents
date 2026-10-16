@@ -48,10 +48,17 @@
   [view]
   (boolean (seq (fresh-threats view))))
 
+(defn listed-threats
+  "The :threat entries among entries whose mob the client still tracks by id (a mob that blew up or died is gone; a
+  hidden one is still listed): a filter only, so a spot is never read for a mob that is not there."
+  [p entries]
+  (let [listed (set (map #(.-id %) (array-seq (.entities p #js {:radius 1000 :kind "hostile" :max 1000}))))]
+    (filterv #(contains? listed (:id (:data %))) entries)))
+
 (defn fled-near?
-  "Whether a mob fled from in the last ::fled-memory-ms was last known within ::fled-radius of spot {:x :y :z}."
-  [view spot]
-  (boolean (some #(some-> (danger-q/rough-pos (:data %)) (u/dist spot) (<= (fled-radius))) (fresh-threats view))))
+  "Whether a listed mob fled from in the last ::fled-memory-ms was last known within ::fled-radius of spot {:x :y :z}."
+  [p view spot]
+  (boolean (some #(some-> (danger-q/rough-pos (:data %)) (u/dist spot) (<= (fled-radius))) (listed-threats p (fresh-threats view)))))
 
 (defn chased-flights [] (settings/get settings ::chased-flights))
 
@@ -108,12 +115,8 @@
   "The places of the :threat entries of c whose mob the client still tracks, as {:pos ..} data with a :pos (a mob
   that blew up or died is gone; a hidden one is still listed), for known-dangers."
   [c]
-  (let [p (:primitives c)
-        listed (set (map #(.-id %) (array-seq (.entities p #js {:radius 1000 :kind "hostile" :max 1000}))))]
-    (keep #(let [d (:data %)]
-             (when (contains? listed (:id d))
-               (when-let [at (rough-pos d)] (assoc d :pos at))))
-          (ctx/entries c :threat))))
+  (keep #(let [d (:data %)] (when-let [at (rough-pos d)] (assoc d :pos at)))
+        (listed-threats (:primitives c) (ctx/entries c :threat))))
 
 (defn known-dangers
   "danger-list of the body of primitives p: sensed-mobs and the remembered :threat entries' data."
