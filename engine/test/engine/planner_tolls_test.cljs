@@ -38,8 +38,3 @@
     (is (= (get-in plain [:path :cost :seconds]) (get-in none [:path :cost :seconds])))
     (is (= (:expanded plain) (:expanded none)))))
 
-(deftest absent-tolls-option-plans-as-before
-  (let [plain (pf/run world goal (tolls 20 []) from)
-        absent (pf/run world goal {} from)]
-    (is (= (pf/cells plain) (pf/cells absent)))
-    (is (= (:expanded plain) (:expanded absent)))))

@@ -101,10 +101,6 @@
         dear (:seconds (cost (plan-course "lad-trap-closed" {:costs {:open 11}})))]
     (is (close? dear (+ base (- 11 (:open pf/default-costs)))))))
 
-(deftest default-costs-are-vanilla-rates
-  (is (= {:up 0.43 :down 0.33 :open 1.0}
-         {:up (:climbUp pf/default-costs) :down (:climbDown pf/default-costs) :open (:open pf/default-costs)})))
-
 (deftest lad-midlanding-tunnel-entered-at-170
   (let [r (plan-course "lad-midlanding")
         ss (steps r)

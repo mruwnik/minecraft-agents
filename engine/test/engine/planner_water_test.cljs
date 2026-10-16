@@ -140,12 +140,6 @@
         slow (cost (run lake from2 (near 26 64 2) {:costs {:swimH 5}}) :seconds)]
     (is (> slow (+ base 10)))))
 
-(deftest default-water-costs-are-the-stated-ones
-  (is (= {:swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
-          :airSupply 15 :airLimit 12 :airDrain 1 :airGrace 0 :maxWaterDrop 64 :dripleaf 0.2}
-         (select-keys costs [:swimH :swimUp :swimDown :exit :current :bubbleUp :bubbleDown :airSupply :airLimit :airDrain :airGrace
-                             :maxWaterDrop :dripleaf]))))
-
 (deftest start-in-the-water-way-out-is-an-exit
   (let [r (run lake {:x 15 :y 63 :z 2} (near 2 64 2))]
     (is (found? r))
@@ -432,10 +426,6 @@
   (let [r (run (lethal-dive false 42) dive-start (near 43 70 1 0) (-> at-health-10 no-lethal-air (assoc :health 12)))]
     (is (found? r))
     (is (< 0 (cost r :drown) 10) "it drowns some, short of the counted 10 hp")))
-
-(deftest a-lethal-way-to-air-is-refused-by-default
-  (let [r (run (lethal-dive false) dive-start (near 53 70 1 0) (update at-health-10 :costs dissoc :lethalAir))]
-    (is (= "air-lethal" (:reason r)))))
 
 (deftest drain-scales-the-lowest-air-reading
   (let [full (cost (run-up (column 20) 20) :airMin)

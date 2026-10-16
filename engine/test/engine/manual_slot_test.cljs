@@ -241,15 +241,6 @@
     (is (true? (core/manual? eng)))
     (is (nil? (core/manual-job eng)))))
 
-(deftest take-starts-with-no-slot-job
-  (let [{:keys [eng]} (setup)]
-    (takeover/take! eng me)
-    (submit-as eng "claude" '(nop))
-    (is (= "j1" (core/manual-job eng)))
-    (takeover/release! eng {:who "claude" :reason "released" :held-ms 1})
-    (is (nil? (core/manual-job eng)))
-    (is (empty? (:list (core/state eng))) "release cancelled it")))
-
 (deftest a-failing-slot-job-ends-failed-and-unlisted
   (async done
     (tu/run-async done

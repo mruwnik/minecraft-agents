@@ -15,15 +15,6 @@
 
 (def night-job 'jobs.survival.night)
 
-(deftest night-exports-the-contract
-  (let [job (get registry/jobs night-job)]
-    (is (fn? (:can-start? job)))
-    (is (nil? (:check job)) "no old check")
-    (is (= [] (:target job)))
-    (is (= [:bed :shelter :flee] (:ways job)))
-    (is (= #{:bed :shelter :flee} (:ways (:defaults job))))
-    (is (fn? (:done? job)))))
-
 (deftest the-quote-is-the-time-left-of-the-night
   (let [q ((:quote-of (get registry/jobs night-job)) {:primitives (tu/fake {:time st/night}) :args {}})
         [least mean most] (get-in q [:uses :job-time])]

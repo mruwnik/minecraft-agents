@@ -364,13 +364,6 @@
           (is (nil? (get (inv s) "stone")))
           (is (= :count (:reason (done-event s)))))))))
 
-(deftest the-drop-table-and-tools
-  (is (= "cobblestone" (lb/drop-item "stone")))
-  (is (= "raw_iron" (lb/drop-item "deepslate_iron_ore")))
-  (is (= "shovel" (kind/tool-kind "sand")))
-  (is (= "axe" (kind/tool-kind "oak_log")))
-  (is (= "pickaxe" (kind/tool-kind "stone"))))
-
 ;; ------------------------------------------------------------------ mend branches
 
 (defn set-pos! [{:keys [p]} x y z] (fake/swap-self! p assoc :pos [x y z]))

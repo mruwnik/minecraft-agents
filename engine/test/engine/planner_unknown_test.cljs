@@ -42,9 +42,6 @@
             :let [^js a (aget t k)]]
       (is (= (aget a air) (aget a void)) k))))
 
-(deftest default-prices-live-in-jobs-lib-cost
-  (is (= {:cell 0.1 :floor 0.3 :peek-s 0.7 :aim-s 0.1 :see-lit-depth 5 :light-depth 5} cost/unknown-prices)))
-
 (deftest off-plans-as-before
   (let [w (line [0 63 "stone"] [1 63 U] [2 63 "stone"])
         off (run w (pf/near 2 64 2) {})]

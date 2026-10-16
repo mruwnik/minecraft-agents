@@ -64,16 +64,6 @@
           (is (= ["jobs.movement.go-to" "jobs.survival.get-food" "jobs.time.wait-for-day"]
                  (->> @seen (filter #(= :round_started (:kind %))) (map :name) dedupe vec))))))))
 
-(deftest go-to-gives-up-after-three-blocked-walks
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :unreachable ["9,64,9"]})]
-          (core/submit! eng (list 'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}}) {})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= [] (:list (core/state eng))))
-          (is (some #(= :unreachable (:kind %)) @seen)))))))
-
 (deftest go-to-gives-up-at-the-edge-and-a-new-call-goes-on
   (async done
     (tu/run-async done

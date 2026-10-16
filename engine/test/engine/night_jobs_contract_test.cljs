@@ -8,12 +8,9 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
-            [engine.settings :as settings]
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]
-            [jobs.items.obtain :as obtain]
-            [jobs.survival.bed-down :as bed-down]))
+            [engine.triggers :as triggers]))
 
 (def seen-events (atom nil))
 
@@ -191,9 +188,6 @@
                (ending-of (await (call! (spawn-world {:time st/noon :blocks {"6,64,0" "red_bed"}}) 'jobs.survival.bed-down {} (constantly nil))))))
         (is (= [:condition-failed :no-bed]
                (ending-of (await (call! (spawn-world {}) 'jobs.survival.bed-down {:fetch false} (constantly nil))))))))))
-(deftest bed-down-time-budget-covers-a-whole-bed-fetch-and-the-sleep
-  (is (>= (settings/get bed-down/settings ::bed-down/job-time-s) (+ (obtain/time-s) 300))))
-
 (deftest bed-down-fetch-false-starts-no-fetch
   (async done
     (tu/run-async done

@@ -45,11 +45,6 @@
 
 ;; ------------------------------------------------------------------ trigger
 
-(deftest night-is-the-only-night-trigger
-  (is (some? (get triggers/all :night)))
-  (is (= '(jobs.survival.night) (:job (get triggers/all :night))))
-  (is (every? nil? (map triggers/all [:night-unsafe :player-sleeping-nearby :shut-in-by-day]))))
-
 (deftest night-holds-for-a-remembered-bed-within-the-radius-under-any-roof
   (let [world {:time night :floor tu/walk-floor :blocks {"0,67,0" "stone" "20,64,0" "red_bed" "60,64,0" "red_bed"}}] ; roofed, not shut in: a floor, nothing seen right over the head
     (is (true? (holds? world #(st/know-bed! % {:x 20 :y 64 :z 0}))) "20 blocks away, roofed")

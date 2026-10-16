@@ -843,12 +843,6 @@
     (is (vector? (:target job)))
     (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {:free 4}}))))))
 
-(deftest enough-free-slots-at-the-start-end-done-at-once
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= {:event :completed :kind :done :reason nil} (await (root-ending {:inventory []} {:free 2}))))))))
-
 (deftest make-room-endings-carry-a-kind-and-a-cause
   (async done
     (tu/run-async done

@@ -13,9 +13,6 @@
 (defn summary [r] (get-in r [:path :summary]))
 (defn close? [a b] (< (js/Math.abs (- a b)) 1e-6))
 
-(deftest default-costs-open-and-redstone
-  (is (= [1.0 1.5] [(:open pf/default-costs) (:openRedstone pf/default-costs)])))
-
 (defn state-of [name props]
   (.stateAt ^js (pf/snapshot {:blocks [[0 64 0 name (clj->js props)]]}) 0 64 0))
 

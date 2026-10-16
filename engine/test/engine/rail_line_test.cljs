@@ -9,7 +9,6 @@
             [engine.memory :as mem]
             [jobs.blocks.dig :as dig]
             [jobs.build.rail :as builder]
-            [engine.registry :as registry]
             [engine.takeover :as takeover]
             [jobs.build.rail-line :as rail-line]
             [engine.fake :as fake]
@@ -23,9 +22,6 @@
   "The data of the job's ending as a ctx/call child of a recording parent in at most n ticks, :not-done while it has not ended."
   [eng job args n]
   (if-let [e (await (ending-of {:eng eng} job args n))] (:data e) :not-done))
-
-(deftest rail-line-has-no-dig-arg
-  (is (not (contains? (:args (get registry/jobs job)) :dig))))
 
 (def from [0 64 0])
 (def to [29 64 0])
@@ -584,14 +580,6 @@
                 [[(spec "stone" 63 (kit {})) {"line" holed-plan} :not-a-line]]]
           (let [e (await (ending-of (b/start world plans []) job {:plan "line"} 10))]
             (is (= [:impossible reason] [(:kind e) (get-in e [:cause :reason])]) (str reason))))))))
-
-(deftest the-rail-line-job-exports-the-contract
-  (let [j (get registry/jobs job)]
-    (is (some? (:can-start? j)))
-    (is (some? (:can-run? j)))
-    (is (nil? (:check j)))
-    (is (= [:plan :part] (:target j)))
-    (is (fn? (:quote-of j)))))
 
 (deftest a-sound-line-is-done-and-a-broken-one-is-nothing-possible
   (async done

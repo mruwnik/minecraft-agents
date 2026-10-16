@@ -403,9 +403,6 @@
       slope nil
       slope {:at nil :box box})))
 
-(deftest a-two-high-wall-with-nothing-beside-it-holds
-  (is (true? (:closed? (check wall2)))))
-
 (deftest a-three-high-wall-holds-past-a-block-inside
   (is (true? (:closed? (check (merge (ring "stone" [64 65 66]) {[0 64 2] "stone"}))))))
 

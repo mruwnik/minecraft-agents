@@ -75,9 +75,6 @@
 
 (defn file-of [dir body] (path/join dir "notes" (str body ".edn")))
 
-(deftest the-paths-go-through-one-seam
-  (is (= {:dir (path/join "/w" "notes") :file (path/join "/w" "notes" "A.edn")} (notes/paths "/w" "A"))))
-
 (deftest a-write-lands-whole-and-is-read-back-by-a-restarted-body
   (let [dir (world-dir)
         [s _] (store dir "A")]

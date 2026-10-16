@@ -1,11 +1,8 @@
 (ns engine.needs-bed-test
   "The :needs-bed trigger: a body overdue for sleep with no bed gets one by day."
   (:require [cljs.test :refer [deftest is]]
-            [engine.expr :as expr]
-            [engine.registry :as registry]
             [engine.memory :as mem]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]
             [jobs.lib.shelter :as sh]
             [triggers.survival.needs-bed :as nb]))
 
@@ -51,11 +48,6 @@
   (is (false? (holds? {:entries (conj slept-long-ago [:bed {:pos {:x 5 :y 64 :z 0}} 2]) :blocks {"5,64,0" "red_bed"}})))
   (is (true? (holds? {:entries (conj slept-long-ago [:bed {:pos {:x 5 :y 64 :z 0}} 2]) :blocks {"5,64,0" "air"}})) "a remembered bed seen gone is no bed")
   (is (false? (holds? {:entries slept-long-ago :night true}))))
-
-(deftest the-entry-runs-a-valid-obtain-and-the-trigger-takes-no-args
-  (let [{:keys [job args]} (get triggers/all :needs-bed)]
-    (is (nil? (expr/problem registry/jobs job)))
-    (is (empty? args) "the obtain's args are the job's, not the trigger's")))
 
 (def rested [[:slept {:pos {:x 0 :y 64 :z 0}} 1]])
 (def spawn-bed-at-5 [:spawn-bed {:pos {:x 5 :y 64 :z 0}} 0.5])

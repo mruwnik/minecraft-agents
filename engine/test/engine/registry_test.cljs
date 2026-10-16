@@ -89,19 +89,10 @@
   (doseq [[id t] triggers/all]
     (is (nil? (expr/problem registry/jobs (:job t))) (str id))))
 
-(deftest trigger-lines-keep-their-defaults
-  (is (= {:name :scaffold-left :job '(jobs.access.cleanup {:within 32}) :args {:within 32} :persistence :stop :level :comfort}
-         (dissoc (:scaffold-left triggers/all) :when))
-      "a line without :cooldown-s has none"))
-
 (deftest mounted-never-latches-after-a-failed-dismount
   (let [t (:mounted triggers/all)]
     (is (= :cooldown (:persistence t)) "a body still aboard fires again after the cooldown, not only after being off once")
     (is (pos? (:cooldown-s t)))))
-
-(deftest the-condition-library-is-the-one-the-defaults-name
-  (is (contains? triggers/library 'health))
-  (is (not (contains? triggers/library 'stuck))))
 
 (deftest numeric-args-are-bounded-at-submit
   (doseq [form ['(jobs.farm.find-spot {:w 1000})

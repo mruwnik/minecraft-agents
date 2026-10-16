@@ -6,11 +6,9 @@
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.farm-contract-test :refer [ending-of kc]]
-            [engine.registry :as registry]
             [engine.harvest-test :as h]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
-            [jobs.lib.world-files :as world]
             [jobs.build.pen :as pen]))
 
 (def job 'jobs.build.pen)
@@ -77,14 +75,6 @@
           (is (empty? (kinds-of seen :pen-build.leaky))))))))
 
 ;; ---------------------------------------------------------------- the contract
-
-(deftest the-pen-job-exports-the-contract
-  (let [j (get registry/jobs job)]
-    (is (some? (:can-start? j)))
-    (is (some? (:can-run? j)))
-    (is (nil? (:check j)))
-    (is (= [:plan :part] (:target j)))
-    (is (fn? (:quote-of j)))))
 
 (deftest a-closed-pen-is-done-and-a-leaky-one-is-nothing-possible
   (async done

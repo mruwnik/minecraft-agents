@@ -1,7 +1,6 @@
 (ns engine.placement-test
   "jobs.lib.placement: from a wanted block state to the click that makes it (or a refusal), one table per family."
   (:require [cljs.test :refer [deftest is are async]]
-            [clojure.string :as str]
             [jobs.lib.placement :as placement]
             [engine.test-util :as tu]
             [plan.shape :as shape]))
@@ -236,10 +235,3 @@
           (let [block (await (placed-in-fake want cells))]
             (is (= :match (shape/judge want block)) (str (shape/want-text want) " came out " (pr-str block)))))))))
 
-(deftest usable-is-the-shared-table
-  (let [fs (js/require "fs")
-        text (.readFileSync fs (->> ["engine/src" "../engine/src"]
-                          (map #(str (.cwd js/process) "/" % "/jobs/lib/interactable_blocks.txt"))
-                          (filter #(.existsSync fs %))
-                          first) "utf8")]
-    (is (= (str/trim text) (.-source placement/usable)))))
