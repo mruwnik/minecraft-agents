@@ -201,9 +201,16 @@
 
 ;; ------------------------------------------------------------------ sink
 
+(defn lava-beside?
+  "Whether lava sits in one of the six cells round fire: its dig would be refused, so nothing is dug for it."
+  [block-at {:keys [x y z]}]
+  (some (fn [[dx dy dz]] (= "lava" (named-at block-at {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
+        [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
+
 (defn next-step
   "The next idempotent step of a sink {:fire :kind :carpet} read off the world:
-  {:op :dig/:place :pos}, :done when the lowered fire stands, :abort when a cell cannot be read."
+  {:op :dig/:place :pos}, :done when the lowered fire stands, :hazard when lava stands by the fire still to be dug,
+  :abort when a cell cannot be read."
   [block-at {:keys [fire kind]}]
   (let [above (update fire :y inc)
         below (update fire :y dec)
@@ -213,6 +220,7 @@
     (cond
       (nil? below-block) {:op :abort}
       (contains? #{"campfire" "soul_campfire"} (.-name below-block)) {:op :done}
+      (and (contains? #{"campfire" "soul_campfire"} fire-name) (lava-beside? block-at fire)) {:op :hazard}
       (and above-name (apiary/carpet? above-name)) {:op :dig :pos above}
       (not= "air" (.-name below-block)) {:op :dig :pos below}
       (contains? #{"campfire" "soul_campfire"} fire-name) {:op :dig :pos fire}
@@ -255,6 +263,7 @@
           :stuck (do (abandon! c fire :cannot) :again)
           :done (await (finish-sink! c s))
           :abort (do (abandon! c fire :cannot) :again)
+          :hazard (do (abandon! c fire :refused) :again)
           :dig (if-not (permitted? c :dig pos)
                  (do (abandon! c fire :refused) :again)
                  (let [outcome (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block}

@@ -293,6 +293,25 @@
     (is (= {:op :dig :pos {:x 2 :y 64 :z 0}}
            (guard/next-step (fn [pos] (when-let [n (get (assoc cells {:x 2 :y 63 :z 0} "air") pos "air")] #js {:name n})) s)))))
 
+(deftest a-sink-beside-lava-digs-nothing-and-ends-refused
+  (let [fire {:x 2 :y 64 :z 0}
+        cells {fire "campfire" {:x 2 :y 63 :z 0} "stone" {:x 3 :y 64 :z 0} "lava"}
+        block-at (fn [pos] (when-let [n (get cells pos "air")] #js {:name n}))]
+    (is (= {:op :hazard} (guard/next-step block-at {:fire fire :kind "campfire"})))
+    (is (= {:op :dig :pos {:x 2 :y 63 :z 0}}
+           (guard/next-step (fn [pos] (when-let [n (get (dissoc cells {:x 3 :y 64 :z 0}) pos "air")] #js {:name n})) {:fire fire :kind "campfire"})))))
+
+(deftest the-sink-of-a-fire-beside-lava-never-digs-the-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (fire-world {:inventory (inv "campfire" 1 "white_carpet" 1)}) (assoc-in [:blocks "3,64,0"] "lava"))
+              {:keys [eng p]} (setup w)
+              result (await (child-outcome eng job {} 60))]
+          (is (empty? (calls p "dig")))
+          (is (= "stone" (block-name p 2 63 0)))
+          (is (= 0 (:sunk result))))))))
+
 (deftest the-walk-to-a-fire-never-escalates-and-a-waiting-walk-is-a-yield
   (async done
     (tu/run-async done
