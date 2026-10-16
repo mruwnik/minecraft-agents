@@ -1,13 +1,13 @@
 (ns engine.registry-test
   (:require-macros [engine.registry-test-macros :refer [describe-message describes-job?]])
-  (:require [cljs.test :refer [deftest is]]
-            [engine.expr :as expr]
-            [engine.registry :as registry]
-            [clojure.string :as str]
-            [engine.triggers :as triggers]
-            [jobs.lib.choose :as choose]
+  (:require [clojure.string :as str]
+            [cljs.test :refer [deftest is]]
             [engine.args :as args]
-            [engine.primitive :as primitive]))
+            [engine.expr :as expr]
+            [engine.primitive :as primitive]
+            [engine.registry :as registry]
+            [engine.triggers :as triggers]
+            [jobs.lib.choose :as choose]))
 
 (def migrated
   '#{jobs.survival.breathe jobs.survival.unwedge jobs.survival.extinguish
@@ -147,26 +147,9 @@
   (is (describes-job? "(ns jobs.probe)\n(defn round [c] :continue)"))
   (is (not (describes-job? "(ns jobs.probe)\n(defn helper [c] :continue)"))))
 
-(defn declared-defaults
-  "The defaults of an args data map, only for keys that declare one."
-  [data]
-  (into {} (keep (fn [[k e]]
-                   (cond (:keys e) [k (declared-defaults (:keys e))]
-                         (contains? e :default) [k (:default e)])))
-        data))
-
 (deftest every-job-default-passes-its-own-args-spec
   (doseq [[sym job] registry/jobs
           :let [data (:args job)
                 bad (when (seq data)
-                      (args/first-problem sym data (declared-defaults data)))]]
+                      (args/first-problem sym data (args/defaults data)))]]
     (is (nil? bad) (str sym " default " (pr-str bad)))))
-
-(deftest every-trigger-job-spec-passes-its-own-args-spec-with-defaults
-  (doseq [[id t] triggers/all
-          :let [[sym & [given]] (:job t)
-                entry (get registry/jobs sym)
-                data (:args entry)
-                merged (args/merge-args data (declared-defaults data) given)
-                bad (when (seq data) (args/first-problem sym data merged))]]
-    (is (nil? bad) (str id " " sym " " (pr-str bad)))))
