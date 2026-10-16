@@ -28,7 +28,7 @@ export const expectedMs = (nss, ms) => {
 // Generous: a loaded machine runs a namespace up to ~3x slower than its prior timing.
 export const runTimeoutS = (expected) => Math.max(180, Math.min(1200, Math.round(60 + 5 * expected / 1000)))
 
-// Measured peak RSS: 600-610 MB for one namespace, 750 for ten, 2.45 GB for a full shard (~45 namespaces). The table of needs is kinds.tests in res-slot.json (needMb = shard and cap, goldenMb).
+// Measured peak RSS: 600-610 MB for one namespace, 750 for ten, 1.4 GB for a full shard (~45 namespaces) with the heap capped at kinds.tests.heapMb (uncapped, V8 let garbage grow it to 2.3 GB). The table of needs is kinds.tests in res-slot.json (needMb = shard and cap, goldenMb).
 export const needMb = (nsCount, tests) => Math.min(tests.needMb, tests.baseMb + tests.perNsMb * nsCount)
 
 export const lastFinished = (lines) =>
@@ -185,7 +185,7 @@ const main = async () => {
   fs.writeFileSync(timings, '')
   child = spawn(path.join(tools, 'res-slot'),
     ['tests', '--need', String(needMb(nss.length, res.kinds.tests)), '--',
-      'timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`],
+      'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${res.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`],
     { cwd: engine, stdio: 'inherit', env: { ...process.env, MC_TEST_TIMINGS: timings, NODE_PATH: path.join(repo, 'node_modules') } })
   const code = await new Promise((resolve) => child.on('exit', (status) => resolve(status ?? 1)))
   if (code === 124 || code === 137)

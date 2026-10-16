@@ -36,9 +36,15 @@ test('needMb: measured peak plus margin per run, growing with the namespace coun
   assert.equal(needMb(200, tests), 2950)
 })
 
-test('res-slot.json holds the one table of tests needs: shard 2950, golden 940, floor 4096', () => {
+test('res-slot.json holds the one table of tests needs: shard 1700, heap 1024, golden 940, floor 4096', () => {
   const res = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.json'), 'utf8'))
-  assert.deepEqual([res.kinds.tests.needMb, res.kinds.tests.goldenMb, res.floorMb], [2950, 940, 4096])
+  assert.deepEqual([res.kinds.tests.needMb, res.kinds.tests.goldenMb, res.floorMb], [1700, 940, 4096])
+})
+
+test('res-slot.json: the node heap cap leaves room under the shard need, and shards fit the slot count', () => {
+  const t = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.json'), 'utf8')).kinds.tests
+  assert.ok(t.heapMb > 0 && t.heapMb < t.needMb, JSON.stringify(t))
+  assert.ok(t.shardMax <= t.max - 2, JSON.stringify(t))
 })
 
 test('res-slot.json: a server slot needs 2000 MB (a shadow-cljs server JVM)', () => {

@@ -13,7 +13,8 @@
   (ev/hook! :begin-test-var (fn [m] (swap! started assoc (str (:var m)) (js/performance.now))))
   (ev/hook! :end-test-var (fn [m]
                          (let [k (str (:var m))]
-                           (line! {:var k :ms (js/Math.round (- (js/performance.now) (get @started k)))}))))
+                           (line! {:var k :ms (js/Math.round (- (js/performance.now) (get @started k)))
+                                 :heap-kb (js/Math.round (/ (.-heapUsed (.memoryUsage js/process)) 1024))}))))
   (.on js/process "exit" (fn [] (line! {:peak-rss-kb (.-maxRSS (.resourceUsage js/process))}))))
 
 (ev/install!)

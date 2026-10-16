@@ -70,7 +70,7 @@ for n in engine.a-test engine.b-test engine.hang-test; do : > "$T/repo/engine/ou
 # test-engine: compile for build test, then node outside the lock on a private copy, namespaces comma-joined
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.a-test engine.b-test 2>&1); check "test-engine rc" "$?" 0
 check "test-engine ns args" "$(grep -c -- '--test=engine.a-test,engine.b-test' <<<"$out")" 1
-check "test-engine heap flag" "$(grep -c -- '--max-old-space-size=4096' <<<"$out")" 1
+check "test-engine heap flag" "$(grep -c -- '--max-old-space-size=[0-9][0-9]*\b' <<<"$out")" 1
 check "test-engine private copy" "$(grep -c -- '/tmp/mc-test-run-[0-9]*/out/test.cjs' <<<"$out")" 1
 # a hung run is killed after the timeout (exit 124) and says so
 out=$(MC_TEST_TIMEOUT_S=2 timeout 30 "$T/repo/tools/test-engine" engine.hang-test 2>&1); check "hung run rc" "$?" 124

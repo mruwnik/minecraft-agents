@@ -41,12 +41,12 @@ test('shardOutcome: exit 0 with no test logged is a failure; a failed exit keeps
   assert.equal(shardOutcome(1, ok).ok, false)
 })
 
-test('memSlots: (available - res-slot.json floor) / shard peak, at least 1, at most 3', () => {
+test('memSlots: (available - res-slot.json floor) / shard peak, at least 1, at most shardMax', () => {
   const { floorMb, kinds } = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'res-slot.json'), 'utf8'))
   const peak = kinds.tests.needMb
   assert.equal(memSlots(floorMb + peak - 100), 1)
   assert.equal(memSlots(floorMb + 2 * peak + 100), 2)
-  assert.equal(memSlots(floorMb + 30000), 3)
+  assert.equal(memSlots(floorMb + 30000 * peak), kinds.tests.shardMax)
 })
 
 test('runInSlot: a waiting heavy shard widens its slot list as memory frees, and its marker follows', async () => {
@@ -54,7 +54,9 @@ test('runInSlot: a waiting heavy shard widens its slot list as memory frees, and
   const env = { RES_SLOT_DIR: dir, RES_SLOT_HEAVY: '1' }
   const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]))
   Object.assign(process.env, env)
-  const holder = spawn('flock', [path.join(dir, 'tests.4'), 'sleep', '30'], { stdio: 'ignore' })
+  const { max } = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'res-slot.json'), 'utf8')).kinds.tests
+  const reserve = max - 1
+  const holder = spawn('flock', [path.join(dir, `tests.${reserve}`), 'sleep', '30'], { stdio: 'ignore' })
   try {
     await new Promise((r) => setTimeout(r, 300))
     let slots = 1
@@ -62,9 +64,9 @@ test('runInSlot: a waiting heavy shard widens its slot list as memory frees, and
     const markerAt = () => fs.readdirSync(path.join(dir, 'heavy-wait')).map((f) => fs.readFileSync(path.join(dir, 'heavy-wait', f), 'utf8'))
     const run = runInSlot(() => slots, ['true'], {})
     await new Promise((r) => setTimeout(r, 700))
-    assert.deepEqual(markerAt(), ['[4]'])
+    assert.deepEqual(markerAt(), [`[${reserve}]`])
     assert.equal((await run).code, 0)
-    assert.equal(holder.exitCode, null, 'ran while slot 4 was still held')
+    assert.equal(holder.exitCode, null, 'ran while the reserve slot was still held')
     assert.deepEqual(fs.readdirSync(path.join(dir, 'heavy-wait')), [])
   } finally {
     holder.kill()

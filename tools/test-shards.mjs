@@ -3,7 +3,7 @@
 // Usage: tools/test-engine --full [--part i/N] [--shards N] [--slots M] [--slowest K]
 //  --part i/N: runs only part i (1-based) of N: a greedy longest-first split by the committed engine/test-weights.json (a function of names and that file alone, so parts never overlap or leave a gap); `--write-weights` copies engine/out/test-ns-ms.json there; timings are merged into test-ns-ms.json, the full-run timings file is left alone.
 //  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
-//  At most M shard processes run at once machine-wide (default: (MemAvailable - floorMb) / 2.95 GB (kinds.tests.needMb), 1..shardMax): each takes res-slot's 'tests' slot tests.<i> (i < M; slots above shardMax stay for targeted runs), so parallel agents cannot OOM the machine.
+//  At most M shard processes run at once machine-wide (default: (MemAvailable - floorMb) / kinds.tests.needMb, 1..shardMax): each takes res-slot's 'tests' slot tests.<i> (i < M; slots above shardMax stay for targeted runs), so parallel agents cannot OOM the machine.
 //  Each shard is killed after runTimeoutS of its prior timing (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test.
 //  TEST_EVENTS=1: prints the live-tests @@test lines (phase, plan, result per test, progress) as the shards produce them (engine.timing-test emits them).
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
@@ -171,7 +171,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
     const file = `${timingFile}.${process.pid}.${i}`
     fs.writeFileSync(file, '')
     const limit = Number(process.env.MC_TEST_TIMEOUT_S) || runTimeoutS(expectedMs(nss, prior))
-    const r = await runInSlot(slotsNow, ['timeout', '-k', '10', String(limit), 'node', '--max-old-space-size=4096', path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined)
+    const r = await runInSlot(slotsNow, ['timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${RES.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined)
     events?.end(i)
     if (r.code === 124 || r.code === 137) r.out += `\ntest-shards: TIMEOUT, shard ${i} killed after ${limit} s; last finished test: ${lastFinished(fs.readFileSync(file, 'utf8').split('\n')) ?? 'none'}\n`
     return { i, nss, file, ...r }
