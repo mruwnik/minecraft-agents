@@ -16,13 +16,14 @@
          [:wait-s 2]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 2 :items [:has {:baby true}]}] 20]
          [:job (jobs.animals.breed {:mob "cow" :count 2 :radius 20 :fetch false})]]
-   :expect [{:event {:source :job :kind :breed.gave-up :data {:reason :too-few :text [:contains "adults 1, babies 1"]}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :too-few :text [:contains "adults 1, babies 1"]}} :within-s 40 :of-job true}]
    :after [[:item "wheat" 4]]}
   {:name "lure-to-a-lone-calf-says-babies-are-not-lured"
    :act [[:summon "cow" [15.5 0 16.5] "{NoAI:1b,Age:-24000}"]
          [:wait-s 2]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 1 :items [:has {:baby true}]}] 20]
          [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [24 0 16] :radius 25})]]
-   :expect [{:event {:source :job :kind :lure-to.gave-up :data {:reason :no-animal :text [:contains "babies are not lured"]}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-animal :text [:contains "babies are not lured"]}} :within-s 40 :of-job true}]
    :after [[:item "wheat" 4]]}
   {:name "breed-with-one-wheat-for-four-cows-ends-food-out"
    :body {:inventory [["wheat" 1]]}
@@ -30,6 +31,6 @@
          [:summon "cow" [15.5 0 18.5] "{NoAI:1b}"] [:summon "cow" [17.5 0 16.5] "{NoAI:1b}"]
          [:wait-s 2]
          [:job (jobs.animals.breed {:mob "cow" :count 4 :radius 20 :fetch false})]]
-   :expect [{:event {:source :job :kind :breed.gave-up :data {:reason :food-out :fed [:any]}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :food-out :fed [:any]}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:item "wheat" 0]]}]}

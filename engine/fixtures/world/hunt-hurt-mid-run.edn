@@ -9,7 +9,7 @@
   :limit-s 90}
  :cases
  [{:name "hurt-below-the-floor-mid-walk-waits-low-health-not-condition-failed"
-   :act [[:summon "cow" [30.5 0 16.5] "{NoAI:1b}"]
+   :act [[:summon "cow" [26.5 0 16.5] "{NoAI:1b}"]
          [:job (jobs.combat.hunt {:mob "cow" :count 1 :keep 0})]
          [:await {:source :job :kind :round_started} 20]
          [:rcon "damage $BODY 16 minecraft:generic"]]
