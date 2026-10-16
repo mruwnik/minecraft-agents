@@ -2,7 +2,7 @@
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
   the body, cuts, firing reflexes and holding them off during a section (ctx/atomic), tick! and do-now!."
   (:require [engine.args :as a]
-            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
+            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of exclusive-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention!]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
@@ -175,15 +175,15 @@
     (save-memory! eng)))
 
 (defn tick-manual!
-  "One pass under manual control: no trigger, no loop. A listed job still in its cleanup (an old slot job the driver
-  replaced) runs first. Then the driver's slot job gets one call (see settle/end-slot!): a failing check ends it at
-  once with the check's reason. With it gone the body idles."
+  "One pass under manual control or an exclusive run: no trigger, no loop. A listed job still in its cleanup (an old
+  slot job the driver replaced, a cancelled run) runs first. Then the exclusive job gets one call (see
+  settle/end-slot!): a failing check ends it at once with the check's reason. With it gone the body idles."
   [eng]
   (housekeep! eng)
   (reset! (:deferred eng) {})
   (if (running eng)
     (check-idle! eng)
-    (when-let [id (or (some #(when (cleanup/closing? eng % []) %) (:list (state eng))) (manual-job eng))]
+    (when-let [id (or (some #(when (cleanup/closing? eng % []) %) (:list (state eng))) (exclusive-job eng))]
       (if (check-passes? eng id)
         (start-round! eng id)
         (do (end-slot! eng id (:reason (waiting eng id) :not-ready) (waiting eng id))
@@ -206,14 +206,14 @@
 (defn tick!
   "One scheduling pass. Synchronous; returns the promise of a round it
   started (resolving once that round is settled), or nil. Does nothing while
-  the body is offline or settling. Under manual control only the driver's slot job runs (tick-manual!).
+  the body is offline or settling. Under manual control or an exclusive run only that one job runs (tick-manual!).
   The first ready tick after a pause clears the backoff and judges the reflex
   ends deferred meanwhile."
   [eng]
   (clear-asked! eng)
   (cond
     (paused? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) nil)
-    (manual? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) (tick-manual! eng))
+    (or (manual? eng) (exclusive-job eng)) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) (tick-manual! eng))
     :else
     (do (when @(:was-paused eng)
           (reset! (:was-paused eng) false)
@@ -221,14 +221,23 @@
         (judge-deferred-ends! eng)
         (tick-online! eng))))
 
+(defn exclusive-run!
+  "Pause the whole engine and run the job spec alone: whatever holds the body is cut at once (a listed job continues
+  after the run, a reflex job is dropped unless it is in its cleanup), no trigger or other job runs until the job ends.
+  The caller has checked that the body is online and no run is in flight."
+  [eng spec]
+  (expr/parse-spec (:jobs eng) spec)
+  (when-let [h (holder eng)] (cut! eng h :exclusive nil))
+  (submit! eng spec {:exclusive? true :by :agent}))
+
 (defn do-now!
   "Cut a running listed job, open sections or not, and list the job spec directly before it as a normal job: it runs
   next, and the cut one, memory kept, continues right after it yields or ends. A running reflex is not cut; the new job
-  waits behind it."
+  waits behind it, as does a running exclusive run."
   [eng spec]
   (expr/parse-spec (:jobs eng) spec)
   (let [r (running eng)]
-    (when (and r (not (:reflex r)))
+    (when (and r (not (:reflex r)) (not (exclusive-job eng)))
       (cut! eng r :do-now nil))
     (let [id (submit! eng spec {:now? true :by :agent})]
       (swap! (:state eng) assoc :resume id)

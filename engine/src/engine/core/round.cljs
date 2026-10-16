@@ -1,7 +1,7 @@
 (ns engine.core.round
   "One round: the ctx a round or check receives, the act wrapper (token check, memory saves, action
   events) and call-child."
-  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of manual-job normalize-result now offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
+  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job normalize-result now offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
@@ -364,7 +364,7 @@
                              (catch :default e (or (own-limit e) (throw e))))]
                   (if (contract/ending? r) (await (cleanup/close eng def c r below)) r)))
             ;; a reflex root and the driver's slot job get this round only
-            r (if (or (:reflex run) (= (:id run) (manual-job eng))) (await (cleanup/run-out eng def c r below)) r)]
+            r (if (or (:reflex run) (= (:id run) (exclusive-job eng))) (await (cleanup/run-out eng def c r below)) r)]
         (assoc (normalize-result r) :result (get @results (:id run)) :child-wait @child-wait))
       (catch :default e
         (if (cut? e) {:status :cut :error e} {:status :error :error e}))

@@ -1,6 +1,6 @@
 (ns engine.core.list-edits
   "Edits of the job list: submit! (at the end, next or now), cancel! and retry!."
-  (:require [engine.core.base :refer [add-instance delete-root! driver? drop-reflex-job! emit! free-owner! job-fields job-of manual-job new-id! remove-listed running save-memory! state]]
+  (:require [engine.core.base :refer [add-instance delete-root! driver? drop-reflex-job! emit! free-owner! job-fields job-of exclusive-job new-id! remove-listed running save-memory! state]]
             [engine.core.attention :refer [resolve-job-attention!]]
             [engine.core.cleanup :as cleanup]
             [engine.core.tally :as tally]
@@ -88,29 +88,32 @@
     :hold?     hold the body (same as wrapping the spec in (hold e))
     :next?    list it directly after the current job, so it gets the next round
     :now?      list it directly before the current job (do-now!)
+    :exclusive? the job is an exclusive run (schedule/exclusive-run!): listed at the end, alone on the body
     :by        who asked, for the event
     :survive-death?  the job stays listed through a death and runs again after the respawn (see core/drop-jobs-on-death!)
   While someone holds the manual lease, a job submitted by them is the slot job: it is listed at the end (:next? and
   :now? ignored) and replaces (cancels) the previous slot job. Jobs from others are listed as usual and wait."
   [eng spec {:keys [next? now? by] :as opts}]
   (let [{:keys [node hold?]} (expr/parse-spec (:jobs eng) spec)
+        run? (boolean (:exclusive? opts))
         hold? (boolean (or hold? (:hold? opts)))
         args (second (job-of eng {:spec node}))
-        slot? (driver? eng by)
+        slot? (or run? (driver? eng by))
         next? (and next? (not slot?))
         now? (and now? (not slot?))
-        _ (when-let [old (and slot? (manual-job eng))] (cancel! eng old by))
+        _ (when-let [old (and slot? (not run?) (exclusive-job eng))] (cancel! eng old by))
         id (new-id! eng)]
-    (when slot? (reset! (:manual-job eng) id))
-    (swap! (:state eng) #(let [s (add-instance % id node (cond-> {:hold? hold?} slot? (assoc :slot? true) (:survive-death? opts) (assoc :survive-death? true)))]
+    (when slot? (reset! (:exclusive eng) id))
+    (swap! (:state eng) #(let [s (add-instance % id node (cond-> {:hold? hold?} slot? (assoc :exclusive? true) (:survive-death? opts) (assoc :survive-death? true)))]
                            (cond
                              now? (insert-now s id)
                              next? (insert-next s id)
                              :else (update s :list conj id))))
     (mem/create-job! (:store eng) id args)
     (save-memory! eng)
-    (emit! eng {:source :job :kind :queued :level :info :job id :chain [id] :name (expr/label node)
-                :spec (pr-str spec) :hold hold? :by by})
+    (emit! eng (cond-> {:source :job :kind :queued :level :info :job id :chain [id] :name (expr/label node)
+                        :spec (pr-str spec) :hold hold? :by by}
+                 run? (assoc :exclusive true)))
     id))
 
 (defn retry!

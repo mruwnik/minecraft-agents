@@ -12,10 +12,10 @@
             [jobs.movement.go-to.tuning :refer [at-night plug-wait-ms plug-wait-min-food plug-wait-min-health]]
             [jobs.movement.go-to.way-steps :as ways]))
 
-(defn manual-slot?
+(defn exclusive-run?
   "Whether this call runs for the driver of a manual lease (its slot job): the agent's own order."
   [c]
-  (let [slot (some-> (:manual-job (:engine c)) deref)]
+  (let [slot (some-> (:exclusive (:engine c)) deref)]
     (and (some? slot) (= slot (:root c)))))
 
 (defn night-wait
@@ -24,7 +24,7 @@
   (the call's, else the setting's)."
   [c]
   (let [p (:primitives c)]
-    (when (and (not (:reflex c)) (not (manual-slot? c)) (not= :go (keyword (or (:at-night (:args c)) (at-night)))) (sh/night? p))
+    (when (and (not (:reflex c)) (not (exclusive-run? c)) (not= :go (keyword (or (:at-night (:args c)) (at-night)))) (sh/night? p))
       (let [{goal :pos :as t} (target c)
             kind (when (and goal (not (:reason t)))
                    (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal (:range (:args c) 1)))]

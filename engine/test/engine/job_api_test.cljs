@@ -91,9 +91,27 @@
             (await resumed))
           (is (= ["j2"] (:list (core/state eng))))
           (is (true? (:ok (command eng "retry-failed" :retry {:id "j2"}))))
+          (is (not= "j2" (:resume (core/state eng))) "the retried job takes its normal turn, not the resume slot")
           (is (empty? (core/outstanding eng)))
           (command eng "cancel-failed" :cancel {:id "j2"})
           (is (empty? (:list (core/state eng))))
+          (core/shutdown! eng))))))
+(deftest an-interrupt-that-yields-lets-the-cut-job-continue
+  (async done
+    (tu/run-async done
+      (fn ^:async run []
+        (let [{:keys [eng]} (setup)
+              ran (atom [])]
+          (command eng "original" :submit {:spec '(wait)})
+          (let [running (core/tick! eng)]
+            (command eng "interrupt" :interrupt {:spec '(wait)})
+            (await running))
+          (dotimes [_ 2]
+            (let [r (core/tick! eng)]
+              (swap! ran conj (:id (core/running eng)))
+              (await r)))
+          (is (= ["j2" "j1"] @ran) "the new job yields after one round, then the cut job continues")
+          (is (= ["j2" "j1"] (:list (core/state eng))))
           (core/shutdown! eng))))))
 (deftest submit-takes-front-hold-and-who-added-it
   (let [{:keys [eng]} (setup)]

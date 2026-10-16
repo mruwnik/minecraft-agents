@@ -6,7 +6,7 @@
   call with a :least other than 1 it asks its quote for the least check) and adds :because to the ending the job's round returns.
   Every ending the engine makes carries done?'s :result and count."
   (:require [engine.contract :as contract]
-            [engine.core.base :refer [cut-error manual-job now owner?]]
+            [engine.core.base :refer [cut-error exclusive-job now owner?]]
             [engine.core.limits :as limits]
             [engine.ctx :as ctx]
             [engine.hooks :as hooks]
@@ -62,7 +62,7 @@
 (defn stays-listed?
   "Whether a skip leaves c's job queued: a listed root not yet started, not a reflex's nor the driver's slot job."
   [c]
-  (and (empty? (:slots c)) (not (started? c)) (not (:reflex c)) (not= (:root c) (manual-job (:engine c)))))
+  (and (empty? (:slots c)) (not (started? c)) (not (:reflex c)) (not= (:root c) (exclusive-job (:engine c)))))
 
 (defn fill-use
   "call with a list in :use for each purpose def's defaults name a chooser for and the call gives none, from the

@@ -123,7 +123,7 @@
           (submit-as eng "claude" '(spin))
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))) "left the slot")
-          (is (nil? (core/manual-job eng)))
+          (is (nil? (core/exclusive-job eng)))
           (is (= [:yielded] (mapv #(:reason %) (kinds seen :stopped))))
           (is (nil? (core/tick! eng)) "then the body idles")
           (is (= ["j1"] (ran seen)))
@@ -167,9 +167,9 @@
   (let [{:keys [eng]} (setup)]
     (takeover/take! eng me)
     (submit-as eng "claude" '(nop))
-    (is (some? (core/manual-job eng)))
+    (is (some? (core/exclusive-job eng)))
     (is (= 200 (.-status (takeover/handle eng opts "POST" "/drive" #js {:op "stop" :who "claude"} nil))))
-    (is (nil? (core/manual-job eng)) "the waiting slot job is cancelled")
+    (is (nil? (core/exclusive-job eng)) "the waiting slot job is cancelled")
     (is (= 200 (:status (drive-set eng))))))
 
 (deftest release-cancels-the-running-slot-job-and-the-normal-queue-goes-on
@@ -221,7 +221,7 @@
                                                       :generation-id (:generation-id (core/state eng))}))))
     (is (empty? (:list (core/state eng))) "nothing was listed")
     (is (true? (:ok (submit-as eng "other" '(nop)))) "a plain submit still queues")
-    (is (nil? (core/manual-job eng)) "and is not the slot")))
+    (is (nil? (core/exclusive-job eng)) "and is not the slot")))
 
 (deftest the-tick-expires-changes-while-manual
   (let [{:keys [eng clock]} (setup)]
@@ -239,7 +239,7 @@
     (core/drop-jobs-on-death! eng)
     (is (empty? (:list (core/state eng))))
     (is (true? (core/manual? eng)))
-    (is (nil? (core/manual-job eng)))))
+    (is (nil? (core/exclusive-job eng)))))
 
 (deftest a-failing-slot-job-ends-failed-and-unlisted
   (async done
@@ -251,7 +251,7 @@
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))) "left the slot, unlisted")
           (is (empty? (:failed (core/state eng))) "not parked")
-          (is (nil? (core/manual-job eng)))
+          (is (nil? (core/exclusive-job eng)))
           (is (= [:required] (mapv :attention (kinds seen :failed))) "one job.failed, attention as usual")
           (is (nil? (core/tick! eng)) "no rerun")
           (is (= ["j1"] (ran seen)))
@@ -270,7 +270,7 @@
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))) "left the slot, unlisted")
           (is (nil? (:resume (core/state eng))))
-          (is (nil? (core/manual-job eng)))
+          (is (nil? (core/exclusive-job eng)))
           (is (= [:cut] (mapv :reason (kinds seen :stopped))))
           (is (nil? (core/tick! eng)) "no rerun")
           (is (= ["j1"] (ran seen))))))))
@@ -297,7 +297,7 @@
               (is (= 200 (.-status r)))
               (await round))
             (is (= ["j1"] (mapv :job (kinds seen :cancelled))) "the slot job is cancelled")
-            (is (nil? (core/manual-job eng)))
+            (is (nil? (core/exclusive-job eng)))
             (is (true? (core/manual? eng)) "the lease stays")
             (is (owns? s (token eng)) "the lease token owns the body again")
             (is (= 200 (:status (drive-set eng))))))))))

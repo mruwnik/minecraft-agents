@@ -345,10 +345,10 @@
   [eng by]
   (and (manual? eng) (= (if (keyword? by) (name by) (str by)) (:who @(:manual eng)))))
 
-(defn manual-job
-  "The id of the driver's slot job while it is listed, else nil."
+(defn exclusive-job
+  "The id of the exclusive run's job (or the manual driver's slot job) while it is listed, else nil."
   [eng]
-  (let [id (some-> (:manual-job eng) deref)]
+  (let [id (some-> (:exclusive eng) deref)]
     (when (and id (some #{id} (:list (state eng)))) id)))
 
 (defn self-pos

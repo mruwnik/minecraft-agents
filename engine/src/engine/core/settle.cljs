@@ -1,7 +1,7 @@
 (ns engine.core.settle
   "Settling a round: booking a listed job's or a reflex job's outcome, judging reflex ends against the
   entry's persistence, and starting a round."
-  (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! job-fields manual-job manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
+  (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! job-fields exclusive-job manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
             [engine.core.ending :refer [refused?]]
             [engine.core.fruitless :refer [book-round! note-fruitless!]]
@@ -138,7 +138,7 @@
   "Book a listed job's round. The driver's slot job gets one call and ends: :continue or :declined and :cut end it
   stopped (see end-slot!), :error ends it failed (fail-slot!); :done is booked as for any listed job."
   [eng {:keys [id] :as run} {:keys [status child-wait error] :as outcome}]
-  (if (= id (manual-job eng))
+  (if (= id (exclusive-job eng))
     (case status
       (:continue :declined) (end-slot! eng id (if (= :declined status) (or (:reason child-wait) :declined) :yielded)
                                        (when (= :declined status) child-wait))

@@ -9,11 +9,11 @@
 
 (defn restore
   "Saved state after a restart: the in-flight round is lost (its job resumes
-  first); the legacy :recent-results key is dropped (results.edn holds the record); reflex jobs and the manual slot job (the lease is not saved) are dropped."
+  first); the legacy :recent-results key is dropped (results.edn holds the record); reflex jobs and an exclusive run (not resumed) are dropped."
   [saved]
   (let [s (merge empty-state (dissoc saved :recent-results))
         reflex-ids (keep (fn [[id inst]] (when (:reflex inst) id)) (:instances s))
-        slot-ids (set (keep (fn [[id inst]] (when (:slot? inst) id)) (:instances s)))
+        slot-ids (set (keep (fn [[id inst]] (when (:exclusive? inst) id)) (:instances s)))
         current (:current s)]
     (-> s
         (update :list #(filterv (complement slot-ids) %))
@@ -27,11 +27,11 @@
   "After a restore: end the manual slot job saved held (restore unlisted it) with one cancelled event, cut off by :restart."
   [eng saved]
   (doseq [[id inst] (:instances saved)
-          :when (:slot? inst)]
+          :when (:exclusive? inst)]
     (mem/delete-job! (:store eng) id)
     (emit! eng {:source :job :kind :cancelled :level :warn :job id :chain [id] :by :restart
                 :data {:kind :cut-off :cause :restart}
-                :text "stopped: restart (manual jobs end with the lease)"})))
+                :text "stopped: restart (an exclusive run ends with the engine)"})))
 
 (defn unknown-job
   "The message why inst's spec no longer resolves against the registry, or nil."

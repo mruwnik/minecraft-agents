@@ -304,10 +304,13 @@
      :generation-id (:generation-id s)
      :cursor (events/cursor (:events eng))
      :mode (cond (core/manual? eng) :manual
+                 (core/exclusive-job eng) :exclusive
                  (core/offline? eng) :offline
                  (core/settling? eng) :settling
                  :else :scheduled)
      :offline (core/away eng)
+     :exclusive (when-let [id (core/exclusive-job eng)]
+                  {:job id :name (some-> (get-in s [:instances id :spec]) expr/label (short-text 80))})
      :manual (when manual
                (cond-> (select-keys manual [:who :why :since])
                  (:who manual) (update :who #(short-text (str %) 80))

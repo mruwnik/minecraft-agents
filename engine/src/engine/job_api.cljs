@@ -22,8 +22,10 @@
     (cond-> {:id id :name (text (expr/label (:spec inst)) 160) :status (status eng id)
              :round (:round inst) :hold? (boolean (:hold? inst))}
       (:survive-death? inst) (assoc :survive-death? true)
-      (= id (core/manual-job eng)) (assoc :manual true)
-      (and (core/manual? eng) (not= id (core/manual-job eng)))
+      (= id (core/exclusive-job eng)) (assoc :exclusive true)
+      (and (core/exclusive-job eng) (not= id (core/exclusive-job eng)))
+      (assoc :waiting {:reason :exclusive-run :job (core/exclusive-job eng)})
+      (and (core/manual? eng) (not (core/exclusive-job eng)))
       (assoc :waiting {:reason :manual-control :who (:who @(:manual eng))})
       (core/waiting eng id) (assoc :waiting (core/waiting eng id))
       (core/holding eng id) (assoc :holding (core/holding eng id)))))
@@ -70,11 +72,11 @@
 (defn mutate! [eng {:keys [op id spec request-id generation-id by] :or {by :agent} :as request}]
   (let [prior (get-in (core/state eng) [:job-requests :records request-id])
         signature (fingerprint request)
-        spec-error (when (#{:submit :interrupt} op)
+        spec-error (when (#{:submit :interrupt :exclusive} op)
                      (if (bounded-spec? spec) (expr/problem (:jobs eng) spec) "job expression exceeds size/depth limits"))]
     (cond
       (not (map? request)) (fail :bad-request)
-      (not (contains? #{:submit :interrupt :cancel :cancel-all :retry} op)) (fail :bad-op)
+      (not (contains? #{:submit :interrupt :exclusive :cancel :cancel-all :retry} op)) (fail :bad-op)
       (seq (remove #{:op :id :spec :request-id :generation-id :next? :hold? :survive-death? :by} (keys request))) (fail :unknown-field)
       (not (valid-request-id? request-id)) (fail :bad-request-id)
       (not= generation-id (:generation-id (core/state eng))) (fail :generation-mismatch)
@@ -94,6 +96,12 @@
       (and (= op :cancel-all) (contains? request :id)) (fail :bad-field ":cancel-all takes no :id; it clears the whole list")
       (and (= op :submit) (:next? request) (core/manual? eng) (not (core/driver? eng by)))
       (fail :manual-control "Manual control is held: only its holder may submit :next?; a plain submit queues and waits.")
+      (and (= op :exclusive) (some request [:next? :hold? :survive-death?]))
+      (fail :bad-field "an exclusive run takes no :next?, :hold? or :survive-death?: it runs alone, once, now")
+      (and (= op :exclusive) (or (core/offline? eng) (core/settling? eng)))
+      (fail :offline "The body is offline or settling: an exclusive run needs it online.")
+      (and (= op :exclusive) (or (core/exclusive-job eng) (core/manual? eng)))
+      (fail :exclusive-running (str "An exclusive run is in flight (" (or (core/exclusive-job eng) "manual control") "); wait for it to end."))
       (and (= op :interrupt) (core/manual? eng)) (fail :manual-control "Release the exclusive body lease before interrupting; submit can still queue work.")
       :else
       (do
@@ -104,6 +112,9 @@
                          :submit (let [job-id (core/submit! eng spec (submit-opts request by))]
                                    (swap! (:state eng) assoc-in [:instances job-id :by] by)
                                    {:ok true :job (summary eng job-id)})
+                         :exclusive (let [job-id (core/exclusive-run! eng spec)]
+                                      (swap! (:state eng) assoc-in [:instances job-id :by] by)
+                                      {:ok true :job (summary eng job-id)})
                          :interrupt (let [job-id (core/do-now! eng spec)]
                                       (swap! (:state eng) update-in [:instances job-id] merge
                                              (cond-> {:by by} (:survive-death? request) (assoc :survive-death? true)))

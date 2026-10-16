@@ -22,7 +22,7 @@
     (let [token (str "m" (swap! (:tokens eng) inc))]
       (when-let [h (core/holder eng)] (core/cut! eng h :takeover nil))
       (core/set-owner! eng token)
-      (reset! (:manual-job eng) nil)
+      (reset! (:exclusive eng) nil)
       (reset! (:manual eng) {:who who :why why :since (core/now eng) :token token})
       (core/emit! eng {:source :system :kind :takeover_started :level :info :who who :why why
                        :text (str "manual control by " who ": " why "; jobs and reflexes paused")})
@@ -32,8 +32,8 @@
   "End the takeover: the slot job is cancelled, controls cleared, owner nil, the loop and triggers resume on the next tick."
   [eng {:keys [who reason held-ms]}]
   (when (core/manual? eng)
-    (when-let [id (core/manual-job eng)] (core/cancel! eng id :release))
-    (reset! (:manual-job eng) nil)
+    (when-let [id (core/exclusive-job eng)] (core/cancel! eng id :release))
+    (reset! (:exclusive eng) nil)
     (.stopDriving (:primitives eng))
     (core/set-owner! eng nil)
     (reset! (:manual eng) nil)
@@ -88,12 +88,12 @@
     (let [body-map (js->clj body :keywordize-keys true)]
       (cond
         (and (= path "/drive") (= method "POST") (= "stop" (:op body-map)) (own-lease? eng (:who body-map))
-             (core/manual-job eng))
-        (do (core/cancel! eng (core/manual-job eng) :driver)
+             (core/exclusive-job eng))
+        (do (core/cancel! eng (core/exclusive-job eng) :driver)
             (handle eng opts method path body content-type))
         (and (= path "/drive") (= method "POST") (= "set" (:op body-map)) (own-lease? eng (:who body-map))
-             (core/manual-job eng))
-        #js {:status 409 :json #js {:ok false :reason "job-running" :job (core/manual-job eng)}}
+             (core/exclusive-job eng))
+        #js {:status 409 :json #js {:ok false :reason "job-running" :job (core/exclusive-job eng)}}
         :else
         (let [now (core/now eng)
               req {:method method :path path :body body-map}
