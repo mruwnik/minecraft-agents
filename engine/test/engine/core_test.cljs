@@ -735,6 +735,25 @@
           (core/cancel! eng "j1")
           (is (not (contains? @(:rounds eng) "j1")) "cancelled: nothing left to resume")))))) 
 
+(deftest a-job-cancelled-while-its-round-runs-stays-gone-after-a-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              {:keys [eng p]} (setup {} dir)]
+          (core/submit! eng (list 'walk {:pos {:x 5 :y 64 :z 0}}) {})
+          (let [release (.hold (.-world p) "moveTo")
+                walking (core/tick! eng)]
+            (await (in-act (.-world p) "moveTo"))
+            (core/cancel! eng "j1")
+            (release)
+            (await walking))
+          (is (= [] (listed eng)))
+          (let [[again _] (restore-with dir registry triggers)]
+            (is (= [] (listed again)) "the saved list does not bring it back")
+            (is (nil? (:resume (core/state again))))
+            (is (nil? (get-in (core/state again) [:instances "j1"])))))))))
+
 (deftest dropping-a-reflex-job-clears-its-round-entry
   (let [{:keys [eng]} (setup)]
     (swap! (:state eng) assoc-in [:instances "r1"] {:spec {:op :leaf :job 'night}})
