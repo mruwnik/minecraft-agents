@@ -208,7 +208,7 @@
           (is (number? (:near @out)) (str "result " @out)))))))
 
 ;; a small deck 11 blocks over the ground, 15 blocks from the body (live fixture go-to-sealed-platform-pool): the goal is proved
-;; cut off in the first rounds, with no walk towards it
+;; cut off in the first round; the body walks under it (the nearest cell it can reach, well within budget) and gives up there
 (def small-deck
   (merge (box -70 63 -70 70 63 70 "stone") (box 13 74 13 19 74 19 "stone")))
 
@@ -220,7 +220,7 @@
                                         {:pos [17 75 17] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}}))]
     (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
         (str "result " @out))
-    (is (< (dist-to (at p) [2.5 64 16.5]) 3)
+    (is (< (dist-to (at p) [17 64 17]) 1.5)
         (str "body at " (at p) " walks: " (mapv (juxt :status :to) (moved eng))))))
 
 (deftest go-to-a-small-sealed-deck-with-the-default-budget
@@ -232,10 +232,10 @@
           (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
               (str "result " @out)))))))
 
-(deftest go-to-a-small-sealed-deck-is-cut-off-without-walking
+(deftest go-to-a-small-sealed-deck-is-cut-off-and-walked-under
   (async done (tu/run-async done (fn ^:async t [] (await (small-deck-cut-off! small-deck))))))
 
-(deftest go-to-a-small-sealed-deck-with-a-pool-is-cut-off-without-walking
+(deftest go-to-a-small-sealed-deck-with-a-pool-is-cut-off-and-walked-under
   (async done (tu/run-async done (fn ^:async t [] (await (small-deck-cut-off! small-deck-pool))))))
 
 ;; ---- a long tour: no cap on frontier walks while a frontier is unspent ----

@@ -90,7 +90,9 @@
   - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body
     is already there (a cut call's memory is a hint).
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up (or escalate, below), and so
-    does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off) or on magma (:goal-on-magma), at once.
+    does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off) or on magma (:goal-on-magma), at once; a
+    walled-in goal it does not escalate into is first walked up to (the cell nearest it the body can reach, once a call, when
+    that walk fits the time left; info go-to.wall-walk).
   - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
     is progress too: a tour of frontiers ends when every frontier within 1000 blocks of the goal is spent, or at the end of
     a frontier walk once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
@@ -104,7 +106,7 @@
     search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off), any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room, makes a way instead of giving up, one child job
     each (jobs.lib.escape/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation): standing on a stair of its own under the goal, that stair cut again (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else jobs.access.pillar up out of a pit when it carries enough blocks; else
     jobs.access.clear-path through a wall up to 3 thick toward the goal (into a walled-in goal no door or stair reaches:
-    the fewest cells dug down or across to it, escalation/dig-way); else jobs.access.stair up out of a pit or
+    the fewest cells dug down or across to it, escalation/dig-way, tried first for a shut-in body); else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
     followed by the next escalation at once); else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
     through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;

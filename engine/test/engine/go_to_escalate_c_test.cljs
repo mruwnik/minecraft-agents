@@ -149,6 +149,19 @@
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [:dig-route] (map :step (events-of seen :go-to.escalated))) "a walk to a wall cuts no way down"))))))
 
+(deftest a-body-on-a-plateau-it-cannot-walk-off-digs-down-to-a-walled-in-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; 29x29 top 6 above a floor: fewer cells than reach/room-cells, so the body counts as shut in
+        (let [blocks (apply dissoc (merge (box -40 57 -40 40 57 40 "stone") (box -14 58 -14 14 63 14 "stone")) ["3,60,0" "3,61,0"])
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks
+                                                     :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                    {:pos [3 60 0] :range 0}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [3 60 0] (feet p)))
+          (is (= [:dig-route] (map :step (events-of seen :go-to.escalated))) "the goal is a dig away: no wall is walked to"))))))
+
 (deftest a-walled-in-goal-is-not-dug-to-in-another-s-zone-or-under-walk-only
   (async done
     (tu/run-async done
@@ -161,6 +174,16 @@
             (is (re-find #"the goal is walled in" (:text @out)) what)
             (is (empty? (calls p "dig")) what)
             (is (empty? (events-of seen :go-to.escalated)) what)))))))
+
+(deftest a-walk-only-call-walks-to-the-wall-of-a-walled-in-goal-when-its-budget-allows
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[spend at] [[nil [5 64 0]] [{:wall-time 0.5} [0 64 0]]]]
+          (let [{:keys [out p]} (await (run-job! free-by-pocket (cond-> {:pos [8 64 0] :range 0 :ways #{:walk}} spend (assoc :spend spend))))]
+            (is (= :goal-enclosed (:why @out)) (pr-str spend @out))
+            (is (= at (feet p)) (str spend ": the nearest cell to the goal, when the walk there fits the budget"))
+            (is (empty? (calls p "dig")))))))))
 
 (deftest a-free-body-far-from-a-walled-in-goal-walks-to-the-nearest-cell-first
   (async done

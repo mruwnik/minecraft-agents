@@ -294,18 +294,25 @@
     (when-let [cells (seq (route-cells p from goal may-dig? own?))]
       {:step :dig-route :cells (vec cells)})))
 
+(defn nearest-stand
+  "The cell [x y z] nearest goal that the body can walk to (a flood of at most reach/room-cells cells), of equally near
+  ones the first the flood reaches (the shortest walk)."
+  [p goal]
+  (let [kind-at (reach/lookup p reach/body-kind-of)
+        to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))]
+    (->> (:cells (reach/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach/room-cells))
+         (map vec)
+         (reduce (fn [a b] (if (< (to-goal b) (to-goal a)) b a))))))
+
 (defn goal-way
   "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to
-  nearest the goal (a flood of at most reach/room-cells cells) is more than a block nearer, from there, as
+  nearest the goal (nearest-stand) is more than a block nearer, from there, as
   {:step :approach :pos cell} first. Only a door, or a stair or pillar up to a higher goal, leads in (a walk along
   the wall too, from where it stands, to a goal not below it), else the fewest cells dug (dig-way); else {:step :none :why :no-dig}."
   [c feet goal may-dig? opts]
   (let [p (:primitives c)
-        kind-at (reach/lookup p reach/body-kind-of)
         to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
-        near (->> (:cells (reach/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach/room-cells))
-                  (map vec)
-                  (apply min-key to-goal))
+        near (nearest-stand p goal)
         here? (or ((:skip opts) :approach) (>= (to-goal near) (dec (to-goal feet))))
         from (if here? feet near)
         e (escape/choose p from goal may-dig? opts)
@@ -368,7 +375,11 @@
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         opts {:own? (own-placed-fn c) :skip (skips c)}
         into? (goal-walled? c result)
-        choose (if into? #(goal-way c feet goal % opts) #(escape/choose (:primitives c) feet goal % opts))
+        ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in digs straight into it when it can
+        dig-in? (and (not into?) (= :goal-enclosed (some-> (:reason result) keyword)))
+        choose (cond into? #(goal-way c feet goal % opts)
+                     dig-in? #(or (dig-way (:primitives c) feet goal % opts) (escape/choose (:primitives c) feet goal % opts))
+                     :else #(escape/choose (:primitives c) feet goal % opts))
         e (or (when (shelter-exit? c result) {:step :leave-shelter})
               (gap-fill c result (:skip opts))
               (own-stair c feet goal)
@@ -389,7 +400,7 @@
       (= :none (:step e)) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
-                                               :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if into? "in" "out") " on foot: " (name (:step e))))})
+                                               :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if (or into? (= :dig-route (:step e))) "in" "out") " on foot: " (name (:step e))))})
           (ctx/update-mem! c #(-> (merge % counted)
                                   (assoc :escalations (inc (:escalations % 0)) :escalation e :escalation-from feet
                                          :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))

@@ -4,6 +4,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.near :as near]
@@ -215,6 +216,34 @@
       (await (ctx/call c :seal-cleanup 'jobs.access.cleanup {:job :all :near near}))
       true)))
 
+(defn budget-s
+  "Seconds the call chain has left (ctx/left: job time, wall time, deadline), ##Inf when nothing bounds it."
+  [c]
+  (let [{:keys [spend deadline]} (ctx/left c)]
+    (apply min ##Inf (cond-> (keep spend [:job-time :wall-time])
+                       deadline (conj (/ (- deadline (ctx/now c)) 1000))))))
+
+(defn ^:async walk-to-wall!
+  "A walled-in goal (result :goal-enclosed, :goal-cut-off) that no escalation will open: once a call (mem :wall-walked),
+  walk to the cell nearest it the body can reach (escalation/nearest-stand) when that is more than a block nearer and
+  the walk there (jobs.lib.cost/walk-cost) fits budget-s. True when it walked."
+  [c pos tries result opts]
+  (let [p (:primitives c)
+        feet (end/feet-cell c)
+        goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
+        near (delay (esc/nearest-stand p goal))
+        to (fn [a b] (u/dist (zipmap [:x :y :z] a) (zipmap [:x :y :z] b)))]
+    (when (and (#{:goal-enclosed :goal-cut-off} (:reason result))
+               (not (:wall-walked (ctx/mem c)))
+               (not (esc/escalate? c tries result))
+               (< (to @near goal) (dec (to feet goal)))
+               (<= (:cost (cost/walk-cost {:distance (to feet @near)})) (budget-s c)))
+      (ctx/update-mem! c assoc :wall-walked true)
+      (ctx/emit! c :go-to.wall-walk :info {:at @near :why (:reason result)
+                                           :text (str "the goal is walled in: walking to " @near ", the nearest cell to it")})
+      (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) (zipmap [:x :y :z] @near) 0 (dissoc opts :progress)))
+      true)))
+
 (defn leg-alert?
   "Whether :leg-alert-within is set and a close-range attacker is within it, or the body lost health since start-attempt!."
   [c]
@@ -378,6 +407,7 @@
                     result (dive-end c pos (dark-end c result))
                     ended (cond-> (if (esc/escalate? c tries result) result (sight-end c pos (unloaded-end result unloaded?)))
                             (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]
-                (if (await (clear-goal-seal! c pos ended))
-                  :again
-                  (await (esc/give-up-or-escalate! c pos tries status ended)))))))))))))
+                (cond
+                  (await (clear-goal-seal! c pos ended)) :again
+                  (await (walk-to-wall! c pos tries ended opts)) :again
+                  :else (await (esc/give-up-or-escalate! c pos tries status ended)))))))))))))

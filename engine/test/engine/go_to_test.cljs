@@ -462,7 +462,7 @@
           (is (= {:arrived true} @(:out dark)))
           (is (empty? (watched dark))))))))
 
-(deftest go-to-gives-up-at-once-on-a-walled-in-goal
+(deftest go-to-walks-to-the-wall-of-a-walled-in-goal-and-gives-up
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -470,8 +470,8 @@
         (let [walled (merge (box -2 63 -2 10 63 4 "stone") (box 5 64 -2 5 65 4 "stone"))
               {:keys [out eng p]} (await (go! {:blocks walled} {:pos [8 64 1] :range 0 :ways #{:walk :clear-seal}}))]
           (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (dissoc @out :at :near :text :status :shut-in)))
-          (is (= [0 64 0] (at p)) "the body did not walk to the wall")
-          (is (= ["blocked"] (mapv :status (moved eng))) "one round"))))))
+          (is (= [4 64 1] (at p)) "the cell nearest the goal it can reach")
+          (is (= ["blocked" "arrived" "blocked"] (mapv :status (moved eng))) "no try again after the walk to the wall"))))))
 
 (deftest go-to-walks-to-where-the-loaded-land-runs-on-when-it-holds-no-way
   (async done
