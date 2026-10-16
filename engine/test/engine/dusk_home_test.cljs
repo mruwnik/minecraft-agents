@@ -14,7 +14,7 @@
   (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
     (doseq [[kind x z] places]
       (mem/write! store kind {:pos {:x x :y 64 :z z}} mem/place-policy))
-    (dh/dusk-home (tu/seeing-all (tu/fake-on-floor (merge {:floor [-200 -200 200 200] :time t :self {:pos {:x 0.5 :y 64 :z 0.5}}} over)))
+    (dh/dusk-home (tu/seeing-all (tu/fake-on-floor (merge {:floor [-4 -4 4 4] :time t :self {:pos {:x 0.5 :y 64 :z 0.5}}} over)))
                   (mem/view store) (or args dh/defaults))))
 
 (deftest leaves-when-the-walk-takes-as-long-as-the-day-has-left

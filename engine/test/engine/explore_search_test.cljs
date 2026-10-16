@@ -128,10 +128,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 48} {:blocks {"40,64,0" "diamond_block"} :cone? true}))
+        (let [s (await (search! {:target "diamond_block" :max-distance 32} {:blocks {"24,64,0" "diamond_block"} :cone? true}))
               e (found-of s)]
           (is (= nil (not-found-of s)))
-          (is (= [{:what "diamond_block" :pos [40 64 0]}] (:found e)))
+          (is (= [{:what "diamond_block" :pos [24 64 0]}] (:found e)))
           (is (seq (walks s))))))))
 
 ;; ------------------------------------------------------------------ the job

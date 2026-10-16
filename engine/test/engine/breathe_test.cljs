@@ -853,7 +853,7 @@
 
 ;; ---------------------------------------------------------------- drowning under a ceiling: go-to air, dig a natural cap
 
-(def cap-args "One column out is searched, so the open fake world beyond the walls is not a target." (assoc defaults :radius 1 :air-radius 1))
+(def cap-args "One column out is searched, so the open fake world beyond the walls is not a target." (assoc small-args :radius 1 :air-radius 1))
 
 (defn capped-world
   "The walled water column capped at y 68 by block, stone beside it up to y 67 with the +x top as land."
@@ -1173,7 +1173,7 @@
                                           (swap! looks conj [[(js/Math.floor (.. a -pos -x)) (js/Math.floor (.. a -pos -z))]
                                                              (boolean (some #{"swim"} (call-names p)))])
                                           #js {:status "ok"}))
-          (await (one-run! eng (assoc defaults :radius 2 :air-radius 2)))
+          (await (one-run! eng (assoc small-args :radius 2 :air-radius 2)))
           (is (some #{"swim"} (call-names p)) "swam up")
           (is (every? #{[0 0]} (map first (remove second @looks))) "before the swim up only the own column was looked at (after it the land search may look)"))))))
 

@@ -218,20 +218,22 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [dir (tu/tmp-dir)
-              sock (path/join dir "body.sock")
-              marker (path/join (tu/tmp-dir) "inside")
-              iterations 15]
-          (doseq [round (range 2)]
-            (let [kids (mapv #(start-child {:mode "loop" :sock sock :marker marker :iterations iterations
-                                            :hold-ms 2 :crash-at (if (zero? %) (rand-int iterations) -1)})
-                             (range 3))
-                  exits (await (js/Promise.all (clj->js (map :exit kids))))]
-              (is (= [[nil "SIGKILL"] [0 nil] [0 nil]] (js->clj exits)) (str "round " round))
-              (doseq [k kids] (is (not (str/includes? @(:out k) "LOCK:overlap")) (str "round " round)))
-              (doseq [k (rest kids)] (is (str/includes? @(:out k) "LOCK:done")))))
-          (await (single/with-replace-lock sock (fn [] nil)))
-          (is (= [] (js->clj (fs/readdirSync dir))) "nothing is left beside the socket"))))))
+        (let [iterations 15
+              ;; both rounds at once, each on its own socket: a child's start (loading the test bundle) is the cost
+              round (fn ^:async round [n]
+                      (let [dir (tu/tmp-dir)
+                            sock (path/join dir "body.sock")
+                            marker (path/join (tu/tmp-dir) "inside")
+                            kids (mapv #(start-child {:mode "loop" :sock sock :marker marker :iterations iterations
+                                                      :hold-ms 2 :crash-at (if (zero? %) (rand-int iterations) -1)})
+                                       (range 3))
+                            exits (await (js/Promise.all (clj->js (map :exit kids))))]
+                        (is (= [[nil "SIGKILL"] [0 nil] [0 nil]] (js->clj exits)) (str "round " n))
+                        (doseq [k kids] (is (not (str/includes? @(:out k) "LOCK:overlap")) (str "round " n)))
+                        (doseq [k (rest kids)] (is (str/includes? @(:out k) "LOCK:done")))
+                        (await (single/with-replace-lock sock (fn [] nil)))
+                        (is (= [] (js->clj (fs/readdirSync dir))) "nothing is left beside the socket")))]
+          (await (js/Promise.all #js [(round 0) (round 1)])))))))
 
 (deftest a-holder-that-died-but-is-not-yet-reaped-frees-the-lock
   (async done

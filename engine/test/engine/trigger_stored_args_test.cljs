@@ -14,13 +14,14 @@
    {:time 18000 :inventory [{:name "bread" :count 1}] :self {:food 4}}
    {:time 11000 :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]}])
 
-(defn judge [t world args]
+(defn judge [t fake args]
   (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
     (mem/write! store :home {:pos {:x 400 :y 64 :z 0}} mem/place-policy)
-    (boolean ((:when t) (tu/fake-on-floor (merge {:floor [-10 -10 10 10]} world)) (mem/view store) args (ew/of-data {} {} []) nil))))
+    (boolean ((:when t) fake (mem/view store) args (ew/of-data {} {} []) nil))))
 
 (deftest every-default-trigger-judges-the-same-without-its-stored-args
-  (doseq [[id t] triggers/all
-          world worlds
+  (doseq [world worlds
+          :let [fake (tu/fake-on-floor (merge {:floor [-10 -10 10 10]} world))]
+          [id t] triggers/all
           :let [args (when (map? (:args t)) (:args t))]]
-    (is (= (judge t world args) (judge t world {})) (str id " " (pr-str world)))))
+    (is (= (judge t fake args) (judge t fake {})) (str id " " (pr-str world)))))
