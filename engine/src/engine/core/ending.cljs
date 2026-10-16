@@ -335,8 +335,8 @@
        done? (done-ending d fresh?)
        (= :never (first s)) (contract/ending :impossible (contract/status-cause s) nil)
        (= :later (first start-s)) (if (stays-listed? c) :continue (failed start-s))
-       (= :later (first run-s)) (cond (seq (:slots c)) (do (some-> (:child-wait c) (reset! (contract/status-cause run-s))) :continue)
-                                      (:reflex c) (failed run-s)
+       (= :later (first run-s)) (cond (:reflex c) (failed run-s)
+                                      (seq (:slots c)) (do (some-> (:child-wait c) (reset! (contract/status-cause run-s))) :continue)
                                       :else :continue)
        :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
                (counted (contract/ending :condition-failed floor nil))

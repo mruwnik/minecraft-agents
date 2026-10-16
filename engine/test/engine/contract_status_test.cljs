@@ -9,6 +9,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.test-util :as tu]
+            [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]))
 
 (deftest constructors-give-kind-text-and-data-with-a-reason
@@ -44,14 +45,16 @@
 
 (def world (atom {}))
 
-(defn setup [jobs]
+(defn setup
+  ([jobs] (setup jobs {}))
+  ([jobs triggers]
   (reset! world {})
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
         p (tu/fake {})
-        eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers {}
+        eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs :triggers triggers
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :seen seen :clock clock :p p}))
+    {:eng eng :seen seen :clock clock :p p})))
 
 (defn job-ev [seen kind] (filterv #(= [:job kind] [(:source %) (:kind %)]) @seen))
 
@@ -242,6 +245,25 @@
           (swap! world assoc :run false)
           (await (core/tick! eng))
           (is (= ["waiting: torches 0 < 4"] (mapv :message (job-ev seen :waiting)))))))))
+
+(deftest a-reflex-calling-a-child-that-waits-on-can-run-gets-the-condition-failed-ending-and-its-tick-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'parent {:can-run? ok
+                                             :round (fn ^:async parent [c]
+                                                      (loop []
+                                                        (let [r (await (ctx/call c :kid gated {}))]
+                                                          (if (= :continue r)
+                                                            (do (await (child/pace!)) (recur))
+                                                            (do (swap! world assoc :child r) (ctx/end c :done nil))))))}}
+                                   {:wait {:name :wait :job '(parent) :persistence :retry :when (constantly true)}})]
+          (swap! world assoc :start true :run false)
+          (core/register-reflex! eng {:trigger :wait})
+          (let [ticked (await (js/Promise.race #js [(.then (core/tick! eng) (constantly true))
+                                                    (js/Promise. (fn [res _] (js/setTimeout #(res false) 3000)))]))]
+            (is ticked "the reflex round ended instead of spinning on its child's wait")
+            (is (= :condition-failed (:kind (:child @world))))))))))
 
 (deftest a-can-start-never-bad-args-beats-a-goal-that-holds
   (async done
