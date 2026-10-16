@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.look-support :as ls]
             [engine.fake :as fake]
             [engine.test-util :as tu]))
 
@@ -216,3 +217,14 @@
           (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (nil? (:spend %)) (false? (:look-round %)) (:zone-tolls %)) opts)
               "a moving target is chased in legs, never dug or pillared toward")
           (is (finished? s)))))))
+
+(deftest an-animal-on-a-lead-behind-the-body-is-looked-for-before-the-run-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:entities [(led 1 3)]})]
+          (ls/entities-after-look (:p s))
+          (core/submit! (:eng s) (list 'jobs.animals.unleash {}) {})
+          (await (run-ticks s 8 700))
+          (is (= ["u1"] (:freed (done-event s))))
+          (is (empty? (still-leashed s))))))))

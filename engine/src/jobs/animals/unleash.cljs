@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -31,7 +32,7 @@
   Ends with a warn unleash.gave-up unless the reason is :unleashed. The data {:reason :freed
   [keys] :given-up {key reason} :collected n :leads n} (:collected is the leads gained since the call began, :leads
   the leads carried at the end) and the ending by the reason:
-  - :done :unleashed: some animal was freed; :already when none within :radius was on a lead at the start.
+  - :done :unleashed: some animal was freed; :already when none within :radius was on a lead at the start, after one look around.
   - :condition-failed :refused (with nothing freed, others given up) or :no-zones (no zone list was read).
   - :nothing-possible with nothing freed: :unreachable if one was given up as unreachable, else :none (0 freed is
     never done; a run that began with an animal on a lead). It also ends after three fruitless animals in a row.
@@ -90,19 +91,20 @@
 (defn finish!
   "Emit the outcome and end the call (ending-of, else nothing-possible). :collected is the leads gained since the call
   began, so a lead picked up the moment it dropped counts too."
-  [c reason]
-  (let [m (ctx/mem c)
-        leads (leads-carried c)
-        result {:reason reason
-                :freed (vec (:freed m))
-                :given-up (:given-up m {})
-                :collected (max 0 (- leads (:leads-at-start m leads)))
-                :leads leads
-                :text (str "unleash done: " (name reason) ", freed " (count (:freed m)))}]
-    (when (not= :unleashed reason)
-      (ctx/emit! c :unleash.gave-up :warn {:reason reason :text (str "unleashing stopped: " (name reason))}))
-    (let [[kind cause] (get ending-of reason [:nothing-possible reason])]
-      (ctx/end c kind cause result))))
+  ([c reason] (finish! c reason nil))
+  ([c reason cause]
+    (let [m (ctx/mem c)
+          leads (leads-carried c)
+          result {:reason reason
+                  :freed (vec (:freed m))
+                  :given-up (:given-up m {})
+                  :collected (max 0 (- leads (:leads-at-start m leads)))
+                  :leads leads
+                  :text (str "unleash done: " (name reason) ", freed " (count (:freed m)))}]
+      (when (not= :unleashed reason)
+        (ctx/emit! c :unleash.gave-up :warn {:reason reason :text (str "unleashing stopped: " (name reason))}))
+      (let [[kind ending-cause] (get ending-of reason [:nothing-possible reason])]
+        (ctx/end c kind (or cause ending-cause) result)))))
 
 (defn go-collect! [c reason]
   (if-not (:collect (:args c))
@@ -136,7 +138,7 @@
   the run ends itself with its reason (a run that freed or gave up on one is not done by finding none)."
   [c]
   (let [{:keys [freed given-up phase]} (ctx/mem c)]
-    (if (and (empty? freed) (empty? given-up) (nil? phase) (empty? (on-a-lead c)))
+    (if (and (empty? freed) (empty? given-up) (nil? phase) (empty? (on-a-lead c)) (look/surveyed? c))
       (contract/ok :unleashed "no animal in reach is on a lead"
                    :result {:reason :unleashed :freed [] :given-up {} :collected 0 :leads (leads-carried c)})
       (contract/later :unleashing (str (count freed) " animals freed") :units :animals
@@ -229,7 +231,10 @@
         cands (candidates c)]
     (cond
       (= :collect (:phase m)) (await (collect! c))
-      (empty? cands) (if (seq (:freed m)) (go-collect! c :unleashed) (finish! c (none-reason c)))
+      (and (empty? cands) (not (look/surveyed? c))) (do (await (look/survey! c)) :again) ; animals count only while in view
+      (empty? cands) (cond (seq (:freed m)) (go-collect! c :unleashed)
+                           (and (empty? (:given-up m)) (empty? (on-a-lead c))) (finish! c :unleashed :already)
+                           :else (finish! c (none-reason c)))
       :else (await (engage! c (first cands))))))
 
 (defn ^:async round

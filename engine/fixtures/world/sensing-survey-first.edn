@@ -63,6 +63,13 @@
    :act [[:summon "cow" [16.5 0 20.5]] [:job (jobs.animals.leash {:mob "cow"})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :leashed}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]}
+  {:name "unleash-the-cow-led-behind-it"
+   :body {:inventory [["lead" 1]]}
+   :act [[:summon "cow" [16.5 0 20.5]] [:job (jobs.animals.leash {:mob "cow"})] [:await {:source :job :kind :completed} 60]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"]
+         [:job (jobs.animals.unleash {:mob "cow"})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :unleashed}} :within-s 60 :of-job true}]
+   :after [[:item "lead" [:>= 1]]]}
   {:name "breed-the-cows-behind-it"
    :body {:inventory [["wheat" 4]]}
    :act [[:summon "cow" [16.5 0 20.5]] [:summon "cow" [17.5 0 20.5]] [:job (jobs.animals.breed {:mob "cow" :count 2 :fetch false})]]
