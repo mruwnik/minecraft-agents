@@ -9,10 +9,10 @@
  :cases
  [{:name "look-useful-lists-table-then-furnace"
    :blocks [[:set [11 0 16] "crafting_table"] [:set [13 0 20] "furnace"]]
-   :act [[:wait-s 3] [:job (jobs.explore.look {:useful? true :radius 32 :max-blocks 16})]]
+   :act [[:job (jobs.explore.look {:useful? true :radius 32 :max-blocks 16})]]
    :expect [{:event {:source :job :kind :completed :data {:blocks [{:name "crafting_table"} {:name "furnace"}]}} :within-s 30 :of-job true}]}
   {:name "look-useful-with-block-names-refused"
-   :act [[:wait-s 2] [:job (jobs.explore.look {:useful? true :block-names ["iron_ore"] :radius 16})]]
+   :act [[:job (jobs.explore.look {:useful? true :block-names ["iron_ore"] :radius 16})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10 :of-job true}]}
   {:name "search-default-max-legs-reaches-a-far-target"

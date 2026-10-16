@@ -149,7 +149,7 @@
          [:await {:source :job :kind :result :data {:arrived true}} 150]
          [:await {:source :job :kind :go-to.restored} 40]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]
-         [:wait-s 3]
+         [:until-pos {:x-min 15 :x-max 18 :z-min 15 :z-max 18} 10]
          [:job (jobs.movement.go-to {:pos #at [20 4 17] :range 1 :ignore-zones? true})]
          [:wait-s 60]]
    :expect [{:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}]
@@ -287,7 +287,6 @@
    :act [[:job (jobs.survival.dig-in {})]
          [:await {:source :job :kind :dig-in.sealed} 90]
          [:time-set 1000]
-         [:wait-s 3]
          [:job (jobs.movement.go-to {:pos #at [22 10 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :leave-shelter}} :within-s 140 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 160 :of-job true}]

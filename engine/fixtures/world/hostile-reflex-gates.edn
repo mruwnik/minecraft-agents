@@ -46,7 +46,7 @@
    :register []
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]] :yaw 270}
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 2]
+         [:until-seen {:entity "zombie"} 10]
          [:job (jobs.survival.fight-back {:range 8 :leash 3})]]
    :expect [{:event {:source :job :kind :nothing-possible} :within-s 20 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "attack"}} :for-s 20}]
@@ -56,7 +56,7 @@
    :register []
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]]}
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 2]
+         [:until-seen {:entity "zombie"} 10]
          [:job (jobs.survival.fight-back {:range 8})]]
    :expect [{:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 20}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 0]]
@@ -64,7 +64,6 @@
   {:name "provoked-enderman-no-shelter-body-seals"
    :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
    :act [[:summon "enderman" [20.5 0 16.5] "{}"]
-         [:wait-s 1]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
             {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 40}]
@@ -73,7 +72,6 @@
    :blocks [[:fill [19 0 14] [23 0 18] "stone"] [:fill [20 0 15] [22 0 17] "water"]]
    :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
    :act [[:summon "enderman" [11.5 0 16.5] "{}"]
-         [:wait-s 1]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
@@ -83,7 +81,6 @@
    :blocks [[:fill [20 0 14] [20 1 14] "stone"] [:fill [24 0 18] [24 1 18] "stone"] [:fill [20 2 14] [24 2 18] "stone"]]
    :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
    :act [[:summon "enderman" [11.5 0 16.5] "{}"]
-         [:wait-s 1]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]

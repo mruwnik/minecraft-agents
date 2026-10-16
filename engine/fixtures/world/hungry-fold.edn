@@ -74,7 +74,7 @@
    :limit-s 80}
   {:name "hurt-hp5-full-bar-no-food-keeps-working"
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [8 0 16]})]
-         [:rcon "damage $BODY 15 minecraft:generic"] [:wait-s 1]
+         [:rcon "damage $BODY 15 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired} :for-s 15 :until {:source :job :kind :result :data {:arrived true}}}

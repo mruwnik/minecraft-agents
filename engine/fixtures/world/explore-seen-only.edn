@@ -13,20 +13,20 @@
   :limit-s 60}
  :cases
  [{:name "look-lists-the-exposed-ore-and-not-the-buried"
-   :act [[:wait-s 3] [:job (jobs.explore.look {:block-names ["iron_ore"] :radius 16 :max-blocks 6})]]
+   :act [[:job (jobs.explore.look {:block-names ["iron_ore"] :radius 16 :max-blocks 6})]]
    :expect [{:event {:source :job :kind :completed :data {:scope :seen :blocks [{:name "iron_ore"}]}} :within-s 30 :of-job true}]}
   {:name "look-at-a-buried-cell-is-unknown"
-   :act [[:wait-s 3] [:job (jobs.explore.look {:at #at [22 0 16] :max-blocks 0 :max-entities 0})]]
+   :act [[:job (jobs.explore.look {:at #at [22 0 16] :max-blocks 0 :max-entities 0})]]
    :expect [{:event {:source :job :kind :completed :data {:scope :seen :at {:unknown true}}} :within-s 30 :of-job true}]}
   {:name "look-at-the-exposed-ore-is-seen"
-   :act [[:wait-s 3] [:job (jobs.explore.look {:at #at [18 0 16] :max-blocks 0 :max-entities 0})]]
+   :act [[:job (jobs.explore.look {:at #at [18 0 16] :max-blocks 0 :max-entities 0})]]
    :expect [{:event {:source :job :kind :completed :data {:at {:name "iron_ore" :seen? true}}} :within-s 30 :of-job true}]}
   {:name "look-lists-a-zombie-in-the-room"
-   :act [[:summon "zombie" [17.5 0 16.5] "{NoAI:1b,Silent:1b}"] [:wait-s 3]
+   :act [[:summon "zombie" [17.5 0 16.5] "{NoAI:1b,Silent:1b}"] 
          [:job (jobs.explore.look {:entity-names ["zombie"] :radius 16 :max-blocks 0})]]
    :expect [{:event {:source :job :kind :completed :data {:entities [{:name "zombie"}]}} :within-s 30 :of-job true}]}
   {:name "look-lists-the-walled-in-zombie-only-as-heard"
-   :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,Silent:1b}"] [:wait-s 3]
+   :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,Silent:1b}"] 
          [:job (jobs.explore.look {:entity-names ["zombie"] :radius 16 :max-blocks 0})]]
    :expect [{:event {:source :job :kind :completed :data {:entities [{:name "zombie" :heard? true}]}} :within-s 30 :of-job true}]}
   {:name "search-finds-the-exposed-ore"

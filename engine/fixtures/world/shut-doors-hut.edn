@@ -36,7 +36,7 @@
    :register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
    :memory [{:kind :opened :data {:cell #xyz [16 0 16] :by "j0" :shut? true}}]
    :body {:at [16.5 0 16.5]}
-   :act [[:summon "cow" [16.5 0 16.5] "{NoAI:1b}"] [:wait-s 1]
+   :act [[:summon "cow" [16.5 0 16.5] "{NoAI:1b}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~4 180 0"]
          [:await {:source :job :kind :shut-doors.stopped} 60]
          [:rcon "kill @e[type=cow,tag=wt,$BOX]"]]
