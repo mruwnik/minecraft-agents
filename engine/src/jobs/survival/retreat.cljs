@@ -30,14 +30,14 @@
   A real danger (jobs.lib.danger: a mob with a walkable way to the body, or a ranged one with a line of fire) within
   :radius (ranged ones :ranged-radius) starts a chase, or is seen afresh. A mob stops chasing (vanilla) once it is
   gone (dead, despawned, untracked), beyond its follow range (jobs.lib.threats: zombie 35, most 16), out of line of
-  sight for :lost-s, or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
+  sight for retreat-flight/lost-s (4 s), or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
   retreat-flight/::blast-reach (6) always has one: its blast).
   Each step, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the nearest chaser than the body is shut
      with one click (retreat.door-shut info). Each door is clicked at most once a flight.
   2. Runs into a closed building first (not while a creeper chases: its blast would take the door and what is inside;
      with a creeper within blast reach no room is looked for, and the one the body stands in is no refuge: it steps away
-     or takes the cornered options): the latest :bed or :home within :home-range, or a room behind a wooden door or
+     or takes the cornered options): the latest :bed or :home within retreat-cover/home-range (64), or a room behind a wooden door or
      gate the body has seen (jobs.survival.retreat-home/rooms, bounded by its settings), that is a closed room (walls,
      doors that shut: jobs.lib.reach/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
      melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
@@ -53,7 +53,7 @@
      done the flight walks. Each flee step emits debug retreat.step-speed {:blocks :seconds :bps}.
   3. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:ways #{:walk :clear-seal}),
      leaning toward the first closed room of 2. (else a home it is nearer to than every hostile it knows, none on the way; else the :goal, the destination of the walk the flight
-     interrupted, while it is safe: jobs.survival.retreat-goal/verdict, judged every step in three dimensions against every hostile it knows and the places of those it fled lately; else the latest :bed or :home within :home-range) when not through the
+     interrupted, while it is safe: jobs.survival.retreat-goal/verdict, judged every step in three dimensions against every hostile it knows and the places of those it fled lately; else the latest :bed or :home within retreat-cover/home-range) when not through the
      hostiles (a closed room behind them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
      jobs.lib.cost/outruns-at?), avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
@@ -63,7 +63,7 @@
      the full step that takes least time (a swim block costs :swim-factor), the most open.
      It first looks away and to either side where it has not seen the ground (at most 3 looks); a cell still unseen
      reads as rock.
-     Eats one bite a step (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
+     Eats one bite a step (up to food 20) when the nearest chaser is at least eat-gap (12) blocks away and food is carried.
   Low on health (at most :hide-health) in a seen ranged chaser's line of fire (over the cells it has seen) with no
   covered step, it takes cover where it stands first: plug in (as below);
   not possible, it walks on. A plug begun where it stands is finished before it walks on (refuge/plugging-here?).
@@ -116,14 +116,11 @@
 (a/defargs args
   {:radius {:doc "hostiles within this many blocks start a flight" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :spec (a/num-in 0 nil) :default 16}
-   :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :spec (a/num-in 0 nil) :default 12}
    :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (done within 3 blocks of it; given up for jobs.survival.retreat-goal/retry-s after a leg that lost ground or left the goal's height), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
    :step {:doc "blocks per walk" :spec (a/num-in 1 nil) :default 6}
-   :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :spec (a/num-in 0 nil) :default 64}
    :reserve {:doc "health a cornered fight must be expected to leave" :spec (a/num-in 0 nil) :default cost/default-reserve}
    :max-places {:doc "seal placements per step" :spec (a/int-in 1 nil) :default 4}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}
-   :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :spec (a/num-in 0 nil) :default 4}
    :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
    :hide-s {:doc "a hidden body hands back after this many seconds in its refuge, though a danger it keeps off stays, once no real danger is on it as it stands" :spec (a/num-in 0 nil) :default 60}
    :swim-factor {:doc "blocks of walking a block of swimming costs a flight; nil: jobs.lib.cost/swim-factor of the boots" :spec (a/num-in 1 nil) :default nil}
@@ -177,12 +174,16 @@
            (cornered/near-hostiles c)))
 
 
+(def eat-gap
+  "Blocks to the nearest hostile at which a bite is eaten per flee step."
+  12)
+
 (defn ^:async eat-on-the-run!
-  "One bite a flee step, with the nearest hostile at least :eat-gap away; none for the rest of the flight once
+  "One bite a flee step, with the nearest hostile at least eat-gap away; none for the rest of the flight once
   nothing is left to eat or a bite fails."
   [c threat]
   (when (and (not (:ate (ctx/mem c)))
-             (>= (danger-q/mob-distance (:primitives c) threat) (:eat-gap (:args c))))
+             (>= (danger-q/mob-distance (:primitives c) threat) eat-gap))
     (let [r (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1}))]
       (when (and (contract/ending? r) (not= :done (:kind r)))
         (ctx/update-mem! c assoc :ate true)))))

@@ -153,12 +153,16 @@
           (and (= :done (:kind e)) (:dug (:data e))) :again
           :else (do (ctx/update-mem! c update :skipped-blocks (fnil conj []) pos) :again))))))
 
+(def farm-radius
+  "Blocks around a known farm in which ripe crops are harvested."
+  6)
+
 (defn ^:async farm!
   [c {:keys [pos]}]
   (case (await (go-near! c pos))
     :continue :continue
     :far (bury-source! c pos)
-    (or (await (dig-ripe! c ripe-age pos (:farm-radius (:args c))))
+    (or (await (dig-ripe! c ripe-age pos farm-radius))
         (do (pass-over! c pos) nil))))
 
 (defn loaves-wanted

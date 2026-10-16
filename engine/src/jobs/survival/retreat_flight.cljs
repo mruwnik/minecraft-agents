@@ -194,12 +194,16 @@
   [p e now]
   (merge {:id (.-id e) :uuid (.-uuid e) :mob (.-name e) :seen-t now} (threats/place-of p e)))
 
+(def lost-s
+  "Seconds out of line of sight after which a mob has stopped chasing."
+  4)
+
 (defn look!
   "Update the flight's chasers (job memory :chasers, by id): the real dangers within :radius (ranged :ranged-radius)
   join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why. The chasers
   still on, as JS entities, nearest first. A mob that hurt the body in its refuge (:reached) has a way whatever the map says."
   [c]
-  (let [{:keys [radius ranged-radius lost-s hide-health]} (:args c)
+  (let [{:keys [radius ranged-radius hide-health]} (:args c)
         p (:primitives c)
         low? (<= (.-health (.self p)) hide-health)
         now (ctx/now c)

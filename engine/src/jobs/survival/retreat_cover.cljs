@@ -18,8 +18,10 @@
             [jobs.survival.retreat-walk :as walk]
             [jobs.survival.retreat-cornered :as cornered]))
 
+(def home-range 64)
+
 (defn home-pos
-  "The position of the latest :bed or :home entry within :home-range blocks of the body, or nil."
+  "The position of the latest :bed or :home entry within home-range blocks of the body, or nil."
   [c]
   (let [pos (->> [(ctx/latest c :bed) (ctx/latest c :home)]
                  (remove nil?)
@@ -27,7 +29,7 @@
                  first
                  :data
                  :pos)]
-    (when (and pos (<= (u/dist pos (u/self-pos c)) (:home-range (:args c)))) pos)))
+    (when (and pos (<= (u/dist pos (u/self-pos c)) home-range)) pos)))
 
 (defn refuges
   "The closed rooms to flee to: the latest :home or :bed (home-pos) and those behind the doors the body has seen

@@ -22,6 +22,14 @@
              "rabbit" ["rabbit" "rabbit_hide" "rabbit_foot"]}]
     (update-vals raw (fn [items] (into items (keep raw-meats) items)))))
 
+(def max-skips
+  "Animals skipped in a row before the hunt or cull gives up."
+  3)
+
+(def collect-radius
+  "Blocks around the last kill in which its drops are collected."
+  8)
+
 (defn note-target!
   "Remember the passive target as last seen (:animal, :entity id, :uuid, :cell, :by job and the rule that allowed the kill, from (rule-fn c entity)),
   for the kill event: the entity is gone once it is dead."
@@ -69,7 +77,7 @@
     (if (= :continue e)
       :yield
       (do (book-outcome! c target e)
-          (if (>= (:skips (ctx/mem c) 0) (:max-skips (:args c)))
+          (if (>= (:skips (ctx/mem c) 0) max-skips)
             (give-up c)
             :again)))))
 
@@ -83,7 +91,7 @@
   "Call the collect-drops child; done collecting when it ends, else waiting (what to return while it waits on the world
   or its call is held by a floor)."
   [c waiting]
-  (let [{:keys [mob collect-radius] :as a} (:args c)
+  (let [{:keys [mob] :as a} (:args c)
         e (await (ctx/call c :collect 'jobs.forestry.collect-drops
                                  {:radius collect-radius :filter (or (:drops a) (get drops mob))}))]
     (if (collect-ended? e)
