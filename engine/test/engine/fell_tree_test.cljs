@@ -145,6 +145,19 @@
           (is (<= @calls 2) "the plan is not made again and again")
           (is (= 1 (count (kinds s :tree_blocked)))))))))
 
+(deftest a-stand-the-walk-cannot-reach-is-avoided-and-the-pillar-planned-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan approach/plan
+              avoids (atom [])
+              unreachable [6 90 9]
+              s (with-redefs [approach/plan (fn [in] (swap! avoids conj (:avoid in))
+                                              (if (empty? (:avoid in)) {:stand [unreachable]} (plan in)))]
+                  (await (fell tall {:radius 10} 300)))]
+          (is (= #{unreachable} (second @avoids)) "the failed stand is passed to the next plan")
+          (is (= (set (range 64 72)) (set (dug-ys (:p s)))) "the tree is felled from the replanned pillar"))))))
+
 (deftest a-planner-refusal-other-than-a-zone-warns-with-its-reason
   (async done
     (tu/run-async done

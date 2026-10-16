@@ -211,7 +211,7 @@
                   approach/plan (fn [in]
                                   (swap! asked conj (count (:targets in)))
                                   (if (> (count (:targets in)) 2) {:reason :zone} {:pillar {:height 3}}))]
-      (is (= {:pillar {:height 3}} (pillar/pillar-plan {:args {}} logs)))
+      (is (= {:pillar {:height 3}} (pillar/pillar-plan {:args {}} logs #{})))
       (is (= [5 4 3 2] @asked)))))
 
 (deftest fell-from-pillar-done-is-ok-only-with-a-closed-ledger-and-no-log-in-reach-of-the-stand

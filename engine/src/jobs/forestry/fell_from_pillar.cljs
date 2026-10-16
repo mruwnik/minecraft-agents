@@ -101,6 +101,8 @@
 
 (defn result [c] {:logs (:dug (ctx/mem c) 0)})
 
+(def max-walk-fails 3)
+
 (defn set-pillar! [c m] (ctx/update-mem! c assoc :pillar m))
 
 (defn pillar-failed!
@@ -109,13 +111,22 @@
   (ctx/update-mem! c update :pillar assoc :phase :clean :failed why)
   :again)
 
+(defn walk-failed!
+  "The walk to the planned stand or base failed: avoid that cell and plan again; the call ends :walk after
+  max-walk-fails."
+  [c plan]
+  (ctx/update-mem! c update :avoid (fnil conj #{}) (or (:base plan) (:stand plan)))
+  (if (< (count (:avoid (ctx/mem c))) max-walk-fails)
+    (do (ctx/update-mem! c dissoc :pillar) :again)
+    (pillar-failed! c :walk)))
+
 (defn log-cell [l] (let [{:keys [x y z]} (:pos l)] [x y z]))
 
 (defn pillar-plan
   "The approach plan (jobs.lib.access.approach/plan) for the highest logs: every log, then without the lowest one at a
   time until the planner finds a stand or a pillar (a zone refusal included)."
-  [c logs]
-  (let [in (assoc (access/rules-input c {:except (:for-plan (:args c)) :own-plans-ok? true}) :reach dig-reach)
+  [c logs avoid]
+  (let [in (assoc (access/rules-input c {:except (:for-plan (:args c)) :own-plans-ok? true}) :reach dig-reach :avoid avoid)
         top-down (vec (sort-by #(- (:y (:pos %))) logs))]
     (loop [n (count top-down)]
       (let [r (approach/plan (assoc in :targets (set (map log-cell (take n top-down)))))]
@@ -171,7 +182,7 @@
   "Plan a stand or a pillar for the highest logs and remember it. A refusal that read unseen floor cells is decided again
   after a look at them (jobs.lib.sense/decide!); one that stays ends the call."
   [c]
-  (let [r (await (sense/decide! c ::pillar #(pillar-plan c (tree-logs c)) {:retry? :reason}))]
+  (let [r (await (sense/decide! c ::pillar #(pillar-plan c (tree-logs c) (:avoid (ctx/mem c))) {:retry? :reason}))]
     (cond
       (:stand r) (do (set-pillar! c {:phase :collect :plan {:stand (first (:stand r))}}) :again)
       (:pillar r) (do (set-pillar! c {:phase :collect :plan (:pillar r)}) :again)
@@ -213,7 +224,7 @@
     (cond
       (= :continue e) :continue
       (and (= :done (:kind e)) (:arrived (:data e))) (do (ctx/update-mem! c assoc-in [:pillar :phase] (if (:height plan) :build :dig)) :again)
-      :else (pillar-failed! c :walk))))
+      :else (walk-failed! c plan))))
 
 (defn ^:async pillar-build!
   [c {:keys [plan]}]

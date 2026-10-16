@@ -32,6 +32,14 @@
     (is (= (:stand r) (sort-by d (:stand r))))
     (is (some #{[0 66 -1]} (:stand r)))))
 
+(deftest avoided-cells-are-neither-stand-nor-base
+  (let [r (plan :targets #{[0 66 0]})
+        r2 (plan :targets #{[0 66 0]} :avoid #{(first (:stand r))})
+        p (plan :avoid #{[1 64 0]})]
+    (is (not-any? #{(first (:stand r))} (:stand r2)))
+    (is (seq (:stand r2)))
+    (is (not= [1 64 0] (:base (:pillar p))))))
+
 (deftest a-high-log-gets-the-nearest-column-and-the-minimal-height
   (is (= {:base [1 64 0] :height 3 :stand [1 67 0]} (:pillar (plan)))))
 

@@ -10,6 +10,7 @@
     :reach      eye-to-centre distance a target is worked from (the caller's constant, e.g. dig-reach)
     :radius     columns searched around the targets, default 3; widened to max-radius whenever nothing usable is found
     :max-height tallest pillar considered, default 10
+    :avoid      optional set of cells that are neither a stand nor a base (ones the walker could not reach)
 
   Output, the first that applies:
     {:stand [cell ...]}   cells to walk to (go-to goal set), nearest to the feet first, 3D (a cell 5 up is 5 away)
@@ -84,9 +85,9 @@
 
 (defn stands
   "Standing cells with every target in reach, nearest to feet first."
-  [{:keys [block-at floor-at targets reach feet]} cols ys]
+  [{:keys [block-at floor-at targets reach feet avoid]} cols ys]
   (->> (for [[x z] cols y ys :let [c [x y z]]
-             :when (and (not (contains? targets c)) (standing-cell? block-at (or floor-at block-at) c) (in-reach? reach targets c))]
+             :when (and (not (contains? targets c)) (not (contains? avoid c)) (standing-cell? block-at (or floor-at block-at) c) (in-reach? reach targets c))]
          c)
        (sort-by (juxt #(dist3 feet %) identity))))
 
@@ -104,9 +105,9 @@
 (defn base-plans
   "Every pillar over a ground cell of cols, as {:base :height :stand :cost :refusal}. A base with no workable height
   carries the refusal of its last try."
-  [{:keys [block-at floor-at targets reach feet max-height] :as in} cols ys]
+  [{:keys [block-at floor-at targets reach feet max-height avoid] :as in} cols ys]
   (for [[x z] cols y ys :let [base [x y z]]
-        :when (and (not (contains? targets base)) (standing-cell? block-at (or floor-at block-at) base))
+        :when (and (not (contains? targets base)) (not (contains? avoid base)) (standing-cell? block-at (or floor-at block-at) base))
         :let [tries (for [n (range 1 (inc max-height))
                           :let [stand [x (+ y n) z]]
                           :when (in-reach? reach targets stand)]
