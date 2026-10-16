@@ -5,12 +5,12 @@
             [engine.ctx :as ctx]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.child :as child]
-            [jobs.lib.apiary :as apiary]
             [jobs.lib.look :as look]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.build.from-plan :as from-plan]
             [jobs.lib.pen :as pen]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.build.from-plan.plan :as plan]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -63,30 +63,7 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one pen build may take." :spec (a/int-in 1 nil)}})
 
-(defn want-blocks
-  "The block names a want can place: one for a block or a state map, the choices of an :any."
-  [want]
-  (cond
-    (string? want) [want]
-    (vector? want) (mapcat #(want-blocks (if (string? %) % (:block %))) (rest want))
-    (and (map? want) (:block want)) [(:block want)]))
-
-(defn barrier?
-  "True when a want places a fence, a fence gate or a wall."
-  [want]
-  (boolean (some #(or (str/ends-with? % "_fence") (str/ends-with? % "_fence_gate") (str/ends-with? % "_wall"))
-                 (want-blocks want))))
-
-(defn barrier-box
-  "The inclusive box {:min :max} around the fence, gate and wall cells of cells ({:pos :want}), or nil without any."
-  [cells]
-  (let [ps (map :pos (filter #(barrier? (:want %)) cells))]
-    (when (seq ps)
-      (let [lo (apply map min ps)
-            hi (apply map max ps)]
-        (pen/with-cols {:min (zipmap [:x :y :z] lo) :max (zipmap [:x :y :z] hi)} ps)))))
-
-(defn gate? [want] (boolean (some #(str/ends-with? % "_fence_gate") (want-blocks want))))
+(defn gate? [want] (boolean (some #(str/ends-with? % "_fence_gate") (pen-read/want-blocks want))))
 
 (def max-step "The most an animal steps up or down between neighbouring cells of a pen." 1)
 
@@ -96,9 +73,9 @@
   max-step above the seen ground (top-of x z y, nil when unknown) of an inside neighbour column."
   [cells top-of]
   (let [low (reduce (fn [m {[x y z] :pos :keys [want]}]
-                      (if (barrier? want) (update m [x z] #(min y (or % y))) m))
+                      (if (pen-read/barrier? want) (update m [x z] #(min y (or % y))) m))
                     {} cells)
-        box (barrier-box cells)
+        box (pen-read/barrier-box cells)
         inside? (fn [[x z]] (and (<= (:x (:min box)) x (:x (:max box))) (<= (:z (:min box)) z (:z (:max box)))))
         near (fn [[x z]] [[(inc x) z] [x (inc z)]])
         steps (for [[col y] (sort low) n (near col) :let [y2 (low n)] :when (and y2 (> (js/Math.abs (- y y2)) max-step))]
@@ -129,7 +106,7 @@
         cells (when (and answer (not (:broken answer)))
                 (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))
         trouble (or (plan/plan-trouble answer cells)
-                    (when-not (barrier-box cells) "the plan has no fence, wall or gate cells")
+                    (when-not (pen-read/barrier-box cells) "the plan has no fence, wall or gate cells")
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) plan/no-zones))]
     (if-not trouble
       {:cells cells}
@@ -138,18 +115,13 @@
                            :text (str "pen build declines plan " plan (when part (str " part " part)) ": " trouble)})
           {:trouble trouble :later? (and (not= plan/no-zones trouble) (known/unreadable? answer))}))))
 
-(defn read-pen
-  "The pen check over the cells the body has seen: an unseen cell is an :unloaded leak."
-  [c cells]
-  (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c))
-              :box (barrier-box cells)
-              :max-cells (:max-cells (:args c))}))
+(defn pen-opts [c cells]
+  {:box (pen-read/barrier-box cells) :max-cells (:max-cells (:args c))})
 
-(defn sound?
-  "True when nothing the plan wants is missing and the pen holds."
+(defn read-pen
+  "The pen check over what the body sees or remembers (pen-read/read; the round's finish! looks first): an unseen cell is an :unloaded leak."
   [c cells]
-  (and (empty? (plan/owed cells))
-       (:closed? (read-pen c cells))))
+  (pen-read/read (:primitives c) (pen-opts c cells)))
 
 (defn build-args [c]
   (select-keys (:args c) [:plan :part :reach :give-up :accept :fetch :ignore-zones? :surface]))
@@ -205,7 +177,7 @@
 (defn outside?
   "Whether the body stands outside the pen's box."
   [c cells]
-  (not (inside? (barrier-box cells) (u/self-pos c))))
+  (not (inside? (pen-read/barrier-box cells) (u/self-pos c))))
 
 (defn result-of
   "The data of the call's ending: the pen's summary, what was built and the shut-gate cause when it did not end done."
@@ -235,12 +207,12 @@
 (defn leak-text [{:keys [pos why]}]
   (str (name why) " " (pr-str [(:x pos) (:y pos) (:z pos)])))
 
-(defn finish!
-  "Read the pen, emit the outcome and end: done when it holds, else nothing-possible with the reason."
+(defn ^:async finish!
+  "Read the pen (looking at the remembered cells in sight first), emit the outcome and end: done when it holds, else nothing-possible with the reason."
   [c cells]
   (let [plan (:plan (:args c))
         built (:built (ctx/mem c))
-        answer (pen/summary (read-pen c cells))
+        answer (pen/summary (await (pen-read/read! c (pen-opts c cells))))
         result (result-of c answer)
         left (plan/left-text built)]
     (if (:closed? answer)
@@ -281,7 +253,7 @@
   "While the body is inside the box: walk out beside the gate. Then on to shutting the gate, or the check if the body
   was never inside. Nothing-possible :inside when it cannot get out."
   [c cells]
-  (let [box (barrier-box cells)]
+  (let [box (pen-read/barrier-box cells)]
     (if-not (inside? box (u/self-pos c))
       (do (ctx/update-mem! c assoc :phase (if (:exited (ctx/mem c)) :shut :check))
           :again)
@@ -310,7 +282,7 @@
       trouble :continue
       (= :exit phase) (await (exit-step! c cells))
       (= :shut phase) (await (shut-step! c))
-      (= :check phase) (do (await (look/survey! c)) (finish! c cells)) ; cells behind the body are not seen until it looks
+      (= :check phase) (do (await (look/survey! c)) (await (finish! c cells))) ; cells behind the body are not seen until it looks
       :else (await (build-step! c)))))
 
 (defn ^:async round

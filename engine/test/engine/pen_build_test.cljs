@@ -9,7 +9,8 @@
             [engine.harvest-test :as h]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
-            [jobs.build.pen :as pen]))
+            [jobs.build.pen :as pen]
+            [jobs.lib.pen-read :as pen-read]))
 
 (def job 'jobs.build.pen)
 
@@ -48,7 +49,7 @@
 ;; ---------------------------------------------------------------- the box
 
 (deftest the-box-is-the-bounding-box-of-the-barrier-cells
-  (are [cells box] (= box (some-> (pen/barrier-box cells) (dissoc :cols)))
+  (are [cells box] (= box (some-> (pen-read/barrier-box cells) (dissoc :cols)))
     [{:pos [2 64 2] :want "oak_fence"} {:pos [4 64 4] :want "oak_fence"}]
     {:min {:x 2 :y 64 :z 2} :max {:x 4 :y 64 :z 4}}
     [{:pos [2 64 2] :want "oak_fence"} {:pos [5 65 3] :want {:block "oak_fence_gate" :facing :north}}
