@@ -43,10 +43,14 @@
     (perception/pass! (aget p "perception"))
     {:eng eng :p p :seen seen :clock clock})))
 
-(defn ^:async run-ticks [{:keys [eng clock]} n]
-  (dotimes [_ n]
-    (swap! clock + 700)
-    (await (core/tick! eng))))
+(defn ^:async run-ticks
+  "Up to n ticks, fewer once no job is left: later ticks would only idle."
+  [{:keys [eng clock]} n]
+  (loop [i 0]
+    (when (< i n)
+      (swap! clock + 700)
+      (await (core/tick! eng))
+      (when (seq (:list (core/state eng))) (recur (inc i))))))
 
 (defn calls [{:keys [p]} name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))

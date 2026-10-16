@@ -77,7 +77,7 @@
               s (f/start (-> (ore-world blocks [{:name "stone_pickaxe" :count 1} {:name "crafting_table" :count 1}])
                              (assoc :floor [-30 -10 40 30])
                              (update :drops assoc "oak_log" "oak_log"))
-                         [] (assoc f/sight-opts :radius 48))
+                         [] (assoc f/sight-opts :radius 24))
               p (:p s)
               breaks (atom 0)]
           (.override (.-world p) "dig"
