@@ -26,11 +26,11 @@
             [jobs.lib.walk :as walk]))
 
 (def doc
-  "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
+  "Cut a way to stand beside a buried block :target [x y z] and stop there (or, with :heading and :length and no :target, a level run of :length blocks that way from the body's cell: the target is the next cell), with the target the next cell ahead
   at feet height. The target itself is left. With no zone list read the job waits (:no-zones) until one is.
   Before the first step it stocks torches when under 8 are carried (jobs.access.stock/torches!: info torch.stocked, or warn torch.no-stock and it goes on dark).
 
-  The way is one straight line along a heading through the target's column:
+  The way is one straight line along a heading (:heading limits it to one) through the target's column:
   1. An entry stand: on the surface (the column's top cell over a solid floor, two open cells; no entry from
      water), or the body's own cell when it stands underground in the entry column.
   2. A 1-wide stair down (or up) to the target's height, cut by jobs.access.stair as a child with :y set, so it
@@ -121,6 +121,8 @@
 
 (a/defargs args
   {:target {:doc "the buried block [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :heading {:doc "with no :target, dig this way from the body's cell at its height, :length blocks; with a :target, take only a line along it" :spec #{:north :east :south :west} :default nil}
+   :length {:doc "with :heading and no :target, blocks to dig (default :max-length less one)" :spec (a/int-in 1 96) :default nil}
    :max-length {:doc "longest line, in blocks along the heading from the entry to the target, 1 to 96" :spec (a/int-in 1 96) :default 24}
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :spec (a/coll-of #{:water :lava :falling-block}) :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
@@ -137,9 +139,17 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn target-of
-  "The :target arg as [x y z], or nil when unset."
+  "The :target arg as [x y z]; with only a :heading, the cell :length + 1 blocks along it from where the call started
+  (the body's cell, remembered in the job memory); else nil."
   [c]
-  (when-let [{:keys [x y z]} (:target (:args c))] [x y z]))
+  (if-let [{:keys [x y z]} (:target (:args c))]
+    [x y z]
+    (when-let [h (:heading (:args c))]
+      (let [{:keys [length max-length]} (:args c)
+            [sx sy sz] (or (:start (ctx/mem c)) (reach/standing-vec (:primitives c)))
+            [dx dz] (shape/headings h)
+            n (inc (or length (max 1 (dec max-length))))]
+        [(+ sx (* n dx)) sy (+ sz (* n dz))]))))
 
 (defn spans
   "[horizontal vertical] blocks from feet to target."
@@ -163,7 +173,7 @@
   (let [{:keys [max-length accept]} (:args c)
         target (target-of c)
         a (when-not (or (:plan (ctx/mem c)) (bad-target? target))
-            (ln/approach (dissoc (stair/rules-in c (reach/standing-vec (:primitives c))) :feet) target (reach/standing-vec (:primitives c)) max-length (set accept)))]
+            (ln/approach (dissoc (stair/rules-in c (reach/standing-vec (:primitives c))) :feet) target (reach/standing-vec (:primitives c)) max-length (set accept) (:heading (:args c))))]
     (when (contains? #{:zone :footprint :claim} (:reason a)) a)))
 
 (defn not-refused
@@ -428,8 +438,9 @@
         target (target-of c)
         feet (reach/standing-vec (:primitives c))]
     (if (bad-target? target)
-      (finish! c :bad-args {:why "target must be [x y z] of integers"})
-      (let [a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (stair/rules-in c feet) :feet) :filler? (some? (choose/filler c :build))) target feet max-length (set accept))
+      (finish! c :bad-args {:why "target must be [x y z] of integers, or a heading with a length"})
+      (let [_ (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start feet))
+            a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (stair/rules-in c feet) :feet) :filler? (some? (choose/filler c :build))) target feet max-length (set accept) (:heading (:args c)))
                                     {:retry? #(not (:entry %))}))]
         (if-let [w (when (or (not (:entry a)) (ln/far-entry? a feet))
                      (when (or (:entry a) (#{:too-far :no-approach} (:reason a)))

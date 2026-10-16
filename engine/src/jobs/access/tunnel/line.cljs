@@ -146,12 +146,14 @@
 
 (defn approach
   "The line to cut to target (the plan map, see fits) from rules input in (without :cell and :feet), the body at
-  feet; else {:reason ...} (see the doc), with :headings when the headings fail for different reasons."
-  [in target feet max-length accept]
+  feet; else {:reason ...} (see the doc), with :headings when the headings fail for different reasons. Only is a heading
+  to take, else all four are tried."
+  ([in target feet max-length accept] (approach in target feet max-length accept nil))
+  ([in target feet max-length accept only]
   (if (and (nil? (:zones in)) (not (:ignore-zones? in)))
     {:reason :no-zones}
-    (let [per (into {} (map (fn [h] [h (best-on-heading in target h max-length accept feet)])) heading-order)
-          plans (distinct (mapcat (fn [h] (keep identity [(:plan (per h)) (:near (per h))])) heading-order))]
+    (let [per (into {} (map (fn [h] [h (best-on-heading in target h max-length accept feet)])) (if only [only] heading-order))
+          plans (distinct (mapcat (fn [h] (keep identity [(:plan (per h)) (:near (per h))])) (keys per)))]
       (if (seq plans)
         (first (sort-by (juxt #(far-entry? % feet) :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))
         (let [stops (into {} (map (fn [[h r]] [h (:stop r)])) per)
@@ -160,7 +162,7 @@
           (cond
             (empty? real) {:reason :too-far}
             (= 1 (count reasons)) (first real)
-            :else {:reason :no-approach :headings (into {} (map (fn [[h s]] [h (:reason s)])) stops)}))))))
+            :else {:reason :no-approach :headings (into {} (map (fn [[h s]] [h (:reason s)])) stops)})))))))
 
 (defn leg-target
   "The waypoint of the first leg of a target far from feet underground. Diagonal: on the body's row, one past the

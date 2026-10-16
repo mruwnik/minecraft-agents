@@ -755,6 +755,21 @@
           (is (= "air" (block-at p [0 20 5])) "the first leg ran to the target's row")
           (is (= "iron_ore" (block-at p [6 20 5]))))))))
 
+(deftest a-heading-and-length-dig-that-many-blocks-from-the-bodys-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [deep (merge (stone -12 12 0 64 -3 8) {"0,20,0" "air" "0,21,0" "air"})
+              {:keys [out p]} (await (tunnel! {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks deep}
+                                              {:heading :east :length 5} (fn [_])))]
+          (is (= :reached (:reason @out)) (pr-str (:reason @out)))
+          (is (= [5 20 0] (feet p)) "5 blocks east at the body's height")
+          (is (= [6 20 0] (:target @out))))))))
+
+(deftest a-given-heading-limits-the-lines-to-it
+  (let [a (ln/approach {:block-at (world-fn {}) :zones [] :footprints #{} :ledger #{}} [6 57 0] [0 65 0] 24 #{} :north)]
+    (is (= :north (:heading a)))))
+
 (deftest a-straight-target-beyond-max-length-underground-is-reached-in-legs-from-the-bodys-own-cell
   (async done
     (tu/run-async done
