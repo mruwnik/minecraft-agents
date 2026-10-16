@@ -40,7 +40,7 @@
             [:fill [16 0 16] [16 9 16] "water"]
             [:fill [16 10 16] [16 12 16] "air"]]
    :body {:at [16.5 1 16.5] :settle-s 1 :effects [["resistance" 600 4]]}
-   :act [[:until-rcon "data get entity $BODY Air" "Air: ([0-9]{1,2}|1[0-9]{2}|2[0-4][0-9])s" 15]
+   :act [[:until-rcon "data get entity $BODY Air" "data: ([0-9]{1,2}|1[0-9]{2}|2[0-4][0-9])s" 15]
          [:job (jobs.movement.go-to {:pos #at [16 11 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :result :data {:why :air}} :for-s 60 :until {:source :job :kind :result}}]
