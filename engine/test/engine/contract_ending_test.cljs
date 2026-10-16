@@ -489,7 +489,7 @@
               (is (= [[(str id "/leaf") by]] (cut-offs seen))))))))))
 
 (def refusing-jobs
-  {'never never
+  {'never {:round (fn [c] (ctx/end c :impossible {:reason :not-smeltable :item "diamond" :text "diamond"}))}
    'gives-up {:round (fn [c] (swap! world assoc :call (ctx/frozen-call c)) (ctx/end c :nothing-possible :gave-up))}})
 
 (def refusing-triggers
