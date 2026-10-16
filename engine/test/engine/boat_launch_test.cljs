@@ -7,6 +7,7 @@
             [engine.library-test :as lt]
             [engine.sense-test :as st]
             [engine.test-util :as tu]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.movement.boat-launch :as bl]))
 
@@ -88,6 +89,21 @@
         (let [other {:id 5 :name "minecart" :uuid "u-5" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}}
               {:keys [res]} (await (run {:blocks pond :inventory [boat-item] :self {:vehicle 5} :entities [other]} {}))]
           (is (= [:condition-failed :aboard] [(:kind (:ending res)) (:reason res)])))))))
+
+(deftest a-remembered-boat-seen-gone-is-replaced-by-a-new-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [m (atom {:placed {:id 99 :pos {:x 5 :y 63 :z 0}}})
+              mem ctx/mem
+              update-mem! ctx/update-mem!
+              _ (set! ctx/mem (fn [_] @m))
+              _ (set! ctx/update-mem! (fn [_ f & args] (apply swap! m f args)))
+              {:keys [res p]} (try (await (run {:blocks pond :inventory [boat-item]} {}))
+                                   (finally (set! ctx/mem mem) (set! ctx/update-mem! update-mem!)))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (= 1 (count (boats p))) "a new boat is down")
+          (is (not= 99 (:id (:placed @m)))))))))
 
 (deftest recovers-a-boat-and-picks-up-the-item
   (async done

@@ -24,7 +24,7 @@
   :no-room (water in sight, none with room for a boat); the engine looks round once first. A listed call waits on them.
   Ends done (data {:id :boat name :pos :boarded bool}), info boat.launched, or
   condition-failed: the place's own (:need, :not-allowed, :no-support, :occupied ...; its ending, nothing-possible :unreachable too, is the :because), or
-  nothing-possible: :no-boat (the placed boat is not in sight), :board-failed (mount's ending is the :because).
+  nothing-possible: :no-boat (the placed boat is not in sight and its place was not seen), :board-failed (mount's ending is the :because).
 
   Recover: the boat is :id, else the nearest boat or raft in sight. When aboard, it gets off first (jobs.movement.leave-vehicle),
   walks into reach (jobs.movement.go-to), hits it until it breaks and collects the dropped item (jobs.forestry.collect-drops).
@@ -196,7 +196,10 @@
   (let [p (:primitives c)
         {:keys [item board]} (:args c)
         item (or item (carried-boat c) default-item)
-        remembered (:placed (ctx/mem c))
+        saved (:placed (ctx/mem c))
+        gone? (and saved (nil? (first (filter #(= (:id saved) (:id %)) (boats-in-sight c))))
+                   (some? (u/seen-name p (:pos saved))))
+        remembered (when-not gone? saved)
         cell (or (:pos remembered) (await (launch-pos! c)))]
     (cond
       (nil? cell) (ctx/end c :condition-failed (no-water-cause c))
