@@ -5,14 +5,15 @@
  {:tags [:farm :fertilize :jobs] :time :any
   :plot {:height 8 :floor "grass_block"}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["bone_meal" 3]]}
-  :act [[:job (jobs.farm.fertilize {:grass true :radius 6 :max 3})]]
   :limit-s 90}
  :cases
  [{:name "grass-patch-takes-the-bone-meal"
+   :act [[:job (jobs.farm.fertilize {:grass true :radius 6 :max 3})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:used [:>= 1]}} :within-s 70 :of-job true}]
    :after [[:item "bone_meal" [:<= 2]]]}
   {:name "bare-dirt-no-grass-keeps-the-bone-meal"
    :plot {:floor "dirt"}
+   :act [[:job (jobs.farm.fertilize {:grass true :radius 6 :max 3})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:used 0}} :within-s 40 :of-job true}]
    :after [[:item "bone_meal" 3]]}
   {:name "no-bone-meal-fetch-false-waits-need"

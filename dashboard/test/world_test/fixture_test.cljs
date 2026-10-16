@@ -148,6 +148,13 @@
     (is (nil? (:problems open)))
     (is (some #(re-find #":name" %) (:problems bad)))))
 
+(deftest a-job-in-the-file-defaults-and-in-a-case-is-refused
+  (let [text (fn [d c] (str "{:defaults {:act " d "} :cases [{:name \"a\" :act " c " :expect [{:event {:kind :x} :within-s 1}]}]}"))
+        ps #(:problems (first (f/file-cases (text %1 %2) "d")))]
+    (is (some #(re-find #":defaults" %) (ps "[[:job (jobs.a.b {})]]" "[[:job (jobs.c.d {})]]")))
+    (is (nil? (ps "[[:job (jobs.a.b {})]]" "[[:rcon \"x\"]]")) "a default job alone runs for every case")
+    (is (nil? (ps "[[:rcon \"x\"]]" "[[:job (jobs.c.d {})]]")) "default setup steps may precede a case's job")))
+
 (deftest a-single-case-file-is-one-case
   (is (= ["one/x"] (map :id (f/file-cases "{:name \"x\"}" "one")))))
 

@@ -9,16 +9,17 @@
            [:fill [14 3 14] [18 4 18] "mangrove_leaves[persistent=true]"]
            [:set [16 3 16] "mangrove_log"]]
   :body {:at [10.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
-  :act [[:job (jobs.forestry.harvest-wood {:radius 32})]]
   :limit-s 120}
  :cases
  [{:name "propagule-replanted"
    :body {:inventory [["iron_axe" 1] ["mangrove_propagule" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 32})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :harvest-wood.replant-owed} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:block [16 0 16] "mangrove_propagule"] [:not-block [16 1 16] "mangrove_log"]]}
   {:name "no-propagule-leaves-the-replant-owed"
    :body {:inventory [["iron_axe" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 32})]]
    :expect [{:event {:source :job :kind :harvest-wood.replant-owed :data {:reason :no-sapling}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:not-block [16 0 16] "mangrove_propagule"]]}

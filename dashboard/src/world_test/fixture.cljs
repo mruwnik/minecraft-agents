@@ -361,6 +361,8 @@
        (remove #(let [n (subs (str %) 1)] (or (known n) (re-find computed-kinds n))))
        distinct))
 
+(defn job-step? [step] (and (vector? step) (= :job (first step))))
+
 (defn file-cases
   "The cases of one fixture file's text: a single case map, or {:defaults {...} :cases [...]}. Each case gets :id
   \"<stem>/<name>\" and :file; a case with problems carries them under :problems."
@@ -368,9 +370,12 @@
   (let [form (read-edn text)
         [file-defaults cases] (if (contains? form :cases) [(:defaults form {}) (:cases form)] [{} [form]])]
     (mapv (fn [c]
-            (let [m (merge-case file-defaults c)]
+            (let [m (merge-case file-defaults c)
+                  ps (cond-> (problems m)
+                       (and (some job-step? (:act file-defaults)) (some job-step? (:act c)))
+                       (conj "a job in :defaults :act runs before this case's own job: put it in the cases that need it"))]
               (cond-> (assoc m :id (str stem "/" (:name m)) :file stem)
-                (seq (problems m)) (assoc :problems (problems m)))))
+                (seq ps) (assoc :problems ps))))
           cases)))
 
 (defn case-uuids

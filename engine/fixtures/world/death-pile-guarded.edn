@@ -13,12 +13,12 @@
         [:await {:source :body :kind :respawned} 30]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
         [:summon "skeleton" [22.5 0 22.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}],ArmorItems:[{},{},{},{id:\"minecraft:iron_helmet\",count:1}]}"]
-        [:wait-s 2]
-        [:job (jobs.survival.recover-drops)]]
+        [:wait-s 2]]
   :limit-s 200}
  :cases
  [{:name "unarmed-skips-guarded-pile-then-retries-when-killer-gone"
-   :act [[:await {:source :job :kind :recover-drops.decided :data {:decision :skip :retry true}} 60]
+   :act [[:job (jobs.survival.recover-drops)]
+         [:await {:source :job :kind :recover-drops.decided :data {:decision :skip :retry true}} 60]
          [:rcon "kill @e[type=skeleton,tag=wt,$BOX]"]
          [:wait-s 2]
          [:job (jobs.survival.recover-drops {:retry true})]]
@@ -29,6 +29,7 @@
   {:name "known-chest-kit-fetched-before-the-guarded-trip"
    :blocks [[:set [6 0 6] "chest{Items:[{Slot:0b,id:\"minecraft:iron_sword\",count:1},{Slot:1b,id:\"minecraft:iron_helmet\",count:1}]}"]]
    :memory [{:kind :fetch/stock :data {:pos #at [6 0 6] :items {"iron_sword" 1 "iron_helmet" 1}}}]
+   :act [[:job (jobs.survival.recover-drops)]]
    :expect [{:event {:source :job :kind :recover-drops.fetching} :within-s 120}
             {:no-event {:source :job :kind :recover-drops.kit-dropped} :for-s 120 :until {:source :job :kind :recover-drops.fetching}}
             {:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 190}]
@@ -37,7 +38,8 @@
    :body {:inventory [["dirt" 3]]}
    :blocks [[:set [6 0 6] "chest{Items:[{Slot:0b,id:\"minecraft:iron_sword\",count:1},{Slot:1b,id:\"minecraft:iron_helmet\",count:1}]}"]]
    :memory [{:kind :fetch/stock :data {:pos #at [6 0 6] :items {"iron_sword" 1 "iron_helmet" 1}}}]
-   :act [[:await {:source :job :kind :recover-drops.decided :data {:decision :skip}} 40]
+   :act [[:job (jobs.survival.recover-drops)]
+         [:await {:source :job :kind :recover-drops.decided :data {:decision :skip}} 40]
          [:job (jobs.survival.recover-drops)]]
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :skip}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :recover-drops.fetching} :for-s 40 :until {:source :job :kind :recover-drops.decided}}
