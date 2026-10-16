@@ -157,7 +157,7 @@
     {:health 18} :flee
     {:health 18 :fighting? true :single? true} :fight
     {:health 18 :fighting? true :single? false} :flee
-    {:health 10 :fighting? true :single? true} :flee
+    {:health 8 :fighting? true :single? true} :flee
     {:health 18 :fighting? true :single? true :creeper? true} :flee))
 
 (deftest a-mob-that-outruns-the-body-is-no-reason-to-start-a-fight-but-a-fight-begun-goes-on
@@ -170,9 +170,9 @@
     {:cannot-outrun? true :fighting? true :creeper? true} :flee))
 
 (deftest the-health-a-begun-fight-is-held-above-is-a-setting
-  (is (= :flee (cost/decide {:reserve 4 :damage 16 :health 9 :fighting? true :single? true})))
-  (is (= :fight (settings/with-settings {:jobs.lib.cost.fight/hysteresis-health 8}
-                  #(cost/decide {:reserve 4 :damage 16 :health 9 :fighting? true :single? true})))))
+  (is (= :flee (cost/decide {:reserve 4 :damage 16 :health 8 :fighting? true :single? true})))
+  (is (= :fight (settings/with-settings {:jobs.lib.cost.fight/hysteresis-health 7}
+                  #(cost/decide {:reserve 4 :damage 16 :health 8 :fighting? true :single? true})))))
 
 (defn fist-stance
   "What decide makes of a body at full health with weapon against one mob (health: what is left of it, nil full)."
@@ -521,6 +521,21 @@
           (core/submit! eng respond {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= 2 @fights) "the second encounter fights the nearly dead zombie, no flight"))))))
+
+(deftest a-refired-reflex-goes-on-with-the-fight-the-last-one-began-below-the-hysteresis-health
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 3 0)]})
+              fights (atom 0)
+              eng (assoc-in eng [:jobs 'jobs.survival.fight-back] {:round (fn ^:async f [_c] (swap! fights inc) (swap! (fake/state p) assoc :entities []) :continue)})]
+          (core/submit! eng respond {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (fake/swap-self! p assoc :health 10)
+          (fake/add-entity! p (zombie 7 3 0))
+          (core/submit! eng respond {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= 2 @fights) "an iron sword against one zombie at health 10, the fight begun a moment ago: no run home"))))))
 
 ;; ----------------------------------------------------------------- retreat
 

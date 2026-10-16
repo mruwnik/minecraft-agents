@@ -205,6 +205,15 @@
                                  (/ mute-ms 1000) " s, one that comes into sight is fought")))
     :left-heard))
 
+(defn fight-begun?
+  "Whether this call or the last refire (a :hostile entry within ::struck-s) decided to fight: a reflex that refired
+  mid-fight is the same fight."
+  [c m]
+  (or (= :fight (:decision m))
+      (let [e (mem/latest (ctx/view c) :hostile)]
+        (boolean (and (= :fight (get-in e [:data :decision]))
+                      (> (:t e) (- (ctx/now c) (* 1000 (settings/get settings ::struck-s)))))))))
+
 (defn ^:async respond [c near]
   (let [{:keys [reserve] :as a} (:args c)
         p (:primitives c)
@@ -215,7 +224,7 @@
         chosen (if (some combat/enderman? near)
                    :flee
                    (cost/decide {:health (.-health self)
-                               :fighting? (= :fight (:decision m))
+                               :fighting? (fight-begun? c m)
                                :single? (= 1 (count near))
                                :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map #(.-name %) (remove combat/ranged? near))))
                                :creeper? (boolean (some combat/creeper? near))

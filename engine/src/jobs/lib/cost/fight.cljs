@@ -12,7 +12,7 @@
 
 (a/defargs settings
   {::fist-gap-ms {:default 1300 :doc "Milliseconds between the hits a body with no sword or axe lands: the mob is knocked back and hops, so most of the time goes on walking up to it again." :spec (a/int-in 1 nil)}
-   ::hysteresis-health {:default 10 :doc "Above this health a fight already begun against a single mob goes on though one hit made it dearer than reserve." :spec (a/num-in 0 20)}})
+   ::hysteresis-health {:default 8 :doc "Above this health a fight already begun against a single mob goes on though one hit made it dearer than reserve." :spec (a/num-in 0 20)}})
 
 (defn swing-gap-ms
   "Milliseconds between the hits weapon lands: its attack gap, ::fist-gap-ms for anything that is no sword or axe."
