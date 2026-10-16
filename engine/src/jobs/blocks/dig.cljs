@@ -52,7 +52,7 @@
 
   Returns an ending whose data is {:dug true|false :pos :block :collected n}, plus :now (the block seen at the cell after a dig, absent when not seen since; the text says it), :left
   (collect-drops' drops it could not take), :stepped-aside [x y z] (the cell it stood on) when it stepped off the column
-  first. :done with :reason :dug, or :already-clear (air there, nothing done). Condition-failed: :fluid (a fluid is not dug),
+  first, :stepped-down [x y z] (the cell it stands in) when picking up the drops walked it down into the hole. :done with :reason :dug, or :already-clear (air there, nothing done). Condition-failed: :fluid (a fluid is not dug),
   :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like), and the conditions above.
   Nothing-possible: :lava-unsealed, :failed (the primitive refused, its status as :primitive). Limit-reached :time: the
   primitive timed out.")
@@ -210,13 +210,14 @@
 
 (def condition-reasons #{:fluid :fluid-adjacent :cannot})
 
-(defn text-of [result cell place stepped-aside]
+(defn text-of [result cell place stepped-aside stepped-down]
   (str (if (:dug result) "dug " "did not dig ") (or (:block result) "") " at " (pr-str (b/cell (:pos result)))
        (when (:dug result)
          (let [now (:now result)]
            (cond (nil? now) "; the cell was not seen since"
                  (b/air now) "; the cell is now clear"
                  :else (str "; the cell now holds " now))))
+       (when stepped-down (str "; the body stepped down to " (pr-str stepped-down) " for the drops"))
        (when stepped-aside (str " from beside (stepped aside to " (pr-str stepped-aside) ": no seen floor under it)"))
        (cond
          (= :lava-unsealed (:reason result))
@@ -235,8 +236,10 @@
   (let [result (cond-> result (:stepped-aside (ctx/mem c)) (assoc :stepped-aside (:stepped-aside (ctx/mem c))))
         {:keys [cell place stepped-aside reason]} result
         now (when (:dug result) (b/target-name (:primitives c) (:pos result) nil))
-        result (cond-> result now (assoc :now now))
-        result (assoc result :text (text-of result cell place stepped-aside))]
+        feet (b/feet-cell c)
+        stepped-down (when-let [[_ y] (:start-feet (ctx/mem c))] (when (< (second feet) y) feet))
+        result (cond-> result now (assoc :now now) stepped-down (assoc :stepped-down stepped-down))
+        result (assoc result :text (text-of result cell place stepped-aside stepped-down))]
     (cond
       (done-reasons reason) (ctx/end c :done nil result)
       (condition-reasons reason) (ctx/end c :condition-failed reason (dissoc result :reason))
@@ -413,6 +416,7 @@
 (defn ^:async round [c]
   (let [{:keys [pos]} (b/parse (:args c))]
     (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
+    (when-not (:start-feet (ctx/mem c)) (ctx/update-mem! c assoc :start-feet (b/feet-cell c)))
     (let [fails (atom 0)]
       (await (pace/steps! c #(attempt! c pos fails))))))
 

@@ -649,6 +649,8 @@
             (is (= {:dug true :collected 1} (select-keys result [:dug :collected])))
             (is (= 1 (carried p "dirt")))
             (is (= 63 (second (get-in @(fake/state p) [:self :pos]))) "it stepped into the hole for the drop")
+            (is (= [0 63 0] (:stepped-down result)) "the walk down is told")
+            (is (re-find #"stepped down to \[0 63 0\]" (:text result)))
             (is (empty? (left-drops seen)))))))))
 
 (deftest a-new-call-digs-once-a-cell-beside-can-be-stood-on
