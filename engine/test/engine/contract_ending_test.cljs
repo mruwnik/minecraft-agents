@@ -9,6 +9,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.expr :as expr]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [jobs.lib.choose :as choose]))
@@ -386,6 +387,45 @@
             (is (= n (looks-at p)) "no look in later rounds")
             (is (nil? (:looks-rounds @world)) "never started")
             (is (= [:unseen] (distinct (mapv #(:reason (:data %)) (job-ev seen :waiting)))))))))))
+
+(def looks-at-cell
+  "Asks for a look at the cell in :look-cell of the test world, which no look can settle."
+  {:can-start? (fn [_] (contract/look :unseen "never seen" :look-at [(:look-cell @world)]))
+   :round (fn [c] (swap! world update :looks-rounds (fnil inc 0)) (ctx/end c :done nil))})
+
+(deftest a-look-asked-from-a-new-spot-or-about-new-cells-looks-once-more
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {'looks-at-cell looks-at-cell})
+              settle (^:async fn [] (dotimes [_ 3] (await (core/tick! eng))) (looks-at p))]
+          (swap! world assoc :look-cell [0 70 0])
+          (core/submit! eng '(looks-at-cell) {})
+          (let [n (await (settle))]
+            (is (pos? n) "it looked once")
+            (is (= n (await (settle))) "then waits")
+            (swap! (fake/state p) assoc-in [:self :pos] [5.5 64 0.5])
+            (let [m (await (settle))]
+              (is (> m n) "the body moved: one more look")
+              (is (= m (await (settle))) "then waits again")
+              (swap! world assoc :look-cell [1 70 0])
+              (let [k (await (settle))]
+                (is (> k m) "other cells: one more look")
+                (is (= k (await (settle))) "then waits again")))
+            (is (nil? (:looks-rounds @world)))))))))
+
+(deftest a-cancelled-job-leaves-no-look-mark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'looks-at-cell looks-at-cell})]
+          (swap! world assoc :look-cell [0 70 0])
+          (let [id (core/submit! eng '(looks-at-cell) {})]
+            (await (core/tick! eng))
+            (is (seq @(:looks eng)) "marked after the look round")
+            (core/cancel! eng id)
+            (await (core/tick! eng))
+            (is (empty? @(:looks eng)))))))))
 
 (def looks-up
   "Starts once the cell above the body was looked at; until then it asks for a look at it."

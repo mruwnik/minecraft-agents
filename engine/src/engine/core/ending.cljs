@@ -95,22 +95,22 @@
   [ss]
   (mapv #(cond-> % (= :look (first %)) (assoc 0 :later)) ss))
 
-(defonce ^{:doc "Per engine (keyed by its :asked atom), an atom of the frames whose last look round left a :look."} looks (js/WeakMap.))
-
-(defn looks-of [eng]
-  (let [k (:asked eng)]
-    (or (.get looks k) (let [a (atom #{})] (.set looks k a) a))))
+(defn look-key
+  "What a look of c's frame was about: the :look-at cells of the :look statuses in ss and the cell the body stood in."
+  [c ss]
+  [(into [] (comp (filter #(= :look (first %))) (mapcat #(:look-at (nth % 2 nil)))) ss)
+   (some->> (some-> (:primitives c) .self .-pos) ((juxt #(.-x %) #(.-y %) #(.-z %))) (mapv js/Math.floor))])
 
 (defn looked?
-  "Whether a look round already followed a :look of c's frame, which no check since has passed without."
-  [c]
-  (boolean (some-> (:engine c) looks-of deref (contains? (asked-key c)))))
+  "Whether a look round already followed a :look of c's frame about key, which no check since has passed without."
+  [c key]
+  (= key (some-> (:engine c) :looks deref (get [(:root c) (:slots c)]))))
 
 (defn note-look!
-  "Record whether c's frame has looked on: after a look round that left a :look, the next :look counts as :later
-  (across rounds); a status without :look clears it."
-  [c look?]
-  (some-> (:engine c) looks-of (swap! (if look? conj disj) (asked-key c)))
+  "Record the key of the look c's frame has looked on, or nil to clear it: after a look round that left a :look, the
+  next :look about the same cells from the same spot counts as :later (across rounds)."
+  [c key]
+  (some-> (:engine c) :looks (swap! (if key assoc dissoc) [(:root c) (:slots c)] key))
   nil)
 
 (defn ^:async looked
@@ -120,7 +120,7 @@
   (if (= :look (first (contract/all ss)))
     (do (await ((:look/around hooks/all) c (into [] (comp (filter #(= :look (first %))) (mapcat #(:look-at (nth % 2 nil)))) ss)))
         (let [after (statuses def c)]
-          (note-look! c (= :look (first (contract/all after))))
+          (note-look! c (when (= :look (first (contract/all after))) (look-key c after)))
           (later-looks after)))
     ss))
 
@@ -308,7 +308,7 @@
 (defn ended!
   "r, the round's answer, after a root job's remembered done? status is dropped once r ends it."
   [c r]
-  (when-not (= :continue r) (forget-done! c) (note-look! c false))
+  (when-not (= :continue r) (forget-done! c) (note-look! c nil))
   r)
 
 (defn ^:async run
@@ -359,8 +359,8 @@
   (let [fresh? (not (started? c))
         raw (if fresh? (zipmap [:start :run] (statuses def c)) {:run (run-status def c)})
         look? (= :look (first (contract/all (vals raw))))
-        _ (when-not look? (note-look! c false))
-        asked (cond-> raw (and look? (looked? c)) (update-vals #(first (later-looks [%]))))
+        _ (when-not look? (note-look! c nil))
+        asked (cond-> raw (and look? (looked? c (look-key c (vals raw)))) (update-vals #(first (later-looks [%]))))
         {start-s :start run-s :run} asked
         s (if fresh? (contract/all [start-s run-s]) run-s)
         later? (= :later (first s))

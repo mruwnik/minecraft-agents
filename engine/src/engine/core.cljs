@@ -261,6 +261,7 @@
              :fruitless (atom {})
              :asked (atom {})
              :seen-done (atom {})
+             :looks (atom {})
              :said (atom [])
              :rounds (atom {})
              :passes (atom {})
