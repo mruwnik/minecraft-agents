@@ -68,10 +68,13 @@
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn ^:async run-ticks
+  "Up to n ticks, fewer once no job is left: later ticks would only idle."
   [{:keys [eng clock]} n]
-  (dotimes [_ n]
-    (swap! clock + 700)
-    (await (core/tick! eng))))
+  (loop [i 0]
+    (when (< i n)
+      (swap! clock + 700)
+      (await (core/tick! eng))
+      (when (seq (:list (core/state eng))) (recur (inc i))))))
 
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks; the setup map."
@@ -2039,9 +2042,7 @@
                            (if (= :continue e) :continue (do (reset! out e) (ctx/end c :done nil)))))}
         eng (assoc (:eng s) :jobs (merge (assoc (:jobs (:eng s)) 'mining-parent parent 'jobs.items.get-tool stub) jobs))]
     (core/submit! eng '(mining-parent) {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! eng)))
+    (await (run-ticks (assoc s :eng eng) n))
     {:s s :out @out :fetch @fetched}))
 
 (deftest getting-none-of-the-block-is-stopped-not-completed
@@ -2287,9 +2288,7 @@
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'jobs.movement.go-to spy))]
     (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
     (core/submit! eng (spec {:block "stone" :count 1 :direction "east" :tunnel-length 4}) {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! eng)))
+    (await (run-ticks (assoc s :eng eng) n))
     {:s s :go-to @go-tos}))
 
 (deftest after-a-descent-the-walk-home-is-a-go-to-and-ends-home
