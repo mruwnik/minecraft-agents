@@ -5,7 +5,7 @@
 {:name "heap-event-reports-a-capped-limit"
  :tags [:engine :memory] :time :any
  :plot {:height 6}
- :settings {:engine.perception/stats-ms 2000}
+ :settings {:engine.core.base/stats-ms 2000}
  :body {:at [16.5 0 16.5] :settle-s 2}
  :expect [{:event {:source :body :kind :body.heap :data {:heap-used [:> 0] :heap-limit [:< 400000000] :rss [:> 0]}} :within-s 20}
           {:no-event {:source :body :kind :body.heap :data {:heap-limit [:>= 400000000]}} :for-s 8}]

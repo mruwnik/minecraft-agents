@@ -18,15 +18,14 @@
     :doc "How many ended listed jobs' outcomes the engine keeps (results.edn, served on /job and /results)."}
    :engine.core.base/reflex-results-limit
    {:default 20 :spec (a/int-in 1 nil)
-    :doc "How many ended reflex jobs' outcomes the engine keeps, apart from the listed jobs'."}})
+    :doc "How many ended reflex jobs' outcomes the engine keeps, apart from the listed jobs'."}
+   :engine.core.base/stats-ms
+   {:default 60000 :spec (a/int-in 1 nil)
+    :doc "How often the engine emits memory.save-stats and the body.heap sample, ms."}})
 
 (def default-idle-s
   "Seconds a round may hold the body with no act in flight and no declared hold before a job.idle warn."
   10)
-
-(def default-stats-ms
-  "How often tick! emits the memory.save-stats summary."
-  60000)
 
 (def default-sweep-ms
   "How often tick! sweeps and saves memory."

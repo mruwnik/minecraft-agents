@@ -1990,3 +1990,9 @@
     (swap! (:seen-done eng) assoc (mem/path->id id []) [:ok nil {}])
     (base/drop-instance! eng id :ended)
     (is (= {} @(:seen-done eng)))))
+
+(deftest stats-interval-comes-from-the-setting-unless-given
+  (let [mk (fn [opts] (core/create (merge {:primitives (tu/fake {}) :jobs registry :triggers triggers :dir (tu/tmp-dir)} opts)))]
+    (is (= 60000 (:stats-ms (mk {}))))
+    (is (= 2000 (:stats-ms (settings/with-settings {:engine.core.base/stats-ms 2000} #(mk {})))))
+    (is (= 500 (:stats-ms (settings/with-settings {:engine.core.base/stats-ms 2000} #(mk {:stats-ms 500})))))))

@@ -62,7 +62,6 @@
 (def cut-error base/cut-error)
 (def cut? base/cut?)
 (def default-idle-s base/default-idle-s)
-(def default-stats-ms base/default-stats-ms)
 (def default-sweep-ms base/default-sweep-ms)
 (def distance base/distance)
 (def emit! base/emit!)
@@ -217,13 +216,13 @@
     :idle-s            seconds with no act and no declared hold before job.idle (10)
     :body-idle-s       seconds with no useful act before body.idle (setting :engine.core.activity/body-idle-s)
     :sweep-ms          memory sweep interval (60000)
-    :stats-ms          memory.save-stats interval (60000)
+    :stats-ms          memory.save-stats and body.heap interval (setting :engine.core.base/stats-ms, 60000)
     :max-event-bytes   event log size cap (setting :engine.events/max-bytes, 64 MiB)"
   [{:keys [primitives jobs triggers dir now events body idle-s body-idle-s sweep-ms stats-ms world
            max-event-bytes
            backoff backoff-alert-ms]
     :or {now js/Date.now idle-s default-idle-s sweep-ms default-sweep-ms
-         stats-ms default-stats-ms backoff-alert-ms default-backoff-alert-ms}}]
+         backoff-alert-ms default-backoff-alert-ms}}]
   (let [_ (game/select! primitives)
         file (path/join dir "engine.edn")
         saved (fsu/read-edn file)
@@ -271,7 +270,7 @@
              :body-idle (atom {:busy 0 :last-at (now) :told? false :list (:list initial-state)})
              :sweep-ms sweep-ms
              :last-sweep (atom (now))
-             :stats-ms stats-ms
+             :stats-ms (or stats-ms (settings/get base/settings :engine.core.base/stats-ms))
              :last-stats (atom (now))
              :save-stats (atom empty-save-stats)}]
     (add-watch st ::persist (fn [_ _ old new]
