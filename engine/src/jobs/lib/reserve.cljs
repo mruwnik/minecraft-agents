@@ -9,6 +9,7 @@
   surplus, lowest strength first, each (cost/reserve-cost value strength); ##Inf when one is strength 1."
   (:require [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [engine.register :as register]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
             [jobs.lib.foods :as foods]
@@ -27,11 +28,7 @@
    :bed #(str/ends-with? % "_bed")
    :seeds #(boolean (re-find #"_seeds$|^(carrot|potato)$" %))})
 
-(defn live?
-  "Whether an entry still counts in view: not past :until, and its :by job (an instance id) has memory."
-  [{:keys [now] :as view} {:keys [until by]}]
-  (and (or (nil? until) (< now until))
-       (or (nil? by) (= "agent" by) (seq (mem/entries view (mem/job-kind by))) false)))
+(def live? register/live?)
 
 (defn entries [view]
   (filterv #(live? view %) (map :data (mem/entries view kind))))

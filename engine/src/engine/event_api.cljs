@@ -15,6 +15,7 @@
             [engine.events :as events]
             [engine.job-api :as job-api]
             [engine.memory :as mem]
+            [engine.register :as register]
             [engine.settings :as settings]
             [engine.trigger-api :as trigger-api]
             ["fs" :as fs]
@@ -129,12 +130,11 @@
     (some-> (.lastKnown p) (js->clj :keywordize-keys true))))
 
 (defn reserved-view
-  "The reserve register's entries (body memory :reserve) not past their :until, as written by jobs.lib.reserve."
+  "The reserve register's entries (body memory :reserve) still live (register/live?), as written by jobs.lib.reserve."
   [eng]
   (when-let [store (:store eng)]
     (let [view (mem/view store)]
-      (vec (filter (fn [{:keys [until]}] (or (nil? until) (< (:now view) until)))
-                   (map :data (mem/entries view :reserve)))))))
+      (filterv #(register/live? view %) (map :data (mem/entries view :reserve))))))
 
 (defn inventory-view
   "Read-only player inventory and worn slots, bounded to the vanilla player-window capacity. :reserved lists the
@@ -144,7 +144,8 @@
         known (when offline? (last-known (:primitives eng)))]
     (if (and offline? (nil? known))
       {:ok false :reason :offline :offline (core/away eng)}
-      (let [self (or known (js->clj (.self (:primitives eng)) :keywordize-keys true))
+      (let [reserved (reserved-view eng)
+            self (or known (js->clj (.self (:primitives eng)) :keywordize-keys true))
           all-stacks (or (:inventory self) [])
           stacks (->> all-stacks (take (setting "inventory-stack-limit")) (keep inventory-stack) vec)
           equipment (into {} (keep (fn [slot]
@@ -153,7 +154,7 @@
                                        (when (armour-slots slot) [slot :empty])))) equipment-slots)]
       (cond-> {:ok true :inventory stacks}
         (seq equipment) (assoc :equipment equipment)
-        (seq (reserved-view eng)) (assoc :reserved (reserved-view eng))
+        (seq reserved) (assoc :reserved reserved)
         (> (count all-stacks) (setting "inventory-stack-limit")) (assoc :more? true)
         offline? (assoc :last-known true :offline (core/away eng)))))))
 

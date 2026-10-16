@@ -507,7 +507,8 @@
         eng {:store store :primitives #js {:isOffline (fn [] false) :self (fn [] #js {:inventory #js []})}}
         kept {:id "k" :item "diamond" :count 3 :strength 1 :by "agent" :why "beacon" :until nil}]
     (swap! store assoc :data {:entries {:reserve [{:t 0 :data kept}
-                                                   {:t 0 :data {:id "old" :item "bread" :strength 0.5 :until 500}}]}})
+                                                   {:t 0 :data {:id "old" :item "bread" :strength 0.5 :until 500}}
+                                                   {:t 0 :data {:id "dead" :item "bread" :strength 0.5 :by "gone-1"}}]}})
     (is (= [kept] (:reserved (event-api/inventory-view eng))))
     (swap! store assoc :data {})
     (is (not (contains? (event-api/inventory-view eng) :reserved)))))
