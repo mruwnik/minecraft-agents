@@ -28,6 +28,13 @@
     (is (true? (:day? day)))
     (is (false? (:day? dusk)))))
 
+(deftest an-old-or-night-reading-says-so
+  (let [old (clock-of pose 1060000)
+        day-fresh (clock-of (assoc pose :timeOfDay 3000) 1001000)]
+    (is (re-find #"60 s old" (:note old)))
+    (is (re-find #"every online player" (:note old)))
+    (is (nil? (:note day-fresh)))))
+
 (deftest the-asking-body-gives-the-clock-even-when-another-is-newer
   (let [dir (world-with-pose pose)
         bob (.join path dir "agents" "Zed" "view")]

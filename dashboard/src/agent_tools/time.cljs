@@ -8,7 +8,7 @@
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --body BODY --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is. dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
+(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --body BODY --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is, :note when it is over 5 s old or at night (why a bed may not skip). dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
 (def stale-ms 90000)
 
 (defn options [argv]
@@ -27,6 +27,16 @@
       (throw (data/fail :invalid-option "timeout must be 0..3600 seconds; poll-ms must be 10..10000")))
     {:ctx (data/context (select-keys values [:state :worlds :world])) :command command :body (:body values)
      :timeout-ms (* 1000 timeout) :poll-ms poll-ms}))
+
+(def night-note "Sleeping skips the night only when every online player sleeps; one awake player means no skip, the clock still runs.")
+
+(defn noted
+  "Say plainly how old a reading is when it is not fresh, and why a bed may not skip the night."
+  [{:keys [age-ms day? by] :as reading}]
+  (let [notes (cond-> []
+                (> age-ms 5000) (conj (str "Reading is " (js/Math.round (/ age-ms 1000)) " s old (last seen by " by "); the real time of day is later."))
+                (not day?) (conj night-note))]
+    (cond-> reading (seq notes) (assoc :note (apply str (interpose " " notes))))))
 
 (defn report [ctx body now]
   (try
@@ -51,7 +61,7 @@
                          (filter #(and (.isDirectory %) (re-matches #"[A-Za-z0-9_-]{1,64}" (.-name %))))
                          (map #(.-name %)))
                     (catch :default e (if (= "ENOENT" (.-code e)) [] (throw e))))]
-    (or (first (sort-by (juxt (comp not #(= asker (:by %))) (comp - :seen-at) :by) (keep #(report ctx % now) bodies)))
+    (or (some-> (first (sort-by (juxt (comp not #(= asker (:by %))) (comp - :seen-at) :by) (keep #(report ctx % now) bodies))) noted)
         {:ok false :world (:world ctx) :reason :time-unknown})))
 
 (defn with-missed!
