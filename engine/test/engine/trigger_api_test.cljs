@@ -410,6 +410,8 @@
     '(nope) :unknown-symbol
     ''(< (health) 10) :quoted
     '(held-for 5 (daytime)) :unknown-symbol
+    '(exposed) :unknown-symbol
+    '(and (job-fit) (daytime)) :unknown-symbol
     '(health) :not-a-status))
 
 (deftest known-compiles-through-the-seam-and-fires-on-an-absent-place

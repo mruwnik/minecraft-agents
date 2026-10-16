@@ -5,7 +5,8 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.ready :as ready]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.danger :as danger]))
 
 (defn ctx-of
   "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job)."
@@ -47,9 +48,8 @@
 (deftest safe-at-open-ground-by-day-is-ok-where-the-light-is-seen
   (is (= :ok (lit 0 15 #(kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))))))
 
-(deftest safe-here-is-ok-in-the-hut-and-later-outside-at-night
-  (are [world expected] (= expected (kind ready/safe-here world))
-    night-hut :ok))
+(deftest safe-here-is-ok-in-the-hut
+  (is (= :ok (kind ready/safe-here night-hut))))
 
 (deftest safe-here-outside-at-night-is-later
   (is (= :later (lit 0 15 #(kind ready/safe-here open-night)))))
@@ -68,6 +68,37 @@
     {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]} :later
     {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie] :blocks (merge wall (tu/box 2 67 -2 4 67 2 "stone") (tu/box 3 64 -2 4 66 -2 "stone") (tu/box 3 64 2 4 66 2 "stone") (tu/box 4 64 -2 4 66 2 "stone"))} :ok
     {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}} :ok))
+
+(def skeleton {:id 8 :name "skeleton" :kind "hostile" :pos {:x 12 :y 64 :z 0}})
+(def at-origin {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
+
+(defn with-entry
+  "ctx-of world, its engine holding a hostile-near register entry with args."
+  [world args]
+  (assoc-in (ctx-of world) [:engine :state] (atom {:register [{:id :hostile-near :trigger :hostile-near :args args}]})))
+
+(deftest threatened-reads-the-hostile-near-entrys-args-and-the-triggers-options
+  (are [world args expected] (= expected (first (ready/threatened (with-entry (merge at-origin world) args))))
+    {:entities [zombie]} {} :later
+    {:entities [zombie]} {:radius 2} :ok
+    {:entities [(assoc skeleton :pos {:x 0 :y 64 :z 20})]} {} :ok
+    {:entities [skeleton]} {} :later
+    {:entities [skeleton]} {:ranged-radius 5} :ok))
+
+(deftest threatened-keeps-the-triggers-visible-only-option
+  (let [far (assoc zombie :pos {:x 5 :y 64 :z 0})
+        behind (tu/box 2 64 0 3 66 0 "stone")]
+    (are [args expected] (= expected (first (ready/threatened (with-entry (merge at-origin {:entities [far] :blocks behind}) args))))
+      {} :ok
+      {:visible-only false} :later)))
+
+(deftest threatened-is-read-once-per-window
+  (let [c (ctx-of (merge at-origin {:entities [zombie]}))
+        asked (atom 0)]
+    (with-redefs [danger/hostile-near? (fn [& _] (swap! asked inc) true)]
+      (ready/threatened c)
+      (ready/threatened c))
+    (is (= 1 @asked))))
 
 (deftest safe-at-adds-the-threat-to-the-exposure
   (is (= :later (kind (ready/safe-at (constantly {:x 1 :y 64 :z 0}))

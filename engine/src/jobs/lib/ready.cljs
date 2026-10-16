@@ -43,10 +43,15 @@
         to (update-vals (or to (sh/feet p)) js/Math.floor)]
     (check-cache/cached c [::exposed to] #(at-status c to))))
 
-(defn threatened
-  "Later :hostile-near while the hostile-near trigger would hold (the same radii and options)."
+(defn trigger-args
+  "The args of the register's hostile-near entry (muted or not), {} when it has none."
   [c]
-  (if (check-cache/cached c ::threatened #(danger/hostile-near? (:primitives c) (ctx/view c) {}))
+  (or (some #(when (= :hostile-near (:trigger %)) (:args %)) (:register (some-> (:engine c) :state deref))) {}))
+
+(defn threatened
+  "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry)."
+  [c]
+  (if (check-cache/cached c ::threatened #(danger/hostile-near? (:primitives c) (ctx/view c) (trigger-args c)))
     (contract/later :hostile-near "a hostile is near")
     (contract/ok :no-hostile-near "no hostile near")))
 

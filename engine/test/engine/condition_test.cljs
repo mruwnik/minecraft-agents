@@ -382,7 +382,7 @@
 
 (def later-exposed (with-meta (fn [_] (contract/later :x "x")) {::ready/exposure (fn [_] (contract/later :exposed "dark"))}))
 
-(deftest job-only-entries-compile-only-with_the_vocabulary
+(deftest job-only-entries-compile-only-with-the-vocabulary
   (doseq [form '[(exposed) (job-safe) (and (job-fit) (not (threatened))) (always) (starving)]]
     (is (= :unknown-symbol (:reason (c/compile form))) (str form " refused for a trigger"))
     (is (:ok (c/compile form ready/vocabulary)) (str form " accepted for a job")))

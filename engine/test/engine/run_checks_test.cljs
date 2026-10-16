@@ -155,6 +155,22 @@
           (is (nil? (:leaf-rounds @world)) "the other key leaves the child's :safe? alone")
           (is (= :dark (:reason (core/waiting eng id)))))))))
 
+(deftest a-restarted-job-keeps-its-checks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! world {})
+        (let [dir (tu/tmp-dir)
+              jobs {'root (leaf :safe?)}
+              again (fn [] (core/create {:primitives (tu/fake {}) :dir dir :now (constantly 1000000) :jobs jobs :triggers {}
+                                         :events (events/make {:body "Fake" :sinks [] :now (constantly 1000000)})}))
+              first-eng (again)
+              id (core/submit! first-eng '(root {:checks {:safe? (always)}}) {})
+              restarted (again)]
+          (is (= {:safe? '(always)} (get-in (core/state restarted) [:instances id :spec :args :checks])) "the form survives the restore")
+          (await (core/tick! restarted))
+          (is (= 1 (:leaf-rounds @world)) "and replaces the closed gate"))))))
+
 (deftest job-safe-on-a-child-call-keeps-the-childs-own
   (async done
     (tu/run-async done
