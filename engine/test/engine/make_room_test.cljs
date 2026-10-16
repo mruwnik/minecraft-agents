@@ -793,6 +793,22 @@
           (await (tick-out! eng 10))
           (is (= [{:x -1 :y 64 :z 0}] @goals) "four blocks back is the wall: the farthest open cell is aimed at"))))))
 
+(deftest the-walk-away-aims-only-at-cells-the-body-has-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (same "diamond" 35 1)})
+              goals (atom [])
+              go-to {:ways [:walk :clear-seal]
+                     :round (fn ^:async go-to-round [c] (swap! goals conj (:pos (:args c))) (ctx/end c :done nil))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))
+              omniscient (.-sensedAt (tu/seeing-all p))]
+          (aset p "sensedAt" (fn [pos] (if (< (.-x pos) 0) #js {:unknown true} (omniscient pos))))
+          (mem/write! (:store eng) :make-room-tossed {:at {:x 2 :y 64 :z 0} :dir [1 0]} mr/tossed-policy)
+          (core/submit! eng '(jobs.storage.make-room) {})
+          (await (tick-out! eng 10))
+          (is (= [{:x 0 :y 64 :z 0}] @goals) "x -2 and -1 were never seen: the farthest seen cell is aimed at"))))))
+
 (deftest a-toss-direction-is-not-picked-from-cells-never-seen
   (let [p (tu/seeing-all (tu/fake-on-floor {}))
         {fx :x} (sh/feet p)

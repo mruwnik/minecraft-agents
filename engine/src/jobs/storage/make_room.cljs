@@ -316,13 +316,13 @@
     (<= (js/Math.hypot (- (.-x pos) (:x at)) (- (.-z pos) (:z at))) reach)))
 
 (defn standable?
-  "Whether the cell {:x :y :z} is no known obstacle for the body: feet and head cells not seen as solid, the floor not
-  seen as air or fluid. A cell never seen counts as standable (the walk looks)."
+  "Whether the cell {:x :y :z} is seen standable: feet and head cells seen open, the floor seen solid. A cell the body
+  has not seen is no goal (it may be rock, or a drop)."
   [p {:keys [x y z]}]
   (let [seen (fn [dy] (u/seen-name p {:x x :y (+ y dy) :z z}))
-        open? (fn [n] (or (nil? n) (and (rules/replaceable n) (not (rules/fluids n)))))]
-    (and (open? (seen 0)) (open? (seen 1))
-         (or (nil? (seen -1)) (rules/solid-floor? (fn [_] (seen -1)) nil)))))
+        open? (fn [n] (and n (rules/replaceable n) (not (rules/fluids n))))]
+    (boolean (and (open? (seen 0)) (open? (seen 1))
+                  (seen -1) (rules/solid-floor? (fn [_] (seen -1)) nil)))))
 
 (defn away-goal
   "The cell to step to from the toss spot at: the farthest one up to away blocks back along dir that the body can stand
