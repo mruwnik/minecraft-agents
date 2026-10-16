@@ -16,7 +16,7 @@
 
 (defn clock-of [pose now]
   (let [dir (world-with-pose pose)
-        result (time/clock {:world "w" :world-dir dir} now)]
+        result (time/clock {:world "w" :world-dir dir} now nil)]
     (.rmSync fs dir #js {:recursive true :force true})
     result))
 
@@ -28,6 +28,16 @@
     (is (true? (:day? day)))
     (is (false? (:day? dusk)))))
 
+(deftest the-asking-body-gives-the-clock-even-when-another-is-newer
+  (let [dir (world-with-pose pose)
+        bob (.join path dir "agents" "Zed" "view")]
+    (.mkdirSync fs bob #js {:recursive true})
+    (.writeFileSync fs (.join path bob "pose.json") (js/JSON.stringify (clj->js (assoc pose :t 1000500))))
+    (let [ctx {:world "w" :world-dir dir}
+          bys (mapv #(:by (time/clock ctx 1001000 %)) [nil "Bob" "Nobody"])]
+      (.rmSync fs dir #js {:recursive true :force true})
+      (is (= ["Zed" "Bob" "Zed"] bys)))))
+
 (deftest dawn-waits-through-the-evening-and-the-last-ticks-before-the-wrap
   (is (= [false false false false true true] (map time/dawn-reached? [10437 11505 12455 23500 0 1000]))))
 
@@ -37,7 +47,7 @@
 
 (deftest a-dawn-result-without-a-checkpoint-or-body-gets-no-missed
   (async done
-    (-> (js/Promise.all #js [(time/with-missed! {:world-dir "/nonexistent"} {:ok true :wake :day})
-                             (time/with-missed! {:world-dir "/nonexistent"} {:ok true :wake :day :by "Bob"})])
+    (-> (js/Promise.all #js [(time/with-missed! {:world-dir "/nonexistent"} nil {:ok true :wake :day})
+                             (time/with-missed! {:world-dir "/nonexistent"} nil {:ok true :wake :day :by "Bob"})])
         (.then (fn [rs] (is (= [{:ok true :wake :day} {:ok true :wake :day :by "Bob"}] (vec rs)))))
         (.finally done))))

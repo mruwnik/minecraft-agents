@@ -8,12 +8,12 @@
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is. dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
+(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --body BODY --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is. dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
 (def stale-ms 90000)
 
 (defn options [argv]
   (let [{:keys [positionals values]} (map-tool/parse-options argv
-        {:world {:type "string"} :state {:type "string"} :worlds {:type "string"}
+        {:world {:type "string"} :body {:type "string"} :state {:type "string"} :worlds {:type "string"}
          :timeout {:type "string"} :poll-ms {:type "string"}})
         [command & extra] positionals
         command (keyword (or command "clock"))
@@ -25,7 +25,7 @@
     (when-not (and (js/Number.isFinite timeout) (<= 0 timeout 3600)
                    (js/Number.isInteger poll-ms) (<= 10 poll-ms 10000))
       (throw (data/fail :invalid-option "timeout must be 0..3600 seconds; poll-ms must be 10..10000")))
-    {:ctx (data/context (select-keys values [:state :worlds :world])) :command command
+    {:ctx (data/context (select-keys values [:state :worlds :world])) :command command :body (:body values)
      :timeout-ms (* 1000 timeout) :poll-ms poll-ms}))
 
 (defn report [ctx body now]
@@ -43,33 +43,35 @@
              :seen-at seen :age-ms (- now seen) :by body}))))
     (catch :default _ nil)))
 
-(defn clock [ctx now]
+(defn clock
+  "The asking body's reading when it has a fresh one, else the newest body's."
+  [ctx now asker]
   (let [dir (.join path (:world-dir ctx) "agents")
         bodies (try (->> (array-seq (.readdirSync fs dir #js {:withFileTypes true}))
                          (filter #(and (.isDirectory %) (re-matches #"[A-Za-z0-9_-]{1,64}" (.-name %))))
                          (map #(.-name %)))
                     (catch :default e (if (= "ENOENT" (.-code e)) [] (throw e))))]
-    (or (first (sort-by (juxt (comp - :seen-at) :by) (keep #(report ctx % now) bodies)))
+    (or (first (sort-by (juxt (comp not #(= asker (:by %))) (comp - :seen-at) :by) (keep #(report ctx % now) bodies)))
         {:ok false :world (:world ctx) :reason :time-unknown})))
 
 (defn with-missed!
-  "A dawn result with what happened to the body that gave the clock since its observer last looked (:missed)."
-  [ctx {:keys [by] :as result}]
-  (if-not by
+  "A dawn result with what happened to the asking body (else the one that gave the clock) since its observer last looked (:missed)."
+  [ctx asker {:keys [by] :as result}]
+  (if-not (or asker by)
     (js/Promise.resolve result)
     (let [get! (fn [socket-path path options] (http/request (assoc options :socket-path socket-path :path path :label "time" :timeout-ms 3000)))]
-      (-> (missed! get! (.join path (:world-dir ctx) "agents" by "engine" "events.sock")
-                   (.join path (:world-dir ctx) "observers" by "agent.edn"))
+      (-> (missed! get! (.join path (:world-dir ctx) "agents" (or asker by) "engine" "events.sock")
+                   (.join path (:world-dir ctx) "observers" (or asker by) "agent.edn"))
           (.then #(cond-> result % (assoc :missed %)))))))
 
 (defn dawn-reached?
   "Whether the day just began: ticks 0..5999. Evening ticks and the last ticks before the sun wraps still wait."
   [tick] (< tick 6000))
 
-(defn execute! [{:keys [ctx command timeout-ms poll-ms]}]
+(defn execute! [{:keys [ctx command timeout-ms poll-ms body]}]
   (let [started (js/Date.now) deadline (+ started timeout-ms)]
     (letfn [(poll []
-              (let [now (js/Date.now) result (clock ctx now)]
+              (let [now (js/Date.now) result (clock ctx now body)]
                 (cond
                   (= command :clock) (js/Promise.resolve result)
                   (not (:ok result)) (js/Promise.resolve (assoc result :waited-ms (- now started)))
@@ -82,6 +84,6 @@
   (-> (js/Promise.resolve nil)
       (.then (fn [_] (let [opts (options (vec argv))]
                        (-> (execute! opts)
-                           (.then #(if (= :dawn (:command opts)) (with-missed! (:ctx opts) %) %))))))
+                           (.then #(if (= :dawn (:command opts)) (with-missed! (:ctx opts) (:body opts) %) %))))))
       (.then (fn [result] (.write (.-stdout js/process) (str (data/write-edn result) "\n")) (if (:ok result) 0 1)))
       (.catch (fn [error] (.write (.-stdout js/process) (str (data/write-edn (map-tool/error-result error)) "\n")) 2))))

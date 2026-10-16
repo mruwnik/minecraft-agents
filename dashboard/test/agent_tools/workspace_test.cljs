@@ -30,6 +30,10 @@
   (is (= ["--world" "w" "--worlds" "/x" "--repo" "/r" "list"]
          (workspace/route ctx "plans" ["list"]))))
 
+(deftest time-gets-the-workspace-body
+  (is (= ["--body" "Probe" "--world" "w" "--worlds" "/x" "dawn"]
+         (workspace/route ctx "time" ["dawn"]))))
+
 (deftest plans-check-cannot-read-another-body
   (is (thrown? js/Error (workspace/route ctx "plans" ["check" "p1" "--body" "Other"]))))
 

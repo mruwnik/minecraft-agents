@@ -39,6 +39,8 @@
       (fail! (str "workspace binds body/world/worlds/repo/workspace; cannot override " arg))))
   (let [prefix (cond-> []
                  (body-tools command) (conj (:body ctx))
+                 ;; the clock and missed events are the agent's own body's, not the world's newest
+                 (= "time" command) (into ["--body" (:body ctx)])
                  true (into ["--world" (:world ctx) "--worlds" (:worlds ctx)])
                  (#{"plans" "blueprints"} command) (into ["--repo" (:repo ctx)])
                  ;; plans check judges one body's seen memory: always the agent's own
@@ -65,6 +67,7 @@
    [#" --worlds (?:DIR|<dir>) --state (?:LEGACY_PARENT|<legacy-parent>)" ""]
    [#" \[--worlds (?:DIR|<dir>)\]| \[--state (?:LEGACY_PARENT|<legacy-parent>)\]" ""]
    [#" \[--worlds <dir>\]| \[--state <legacy-parent>\]| --worlds <dir>| --state <legacy-parent>| --repo <dir>" ""]
+   [#"--body BODY " ""]
    [#" (?:<agent>|<body>|BODY)(?= )" ""]
    [#" --world (?:<world>|WORLD)" ""]
    [#"(check <id>) --body <name>" "$1"]])
