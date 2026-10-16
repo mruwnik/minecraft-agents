@@ -1,0 +1,36 @@
+;; Bodies outside a pen with a shut fence gate. Cards 6b8e84d0 (go-to into a fenced pen opens the gate instead of ending
+;; :goal-enclosed, entities lists the animals in a fenced pen), 159e43f6 (animals.tend started outside the pen walks to the box once
+;; and counts again instead of :adults 0). Pen: oak fence ring x 18..24, z 13..19, inside 19..23 x 14..18, shut gate west at [18 0 16].
+;; Walled pen (tend case): stone ring of the same size, 4 high, gate in the west wall, nothing inside is visible from outside.
+;; Should-succeed: go-to a cell inside the fenced pen arrives; entities lists the sheep inside; tend from outside the walled pen counts
+;; the 3 chickens inside. Should-fail: none (go-to never ends :goal-enclosed here).
+{:defaults
+ {:tags [:animals :jobs :pen :go-to]
+  :time :any
+  :plot {:floor "grass_block" :height 8}
+  :body {:at [10.5 0 16.5] :yaw 270 :effects [["resistance" 900 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "go-to-into-the-fenced-pen-opens-the-gate"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:job (jobs.movement.go-to {:pos #xyz [21 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:why :goal-enclosed}} :for-s 90 :until {:source :job :kind :completed}}]
+   :after [[:body-near [21.5 0 16.5] 2.5]]}
+  {:name "entities-lists-the-sheep-inside-a-fenced-pen"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:summon "sheep" [21.5 0 16.5] "{NoAI:1b}"]
+         [:wait-s 2]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "sheep"] {:total 1}] 30]]
+   :after [[:entities "type=sheep,tag=wt" [[19 0 14] [23 1 18]] 1]]}
+  {:name "tend-from-outside-a-walled-pen-looks-and-counts"
+   :blocks [[:fill [18 0 13] [24 3 19] "stone"] [:fill [19 0 14] [23 3 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [18 1 16] "air"]]
+   :body {:at [10.5 0 16.5] :yaw 90}
+   :act [[:summon "chicken" [20.5 0 15.5] "{NoAI:1b}"] [:summon "chicken" [21.5 0 16.5] "{NoAI:1b}"] [:summon "chicken" [22.5 0 17.5] "{NoAI:1b}"]
+         [:wait-s 2]
+         [:job (jobs.animals.tend {:mob "chicken" :target 3 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :adults 3}} :within-s 100 :of-job true}]
+   :limit-s 140}]}

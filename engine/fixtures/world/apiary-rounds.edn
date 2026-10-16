@@ -41,6 +41,14 @@
    :expect [{:event {:kind :waiting :data {:reason :not-smoked}} :within-s 60 :of-job true}
             {:no-event {:kind :completed} :for-s 20}]
    :after [[:block [14 1 10] "beehive[honey_level=5]"] [:item "honeycomb" 0]]}
+  ;; card af65abd7: fewer hives taken than :least is not :done; the one hive that was ripe is still harvested
+  {:name "harvest-least-three-with-one-hive-is-not-done"
+   :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=5]"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.apiary.harvest {:radius 20 :least 3})]]
+   :expect [{:event {:source :job :kind :stopped :data {:harvested 1}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30}]
+   :after [[:block [14 1 10] "beehive[honey_level=0]"] [:item "honeycomb" [:>= 3]]]}
   {:name "harvest-without-a-tool-stops"
    :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=5]"]]
    :body {:inventory [["stick" 1]]}
