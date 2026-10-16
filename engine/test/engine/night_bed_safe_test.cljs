@@ -21,15 +21,15 @@
 (def far-bed {:x 40 :y 64 :z 0})
 
 (def buried-light
-  "Sky light 0 at the miner's feet and head cells (x 5 in the tunnel): sealed from the sky."
-  {[5 64 0] [0 0] [5 65 0] [0 0]})
+  "Sky light 0 at the feet and head cells along the tunnel (x 0..20): sealed from the sky."
+  (into {} (for [x (range 0 21) y [64 65]] [[x y 0] [0 0]])))
 
 (defn tunnel-world
-  "A miner at x 5 in the one-wide stone tunnel (x 0..20, both ends stopped, else its unseen ends flood into the open
-  field and count as a room), at night, with a bed block at far-bed in the open."
+  "A miner at x 5 in the one-wide stone tunnel (x 0..20, open at both ends onto the field), at night, with a bed block
+  at far-bed in the open."
   [light]
   {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :offlineScale 0.0001
-   :blocks (merge hut/tunnel {"-1,64,0" "stone" "-1,65,0" "stone" "21,64,0" "stone" "21,65,0" "stone" "40,64,0" "red_bed"}) :light light})
+   :blocks (merge hut/tunnel {"40,64,0" "red_bed"}) :light light})
 
 (defn lit-fake
   "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh/buried?). :sees-all in the
@@ -114,15 +114,16 @@
     (tu/run-async done
       (fn ^:async t []
         (let [random js/Math.random]
-          (doseq [seed [0 1 5 7]]
-            (set! js/Math.random (lcg seed))
-            (let [{:keys [eng p raw]} (setup (tunnel-world buried-light))]
-              (core/submit! eng '(jobs.survival.night) {})
-              (await (st/tick-n eng 12))
-              (is (= {:x 5 :y 64 :z 0} (update-vals (st/pos-of p) js/Math.floor)) (str "the body stays in the tunnel, seed " seed))
-              (is (empty? (st/calls raw "sleep")))
-              (is (empty? (st/calls raw "moveTo")) "no walk toward the far bed")))
-          (set! js/Math.random random))))))
+          (try
+            (doseq [seed [0 1 5 7]]
+              (set! js/Math.random (lcg seed))
+              (let [{:keys [eng p raw]} (setup (tunnel-world buried-light))]
+                (core/submit! eng '(jobs.survival.night) {})
+                (await (st/tick-n eng 12))
+                (is (= {:x 5 :y 64 :z 0} (update-vals (st/pos-of p) js/Math.floor)) (str "the body stays in the tunnel, seed " seed))
+                (is (empty? (st/calls raw "sleep")))
+                (is (empty? (st/calls raw "moveTo")) "no walk toward the far bed")))
+            (finally (set! js/Math.random random))))))))
 
 (def hut-light
   "A closed hut: sky light 0 at the body's feet and head cells."
@@ -225,16 +226,28 @@
               x xs] [x 65 z])
         (for [z (range 9 16) x [9 10 11] y [63 67]] [x y z]))))
 
+(def seen-after-a-look
+  "seen-from-the-start with the walls and the air at feet and head height seen all round; the floor beside the feet
+  still unseen."
+  (into seen-from-the-start (for [x (range 8 17) z (range 8 17) y [64 65]] [x y z])))
+
+(defn seeing
+  "p made to have seen only the cells in seen."
+  [p seen]
+  (let [sensed (.-sensedAt p)]
+    (doto p (aset "sensedAt" (fn [a] (if (seen [(.-x a) (.-y a) (.-z a)]) (.call sensed p a) #js {:unknown true}))))))
+
 (deftest a-seen-bed-in-a-hut-whose-floor-beside-the-body-is-unseen-is-used
   (let [{:keys [eng p]} (setup {:floor [0 0 20 20] :self {:pos {:x 13.5 :y 64 :z 13.5}} :time st/night :sees-all true
                                 :blocks seven-hut :light {[13 64 13] [0 0] [13 65 13] [0 0]}})
         _ (mem/forget-where! (:store eng) :bed (constantly true))
-        seen (.-sensedAt p)
-        _ (aset p "sensedAt" (fn [a] (if (seen-from-the-start [(.-x a) (.-y a) (.-z a)]) (.call seen p a) #js {:unknown true})))
-        v (mem/view (:store eng))]
-    (is (contains? (:cells (reach/room* p {:x 13 :y 64 :z 13})) [11 64 11]) "a seen-free cell beside the feet over an unseen floor is a room cell, and the room goes on from it")
-    (is (= {:x 11 :y 64 :z 12} (sh/bed-to-use p v 48 (constantly true))))
-    (is (true? (sh/night-holds? p v {} (constantly true))))))
+        v (mem/view (:store eng))
+        unseen-east (seeing (js/Object.assign #js {} p) seen-from-the-start)]
+    (is (nil? (reach/room* unseen-east {:x 13 :y 64 :z 13})) "walls never seen behind the body: no closed room")
+    (is (contains? (:cells (reach/room* (seeing p seen-after-a-look) {:x 13 :y 64 :z 13})) [11 64 11])
+        "a seen-free cell beside the feet over an unseen floor is a room cell, and the room goes on from it")
+    (is (= {:x 11 :y 64 :z 12} (sh/bed-to-use unseen-east v 48 (constantly true))))
+    (is (true? (sh/night-holds? unseen-east v {} (constantly true))))))
 
 
 (def roofed-room
