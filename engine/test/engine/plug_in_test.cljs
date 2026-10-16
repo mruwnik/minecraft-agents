@@ -9,7 +9,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.ledger :as ledger]))
+            [jobs.lib.ledger :as ledger]
+            [jobs.survival.plug-way :as way]))
 
 (def cobble [{:name "cobblestone" :count 20}])
 (def pick [{:name "stone_pickaxe" :count 1}])
@@ -20,13 +21,14 @@
   (let [clock (atom 1000000)
         out (atom :not-done)
         continues (atom 0)
+        digs-at-first (atom nil)
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
         _ (when setup! (setup! p))
         now (tu/act-clock clock p 1000)
         caller {:round (fn ^:async caller-round [c]
                          (let [r (await (ctx/call c :plug 'jobs.survival.plug-in args))]
-                           (if (= :continue r) (do (swap! continues inc) :continue) (do (reset! out r) (ctx/end c :done nil)))))}
+                           (if (= :continue r) (do (swap! continues inc) (when-not @digs-at-first (reset! digs-at-first (count (ct/calls p "dig")))) :continue) (do (reset! out r) (ctx/end c :done nil)))))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'caller caller) :triggers triggers/all :dir (tu/tmp-dir)
                           :now now :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (core/submit! eng '(caller) {})
@@ -34,7 +36,7 @@
       (when (and (= :not-done @out) (< i 40))
         (await (core/tick! eng))
         (recur (inc i))))
-    {:out @out :p p :eng eng :continues @continues}))
+    {:out @out :p p :eng eng :continues @continues :digs-at-first @digs-at-first}))
 
 (defn cells-of [p name]
   (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (ct/calls p name)))
@@ -154,3 +156,13 @@
               {:keys [out continues]} (await (plug! {:blocks ct/dead-end :inventory cobble} {} refuse-twice))]
           (is (pos? continues))
           (is (= :done (:kind out))))))))
+
+(deftest a-way-that-fails-with-a-hostile-adjacent-yields-before-the-next-way-starts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walls-step way/walls-step!]
+          (set! way/walls-step! (fn ^:async fail [_] nil))
+          (let [{:keys [digs-at-first]} (await (plug! {:blocks ct/dead-end :inventory (into cobble pick) :entities [(ct/zombie 1 64 0)]} {:ways #{:walls :pocket}}))]
+            (set! way/walls-step! walls-step)
+            (is (= 0 digs-at-first) "the round ended :continue before the pocket dug")))))))

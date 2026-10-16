@@ -141,7 +141,7 @@
 (defn ^:async take-cover!
   "Plug in (every way: walls, pit, pocket; refuge), unless that failed this sweep: its step's result, nil when it cannot be taken."
   [c]
-  (await (refuge/plug-option! c (:plug-ways (:args c)))))
+  (await (refuge/plug-option! c :plug refuge/all-ways)))
 
 (defn ^:async dig-pocket!
   "Underground with no stair to take, a side pocket in the rock beats a hop across the open cave: its step's result,
@@ -149,10 +149,10 @@
   [c]
   (let [{:keys [pocket-tried]} (ctx/mem c)]
     (cond
-      (refuge/plugging-here? c) (await (refuge/plug! c #{:pocket}))
+      (refuge/plugging-here? c) (await (refuge/plug-on! c))
       pocket-tried nil
       :else (do (ctx/update-mem! c assoc :pocket-tried true)
-                (await (refuge/plug! c #{:pocket}))))))
+                (await (refuge/plug! c :pocket #{:pocket}))))))
 
 (defn close-danger?
   "Whether a creeper chases the body or a melee threat is within cover-gap: a seal or pit beside it is no cover (a blast

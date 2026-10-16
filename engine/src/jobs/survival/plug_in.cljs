@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.combat :as combat]
             [jobs.lib.shelter :as sh]
             [jobs.lib.spent :as spent]
             [jobs.survival.plug-way :as way]))
@@ -15,7 +16,7 @@
   Ways (:ways) are child jobs: jobs.survival.plug-walls (the open sides, a roof support and the roof with carried blocks),
   plug-pit (dig down under a solid side and plug the hole), plug-pocket (dig a pocket beside the body, step in, wall the way in).
   It quotes the ways the call allows, starts the cheapest (ties in the order walls, pit, pocket) and, when that one ends other than
-  :done, the next cheapest; a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
+  :done, the next cheapest (after a :continue step when a hostile is within 2 blocks); a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
   :build filler, carried or dug. None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
   :why {way the child's cause}}.
   Every placed block goes to the scaffold ledger with :purpose (default :retreat-plug, taken back by jobs.access.cleanup once no
@@ -79,8 +80,12 @@
   [c kind cause data]
   (ctx/end c kind cause (merge data (spent/summary (spent/log c)))))
 
+(def adjacent-reach
+  "Blocks within which a hostile is at the body: a way that failed ends the step so the round and the triggers see it before the next way starts."
+  2)
+
 (defn ^:async round
-  "Start the cheapest way; one that ends other than :done is dropped for this call and the next is chosen."
+  "Start the cheapest way; one that ends other than :done is dropped for this call and the next is chosen on the next step when a hostile is at the body, else at once."
   [c]
   (loop []
     (if (way/enclosed? c)
@@ -98,4 +103,4 @@
                                       (end! c :done nil {:pos (sh/feet (:primitives c)) :way way}))
               :else (do (spent/absorb! c (:data e))
                         (ctx/update-mem! c #(-> % (dissoc :way) (update :failed-ways (fnil conj #{}) way) (assoc-in [:why way] (or (:text (:data e)) (:cause e)))))
-                        (recur)))))))))
+                        (if (seq (combat/hostiles (:primitives c) adjacent-reach)) :continue (recur))))))))))

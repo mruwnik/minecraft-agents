@@ -76,7 +76,7 @@
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else plug in, last of all fight.
      - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
-     - plug in (jobs.survival.plug-in, a child: walls, pit or side pocket, the cheapest it can do; at home the walls alone): shuts the body
+     - plug in (jobs.survival.plug-in, a child: the walls, and later a pit or side pocket, never at home; the early refuge the walls alone): shuts the body
        in with carried blocks (or, with none to wall with, ones it digs), the sides towards a seen ranged hostile first. Every
        plug block goes to the scaffold ledger (purpose :retreat-plug), taken back by jobs.access.cleanup once no hostile is near.
      - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor, free cells above and no slope or ledge a mob could climb to beside its top.
@@ -85,11 +85,11 @@
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist. A body with no weapon
        (the call's :use :tools, else jobs.lib.combat/default-weapons) first looks for a way to walk once more (:fist-sweeps, default 1).
        A pillared body that is hit raises the pillar `retreat-pillar/::pillar-extend` (2) blocks, once, before the refuge fails.
-     Order: fight if it wins, then plug in, pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), fight.
+     Order: fight if it wins, then plug in (walls), pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), plug in by a pit or pocket (not at home), fight.
      Against a creeper back off comes first.
      Hit ::beaten-hits times in ::hurt-window-s by melee mobs within close-radius, the fight comes first, armed or not.
      Under fire (::fire-hits hits within ::hurt-window-s whose attacker is a ranged mob, or arrow damage: the mob need not be seen or known) cover comes before any fight: the order is
-     plug in, back off, fight, though a melee mob is at the body; the fight is weighed over every hostile near, and never counts as won
+     plug in (walls), back off, plug in (pit or pocket), fight, though a melee mob is at the body; the fight is weighed over every hostile near, and never counts as won
      while no ranged hostile near has been seen. With none seen the last-resort fight swings only at a mob within 3 blocks, none walked to. In another cell than the
      last time it was under fire, a plug that failed is tried again.
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
@@ -128,7 +128,6 @@
    :swim-factor {:doc "blocks of walking a block of swimming costs a flight; nil: jobs.lib.cost/swim-factor of the boots" :spec (a/num-in 1 nil) :default nil}
    :hide-health {:doc "at or under this health, in a ranged chaser's line of fire with no covered step, take cover where it stands before walking on" :spec (a/num-in 0 20) :default 12}
    :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :spec (a/int-in 1 nil) :default 20}
-   :plug-ways {:doc "the ways the plug-in option may shut the body in (all but at home: the walls alone)" :spec (a/set-of #{:walls :pit :pocket}) :default #{:walls :pit :pocket}}
    :fist-sweeps {:doc "times a body with no weapon, every cornered option failed, looks for a way to walk before it punches a hostile it would not beat; 0: it punches at once" :spec (a/int-in 0 nil) :default 1}})
 
 
@@ -253,7 +252,7 @@
     (when (and (not (:early-refuge-failed (ctx/mem c))) (lone-melee? (:primitives c) hostiles)
                (pillar/pillar-item c) (not (cornered/fight-wins? c hostiles)))
       (let [r (or (when-not (flight/tried? c :pillar) (await (refuge/pillar! c)))
-                  (await (refuge/plug-option! c (:plug-ways (:args c)))))]
+                  (await (refuge/plug-option! c :plug #{:walls})))]
         (when (nil? r) (ctx/update-mem! c assoc :early-refuge-failed true))
         r))))
 
@@ -290,7 +289,7 @@
                         (await (wait-far! c))))))]
     (cond
       (nil? threat) (or (await (flight/look-back! c))
-                        (when (refuge/plugging-here? c) (await (refuge/plug! c (:plug-ways (:args c)))))
+                        (when (refuge/plugging-here? c) (await (refuge/plug-on! c)))
                         (flight/end-flight! c nil))
       (some? early) early
       (flight/no-gain? (ctx/mem c) no-gain-steps)

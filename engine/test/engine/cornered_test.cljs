@@ -651,11 +651,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p while-hidden]}
-              (await (hidden-round '(jobs.survival.retreat {:plug-ways #{:pit}}) {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
+              (await (hidden-round '(jobs.survival.retreat) {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
                                             :entities [(zombie 1 64 0)]}
-                                   1000 (fn [{:keys [p]}] (.-name (.blockAt p #js {:x 0 :y 64 :z 0})))))]
+                                   1000 (fn [{:keys [p]}] (.-name (.blockAt p #js {:x -1 :y 64 :z 0})))))]
           (is (zero? (count (calls p "attack"))) "a pickaxe and a hole beat a pickaxe fight")
-          (is (= [[0 63 0] [0 62 0]] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
+          (is (= [[-1 64 0] [-1 65 0] [-1 63 0] [-1 62 0]] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
           (is (= 62 (js/Math.floor (second (:pos (fake/self p))))) "two down")
           (is (#{"stone" "cobblestone"} while-hidden) "plugged over the head"))))))
 
@@ -822,7 +822,7 @@
 (def enderman (fn [x y z] {:id 10 :name "enderman" :kind "hostile" :pos {:x x :y y :z z} :health 40}))
 
 (deftest an-angry-enderman-is-not-fled-on-foot-nor-fought-the-body-shelters
-  (is (= [:water :roof :plug :fight] (cornered/escape-order {:enderman? true :win? true}))
+  (is (= [:water :roof :plug :plug-dig :fight] (cornered/escape-order {:enderman? true :win? true}))
       "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds"))
 
 (deftest a-body-with-an-enderman-near-walls-itself-in-instead-of-walking
@@ -938,23 +938,23 @@
           (is (not-any? #(re-find #"cannot_escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
 
 (deftest a-body-in-water-hunted-by-a-drowned-tries-to-swim-out-before-anything-else
-  (is (= [:swim-out :plug :pillar :back-off :fight] (cornered/escape-order {:swim? true})))
+  (is (= [:swim-out :plug :pillar :back-off :plug-dig :fight] (cornered/escape-order {:swim? true})))
   (is (= [:fight] (cornered/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
   (is (= :back-off (first (cornered/escape-order {:swim? true :creeper? true})))))
 
 (deftest no-pillar-against-a-climber
-  (is (= [:plug :back-off :fight] (cornered/escape-order {:climber? true}))
+  (is (= [:plug :back-off :plug-dig :fight] (cornered/escape-order {:climber? true}))
       "a spider climbs the pillar's side to the body on top"))
 
 (deftest no-step-back-from-a-mob-that-outruns-the-body
-  (is (= [:plug :fight] (cornered/escape-order {:climber? true :faster? true})))
-  (is (= [:plug :pillar :fight] (cornered/escape-order {:faster? true})) "one that cannot climb is pillared against")
+  (is (= [:plug :plug-dig :fight] (cornered/escape-order {:climber? true :faster? true})))
+  (is (= [:plug :pillar :plug-dig :fight] (cornered/escape-order {:faster? true})) "one that cannot climb is pillared against")
   (is (= [:fight] (cornered/escape-order {:faster? true :win? true}))))
 
 (deftest an-armed-body-with-a-hitter-at-it-fights-before-it-builds
-  (is (= [:fight :plug :pillar :back-off] (cornered/escape-order {:pressed? true}))
+  (is (= [:fight :plug :pillar :back-off :plug-dig] (cornered/escape-order {:pressed? true}))
       "four dirt placed beside a zombie that keeps hitting cost three hits")
-  (is (= [:fight :plug :pillar] (cornered/escape-order {:pressed? true :faster? true})))
+  (is (= [:fight :plug :pillar :plug-dig] (cornered/escape-order {:pressed? true :faster? true})))
   (is (= :back-off (first (cornered/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
   (is (= :water (first (cornered/escape-order {:pressed? true :enderman? true})))))
 
@@ -1045,7 +1045,7 @@
 
 (deftest under-fire-in-a-new-cell-the-covers-that-failed-elsewhere-are-tried-again
   (is (= {:tried #{:back-off} :fire-cell [1 64 0]}
-         (cornered/retry-covers {:tried #{:plug :back-off} :fire-cell [0 64 0]} [1 64 0])))
+         (cornered/retry-covers {:tried #{:plug :plug-dig :back-off} :fire-cell [0 64 0]} [1 64 0])))
   (is (= {:tried #{:plug} :fire-cell [0 64 0]} (cornered/retry-covers {:tried #{:plug} :fire-cell [0 64 0]} [0 64 0]))
       "the same cell: a failed plug stays failed"))
 

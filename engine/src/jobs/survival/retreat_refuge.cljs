@@ -13,6 +13,7 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.spent :as spent]
             [jobs.lib.threats :as threats]
+            [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-pillar :as pillar]))
 
@@ -64,34 +65,44 @@
   (let [purpose (flight/plug-purpose c)]
     (vec (keep #(when (= purpose (:purpose %)) (:cell %)) (ledger/open-entries (ctx/view c))))))
 
+(def all-ways #{:walls :pit :pocket})
+
 (defn ^:async plug!
   "Shut the body in with jobs.survival.plug-in by ways and hide there (a :plug refuge): :again while it works or once shut
-  in, nil when no way shuts it. :plugging-at marks the cell a plug is under way at (plugging-here?)."
-  [c ways]
+  in, nil when no way shuts it. :plugging marks the option, ways and cell a plug is under way at (plugging-here?)."
+  [c option ways]
   (let [{:keys [radius ranged-radius max-places on-lava purpose]} (:args c)
-        e (await (ctx/call c :plug 'jobs.survival.plug-in
+        e (await (ctx/call c option 'jobs.survival.plug-in
                            (cond-> {:ways ways :radius radius :ranged-radius ranged-radius :max-places max-places :on-lava on-lava}
                              purpose (assoc :purpose purpose)
                              (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
         feet (sh/feet (:primitives c))]
     (cond
-      (= :continue e) (do (ctx/update-mem! c assoc :plugging-at feet) :again)
-      (= :done (:kind e)) (do (ctx/update-mem! c dissoc :plugging-at)
+      (= :continue e) (do (ctx/update-mem! c assoc :plugging {:at feet :option option :ways ways}) :again)
+      (= :done (:kind e)) (do (ctx/update-mem! c dissoc :plugging)
                               (spent/absorb! c (:data e))
-                              (hide-now! c {:kind :plug :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
-      :else (do (ctx/update-mem! c dissoc :plugging-at) nil))))
+                              (hide-now! c {:kind option :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
+      :else (do (ctx/update-mem! c dissoc :plugging) nil))))
 
 (defn ^:async plug-option!
-  "The :plug option of a cornered body (every way, or the walls alone at home), once a flight: plug!'s result, nil when
-  it failed or was tried."
-  [c ways]
-  (when-not (flight/tried? c :plug)
-    (or (await (plug! c ways)) (do (flight/tried! c :plug) nil))))
+  "A plug option of a cornered body (:plug: the walls, :plug-dig: pit or pocket), once a flight: plug!'s result, nil when
+  it failed or was tried; a pit or pocket is not dug in a body already shut in (its walls did not keep the hostile off)."
+  [c option ways]
+  (when-not (or (flight/tried? c option)
+                (and (= :plug-dig option) (dig-cells/sealed-in? (:primitives c) :walls sh/default-roof-height)))
+    (or (await (plug! c option ways)) (do (flight/tried! c option) nil))))
 
 (defn plugging-here?
   "Whether a plug was begun at the body's feet cell this flight and has not failed: it is finished before the walk goes on."
   [c]
-  (and (= (:plugging-at (ctx/mem c)) (sh/feet (:primitives c))) (not (flight/tried? c :plug))))
+  (let [{:keys [at option]} (:plugging (ctx/mem c))]
+    (and (= at (sh/feet (:primitives c))) (not (flight/tried? c option)))))
+
+(defn ^:async plug-on!
+  "The plug begun here, one more step."
+  [c]
+  (let [{:keys [option ways]} (:plugging (ctx/mem c))]
+    (await (plug! c option ways))))
 
 (defn ^:async pillar!
   "Start a pillar (retreat-pillar/plan!) when it fits: a step's result, else nil."
