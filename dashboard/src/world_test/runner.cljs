@@ -290,11 +290,13 @@
 
 (defn await-event
   "Polls the log from offset until an event matching pattern with :time-ms >= since-ms comes; resolves to it or nil
-  after limit-ms."
-  [opts offset pattern since-ms limit-ms]
-  (let [until (+ (js/Date.now) limit-ms)]
+  after limit-ms. A pattern with :of-job true matches only events of job-ids (the jobs submitted so far)."
+  [opts offset pattern since-ms limit-ms job-ids]
+  (let [until (+ (js/Date.now) limit-ms)
+        own? (:of-job pattern)
+        pattern (dissoc pattern :of-job)]
     (letfn [(poll []
-              (let [hit (some #(when (and (>= (:time-ms % 0) since-ms) (x/matches? pattern %)) %)
+              (let [hit (some #(when (and (>= (:time-ms % 0) since-ms) (x/matches? pattern %) (or (not own?) (x/of-jobs? job-ids %))) %)
                               (read-events-from (events-file opts) offset))]
                 (cond
                   hit (js/Promise.resolve hit)
@@ -430,7 +432,7 @@
           child (cp/spawn "node" (body-argv opts scenario)
                           #js {:cwd (repo-path "engine") :stdio #js ["ignore" fd fd]})]
       (swap! bodies assoc (:body opts) child)
-      (.then (await-event opts offset {:source :system :kind :started} since 90000)
+      (.then (await-event opts offset {:source :system :kind :started} since 90000 #{})
              (fn [ev]
                (when-not ev (throw (js/Error. (str "the body did not start within 90 s (see " out ")"))))
                (await-online! opts))))))
@@ -1239,7 +1241,7 @@
                                                              do-set)
                                               (do-set)))
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
-                         :await (.then (await-event opts offset a (await-since a t0 @cli-ms) (* 1000 b))
+                         :await (.then (await-event opts offset (dissoc a :of-job) (await-since a t0 @cli-ms) (* 1000 b) ids)
                                        (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
                          :restart-body (.then (restart-body! opts origin c) (constantly ids))
                          :until (.then (until-step! opts a b @last-job @event-job) (constantly ids))

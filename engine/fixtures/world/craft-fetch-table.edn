@@ -23,7 +23,7 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.items.craft {:item "wooden_pickaxe" :fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-table}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :child_started :data {:slot :need-crafting_table}} :for-s 30 :until {:source :job :kind :stopped}}]
+            {:no-event {:source :job :kind :child_started :data {:slot :need-crafting_table}} :for-s 30 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "wooden_pickaxe" 0] [:item "oak_planks" 3]]}
   {:name "carried-table-is-placed-and-reported-spent"
    :blocks [[:set [14 0 19] "stone"]]

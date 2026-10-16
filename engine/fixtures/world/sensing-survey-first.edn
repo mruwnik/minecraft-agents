@@ -14,7 +14,7 @@
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}
    :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 30 :until {:source :job :kind :completed}}
+            {:no-event {:source :job :kind :fetch.started} :for-s 30 :of-job true :until {:source :job :kind :completed}}
             {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "wooden_pickaxe" 1] [:block [16 0 20] "crafting_table"]]}
   {:name "compost-feeds-the-composter-behind-it"
@@ -22,14 +22,14 @@
    :body {:inventory [["wheat_seeds" 64]]}
    :act [[:job (jobs.farm.compost {:items ["wheat_seeds"] :times 1})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:bone-meal [:>= 1]}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :compost.no-composter} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}]
+            {:no-event {:source :job :kind :compost.no-composter} :for-s 40 :of-job true :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "bone_meal" [:>= 1]]]
    :limit-s 100}
   {:name "get-seeds-cuts-the-cane-behind-it"
    :blocks [[:set [16 -1 20] "sand"] [:set [17 -2 20] "stone"] [:set [17 -1 20] "water"] [:fill [16 0 20] [16 2 20] "sugar_cane"]]
    :act [[:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 16})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :count}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :stopped :data {:reason :none}} :for-s 30 :until {:source :job :kind :completed :data {:reason :count}}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :none}} :for-s 30 :of-job true :until {:source :job :kind :completed :data {:reason :count}}}]
    :after [[:block [16 0 20] "sugar_cane"] [:item "sugar_cane" [:>= 1]]]}
   {:name "tend-harvests-the-crops-behind-it"
    :blocks [[:fill [10 -1 20] [12 -1 20] "farmland[moisture=7]"] [:fill [10 -2 21] [12 -2 21] "stone"] [:fill [10 -1 21] [12 -1 21] "water"]
@@ -51,7 +51,7 @@
    :body {:inventory [["oak_boat" 1]]}
    :act [[:job (jobs.movement.boat-launch {:board false})]]
    :expect [{:event {:source :job :kind :boat.launched :data {:boat "oak_boat"}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :no-water}} :for-s 20 :until {:source :job :kind :boat.launched}}]}
+            {:no-event {:source :job :kind :waiting :data {:reason :no-water}} :for-s 20 :of-job true :until {:source :job :kind :boat.launched}}]}
 
   {:name "shear-the-sheep-behind-it"
    :body {:inventory [["shears" 1]]}
@@ -81,7 +81,7 @@
    :body {:inventory [["fishing_rod" 1]]}
    :act [[:job (jobs.food.fish {:count 1})]]
    :expect [{:event {:source :job :kind :fish.caught} :within-s 170 :of-job true}
-            {:no-event {:source :job :kind :stopped :data {:reason :no-water}} :for-s 30 :until {:source :job :kind :fish.caught}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-water}} :for-s 30 :of-job true :until {:source :job :kind :fish.caught}}]
    :limit-s 185}
 
   ;; Unsensed cells: a bridge whose stand and head cells ahead are out of view (pitch up) looks before it steps; a pillar with the
@@ -91,14 +91,14 @@
    :body {:at [8.5 0 16.5] :yaw 270 :pitch -70 :inventory [["dirt" 8]]}
    :act [[:job (jobs.access.bridge {:heading :east :length 5 :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:built 5}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :bridge.gave-up} :for-s 30 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :bridge.gave-up} :for-s 30 :of-job true :until {:source :job :kind :completed}}]
    :after [[:block [11 -1 16] "dirt"] [:body-near [13.5 0 16.5] 3]]}
   {:name "pillar-with-the-body-looking-down"
    :plot {:height 12 :floor "grass_block"}
    :body {:pitch 80 :inventory [["dirt" 8]]}
    :act [[:job (jobs.access.pillar {:height 3 :use {:blocks ["dirt"]} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :pillar.done} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :pillar.gave-up :data {:reason :ceiling}} :for-s 30 :until {:source :job :kind :pillar.done}}]
+            {:no-event {:source :job :kind :pillar.gave-up :data {:reason :ceiling}} :for-s 30 :of-job true :until {:source :job :kind :pillar.done}}]
    :after [[:body-near [16.5 3 16.5] 1.5]]}
 
   ;; Search: a wall of bedrock across the plot at x 18..19 (never dug). Legs east of it fail; the legs other ways still go on and find

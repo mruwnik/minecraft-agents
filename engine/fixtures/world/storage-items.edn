@@ -23,7 +23,7 @@
    :body {:at [10.5 0 16.5] :inventory [["gravel" 64] ["sand" 64] ["tuff" 64] ["andesite" 64] ["diorite" 64] ["granite" 64] ["cobblestone" 64]]}
    :act [[:job (jobs.storage.make-room {:free 33})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
-            {:no-event {:source :job :level :warn :message [:contains "gave up walking"]} :for-s 80 :until {:source :job :kind :completed}}]}
+            {:no-event {:source :job :level :warn :message [:contains "gave up walking"]} :for-s 80 :of-job true :until {:source :job :kind :completed}}]}
   {:name "tossed-junk-is-not-picked-up-again"
    :register [{:trigger :loose-items}]
    :body {:inventory [["gravel" 64] ["sand" 64] ["tuff" 64] ["andesite" 64] ["diorite" 64] ["granite" 64]]}
@@ -58,7 +58,7 @@
    :body {:inventory [["dirt" 20] ["chest" 1]]}
    :act [[:job (jobs.storage.deposit {:chest #xyz [20 0 16] :make-chests? false})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped}}]
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "dirt" 20] [:item "chest" 1]]
    :limit-s 80}
   {:name "withdraw-short-names-what-the-chest-held"
@@ -96,7 +96,7 @@
    :body {:inventory [["dirt" 20]]}
    :act [[:job (jobs.storage.deposit {:chest #xyz [20 0 16] :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind #{:place.set :place.kept}} :for-s 60 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind #{:place.set :place.kept}} :for-s 60 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "dirt" 0]]
    :limit-s 80}
   {:name "deposit-into-an-unzoned-chest-records-it-as-mine"
@@ -125,6 +125,6 @@
    :body {:inventory [["cobblestone" 500] ["dirt" 40]]}
    :act [[:job (jobs.storage.deposit {:chest #xyz [20 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :goods.found} :for-s 60 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :goods.found} :for-s 60 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "dirt" 0]]
    :limit-s 80}]}

@@ -21,7 +21,7 @@
    :body {:inventory [["white_wool" 3] ["oak_planks" 1]]}
    :act [[:job (jobs.items.craft {:item "white_bed" :fetch false})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 15 :until {:source :job :kind :stopped}}]
+            {:no-event {:source :job :kind :completed} :for-s 15 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "white_bed" 0]]
    :limit-s 60}
   {:name "bread-with-a-table-made-from-planks"
@@ -34,7 +34,7 @@
    :body {:at [18.5 0 16.5] :inventory [["birch_log" 6] ["cobblestone" 20]]}
    :act [[:job (jobs.items.craft {:item "stone_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :stopped :data {:reason :no-table-spot}} :for-s 70 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-table-spot}} :for-s 70 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "stone_pickaxe" 1]]}
   {:name "seen-table-12-off-is-walked-to-before-crafting"
    :blocks [[:set [28 0 16] "crafting_table"]]

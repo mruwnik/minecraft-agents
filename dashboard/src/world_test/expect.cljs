@@ -76,7 +76,7 @@
 (defn judge
   "One expectation's state at now-ms: {:expect e :status :pass|:fail|:pending :evidence text :at-s seconds after t0}.
   events are those logged since the act started (t0-ms); job-ids the jobs the act submitted.
-  A :no-event window starts at t0 (or :from-s, or the first :from-event match, then :for-s long) and ends early at the first :until match inside it."
+  A :no-event window starts at t0 (or :from-s, or the first :from-event match, then :for-s long) and ends early at the first :until match inside it (with :of-job, only the act's own jobs count for both)."
   [e events {:keys [t0-ms now-ms job-ids] :as opts}]
   (if (:count-event e)
     (judge-count e events opts)
@@ -92,7 +92,7 @@
                  (when start (:time-ms start))
                  (+ t0-ms (* 1000 (or (:from-s e) 0))))
           cap (+ (if start from t0-ms) (* 1000 (:for-s e)))
-          until (when-let [p (:until e)] (some #(when (and from (>= (:time-ms % 0) from) (matches? p %)) %) events))
+          until (when-let [p (:until e)] (some #(when (and from (>= (:time-ms % 0) from) (matches? p %) (or (not (:of-job e)) (of-jobs? job-ids %))) %) events))
           deadline (if until (min cap (:time-ms until)) cap)
           hit (when from (event-match e (:no-event e) (filter #(<= from (:time-ms % 0) deadline) events) job-ids))]
       (cond

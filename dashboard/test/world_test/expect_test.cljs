@@ -89,6 +89,13 @@
   (is (= :pending (:status (x/judge {:event {:kind :child_ended} :within-s 60 :of-job true} [dig-child]
                                     (assoc opts :now-ms 5000 :job-ids #{"j1"}))))))
 
+(deftest of-job-limits-a-no-event-until-to-the-submitted-jobs
+  (let [e {:no-event {:kind :fired} :for-s 100 :until {:kind :child_ended}}
+        own (assoc opts :now-ms 5000 :job-ids #{"j1"})]
+    (is (= :pass (:status (x/judge e [dig-child] own))) "without :of-job another job's event ends the window")
+    (is (= :pending (:status (x/judge (assoc e :of-job true) [dig-child] own))) "with :of-job the window stays open")
+    (is (= :pass (:status (x/judge (assoc e :of-job true) [dig-child] (assoc own :job-ids #{"j9"})))) "an own job's event ends it")))
+
 (deftest a-run-is-decided-when-nothing-is-pending-and-passes-when-all-pass
   (let [es [{:event {:kind :herd.done :data {:reason :brought}} :within-s 120}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 5}]
