@@ -188,19 +188,25 @@
   [c target]
   (ctx/update-mem! c assoc-in [:fails (.-id target)] 0))
 
+(defn vehicle?
+  "Whether target is a minecart or boat: it has no health, so a hit shows no damage until it breaks."
+  [target]
+  (boolean (some->> (.-name target) (re-find #"(minecart|boat|raft)$"))))
+
 (defn quiet-hit?
-  "Whether a hit did no damage: reported hurt false, or a known health that did not drop."
-  [result previous]
+  "Whether a hit did no damage: reported hurt false, or a known health that did not drop. A vehicle's hit never is."
+  [target result previous]
   (let [h (.-health result)]
-    (or (false? (.-hurt result))
-        (and (number? h) (number? previous) (not (< h previous))))))
+    (and (not (vehicle? target))
+         (or (false? (.-hurt result))
+             (and (number? h) (number? previous) (not (< h previous)))))))
 
 (defn note-hit!
   "Record a landed hit on target, and give up on it when it takes no damage or too many hits."
   [c target result]
   (let [id (.-id target)
         h (.-health result)
-        quiet? (quiet-hit? result (get-in (ctx/mem c) [:health id]))]
+        quiet? (quiet-hit? target result (get-in (ctx/mem c) [:health id]))]
     (ctx/update-mem! c (fn [m]
                          (cond-> (-> m
                                      (update-in [:hits id] (fnil inc 0))

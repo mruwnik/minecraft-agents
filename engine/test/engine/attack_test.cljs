@@ -236,6 +236,15 @@
           (is (finished? s))
           (is (= :gave-up (:reason (done-event s)))))))))
 
+(deftest a-vehicle-that-shows-no-damage-is-hit-until-the-max-hits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:targets [7] :max-hits 6}
+                                 {:inventory h/sword :entities [(ent 7 "chest_minecart" "vehicle" 2 {:invulnerable true})]} 8))]
+          (is (= 6 (count (attacked s))))
+          (is (= [[7 :too-many-hits]] (mapv (juxt :target :reason) (events-of s :attack.gave-up)))))))))
+
 (deftest gives-up-after-max-hits-without-a-kill
   (async done
     (tu/run-async done
