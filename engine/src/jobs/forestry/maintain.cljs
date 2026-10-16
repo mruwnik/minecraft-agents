@@ -33,7 +33,7 @@
   Anything else on a planned cell (another species, a block) is left and reported once (forest.foreign). Trees off
   the planned cells are never touched.
   A bare cell whose sapling is not carried is skipped, with one forest.no-sapling note. A later run plants it.
-  A tree is left standing (forest.left, once, and skipped for 30 minutes via body memory :forestry/left) when:
+  A tree is left standing (forest.left, once, and skipped for the rest of the call; the next call looks again) when:
   - its column holds more than :max-logs logs and :pillar? is false (else it is felled from a pillar),
   - fell-tree gave up on it,
   - a log of it may not be dug (another plan's footprint or a zone; checked for the whole column before the first
@@ -133,19 +133,15 @@
 
 ;; ------------------------------------------------------------------ left cells
 
-(def left-kind :forestry/left)
-
-(def left-policy {:cap 50 :ttl (* 30 60 1000)})
-
 (defn left-cells
-  "The cells to skip: those noted left in body memory and not yet expired."
+  "The cells to skip: those left in this call's memory."
   [c]
-  (set (map (comp :pos :data) (ctx/entries c left-kind))))
+  (set (keys (:left (ctx/mem c)))))
 
 (defn leave!
-  "Skip the cell pos for a while and say why, once."
+  "Skip the cell pos for the rest of the call and say why, once."
   [c pos reason & {:as more}]
-  (ctx/remember! c left-kind {:pos pos :reason reason} left-policy)
+  (ctx/update-mem! c assoc-in [:left pos] reason)
   (ctx/warn-once! c [:left pos reason] :forest.left
                   (merge {:pos pos :reason reason}
                          more

@@ -28,8 +28,8 @@
   Placing, access rules, refusals, give-ups and the result are jobs.build.from-plan's functions over this job's
   memory. Every dig and place asks jobs.lib.access.rules right before it acts.
   Needs: a readable plan and the items for the cells to place carried (the caller fetches them). Ends done with the
-  data {:placed :missing :short :given-up :wrong :refused} once nothing more can be done; condition-failed :plan when
-  the plan cannot be read; a dig child's failure ends it with that child's kind and cause.")
+  data {:placed :missing :short :given-up :wrong :refused} once nothing more can be done; a plan that is missing or
+  unreadable is a wait (later :plan-trouble), a readable one with no cells never (as jobs.build.from-plan); a dig child's failure ends it with that child's kind and cause.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
@@ -44,6 +44,8 @@
   {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}})
 
 (def target [:plan :part])
+
+(def can-run? build/plan-problem)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -263,4 +265,4 @@
   (await (pace/steps! c (fn ^:async s []
                           (if-let [cells (seq (cells-of c))]
                             (await (step! c (vec cells)))
-                            (ctx/end c :condition-failed :plan))))))
+                            :continue)))))

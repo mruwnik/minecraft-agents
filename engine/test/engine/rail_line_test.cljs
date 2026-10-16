@@ -94,12 +94,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (b/start (spec "stone" 63 (kit {})) {"line" (line-plan {})} [])
-              built (await (outcome eng 'jobs.build.rail {:plan "line"} 400))
-              {:keys [eng]} (b/start (spec "stone" 63 (kit {})) {} [])
-              missing (await (ending-of {:eng eng} 'jobs.build.rail {:plan "line"} 20))]
+              built (await (outcome eng 'jobs.build.rail {:plan "line"} 400))]
           (is (pos? (:placed built)))
-          (is (= "powered_rail" (h/block-at p 3 64 0)))
-          (is (= [:condition-failed :plan] [(:kind missing) (:cause missing)])))))))
+          (is (= "powered_rail" (h/block-at p 3 64 0))))))))
 
 ;; ---------------------------------------------------------------- the check
 

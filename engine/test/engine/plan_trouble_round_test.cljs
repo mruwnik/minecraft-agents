@@ -55,6 +55,13 @@
         (let [{:keys [eng w]} (bfp/start (rl/spec "stone" 63 (rl/kit {})) {"line" (rl/line-plan {})} [])]
           (is (true? (await (alive-after-plan-loss? eng w 'jobs.build.rail-line '(jobs.build.rail-line {:plan "line"}) 3)))))))))
 
+(deftest rail-round-leaves-plan-trouble-to-the-checks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng w]} (bfp/start (rl/spec "stone" 63 (rl/kit {})) {"line" (rl/line-plan {})} [])]
+          (is (true? (await (alive-after-plan-loss? eng w 'jobs.build.rail '(jobs.build.rail {:plan "line"}) 3)))))))))
+
 (deftest pen-check-round-leaves-plan-trouble-to-the-checks
   (async done
     (tu/run-async done
@@ -97,6 +104,7 @@
      {'jobs.build.from-plan [(fn [] [(:eng (bfp/start {:inventory bfp/kit} plans))]) {:plan "pen" :part "nope"}]
       'jobs.build.pen [(fn [] [(:eng (bfp/start (pb/spec pb/kit) plans []))]) {:plan "pen"}]
       'jobs.build.rail-line [(fn [] [(:eng (bfp/start (rl/spec "stone" 63 (rl/kit {})) plans []))]) {:plan "line"}]
+      'jobs.build.rail [(fn [] [(:eng (bfp/start (rl/spec "stone" 63 (rl/kit {})) plans []))]) {:plan "line"}]
       'jobs.animals.pen-check [(fn [] [(:eng (bfp/start (pb/spec [] pb/built-pen) plans []))]) {:plan "pen"}]
       'jobs.animals.tend [tend-world {:plan "pen" :part "nowhere"}]}
      (into {} (map (fn [sym] [sym [(fn [] [(:eng (bfp/start {} plans))]) {:plan "pen"}]]))

@@ -369,7 +369,7 @@
           (is (= [[3 64 0 "oak_sapling"]] (places p)))
           (is (= 0 (count (h/events-of seen :forest.no-sapling)))))))))
 
-(deftest a-tree-too-tall-is-left-with-one-note-and-not-retried
+(deftest a-tree-too-tall-is-left-for-the-call-and-looked-at-again-by-the-next
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -380,9 +380,9 @@
           (is (not (listed? eng)) "the run ends")
           (core/submit! eng (list job {:plan "forest" :pillar? false}) {})
           (await (ticks eng 40))
-          (is (= [] (vec (.-calls (.-world p)))) "a second run does not retry the tree")
-          (is (= 1 (count (warns seen :forest.left))))
-          (is (listed? eng) "it waits instead"))))))
+          (is (= [] (vec (.-calls (.-world p)))) "a second run leaves the tree again")
+          (is (= 2 (count (warns seen :forest.left))) "no clock carries the first call's verdict over")
+          (is (not (listed? eng)) "it ends again"))))))
 
 (deftest a-tree-the-felling-gave-up-on-is-left-with-one-note
   (async done
