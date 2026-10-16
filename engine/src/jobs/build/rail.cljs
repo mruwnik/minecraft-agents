@@ -191,8 +191,8 @@
 (defn ^:async dig-away!
   "Dig the rail at pos through the jobs.blocks.dig child (hazards, tidy record, tool, drops) if the rules agree, and
   count one fix when it is dug. Water beside is taken as :accept says, lava never. A dig that ended done without
-  digging or on a hazard counts a :shape failure (the next round re-reads the cell); any other ending (no tool, a limit) is the job's.
-  Resolves to :continue while the child waits or the cell cannot be reached (the build parks), else :again."
+  digging, on a hazard or unreachable counts a :shape failure (the next round re-reads the cell); any other ending (no tool, a limit) is the job's.
+  Resolves to :continue while the child waits or is cut off (the build parks), else :again."
   [c pos]
   (let [v (rules/may-dig? (assoc (plan/rules-input c) :cell pos))
         [x y z] pos
@@ -206,9 +206,9 @@
       (let [r (await (ctx/call c :dig 'jobs.blocks.dig args))]
         (cond
           (= :continue r) :continue
-          (or (= :unreachable (contract/cause-key r)) (= :cut-off (:kind r))) :continue
+          (= :cut-off (:kind r)) :continue
           (and (= :done (:kind r)) (:dug (:data r))) (do (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0)) :again)
-          (or (= :done (:kind r)) (#{:hazard :fluid-adjacent :cannot} (contract/cause-key r)))
+          (or (= :done (:kind r)) (#{:hazard :fluid-adjacent :cannot :unreachable} (contract/cause-key r)))
           (do (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c))) :again)
           :else (ctx/end c (:kind r) (:cause r)))))))
 
