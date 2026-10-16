@@ -885,6 +885,20 @@
         (.catch (fn [e] (is false (.-message e))))
         (.finally done))))
 
+(deftest clear-body-notes-drops-only-this-bodys-notes-file-test
+  (async done
+    (-> (with-body-dir
+    (fn [opts _]
+      (let [dir (path/join (r/world-file opts "notes"))]
+        (fs/mkdirSync dir #js {:recursive true})
+        (doseq [n ["B.edn" "BB.edn"]] (fs/writeFileSync (path/join dir n) "{}"))
+        (r/clear-body-notes! opts)
+        (is (= ["BB.edn"] (vec (fs/readdirSync dir))))
+        (r/clear-body-notes! opts)
+        (js/Promise.resolve nil))))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
 (deftest write-plans-settled-waits-for-the-body-to-re-read-each-plan-file
   (async done
     (-> (with-body-dir

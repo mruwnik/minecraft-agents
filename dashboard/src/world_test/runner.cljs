@@ -3,7 +3,7 @@
   test server with one probe body. Per case and run: a fresh plot of the reserved grid is cleared and built, the body
   is put at its start, the act steps run, the body's event log is read until every expectation is decided, the
   :after checks ask the server, and the plot is cleaned up. The body is started once per distinct :register (the
-  scenario) and restarted before every case with its engine/memory.edn and seen.bin and its leftover test plans deleted and the plot it was last left on cleared (a case with :keep-memory true keeps
+  scenario) and restarted before every case with its engine/memory.edn, seen.bin and notes file and its leftover test plans deleted and the plot it was last left on cleared (a case with :keep-memory true keeps
   the memory: the body goes on from the case before it). Stopped at the end. Pure parts: world-test.fixture and world-test.expect."
   (:require ["child_process" :as cp]
             ["fs" :as fs]
@@ -402,6 +402,12 @@
 
 (declare clear-stale-plans!)
 
+(defn clear-body-notes!
+  "Deletes the notes file of the body (worlds/<world>/notes/<body>.edn): what an earlier case saw or searched (24 h)
+  would change where a later case looks."
+  [opts]
+  (fs/rmSync (path/join (repo-path "worlds" (:world opts) "notes") (str (:body opts) ".edn")) #js {:force true}))
+
 (defn reset-body-log!
   "Drops the body.log an earlier run kept, so this run's log holds only this run (start-body! appends across restarts)."
   [opts]
@@ -414,6 +420,7 @@
   [opts register keep-memory? memory-data]
   (when-not keep-memory?
     (clear-stale-plans! opts)
+    (clear-body-notes! opts)
     (doseq [name f/clean-start-files
             :let [file (path/join (body-dir opts) "engine" name)]
             :when (fs/existsSync file)]
