@@ -260,6 +260,17 @@
        (mapcat (fn [m] (keep (fn [k] (get m k)) [:pos :at :target])))
        (filter #(and (coords? %) (<= -16 (second %) 16)))))
 
+(def fill-limit "Most blocks one /fill command accepts." 32768)
+
+(defn fill-volume [[x y z] [x2 y2 z2]]
+  (* (inc (js/Math.abs (- x2 x))) (inc (js/Math.abs (- y2 y))) (inc (js/Math.abs (- z2 z)))))
+
+(defn unsplittable-fills
+  "The :blocks fills with a :hollow / :outline mode (splitting them would change the shape) that are over fill-limit."
+  [c]
+  (filter (fn [[op a b _ d]] (and (= :fill op) d (> (fill-volume (mapv #(js/Math.floor %) a) (mapv #(js/Math.floor %) b)) fill-limit)))
+          (:blocks c)))
+
 ;; A goal this far outside the plot is deliberately far (an unloaded-goal case), not a mistake.
 (def far-margin 64)
 
@@ -301,6 +312,7 @@
       (some step-problem? (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
       (seq (bare-plot-positions c)) (conj (str "a job position " (first (bare-plot-positions c)) " with a plot-relative height needs #at"))
       (seq (out-of-plot-positions c)) (conj (str "position " (first (out-of-plot-positions c)) " is outside the plot: give :plot :length / :width or move it inside"))
+      (seq (unsplittable-fills c)) (conj (str "a :hollow / :outline fill over " fill-limit " blocks cannot be split: " (first (unsplittable-fills c))))
       (seq (unbounded-selectors c)) (conj "an @e selector must be bounded to the plot: use $BOX (x,y,z,dx,dy,dz), not distance")
       (some #(not (and (after-kinds (first %)) (or (not= :file (first %)) (string? (second %))))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))
       (some #(and (map? %) (contains? % ::rel) (= :vec (::as %))) (tree-seq coll? seq (:after c)))
@@ -557,7 +569,27 @@
     :set (str "setblock " (xyz-str (block-pos origin a)) " " b)
     (throw (js/Error. (str "unknown block op " op)))))
 
-(defn block-commands [origin c] (mapv #(block-command origin %) (:blocks c)))
+(defn split-fill
+  "The [a b] corner pairs that together cover the fill a..b with none over fill-limit blocks, cut in halves along
+  the longest side."
+  [a b]
+  (if (<= (fill-volume a b) fill-limit)
+    [[a b]]
+    (let [axis (apply max-key #(js/Math.abs (- (b %) (a %))) [0 1 2])
+          mid (quot (+ (a axis) (b axis)) 2)
+          up? (<= (a axis) (b axis))]
+      (into (split-fill a (assoc b axis mid))
+            (split-fill (assoc a axis (if up? (inc mid) (dec mid))) b)))))
+
+(defn block-commands
+  "RCON commands for the case's :blocks. A plain fill over fill-limit blocks (the server refuses it) is split."
+  [origin c]
+  (vec (mapcat (fn [[op a b _ d :as entry]]
+                 (if (and (= :fill op) (nil? d))
+                   (map (fn [[x y]] (block-command origin [:fill x y (nth entry 3)]))
+                        (split-fill (mapv #(js/Math.floor %) a) (mapv #(js/Math.floor %) b)))
+                   [(block-command origin entry)]))
+               (:blocks c))))
 
 (defn build-failure
   "The first RCON reply of a setup or block command that says the plot was not built (a position not loaded yet or outside
@@ -757,12 +789,13 @@
   8)
 
 (defn may-leave-plot?
-  "A case with a deliberately far #at position (see far-margin) sends the body out of its plot on purpose."
+  "A case with a deliberately far #at position (see far-margin) sends the body out of its plot on purpose; a case
+  that kills its body respawns it at the world spawn."
   [c]
   (let [{:keys [length width]} (:plot c)
         lx (or length 32) lz (or width 32)]
-    (boolean (some (fn [[x _ z]] (or (< x 0) (>= x lx) (< z 0) (>= z lz)))
-                   (filter coords? (keep ::rel (filter map? (tree-seq coll? seq (:act c)))))))))
+    (boolean (or (some #(= :kill-body (first %)) (filter vector? (:act c))) (some (fn [[x _ z]] (or (< x 0) (>= x lx) (< z 0) (>= z lz)))
+                   (filter coords? (keep ::rel (filter map? (tree-seq coll? seq (:act c))))))))))
 
 (defn left-plot-why
   "Why the body at reply (a start-check-command reply) left the case's plot by more than leave-margin, else nil."

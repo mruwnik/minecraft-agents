@@ -466,7 +466,9 @@
     (is (re-find #"left its plot.*20064\.5 150 20010\.5" (f/left-plot-why origin c (at 20064.5 20010.5))))
     (is (some? (f/left-plot-why origin c (at 20010.5 19980.5))) "north of the plot")
     (is (nil? (f/left-plot-why origin c "No entity was found")))
-    (is (nil? (f/left-plot-why origin far (at 19900.5 20010.5))) "a deliberately far goal may leave")))
+    (is (nil? (f/left-plot-why origin far (at 19900.5 20010.5))) "a deliberately far goal may leave")
+    (is (nil? (f/left-plot-why origin (f/merge-case {} {:name "a" :act [[:kill-body] [:wait-s 1]]}) (at 21.5 -15.5)))
+        "a case that kills its own body respawns at world spawn")))
 
 (deftest a-case-with-nothing-to-check-cannot-run
   (let [ps (fn [c] (f/problems (f/merge-case {} c)))]
@@ -728,3 +730,13 @@
            :act [[:await {:source :job :kind :gone.five} 5]
                  [:until [:cli "jobs" []] 5]]}]
     (is (= [:gone.five :gone.three :gone.two] (sort (f/unknown-kinds c #{"real.one"}))))))
+
+(deftest a-fill-over-the-server-limit-is-split-and-a-hollow-one-is-refused
+  (let [origin [20000 150 20000]
+        cmds (f/block-commands origin {:blocks [[:fill [0 0 0] [59 19 59] "stone"]]})
+        vol (fn [cmd] (let [[x y z x2 y2 z2] (map js/parseInt (re-seq #"\d+" cmd))] (* (inc (- x2 x)) (inc (- y2 y)) (inc (- z2 z)))))]
+    (is (< 1 (count cmds)))
+    (is (every? #(<= (vol %) 32768) cmds))
+    (is (= (* 60 20 60) (reduce + (map vol cmds))) "the pieces cover the fill exactly")
+    (is (some #(re-find #"cannot be split" %)
+              (f/problems {:blocks [[:fill [0 0 0] [59 19 59] "stone" :hollow]]})))))
