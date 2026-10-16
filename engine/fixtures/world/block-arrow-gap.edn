@@ -14,6 +14,7 @@
   :limit-s 60}
  :cases
  [{:name "slit-in-the-wall-is-filled"
+   :body {:yaw 270}
    :act [[:job (jobs.survival.block-arrow-gap {})]]
    :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 30 :until {:source :job :kind :completed}}]

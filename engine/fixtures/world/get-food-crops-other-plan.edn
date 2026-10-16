@@ -18,7 +18,9 @@
  :cases
  [{:name "ripe-potatoes-in-anothers-plan-are-dug-as-a-last-resort-with-a-warning"
    :plans [{:id "field" :metadata {:by "SomeoneElse"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
-   :expect [{:event {:source :job :kind :get-food.trespass-last-resort} :within-s 80 :of-job true}]
+   :body {:at [18.5 0 19.5]}
+   :expect [{:event {:source :job :kind :get-food.trespass-last-resort} :within-s 80 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}]
    :after [[:not-block [22 0 22] "potatoes[age=7]"]]}
   {:name "ripe-potatoes-in-the-own-plan-are-dug-without-a-warning"
    :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]

@@ -5,6 +5,7 @@
 ;; Should-succeed: carried torches light the drop (one placed, 3 in the inventory, nothing fetched); without :place-torches the off-hand
 ;; torch is back (4 in the inventory); a cancelled call's off-hand torch is back after the next call.
 ;; Should-fail: a zone over the takeoff cells refuses the torch (none placed). The first case's result also carries :spent (card 99785eb0: the torch placed).
+;; A pickaxe is the first item so the held (main hand) slot is not a torch: a torch in the main hand lights the drop by itself.
 {:defaults
  {:tags [:movement :go-to :torch]
   :time :any
@@ -12,7 +13,7 @@
   :blocks [[:fill [10 0 14] [26 8 18] "stone"]
            [:fill [11 3 16] [13 4 16] "air"]
            [:fill [14 0 16] [24 4 16] "air"]]
-  :body {:at [11.5 3 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]] :inventory [["torch" 4]]}
+  :body {:at [11.5 3 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["torch" 4]]}
   :limit-s 120}
  :cases
  [{:name "carried-torch-lights-the-drop-without-fetching-and-off-hand-comes-back"

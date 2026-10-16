@@ -1,5 +1,5 @@
 ;; Fight or flee at close quarters, with mobs that move and hit (AI on; helmets stop sun burn). Cards 23c5129e (a fist body
-;; with food 6 cannot outrun a spider: it fights), f7e75f9e 89661b40 db3338ae 7725ab3f a0e376ef (a flee leg never stands
+;; with food 6 cannot outrun a spider: it goes on fighting once a fight has begun; before that it flees a whole spider), f7e75f9e 89661b40 db3338ae 7725ab3f a0e376ef (a flee leg never stands
 ;; searching with a mob in reach: the body swings within seconds), 8ab62538 (an axe swings at its own cooldown: few strong
 ;; hits), 05029ce5 (an armed body hit at a dead end fights before it seals), 222faba7 (a witch is not fought in iron at
 ;; health 11), d2f4d76e (a full-iron body with a sword does not flee skeletons it only hears).
@@ -13,14 +13,14 @@
   :body {:at [16.5 0 16.5]}
   :limit-s 70}
  :cases
- [{:name "fist-body-at-food-6-fights-the-spider"
+ [{:name "fist-body-at-food-6-flees-the-whole-spider-before-a-fight-begins"
    :act [[:rcon "effect give $BODY minecraft:hunger 6 226 true"]
          [:wait-s 7]
          [:rcon "damage $BODY 2 minecraft:generic"]
          [:summon "spider" [19.5 0 16.5] "{NoAI:1b}"]]
    :expect [{:event {:source :body :kind :hurt :data {:food [:<= 6]}} :within-s 15}
-            {:event {:source :job :kind :hostile.decided :data {:mob "spider" :decision :fight}} :within-s 30}
-            {:no-event {:source :job :kind :child_started :data {:slot :flee}} :for-s 30}]}
+            {:event {:source :job :kind :hostile.decided :data {:mob "spider" :decision :flee}} :within-s 30}
+            {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 30}]}
   {:name "unarmed-body-walled-in-with-a-zombie-swings-within-seconds"
    :blocks [[:fill [12 0 12] [20 2 20] "obsidian" :hollow] [:fill [13 0 13] [19 2 19] "air"]
             [:set [13 1 13] "torch"] [:set [19 1 19] "torch"]]

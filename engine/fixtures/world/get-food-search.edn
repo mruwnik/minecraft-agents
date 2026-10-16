@@ -6,6 +6,7 @@
 ;; give-ups widen the radius in the food.none text (24, 72); an explore search runs for a body with a stale give-up while it
 ;; is starving or asked for a :stock; a melon seen is dug and eaten; a chest booked with bread 100 blocks off is walked to;
 ;; 3 cows lose one, 2 are kept.
+;; A fragile body (hp 6 or less) waits sheltered at night, so the night cases take only 8 damage (get-food-fragile.edn covers the fragile stop).
 ;; Should-fail: a fed-enough body inside the ask cooldown ends condition-failed without searching; a night body that is not
 ;; starving does not search; a booked chest holding cobblestone is not visited.
 {:defaults
@@ -17,7 +18,7 @@
  :cases
  [{:name "starving-body-past-one-give-up-hunts-a-cow-40-away"
    :memory [{:kind :hungry :data {:food 0} :age-s 90 :policy {:cap 10 :ttl 3600000}}]
-   :act [[:summon "cow" [44.5 0 16.5] "{NoAI:1b}"]
+   :act [[:summon "cow" [44.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [46.5 0 14.5] "{NoAI:1b}"] [:summon "cow" [46.5 0 18.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
@@ -58,7 +59,8 @@
    :limit-s 150}
   {:name "far-cow-found-by-the-explore-search"
    :plot {:height 6 :length 96 :width 32}
-   :act [[:summon "cow" [60.5 0 16.5] "{NoAI:1b}"]
+   :body {:at [16.5 0 16.5]}
+   :act [[:summon "cow" [72.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [74.5 0 14.5] "{NoAI:1b}"] [:summon "cow" [74.5 0 18.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore true})]]
@@ -67,7 +69,7 @@
   {:name "night-starving-body-explores-calm"
    :time :night
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
-         [:rcon "damage $BODY 14 minecraft:generic"]
+         [:rcon "damage $BODY 8 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore {:max-distance 64 :max-legs 3 :spend {:job-time 30}}})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :explore}} :within-s 110}]
    :limit-s 150}
@@ -75,7 +77,7 @@
    :time :night
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,Silent:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:wait-s 14]
-         [:rcon "damage $BODY 14 minecraft:generic"]
+         [:rcon "damage $BODY 8 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore true})]]
    :expect [{:event {:source :job :kind :food.none :message [:contains "not searched"]} :within-s 60}
             {:no-event {:source :job :kind :child_started :data {:slot :explore}} :for-s 40}]}

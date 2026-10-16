@@ -30,7 +30,7 @@
    :blocks [[:fill [0 0 0] [47 14 31] "stone"]
             [:fill [4 0 4] [24 14 28] "water"]]
    :body {:at [30.5 15 16.5] :yaw 270 :settle-s 1}
-   :act [[:job (jobs.movement.go-to {:pos [14 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 100 :until {:source :job :kind :result}}]
    :after [[:body-near [14.5 15 16.5] 3]]}

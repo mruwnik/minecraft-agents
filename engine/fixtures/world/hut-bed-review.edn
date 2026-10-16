@@ -69,7 +69,8 @@
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :body {:at [13.5 0 13.5] :yaw 90}
    :act [[:summon "zombie" [14.5 0 11.5] "{NoAI:1b,Silent:1b}"] [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"] [:rcon "execute positioned $X $Y $Z run setblock ~11 ~ ~12 red_bed[facing=east,part=head]"] [:wait-s 75]]
-   :expect [{:event {:source :job :kind :shelter.sleep_failed} :within-s 40}
+   ;; sleep holds the monsters-near refusal in pauses (a :pause child each) and asks again, never ending in a sleep_failed
+   :expect [{:event {:source :job :kind :child_started :data {:slot :pause}} :within-s 40}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 75}]
    :limit-s 90}
   {:name "far-known-bed-kept-carried-bed-placed"

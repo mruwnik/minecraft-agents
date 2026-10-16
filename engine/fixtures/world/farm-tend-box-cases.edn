@@ -17,11 +17,13 @@
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [12 0 18]} :till true})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:till {:tilled [:>= 1]}}}} :within-s 90 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "wheat"]]}
-  {:name "stone-over-the-grass-waits-nothing-to-do-naming-covered"
+  ;; the grass under the stone shows no face to the body: unseen cells are not counted as covered tillable ground
+  {:name "stone-over-the-grass-waits-nothing-to-do-without-covered"
    :blocks [[:fill [10 0 16] [12 0 18] "stone"]]
    :body {:inventory [["stone_hoe" 1] ["wheat_seeds" 9]]}
    :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [12 0 18]} :till true})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :covered 9}} :within-s 40 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:covered [:any]}} :for-s 30}
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30}]
    :after [[:block [10 -1 16] "grass_block"]]}
   {:name "bones-are-crafted-into-bone-meal-and-used"
@@ -51,7 +53,7 @@
    :blocks [[:fill [10 -1 18] [13 -1 18] "farmland[moisture=7]"] [:fill [10 -2 19] [13 -2 19] "stone"] [:fill [10 -1 19] [13 -1 19] "water"]]
    :body {:at [11.5 0 14.5] :yaw 180 :inventory [["wheat_seeds" 10]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 18] :max #xyz [13 -1 18]}})]]
-   :expect [{:event {:source :job :kind :plant.done :data {:planted 4}} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:planted 4}} :within-s 80 :of-job true}]
    :after [[:block [10 0 18] "wheat"] [:block [13 0 18] "wheat"]]}
   ;; Card 17761d3f: plant on dried-back dirt names the untilled cells instead of "planted 0, reason none".
   {:name "plant-on-dried-back-dirt-names-the-untilled-cells"

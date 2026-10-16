@@ -46,6 +46,9 @@
    :blocks [[:set [28 0 16] "furnace[facing=west]"]]
    :memory [{:kind :furnace :data {:pos #xyz [28 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["beef" 2] ["coal" 2]]}
+   ;; the job is submitted below, after the damage: the hungry trigger would fire at food 8, before the damage lands, and call it as a healthy body
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :act [[:summon "creeper" [26.5 0 18.5] "{NoAI:1b,Silent:1b}"]
          [:job (jobs.survival.get-food {})]]
    :expect [{:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 40}]

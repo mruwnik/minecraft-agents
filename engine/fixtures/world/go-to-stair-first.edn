@@ -8,7 +8,14 @@
   :time :any
   :plot {:length 64 :height 16}
   :blocks [[:fill [2 0 2] [61 13 29] "stone"]
-           [:fill [3 0 16] [44 1 16] "air"]]
+           [:fill [3 0 16] [44 1 16] "air"]
+           ;; wall torches light the sealed corridors: unlit cells count as seen only within 4
+           [:set [8 1 15] "wall_torch[facing=south]"] [:set [18 1 15] "wall_torch[facing=south]"]
+           [:set [28 1 15] "wall_torch[facing=south]"] [:set [38 1 15] "wall_torch[facing=south]"]
+           [:set [46 3 15] "wall_torch[facing=south]"] [:set [50 7 15] "wall_torch[facing=south]"]
+           [:set [53 10 15] "wall_torch[facing=south]"] [:set [20 11 15] "wall_torch[facing=south]"]
+           [:set [30 11 15] "wall_torch[facing=south]"] [:set [40 11 15] "wall_torch[facing=south]"]
+           [:set [50 11 15] "wall_torch[facing=south]"]]
   :zones [{:name "tunnel" :min [3 0 16] :max [44 0 16] :owner "SomeoneElse"}
           {:name "top" :min [16 10 16] :max [54 10 16] :owner "SomeoneElse"}]
   :body {:at [4.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}

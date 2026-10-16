@@ -10,14 +10,14 @@
  :cases
  [{:name "low-vine-walks-on-to-the-floor"
    :blocks [[:fill [12 0 11] [12 3 11] "stone"] [:fill [11 1 11] [11 2 11] "vine[east=true]"]]
-   :body {:at [11.5 1 11.5]}
+   :body {:at [11.5 1 11.5] :settle-s 0}
    :act [[:job (jobs.movement.go-to {:pos #at [9 0 11] :range 3})]]
    :expect [{:event {:source :job :kind :go-to.hanging :data {:stand [:any]}} :within-s 30 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [9.5 0 11.5] 3.5]]}
   {:name "high-vine-with-no-floor-in-range-is-unreachable-hanging"
    :blocks [[:fill [12 0 11] [12 8 11] "stone"] [:fill [11 5 11] [11 7 11] "vine[east=true]"]]
-   :body {:at [11.5 6 11.5]}
+   :body {:at [11.5 6 11.5] :settle-s 0}
    :act [[:job (jobs.movement.go-to {:pos #at [9 6 11] :range 3})]]
    :expect [{:event {:source :job :kind :go-to.hanging :data {:stand nil}} :within-s 30 :of-job true}
             {:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :hanging}} :within-s 60 :of-job true}

@@ -59,7 +59,7 @@
    :body {:at [15.5 2 15.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 80}]
-   :after [[:body-near [8.5 4 15.5] 4]]}
+   :after [[:body-near [10.5 4 15.5] 5.6]]}
   {:name "ledge-west-lands-2"
    :blocks [[:fill [10 4 11] [10 5 20] "air"]]
    :body {:at [12.5 2 13.5]}

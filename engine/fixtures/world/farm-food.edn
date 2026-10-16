@@ -64,7 +64,7 @@
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["carrot" 15] ["wheat_seeds" 4]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
-   :expect [{:event {:source :job :kind :plant.done :data {:planted 4 :reason :done}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:planted 4}} :within-s 60 :of-job true}]
    :after [[:block [10 0 16] "wheat"] [:block [13 0 16] "wheat"] [:item "carrot" 15]]}
   {:name "kit-takes-cooked-beef-up-to-60-points"
    :blocks [[:set [14 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:cooked_beef\",count:20}]}"]]

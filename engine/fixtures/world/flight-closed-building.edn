@@ -49,7 +49,7 @@
    :expect [{:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:block [16 0 20] "oak_door[half=lower,open=false]"] [:body-near [16.5 0 16.5] 4.5]]}
   {:name "creeper-beside-the-door-no-room-within-blast-reach"
-   :body {:at [8.5 0 24.5]}
+   :body {:at [8.5 0 24.5] :yaw 270}
    :act [[:summon "creeper" [18.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.target} :within-s 25}
             {:no-event {:source :job :kind :retreat.home} :for-s 30}

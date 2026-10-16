@@ -43,6 +43,7 @@
    :after [[:block [18 0 16] "stone"]]
    :limit-s 70}
   {:name "mine-wet-stone-tunnel-4-says-wet-skipped"
+   :body {:yaw 270}
    :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 4 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :wet :wet-skipped [:>= 1]}} :within-s 120 :of-job true}]
    :after [[:block [18 0 16] "stone"]]

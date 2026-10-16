@@ -39,11 +39,11 @@
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}]
    :after [[:item "beef" 0]]}
-  ;; 2e4d9b7d: a furnace 36 blocks off, known as the :furnace place, still pays for the walk (cook-far-radius 64, not the 16 of a placed one)
+  ;; 2e4d9b7d: a furnace 36 blocks off, known as the :furnace memory place, still pays for the walk (cook-far-radius 64, not the 16 of a placed one)
   {:name "remembered-furnace-36-blocks-away-is-walked-to-and-used"
    :plot {:height 6 :length 64 :width 32}
    :blocks [[:set [40 0 16] "furnace[facing=west]"]]
-   :places [{:name "furnace-$tag" :kind "furnace" :pos [40 0 16]}]
+   :memory [{:kind :furnace :data {:pos #xyz [40 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["beef" 2] ["coal" 2]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:rcon "damage $BODY 5 minecraft:generic"]

@@ -87,6 +87,7 @@
    :after [[:item "stone_pickaxe" 1] [:item "cobbled_deepslate" 0]]}
   {:name "no-material-seen-waits-no-source"
    ;; card fd6e381b should-fail: no cobblestone/deepslate/blackstone seen: waits :no-source naming cobblestone
+   :plot {:floor "grass_block"}
    :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["oak_planks" 8]]}
    :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "cobblestone"]}} :within-s 30 :of-job true}
