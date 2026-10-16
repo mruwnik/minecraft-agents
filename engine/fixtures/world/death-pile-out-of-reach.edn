@@ -9,7 +9,7 @@
   :act [[:wait-s 1]
         [:kill-body]
         [:await {:source :body :kind :respawned} 30]
-        [:wait-s 3]]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]]
   :limit-s 220}
  :cases
  [{:name "own-seal-plug-taken-back-then-pile-collected"

@@ -6,7 +6,7 @@
   :act [[:wait-s 1]
         [:kill-body]
         [:await {:source :body :kind :respawned} 30]
-        [:wait-s 4]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
         [:job (jobs.survival.recover-drops)]]
   :limit-s 150}
  :cases

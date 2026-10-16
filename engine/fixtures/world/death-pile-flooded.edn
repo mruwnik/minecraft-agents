@@ -8,7 +8,7 @@
   :act [[:wait-s 1]
         [:kill-body]
         [:await {:source :body :kind :respawned} 30]
-        [:wait-s 3]]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]]
   :limit-s 150}
  :cases
  [{:name "cheap-pile-in-water-skipped-for-the-water"

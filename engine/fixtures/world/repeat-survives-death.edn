@@ -9,7 +9,7 @@
  :cases
  [{:name "repeat-job-survives-a-death"
    :act [[:http :submit (repeat (jobs.movement.look-around {:every-ms 500})) [] {:ok true}]
-         [:kill-body] [:await {:source :body :kind :respawned} 30] [:wait-s 3]
+         [:kill-body] [:await {:source :body :kind :respawned} 30]
          [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
    :expect [{:event {:source :body :kind :respawned} :within-s 40}
             {:no-event {:source :job :kind :cancelled} :for-s 10 :of-job true}]}

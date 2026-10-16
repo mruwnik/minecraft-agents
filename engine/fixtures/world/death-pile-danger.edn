@@ -8,9 +8,9 @@
   :act [[:wait-s 1]
         [:kill-body]
         [:await {:source :body :kind :respawned} 30]
-        [:wait-s 3]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
         [:summon "zombie" [8.5 0 4.5] "{NoAI:1b}"]
-        [:wait-s 1]
+        [:until-seen {:entity "zombie"} 10]
         [:job (jobs.survival.recover-drops {:danger-overrides {"zombie" 0.01}})]]
   :limit-s 150}
  :cases

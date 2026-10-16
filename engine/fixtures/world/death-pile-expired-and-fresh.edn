@@ -11,7 +11,8 @@
  :cases
  [{:name "fresh-pile-is-fetched-whole-past-the-expired-one"
    :body {:inventory [["raw_iron" 7] ["cobblestone" 64] ["cobblestone" 36]]}
-   :act [[:wait-s 1] [:kill-body] [:await {:source :body :kind :respawned} 30] [:wait-s 4]
+   :act [[:wait-s 1] [:kill-body] [:await {:source :body :kind :respawned} 30]
+         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
          [:job (jobs.survival.recover-drops)]]
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :recover-drops.decided :data {:decision :abandoned :reason :window-closed}} :for-s 120 :until {:source :job :kind :recover-drops.decided :data {:decision :collected}}}]
