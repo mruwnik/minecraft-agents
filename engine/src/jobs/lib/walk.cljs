@@ -59,7 +59,7 @@
 
 (defn pose-of [pose]
   {:x (.-x pose) :y (.-y pose) :z (.-z pose) :vx (.-vx pose) :vy (.-vy pose) :vz (.-vz pose) :on-ground (.-onGround pose)
-   :on-climbable (.-onClimbable pose) :on-scaffolding (.-onScaffolding pose) :in-water (.-inWater pose) :in-lava (.-inLava pose) :collided (.-collided pose)})
+   :on-climbable (.-onClimbable pose) :on-scaffolding (.-onScaffolding pose) :in-water (.-inWater pose) :under-water (.-underWater pose) :in-lava (.-inLava pose) :collided (.-collided pose)})
 
 (def room-margin-s "Seconds a steer leaves of the time left, for the time between asking and the act's check." 0.05)
 (def min-steer-s "The shortest steer a walk holds to the time left; with less left the act's refusal ends the call." 0.5)

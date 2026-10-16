@@ -9,6 +9,7 @@ import { setting } from './settings.mjs'
 const { Vec3 } = vec3
 
 const CLIMBABLE = new Set(['ladder', 'vine', 'scaffolding', 'twisting_vines', 'twisting_vines_plant', 'weeping_vines', 'weeping_vines_plant', 'cave_vines', 'cave_vines_plant'])
+const WATER_PLANTS = new Set(['kelp', 'kelp_plant', 'seagrass', 'tall_seagrass'])
 const isNum = n => typeof n === 'number' && Number.isFinite(n)
 const reasonOf = err => String(err).slice(0, 200)
 
@@ -21,6 +22,12 @@ const climbableAt = (bot, cell) => {
   const below = bot.blockAt(cell.offset(0, -1, 0))
   const props = block.getProperties()
   return below?.name === 'ladder' && props.open === true && props.facing === below.getProperties().facing
+}
+
+// the eyes (standing height) in water: a sprint there swims (vanilla starts a swim only with the eyes under)
+const underWater = (bot, position) => {
+  const block = bot.blockAt(position.offset(0, 1.62, 0))
+  return block?.name === 'water' || block?.name === 'bubble_column' || WATER_PLANTS.has(block?.name) || block?.getProperties?.().waterlogged === true
 }
 
 // scaffolding at the feet or under them: there sneak means descend, so a sneaking walk lets go of it
@@ -42,6 +49,7 @@ export function createSteer ({ act, getBot, badArgs }) {
       onClimbable: climbableAt(bot, cell),
       onScaffolding: onScaffolding(bot, cell),
       inWater: isInWater,
+      underWater: underWater(bot, position),
       inLava: isInLava,
       collided: isCollidedHorizontally,
       yaw,

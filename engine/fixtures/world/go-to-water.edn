@@ -2,6 +2,7 @@
 ;; Should-succeed: lake-floor-start-walks-to-the-bank (from the lake floor to the bank 11 blocks off: surfaces, walks, arrives, no hurt); water-goal-leaves-the-water (a goal in the water
 ;; with range 3 ends on the bank); unseen-lake-column-aims-at-the-surface (a column goal [x z] in a deep lake the body has not seen: it ends on the surface, not the seabed);
 ;; dark-shaft-go-to-swims-up (the body has been under water ~6 s in a sealed, dark 1x1 shaft, the goal is the air pocket above: a blind swim up arrives, no :why :air).
+;; submerged-tunnel-is-swum (an 18 cell tunnel two high is swum at ~3.9 b/s: out within 11 s, no hurt).
 ;; Live risk: the unseen-column case depends on the body not seeing the lake from the bank (it faces away); the dark shaft pocket is only dark when the roof really seals it.
 {:defaults
  {:tags [:movement :water :air] :time :any
@@ -60,4 +61,16 @@
    :act [[:job (jobs.movement.go-to {:pos #at [16 1 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :walker-fault} :for-s 60 :until {:source :job :kind :result}}]
-   :after [[:body-near [16.5 1 8.5] 3]]}]}
+   :after [[:body-near [16.5 1 8.5] 3]]}
+  ;; card f4668a26: a submerged 2-high tunnel (18 cells, the only way past the ridge) is swum, not paddled: a swim (sprint, eyes
+  ;; under) is ~3.9 b/s, so up the far shaft and out within 11 s; a paddle takes 9 s for the tunnel alone (live, 1.4 s a cell: drowns)
+  {:name "submerged-tunnel-is-swum"
+   :plot {:height 12 :length 32 :width 64}
+   :blocks [[:fill [0 0 0] [31 5 63] "stone"]
+            [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [22 1 8] "water"] [:fill [23 0 8] [23 5 8] "water"]
+            [:fill [11 6 0] [11 9 63] "bedrock"]]
+   :body {:at [4.5 0 8.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 6 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 11 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 11 :until {:source :job :kind :result}}]
+   :after [[:body-near [24.5 6 8.5] 3]]}]}

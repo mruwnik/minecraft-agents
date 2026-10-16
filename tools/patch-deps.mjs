@@ -9,6 +9,7 @@ import { patchTerrainWaypoints, patchTerrainStart, patchTerrainStop, patchPathNo
 import { patchAttributeProtocol } from './dependency-patches/attribute-protocol.mjs'
 import { patchClimbableTrapdoor } from './dependency-patches/trapdoor-ladder.mjs'
 import { patchDepthStrider } from './dependency-patches/depth-strider.mjs'
+import { patchSwimming } from './dependency-patches/swimming.mjs'
 
 const PATCHES = [
   ['node_modules/mineflayer-pathfinder/index.js', patchPathNodeCopies, 'mineflayer-pathfinder immutable search nodes', 'path rendering must not mutate an unfinished A* search'],
@@ -17,6 +18,7 @@ const PATCHES = [
   ['node_modules/mineflayer-pathfinder/index.js', patchScaffoldingDriver, 'mineflayer-pathfinder scaffold descent controls', 'scaffold sneak descent driver anchor changed'],
   ['node_modules/prismarine-physics/index.js', patchClimbableTrapdoor, 'prismarine-physics climbs an open trapdoor over a ladder', 'read tools/dependency-patches/trapdoor-ladder.mjs: a body may stop under a hatch vanilla climbs'],
   ['node_modules/prismarine-physics/index.js', patchDepthStrider, 'prismarine-physics depth strider', 'read tools/dependency-patches/depth-strider.mjs: Depth Strider boots may not speed the swim the planner prices'],
+  ['node_modules/prismarine-physics/index.js', patchSwimming, 'prismarine-physics swimming', 'read tools/dependency-patches/swimming.mjs: a body under water may paddle at half the swim speed'],
   ['node_modules/prismarine-physics/index.js', patchScaffoldingPhysics, 'prismarine-physics scaffold collision', 'read tools/dependency-patches/scaffolding.mjs: scaffolding climb simulation may treat its outline as solid'],
   ['node_modules/mineflayer-pathfinder/index.js', patchGateWaypoints, 'mineflayer-pathfinder centred gate waypoints', 'read patchGateWaypoints in tools/dependency-patches/patches.mjs: gate paths may aim into adjacent fences'],
   ['node_modules/mineflayer-pathfinder/index.js', patchTerrainWaypoints, 'mineflayer-pathfinder terrain waypoints', 'read patchTerrainWaypoints in tools/dependency-patches/terrain.mjs: partial blocks and climbing need matching route heights'],

@@ -654,6 +654,18 @@
     (is (false? (:sprint (swim-controls steps 1 (wet 0.6 62 0.5 :on-ground true)))))
     (is (false? (:sprint (swim-controls straight 1 (pose 0.6 64 3.5 {:in-water true})))))))
 
+(deftest under-water-a-swim-step-is-swum
+  ;; sprint and no jump; the pitch (up positive) leans toward the step's height
+  (let [r (ex/tick p (state-at pond 2) (wet 1.6 61.5 0.5 :under-water true))]
+    (is (= [true false] ((juxt :sprint :jump) (controls-of r))))
+    (is (< 0 (:pitch r) (/ Math/PI 2))))
+  (let [dive [(step 2 62 0 :start {:swim true}) (step 2 60 0 :swim-down {:swim true})]
+        r (ex/tick p (state-at dive 1) (wet 2.6 61.5 0.5 :under-water true))]
+    (is (true? (:sprint (controls-of r))))
+    (is (< (:pitch r) 0)))
+  (is (false? (:sprint (swim-controls pond 2 (wet 1.6 62 0.5)))) "head out: a paddle")
+  (is (false? (:sprint (controls-of (ex/tick (assoc p :sprint false) (state-at pond 2) (wet 1.6 61.5 0.5 :under-water true)))))))
+
 (deftest a-climb-in-water-keeps-the-climb-rules
   (let [steps [(step 0 64 3 :start) (step 0 62 3 :climb-down {:px 0.5 :pz 3.5})]]
     (is (false? (:jump (swim-controls steps 1 (wet -0.2 61.9 3.5 :on-climbable true)))))))

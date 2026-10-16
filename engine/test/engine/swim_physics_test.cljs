@@ -92,13 +92,15 @@
       {:done {:status :no-plan}}
       (loop [t 0 state (ex/start steps 0) run 0 wet-run 0 in-block 0]
         (let [pose (pose-of bot)
-              {:keys [done controls yaw] :as r} (ex/tick ex/policy state pose)
+              pose (assoc pose :under-water (eye-wet? blocks pose))
+              {:keys [done controls yaw pitch] :as r} (ex/tick ex/policy state pose)
               run' (if (eye-wet? blocks pose) (inc run) 0)
               wet-run' (max wet-run run')
               in-block' (cond-> in-block (in-block? blocks pose) inc)]
           (if (or done (>= t max-ticks))
             {:done done :moves (set (map :move steps)) :ticks t :wet-run wet-run' :in-block in-block'}
             (do (set! (.-yaw (.-entity bot)) yaw)
+                (set! (.-pitch (.-entity bot)) pitch)
                 (.apply (.simulatePlayer phys (new (.-PlayerState physics) bot (clj->js controls)) world) bot)
                 (recur (inc t) (:state r) run' wet-run' in-block'))))))))
 
@@ -184,3 +186,13 @@
     16 [16.5 1.67] 0.31
     4 nil 0.31
     512 nil 0.31))
+
+(def tunnel
+  "A water tunnel two high and one wide (x 5..16, y 60..61, z 1) in stone."
+  (merge (box 3 59 -1 18 62 3 "stone") (box 5 60 1 16 61 1 "water")))
+
+(deftest a-submerged-tunnel-is-swum-not-paddled
+  ;; a vanilla swim (sprint, eyes under) settles at 3.92 b/s, a paddle at 1.96; a quarter over the swim for the start
+  (let [{:keys [done ticks]} (swim tunnel [5 60 1] [16 60 1])]
+    (is (= :arrived (:status done)))
+    (is (<= ticks (* 1.25 20 (/ 11 3.92))) (str ticks " ticks for 11 cells"))))

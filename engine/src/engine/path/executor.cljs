@@ -7,7 +7,7 @@
          move came in by), :swim true, :opens [...] and :free [fx fz] (corner slides) when present.
          h is the stand height above the cell floor in 1/16 block; px/pz is the point to stand at.
   Pose:  {:x :y :z :vy :on-ground :on-climbable :in-water :in-lava :collided}, feet position; :vx :vz (horizontal velocity, blocks
-         per tick) when the body reports them.
+         per tick) and :under-water (the eyes in water) when the body reports them.
   State: {:steps :i :since :tick :yaw}; i is the index of the step walked to, since the tick at which it
          became current, tick the number of calls, yaw the last yaw sent while moving, landed (when set) the tick a :bounce
          drop's bounce began.
@@ -501,13 +501,28 @@
                       (< past (:gap-past policy))))
         (jump? policy step pose dist))))
 
+(def swim-sprint-moves #{:swim :swim-down})
+
+(defn swim?
+  "Under water on a :swim or :swim-down step: swim (sprint, the look pitch steering up or down) where the policy may
+  sprint, twice a paddle's speed. With the head out the body paddles: a sprint there is no swim."
+  [policy step {:keys [in-water under-water]}]
+  (boolean (and (:sprint policy) in-water under-water (contains? swim-sprint-moves (:move step)))))
+
+(defn swim-pitch
+  "The look pitch (up positive) from the feet toward the step's stand height over the horizontal distance dist."
+  [step {:keys [y]} dist]
+  (Math/atan2 (- (stand-y step) y) (max dist 0.1)))
+
 (defn sprint?
-  "Never in water: sprinting there is the server's swimming pose, a body one block high. A jump past a high corner block
-  is sprinted on the ground (a walking jump clears it 4 times in 10, a sprint jump always)."
-  [policy steps i {:keys [on-ground in-water]}]
+  "In water only to swim (swim?). A jump past a high corner block is sprinted on the ground (a walking jump clears it 4
+  times in 10, a sprint jump always)."
+  [policy steps i {:keys [on-ground in-water] :as pose}]
   (let [window (take 3 (drop i steps))
         step (first window)]
     (boolean (cond
+               (swim? policy step pose) true
+
                (= :gap (:move step))
                (and (:sprint policy) (:sprint (gap-rule policy steps i)))
 
@@ -543,16 +558,18 @@
         yaw' (if moving? (yaw-to x z ax az) (or yaw 0))
         prev (when (pos? i) (nth steps (dec i)))
         forward? (and moving?
-                      (not (climb-hold? policy step pose)))]
+                      (not (climb-hold? policy step pose)))
+        swim (swim? policy step pose)]
     {:state (cond-> state moving? (assoc :yaw yaw'))
      :controls {:forward forward? :back false :left false :right false
                 :jump (cond
                         (= :gap (:move step)) (gap-jump? policy steps i pose dist)
+                        swim false
                         (and (:in-water pose) (not (contains? climb-moves (:move step)))) (swim-jump? policy step pose)
                         :else (or (jump? policy step pose dist) (hop-now? policy prev step pose yaw' forward?)))
                 :sneak false
                 :sprint (sprint? policy steps i pose)}
-     :yaw yaw' :pitch 0}))
+     :yaw yaw' :pitch (if swim (swim-pitch step pose dist) 0)}))
 
 (defn beside-start?
   "The body at pose stands outside step 0's cell but its box (the client physics' width) reaches into it: the planner
