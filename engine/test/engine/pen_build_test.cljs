@@ -257,6 +257,16 @@
           (is (= [:condition-failed :no-items] [(:kind e) (get-in e [:cause :reason])]))
           (is (empty? (kinds-of seen :build.declined))))))))
 
+(deftest a-builder-short-of-items-after-its-look-round-ends-the-pen-the-same
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as w} (b/start (spec []) {"pen" (ring-plan)} [])
+              _ (tu/seeing-after-look p)
+              e (await (ending-of w job {:plan "pen" :fetch false} 100))]
+          (is (empty? (h/calls p "place")))
+          (is (= {:kind :condition-failed :cause {:reason :no-items :needs {"oak_fence" 7 "oak_fence_gate" 1}}} (kc e))))))))
+
 (deftest the-default-fetch-explores-for-fences-that-are-short
   (async done
     (tu/run-async done

@@ -42,7 +42,8 @@
   - {:reason :uneven :why text}: its ring steps more than 1 between neighbouring fences, or a gate is more than 1 above
     the ground of an inside neighbour (animals will not step down 2), unless :uneven? true.
   - {:reason :no-zones}: no zone list has been read (unless :ignore-zones?).
-  - {:reason :no-items}: the builder's own (jobs.build.from-plan): nothing to place is carried or fetchable.
+  - {:reason :no-items}: the builder's own (jobs.build.from-plan): nothing to place is carried or fetchable; also the
+    ending (condition-failed) when its look round finds that, with nothing placed.
   A pen already sound with the body outside it is done at once with nothing placed. Nothing is rebuilt after a restart: the world is the memory.")
 
 (a/defargs args
@@ -256,11 +257,13 @@
 (defn ^:async build-step!
   "One round of the builder as the child; the phase moves to the exit when its round ended with its data (done, or it
   left cells refused, given up or short: the check reports them as leaks); an ending of its conditions, or of a limit, is
-  this job's."
+  this job's, and so is a :no-items with nothing placed (the look round found the fences short)."
   [c]
   (let [r (await (ctx/call c :build 'jobs.build.from-plan (build-args c)))]
     (cond
       (or (= :continue r) (= :cut-off (:kind r))) :continue
+      (and (= :condition-failed (:kind r)) (= :no-items (get-in r [:cause :reason])) (zero? (get-in r [:data :placed] 0)))
+      (ctx/end c :condition-failed (:cause r) (:data r))
       (or (= :done (:kind r)) (and (:data r) (#{:nothing-possible :condition-failed} (:kind r)))) (do (ctx/update-mem! c assoc :phase :exit :built (:data r))
                                                  :again)
       :else (ctx/end c (:kind r) (:cause r)))))
