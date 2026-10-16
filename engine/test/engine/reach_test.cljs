@@ -291,3 +291,19 @@
 (deftest a-zombie-heard-just-outside-a-sealed-body-is-no-danger
   (is (= [] (danger-ids walls (assoc corner-zed :pos {:x 2.4 :y 64 :z 0.5} :seen false :heard true)))
       "heard close and east, but the cells beside the body that way are rock"))
+
+(defn hall
+  "A closed hall n x n cells: walls two high around it and a roof."
+  [n]
+  (let [r (quot n 2)
+        cells (range (- r) (inc r))]
+    (into {} (concat (for [x cells z cells] [(str x ",66," z) "stone"])
+                     (for [a cells b [(- (inc r)) (inc r)] y [64 65] k [(str a "," y "," b) (str b "," y "," a)]] [k "stone"])))))
+
+(deftest a-closed-room-flood-reads-each-cell-a-bounded-number-of-times
+  (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (hall 21)})
+        n (atom 0)
+        q (js/Object.create p)]
+    (set! (.-sensedAt q) (fn [pos] (swap! n inc) (.sensedAt p pos)))
+    (is (some? (reach/room q {:x 0 :y 64 :z 0})))
+    (is (< @n 10000) (str "sensedAt calls: " @n))))

@@ -412,15 +412,31 @@
 (defn seen-free? [p kind-at x y z]
   (and (some? (u/seen-block p {:x x :y y :z z})) (passable? kind-at x y z)))
 
+(defn memo-kind-at
+  "kind-at answering each cell once: a flood asks about a cell ~20 times, and these wrappers read the body's senses."
+  [kind-at]
+  (let [cache (js/Map.)
+        key (volatile! nil)]
+    (fn [x y z]
+      (let [key-of (or @key (vreset! key (keyer x z)))
+            k (key-of x y z)
+            hit (.get cache k)]
+        (if (some? hit)
+          hit
+          (let [v (kind-at x y z)]
+            (.set cache k v)
+            v))))))
+
 (defn room-kind-at
   "kind-at for the room flood: a floor cell the body has not seen under seen-free feet and head cells is a floor (a
   level look does not show the floor beside the feet)."
   [p kind-at]
-  (fn [x y z]
-    (if (and (nil? (u/seen-block p {:x x :y y :z z}))
-             (seen-free? p kind-at x (inc y) z) (seen-free? p kind-at x (+ y 2) z))
-      :solid
-      (kind-at x y z))))
+  (memo-kind-at
+   (fn [x y z]
+     (if (and (nil? (u/seen-block p {:x x :y y :z z}))
+              (seen-free? p kind-at x (inc y) z) (seen-free? p kind-at x (+ y 2) z))
+       :solid
+       (kind-at x y z)))))
 
 (defn unseen-edge?
   "Whether a walker at cell #js [x y z] may lead somewhere the body has not seen: a side feet cell, or the head cell over
@@ -460,9 +476,10 @@
 (defn shut-kind-at
   "kind-of over the blocks the body has seen, every door, gate and trapdoor shut."
   [p]
-  (fn [x y z]
-    (let [b (u/seen-block p {:x x :y y :z z})]
-      (if (and b (openable? (.-name b))) :solid (kind-of b)))))
+  (memo-kind-at
+   (fn [x y z]
+     (let [b (u/seen-block p {:x x :y y :z z})]
+       (if (and b (openable? (.-name b))) :solid (kind-of b))))))
 
 (defn room*
   "The closed room around cell pos {:x :y :z}: the cells a walker there reaches with every door, gate and trapdoor shut,

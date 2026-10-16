@@ -1492,4 +1492,4 @@
   (let [p (seen-dark cave-blocks)
         ask #(reads-during p (fn [] ((:when (get triggers/all :night)) p {} {})))
         first-ask (ask)]
-    (is (< (ask) (/ first-ask 20)) "the second ask reuses the room")))
+    (is (< (ask) (/ first-ask 5)) "the second ask reuses the room")))
