@@ -90,13 +90,38 @@
 (defn clear-asked! "Drop every kept check: they last for the pass that asked them." [eng]
   (reset! (:asked eng) {}))
 
+(defn later-looks
+  "Statuses ss with each :look made :later."
+  [ss]
+  (mapv #(cond-> % (= :look (first %)) (assoc 0 :later)) ss))
+
+(defonce ^{:doc "Per engine (keyed by its :asked atom), an atom of the frames whose last look round left a :look."} looks (js/WeakMap.))
+
+(defn looks-of [eng]
+  (let [k (:asked eng)]
+    (or (.get looks k) (let [a (atom #{})] (.set looks k a) a))))
+
+(defn looked?
+  "Whether a look round already followed a :look of c's frame, which no check since has passed without."
+  [c]
+  (boolean (some-> (:engine c) looks-of deref (contains? (asked-key c)))))
+
+(defn note-look!
+  "Record whether c's frame has looked on: after a look round that left a :look, the next :look counts as :later
+  (across rounds); a status without :look clears it."
+  [c look?]
+  (some-> (:engine c) looks-of (swap! (if look? conj disj) (asked-key c)))
+  nil)
+
 (defn ^:async looked
   "Statuses [start run], or after one look round (the :look/around hook, given the :look-at cells of the :look statuses)
   when they come to :look (no :never or :later among them), the statuses then; a second :look counts as :later."
   [def c ss]
   (if (= :look (first (contract/all ss)))
     (do (await ((:look/around hooks/all) c (into [] (comp (filter #(= :look (first %))) (mapcat #(:look-at (nth % 2 nil)))) ss)))
-        (mapv #(cond-> % (= :look (first %)) (assoc 0 :later)) (statuses def c)))
+        (let [after (statuses def c)]
+          (note-look! c (= :look (first (contract/all after))))
+          (later-looks after)))
     ss))
 
 (defn stays-listed?
@@ -283,7 +308,7 @@
 (defn ended!
   "r, the round's answer, after a root job's remembered done? status is dropped once r ends it."
   [c r]
-  (when-not (= :continue r) (forget-done! c))
+  (when-not (= :continue r) (forget-done! c) (note-look! c false))
   r)
 
 (defn ^:async run
@@ -332,7 +357,10 @@
   waiting is bounded by the call's limits, :wall-time among them."
   [def c]
   (let [fresh? (not (started? c))
-        asked (if fresh? (zipmap [:start :run] (statuses def c)) {:run (run-status def c)})
+        raw (if fresh? (zipmap [:start :run] (statuses def c)) {:run (run-status def c)})
+        look? (= :look (first (contract/all (vals raw))))
+        _ (when-not look? (note-look! c false))
+        asked (cond-> raw (and look? (looked? c)) (update-vals #(first (later-looks [%]))))
         {start-s :start run-s :run} asked
         s (if fresh? (contract/all [start-s run-s]) run-s)
         later? (= :later (first s))

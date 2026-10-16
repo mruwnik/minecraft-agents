@@ -21,12 +21,6 @@
 (deftest no-cause-is-ok
   (is (= [:ok :holds] (tu/kind-reason (checks/cause-status :later nil)))))
 
-(deftest unseen-later-asks-for-a-look-until-the-body-has-looked
-  (are [mem expected] (= expected (with-redefs [ctx/mem (constantly mem)]
-                                    (tu/kind-reason (checks/unseen-later {} :no-tree "none" :near 3))))
-    {:looked {:x 0 :y 64 :z 0}} [:later :no-tree]
-    {} [:look :no-tree]))
-
 (deftest not-moved-is-later-with-the-distance-only-when-the-body-left
   (with-redefs [submitted/away-cause (constantly nil)]
     (is (= [:ok :here] (tu/kind-reason (checks/not-moved {})))))

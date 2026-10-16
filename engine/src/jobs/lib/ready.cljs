@@ -12,7 +12,6 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
-            [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
             [jobs.lib.storage :as storage]))
 
@@ -44,7 +43,7 @@
       (and (sh/night? p) (sh/safe-from-night? p) (not (sh/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
-      (contains? lowered-by :look) ((if (look/surveyed? c :near) contract/later contract/look) :exposed (str "light at " where " not seen") :look-at look-at)
+      (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
       (contains? lowered-by :dawn) (contract/later :exposed (str "dark at " where " until dawn") :lowered-by lowered-by :chance chance)
       :else (contract/never :exposed (str "exposed at " where ", nothing lowers it") :chance chance))))
 

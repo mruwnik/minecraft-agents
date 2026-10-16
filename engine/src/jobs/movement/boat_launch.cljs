@@ -144,7 +144,7 @@
   [c]
   (if (and (launching? c) (nil? (launch-pos c)))
     (let [{:keys [reason hint]} (no-water-cause c)]
-      (checks/unseen-later c reason hint :hint hint))
+      (contract/look reason hint :hint hint))
     (contract/ok :water "room for a boat")))
 
 (defn pick-boat [c]

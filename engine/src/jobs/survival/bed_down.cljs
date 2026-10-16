@@ -6,7 +6,6 @@
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
-            [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.access :as access]
             [jobs.lib.places :as places]
@@ -80,7 +79,7 @@
   "A bed to use, a bed item to put down or a bed to fetch, else :no-bed (:look until the body looked round)."
   [c]
   (if (when-let [w (problem c)] (not (some->> (need/opts c job) (need/plan-for w))))
-    (contract/status (if (look/surveyed? c) :later :look) :no-bed "no bed to use and none carried to put down" {})
+    (contract/status :look :no-bed "no bed to use and none carried to put down" {})
     (contract/ok :bed "a bed to use, put down or fetch")))
 
 (defn can-start?

@@ -153,9 +153,9 @@
   [c]
   (cond
     (crossing c) (contract/ok :under-way "a crossing under way")
-    (nil? (spot-of c)) (checks/unseen-later c :no-far-shore (if (given-pos c) "the given cell is no seen shore" "no far shore in sight"))
+    (nil? (spot-of c)) (contract/look :no-far-shore (if (given-pos c) "the given cell is no seen shore" "no far shore in sight"))
     (and (not (vehicle/mounted? (:primitives c))) (not (water-in-sight? c)))
-    (checks/unseen-later c :not-water "no water in sight to launch a boat on")
+    (contract/look :not-water "no water in sight to launch a boat on")
     :else (contract/ok :start "a shore to cross to")))
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))

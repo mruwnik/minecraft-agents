@@ -103,7 +103,7 @@
   "Later with the cause that bars the first cast."
   [c]
   (if-let [[cause text] (start-problem c)]
-    (if (= :no-water cause) (checks/unseen-later c cause text) (contract/later cause text))
+    (if (= :no-water cause) (contract/look cause text) (contract/later cause text))
     (contract/ok :ready "a rod and water to cast at")))
 
 (defn ^:async cast! [c {:keys [water]}]

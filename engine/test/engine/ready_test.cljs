@@ -169,12 +169,6 @@
     (is (= :look (first s)))
     (is (= [[15 64 0]] (:look-at (nth s 2))))))
 
-(deftest an-unseen-cell-after-a-look-round-is-later
-  (let [c (ctx-of open-night)
-        looked (assoc c :root (:id c) :view (fn [] {:now 0 :data {:entries {(keyword "job" (:id c)) [{:t 0 :data {:looked {:x 0 :y 64 :z 0}}}]}}}))
-        s ((ready/safe-at (constantly outside)) looked)]
-    (is (= [:later :exposed] [(first s) (:reason (nth s 2))]))))
-
 (def escapes
   '[respond-to-hostile fight-back block-arrow-gap unwedge breathe extinguish night dig-niche retreat plug-in dig-in])
 

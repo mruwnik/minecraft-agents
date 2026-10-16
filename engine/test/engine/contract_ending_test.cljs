@@ -368,6 +368,25 @@
           (is (= 1 (:looks-rounds @world)))
           (is (= 1 (count (job-ev seen :completed)))))))))
 
+(def looks-blind
+  "A condition no look can settle: it says :look for ever."
+  {:can-start? (fn [_] (contract/look :unseen "never seen"))
+   :round (fn [c] (swap! world update :looks-rounds (fnil inc 0)) (ctx/end c :done nil))})
+
+(deftest a-look-that-settles-nothing-is-later-in-every-round-after-the-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {'looks-blind looks-blind})]
+          (core/submit! eng '(looks-blind) {})
+          (await (core/tick! eng))
+          (let [n (looks-at p)]
+            (is (pos? n) "it looked once")
+            (dotimes [_ 3] (await (core/tick! eng)))
+            (is (= n (looks-at p)) "no look in later rounds")
+            (is (nil? (:looks-rounds @world)) "never started")
+            (is (= [:unseen] (distinct (mapv #(:reason (:data %)) (job-ev seen :waiting)))))))))))
+
 (def looks-up
   "Starts once the cell above the body was looked at; until then it asks for a look at it."
   {:can-start? (fn [c]

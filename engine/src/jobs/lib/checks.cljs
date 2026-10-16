@@ -6,7 +6,6 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.body :as body]
             [jobs.lib.cond :as cond]
-            [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
             [jobs.lib.submitted :as submitted]
             [jobs.lib.world :as known]))
@@ -35,11 +34,6 @@
      (holds)
      (let [cause (if (keyword? cause) {:reason cause} cause)]
        (contract/status kind (:reason cause) (or text (cause-text cause)) (dissoc cause :reason))))))
-
-(defn unseen-later
-  "A :later with reason, text and data, a :look instead while the body has not looked round."
-  [c reason text & data]
-  (apply (if (look/surveyed? c) contract/later contract/look) reason text data))
 
 (defn not-moved
   "Later :moved-since-submit while the call has a :from the body has left before its first round (jobs.lib.submitted)."

@@ -67,7 +67,7 @@
   "Later :no-shore while no :pos is given and no shore is in sight; a look first while the body has not looked round."
   [c]
   (if (and (nil? (:pos (:args c))) (vehicle/mounted? (:primitives c)) (empty? (candidates c)))
-    (checks/unseen-later c :no-shore "no seen shore to land on" :hint "no seen shore to land on")
+    (contract/look :no-shore "no seen shore to land on" :hint "no seen shore to land on")
     (contract/ok :shore "a shore to land on")))
 
 (a/defargs settings
