@@ -332,6 +332,23 @@
                    (dissoc result :text)))
             (is (re-find #"no hoe" (:text result)))))))))
 
+(deftest a-hoe-lost-mid-run-with-fetch-false-skips-the-rest-as-no-hoe-without-fetching
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory hoe :blocks four})
+              first? (atom true)]
+          (.override (.-world p) "useOn" (fn ^:async f [t a impl]
+                                           (let [r (await (impl t a))]
+                                             (when @first?
+                                               (reset! first? false)
+                                               (swap! (fake/state p) assoc :inventory []))
+                                             r)))
+          (let [result (await (child-outcome eng job (assoc box :fetch false) 40))]
+            (is (= 1 (:tilled result)))
+            (is (= [:no-hoe :no-hoe :no-hoe] (vec (vals (:skipped result)))))
+            (is (empty? (filterv #(= :need (:slot %)) (kinds seen :child_started))))))))))
+
 (deftest till-of-only-not-tillable-cells-stops-not-tillable
   (async done
     (tu/run-async done

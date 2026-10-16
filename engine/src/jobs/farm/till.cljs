@@ -323,10 +323,10 @@
                   :again)))))))))
 
 (defn ^:async hoe!
-  "Get a hoe when none may be used and cells are left: nil when one is carried (or came), :continue while the fetch waits
+  "Get a hoe when none may be used, cells are left and :fetch allows tools: nil when one is carried (or came), :continue while the fetch waits
   on the world, else the ending of the call: done when enough is tilled already, else the fetch's kind and cause."
   [c]
-  (when (and (nil? (hoe c)) (seq (pending c)))
+  (when (and (nil? (hoe c)) (seq (pending c)) (fetch-opts c))
     (let [e (await (need/tool! c (hoe-wanted c) (fetch-opts c)))]
       (cond
         (= :continue e) :continue
