@@ -33,7 +33,7 @@
   {:name "coal-ore-seen-28-blocks-off-is-mined"
    :blocks [[:fill [4 0 4] [4 1 5] "stone"] [:set [4 0 4] "coal_ore"] [:set [4 1 4] "coal_ore"] [:set [4 0 5] "coal_ore"]]
    :body {:at [30.5 0 28.5] :yaw 135 :inventory [["stone_pickaxe" 1]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 135 5"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 135 5"]
          [:job (jobs.items.obtain {:item "coal" :count 2})]]
    :expect [{:event {:source :job :kind :completed} :within-s 130 :of-job true}]
    :after [[:item "coal" [:>= 2]]]
@@ -86,14 +86,14 @@
   {:name "stone-axe-from-cobble-and-a-seen-birch"
    :blocks [[:fill [21 4 21] [23 5 23] "birch_leaves[persistent=true]"] [:fill [22 0 22] [22 4 22] "birch_log"]]
    :body {:inventory [["cobblestone" 3]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"]
          [:job (jobs.items.obtain {:item "stone_axe" :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:item "stone_axe" 1]]
    :limit-s 170}
   {:name "oak-log-with-only-birch-seen-stops-no-source-naming-birch"
    :blocks [[:fill [21 4 21] [23 5 23] "birch_leaves[persistent=true]"] [:fill [22 0 22] [22 4 22] "birch_log"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"]
          [:job (jobs.items.obtain {:item "oak_log" :count 2 :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "birch_log"]}} :within-s 50 :of-job true}]
    :after [[:item "oak_log" 0] [:block [22 0 22] "birch_log"]]

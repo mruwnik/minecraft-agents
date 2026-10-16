@@ -1320,3 +1320,17 @@
   (is (= {:ways #{:craft :smelt :gather} :spend {:job-time 120}} (need/child-limits 'jobs.items.obtain {:how #{:craft :gather} :minutes 2})))
   (is (= {:ways #{:chest :gather}} (need/child-limits 'jobs.items.get-tool {:how #{:chest :gather}})))
   (is (= {} (need/child-limits 'jobs.items.get-tool {}))))
+
+(deftest get-tool-looks-around-and-takes-the-chest-behind-it-before-crafting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [behind "0,64,-6"
+              s (start (-> (bare [{:name "oak_log" :count 12}])
+                           (assoc-in [:blocks behind] "chest")
+                           (assoc :containers {behind [{:name "wooden_pickaxe" :count 1}]}))
+                       [own-zone])]
+          (await (get-tool! s {:kind "pickaxe"} 60))
+          (is (seq (calls s "look")) "it looked around")
+          (is (= 1 (count (transfers s))) "the chest behind was used")
+          (is (empty? (tables s)) "no table was crafted"))))))

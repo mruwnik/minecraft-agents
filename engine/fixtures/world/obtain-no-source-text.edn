@@ -19,7 +19,7 @@
    :zones [{:name "yard" :min [6 -1 19] :max [13 6 25] :owner "Other" :allow #{}}]
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"]
          [:job (jobs.items.obtain {:item "oak_log" :count 2 :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "seen but not taken"]}} :within-s 40 :of-job true}]
    :after [[:block [9 0 22] "oak_log"] [:item "oak_log" 0]]
@@ -29,7 +29,7 @@
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [21 4 21] [23 5 23] "oak_leaves[persistent=true]"] [:fill [22 0 22] [22 4 22] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"]
          [:job (jobs.items.obtain {:item "oak_log" :count 2 :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 85 :of-job true}]
    :after [[:item "oak_log" [:>= 2]] [:block [9 0 22] "oak_log"]]}
