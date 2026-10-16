@@ -112,13 +112,23 @@
     (is (= [] (:tick r)))
     (is (= [] (:new-bugs r)))))
 
-(deftest unskip-ids-are-the-known-failures-named-by-live-cards-whose-commits-are-in
+(deftest unskip-ids-are-the-known-failures-named-by-cards-past-coding-whose-commits-are-in
   (let [cards [{:id "c1" :column "live" :title "one" :commits ["aaa"] :description "live: a/x, a/z"}
                {:id "c2" :column "live" :title "two" :commits ["bbb"] :description "live: b/w"}
                {:id "c3" :column "needs_fixture" :title "three" :commits ["aaa"] :description "live: a/y"}
-               {:id "c4" :column "pending" :title "four" :commits ["aaa"] :description "live: b/e"}]]
-    (is (= ["a/x"] (t/unskip-ids {:previous [prev] :cards cards :ancestor? #(not= % "bbb")})))
-    (is (= ["a/x" "b/w"] (t/unskip-ids {:previous [prev] :cards cards :ancestor? (constantly true)})))))
+               {:id "c4" :column "pending" :title "four" :commits ["aaa"] :description "live: b/e"}
+               {:id "c5" :column "testing" :title "five" :commits ["aaa"] :plan-notes ["Live plan (cases):\nb/w"]}
+               {:id "c6" :column "in_review" :title "six" :commits ["aaa"] :plan-notes ["Live plan (cases):\nb/e"]}
+               {:id "c7" :column "needs_fixture" :title "seven" :commits ["bbb"] :plan-notes ["Live plan (cases):\na/y"]}]
+        ids #(sort (t/unskip-ids (merge {:previous [prev] :cards cards} %)))]
+    (is (= ["a/x" "b/e" "b/w"] (ids {:ancestor? #(not= % "bbb")})))
+    (is (= ["a/x" "a/y" "b/e" "b/w"] (ids {:ancestor? (constantly true)})))))
+
+(deftest known-failures-of-changed-fixture-files-are-unskipped
+  (is (= ["b/e" "b/w"] (t/unskip-ids {:previous [prev] :cards [] :ancestor? (constantly true) :changed-files #{"b"}}))))
+
+(deftest changed-fixture-files-come-from-the-diff-of-engine-fixtures-world
+  (is (= #{"a" "b-c"} (t/fixture-stems "engine/fixtures/world/a.edn\nengine/fixtures/world/sub/b-c.edn\nREADME.md\n"))))
 
 (def cases-note "Unit green, b/f too.\nLive plan (cases):\na/x\nb/w")
 

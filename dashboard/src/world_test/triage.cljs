@@ -10,7 +10,7 @@
 
 (def usage
   (str "usage: node tools/sweep-triage.mjs --dir DIR [--previous RESULTS.edn ...] [--rev R] [--repo PATH] [--plans PLANS.edn] [--db FILE] [--board ID | --board-file BOARD.edn] [--out report.edn]\n"
-       "       node tools/sweep-triage.mjs --unskip-list --previous RESULTS.edn ... [--repo PATH] [--rev R] [--db FILE] [--board ID] --out FILE: the known failures named by the live plans of `live` cards whose commits are in the revision, one id per line, for world-sweep --unskip-ids.\n"
+       "       node tools/sweep-triage.mjs --unskip-list --previous RESULTS.edn ... [--repo PATH] [--rev R] [--prev-rev P] [--db FILE] [--board ID] --out FILE: the known failures named by the live plans of testing, live and in_review cards (needs_fixture with a case plan) whose commits are in the revision, and all known failures of fixture files changed since P, one id per line, for world-sweep --unskip-ids.\n"
        "DIR holds sweep-<pass>.edn (day, night, night-exclusive, any sweep-*.edn except sweep-summary.edn). --previous: the earlier sweep's result files, as the pool's --durations.\n"
        "--plans: EDN map of card id prefix -> text naming fixtures/cases, for a card whose own plan names none. "
        "--rev (default HEAD) and --repo (default .): a card is covered when its commits are ancestors of the revision. Prints a text summary; --out writes the full EDN report."))
@@ -117,14 +117,25 @@
       (some #(or (#{:inconclusive} (:class %)) (#{:error :fail :skipped-known} (:status %))) named) :hold
       :else :tick)))
 
+(def unskip-columns #{"testing" "live" "in_review"})
+
+(defn fixture-stems
+  "Output of git diff --name-only -> the set of fixture file names (no directory, no .edn) it lists."
+  [diff-out]
+  (into #{} (keep #(second (re-matches #"engine/fixtures/world/(?:.*/)?([^/]+)\.edn" %))) (str/split-lines diff-out)))
+
 (defn unskip-ids
-  "{:previous [vector ...] :cards :ancestor?} -> sorted ids of the known failures that the live plans of `live` cards name, for the cards whose commits are all in the revision: they wait for a run with the fix in."
-  [{:keys [previous cards ancestor?]}]
+  "{:previous [vector ...] :cards :ancestor? :changed-files} -> sorted ids of the known failures to run again: those that the live plans of testing, live and in_review cards name (and of needs_fixture cards with a 'Live plan (cases):' note), for the cards whose commits are all in the revision, and all of those in a changed fixture file (a set of file names)."
+  [{:keys [previous cards ancestor? changed-files]}]
   (let [failing (set (keys (last-results previous)))
         cases (into [] (comp (map :id) (distinct) (filter failing) (map (fn [id] {:id id :file (first (str/split id #"/"))})))
                     (apply concat previous))
-        waiting (filter #(and (= "live" (:column %)) (every? ancestor? (:commits %))) cards)]
-    (vec (sort (distinct (mapcat #(map :id (named-cases (card-plan-text %) cases)) waiting))))))
+        waiting (filter #(and (or (unskip-columns (:column %))
+                                  (and (= "needs_fixture" (:column %)) (seq (case-plan-lines (:plan-notes %)))))
+                              (every? ancestor? (:commits %)))
+                        cards)]
+    (vec (sort (distinct (concat (mapcat #(map :id (named-cases (card-plan-text %) cases)) waiting)
+                                 (map :id (filter #(contains? (set changed-files) (:file %)) cases))))))))
 
 (defn bug-matches [bugs {:keys [id file]}]
   (mapv :id (filter #(let [toks (tokens (:title %))] (or (toks id) (toks file))) bugs)))
@@ -184,11 +195,12 @@
     (when-not (zero? (.-status r)) (throw (js/Error. (str "sqlite3: " (.-stderr r)))))
     (if (str/blank? (.-stdout r)) [] (js->clj (js/JSON.parse (.-stdout r)) :keywordize-keys true))))
 
-(defn read-board [db board]
-  (let [q (fn [s] (sql-json db (str/replace s "BOARD" (str "'" board "'"))))
-        tasks (q "select id, title, description, status as column from tasks where board_id=BOARD and status in ('live','needs_fixture')")
-        notes (group-by :task_id (q "select task_id, content from task_notes where task_id in (select id from tasks where board_id=BOARD and status in ('live','needs_fixture')) and lower(content) like '%live plan%' order by created_at"))
-        commits (group-by :task_id (q "select task_id, sha from task_commits where task_id in (select id from tasks where board_id=BOARD and status in ('live','needs_fixture'))"))
+(defn read-board [db board & [columns]]
+  (let [cols (str "(" (str/join "," (map #(str "'" % "'") (or columns ["live" "needs_fixture"]))) ")")
+        q (fn [s] (sql-json db (-> s (str/replace "BOARD" (str "'" board "'")) (str/replace "COLS" cols))))
+        tasks (q "select id, title, description, status as column from tasks where board_id=BOARD and status in COLS")
+        notes (group-by :task_id (q "select task_id, content from task_notes where task_id in (select id from tasks where board_id=BOARD and status in COLS) and lower(content) like '%live plan%' order by created_at"))
+        commits (group-by :task_id (q "select task_id, sha from task_commits where task_id in (select id from tasks where board_id=BOARD and status in COLS)"))
         bugs (q "select id, title from tasks where board_id=BOARD and status not in ('done','rejected') and title like 'Bug%'")]
     {:cards (mapv (fn [t] (assoc t :plan-notes (mapv :content (notes (:id t))) :commits (mapv :sha (commits (:id t))))) tasks)
      :bugs bugs}))
@@ -205,6 +217,13 @@
         (boolean (some #(str/starts-with? % sha) all))
         (boolean (some #(str/starts-with? % sha) (by-7 (subs sha 0 7))))))))
 
+(defn changed-fixtures
+  "The fixture file names changed between two revisions of the repo."
+  [repo from to]
+  (let [r (cp/spawnSync "git" #js ["diff" "--name-only" (str from ".." to) "--" "engine/fixtures/world"] #js {:cwd repo :encoding "utf8"})]
+    (when-not (zero? (.-status r)) (throw (js/Error. (str "git diff " from ".." to ": " (.-stderr r)))))
+    (fixture-stems (.-stdout r))))
+
 (defn with-plans [board plans]
   (update board :cards (fn [cards] (mapv (fn [c] (if-let [t (some (fn [[p t]] (when (str/starts-with? (:id c) p) t)) plans)] (assoc c :extra-plan t) c)) cards))))
 
@@ -213,7 +232,7 @@
     (cond
       (empty? args) o
       (= a "--previous") (let [[files rst] (split-with #(not (str/starts-with? % "--")) more)] (recur rst (update o :previous into files)))
-      (#{"--dir" "--rev" "--repo" "--db" "--board" "--board-file" "--plans" "--out"} a) (recur (rest more) (assoc o (keyword (subs a 2)) (first more)))
+      (#{"--dir" "--rev" "--repo" "--db" "--board" "--board-file" "--plans" "--out" "--prev-rev"} a) (recur (rest more) (assoc o (keyword (subs a 2)) (first more)))
       (= a "--unskip-list") (recur more (assoc o :unskip-list true))
       :else (recur more (update o :extra (fnil conj []) a)))))
 
@@ -232,7 +251,8 @@
       (and (:unskip-list o) (not (:extra o)) (:out o))
       (let [ids (unskip-ids (merge {:previous (mapv read-results (:previous o))
                                     :ancestor? (ancestor-fn (:repo o) (:rev o))}
-                                   (read-board (:db o) (:board o))))]
+                                   {:changed-files (when-let [pr (:prev-rev o)] (changed-fixtures (:repo o) pr (:rev o)))}
+                                   (read-board (:db o) (:board o) ["testing" "live" "in_review" "needs_fixture"])))]
         (fs/writeFileSync (:out o) (apply str (map #(str % "\n") ids)))
         (js/console.log (str (count ids) " ids -> " (:out o)))
         0)
