@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
 
@@ -192,6 +193,7 @@
   [c]
   (let [e (find-villager (:primitives c) (:villager (:args c)))]
     (cond
+      (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c)) ; villagers count only while in view
       (nil? e) (give-up! c :gone)
       (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach)) (await (trade! c))
       :else

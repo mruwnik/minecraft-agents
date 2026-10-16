@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]))
 
 (def doc
@@ -67,6 +68,13 @@
     {:villagers (mapv (fn [e] {:baby (true? (.-baby e)) :profession (.-profession e)}) v)}))
 
 ;; ------------------------------------------------------------------ what is decided
+
+(defn unlooked?
+  "A role or a target needs villagers, none is in view and no look round yet: villagers count only while in view."
+  [c]
+  (and (or (seq (:roles (:args c))) (:target (:args c)))
+       (empty? (:villagers (facts c)))
+       (not (look/surveyed? c))))
 
 (defn decide
   "{:skip reason} or {:call args} for a step slot."
@@ -173,6 +181,8 @@
   [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo (slots (:args c)) :report {}))
+  (if (unlooked? c)
+    (await (look/survey! c))
   (let [m (ctx/mem c)
         {:keys [call] :as p} (resume c m)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
@@ -187,7 +197,7 @@
           (do (ctx/update-mem! c booked slot (entry-of r))
               (if (= :limit-reached (:kind r))
                 (ctx/end c :limit-reached (:cause r) {:steps (:report (ctx/mem c))})
-                :again)))))))
+                :again))))))))
 
 (a/defargs settings
   {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
@@ -212,7 +222,7 @@
         {:keys [call report todo]} (plan (or (:todo m) (slots (:args c))) (:args c) (facts c) (:report m {}))
         ran (count (filter ran? (vals report)))
         data [:units :steps :done ran :left (count todo)]]
-    (if (or call (:call-args m) (some incomplete? (vals report)))
+    (if (or call (:call-args m) (some incomplete? (vals report)) (unlooked? c))
       (apply contract/later :steps (str ran " steps run") data)
       (apply contract/ok :in-order (str "the village is in order: " (count (filter :skipped (vals report))) " steps skipped")
              (conj data :result {:villagers (count (:villagers (facts c))) :target (:target (:args c)) :steps report})))))

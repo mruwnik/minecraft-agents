@@ -37,9 +37,10 @@
 
 (defn ^:async scenario
   ([args w ends] (scenario args w ends 40))
-  ([args w ends n]
+  ([args w ends n] (await (scenario args w ends n identity)))
+  ([args w ends n prepare]
    (let [calls (atom [])
-         s (doto (h/setup w) (-> :p tu/seeing-all))
+         s (doto (h/setup w) (-> :p tu/seeing-all) (-> :p prepare))
          s (update s :eng #(update % :jobs (stubs calls ends)))]
      (core/submit! (:eng s) (list job args) {})
      (await (tu/run-ticks (:eng s) (:clock s) n 700))
@@ -284,3 +285,20 @@
       (fn ^:async t []
         (let [s (await (scenario {:plan "p" :ignore-zones? true} (world) {}))]
           (is (= [['jobs.build.from-plan {:plan "p" :ignore-zones? true}]] (ran s 'jobs.build.from-plan))))))))
+
+(defn appear-on-look
+  "p whose entities are all out of sight until its first look call."
+  [p]
+  (let [st (fake/state p)
+        all (:entities @st)]
+    (swap! st assoc :entities [])
+    (.override (.-world p) "look" (fn ^:async f [token a impl]
+                                    (swap! st assoc :entities all)
+                                    (await (impl token a))))))
+
+(deftest a-villager-behind-the-body-is-looked-for-before-the-role-is-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:roles [librarian]} (world (villager 1 3 {:profession "none" :pos {:x -3 :y 64 :z 0}})) {} 40 appear-on-look))]
+          (is (= 1 (count (ran s 'jobs.village.roll)))))))))

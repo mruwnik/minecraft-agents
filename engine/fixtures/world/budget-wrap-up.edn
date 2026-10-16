@@ -12,14 +12,12 @@
  :cases
  [{:name "lead-to-far-spot-short-budget-reaches-its-limit-and-cleanup-lets-the-cow-go"
    :act [[:summon "cow" [8.5 0 16.5]]
-         [:wait-s 3]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [90 0 16] :radius 20 :spend {:job-time 25}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :limit-reached :still-led false}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :completed :data {:reason :unleashed}} :for-s 120 :until {:source :job :kind :stopped}}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [99 3 31]] 1] [:item "lead" [:>= 1]]]}
   {:name "lead-to-near-spot-ample-budget-is-done-unleashed"
    :act [[:summon "cow" [8.5 0 16.5]]
-         [:wait-s 3]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [14 0 16] :radius 20 :spend {:job-time 180}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :unleashed}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:kind :limit-reached}} :for-s 5}]

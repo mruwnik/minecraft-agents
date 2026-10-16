@@ -6,6 +6,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.hostile-test :as h]
+            [engine.look-support :as ls]
             [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -131,6 +132,14 @@
         (let [{:keys [p out]} (await (feed {:inventory bread} {:villager "v-1"} 20 identity))]
           (is (= {:fed 0 :item nil :status :stopped :reason :gone} (select-keys @out [:fed :item :status :reason])))
           (is (empty? (tosses p))))))))
+
+(deftest a-villager-behind-the-body-is-looked-for-before-it-is-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (feed {:entities [(villager 2)] :inventory bread} {:villager "v-1"} 60
+                                         #(-> % ls/entities-after-look (taking (all-taken "v-1")))))]
+          (is (= {:fed 1 :status :done} (select-keys @out [:fed :status]))))))))
 
 (deftest a-blocked-walk-is-unreachable
   (async done

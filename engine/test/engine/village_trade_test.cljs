@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.look-support :as ls]
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
             [jobs.village.trade :as trade]))
@@ -330,3 +331,12 @@
           (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
           (is (= {"emerald" 9 "bread" 1} (inv p)))
           (is (= 1 (count (filter #(= "buy" (.-op (.-args %))) (calls p "trade"))))))))))
+
+(deftest a-villager-behind-the-body-is-looked-for-before-it-is-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (trade {:entities [(villager [(bread {})])] :inventory [{:name "emerald" :count 10}]}
+                                       {:count 1} ls/entities-after-look))]
+          (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
+          (is (= {"emerald" 9 "bread" 1} (inv p))))))))

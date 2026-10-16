@@ -15,7 +15,6 @@
  :cases
  [{:name "no-lead-lures-one-cow-in"
    :act [[:summon "cow" [10.5 0 18.5]]
-         [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
@@ -26,7 +25,6 @@
    :body {:at [13.5 0 16.5] :yaw 90 :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
    :act [[:summon "cow" [21.5 0 16.5]]
          [:summon "cow" [15.5 0 21.5]]
-         [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 2})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought :inside 2}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]
@@ -36,14 +34,12 @@
   {:name "radius-is-measured-from-the-start"
    :body {:at [1.5 0 16.5] :yaw 0 :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
    :act [[:summon "cow" [1.5 0 20.5]]
-         [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1 :radius 5})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}
   {:name "cow-beyond-radius-from-the-start-is-none"
    :body {:at [3.5 0 8.5] :yaw 0 :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
    :act [[:summon "cow" [3.5 0 28.5]]
-         [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1 :radius 8})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :none}} :within-s 120 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
@@ -51,7 +47,6 @@
   ;; should fail: a cow that does not move never follows the food; the lure is given up with a reason and the pen stays empty
   {:name "cow-that-never-follows-is-given-up"
    :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]
-         [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    ;; a cow that stays put is given up as :jammed after the trip over (herd.lure-lost is for an animal that follows, then stops)
    :expect [{:event {:source :job :kind :herd.gave-up :data {:reason :short}} :within-s 200 :of-job true}
@@ -66,7 +61,6 @@
                     {:id "gate" :cells [#at [18 0 16]] :want [:any "oak_fence_gate"]}]}]
    :body {:at [4.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
    :act [[:summon "cow" [3.5 0 20.5]]
-         [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :completed}}
@@ -78,7 +72,6 @@
    :blocks [[:fill [0 0 0] [15 0 31] "dirt"]]
    :body {:at [12.5 1 16.5] :yaw 270 :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
    :act [[:summon "cow" [10.5 1 18.5]]
-         [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
             {:no-event {:source :job :kind :herd.gave-up :data {:reason :no-gate}} :for-s 240 :until {:source :job :kind :completed}}]

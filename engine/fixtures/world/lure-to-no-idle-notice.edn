@@ -8,7 +8,7 @@
   :limit-s 400}
  :cases
  [{:name "long-lure-walk-raises-no-idle-notice"
-   :act [[:summon "cow" [6.5 0 18.5]] [:wait-s 2]
+   :act [[:summon "cow" [6.5 0 18.5]]
          [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [170 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :arrived}} :within-s 380 :of-job true}
             {:no-event {:source :body :kind :idle} :for-s 380 :until {:source :job :kind :completed}}]

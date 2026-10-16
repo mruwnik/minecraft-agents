@@ -298,6 +298,7 @@
                      (await (walk! c (:at (:tossing m)) (settle-reach))))
       (:cleanup m) (await (clean-up! c (:cleanup m)))
       (>= (:refused m 0) (max-refused)) (stop! c :not-taken)
+      (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c)) ; villagers count only while in view
       (nil? e) (stop! c :gone)
       (nil? item) (await (fetch-food! c))
       (tossing-gap? (u/self-pos c) (u/pos-of (.-pos e))) (await (toss! c e item))
