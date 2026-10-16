@@ -4,14 +4,11 @@
 ;; of another owner's plan (not-diggable, the walls stay).
 ;; Stone mass x 2..30, z 2..30, y 0..5 under a body on its top at [16.5 6 16.5]; the pocket [19 2 16] [19 3 16] is air inside the mass.
 ;; The straight route is the shaft [19 5 16] [19 4 16] straight above the pocket.
-;; A 3-wide stair of 1-high steps at x 2..6 (air cut into the west edge) walks down off the mass: without it the 29x29 top is a closed plateau under
-;; reach/room-cells, the body counts as shut in and takes the shut-in ladder (approach a wall) instead of the dig-route into the goal.
 {:defaults
  {:tags [:movement :go-to :access]
   :time :any
   :plot {:height 12}
-  :blocks [[:fill [2 0 2] [30 5 30] "stone"] [:fill [19 2 16] [19 3 16] "air"]
-           [:fill [6 5 15] [6 5 17] "air"] [:fill [5 4 15] [5 5 17] "air"] [:fill [4 3 15] [4 5 17] "air"] [:fill [3 2 15] [3 5 17] "air"] [:fill [2 1 15] [2 5 17] "air"]]
+  :blocks [[:fill [2 0 2] [30 5 30] "stone"] [:fill [19 2 16] [19 3 16] "air"]]
   :body {:at [16.5 6 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["stone_pickaxe" 1] ["cobblestone" 4]]}
   :limit-s 150}
  :cases
