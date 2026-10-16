@@ -466,7 +466,7 @@
                              (when (= "wait" act) (swap! cow-x + 0.0015))
                              (set-cow-x! p @cow-x))))
           (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
-          (await (run-until-done s 150))
+          (await (run-until-done s 60))
           (is (some? @cow-x) "the cow fell behind")
           (is (not= :animal-stalled (:reason (done-event s))) "a third of a block in 10 s is still closing in"))))))
 

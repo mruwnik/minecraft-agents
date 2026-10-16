@@ -744,11 +744,11 @@
   "Run the night job (with args) in world with :home at pos, the body seeing through its perception: {:eng :p}."
   ([world pos] (night-at-home world pos {}))
   ([world pos args] (night-at-home world pos args {}))
-  ([world pos args {:keys [unseen rand]}]
+  ([world pos args {:keys [unseen rand ray-deg] :or {ray-deg 2}}]
   (let [[seen sink] (tu/legacy-capture-sink)
         raw-p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :light-default :light)))
         _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
-        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000) :rand (or rand (constantly 0.5))})
+        per (perception/create (fake-raw/create raw-p) {:ray-deg ray-deg :now (constantly 1000000) :rand (or rand (constantly 0.5))})
         p (perception/wrap raw-p per)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now (constantly 1000000)
@@ -918,7 +918,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [j [0.0 0.25 0.5 0.75 0.99]]
-          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j)}))]
+          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1}))]
             (await (tu/run-until-empty eng 60))
             (is (= [] (bed-places p)) (str "no bed in the open, sight jitter " j))
             (is (= [] (st/calls p "sleep")) "and no sleep out there")

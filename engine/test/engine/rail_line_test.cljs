@@ -332,7 +332,7 @@
   "Build the plan of the waypoints over the world: [result seen p eng]."
   [waypoints opts world args & [zones]]
   (let [{:keys [eng p seen]} (b/start world {"line" (route-plan waypoints opts)} (or zones []))
-        result (await (outcome eng job (merge {:plan "line"} args) 900))]
+        result (await (outcome eng job (merge {:plan "line"} (dissoc args :ticks)) (:ticks args 900)))]
     [result seen p eng]))
 
 (defn shape-of [p [x y z]] (:shape (props p [x y z])))
@@ -487,7 +487,7 @@
                       (with-dig-attempt! attempt
                         (fn ^:async f []
                           (let [{:keys [eng]} (b/start world {"line" (route-plan l-route {})} [])]
-                            (await (ending-of {:eng eng} job {:plan "line" :all-carried false} 300))))))
+                            (await (ending-of {:eng eng} job {:plan "line" :all-carried false} 100))))))
               no-tool (await (ended (fn [c _] (ctx/end c :condition-failed {:reason :no-tool}))))
               cut (await (ended (fn [c _] (ctx/end c :cut-off nil))))]
           (is (= {:kind :condition-failed :cause {:reason :no-tool}} (kc no-tool)))
@@ -500,7 +500,7 @@
         (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
               [result seen p] (await (with-dig-attempt!
                                     (fn [c _] (dig/unreachable! c :test))
-                                    #(build-route! l-route {} world {:all-carried false})))]
+                                    #(build-route! l-route {} world {:all-carried false :ticks 100})))]
           (is (not (true? (:ok? result))))
           (is (nil? (get-in result [:built :given-up [10 64 0]])) (pr-str result))
           (is (= :not-done result) "the build parks")
