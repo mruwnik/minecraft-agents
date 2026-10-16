@@ -2,7 +2,7 @@
 ;; mine.unreachable, no failure counted, so it never gives up after 3) and its walk home out of a pit with no diggable wall
 ;; (card 16b6b93e: the first walk home has no :pillar, the second, :home-last, every way).
 ;; Dirt floor, so the only stone is the case's own; body with a stone pickaxe.
-;; Case 1: four stones on 7-high bedrock pillars 3 off, no blocks carried: each is skipped, mine ends without mine.gave-up.
+;; Case 1: four stones on 7-high bedrock pillars 3 off, no blocks carried: none is taken, mine ends got 0 naming them out of reach, without mine.gave-up.
 ;; Case 2: a 3x3 pit 3 deep, obsidian walls, stone floor; the body starts 4 off its rim, drops in, mines 2, pillars home.
 {:defaults
  {:tags [:mine :jobs] :time :any
@@ -17,8 +17,7 @@
             [:fill [16 0 19] [16 6 19] "bedrock"] [:set [16 7 19] "stone"]]
    :body {:at [16.5 0 16.5]}
    :act [[:job (jobs.gather.mine {:block "stone" :count 3 :radius 8 :tunnel-length 0 :descend-limit 0})]]
-   :expect [{:count-event {:source :job :kind :mine.unreachable} :for-s 130 :at-least 4 :of-job true}
-            {:event {:source :job :kind #{:completed :stopped} :data {:got 0}} :within-s 130 :of-job true}
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :text [:contains "seen ore out of reach"]}} :within-s 130 :of-job true}
             {:no-event {:source :job :kind :mine.gave-up} :for-s 130 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:block [13 7 16] "stone"] [:block [16 7 19] "stone"]]}
   {:name "pit-with-obsidian-walls-pillars-home"

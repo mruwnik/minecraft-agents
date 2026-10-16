@@ -10,7 +10,8 @@
 ;; Should-succeed: the full strip ends done, rails and cobwebs gone, the branch sealed with cobblestone, the loot hauled
 ;; to the main chest (nothing of it left in the bag); carried raw iron is smelted and hauled; a spawner in the branch under :seal
 ;; stops that segment and the branch is sealed with the spawner left.
-;; Should-fail: an unknown base plan stops :bad-plan; no torches (and none to get) stops :no-torches before any digging.
+;; Should-fail: an unknown base plan stops :bad-plan; the base is built first (it takes torches: 3 carried), then fewer torches than a
+;; strip needs (and none to get) stops :no-torches before any digging.
 {:defaults
  {:tags [:strip :site :mineshaft :build :storage :jobs] :time :any
   :plot {:height 8 :floor "stone"}
@@ -52,7 +53,7 @@
    :after [[:block [10 0 16] "rail"]]
    :limit-s 200}
   {:name "no-torches-and-none-to-get-stops-no-torches-before-digging"
-   :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
+   :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 3] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
                       ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1]]}
    :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false})]]
    :expect [{:event {:source :job :kind :strip.site.stopped :data {:reason :no-torches}} :within-s 500 :of-job true}
