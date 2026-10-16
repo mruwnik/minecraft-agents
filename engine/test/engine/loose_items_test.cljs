@@ -72,8 +72,8 @@
 (deftest a-nearly-full-inventory-holds-nothing
   (is (false? (holds? (assoc (world log-near) :inventory (vec (for [i (range 34)] {:name "dirt" :count 64 :slot (+ 9 i)})))))))
 
-(deftest a-danger-near-holds-nothing
-  (is (false? (holds? (update (world log-near) :entities conj {:id 7 :name "zombie" :kind "hostile" :pos [-3 64 0]})))))
+(deftest a-danger-near-is-left-to-the-jobs-check
+  (is (true? (holds? (update (world log-near) :entities conj {:id 7 :name "zombie" :kind "hostile" :pos [-3 64 0]})))))
 
 (defn spawn
   "A spawn record: the item appeared at pos (dx dy dz from the feet of player name at feet), tossed ms before (a toss of item, default oak_log)."

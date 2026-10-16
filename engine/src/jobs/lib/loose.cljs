@@ -30,7 +30,6 @@
    ::thrown-s {:default 60 :spec (a/num-in 0 nil) :doc "Seconds an item another player threw is left to them."}
    ::owed-s {:default 120 :spec (a/num-in 0 nil) :doc "Seconds an item that appeared while another job runs is left to that job."}
    ::left-s {:default 300 :spec (a/num-in 0 nil) :doc "Seconds an item a run could not pick up is not tried again."}
-   ::danger-radius {:default 8 :spec (a/num-in 0 nil) :doc "No pick-up while a real danger is this near."}
    ::drop-dy {:default 1.32 :spec (a/num-in 0 2) :doc "Height above a player's feet where its thrown items appear (vanilla: eye 1.62 less 0.3)."}
    ::throw-dxz {:default 0.1 :spec (a/num-in 0 1) :doc "Blocks across from a player's drop point within which an item counts as its throw."}
    ::throw-dy {:default 0.1 :spec (a/num-in 0 1) :doc "Blocks up or down from a player's drop point within which an item counts as its throw."}
@@ -42,7 +41,7 @@
    ::check-radius {:default 32 :spec (a/num-in 1 nil) :doc "Blocks within which pick-up-loose looks for the items it tried, after the run."}
    ::collect-pad {:default 1 :spec (a/num-in 0 nil) :doc "Blocks added to :radius for the collect-drops child's area."}})
 
-(def option-keys [:radius :min-ratio :always :never :thrown-s :owed-s :left-s :danger-radius
+(def option-keys [:radius :min-ratio :always :never :thrown-s :owed-s :left-s
                   :drop-dy :throw-dxz :throw-dy :toss-ms :toss-reach :hold-cap :hold-ttl-s :left-cap :check-radius :collect-pad])
 
 (defn options
