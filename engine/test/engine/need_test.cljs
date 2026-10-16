@@ -190,3 +190,17 @@
           (await (run! (fn [c] (need/item! c (if (= 1 (swap! round inc)) "cobblestone" "birch_planks") 16))
                        {:obtain-step step} 2))
           (is (= [nil nil] @mems) "the second need does not inherit the first one's booked target"))))))
+
+(deftest a-shrinking-count-keeps-the-child-and-its-booked-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [round (atom 0)
+              mems (atom [])
+              step (fn [c]
+                     (swap! mems conj (:start (ctx/mem c)))
+                     (ctx/update-mem! c assoc :start {:have 0 :target 26})
+                     :continue)]
+          (await (run! (fn [c] (need/item! c "cobblestone" (- 16 (swap! round inc))))
+                       {:obtain-step step} 2))
+          (is (= [nil {:have 0 :target 26}] @mems) "the second round resumes the first one's booked target"))))))
