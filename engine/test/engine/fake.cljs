@@ -433,10 +433,15 @@
       (crops item)                      ; a seed or tuber becomes the young crop
       [(-> w (take-one item) (put-block pos (crops item)) (assoc-in [:ages pos] 0)) {:status "placed" :block item}]
 
-      (= item "water_bucket")           ; pours water and leaves the empty bucket
-      (let [below (update pos 1 dec)
-            w (-> w (take-one item) (give "bucket" 1) (put-block pos "water")
-                  (cond-> (= "lava" (block-name w below)) (put-block below "obsidian")))]
+      (and (= item "water_bucket") (nil? click) (nil? (plain-click w pos))) [w {:status "no-support"}]
+
+      (= item "water_bucket")           ; pours water and leaves the empty bucket; it runs down onto lava in its own column or a side one
+      (let [w (-> w (take-one item) (give "bucket" 1) (put-block pos "water"))
+            lava-below (for [d [[0 0 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]
+                             :let [below (mapv + pos d [0 -1 0])]
+                             :when (= "lava" (block-name w below))]
+                         below)
+            w (reduce #(put-block %1 %2 "obsidian") w lava-below)]
         [(cond-> w (= pos (body-pos w)) settle) {:status "placed" :block "water"}])
 
       (str/ends-with? item "campfire")

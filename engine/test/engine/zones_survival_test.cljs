@@ -104,7 +104,7 @@
         (doseq [[zones warns] [[[feet-zone] [["vault"]]]
                                [[(zone "FAKE" [0 64 0] [0 64 0])] []]
                                [nil []]]]
-          (let [{:keys [eng p seen]} (setup (assoc burning-with-bucket :blocks {}) zones)]
+          (let [{:keys [eng p seen]} (setup (assoc burning-with-bucket :blocks st/floor) zones)]
             (core/submit! eng '(jobs.survival.extinguish) {})
             (await (core/tick! eng))
             (is (= [{:x 0 :y 64 :z 0} {:x 0 :y 64 :z 0}] (mapv arg-pos (calls p "place"))) (str (pr-str zones) " poured, then scooped back"))

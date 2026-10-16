@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
@@ -15,8 +16,8 @@
 (def doc
   "Get :count obsidian by pouring water on a seen lava source and mining the result with a diamond pickaxe.
   Takes seen obsidian first (jobs.gather.mine). Else it needs a water bucket carried (an empty bucket is filled at seen water; no bucket at all is fetched, :fetch) and a seen
-  lava cell with seen air above it and a stand cell beside that air (a standable cell with no lava beside it, never over lava):
-  it walks to the stand (go-to, which keeps off lava), pours the water at the air cell above the lava, waits for the lava to turn to obsidian,
+  lava cell with seen air above it, a clickable air cell to pour at (that one, or one level with it and beside it, the water then runs over) and a stand cell beside the pour cell (a standable cell with no lava beside it, never over lava):
+  it walks to the stand (go-to, which keeps off lava), pours the water there, waits for the lava to turn to obsidian,
   scoops the water back up (also in the cleanup of a cut run), and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
   Ends :done {:got n} at :count obsidian gained. Else it ends with :got n in its data: condition-failed :no-bucket (no water bucket and no bucket
   with water seen, or :fetch off); a failed bucket fetch ends with its need cause or :no-lava (no seen lava with open air above and a safe stand); nothing-possible :pour-failed (two sites in a row where
@@ -53,9 +54,27 @@
   (boolean (some (fn [[dx dy dz]] (= "lava" (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
                  (for [[dx dz] shore/sides] [dx 0 dz]))))
 
+(defn solid?
+  "Whether the seen block at cell can be clicked: not air, fluid or a plant."
+  [p cell]
+  (let [n (u/seen-name p cell)]
+    (boolean (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))))
+
+(defn supported?
+  "Whether a bucket can be emptied at cell: a solid block below it or beside it to click."
+  [p {:keys [x y z]}]
+  (boolean (some #(solid? p %) (cons {:x x :y (dec y) :z z} (for [[dx dz] shore/sides] {:x (+ x dx) :y y :z (+ z dz)})))))
+
+(defn pours
+  "The cells to empty the bucket at for the air cell above: the cell itself when it can be clicked, else a clickable air cell level with it
+  and beside it (the water runs over and falls onto the lava)."
+  [p above]
+  (->> (cons above (for [[dx dz] shore/sides] (-> above (update :x + dx) (update :z + dz))))
+       (filter #(and (shore/seen-air? p %) (supported? p %)))))
+
 (defn sites
-  "The pour sites {:lava :above :stand} for the seen lava: air above the lava, a stand beside that air (not the lava's column) that
-  is standable with no lava beside it; nearest to the body first, those in :tried left out."
+  "The pour sites {:lava :above :pour :stand} for the seen lava: air above the lava, a clickable air cell to pour at (the one above or one
+  beside it), a stand beside the pour cell that is standable with no lava beside it; nearest to the body first, those in :tried left out."
   [c]
   (let [p (:primitives c)
         here (u/self-pos c)
@@ -64,10 +83,11 @@
          (mapcat (fn [{:keys [pos]}]
                    (let [above (update pos :y inc)]
                      (when (and (shore/seen-air? p above) (not (tried pos)))
-                       (for [[dx dz] shore/sides
-                             :let [stand {:x (+ (:x above) dx) :y (:y above) :z (+ (:z above) dz)}]
-                             :when (and (shore/standable? p stand) (not (lava-near? p stand)))]
-                         {:lava pos :above above :stand stand})))))
+                       (for [pour (pours p above)
+                             [dx dz] shore/sides
+                             :let [stand {:x (+ (:x pour) dx) :y (:y pour) :z (+ (:z pour) dz)}]
+                             :when (and (not= stand above) (shore/standable? p stand) (not (lava-near? p stand)))]
+                         {:lava pos :above above :pour pour :stand stand})))))
          (sort-by #(u/dist here (:stand %))))))
 
 (defn gained [c] (- (carried c "obsidian") (:base (ctx/mem c) (carried c "obsidian"))))
@@ -104,11 +124,11 @@
 (def settle-looks 6)
 
 (defn ^:async pour!
-  "Note the air cell above the lava of site in memory (:poured), then pour there (the note first: a cut right after the
+  "Note the pour cell of site in memory (:poured), then pour there (the note first: a cut right after the
   pour still finds its water); settle! waits and scoops. :again, or :failed."
-  [c {:keys [lava above] :as site}]
+  [c {:keys [pour] :as site}]
   (ctx/update-mem! c assoc :poured (assoc site :looks 0))
-  (if (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos above :item "water_bucket"})))))
+  (if (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos pour :item "water_bucket"})))))
     :again
     (do (ctx/update-mem! c dissoc :poured) :failed)))
 
@@ -118,11 +138,11 @@
   (a pause child, so the engine's limit and cuts apply between looks). :again, or :continue while the pause waits."
   [c]
   (let [p (:primitives c)
-        {:keys [lava above looks]} (:poured (ctx/mem c))
+        {:keys [lava pour looks]} (:poured (ctx/mem c))
         made? (= "obsidian" (u/seen-name p lava))]
     (if (or made? (>= looks settle-looks))
-      (do (when (= "water" (u/seen-name p above))
-            (await (ctx/act c :place (clj->js {:pos above :item "bucket"}))))
+      (do (when (= "water" (u/seen-name p pour))
+            (await (ctx/act c :place (clj->js {:pos pour :item "bucket"}))))
           (ctx/update-mem! c #(-> (dissoc % :poured)
                                   (cond-> made? (assoc :failed 0)
                                           (not made?) (-> (update :tried (fnil conj []) lava) (update :failed (fnil inc 0))))))
@@ -136,17 +156,17 @@
   "However the run ended: water poured and not yet scooped back is taken up again, from within reach (a go-to child,
   :continue while it waits). Done, or nothing-possible :water-left (data :pos) when the walk or the scoop failed."
   [c _]
-  (let [{:keys [above]} (:poured (ctx/mem c))
+  (let [{:keys [pour]} (:poured (ctx/mem c))
         left! (fn [] (ctx/update-mem! c dissoc :poured)
-                (ctx/end c :nothing-possible :water-left {:pos above}))]
-    (if-not (and above (= "water" (u/seen-name (:primitives c) above)))
+                (ctx/end c :nothing-possible :water-left {:pos pour}))]
+    (if-not (and pour (= "water" (u/seen-name (:primitives c) pour)))
       (do (ctx/update-mem! c dissoc :poured)
           (ctx/end c :done nil {}))
-      (let [w (await (walk! c above 3))]
+      (let [w (await (walk! c pour 3))]
         (case w
           :continue :continue
           :blocked (left!)
-          (if (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos above :item "bucket"})))))
+          (if (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos pour :item "bucket"})))))
             (do (ctx/update-mem! c dissoc :poured)
                 (ctx/end c :done nil {}))
             (left!)))))))
