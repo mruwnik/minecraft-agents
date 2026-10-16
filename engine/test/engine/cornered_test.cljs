@@ -21,7 +21,6 @@
             [jobs.survival.retreat-walk :as retreat-walk]
             [jobs.lib.seal :as seal]
             [jobs.survival.retreat-pillar :as retreat-pillar]
-            [jobs.survival.retreat-pit :as retreat-pit]
             [jobs.survival.retreat-seal :as retreat-seal]))
 
 (defn setup
@@ -429,26 +428,6 @@
           (is (= ["j1"] while-hidden) "hiding in the pocket")
           (is (= [] (:list (core/state eng)))))))))
 
-(deftest a-pit-that-fails-gives-way-to-the-pocket
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[plan round] [retreat-pit/plan! retreat-pit/pit-round!]
-              pits (atom 0)]
-          (set! retreat-pit/plan! (fn [_] (js/Promise.resolve {:kind :pit :anchor {:x 0 :y 64 :z 0} :steps [] :cells []})))
-          (set! retreat-pit/pit-round! (fn [_ _] (swap! pits inc) (js/Promise.resolve :failed)))
-          (try
-            (let [{:keys [p while-hidden]}
-                  (await (hidden-round hiding-retreat {:blocks dead-end :inventory [{:name "stone_pickaxe" :count 1}]
-                                                       :entities [(skeleton 4 64 0)]}
-                                       120000 (fn [{:keys [eng]}] (:list (core/state eng)))))]
-              (is (= 1 @pits) "the pit was started once and failed")
-              (is (= #{[0 64 0] [0 65 0]} (set (placed-cells p))) "the pocket's way in sealed")
-              (is (= ["j1"] while-hidden) "hiding in the pocket"))
-            (finally
-              (set! retreat-pit/plan! plan)
-              (set! retreat-pit/pit-round! round))))))))
-
 (deftest a-phantom-is-hidden-from-not-outrun
   (async done
     (tu/run-async done
@@ -672,7 +651,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p while-hidden]}
-              (await (hidden-round retreat {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
+              (await (hidden-round '(jobs.survival.retreat {:plug-ways #{:pit}}) {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
                                             :entities [(zombie 1 64 0)]}
                                    1000 (fn [{:keys [p]}] (.-name (.blockAt p #js {:x 0 :y 64 :z 0})))))]
           (is (zero? (count (calls p "attack"))) "a pickaxe and a hole beat a pickaxe fight")
@@ -843,7 +822,7 @@
 (def enderman (fn [x y z] {:id 10 :name "enderman" :kind "hostile" :pos {:x x :y y :z z} :health 40}))
 
 (deftest an-angry-enderman-is-not-fled-on-foot-nor-fought-the-body-shelters
-  (is (= [:water :roof :seal :pit :pocket :fight] (cornered/escape-order {:enderman? true :win? true}))
+  (is (= [:water :roof :plug :fight] (cornered/escape-order {:enderman? true :win? true}))
       "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds"))
 
 (deftest a-body-with-an-enderman-near-walls-itself-in-instead-of-walking
@@ -959,23 +938,23 @@
           (is (not-any? #(re-find #"cannot_escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
 
 (deftest a-body-in-water-hunted-by-a-drowned-tries-to-swim-out-before-anything-else
-  (is (= [:swim-out :seal :pillar :back-off :pit :pocket :fight] (cornered/escape-order {:swim? true})))
+  (is (= [:swim-out :plug :pillar :back-off :fight] (cornered/escape-order {:swim? true})))
   (is (= [:fight] (cornered/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
   (is (= :back-off (first (cornered/escape-order {:swim? true :creeper? true})))))
 
 (deftest no-pillar-against-a-climber
-  (is (= [:seal :back-off :pit :pocket :fight] (cornered/escape-order {:climber? true}))
+  (is (= [:plug :back-off :fight] (cornered/escape-order {:climber? true}))
       "a spider climbs the pillar's side to the body on top"))
 
 (deftest no-step-back-from-a-mob-that-outruns-the-body
-  (is (= [:seal :pit :pocket :fight] (cornered/escape-order {:climber? true :faster? true})))
-  (is (= [:seal :pillar :pit :pocket :fight] (cornered/escape-order {:faster? true})) "one that cannot climb is pillared against")
+  (is (= [:plug :fight] (cornered/escape-order {:climber? true :faster? true})))
+  (is (= [:plug :pillar :fight] (cornered/escape-order {:faster? true})) "one that cannot climb is pillared against")
   (is (= [:fight] (cornered/escape-order {:faster? true :win? true}))))
 
 (deftest an-armed-body-with-a-hitter-at-it-fights-before-it-builds
-  (is (= [:fight :seal :pillar :back-off :pit :pocket] (cornered/escape-order {:pressed? true}))
+  (is (= [:fight :plug :pillar :back-off] (cornered/escape-order {:pressed? true}))
       "four dirt placed beside a zombie that keeps hitting cost three hits")
-  (is (= [:fight :seal :pillar :pit :pocket] (cornered/escape-order {:pressed? true :faster? true})))
+  (is (= [:fight :plug :pillar] (cornered/escape-order {:pressed? true :faster? true})))
   (is (= :back-off (first (cornered/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
   (is (= :water (first (cornered/escape-order {:pressed? true :enderman? true})))))
 
@@ -1066,9 +1045,9 @@
 
 (deftest under-fire-in-a-new-cell-the-covers-that-failed-elsewhere-are-tried-again
   (is (= {:tried #{:back-off} :fire-cell [1 64 0]}
-         (cornered/retry-covers {:tried #{:seal :pit :pocket :back-off} :fire-cell [0 64 0]} [1 64 0])))
-  (is (= {:tried #{:seal} :fire-cell [0 64 0]} (cornered/retry-covers {:tried #{:seal} :fire-cell [0 64 0]} [0 64 0]))
-      "the same cell: a failed seal stays failed"))
+         (cornered/retry-covers {:tried #{:plug :back-off} :fire-cell [0 64 0]} [1 64 0])))
+  (is (= {:tried #{:plug} :fire-cell [0 64 0]} (cornered/retry-covers {:tried #{:plug} :fire-cell [0 64 0]} [0 64 0]))
+      "the same cell: a failed plug stays failed"))
 
 (deftest an-unarmed-body-at-full-health-seals-in-against-a-spider-instead-of-running-or-punching
   (async done

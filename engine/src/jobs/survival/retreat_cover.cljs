@@ -14,8 +14,6 @@
             [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.survival.retreat-home :as retreat-home]
             [jobs.survival.retreat-refuge :as refuge]
-            [jobs.survival.retreat-pit :as pit]
-            [jobs.survival.retreat-seal :as seal]
             [jobs.survival.retreat-walk :as walk]
             [jobs.survival.retreat-cornered :as cornered]))
 
@@ -141,30 +139,20 @@
                           :known (ledger/ways-of c)})))))
 
 (defn ^:async take-cover!
-  "Seal in, else dig down and plug, else a side pocket (refuge), the first not failed this sweep: its step's result, nil
-  when none can be taken."
+  "Plug in (every way: walls, pit, pocket; refuge), unless that failed this sweep: its step's result, nil when it cannot be taken."
   [c]
-  (loop [[option & more] [:seal :pit :pocket]]
-    (when option
-      (let [r (when-not (flight/tried? c option)
-                (case option
-                  :seal (await (refuge/hide! c))
-                  :pit (await (refuge/pit! c))
-                  :pocket (await (pit/pocket! c))))]
-        (if (some? r) r (recur more))))))
+  (await (refuge/plug-option! c (:plug-ways (:args c)))))
 
 (defn ^:async dig-pocket!
   "Underground with no stair to take, a side pocket in the rock beats a hop across the open cave: its step's result,
-  nil when it is not possible. One dig attempt a flight (a hop does not clear that); once dug, the next steps seal it."
+  nil when it is not possible. One dig attempt a flight (a hop does not clear that); a pocket under way is finished."
   [c]
-  (let [{:keys [pocket-tried pocket-dug]} (ctx/mem c)]
+  (let [{:keys [pocket-tried]} (ctx/mem c)]
     (cond
-      pocket-dug (or (await (refuge/hide! c)) (do (ctx/update-mem! c dissoc :pocket-dug) nil))
+      (refuge/plugging-here? c) (await (refuge/plug! c #{:pocket}))
       pocket-tried nil
       :else (do (ctx/update-mem! c assoc :pocket-tried true)
-                (let [r (await (pit/pocket! c))]
-                  (when r (ctx/update-mem! c assoc :pocket-dug true))
-                  r)))))
+                (await (refuge/plug! c #{:pocket}))))))
 
 (defn close-danger?
   "Whether a creeper chases the body or a melee threat is within cover-gap: a seal or pit beside it is no cover (a blast
@@ -176,10 +164,10 @@
 
 (defn exposed-low?
   "Whether the body is at or under :hide-health with a ranged threat's line of fire on it (covered? false at its feet),
-  or, a ranged threat seen, a seal begun where it stands is not finished (seal/sealing-here?: its first blocks may
+  or, a ranged threat seen, a plug begun where it stands is not finished (refuge/plugging-here?: its first blocks may
   be all that stop the arrows)."
   [c covered?]
   (boolean (and covered?
-                (or (seal/sealing-here? c)
+                (or (refuge/plugging-here? c)
                     (and (<= (.-health (.self (:primitives c))) (:hide-health (:args c)))
                          (not (covered? (sh/feet (:primitives c)))))))))

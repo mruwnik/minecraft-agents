@@ -140,11 +140,9 @@
     (when-let [cells (some #(pocket-cells c feet %) dig-cells/sides)]
       (let [in (access/rules-input c)]
         (access/trespass! c "retreat" (some #(access/trespass-refusal in :dig %) cells)))
-      (flight/tried! c :pocket)
       (loop [[cell & more] cells]
         (if (nil? cell)
-          (do (ctx/update-mem! c update :tried disj :seal)
-              ;; raw moveTo kept: a step into the body's own pocket, as the pit's drop; the planner has no standable goal there.
+          (do ;; raw moveTo kept: a step into the body's own pocket, as the pit's drop; the planner has no standable goal there.
               (await (ctx/act c :moveTo (clj->js {:pos (first cells) :range 0.5})))
               :again)
           (let [_ (await (tools/equip-for! c (dig-cells/rock-name p cell) {:fast true}))

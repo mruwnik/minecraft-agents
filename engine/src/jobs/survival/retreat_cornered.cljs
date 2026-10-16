@@ -19,7 +19,6 @@
             [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.survival.retreat-home :as retreat-home]
             [jobs.survival.retreat-refuge :as refuge]
-            [jobs.survival.retreat-pit :as pit]
             [jobs.survival.retreat-walk :as walk]))
 
 (def tool-weapons
@@ -79,19 +78,23 @@
   for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
   pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, or the body is under fire (under-fire?), :climber? it is a spider (it climbs the pillar), :faster? a mob
   the body cannot outrun is near (no step back: it gains nothing), :home? the body is in its home
-  room: it digs no pit or pocket in its own floor or walls, :pressed? pressed? holds and the body is not under fire (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
+  room: its plug is the walls alone (plug-ways), :pressed? pressed? holds and the body is not under fire (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
   [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home? pressed?]}]
   (cond->> (cond
-             creeper? [:back-off :seal :pillar :pit :pocket :fight]
-             enderman? [:water :roof :seal :pit :pocket :fight]
+             creeper? [:back-off :plug :pillar :fight]
+             enderman? [:water :roof :plug :fight]
              win? [:fight]
-             flyer? [:seal :pit :pocket :fight]
+             flyer? [:plug :fight]
              :else (into (if pressed? [:fight] [])
-                         (concat (if (or ranged? climber?) [:seal] [:seal :pillar])
-                                 (if faster? [:pit :pocket] [:back-off :pit :pocket])
+                         (concat (if (or ranged? climber?) [:plug] [:plug :pillar])
+                                 (when-not faster? [:back-off])
                                  (when-not pressed? [:fight]))))
-    (and swim? (not creeper?) (not enderman?) (not win?)) (into [:swim-out])
-    home? (filterv (complement #{:pit :pocket}))))
+    (and swim? (not creeper?) (not enderman?) (not win?)) (into [:swim-out])))
+
+(defn plug-ways
+  "The ways the :plug option may shut the body in: the call's :plug-ways, but at home (its own hut: no pit or pocket in its floor or walls) the walls alone."
+  [c home?]
+  (if home? #{:walls} (:plug-ways (:args c))))
 
 (defn outrun?
   "Whether the body gets away on foot from every one of hostiles that attacks at close range (jobs.lib.cost/outruns?,
@@ -406,11 +409,11 @@
 
 (defn retry-covers
   "Pure: mem of a body under fire at feet cell: in another cell than the last time (:fire-cell), the covers that failed
-  there (seal, pit, pocket) are open again."
+  there (plug) are open again."
   [mem cell]
   (if (= cell (:fire-cell mem))
     mem
-    (-> mem (update :tried #(reduce disj (set %) [:seal :pit :pocket])) (assoc :fire-cell cell))))
+    (-> mem (update :tried #(reduce disj (set %) [:plug])) (assoc :fire-cell cell))))
 
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
@@ -444,14 +447,12 @@
                                           :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps fist-sweeps})
                            (await (fist-look! c))
                            (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) blind?)))
-                  :seal (await (refuge/hide! c))
+                  :plug (await (refuge/plug-option! c (plug-ways c home?)))
                   :pillar (await (refuge/pillar! c))
                   :water (await (water! c))
                   :roof (await (roof! c))
                   :swim-out (await (swim-out! c))
-                  :back-off (when threat (await (back-off! c threat)))
-                  :pit (await (refuge/pit! c))
-                  :pocket (await (pit/pocket! c))))]
+                  :back-off (when threat (await (back-off! c threat)))))]
         (cond
           (some? r) r
           (seq more) (recur more)

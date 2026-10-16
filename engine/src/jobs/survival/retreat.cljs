@@ -22,7 +22,6 @@
             [jobs.survival.retreat-home :as retreat-home]
             [jobs.survival.retreat-pillar :as pillar]
             [jobs.survival.retreat-refuge :as refuge]
-            [jobs.survival.retreat-seal :as seal]
             [jobs.survival.retreat-walk :as walk]))
 
 (def doc
@@ -44,7 +43,7 @@
      that door (retreat.home info, once a flight); a step that gets no nearer drops that room for the flight. Not while
      low in a ranged chaser's line of fire (the cover step below comes first). Any cell of the room counts as home:
      there an open door of the room is shut (a step back to one out of reach first), and a chaser still with a way in
-     gets the cornered options (4.), no pit or pocket dug in the hut: it does not walk out.
+     gets the cornered options (4.), its plug the walls alone (no pit or pocket dug in the hut): it does not walk out.
   Underground (shelter/buried?) it first takes the stairs the body cut (ledger/ways-of: the highest stair cell within 14
   blocks, above it and no nearer a chaser), before any walk to the :goal, and with none digs a side pocket (as below) before it walks across the open cave,
   unless a creeper or a melee mob is within cover-gap.
@@ -65,8 +64,8 @@
      reads as rock.
      Eats one bite a step (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
   Low on health (at most :hide-health) in a seen ranged chaser's line of fire (over the cells it has seen) with no
-  covered step, it takes cover where it stands first: seal in, else dig down and plug, else a side pocket (as below);
-  none of them possible, it walks on. A seal begun where it stands is finished before it walks on (seal/sealing-here?).
+  covered step, it takes cover where it stands first: plug in (as below);
+  not possible, it walks on. A plug begun where it stands is finished before it walks on (refuge/plugging-here?).
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
   A step of at most 1.5 s there that left the body where it stood (a search) is followed by that cover at once.
   A mob that attacks at close range within :radius and outruns the body (jobs.lib.cost/outruns?: a spider at any food;
@@ -74,38 +73,28 @@
   speed) it takes the cornered options (4.) without the back-off.
   4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step, or melee mobs within close-radius hit it retreat-cornered/::beaten-hits (2) times within its ::hurt-window-s: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
-     - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else seal, pit, pocket, last of all fight.
+     - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else plug in, last of all fight.
      - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
-     - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried blocks,
-       at most :max-places a step, the sides towards a seen ranged hostile first (feet, then head: the first blocks
-       stop its arrows). It first steps to the middle of its cell, and does not place while a hostile's hitbox
-       overlaps a cell to fill. An open door is shut, not filled. A cell that answers occupied (torch, chest, bed) is left alone.
-       When only such cells stay open the seal has failed. Every seal block goes to the scaffold ledger (purpose :retreat-plug), taken back by jobs.access.cleanup once no hostile is near.
+     - plug in (jobs.survival.plug-in, a child: walls, pit or side pocket, the cheapest it can do; at home the walls alone): shuts the body
+       in with carried blocks (or, with none to wall with, ones it digs), the sides towards a seen ranged hostile first. Every
+       plug block goes to the scaffold ledger (purpose :retreat-plug), taken back by jobs.access.cleanup once no hostile is near.
      - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor, free cells above and no slope or ledge a mob could climb to beside its top.
        Not against a ranged mob or a spider (it climbs the pillar). Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
      - back off: a step of up to 2 cells in any of 8 directions that gains at least a block on the hostile.
-     - dig down and plug: a pit 2 deep under a solid side, else 3, then carried or dug blocks beside and over the head
-       (ledger purpose :retreat-plug). It never drops onto a floor it has not seen solid: it zigzags over an open side
-       column, digging beside the body and looking down the open column first; straight down only onto known floors.
-       Every cell must be solid, harvestable with what is carried, with no fluid beside and solid under it.
-     - side pocket: with no block to seal with, dig a pocket beside the body (feet and head cell, solid on every other side,
-       harvestable with what is carried), step in and seal the way in with the dug blocks (the seal option again).
-     - The pit and the pocket are dropped when a dig shows fluid or a cave (a seen open cell) in their shell. Lava is first
-       filled with a carried block (:on-lava :seal, the default; :stop leaves it).
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist. A body with no weapon
        (the call's :use :tools, else jobs.lib.combat/default-weapons) first looks for a way to walk once more (:fist-sweeps, default 1).
        A pillared body that is hit raises the pillar `retreat-pillar/::pillar-extend` (2) blocks, once, before the refuge fails.
-     Order: fight if it wins, then seal, pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), pit, pocket, fight.
+     Order: fight if it wins, then plug in, pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), fight.
      Against a creeper back off comes first.
      Hit ::beaten-hits times in ::hurt-window-s by melee mobs within close-radius, the fight comes first, armed or not.
      Under fire (::fire-hits hits within ::hurt-window-s whose attacker is a ranged mob, or arrow damage: the mob need not be seen or known) cover comes before any fight: the order is
-     seal, back off, pit, pocket, fight, though a melee mob is at the body; the fight is weighed over every hostile near, and never counts as won
+     plug in, back off, fight, though a melee mob is at the body; the fight is weighed over every hostile near, and never counts as won
      while no ranged hostile near has been seen. With none seen the last-resort fight swings only at a mob within 3 blocks, none walked to. In another cell than the
-     last time it was under fire, a seal, pit or pocket that failed is tried again.
+     last time it was under fire, a plug that failed is tried again.
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
      (one retreat_blocked warning per flight).
-  Sealed in, up a pillar or down a pit it hides (one retreat_sealed warning; a declared hold, wait why hiding) while a
+  Plugged in or up a pillar it hides (one retreat_sealed warning; a declared hold, wait why hiding) while a
   hostile within its follow range (jobs.lib.threats; ranged ones at least :ranged-radius) would have a walkable way to
   the refuge if its own blocks were gone, and for :quiet-s more after the last such danger (a silent mob is forgotten
   after a few seconds); then the flight ends :hidden. After :hide-s in the refuge with no real danger on the body as it
@@ -139,6 +128,7 @@
    :swim-factor {:doc "blocks of walking a block of swimming costs a flight; nil: jobs.lib.cost/swim-factor of the boots" :spec (a/num-in 1 nil) :default nil}
    :hide-health {:doc "at or under this health, in a ranged chaser's line of fire with no covered step, take cover where it stands before walking on" :spec (a/num-in 0 20) :default 12}
    :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :spec (a/int-in 1 nil) :default 20}
+   :plug-ways {:doc "the ways the plug-in option may shut the body in (all but at home: the walls alone)" :spec (a/set-of #{:walls :pit :pocket}) :default #{:walls :pit :pocket}}
    :fist-sweeps {:doc "times a body with no weapon, every cornered option failed, looks for a way to walk before it punches a hostile it would not beat; 0: it punches at once" :spec (a/int-in 0 nil) :default 1}})
 
 
@@ -263,7 +253,7 @@
     (when (and (not (:early-refuge-failed (ctx/mem c))) (lone-melee? (:primitives c) hostiles)
                (pillar/pillar-item c) (not (cornered/fight-wins? c hostiles)))
       (let [r (or (when-not (flight/tried? c :pillar) (await (refuge/pillar! c)))
-                  (when-not (flight/tried? c :seal) (await (refuge/hide! c))))]
+                  (await (refuge/plug-option! c (:plug-ways (:args c)))))]
         (when (nil? r) (ctx/update-mem! c assoc :early-refuge-failed true))
         r))))
 
@@ -300,7 +290,7 @@
                         (await (wait-far! c))))))]
     (cond
       (nil? threat) (or (await (flight/look-back! c))
-                        (when (seal/sealing-here? c) (await (refuge/hide! c)))
+                        (when (refuge/plugging-here? c) (await (refuge/plug! c (:plug-ways (:args c)))))
                         (flight/end-flight! c nil))
       (some? early) early
       (flight/no-gain? (ctx/mem c) no-gain-steps)
@@ -325,7 +315,7 @@
             low? (cover/exposed-low? c covered?)
             cover (cond
                     (and low?
-                         (or (seal/sealing-here? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
+                         (or (refuge/plugging-here? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
                          (not (cover/close-danger? p threats)))
                     (await (cover/take-cover! c))
                     (and target (not stair) (sh/buried? p) (not (cover/close-danger? p threats)))

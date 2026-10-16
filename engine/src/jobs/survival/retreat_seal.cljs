@@ -98,19 +98,13 @@
          (filter #(and (not (combat/ranged? %)) (danger-q/seen-only? %)))
          (mapv #(danger-q/mob-pos p %)))))
 
-(defn sealing-here?
-  "Whether a seal was begun at the body's feet cell this flight and has not failed: it is finished before the walk goes on."
-  [c]
-  (and (= (:seal-at (ctx/mem c)) (sh/feet (:primitives c))) (not (flight/tried? c :seal))))
-
 (defn ^:async seal!
   "Fill the open cells around the body (dig-in's 1x1: sides at feet and head
   height, a roof support, the roof) with carried :blocks, at most
   :max-places this step. :sealed when none is left open, :again while
   more are owed, :failed when a hostile stands in one (not with :purpose :shelter: the place is tried and a mob in its cell waited out), none is carried, a
   placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
-  in a side cell, which the seal leaves alone; the option then counts as failed this flight, so a cornered body moves
-  on to the next one instead of placing there step after step).
+  in a side cell, which the seal leaves alone).
   A door standing open in a side cell is no wall (dig-cells/sealed?): it is shut. Cells it has not sensed (a ceiling
   out of view) are looked at first: an unseen cell is not taken for an open one."
   [c]
@@ -122,7 +116,7 @@
         free (remove #(occupied? c %) open)
         cells (if (seq (shooters c)) (facing-first (sh/feet p) (shooters c) free) (nearest-first (sh/feet p) (melee-spots c) free))
         forget! #(dig-cells/forget-wait! c :seal-mob-since)
-        unfillable (fn [] (forget!) (flight/tried! c :seal) :failed)]
+        unfillable (fn [] (forget!) :failed)]
     (cond
       (empty? open) (do (forget!) :sealed)
       (empty? cells) (unfillable)
@@ -131,10 +125,8 @@
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))
           (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
-          (ctx/update-mem! c #(-> % (update :seal-cells (fnil into #{}) (map (juxt :x :y :z) (take max-places cells)))
-                                  (assoc :seal-at (sh/feet p))))
           (case (await (place-seal! c (take max-places cells)))
-            :failed (do (flight/tried! c :seal) :failed)
+            :failed :failed
             :wait :again
             (let [left (dig-cells/open-cells p (sh/feet p))]
               (cond

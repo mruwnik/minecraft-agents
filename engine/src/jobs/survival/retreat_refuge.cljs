@@ -1,6 +1,5 @@
 (ns jobs.survival.retreat-refuge
-  "A cornered body's refuges (jobs.survival.retreat): started and stepped (retreat-seal, retreat-pillar, retreat-pit),
-  and the hiding in them."
+  "A cornered body's refuges (jobs.survival.retreat): a pillar (retreat-pillar) or a plug (jobs.survival.plug-in), and the hiding in them."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.settings :as settings]
@@ -9,14 +8,13 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [jobs.lib.spent :as spent]
             [jobs.lib.threats :as threats]
             [jobs.survival.retreat-flight :as flight]
-            [jobs.survival.retreat-pillar :as pillar]
-            [jobs.survival.retreat-pit :as pit]
-            [jobs.survival.retreat-seal :as seal]))
+            [jobs.survival.retreat-pillar :as pillar]))
 
 (a/defargs settings
   {::leave-for-breakers {:default true :doc "Whether a hidden body leaves its refuge, before it is hit, for a creeper (its blast breaks any refuge) or, on a pillar, a spider (it climbs) within :breaker-reach." :spec boolean?}
@@ -29,9 +27,8 @@
 (defn hide-max-s [] (settings/get settings ::hide-max-s))
 
 (def hide-texts
-  {:seal "cornered: sealed in with blocks until the hostile leaves"
-   :pillar "cornered: pillared up out of reach until the hostile leaves"
-   :pit "cornered: dug down and plugged the hole until the hostile leaves"})
+  {:plug "cornered: shut in with blocks until the hostile leaves"
+   :pillar "cornered: pillared up out of reach until the hostile leaves"})
 
 (declare hide-now! hide-hold! hostiles-known)
 
@@ -44,41 +41,62 @@
     :again))
 
 (defn ^:async refuge-round!
-  "A step in a refuge: building it (pillar or pit), or hidden in it (to the end of the flight)."
+  "A step in a refuge: building the pillar, or hidden in it (to the end of the flight)."
   [c]
   (let [{:keys [kind hidden] :as refuge} (:refuge (ctx/mem c))]
     (if hidden
       (await (hide-hold! c))
-      (case (await (if (= :pillar kind) (pillar/step! c refuge) (pit/pit-round! c refuge)))
+      (case (await (pillar/step! c refuge))
         :failed (await (abandon-refuge! c))
         :hidden (hide-now! c refuge (hide-texts kind))
         :again))))
 
 (defn ^:async start-refuge!
-  "Note refuge (a map with :kind, :anchor the feet cell it starts from, :cells [x y z] the cells it fills) in job
-  memory and run its first step."
+  "Note the pillar refuge (a map with :kind, :anchor the feet cell it starts from, :cells [x y z] the cells it fills) in
+  job memory and run its first step."
   [c refuge]
   (ctx/update-mem! c assoc :refuge refuge)
   (await (refuge-round! c)))
 
-(defn ^:async hide!
-  "Seal the body in and hide there (a :seal refuge): :again while sealing or once sealed, nil when it cannot seal."
+(defn plug-cells
+  "The cells of the blocks this flight's plugs hold (the open ledger entries of the flight's plug purpose), as [x y z]."
   [c]
-  (case (await (seal/seal! c))
-    :failed nil
-    :again :again
-    :sealed (hide-now! c {:kind :seal :anchor (sh/feet (:primitives c)) :cells (vec (:seal-cells (ctx/mem c)))} (hide-texts :seal))))
+  (let [purpose (flight/plug-purpose c)]
+    (vec (keep #(when (= purpose (:purpose %)) (:cell %)) (ledger/open-entries (ctx/view c))))))
+
+(defn ^:async plug!
+  "Shut the body in with jobs.survival.plug-in by ways and hide there (a :plug refuge): :again while it works or once shut
+  in, nil when no way shuts it. :plugging-at marks the cell a plug is under way at (plugging-here?)."
+  [c ways]
+  (let [{:keys [radius ranged-radius max-places on-lava purpose]} (:args c)
+        e (await (ctx/call c :plug 'jobs.survival.plug-in
+                           (cond-> {:ways ways :radius radius :ranged-radius ranged-radius :max-places max-places :on-lava on-lava}
+                             purpose (assoc :purpose purpose)
+                             (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
+        feet (sh/feet (:primitives c))]
+    (cond
+      (= :continue e) (do (ctx/update-mem! c assoc :plugging-at feet) :again)
+      (= :done (:kind e)) (do (ctx/update-mem! c dissoc :plugging-at)
+                              (spent/absorb! c (:data e))
+                              (hide-now! c {:kind :plug :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
+      :else (do (ctx/update-mem! c dissoc :plugging-at) nil))))
+
+(defn ^:async plug-option!
+  "The :plug option of a cornered body (every way, or the walls alone at home), once a flight: plug!'s result, nil when
+  it failed or was tried."
+  [c ways]
+  (when-not (flight/tried? c :plug)
+    (or (await (plug! c ways)) (do (flight/tried! c :plug) nil))))
+
+(defn plugging-here?
+  "Whether a plug was begun at the body's feet cell this flight and has not failed: it is finished before the walk goes on."
+  [c]
+  (and (= (:plugging-at (ctx/mem c)) (sh/feet (:primitives c))) (not (flight/tried? c :plug))))
 
 (defn ^:async pillar!
   "Start a pillar (retreat-pillar/plan!) when it fits: a step's result, else nil."
   [c]
   (when-let [refuge (await (pillar/plan! c))]
-    (await (start-refuge! c refuge))))
-
-(defn ^:async pit!
-  "Start digging down and plugging (retreat-pit/plan!) when it can: a step's result, else nil."
-  [c]
-  (when-let [refuge (await (pit/plan! c))]
     (await (start-refuge! c refuge))))
 
 (defn refuge-danger?
@@ -118,7 +136,7 @@
            first))))
 
 (defn ^:async hide-hold!
-  "Sealed in, up the pillar or down the pit: hold (a :wait, why hiding) while the refuge keeps a danger off
+  "Plugged in or up the pillar: hold (a :wait, why hiding) while the refuge keeps a danger off
   (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden. Past :hide-s (while a melee hostile waits at the foot, ::hide-max-s) in the refuge with no real
   danger on the body as it stands (danger-q/danger-near?, the hostile-near trigger's test) it ends :hidden at once,
   the trigger fires again should one reach it.

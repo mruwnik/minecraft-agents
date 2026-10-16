@@ -67,7 +67,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (await (see-tunnel! raw p))
-    (core/submit! eng (list 'jobs.survival.retreat args) {})
+    (core/submit! eng (list 'jobs.survival.retreat (merge {:plug-ways #{:pocket}} args)) {})
     (leave-at-first-hold! raw clock)
     (await (core/tick! eng))
     p))
@@ -142,6 +142,7 @@
                              [(key-of x y z) "stone"]))
                   (when side? {(key-of 0 64 -1) "stone"})
                   extra)
+   :self {:pos [-0.5 64 -0.5]}
    :inventory kit})
 
 (defn ^:async see-plain! [raw p]
@@ -164,7 +165,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (await (see-plain! raw p))
-    (core/submit! eng (list 'jobs.survival.retreat args) {})
+    (core/submit! eng (list 'jobs.survival.retreat (merge {:plug-ways #{:pit}} args)) {})
     (leave-at-first-hold! raw clock)
     (await (core/tick! eng))
     {:p p :kinds (set (map :kind @seen)) :stood @stood :feet-y (js/Math.floor (second (:pos (fake/self raw))))}))

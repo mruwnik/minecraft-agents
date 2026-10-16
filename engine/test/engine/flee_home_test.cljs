@@ -83,9 +83,9 @@
     20 0 true))
 
 (deftest cornered-at-home-the-body-never-digs-its-own-hut
-  (let [order (cornered/escape-order {:home? true})]
-    (is (not-any? #{:pit :pocket} order) (str order))
-    (is (= :seal (first order)))))
+  (is (= #{:walls} (cornered/plug-ways {:args {:plug-ways #{:walls :pit}}} true)))
+  (is (= #{:walls :pit} (cornered/plug-ways {:args {:plug-ways #{:walls :pit}}} false)))
+  (is (= :plug (first (cornered/escape-order {:home? true})))))
 
 (deftest a-hut-is-a-closed-room-once-its-doors-are-shut-and-open-ground-is-not
   (let [p (tu/seeing-all (tu/fake-on-floor (hut {:x 5.5 :y 64 :z 0.5} open-door [])))]
