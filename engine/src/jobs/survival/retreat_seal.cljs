@@ -11,7 +11,6 @@
             [jobs.lib.seal :as seal]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tidy :as tidy]
-            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]))
@@ -60,16 +59,9 @@
                   (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) cell)
                       (recur (rest cells) 0))
                   (= "occupied" status)
-                  (if (or (nil? (u/seen-block (:primitives c) cell)) (dig-cells/full-cube? c cell) (dig-cells/bed? (:primitives c) cell) (contains? (:seal-cleared (ctx/mem c)) cell))
-                    (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) cell)
-                        (recur (rest cells) 0))
-                    (let [_ (await (tools/equip-for! c (u/seen-name (:primitives c) cell) {:fast true}))
-                          d (await (tidy/dig! c cell true))]
-                      (ctx/update-mem! c update :seal-cleared (fnil conj #{}) cell)
-                      (if (= "dug" (.-status d))
-                        (recur cells 0)
-                        (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) cell)
-                            (recur (rest cells) 0)))))
+                  (if (await (dig-cells/clear-over! c cell :seal-cleared :seal-occupied))
+                    (recur cells 0)
+                    (recur (rest cells) 0))
                   (dig-cells/keep-waiting! c :seal-mob-since r) :wait
                   :else (let [support? (= "no-support" status)]
                           (dig-cells/forget-wait! c :seal-mob-since)
@@ -133,7 +125,8 @@
   placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
   in a side cell, which the seal leaves alone).
   A door standing open in a side cell is no wall (dig-cells/sealed?): it is shut. Cells it has not sensed (a ceiling
-  out of view) are looked at first: an unseen cell is not taken for an open one."
+  out of view) are looked at first: an unseen cell is not taken for an open one. A support block under a wall cell is never placed in another's
+  area (the wall cell then fails no-support); the wall cells themselves are a last resort."
   [c]
   (await (look/look-unknown! c (map lb/cell (dig-cells/open-cells (:primitives c) (sh/feet (:primitives c))))))
   (let [{:keys [radius max-places]} (:args c)
@@ -152,7 +145,8 @@
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))
           (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
-          (case (await (place-seal! c (take max-places (dig-cells/bottom-up p cells (sh/feet p)))))
+          (case (await (place-seal! c (take max-places (remove #(and (not (some #{%} cells)) (access/trespass-refusal c :place %))
+                                                                 (dig-cells/bottom-up p cells (sh/feet p))))))
             :failed :failed
             :wait :again
             (let [left (dig-cells/open-cells p (sh/feet p))]

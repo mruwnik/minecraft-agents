@@ -732,8 +732,8 @@
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 12))
           (is (every? #(= "dirt" (.-name (.blockAt p (tu/pos (first %) (second %) (nth % 2)))))
-                      [[1 64 0] [0 64 1] [0 64 -1] [1 65 0] [0 66 0]])
-              "every cell but the refused one and the one above it is filled"))))))
+                      [[1 64 0] [0 64 1] [0 64 -1] [1 65 0] [-1 65 0] [0 66 0]])
+              "every cell but the refused one is filled, its head cell too"))))))
 
 ;; ----------------------------------------------------------------- shelter
 

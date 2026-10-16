@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [clojure.string :as string]
             [engine.settings :as settings]
+            [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
             [jobs.lib.ledger :as ledger]
@@ -209,6 +210,21 @@
   [p cell]
   (string/ends-with? (or (u/seen-name p cell) "") "_bed"))
 
+(defn ^:async clear-over!
+  "A place was answered occupied at cell: dig out a block a mob walks through (a torch, a sapling) once, so the place can be
+  tried again. True when it was dug. Else cell goes in occupied-key and is not tried again: a full block, a bed, one
+  already dug once (cleared-key), one in another's area, a dig that fails."
+  [c cell cleared-key occupied-key]
+  (let [p (:primitives c)
+        leave! #(do (ctx/update-mem! c update occupied-key (fnil conj #{}) cell) false)]
+    (if (or (nil? (u/seen-block p cell)) (full-cube? c cell) (bed? p cell) (contains? (get (ctx/mem c) cleared-key) cell)
+            (access/trespass-refusal c :dig cell))
+      (leave!)
+      (let [_ (await (tools/equip-for! c (u/seen-name p cell) {:fast true}))
+            d (await (tidy/dig! c cell true))]
+        (ctx/update-mem! c update cleared-key (fnil conj #{}) cell)
+        (if (= "dug" (.-status d)) true (leave!))))))
+
 (defn ^:async place-all!
   "Place blocks at cells in order. Resolves to :ok, :wait (a mob stands in the cell: the place was refused and is retried
   for mob-wait-ms, the caller yields in between), or the first status that is not placed or occupied.
@@ -250,17 +266,10 @@
                       (ctx/update-mem! c assoc :mob-text (mob-text r))
                       status)
 
-                  (or (full-cube? c cell) (contains? (:cleared (ctx/mem c) #{}) cell) (bed? (:primitives c) cell))
-                  (do (ctx/update-mem! c update :occupied (fnil conj #{}) cell)
-                      (recur (rest cells)))
-
                   :else
-                  (let [_ (await (tools/equip-for! c (u/seen-name (:primitives c) cell) {:fast true}))
-                        d (await (tidy/dig! c cell true))]
-                    (ctx/update-mem! c update :cleared (fnil conj #{}) cell)
-                    (when (not= "dug" (.-status d))
-                      (ctx/update-mem! c update :occupied (fnil conj #{}) cell))
-                    (recur (if (= "dug" (.-status d)) cells (rest cells))))))))))
+                  (if (await (clear-over! c cell :cleared :occupied))
+                    (recur cells)
+                    (recur (rest cells)))))))))
 
 (defn sealed-in?
   "Whether the world shows the body shut in: a roof within roof-height above (a solid block, or a cell that stops a mob,

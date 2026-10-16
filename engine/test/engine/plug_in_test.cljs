@@ -9,6 +9,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.world-files :as world-files]
             [jobs.lib.ledger :as ledger]
             [jobs.survival.plug-way :as way]))
 
@@ -16,9 +17,11 @@
 (def pick [{:name "stone_pickaxe" :count 1}])
 
 (defn ^:async plug!
-  "Run plug-in with args over world through a recording parent (setup! gets the fake first): {:out the ending :p :eng :continues}."
+  "Run plug-in with args over world (its :zones go to the engine) through a recording parent (setup! gets the fake first): {:out the ending :p :eng :continues}."
   [world args & [setup!]]
-  (let [clock (atom 1000000)
+  (let [zones (:zones world)
+        world (dissoc world :zones)
+        clock (atom 1000000)
         out (atom :not-done)
         continues (atom 0)
         digs-at-first (atom nil)
@@ -29,7 +32,7 @@
         caller {:round (fn ^:async caller-round [c]
                          (let [r (await (ctx/call c :plug 'jobs.survival.plug-in args))]
                            (if (= :continue r) (do (swap! continues inc) (when-not @digs-at-first (reset! digs-at-first (count (ct/calls p "dig")))) :continue) (do (reset! out r) (ctx/end c :done nil)))))}
-        eng (core/create {:primitives p :jobs (assoc registry/jobs 'caller caller) :triggers triggers/all :dir (tu/tmp-dir)
+        eng (core/create {:primitives p :world (world-files/of-data {} {} (or zones [])) :jobs (assoc registry/jobs 'caller caller) :triggers triggers/all :dir (tu/tmp-dir)
                           :now now :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (core/submit! eng '(caller) {})
     (loop [i 0]
@@ -51,8 +54,7 @@
           (is (= [:done :walls] [(:kind out) (:way (:data out))]))
           (is (= [[1 64 0] [1 65 0]] (cells-of p "place")) "the open side towards the skeleton, feet then head")
           (is (= #{:retreat-plug} (purposes eng)))
-          (is (= [{:cell [1 64 0] :item "cobblestone"} {:cell [1 65 0] :item "cobblestone"}] (:placed (:data out))) "every placed block, for a caller to take back")
-          (is (= {:x 0 :y 64 :z 0} (:start (:data out)))))))))
+          (is (= [{:cell [1 64 0] :item "cobblestone"} {:cell [1 65 0] :item "cobblestone"}] (:placed (:data out))) "every placed block, for a caller to take back"))))))
 
 (deftest the-callers-purpose-labels-the-ledger-entries
   (async done
@@ -166,3 +168,29 @@
         (with-redefs [way/walls-step! (fn ^:async fail [_] nil)]
           (let [{:keys [digs-at-first]} (await (plug! {:blocks ct/dead-end :inventory (into cobble pick) :entities [(ct/zombie 1 64 0)]} {:ways #{:walls :pocket}}))]
             (is (= 0 digs-at-first) "the round ended :continue before the pocket dug")))))))
+
+(deftest a-torch-in-an-off-limits-cell-is-not-dug-over
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (plug! {:blocks (assoc ct/dead-end "1,64,0" "torch") :inventory cobble :entities [(ct/skeleton 4 64 0)]
+                                         :zones [{:name "keep-out" :min [1 64 0] :max [1 64 0]}]} {}))]
+          (is (empty? (cells-of p "dig")) "the torch stays"))))))
+
+(defn needs-support!
+  "Make place answer no-support for a cell with no block beside, above or below it, as the real primitive does."
+  [p]
+  (.override (.-world p) "place"
+             (fn ^:async f [token args impl]
+               (let [x (.-x (.-pos args)) y (.-y (.-pos args)) z (.-z (.-pos args))
+                     held? (some #(some-> (.blockAt p #js {:x (+ x (nth % 0)) :y (+ y (nth % 1)) :z (+ z (nth % 2))}) .-name (not= "air"))
+                                 [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])]
+                 (if held? (await (impl token args)) #js {:status "no-support"})))))
+
+(deftest a-support-block-in-another-zone-is-not-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (plug! {:blocks {"0,63,0" "stone"} :floor [0 0 0 0] :inventory cobble :entities [(ct/skeleton 4 64 0)]
+                                         :zones [{:name "keep-out" :min [-1 63 -1] :max [1 63 1]}]} {} needs-support!))]
+          (is (empty? (filterv (fn [[_ y _]] (= 63 y)) (cells-of p "place"))) "nothing is placed under the wall cells"))))))

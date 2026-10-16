@@ -11,7 +11,7 @@
 
 (def doc
   "Shut the body in where it stands, atomically: no night or hostile logic, no walking; whoever calls it decides when.
-  Needs nothing to start. One call is a whole attempt: it ends :done {:pos :way :start :placed} once the body is enclosed (a roof within
+  Needs nothing to start. One call is a whole attempt: it ends :done {:pos :way :placed} once the body is enclosed (a roof within
   :roof-height over no open cell round the feet), at once when it already is.
   Ways (:ways) are child jobs: jobs.survival.plug-walls (the open sides, a roof support and the roof with carried blocks),
   plug-pit (dig down under a solid side and plug the hole), plug-pocket (dig a pocket beside the body, step in, wall the way in).
@@ -19,7 +19,7 @@
   :done, the next cheapest (after a :continue step when a hostile is within 2 blocks); a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
   :build filler, carried or dug. None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
   :why {way the child's cause}}.
-  :start is the cell the call began at, :placed the blocks placed ({:cell [x y z] :item}), also with an ending other than :done. Every placed block goes to the scaffold ledger with :purpose (default :retreat-plug, taken back by jobs.access.cleanup once no
+  :placed the blocks placed ({:cell [x y z] :item}), also with an ending other than :done. Every placed block goes to the scaffold ledger with :purpose (default :retreat-plug, taken back by jobs.access.cleanup once no
   hostile is near; :shelter is left alone). A cell in another's zone is used only as a last resort (retreat.trespass-last-resort).
   Quote: time.")
 
@@ -78,7 +78,7 @@
 (defn end!
   "The call's ending with what the children placed."
   [c kind cause data]
-  (ctx/end c kind cause (merge data (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed :start]))))
+  (ctx/end c kind cause (merge data (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed]))))
 
 (defn absorb!
   "A child's ending: what it placed goes in the log and in :placed."
@@ -93,7 +93,6 @@
 (defn ^:async round
   "Start the cheapest way; one that ends other than :done is dropped for this call and the next is chosen on the next step when a hostile is at the body, else at once."
   [c]
-  (ctx/update-mem! c update :start #(or % (sh/feet (:primitives c))))
   (loop []
     (if (way/enclosed? c)
       (end! c :done nil {:pos (sh/feet (:primitives c)) :way (:way (ctx/mem c))})
