@@ -15,7 +15,7 @@ function fakeRepo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'land-test-'))
   const repo = path.join(root, 'repo')
   fs.mkdirSync(path.join(repo, 'tools'), { recursive: true })
-  for (const f of ['fixer-worktree.sh', 'land.sh', 'commit-lock.sh', 'merge-master.sh']) fs.copyFileSync(path.join(tools, f), path.join(repo, 'tools', f))
+  for (const f of ['fixer-worktree.sh', 'land.sh', 'commit-lock.sh', 'merge-master.sh', 'seed-shadow-cache.sh']) fs.copyFileSync(path.join(tools, f), path.join(repo, 'tools', f))
   for (const d of ['.', 'engine', 'dashboard']) fs.mkdirSync(path.join(repo, d, 'node_modules'), { recursive: true })
   fs.mkdirSync(path.join(repo, 'engine/test/fixtures/pathfinding'), { recursive: true })
   for (const d of ['worlds', 'state', 'textures']) fs.mkdirSync(path.join(repo, d))
