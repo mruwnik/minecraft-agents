@@ -71,7 +71,8 @@
         (let [{:keys [eng p seen]} (setup {:self body :blocks {"2,64,0" "stone"} :drops {"stone" "cobblestone"}
                                            :inventory (into [{:name "oak_log" :count 1}] pick)})
               result (await (tu/child-outcome eng job {:pos [2 64 0]} 10))]
-          (is (= {:dug true :pos at :block "stone" :reason :dug :collected 1 :status :done} (dissoc result :text)))
+          (is (= {:dug true :pos at :block "stone" :reason :dug :collected 1 :now "air" :status :done} (dissoc result :text)))
+          (is (re-find #"the cell is now clear" (:text result)) "a dig says what the cell holds after it")
           (is (= "air" (block-at p at)))
           (is (= ["wooden_pickaxe"] (mapv #(.-item (.-args %)) (calls p "equip"))))
           (is (= 1 (carried p "cobblestone")))

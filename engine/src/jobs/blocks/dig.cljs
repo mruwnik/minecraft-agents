@@ -50,7 +50,7 @@
   carried or fetched (:seal-fetch), or two places fail) the body steps off the cells beside the lava and the job ends
   nothing-possible :lava-unsealed with :cell, :place (:need: no block) and :stepped-away.
 
-  Returns an ending whose data is {:dug true|false :pos :block :collected n}, plus :left
+  Returns an ending whose data is {:dug true|false :pos :block :collected n}, plus :now (the block seen at the cell after a dig; the text says it), :left
   (collect-drops' drops it could not take), :stepped-aside [x y z] (the cell it stood on) when it stepped off the column
   first. :done with :reason :dug, or :already-clear (air there, nothing done). Condition-failed: :fluid (a fluid is not dug),
   :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like), and the conditions above.
@@ -212,6 +212,7 @@
 
 (defn text-of [result cell place stepped-aside]
   (str (if (:dug result) "dug " "did not dig ") (or (:block result) "") " at " (pr-str (b/cell (:pos result)))
+       (when-let [now (:now result)] (if (b/air now) "; the cell is now clear" (str "; the cell now holds " now)))
        (when stepped-aside (str " from beside (stepped aside to " (pr-str stepped-aside) ": no seen floor under it)"))
        (cond
          (= :lava-unsealed (:reason result))
@@ -229,6 +230,8 @@
   (ctx/update-mem! c assoc :finished true)
   (let [result (cond-> result (:stepped-aside (ctx/mem c)) (assoc :stepped-aside (:stepped-aside (ctx/mem c))))
         {:keys [cell place stepped-aside reason]} result
+        now (when (:dug result) (b/target-name (:primitives c) (:pos result) b/hidden-guess))
+        result (cond-> result now (assoc :now now))
         result (assoc result :text (text-of result cell place stepped-aside))]
     (cond
       (done-reasons reason) (ctx/end c :done nil result)
