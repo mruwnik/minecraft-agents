@@ -117,7 +117,8 @@
     (is (true? ((:air-seen (policy {:inWater true :oxygen 5} column)) 0 66 0)) "air it has seen counts")
     (is (nil? (:air-grace (policy {:inWater true :oxygen 20} column turtle))) "under water: no grace")
     (is (= 10 (:air-grace (policy {:inWater true :oxygen 5} surface turtle))) "head out: as before")
-    (is (nil? (:air-used (policy {:inWater true :oxygen 5} surface))))
+    (is (= 11.625 (:air-used (policy {:inWater true :oxygen 5} surface))) "head out, breath low: it plans with the air it has")
+    (is (nil? (:air-used (policy {:inWater true :oxygen 20} surface))))
     (is (nil? (:air-used (policy {:inWater false :oxygen 20} {}))))
     (is (= 11.25 (.. (wplan/with-drops #js {} {:air-used 11.25}) -costs -airUsed)) "go-to hands it to the planner")
     (let [o (wplan/with-drops #js {} {:air-used 11.25 :health 10 :drown-prices [0 20]})]
