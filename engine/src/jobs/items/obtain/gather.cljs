@@ -137,7 +137,7 @@
                     before (get-in (ctx/mem c) [:gather :before])]
                 (ctx/update-mem! c update :gather dissoc :before :item :tree)
                 (if (> (gather-carried p need) before)
-                  (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :again)
+                  (do (child/progress! c :gather) :again)
                   (do (when-let [w (or (:why res) (spared-why res))] (ctx/update-mem! c assoc-in [:gather :why] w))
                       (when-let [cols (seq (:columns res))] (ctx/update-mem! c update :cut-off (fnil into #{}) (map vec) cols))
                       (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e))))))))))

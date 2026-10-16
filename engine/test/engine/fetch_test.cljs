@@ -1294,6 +1294,25 @@
                        (is (= :no-source (:reason st)) (pr-str st))
                        (is (re-find #"searched" (pr-str (:tried st))) (pr-str st)))))))))))
 
+(deftest a-gather-round-that-brought-a-log-starts-the-fruitless-count-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trees {"1,68,4" "oak_leaves" "2,67,4" "oak_leaves" "1,64,4" "oak_log" "1,65,4" "oak_log" "1,66,4" "oak_log" "1,67,4" "oak_log"}
+              s (start (update (world {}) :blocks merge trees) [own-zone])
+              orig ctx/call
+              calls (atom 0)]
+          (set! ctx/call (fn [c slot job args]
+                           (if-not (= 'jobs.forestry.harvest-wood job)
+                             (orig c slot job args)
+                             (do (when (= 3 (swap! calls inc)) (swap! (fake/state (:p s)) fake/give "oak_log" 1))
+                                 (js/Promise.resolve {:kind :done})))))
+          (try
+            (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 20 :explore false}) {})
+            (await (run-ticks s 40))
+            (finally (set! ctx/call orig)))
+          (is (= 6 @calls) "two empty rounds, one with a log, then three empty ones end it"))))))
+
 (def tree-far
   "A tree 24 blocks east of the body, past the 16 blocks within which a seen log counts."
   (merge (into {} (for [y (range 64 68)] [(str "24," y ",2") "oak_log"]))
