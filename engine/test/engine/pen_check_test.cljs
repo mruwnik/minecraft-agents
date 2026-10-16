@@ -108,9 +108,9 @@
     (is (= leaks (pen/dedupe-leaks (concat leaks leaks))))))
 
 (defn ^:async run-seeing
-  "run-job with the body seeing through perception and no look taken yet; facing yaw (Minecraft degrees), ticks rounds (default 6)."
+  "run-job with the body seeing through perception (sight jitter pinned) and no look taken yet; facing yaw (Minecraft degrees), ticks rounds (default 6)."
   [args w yaw & [ticks]]
-  (let [s (h/setup-seeing (assoc w :yaw yaw) nil)]
+  (let [s (h/setup-seeing (assoc w :yaw yaw :rand (constantly 0.5)) nil)]
     (core/submit! (:eng s) (list job args) {})
     (dotimes [_ (or ticks 6)]
       (swap! (:clock s) + 700)
