@@ -50,13 +50,6 @@
     {:doc nil :ns-doc "N"} ["N"]
     {:doc nil :ns-doc nil} []))
 
-(deftest long-docs
-  (are [doc expected] (= expected (jm/long-doc? {:doc doc}))
-    nil false
-    "short" false
-    (apply str (repeat 421 "x")) true
-    (str (apply str (repeat 300 "x")) "\n\n" (apply str (repeat 300 "y"))) true))
-
 (def long-sentence (str (str/join " " (repeat 60 "word")) "."))
 
 (deftest summaries

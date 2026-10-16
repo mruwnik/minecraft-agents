@@ -86,27 +86,15 @@
                                      {:source "action" :kind "started" :name "moveTo" :args {} :t t0}
                                      {:source "action" :kind "done" :name "chat" :t t0})] 200))))
 
-(deftest maybe-talk-line-keeps-every-line-talk-accepts
-  (are [line expected] (= expected (boolean (chat/maybe-talk-line? line)))
-    "{\"source\":\"body\",\"kind\":\"chat\",\"from\":\"a\"}" true
-    "{\"source\":\"chat\",\"kind\":\"said\"}" true
-    "{\"source\": \"chat\", \"kind\": \"whisper\"}" true
-    "{\"type\":\"chat\",\"t\":\"2026-01-01\"}" true
-    "{\"type\":\"whisper\"}" true
-    "{\"source\":\"action\",\"kind\":\"started\",\"name\":\"chat\"}" true
-    "{\"source\":\"body\",\"kind\":\"position\",\"text\":\"chat\"}" false
-    "{\"source\":\"job\",\"kind\":\"round_started\"}" false))
-
 (def body-whisper {:seq 4 :t t0 :source "body" :kind "whisper" :from "Jizo" :message "psst"})
 
 (deftest body-whisper-is-addressed-to-the-recipient-body
   (is (= [{:t t0 :from "Jizo" :to "Pacer" :kind "whisper" :message "psst"}]
          (chat/merge-chat [(heard "Pacer" body-whisper)] 200))))
 
-(deftest body-whisper-line-as-written-passes-the-pre-check-and-talk
+(deftest body-whisper-line-as-written-is-talk
   (let [text (str "{\"seq\":4,\"t\":" t0 ",\"source\":\"body\",\"kind\":\"whisper\",\"from\":\"Jizo\",\"message\":\"psst\"}")
         parsed (js->clj (js/JSON.parse text) :keywordize-keys true)]
-    (is (chat/maybe-talk-line? text))
     (is (chat/talk? parsed))))
 
 (def edn-chat "{:seq 16753, :generation-id \"40b3\", :time-ms 1791070636598, :source :body, :kind :chat, :data {:from \"Rcon\", :pos {:x 1}}, :message \"ok-stone\"}")

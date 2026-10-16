@@ -35,10 +35,6 @@
        (let [t (epoch-ms (:t e))] (and (number? t) (not (js/Number.isNaN t))))
        (or (own-chat? e) (string? (:from e)))))
 
-;; A cheap test on the raw line, run before JSON.parse: true for every line talk? could accept (and some others).
-;; Position events flood the file; only lines naming chat or whisper in kind, source, type or name are parsed.
-(def talk-marker #"\"(?:kind|source|type|name)\"\s*:\s*\"(?:chat|whisper)\"")
-(defn maybe-talk-line? [line] (re-find talk-marker line))
 
 ;; The canonical events.edn: one EDN map per line, {:source :body :kind :chat|:whisper :data {:from} :message
 ;; :time-ms}. The marker is a raw-line pre-check; the parser re-checks the parsed keys, so a line that only mentions

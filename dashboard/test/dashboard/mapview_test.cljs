@@ -74,21 +74,6 @@
     (testing why
       (is (= expected (mapv :text (m/fit-labels boxes)))))))
 
-(def up-body {:name "A" :up true :state {:pos {:x 5 :y 64 :z 6}}})
-(def down-body {:name "B" :up false :state nil})
-(def hut {:name "hut" :x 10 :z 20})
-(def zone {:name "z" :x1 1 :z1 2 :x2 3 :z2 4})
-
-(deftest empty-world-cases
-  (doseq [[why world expected]
-          [["nothing" {:bodies [] :places [] :zones []} true]
-           ["a down body" {:bodies [down-body] :places [] :zones []} true]
-           ["a body up" {:bodies [up-body] :places [] :zones []} false]
-           ["a place" {:bodies [] :places [hut] :zones []} false]
-           ["a zone" {:bodies [] :places [] :zones [zone]} false]]]
-    (testing why
-      (is (= expected (m/empty-world? world))))))
-
 (deftest world-bounds-default-pad-grows-with-span
   (is (= {:min-x -16 :max-x 26 :min-z -16 :max-z 26} (m/world-bounds [{:x 0 :z 0} {:x 10 :z 10}])))
   (is (= {:min-x -40 :max-x 1040 :min-z -40 :max-z 40} (m/world-bounds [{:x 0 :z 0} {:x 1000 :z 0}]))))

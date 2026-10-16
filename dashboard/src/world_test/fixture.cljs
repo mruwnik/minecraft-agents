@@ -466,8 +466,6 @@
     (for [[x0 x1] (segments ox sx 128)]
       (str "forceload " op " " x0 " " oz " " x1 " " (+ oz (dec sz))))))
 
-(defn forceload-command [op grid origin] (first (forceload-commands op grid origin)))
-
 (defn clear-commands
   "Air over the plot from the floor up to height, then the floor layer, in 64-long slices so that no fill exceeds 32768 blocks."
   [grid [ox oy oz] height floor]

@@ -53,17 +53,6 @@
             :villageError nil}
            (worlds/scope-snapshot snapshot "test")))))
 
-(deftest agent-in-world-cases
-  (let [agents [{:name "Claude" :world "main"} {:name "Free" :world nil}]]
-    (doseq [[why name world expected]
-            [["no world asked keeps the agent" "Claude" nil true]
-             ["the agent's world" "Claude" "main" true]
-             ["another world" "Claude" "test" false]
-             ["an unknown agent" "Nobody" "main" false]
-             ["an agent with no world" "Free" "main" false]]]
-      (testing why
-        (is (= expected (worlds/agent-in-world? agents name world)))))))
-
 (def tilde-place {:name "hut" :structure {:legend {(keyword "~") "water" (keyword "#") "wall" :w "wood"} :rows ["#~w"]}})
 
 (deftest readable-places-stringifies-legend-keys

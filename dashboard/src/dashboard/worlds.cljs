@@ -37,10 +37,6 @@
            :bodies bodies
            :worlds (filterv #(= world-name (:name %)) (:worlds snapshot)))))
 
-(defn agent-in-world? [agents name world-name]
-  (or (nil? world-name)
-      (boolean (some #(and (= name (:name %)) (= world-name (:world %))) agents))))
-
 ;; JSON legend keys are single characters such as "~" or "#"; keywordized they
 ;; print as :~ and the browser's cljs.reader cannot read them back
 (defn readable-place [place]

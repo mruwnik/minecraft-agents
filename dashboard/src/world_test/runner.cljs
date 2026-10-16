@@ -688,13 +688,6 @@
   [batch & [dir]]
   (fs/existsSync (path/join (or dir night-batch-marker-dir) batch)))
 
-(defn mark-night-batch-set!
-  "Writes the batch marker: what to undo at the end of the batch (data, e.g. {:gamerule old})."
-  [batch & [dir data]]
-  (let [dir (or dir night-batch-marker-dir)]
-    (fs/mkdirSync dir #js {:recursive true})
-    (fs/writeFileSync (path/join dir batch) (pr-str (merge {:at (js/Date.now)} data)))))
-
 (declare local-now)
 
 (def sleep-rule "players_sleeping_percentage")

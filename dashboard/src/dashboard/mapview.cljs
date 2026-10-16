@@ -36,11 +36,6 @@
         (mapcat (fn [z] [{:x (:x1 z) :z (:z1 z)} {:x (:x2 z) :z (:z2 z)}]) zones)
         (map (fn [h] {:x (:x h) :z (:z h)}) humans))))
 
-(defn empty-world? [world]
-  (and (not-any? :up (:bodies world))
-       (empty? (:places world))
-       (empty? (:zones world))))
-
 (defn trimmed-points
   "The points without the outliers: those outside the trim..(1-trim) quantile of x or of z are dropped, so a few places
   far from a cluster do not stretch a view fitted to it. Fewer than 10 points are kept whole."

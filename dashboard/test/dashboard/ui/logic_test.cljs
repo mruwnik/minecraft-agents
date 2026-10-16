@@ -88,11 +88,6 @@
     (doseq [[x y r expected] [[13 10 8 :b] [10 10 8 :a] [50 50 8 nil] [100 104 8 :c]]]
       (is (= expected (:id (l/pick-nearest items x y r)))))))
 
-(deftest cooldown-text
-  (doseq [[reflex expected] [[{:cooldown-s 30 :cooling? true} "cooling (30s)"] [{:cooldown-s 30 :cooling? false} "ready (30s)"]
-                             [{:cooling? true} "cooling"] [{} "ready"]]]
-    (is (= expected (l/cooldown-text reflex)))))
-
 (deftest clock-ms-text
   (is (= "03:04:05" (l/clock-ms-text (.getTime (js/Date. 2020 0 1 3 4 5)))))
   (is (= "x" (l/clock-ms-text "x"))))

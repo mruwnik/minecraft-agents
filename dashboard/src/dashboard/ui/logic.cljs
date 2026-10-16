@@ -93,10 +93,6 @@
   (let [d (fn [i] (js/Math.hypot (- (:px i) x) (- (:py i) y)))]
     (->> items (filter #(<= (d %) r)) (sort-by d) first)))
 
-(defn cooldown-text [reflex]
-  (let [state (if (:cooling? reflex) "cooling" "ready")]
-    (if (:cooldown-s reflex) (str state " (" (:cooldown-s reflex) "s)") state)))
-
 (defn body-from-search [search]
   (let [b (.get (js/URLSearchParams. search) "body")]
     (when-not (str/blank? b) b)))

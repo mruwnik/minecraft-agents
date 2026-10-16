@@ -166,8 +166,6 @@
             entry)))
       (catch :default _ nil))))
 
-(defn read-edn-text [body] (:text (read-edn-file body)))
-
 (defn edn-fields [body now]
   (let [summary (engine-edn/summarize-read (or (:read (read-edn-file body)) (engine-edn/read-text nil)) now)]
     (if (:error summary)

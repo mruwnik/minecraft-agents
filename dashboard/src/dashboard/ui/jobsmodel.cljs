@@ -37,13 +37,6 @@
   (let [noun (if (= 1 total) "job" "jobs")]
     (if (str/blank? needle) (str total " " noun) (str shown " of " total " " noun))))
 
-(def long-doc-chars 420)
-
-(defn long-doc?
-  "Docs this long start collapsed on the page."
-  [job]
-  (> (count (str/join (body-paragraphs job))) long-doc-chars))
-
 (def summary-chars 200)
 
 (defn cut-at-word [text limit]
