@@ -62,7 +62,7 @@
                   (some #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc height)))))))
 
 (defn sky-light-at
-  "Sky light (0-15, before the night's darkening) of the cell, or nil when no light data is loaded there. Only for the body's own cells (a player feels the light it stands in)."
+  "Sky light (0-15, before the night's darkening) of the cell, or nil when no light data is loaded there. Read only for the body's cells and cells it has seen."
   [p {:keys [x y z]}]
   (let [raw (some-> (aget p "perception") :raw)]
     (when (and raw (<= 0 (.stateAt ^js raw x y z)))
@@ -82,18 +82,18 @@
     (boolean (and b (not (:unknown b))))))
 
 (defn buried-at?
-  "Whether the cell is underground. At the body's own feet: no sky light at it and the cell over it (a cell at 0 is
-  sealed from the sky, so the night changes nothing there; a ravine, shaft or cave mouth keeps sky light and stays
-  unsafe), else buried-by-column? decides. Any other cell is buried only when the body has seen it and the block two
-  over it (raw light there is no sight of it)."
+  "Whether the cell is underground: no sky light at it and the cell over it (a cell at 0 is sealed from the sky, so
+  the night changes nothing there; a ravine, shaft or cave mouth keeps sky light and stays unsafe). The brightness of
+  a cell the body has seen is sensed like the light at its feet; an unseen cell is not buried. Without light data there,
+  buried-by-column? decides."
   [p {:keys [x y z] :as cell}]
   (let [own (feet p)
-        lights (when (= [x y z] [(:x own) (:y own) (:z own)])
-                 (keep #(sky-light-at p %) [cell {:x x :y (inc y) :z z}]))]
+        own? (= [x y z] [(:x own) (:y own) (:z own)])
+        lights (keep #(sky-light-at p %) [cell {:x x :y (inc y) :z z}])]
     (cond
+      (not (or own? (seen-cell? p cell))) false
       (seq lights) (every? zero? lights)
-      (= cell own) (buried-by-column? p cell)
-      :else (and (seen-cell? p cell) (buried-by-column? p cell)))))
+      :else (buried-by-column? p cell))))
 
 (defn buried?
   "The body is underground (buried-at? its feet)."

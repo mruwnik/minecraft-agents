@@ -146,16 +146,26 @@
   (is (not (sh/buried-by-column? (seen-fake {:time night :blocks (stone-above 5 3)}))) "air over the head")
   (is (not (sh/buried-by-column? (tu/fake {:time night :blocks (stone-above 2 1)}))) "nothing seen without a perception"))
 
-(deftest buried-at-reads-raw-light-only-at-the-body-and-judges-a-goal-by-what-it-has-seen
-  (let [raw-p (tu/fake {:pitch -80 :time night :blocks (stone-above 2 1)})
-        _ (swap! (fake/state raw-p) merge dark)
+(defn buried-cells
+  "buried-at? of each cell for a body at the origin looking up in the world, wrapped in perception after one sight pass."
+  [world cells]
+  (let [raw-p (tu/fake (merge {:pitch -80 :time night} (dissoc world :light-default :light)))
+        _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
         p (perception/wrap raw-p per)]
     (perception/pass! per)
-    (are [cell expected] (= expected (sh/buried-at? p cell))
-      {:x 0 :y 64 :z 0} true
-      {:x 30 :y 64 :z 0} false
-      {:x 0 :y 64 :z 1} false)))
+    (mapv #(sh/buried-at? p %) cells)))
+
+(deftest buried-at-judges-any-cell-by-its-sky-light-when-the-body-has-seen-it
+  (are [world cell expected] (= [expected] (buried-cells world [cell]))
+    (merge dark {:blocks (stone-above 2 1)}) {:x 0 :y 64 :z 0} true
+    ;; seen, open sky, a roof one block thick: lit, not buried
+    {:blocks (stone-above 3 1) :light {[0 65 0] [15 0] [0 66 0] [15 0]}} {:x 0 :y 65 :z 0} false
+    ;; seen cell in a tall cave: no sky light, ceiling far over
+    (merge dark {:blocks (stone-above 10 1)}) {:x 0 :y 65 :z 0} true
+    ;; never seen
+    (merge dark {:blocks (stone-above 2 1)}) {:x 30 :y 64 :z 0} false
+    (merge dark {:blocks (stone-above 2 1)}) {:x 0 :y 64 :z 1} false))
 
 (deftest a-roofed-body-logs-out-for-a-sleeper-from-the-register
   (async done
