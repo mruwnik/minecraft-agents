@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.breath :as breath]
             [jobs.lib.click :as click]
             [jobs.lib.reach :as reach]
             [jobs.lib.solid :as solid]
@@ -48,11 +49,17 @@
 
 (defn solid-at? [p pos] (solid/solid? (u/seen-name p pos)))
 
+(defn head-in-block?
+  "Whether the body's eyes are inside a full block (it suffocates): buried in, not sheltered."
+  [p]
+  (breath/suffocates-here? p (breath/eye-cell (.self p))))
+
 (defn roofed?
-  "Whether a solid block lies within height blocks straight above the feet cell."
+  "Whether a solid block lies within height blocks straight above the feet cell, the head not inside one."
   [p height]
   (let [{:keys [x y z]} (feet p)]
-    (boolean (some #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc height))))))
+    (boolean (and (not (head-in-block? p))
+                  (some #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc height)))))))
 
 (defn sky-light-at
   "Sky light (0-15, before the night's darkening) of the cell, or nil when no light data is loaded there. Only for the body's own cells (a player feels the light it stands in)."
@@ -571,9 +578,10 @@
 
 (defn safe-from-night?
   "Whether the body is safe from the night where it stands: a roof within roof-height (default default-roof-height) over it, buried,
-  or shut in a closed room (shut-in-room?). The one notion the night trigger, night-sheltered and walk-leaves-shelter? share."
+  or shut in a closed room (shut-in-room?), never with the head inside a block. The one notion the night trigger,
+  night-sheltered and walk-leaves-shelter? share."
   ([p] (safe-from-night? p default-roof-height))
-  ([p roof-height] (or (not (unsafe-night? p roof-height)) (shut-in-room? p))))
+  ([p roof-height] (and (not (head-in-block? p)) (or (not (unsafe-night? p roof-height)) (shut-in-room? p)))))
 
 (defn night-sheltered
   "At night, awake and safe from it (roofed or buried, or shut-in-room?), the kind of shelter the body is in (:dug-in

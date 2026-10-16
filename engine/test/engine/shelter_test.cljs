@@ -135,6 +135,7 @@
     {:time night :blocks {"0,69,0" "stone"}} {} true
     {:time night :blocks {"0,66,0" "oak_leaves"}} {} true
     {:time night :blocks {"0,66,0" "stone"} :self {:pos {:x 1 :y 64 :z 0}}} {} true
+    {:time night :blocks {"0,65,0" "dirt" "0,66,0" "stone"}} {} true
     {:time night :self {:isSleeping true}} {} false))
 
 (def stone-above
@@ -543,6 +544,31 @@
           (is (= {:x 0 :y 61 :z 0} (pos-of p)) "three blocks down")
           (is (= [{:x 0 :y 63 :z 0}] (mapv arg-pos (calls p "place"))) "the roof goes in the ground layer, beside solid ground")
           (is (= [{:pos {:x 0 :y 61 :z 0} :roof {:x 0 :y 63 :z 0} :start {:x 0 :y 64 :z 0} :state :built}] (entries eng :shelter))))))))
+
+(deftest dig-in-whose-pit-is-filled-over-the-head-is-not-done
+  ;; a block set in the head cell (a neighbouring fill) as the roof goes on: roofed over, but the body suffocates
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks floor})]
+          (.override (.-world p) "place" (fn ^:async g [token a impl]
+                                           (fake/set-block! p [0 62 0] "dirt")
+                                           (await (impl token a))))
+          (core/submit! eng '(jobs.survival.dig-in) {})
+          (await (run-until-empty eng 8))
+          (is (= {:x 0 :y 61 :z 0} (pos-of p)))
+          (is (empty? (emitted seen :dig-in.sealed)))
+          (is (= [:unsealed] (mapv :reason (emitted seen :stopped)))))))))
+
+(deftest night-does-not-end-done-with-the-head-in-a-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :blocks (merge floor {"0,65,0" "dirt" "0,66,0" "dirt"})})]
+          (is (nil? (sh/night-sheltered p nil)))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tick-n eng 6))
+          (is (empty? (filter #(= :roofed (:night %)) (emitted seen :completed)))))))))
 
 (deftest dig-in-digs-down-two-and-roofs-at-the-start-cell-beside-a-solid-block
   (async done
