@@ -3,6 +3,8 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
+            [jobs.lib.cond :as cond]
+            [jobs.lib.need :as need]
             [engine.ctx :as ctx]
             [jobs.lib.aim :as aim]
             [jobs.lib.child :as child]
@@ -29,12 +31,17 @@
   - :price (every open offer is dearer than :max-price; :price is the cheapest seen).
   - :payment-short, :no-room, :incomplete (a buy stopped short for no reason, three times), or the
     primitive's failure reason.
+  Before a buy the body must carry the price of one trade: missing it is fetched (jobs.lib.need, :fetch true, a set of
+  kinds or a map of limits; :payment-short when :fetch is off or the fetch ended), and with a full bag one
+  jobs.storage.make-room child (keeping the payment) runs per call. Without :fetch, can-start? waits (later :need)
+  while no emerald is carried.
   What was bought and paid is kept across a cut and restart, so a purchase is neither lost nor repeated.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid" :spec string? :default nil}
    :buy {:doc "item name to buy" :spec a/item? :default nil}
    :count {:doc "items wanted" :spec (a/int-in 1 nil) :default 1}
+   :fetch {:doc "get the payment when one trade's price is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :payment-short" :spec need/option? :default true}
    :max-price {:doc "highest price per trade (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}})
 
 (a/defargs settings
@@ -64,9 +71,25 @@
       (contract/ok :args "a villager uuid and an item name")
       (contract/never :bad-args "needs a villager uuid and an item name" :why "needs a villager uuid and an item name"))))
 
-(def can-start? bad-args)
+(def job 'jobs.village.trade)
 
 (defn bought [c] (:bought (ctx/mem c) 0))
+
+(def currency "The item villagers sell for; the price is known only once the offers are read." "emerald")
+
+(defn carried
+  "How many of item are carried."
+  [c item]
+  (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
+
+(defn no-payment
+  "Later :need while no currency is carried and the call will not fetch it."
+  [c]
+  (if (or (need/opts c job) (pos? (carried c currency)))
+    (contract/ok :payment "payment carried or fetched")
+    (contract/later :need "no payment carried and no fetch for it" :why "no payment carried and no fetch for it" :item currency :count 1)))
+
+(def can-start? (cond/and bad-args no-payment))
 
 (defn result
   "{:bought n :paid {item n} :item :buy} so far."
@@ -177,6 +200,43 @@
                  (retry :no-such-offer))
       (retry (keyword (.-reason r))))))
 
+(defn short-payment
+  "The first cost stack of offer the body carries too little of for one trade: {:item i :count n-missing}, else nil."
+  [c offer]
+  (some (fn [{:keys [item count]}]
+          (let [missing (- count (carried c item))]
+            (when (pos? missing) {:item item :count missing})))
+        (:cost offer)))
+
+(defn ^:async pay!
+  "Fetch the payment of one trade when it is not carried: nil when it is, :continue while the fetch waits, :again
+  when it ran, else the :payment-short ending."
+  [c offer]
+  (when-let [{:keys [item count]} (short-payment c offer)]
+    (let [opts (need/opts c job)
+          e (when opts (await (need/item! c item count opts)))]
+      (cond
+        (= :continue e) :continue
+        (and e (= :done (:kind e))) :again
+        :else (give-up! c :payment-short)))))
+
+(defn no-room?
+  "Whether the bought item would find no slot: the bag is full and no carried stack of it has space."
+  [c buy]
+  (and (zero? (u/free-slots (:primitives c)))
+       (not-any? #(and (= buy (:name %)) (< (:count %) 64)) (u/inventory (:primitives c)))))
+
+(defn ^:async room!
+  "A full bag: once per call a jobs.storage.make-room child keeping the payment. :continue while it waits, :again when
+  it ran, nil when it was tried before or there is room."
+  [c offer]
+  (when (and (not (:room-tried (ctx/mem c))) (no-room? c (:buy (:args c))))
+    (let [r (await (ctx/call c :room 'jobs.storage.make-room {:keep-items (mapv :item (:cost offer))}))]
+      (if (= :continue r)
+        :continue
+        (do (ctx/update-mem! c assoc :room-tried true)
+            :again)))))
+
 (defn ^:async trade!
   "Read the offers and buy from the chosen one: :again, an ending or a retry."
   [c]
@@ -186,7 +246,9 @@
     (case status
       "ok" (let [{:keys [offer reason price]} (choose (js->clj (.-offers r) :keywordize-keys true) buy max-price)]
              (if offer
-               (await (buy! c offer))
+               (or (await (pay! c offer))
+                   (await (room! c offer))
+                   (await (buy! c offer)))
                (finish! c reason (when price {:price price}))))
       "gone" (give-up! c :gone)
       "cannot" (give-up! c (if (= "not-villager" (.-reason r)) :not-villager :no-offers))

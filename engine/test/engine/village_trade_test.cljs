@@ -161,11 +161,7 @@
                  {:label "partial payment"
                   :world {:entities [(villager [(bread {})])] :inventory [{:name "emerald" :count 2}]}
                   :args {:count 3} :want {:bought 2 :paid {"emerald" 2} :item "bread" :status :stopped :reason :payment-short}
-                  :have {"bread" 2} :kind :child_ended}
-                 {:label "no room"
-                  :world {:entities [(villager [(bread {})])] :inventory (into [{:name "emerald" :count 5}] (fillers 35))}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :no-room}
-                  :have (into {"emerald" 5} (map (fn [i] [(:name i) 1])) (fillers 35)) :kind :child_ended}]))))))
+                  :have {"bread" 2} :kind :child_ended}]))))))
 
 (deftest the-price-limit-is-the-adjusted-price-of-the-first-stack
   (async done
@@ -351,3 +347,34 @@
                                        {:count 1} ls/entities-after-look))]
           (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
           (is (= {"emerald" 9 "bread" 1} (inv p))))))))
+
+(deftest trade-waits-for-payment-only-when-it-will-not-fetch
+  (are [inv fetch ok] (= ok (= :ok (first (trade/no-payment {:args {:villager "v-1" :buy "bread" :count 1 :fetch fetch}
+                                                              :primitives (tu/fake-on-floor {:inventory inv})}))))
+    [] false false
+    [] true true
+    [{:name "emerald" :count 1}] false true))
+
+(deftest payment-not-carried-and-not-fetched-ends-payment-short-before-any-buy
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ops (atom [])
+              [result] (await (trade {:entities [(villager [(bread {:cost [{:item "emerald" :count 3}]})])] :inventory [{:name "emerald" :count 2}]}
+                                     {:fetch false}
+                                     #(.override (.-world %) "trade" (trade-ops ops false))))]
+          (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason :payment-short} result))
+          (is (= ["offers"] @ops) "the price was read, nothing was bought"))))))
+
+(deftest a-full-bag-gets-a-make-room-child-before-the-buy
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ops (atom [])
+              [result p] (await (trade {:entities [(villager [(bread {})])]
+                                        :inventory (into [{:name "emerald" :count 5}] (fillers 35))}
+                                       {:fetch false}
+                                       #(.override (.-world %) "trade" (trade-ops ops false))))]
+          (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
+          (is (= 4 (get (inv p) "emerald")))
+          (is (= ["offers" "offers" "buy"] (take 3 @ops)) "make-room ran between the first offers read and the buy"))))))

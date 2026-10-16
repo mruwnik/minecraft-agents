@@ -11,8 +11,7 @@
             [jobs.village.trade :as trade]
             [engine.registry :as registry]
             [engine.seek-contract-test :as seek]
-            [engine.test-util :as tu]
-            [engine.village-trade-test :as vt]))
+            [engine.test-util :as tu]))
 
 (defn job [sym] (get registry/jobs sym))
 
@@ -99,7 +98,7 @@
                (await (ends '(jobs.village.trade {:villager "v-1" :buy "bread"}) {}))))
         (is (= {:event :stopped :kind :condition-failed :reason :no-room}
                (await (ends '(jobs.village.trade {:villager "v-1" :buy "bread"})
-                             {:entities [(villager [bread-offer])] :inventory (into [{:name "emerald" :count 5}] (vt/fillers 35))}))))
+                             {:entities [(villager [bread-offer])] :inventory (into [{:name "emerald" :count 5}] (repeat 35 {:name "cobblestone" :count 1}))}))))
         (is (= {:event :completed}
                (select-keys (await (ends '(jobs.village.trade {:villager "v-1" :buy "bread" :count 3 :least 1})
                                          {:entities [(villager [bread-offer])] :inventory [{:name "emerald" :count 1}]}))
