@@ -483,6 +483,14 @@
           (is (every? #(<= (js/Math.hypot (:x %) (:z %)) 40) (walks s)) "no leg beyond :max-distance")
           (is (= :distance (:why (not-found-of s)))))))))
 
+(deftest a-heading-alone-searches-outward-that-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :heading :west :max-distance 40} {}))]
+          (is (seq (walks s)))
+          (is (every? #(<= (:x %) 0) (walks s)) "no leg east of the origin"))))))
+
 (deftest an-unknown-pattern-or-heading-is-refused-at-submit
   (is (re-find #":pattern must be one of :outward, :spiral, got :zigzag"
                (expr/problem registry/jobs '(jobs.explore.search {:target "diamond_block" :pattern :zigzag}))))

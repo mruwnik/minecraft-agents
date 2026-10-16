@@ -24,7 +24,7 @@
   jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
   on the world or for leg columns to load (:chunks-loading).
 
-  Legs are :spacing apart: :spiral rings round the origin, or :outward ahead along :heading, then the sides, and on further ahead once those are tried or searched. A
+  Legs are :spacing apart: :spiral rings round the origin, or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond :max-distance (XZ) of the origin. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
   radius.
@@ -59,8 +59,8 @@
   {:target {:doc "a block or entity name, or several (a vector or set)" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
    :count {:doc "how many targets end the search" :spec (a/int-in 1 nil) :default 1}
    :max-distance {:doc "how far (XZ) from the origin a leg may go, 1 to 128" :spec (a/int-in 1 128) :default 96}
-   :pattern {:doc ":spiral (rings round the origin) or :outward (ahead along :heading)" :spec #{:spiral :outward} :default :spiral}
-   :heading {:doc ":north, :east, :south or :west, for :outward" :spec #{:north :east :south :west} :default :north}
+   :pattern {:doc ":spiral (rings round the origin, the default) or :outward (ahead along :heading); :outward when a :heading is given" :spec #{:spiral :outward} :default nil}
+   :heading {:doc ":north, :east, :south or :west, for :outward (default :north)" :spec #{:north :east :south :west} :default nil}
    :spacing {:doc "blocks between legs, 4 to 64" :spec (a/int-in 4 64) :default 16}
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
    :max-legs {:doc "legs walked before it gives up" :spec (a/int-in 0 nil) :default 32}
@@ -319,9 +319,10 @@
   (let [{:keys [pattern heading spacing max-distance]} (:args c)
         [ox _ oz] (:origin m)
         [x _ z] (here c)]
-    (if (= :outward (keyword pattern))
-      (let [[dx dz] (headings (keyword heading))]
-        (mapcat (fn [k] (outward-points [(+ x (* dx spacing k)) (+ z (* dz spacing k))] (keyword heading) spacing))
+    (if (or (= :outward (keyword pattern)) (and heading (not pattern)))
+      (let [heading (keyword (or heading :north))
+            [dx dz] (headings heading)]
+        (mapcat (fn [k] (outward-points [(+ x (* dx spacing k)) (+ z (* dz spacing k))] heading spacing))
                 (range (inc (js/Math.ceil (/ max-distance spacing))))))
       (spiral-points [ox oz] spacing max-distance))))
 
