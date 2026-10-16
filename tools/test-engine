@@ -8,6 +8,9 @@
 # Why not JS: a thin shell wrapper; runs node with --max-old-space-size=4096.
 set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export MC_RUN_ID="${MC_RUN_ID:-$$}" # joins this run's res-slot and compile lines in log.jsonl
+# phase <name>: the live-tests phase line (TEST_EVENTS=1) with an epoch-ms t
+phase() { [ "${TEST_EVENTS:-}" = 1 ] && echo "@@test {\"event\":\"phase\",\"t\":$(date +%s%3N),\"name\":\"$1\"}"; return 0; }
 # compile_retry <build>: tools/compile, retried up to 2x when the failure printed an ERROR or an undeclared-var/ns or fn-arity warning (another agent's half-edited file). When the output names the failing files ("File: <path>:l:c"), it polls them every MC_COMPILE_POLL_S (5) s up to MC_COMPILE_RETRY_S (50) s: a changed file retries at once, none changed fails at once; without a named file it just sleeps the full time. Exit 2/75 (usage, busy) and failures without such output are not retried.
 stamps() { stat -c '%Y.%s' "$@" 2>&1; }
 compile_retry() {
@@ -48,7 +51,7 @@ if [ "$1" = "--changed" ]; then
   fi
 fi
 if [ "$1" = "--golden" ]; then
-  [ "${TEST_EVENTS:-}" = 1 ] && echo '@@test {"event":"phase","name":"compiling"}'
+  phase compiling
   compile_retry engine test-golden || exit $?
   # one 'tests' slot with the golden need from res-slot.json (kinds.tests.goldenMb)
   need="$(node -e 'console.log(require(process.argv[1]).kinds.tests.goldenMb)' "$repo/tools/res-slot.json")"
@@ -59,7 +62,7 @@ if [ "$1" = "--full" ]; then
   # sharded, machine-wide slot limit, per-test timings in engine/out/test-timings.jsonl (see tools/test-shards.mjs); options after --full: --part i/N (only part i of N, stable by namespace name) --shards N --slots M --slowest K
   shift; exec node "$repo/tools/test-shards.mjs" "$@"
 fi
-[ "${TEST_EVENTS:-}" = 1 ] && echo '@@test {"event":"phase","name":"compiling"}'
+phase compiling
 compile_retry engine test || exit $?
-[ "${TEST_EVENTS:-}" = 1 ] && echo '@@test {"event":"phase","name":"testing"}'
+phase testing
 exec node "$repo/tools/test-run.mjs" "$@"

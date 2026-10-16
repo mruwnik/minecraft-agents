@@ -251,4 +251,5 @@ rm -f "$out"; out=
 touch .shadow-cljs/last-use; rm -f .shadow-cljs/last-use.compiling
 t2=$(date +%s.%N)
 [ -z "${MC_COMPILE_LOG:-}" ] || awk -v a="$t0" -v b="$t1" -v c="$t2" 'BEGIN{printf "tools/compile: waited %.1fs, compiled %.1fs\n", b-a, c-b}' >&2
+printf '{"t":"%s","kind":"compile","run":"%s","cwd":"%s","build":"%s","waitedS":%.0f,"compiledS":%.0f,"code":%s}\n' "$(date -u +%FT%T.%3NZ)" "${MC_RUN_ID:-}" "$PWD" "$*" "$(awk -v a="$t0" -v b="$t1" 'BEGIN{print b-a}')" "$(awk -v b="$t1" -v c="$t2" 'BEGIN{print c-b}')" "$code" 2>/dev/null >> "${RES_SLOT_DIR:-/tmp/mc-res}/log.jsonl"
 exit $code

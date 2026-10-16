@@ -78,7 +78,7 @@ const tryRun = (kind, i, cmd, onStart = () => {}) => new Promise((res) => {
 })
 
 // One line per finished run in <dir>/log.jsonl, so queue waits can be measured.
-export const logRun = (entry) => fs.appendFileSync(path.join(dir(), 'log.jsonl'), JSON.stringify({ t: new Date().toISOString(), ...entry, cmd: entry.cmd.slice(0, 200) }) + '\n')
+export const logRun = (entry) => fs.appendFileSync(path.join(dir(), 'log.jsonl'), JSON.stringify({ t: new Date().toISOString(), cwd: process.cwd(), run: process.env.MC_RUN_ID, ...entry, cmd: entry.cmd.slice(0, 200) }) + '\n')
 
 // Grants: <dir>/grants/<pid>.json = {needMb, t}. A grant reserves its need until rampMs after it started or its owner died.
 // Pure: total need of grants still ramping.
@@ -186,7 +186,7 @@ const main = async () => {
     else {
       // live-tests phase line (TEST_EVENTS=1), once per change of reason (digits ignored: free MB drifts)
       const reason = d.why.replace(/\d+/g, '#')
-      if (process.env.TEST_EVENTS && reason !== lastReason) console.log(`@@test ${JSON.stringify({ event: 'phase', name: `waiting: ${d.why}${blockers()}`.slice(0, 300) })}`)
+      if (process.env.TEST_EVENTS && reason !== lastReason) console.log(`@@test ${JSON.stringify({ event: 'phase', t: Date.now(), name: `waiting: ${d.why}${blockers()}`.slice(0, 300) })}`)
       lastReason = reason
     }
     if (d.action === 'wait' && Date.now() - lastLine >= (Number(process.env.RES_SLOT_STATUS_MS) || 60000)) {
