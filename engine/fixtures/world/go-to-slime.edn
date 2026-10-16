@@ -18,7 +18,7 @@
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}
-            {:no-event {:source :job :level :warn :kind #{:walker-fault :go-to.walker-fault}} :for-s 60 :until {:source :job :kind :result}}]
+            {:no-event {:source :job :level :warn :kind :walker-fault} :for-s 60 :until {:source :job :kind :result}}]
    :after [[:body-near [24.5 0 16.5] 2.5]]}
   {:name "shaft-walled-10-high-is-free-at-floor-14"
    :blocks [[:fill [16 0 15] [17 9 17] "stone"] [:fill [16 0 16] [16 9 16] "air"] [:set [16 -1 16] "slime_block"]]

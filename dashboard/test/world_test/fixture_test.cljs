@@ -691,3 +691,12 @@
     (is (out? {:act [[:submit {:job 'go-to :args {:pos (f/rel [46 0 16])}}]]}) "a goal in the neighbour plot")
     (is (not (out? {:plot {:length 52} :act [[:submit {:job 'go-to :args {:pos (f/rel [46 0 16])}}]]})))
     (is (not (out? {:act [[:submit {:job 'go-to :args {:pos (f/rel [1000 0 16])}}]]})) "deliberately far goals are allowed")))
+
+(deftest unknown-kinds-lists-only-engine-sourced-patterns-whose-kind-nothing-emits
+  (let [c {:expect [{:event {:source :job :kind :real.one :data {:kind :nested}} :within-s 1}
+                    {:no-event {:source :reflex :kind #{:real.one :gone.two}} :for-s 1 :from-event {:source :job :kind :gone.three}}
+                    {:event {:source :body :kind :gone.four} :within-s 1}
+                    {:event {:source :job :kind :trip.deposited} :within-s 1}]
+           :act [[:await {:source :job :kind :gone.five} 5]
+                 [:until [:cli "jobs" []] 5]]}]
+    (is (= [:gone.five :gone.three :gone.two] (sort (f/unknown-kinds c #{"real.one"}))))))

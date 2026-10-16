@@ -28,7 +28,7 @@
    :after [[:item "bread" 0]]}
   {:name "stock-booked-forty-minutes-ago-is-still-listed"
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
-   :memory [{:kind :fetch/stock :data {:pos #at [20 0 16] :items {"bread" 12}} :age-s 2400}]
+   :memory [{:kind :fetch/stock :data {:pos #at [20 0 16] :items {"bread" 12}} :policy {:cap 64 :ttl 21600000} :age-s 2400}]
    :act [[:cli "observe" ["$body" "--world" "$world" "chests"] {:ok true :chests [{:pos #at [20 0 16] :items {"bread" 12}}]}]]
    :expect [{:no-event {:source :job :kind :queued} :for-s 3}]
    :after [[:block [20 0 16] "chest"]]}]}

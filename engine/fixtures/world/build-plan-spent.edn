@@ -1,4 +1,4 @@
-;; Card 99785eb0: jobs.build.from-plan reports what it placed (jobs.lib.spent): the result and build.done carry :spent {item n} and :spent-at.
+;; Card 99785eb0: jobs.build.from-plan reports what it placed (jobs.lib.spent): the completed ending carries :spent {item n} and :spent-at.
 ;; Plan of three dirt cells [20..22 0 16] on grass, dirt carried. Should-succeed: completed with :spent naming the dirt.
 {:defaults
  {:tags [:build :spent :jobs]
@@ -10,6 +10,5 @@
  [{:name "small-build-reports-what-it-placed"
    :plans [{:id "row" :metadata {:by "$body"} :parts [{:id "dirt" :cells [#at [20 0 16] #at [21 0 16] #at [22 0 16]] :want "dirt"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:row"})]]
-   :expect [{:event {:source :job :kind :build.done :data {:spent {"dirt" 3}}} :within-s 70 :of-job true}
-            {:event {:source :job :kind :completed :data {:spent {"dirt" 3}}} :within-s 70 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:spent {"dirt" 3}}} :within-s 70 :of-job true}]
    :after [[:block [20 0 16] "dirt"] [:block [22 0 16] "dirt"] [:item "dirt" 5]]}]}
