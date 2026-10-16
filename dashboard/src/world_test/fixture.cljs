@@ -700,8 +700,12 @@
     (str "@e[" sel ",x=" (min ax bx) ",y=" (min ay by) ",z=" (min az bz)
          ",dx=" (js/Math.abs (- bx ax)) ",dy=" (js/Math.abs (- by ay)) ",dz=" (js/Math.abs (- bz az)) "]")))
 
+(def any-not-block-chunk
+  "Cells per command of an :any-not-block check: one command of 40 cells exceeds the RCON request limit and gets an empty reply."
+  10)
+
 (defn after-command
-  "The RCON command whose reply answers one :after check (positions plot-relative)."
+  "The RCON command whose reply answers one :after check (positions plot-relative); :any-not-block gives a vector of commands."
   [origin body grid c [op & args]]
   (case op
     :block (str "execute if block " (xyz-str (block-pos origin (first args))) " " (second args))
@@ -711,12 +715,29 @@
                           (mapcat (fn [[[ax ay az] [bx by bz]]]
                                     (for [x (range ax (inc bx)) y (range ay (inc by)) z (range az (inc bz))] [x y z])))
                           (map #(str "if block " (xyz-str (block-pos origin %)) " " block))
-                          (str/join " ")
-                          (str "execute ")))
+                          (partition-all any-not-block-chunk)
+                          (mapv #(str "execute " (str/join " " %)))))
     (:body-near :body-far) (str "data get entity " body " Pos")
     :item (str "execute if items entity " body " container.* " (first args))
     :entities (str "execute if entity " (entities-selector origin args))
     nil))
+
+(defn after-commands
+  "The RCON commands of one :after check, always a vector."
+  [origin body grid c check]
+  (let [cmd (after-command origin body grid c check)]
+    (if (vector? cmd) cmd [cmd])))
+
+(defn group-replies
+  "Splits replies into consecutive groups of the given sizes."
+  [sizes replies]
+  (loop [out [] [n & more] sizes rs replies]
+    (if (nil? n) out (recur (conj out (take n rs)) more (drop n rs)))))
+
+(defn join-after-replies
+  "The single reply of a check from its commands' replies: an :any-not-block cell set differs when any chunk's test failed."
+  [replies]
+  (or (first (filter #(str/includes? % "Test failed") replies)) (last replies)))
 
 (defn entity-probe-command
   "The RCON command that dumps one entity matching a failed :entities check (nil for other checks)."

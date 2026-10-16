@@ -334,13 +334,22 @@
 (deftest any-not-block-passes-when-one-cell-is-not-the-block
   (let [origin [20000 150 20000]
         check [:any-not-block [[[1 0 1] [2 0 1]] [[3 0 3] [3 0 3]]] "dirt"]]
-    (is (= "execute if block 20001 150 20001 dirt if block 20002 150 20001 dirt if block 20003 150 20003 dirt"
-           (f/after-command origin "B" {} {} check)))
+    (is (= ["execute if block 20001 150 20001 dirt if block 20002 150 20001 dirt if block 20003 150 20003 dirt"]
+           (f/after-commands origin "B" {} {} check)))
     (is (:pass? (f/judge-after origin check "Test failed")))
     (is (not (:pass? (f/judge-after origin check "Test passed"))))
     (is (not (:pass? (f/judge-after origin check "weird"))))
     (is (not-any? #(re-find #":after checks" %)
                   (f/problems {:name "x" :time :day :body {:at [1 0 1]} :act [] :after [check]})))))
+
+(deftest any-not-block-splits-a-large-box-set-into-short-commands
+  (let [check [:any-not-block [[[0 0 0] [3 0 3]] [[5 0 0] [5 0 3]] [[7 0 0] [8 0 3]]] "dirt"]
+        cmds (f/after-commands [20000 150 20000] "B" {} {} check)]
+    (is (= 28 (count (re-seq #"if block" (apply str cmds)))))
+    (is (every? #(<= (count %) 400) cmds))
+    (is (= [[1 2] [3]] (map vec (f/group-replies [2 1] [1 2 3]))))
+    (is (:pass? (f/judge-after [0 0 0] check (f/join-after-replies ["Test passed" "Test failed" "Test passed"]))))
+    (is (not (:pass? (f/judge-after [0 0 0] check (f/join-after-replies ["Test passed" "Test passed" "Test passed"])))))))
 
 (deftest body-start-plan-gives-each-case-clean-memory
   (is (= :restart-clean (f/body-start-plan {} true)))
