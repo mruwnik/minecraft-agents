@@ -34,7 +34,7 @@
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :ignore-zones? true})]
          [:await {:source :job :kind :go-to.off-hand-torch} 100]
          [:http :cancel "$event-job" {:ok true}]
-         [:wait-s 2]
+         [:await {:source :job :kind :cancelled} 10]
          [:job (jobs.movement.go-to {:pos #at [12 3 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:item "torch" 4]]}

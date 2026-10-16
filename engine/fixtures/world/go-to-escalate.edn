@@ -147,7 +147,7 @@
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :ignore-zones? true})]
          [:await {:source :job :kind :result :data {:arrived true}} 150]
-         [:wait-s 15]
+         [:await {:source :job :kind :go-to.restored} 40]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]
          [:wait-s 3]
          [:job (jobs.movement.go-to {:pos #at [20 4 17] :range 1 :ignore-zones? true})]

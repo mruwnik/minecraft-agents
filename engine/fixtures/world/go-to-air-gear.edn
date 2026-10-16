@@ -15,7 +15,7 @@
             [:fill [4 0 8] [45 1 8] "water"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [45 2 8] [45 3 8] "air"]
             [:fill [5 2 8] [44 2 8] "glass"]]
-   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:wait-s 1]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
@@ -26,7 +26,7 @@
             [:fill [4 0 8] [105 1 8] "water"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [105 2 8] [105 3 8] "air"]
             [:fill [5 2 8] [104 2 8] "glass"]]
-   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:wait-s 1]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [105 1 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind :result}}]
@@ -36,7 +36,7 @@
             [:fill [4 0 8] [45 1 8] "water"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [45 2 8] [45 3 8] "air"]
             [:fill [5 2 8] [44 2 8] "glass"]]
-   :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet[enchantments={respiration:3}]"] [:wait-s 1]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet[enchantments={respiration:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "iron_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
@@ -47,7 +47,7 @@
             [:fill [4 0 8] [45 1 8] "water"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [45 2 8] [45 3 8] "air"]
             [:fill [5 2 8] [44 2 8] "glass"]]
-   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:wait-s 1]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
@@ -58,7 +58,7 @@
             [:fill [4 0 8] [41 1 8] "water"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [41 2 8] [41 3 8] "air"]
             [:fill [5 2 8] [40 2 8] "glass"]]
-   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:wait-s 1]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [41 1 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 116 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 116 :until {:source :job :kind :result}}]
@@ -70,7 +70,7 @@
             [:fill [4 0 8] [41 1 8] "water"] [:set [4 0 8] "stone"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [41 2 8] [41 3 8] "air"]
             [:fill [5 2 8] [40 2 8] "glass"]]
-   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:wait-s 1]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [41 1 8] :range 1}] {:ok true :quote {:route {:found true :drown nil}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [4.5 1 8.5] 1]]}
@@ -99,7 +99,7 @@
             [:fill [4 0 8] [135 1 8] "water"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [135 2 8] [135 3 8] "air"]
             [:fill [5 2 8] [134 2 8] "glass"]]
-   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:wait-s 1]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [135 1 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [4.5 1 8.5] 3]]}
@@ -109,7 +109,7 @@
             [:fill [4 0 8] [33 1 8] "water"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [33 2 8] [33 3 8] "air"]
             [:fill [5 2 8] [32 2 8] "glass"]]
-   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots[enchantments={depth_strider:3}]"] [:wait-s 1]
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots[enchantments={depth_strider:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "iron_boots"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [33 1 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]

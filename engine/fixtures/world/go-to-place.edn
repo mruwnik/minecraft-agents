@@ -9,7 +9,7 @@
  :cases
  [{:name "set-place-then-go-to-place-arrives"
    :act [[:job (jobs.memory.set-place {:name :camp :pos #at [24 0 16]})]
-         [:wait-s 2]
+         [:await {:source :job :kind :completed} 10]
          [:job (jobs.movement.go-to {:place :camp :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}

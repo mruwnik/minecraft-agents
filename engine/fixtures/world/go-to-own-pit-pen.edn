@@ -14,7 +14,7 @@
  [{:name "cows-in-the-pit-wall-spared"
    :act [[:summon "cow" [15.5 0 15.5]]
          [:summon "cow" [17.5 0 17.5]]
-         [:wait-s 3]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 2}] 10]
          [:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :own-pen}}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false}}}]

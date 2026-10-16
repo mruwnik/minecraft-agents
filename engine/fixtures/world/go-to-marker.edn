@@ -21,7 +21,7 @@
   {:name "own-place-wins-over-a-marker-of-the-same-name"
    :places [{:name "wtcamp-$tag" :pos [24 0 26]}]
    :act [[:job (jobs.memory.set-place {:name "wtcamp-$tag" :pos #at [24 0 6]})]
-         [:wait-s 2]
+         [:await {:source :job :kind :completed} 10]
          [:job (jobs.movement.go-to {:place "wtcamp-$tag" :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
    :after [[:body-near [24.5 0 6.5] 2] [:body-far [24.5 0 26.5] 10]]}

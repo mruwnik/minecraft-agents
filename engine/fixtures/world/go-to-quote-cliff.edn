@@ -10,12 +10,12 @@
   :limit-s 40}
  :cases
  [{:name "quote-finds-a-5-drop-with-feather-falling"
-   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1 :spend {:health 1.5}}] {:ok true :quote {:route {:found true}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [8.5 5 16.5] 1]]}
   {:name "quote-finds-no-5-drop-in-plain-boots"
-   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1 :spend {:health 1.5}}] {:ok true :quote {:route {:found false}}}]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [8.5 5 16.5] 1]]}]}
