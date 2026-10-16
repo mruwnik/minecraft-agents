@@ -119,3 +119,25 @@
                {:id "c4" :column "pending" :title "four" :commits ["aaa"] :description "live: b/e"}]]
     (is (= ["a/x"] (t/unskip-ids {:previous [prev] :cards cards :ancestor? #(not= % "bbb")})))
     (is (= ["a/x" "b/w"] (t/unskip-ids {:previous [prev] :cards cards :ancestor? (constantly true)})))))
+
+(def cases-note "Unit green, b/f too.\nLive plan (cases):\na/x\nb/w")
+
+(deftest a-case-named-under-the-live-plan-heading-but-absent-from-the-results-is-missing
+  (let [r (t/triage {:results [(ok "a/x") (ok "a/z") (ok "b/w")] :previous []
+                     :cards [{:id "c1" :column "live" :title "one" :commits [] :plan-notes ["Live plan (cases):\na/x\na/gone"]}
+                             {:id "c2" :column "live" :title "two" :commits [] :plan-notes ["Live plan (cases):\na/x\nb/w"]}
+                             {:id "c3" :column "live" :title "three" :commits [] :plan-notes ["Live plan (cases):\nnew-fixture/case"]}]
+                     :bugs [] :ancestor? (constantly true)})]
+    (is (= ["c2"] (:tick r)))
+    (is (= ["c1" "c3"] (:no-plan r)))
+    (is (= ["a/gone"] (:missing (first (:cards r)))))))
+
+(deftest a-shortened-case-name-under-the-heading-is-not-missing
+  (let [r (t/triage {:results [(ok "a/long-case-name")] :previous []
+                     :cards [{:id "c1" :column "live" :title "one" :commits [] :plan-notes ["Live plan (cases):\na/long-case"]}]
+                     :bugs [] :ancestor? (constantly true)})]
+    (is (= ["c1"] (:tick r)))))
+
+(deftest only-lines-under-the-live-plan-heading-name-cases
+  (is (= ["a/x" "b/w"] (map :id (t/named-cases (t/card-plan-text {:title "mentions b/f" :plan-notes [cases-note]})
+                                              (t/classify [(ok "a/x") (ok "a/z") (ok "b/w") (ok "b/f")] []))))))

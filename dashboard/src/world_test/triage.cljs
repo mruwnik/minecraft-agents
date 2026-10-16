@@ -64,15 +64,33 @@
   (into #{} (comp (map #(str/replace % #"[-_]+$" "")) (remove str/blank?))
         (str/split (str/lower-case (or text "")) #"[^a-z0-9_/-]+")))
 
+(defn case-plan-lines
+  "The lines under each note's 'Live plan (cases):' heading, up to the next blank line; empty when no note has one."
+  [plan-notes]
+  (vec (mapcat (fn [n]
+                 (when-let [i (str/index-of (str/lower-case n) "live plan (cases):")]
+                   (->> (str/split-lines (subs n (+ i (count "live plan (cases):"))))
+                        (map str/trim) (drop-while str/blank?) (take-while (complement str/blank?)))))
+               plan-notes)))
+
 (defn card-plan-text
-  "The text a card's live plan lives in: its title, then each note's text from 'live plan' on (unit-test lists before it do not count); with no such note the description from its first line that mentions live (all of it when none does). :extra-plan is text the sweep agent adds by hand."
+  "The text a card's live plan lives in: with a 'Live plan (cases):' heading only the lines under it (extra-plan too); else its title, then each note's text from 'live plan' on (unit-test lists before it do not count); with no such note the description from its first line that mentions live (all of it when none does). :extra-plan is text the sweep agent adds by hand."
   [{:keys [title description plan-notes extra-plan]}]
-  (let [from-live-plan (fn [n] (when-let [i (str/index-of (str/lower-case n) "live plan")] (subs n i)))
+  (if-let [lines (seq (case-plan-lines plan-notes))]
+    (str/join "\n" (cons extra-plan lines))
+    (let [from-live-plan (fn [n] (when-let [i (str/index-of (str/lower-case n) "live plan")] (subs n i)))
         notes (keep from-live-plan plan-notes)
         lines (str/split-lines (or description ""))
         from-live (drop-while #(not (re-find #"(?i)live" %)) lines)]
     (str/join "\n" (concat [title extra-plan]
-                           (if (seq notes) notes (if (seq from-live) from-live lines))))))
+                           (if (seq notes) notes (if (seq from-live) from-live lines)))))))
+
+(defn missing-cases
+  "The refs (file/case, case may be cut short) on a card's 'Live plan (cases):' lines that match no case of the run."
+  [{:keys [plan-notes]} cases]
+  (let [ids (map (comp str/lower-case :id) cases)]
+    (vec (remove (fn [r] (some #(str/starts-with? % r) ids))
+                 (filter #(str/includes? % "/") (mapcat tokens (case-plan-lines plan-notes)))))))
 
 (defn named-cases
   "Plan text + all classified cases -> the cases the plan names. A fixture token alone names all its cases; fixture/slug (slug may be cut short) or a bare slug of a named fixture's case narrows it to those."
@@ -119,10 +137,13 @@
         card-reports (mapv (fn [c]
                              (let [named (named-cases (card-plan-text c) classified)
                                    covered? (every? ancestor? (:commits c))
+                                   missing (missing-cases c classified)
                                    v (cond (not covered?) :not-in-rev
+                                           (seq missing) :no-plan
                                            :else (verdict named))]
                                {:id (:id c) :title (:title c) :column (:column c)
                                 :cases (mapv #(select-keys % [:id :status :class]) named)
+                                :missing missing
                                 :failing (mapv :id (filter #(= :fail (:status %)) named))
                                 :bug-cards (vec (distinct (mapcat #(bug-matches bugs %) (filter #(= :fail (:status %)) named))))
                                 :verdict v}))
