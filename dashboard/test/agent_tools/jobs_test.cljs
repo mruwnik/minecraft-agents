@@ -480,6 +480,9 @@
                                 ['(repeat (jobs.farm.tend)) true '(repeat (jobs.farm.tend))]]]
       (is (= want (jobs/stamp-from spec pos takes?)) (pr-str spec takes?)))))
 
+(deftest the-jobs-that-take-from-are-the-ones-requiring-jobs-lib-submitted
+  (is (= #{"jobs.access.stair" "jobs.access.bridge" "jobs.access.pillar" "jobs.gather.mine"} jobs/from-jobs)))
+
 (deftest the-jobs-that-take-from-are-named-not-read-from-the-truncated-catalog
   (doseq [spec ['(jobs.access.stair {:dir :down}) '(jobs.access.bridge) '(jobs.access.pillar) '(jobs.gather.mine {:block "coal_ore"})]]
     (is (true? (jobs/takes-from? spec)) (pr-str spec)))

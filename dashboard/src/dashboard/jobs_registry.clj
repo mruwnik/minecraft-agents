@@ -2,7 +2,8 @@
   "Compile time: the engine's job and trigger namespaces as data. The files are found and read by
   engine.registry (engine/src is on the source path, only its .clj is loaded); this ns adds kind, category and
   name and prints the args."
-  (:require [clojure.string :as str]
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
             [engine.registry :as registry]))
 
 (defn pretty
@@ -34,3 +35,18 @@
   "A literal vector of every job and trigger entry, read when the build runs."
   []
   (vec (concat (job-entries) (trigger-entries))))
+
+(defn submitted-job-ids
+  "Ids of the jobs whose ns requires jobs.lib.submitted: the ones that take the submit-time :from."
+  []
+  (set (for [m (registry/job-metadata)
+             :let [file (io/resource (str (str/replace (str/replace (:id m) "." "/") "-" "_") ".cljs"))]
+             :when (and file
+                        (some #{'jobs.lib.submitted}
+                              (tree-seq coll? seq (first (registry/read-forms (io/file file))))))]
+         (:id m))))
+
+(defmacro submitted-jobs
+  "A literal set of submitted-job-ids, read when the build runs."
+  []
+  (submitted-job-ids))

@@ -1,5 +1,6 @@
 (ns agent-tools.jobs
   "Job command validation and native EDN requests; HTTP remains a Node boundary."
+  (:require-macros [dashboard.jobs-registry :refer [submitted-jobs]])
   (:require [engine.bodies :as bodies]
             [agent-tools.http :as http]
             [agent-tools.job-results :as job-results]
@@ -211,8 +212,8 @@
       spec)))
 
 (def from-jobs
-  "Jobs that declare :from (jobs.lib.submitted). Named here because the catalog entry cuts a long args map, and :from sits past the cut in stair's."
-  #{"jobs.access.stair" "jobs.access.bridge" "jobs.access.pillar" "jobs.gather.mine"})
+  "Jobs that declare :from (jobs.lib.submitted); read from the sources because the catalog entry cuts a long args map."
+  (submitted-jobs))
 
 (defn takes-from?
   "Whether the spec's job is one of from-jobs."
