@@ -170,9 +170,9 @@
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30 :until {:source :job :kind :holding :data {:reason :night-sheltered}} :of-job true}]
    :after [[:body-near [14.5 0 16.5] 1.5]]
    :limit-s 50}
-  ;; 87aee1d1: a bed in a hut with no door cannot be reached; sleep says the hut is walled in, not a bare "cannot reach"
+  ;; 87aee1d1: a bed in a hut with no door cannot be reached (bedrock walls: go-to digs through any other wall); sleep says the hut is walled in, not a bare "cannot reach"
   {:name "sleep-to-a-walled-in-bed-says-why"
-   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+   :blocks [[:fill [8 0 8] [16 3 16] "bedrock" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
             [:set [11 0 12] "red_bed[facing=east,part=foot]"] [:set [12 0 12] "red_bed[facing=east,part=head]"]]
    :body {:at [4.5 0 12.5]}

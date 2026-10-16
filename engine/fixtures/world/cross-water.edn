@@ -20,7 +20,7 @@
    :expect [{:event {:source :job :kind :boat.landed :data {:recovered false}} :within-s 150 :of-job true}]}
   {:name "given-cell-is-no-shore"
    :act [[:job (jobs.movement.cross-water {:pos #at [17 0 16]})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-far-shore}} :within-s 30 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-far-shore}} :within-s 30 :of-job true}]}
   {:name "no-shore-far-enough"
    :act [[:job (jobs.movement.cross-water {:min-cross 60})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-far-shore}} :within-s 30 :of-job true}]}
