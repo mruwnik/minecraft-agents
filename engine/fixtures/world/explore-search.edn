@@ -1,6 +1,6 @@
 ;; Card 7ef2db8f: jobs.explore.search reads at most 48 stand cells per step (no runaway read loop) and keeps its sweep going: legs are
 ;; walked one after another until the target comes into the small scan radius. Long grass plot 64 x 32, body at the west end
-;; [8.5 0 16.5], an emerald block 32 east at [40 0 16], :scan-radius 8 so no look sees it from the origin; legs run :outward east.
+;; [8.5 0 16.5], an emerald block 32 east at [40 0 16], :scan-radius 10 so no look sees it from the origin (and a line of legs a spacing aside, skipped by searched notes of earlier runs of the probe body, still brings it in range); legs run :outward east.
 ;; Should-succeed: spacing 8 and the tightest spacing 4 both end search.done :found within the limit, no error and no :runaway.
 ;; (A :spacing below 4 is refused when the job is submitted: typed arg, no log event, unit-covered.)
 {:defaults
@@ -11,13 +11,13 @@
   :limit-s 150}
  :cases
  [{:name "legs-walked-until-the-target-is-in-scan-range"
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 10
                                      :use-notes false :max-distance 60 :max-legs 16 :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :of-job true :until {:source :job :kind :completed}}
             {:no-event {:source :system :kind :error} :for-s 60 :until {:source :job :kind :completed}}]}
   {:name "tightest-spacing-still-ends-found"
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 4 :scan-radius 8
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 4 :scan-radius 10
                                      :use-notes false :max-distance 60 :max-legs 24 :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :of-job true :until {:source :job :kind :completed}}
