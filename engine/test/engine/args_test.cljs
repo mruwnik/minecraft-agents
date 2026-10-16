@@ -63,7 +63,7 @@
   (is (= {:risk {:max-damage 2}} (restart/strip-keys {:bogus 1 :risk {:min-hp 3 :max-damage 2}} [:bogus [:risk :min-hp]]))))
 
 (deftest restore-keeps-the-call-keys
-  (is (nil? (restart/stale-keys reg job {:spend {:wall-time 60} :floor {:health 8} :least 1 :deadline 5}))))
+  (is (nil? (restart/stale-keys reg job {:spend {:wall-time 60} :floor {:health 8} :least 1 :deadline 5 :checks {:safe? '(always)}}))))
 
 (deftest merge-args-merges-layers-per-group
   (is (= {:range 3 :risk {:min-health 5 :max-damage 1}}

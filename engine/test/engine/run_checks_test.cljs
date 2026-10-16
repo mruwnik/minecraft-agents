@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.job-api :as api]
+            [engine.memory :as mem]
             [engine.test-util :as tu]))
 
 (def world (atom {}))
@@ -129,3 +130,63 @@
             (await (core/tick! eng))
             (is (= 1 (:reflex-rounds @world)) (str k " fires once the check passes"))
             (is (nil? (core/held-trigger eng :r)))))))))
+
+(defn raw-mem [eng root slots] (mem/job-mem (mem/view (:store eng)) root slots))
+
+(defn run-parent
+  "Submit (root args) over a parent whose child leaf is gated by key; one tick."
+  [jobs args]
+  (let [{:keys [eng] :as s} (setup jobs)
+        id (core/submit! eng (list 'root args) {})]
+    (assoc s :id id)))
+
+(deftest checks-flow-down-per-key
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng id]} (run-parent {'root (parent :safe?)} {:checks {:safe? '(always)}})]
+          (await (core/tick! eng))
+          (is (= 1 (:leaf-rounds @world)) "the caller's :safe? replaces the child's own")
+          (is (= {:safe? '(always)} (get-in (raw-mem eng id [:leaf]) [:contract :call :checks])) "frozen as the form"))
+        (reset! world {})
+        (let [{:keys [eng id]} (run-parent {'root (parent :safe?)} {:checks {:fit? '(always)}})]
+          (await (core/tick! eng))
+          (is (nil? (:leaf-rounds @world)) "the other key leaves the child's :safe? alone")
+          (is (= :dark (:reason (core/waiting eng id)))))))))
+
+(deftest job-safe-on-a-child-call-keeps-the-childs-own
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [root {:round (fn ^:async r [c]
+                             (swap! world assoc :after-child
+                                    (await (ctx/call c :leaf (leaf :safe?) {:checks {:safe? '(job-safe)}})))
+                             :continue)}
+              {:keys [eng id]} (run-parent {'root root} {:checks {:safe? '(always)}})]
+          (await (core/tick! eng))
+          (is (nil? (:leaf-rounds @world)))
+          (is (= :dark (:reason (core/waiting eng id))))
+          (swap! world assoc :go true)
+          (await (core/tick! eng))
+          (is (= 1 (:leaf-rounds @world))))))))
+
+(deftest a-jobs-defaults-may-carry-checks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'root (assoc (leaf :safe?) :defaults {:checks {:safe? '(always)}}
+                                                 :round (count-round :rounds))})]
+          (core/submit! eng '(root) {})
+          (await (core/tick! eng))
+          (is (= 1 (:rounds @world))))))))
+
+(deftest a-bad-checks-form-is-refused-at-submit
+  (let [{:keys [eng]} (setup {'root (leaf :safe?)})
+        submit #(api/mutate! eng {:op :submit :spec %1 :by "claude" :request-id %2
+                                  :generation-id (:generation-id (core/state eng))})]
+    (are [form] (and (= :bad-args (:reason (submit (list 'root {:checks {:safe? form}}) (str (hash form)))))
+                     (empty? (:list (core/state eng))))
+      '(nonsense)
+      '(health))
+    (is (= :bad-spec (:reason (submit '(root {:checks {:other (always)}}) "k2"))) "the shape is checked too")
+    (is (true? (:ok (submit '(root {:checks {:safe? (and (job-safe) (not (threatened)))}}) "k3"))))))

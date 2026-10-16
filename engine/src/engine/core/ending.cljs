@@ -21,25 +21,46 @@
 
 (defn started? [c] (some? (ctx/frozen-call c)))
 
-(def compiled-forms "{form checker}: a condition form an export is, compiled when first asked." (atom {}))
+(def compiled-forms "{form checker}: a condition form an export or a :checks line is, compiled when first asked." (atom {}))
+
+(defn compiled
+  "The checker fn of condition form, compiled with the job-only vocabulary and cached by form; a refusal throws naming what."
+  [form what]
+  (or (get @compiled-forms form)
+      (let [r (condition/compile form (:ready/vocabulary hooks/all))]
+        (when (condition/refusal? r)
+          (throw (js/Error. (str what ": " (:message r)))))
+        (swap! compiled-forms assoc form (:check r))
+        (:check r))))
 
 (defn export-check
   "The checker fn of def's export k (:safe? or :fit?: a checker fn or a quoted condition form), or nil when it has none."
   [def k]
   (let [x (get def k)]
-    (if-not (seq? x)
-      x
-      (or (get @compiled-forms x)
-          (let [r (condition/compile x)]
-            (when (condition/refusal? r)
-              (throw (js/Error. (str (name k) " of " (:sym def) ": " (:message r)))))
-            (swap! compiled-forms assoc x (:check r))
-            (:check r))))))
+    (if (seq? x) (compiled x (str (name k) " of " (:sym def))) x)))
+
+(declare inherited-checks)
+
+(defn checks-of
+  "The :checks (form per key) c's frame runs under: its frozen call's once started, else what it would freeze with."
+  [def c]
+  (if-let [call (ctx/frozen-call c)]
+    (:checks call)
+    (merge (inherited-checks c) (:checks (:defaults def)) (:checks (:args c)))))
 
 (defn run-status
-  "def's can-run?, safe? and fit? statuses for c as one (contract/all); an export it lacks holds."
+  "def's can-run?, safe? and fit? statuses for c as one (contract/all); an export it lacks holds. A :checks form of the
+  frame's call (its own, else the nearest caller's, per key) replaces the export; c carries the def, with its exports
+  as checker fns, for the forms' (job-safe) and (exposed)."
   [def c]
-  (contract/all (for [k [:can-run? :safe? :fit?] :let [f (export-check def k)] :when f] (contract/asked c def k f))))
+  (let [checks (checks-of def c)
+        own (assoc def :safe? (export-check def :safe?) :fit? (export-check def :fit?))
+        c (assoc c :def own)]
+    (contract/all (for [k [:can-run? :safe? :fit?]
+                        :let [form (get checks k)
+                              f (if form (compiled form (str (name k) " of " (:sym def) " :checks")) (if (= k :can-run?) (export-check def k) (get own k)))]
+                        :when f]
+                    (contract/asked c def k f)))))
 
 (defn statuses
   "[start run] for c: start def's can-start? status until it has started (:ok after); run its can-run?'s
@@ -102,11 +123,20 @@
   (let [view ((:view c))
         caller (when (seq (:slots c)) (:contract (mem/job-mem view (:root c) (pop (:slots c)))))
         defaults (contract/resolve-settings (:defaults def) #(settings/get (:settings def) %) (:args c))
-        call (fill-use c def (contract/freeze (assoc def :defaults defaults) (:args c) (:call caller)))]
+        call (fill-use c def (contract/freeze (assoc def :defaults defaults) (:args c) (:call caller)))
+        call (cond-> call (seq (inherited-checks c)) (update :checks #(merge (inherited-checks c) %)))]
     (if (:call caller)
       (let [t (now (:engine c))]
         (contract/clamp call (:call caller) (contract/remainder caller t (- t (nth (:t0s c) (dec (count (:slots c))) t)))))
       [call []])))
+
+(defn inherited-checks
+  "The :checks of c's callers, per key from the nearest one."
+  [c]
+  (when (seq (:slots c))
+    (let [view ((:view c))]
+      (reduce (fn [acc i] (merge acc (get-in (mem/job-mem view (:root c) (subvec (:slots c) 0 i)) [:contract :call :checks])))
+              {} (range (count (:slots c)))))))
 
 (defn frame-identity
   "{:job sym :target args} a frame of def with args is known by: the job and the args its :target names. nil for a

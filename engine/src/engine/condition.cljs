@@ -67,8 +67,13 @@
 
 (def comparable #{:number :string :keyword})
 
+(def ^:dynamic *extras*
+  "{sym entry} of the entries a job-side compile adds to the trigger library (the :ready/vocabulary hook): set by
+  compile and allowed, so a trigger's own condition never sees them."
+  nil)
+
 (defn entry "The library entry sym names (an operator's has no :type), or nil." [sym]
-  (let [e (get triggers/library sym)] (when (:type e) e)))
+  (let [e (or (get *extras* sym) (get triggers/library sym))] (when (:type e) e)))
 
 (defn entry-sig [sym {:keys [args type]}]
   (str "(" (str/join " " (cons sym (map name args))) ") -> " (name type)))
@@ -82,7 +87,7 @@
   "Every signature, operators first: what a refusal for an unknown symbol lists."
   (into (mapv :sig (vals ops)) (keep (fn [[sym e]] (when (:type e) (entry-sig sym e)))) (sort-by key triggers/library)))
 
-(defn op-fn [sym] (:fn (get triggers/library sym)))
+(defn op-fn [sym] (:fn (or (get *extras* sym) (get triggers/library sym))))
 
 ;; ------------------------------------------------------------------ compiler
 
@@ -93,7 +98,7 @@
     (keyword? x) :keyword
     (boolean? x) :boolean))
 
-(declare check)
+(declare check allowed)
 
 (defn check-args
   "The checked children of form's arguments, or the first refusal."
@@ -156,13 +161,13 @@
       (refuse :not-a-form form
               (str (pr-str form) " is not a value or a call; facts are called like (health) and literals are"
                    " numbers, strings or keywords")
-              :allowed vocabulary)
+              :allowed (allowed *extras*))
 
       (not (or (contains? ops head) (entry head)))
       (refuse :unknown-symbol form
               (str head " is not in the condition language: no variables, arithmetic or functions of your own;"
                    " when nothing here says it, ask for a new fact")
-              :allowed vocabulary)
+              :allowed (allowed *extras*))
 
       (not (arity-ok? (or (get ops head) {:arity (count (:args (entry head)))}) (count args)))
       (refuse :arity form (str head " takes " (sig head) ", not " (count args) " argument(s)") :allowed [(sig head)])
@@ -172,18 +177,28 @@
       :else (let [children (check-args args)]
               (if (refusal? children) children (typed form head children (:args (entry head))))))))
 
-(def status-forms
-  (filterv #(or (str/ends-with? % "status") (not (str/includes? % "->"))) vocabulary))
+(defn allowed
+  "Every signature of the library and of the extra entries (default none), as a refusal lists them."
+  ([] vocabulary)
+  ([extras] (into vocabulary (keep (fn [[sym e]] (when (:type e) (entry-sig sym e)))) (sort-by key extras))))
 
-(defn compile
-  "{:ok true :check f} for a condition form, f a fn of a ctx {:primitives :view} returning a status, or a refusal
-  {:ok false :reason :at :message :allowed}. Reasons: :quoted :not-a-form :unknown-symbol :arity :type :incomparable
-  :not-a-status."
+(defn status-forms []
+  (filterv #(or (str/ends-with? % "status") (not (str/includes? % "->"))) (allowed *extras*)))
+
+(defn compile*
   [form]
   (let [r (check form)]
     (cond
       (refusal? r) r
       (not= :status (:type r))
       (refuse :not-a-status form (str "a condition must be a status; " (pr-str form) " is a " (name (:type r)))
-              :allowed status-forms)
+              :allowed (status-forms))
       :else {:ok true :check (:value r)})))
+
+(defn compile
+  "{:ok true :check f} for a condition form, f a fn of a ctx {:primitives :view} returning a status, or a refusal
+  {:ok false :reason :at :message :allowed}. Reasons: :quoted :not-a-form :unknown-symbol :arity :type :incomparable
+  :not-a-status. extras: {sym entry} added to the library (a job's checks)."
+  ([form] (compile form nil))
+  ([form extras]
+   (binding [*extras* extras] (compile* form))))

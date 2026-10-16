@@ -4,7 +4,9 @@
   result with :duplicate true; with a different request it is refused. Request records live in the engine state
   (the last 128). Scheduling stays in core."
   (:require [engine.core :as core]
+            [engine.condition :as condition]
             [engine.expr :as expr]
+            [engine.hooks :as hooks]
             [clojure.walk :as walk]
             ["crypto" :as crypto]))
 
@@ -54,6 +56,16 @@
                          (string? v) (<= (count v) 2048)
                          :else true)))]
       (walk spec 0))))
+(defn checks-problem
+  "Why a :checks form anywhere in spec does not compile (with the job-only vocabulary), or nil. engine.contract only
+  checks the shape: engine.condition needs the triggers, which need contract."
+  [spec]
+  (first (for [m (tree-seq coll? seq spec)
+               :when (and (map? m) (map? (:checks m)))
+               [k form] (:checks m)
+               :let [r (condition/compile form (:ready/vocabulary hooks/all))]
+               :when (condition/refusal? r)]
+           (str ":checks " k ": " (:message r)))))
 (defn fingerprint [request]
   (let [canonical (walk/postwalk #(if (map? %) (into (sorted-map-by (fn [a b] (compare (pr-str a) (pr-str b)))) %) %)
                                 (select-keys request [:op :id :spec :generation-id :next? :hold? :survive-death? :by]))]
@@ -89,6 +101,7 @@
                   (fail :request-uncertain "A previous attempt was interrupted; it will not be executed again."))
               (fail :request-id-conflict))
       spec-error (fail :bad-spec spec-error)
+      (and spec (checks-problem spec)) (fail :bad-args (checks-problem spec))
       (some #(and (contains? request %) (not (boolean? (get request %)))) [:next? :hold? :survive-death?]) (fail :bad-field ":next?, :hold? and :survive-death? are true or false")
       (not (valid-by? by)) (fail :bad-by ":by is a short string or keyword naming who asks")
       (and (#{:cancel :retry} op) (not (valid-job-id? id))) (fail :bad-job-id)

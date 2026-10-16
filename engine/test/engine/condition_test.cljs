@@ -5,7 +5,8 @@
             [engine.triggers :as triggers]
             [engine.memory :as mem]
             [engine.test-util :as tu]
-            [jobs.lib.cond :as cond]))
+            [jobs.lib.cond :as cond]
+            [jobs.lib.ready :as ready]))
 
 (defn view
   "A memory view at now with the given {kind [data ...]} entries, all written at t 0."
@@ -378,3 +379,23 @@
     '(< (since (place :home)) 5) :type '(place :home)
     '(< (since) 5) :arity '(since)
     '(< (since :a :b) 5) :arity '(since :a :b)))
+
+(def later-exposed (with-meta (fn [_] (contract/later :x "x")) {::ready/exposure (fn [_] (contract/later :exposed "dark"))}))
+
+(deftest job-only-entries-compile-only-with_the_vocabulary
+  (doseq [form '[(exposed) (job-safe) (and (job-fit) (not (threatened))) (always) (starving)]]
+    (is (= :unknown-symbol (:reason (c/compile form))) (str form " refused for a trigger"))
+    (is (:ok (c/compile form ready/vocabulary)) (str form " accepted for a job")))
+  (is (= :unknown-symbol (:reason (c/compile '(exposed) {'other {:args [] :type :status :fn identity}}))))
+  (is (some #(re-find #"\(exposed\)" %) (c/allowed ready/vocabulary)) "a refusal lists them"))
+
+(deftest job-only-entries-read-the-frames-def
+  (let [run (fn [form def] ((:check (c/compile form ready/vocabulary)) (assoc (ctx-of) :def def)))
+        ok? #(= :ok (first %))]
+    (is (not (ok? (run '(job-safe) {:safe? (fn [_] (contract/later :x "x"))}))))
+    (is (ok? (run '(job-safe) {:safe? (fn [_] (contract/ok :x "x"))})))
+    (is (ok? (run '(job-fit) {})) "no export holds")
+    (is (ok? (run '(exposed) {:safe? later-exposed})))
+    (is (not (ok? (run '(exposed) {:safe? (fn [_] (contract/ok :x "x"))}))))
+    (is (ok? (run '(not (exposed)) {:safe? (fn [_] (contract/ok :x "x"))})))
+    (is (ok? (run '(always) {})))))

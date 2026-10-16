@@ -156,7 +156,7 @@
 
 (defmacro job-registry
   "{ns-symbol {:check :round :doc :args :idle-ok}} for every job namespace under jobs/; a contract job's entry also
-  holds :can-start? :can-run? :target :ways :defaults :done? :quote-of :cleanup :cleanup-defaults  and its namespace's
+  holds :can-start? :can-run? :safe? :fit? (a checker fn or a quoted condition form) :target :ways :defaults :done? :quote-of :cleanup :cleanup-defaults  and its namespace's
   :settings. Each
   primitive of the engine/primitive.cljs table is a job too, as jobs.primitive.<kebab-case> (jobs.primitive/job)."
   []
@@ -319,6 +319,7 @@
   {:world/open "the world store over a world folder's files (engine.main)"
    :world/blank "an empty world store (engine.core, when none is given)"
    :use/default "the list a call's :use gets for a purpose its job's defaults name a chooser for (engine.core.ending)"
+   :ready/vocabulary "{sym entry} the condition entries only a job's :checks forms may use, (job-safe) (exposed) ... (engine.condition/compile extras)"
    :look/around "one look round from where the body stands, aimed first at the cells a :look status names, for a condition that asks for one (engine.core.ending)"})
 
 (defn hook-defs

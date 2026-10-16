@@ -222,6 +222,12 @@
                              (partial lines-problem #{:job-time :wall-time :tries :health :food} #{:items :wear}))}
    :floor {:doc "levels the job does not go below: {:health hp :food pts}" :default nil
            :spec (a/valid-by "a map {:health hp :food pts} of numbers >= 0" (partial lines-problem #{:health :food} #{}))}
+   :checks {:doc "checks that replace the job's own and its callers' safe? / fit? here and below, as condition forms: {:safe? form :fit? form}; each key flows down on its own; (job-safe) and (job-fit) are the job's own"
+            :default nil
+            :spec (a/valid-by "a map {:safe? form :fit? form} of condition forms (lists)"
+                              #(cond (not (map? %)) "not a map"
+                                     (seq (remove #{:safe? :fit?} (keys %))) "an unknown key"
+                                     (not-every? seq? (vals %)) "a value not a form"))}
    :deadline {:doc "the wall-clock ms by which the call must have ended; default the caller's" :default nil
               :spec (a/num-in 0 nil)}
    :least {:doc "the least work accepted, in the job's units, or :all; default 1" :default nil
@@ -245,7 +251,7 @@
   [defaults lookup args]
   (walk/postwalk #(cond (qualified-keyword? %) (lookup %) (fn? %) (% args) :else %) defaults))
 
-(def merged-keys "Call keys a call merges over the defaults line by line." #{:spend :floor :use})
+(def merged-keys "Call keys a call merges over the defaults line by line." #{:spend :floor :use :checks})
 
 (defn freeze
   "The call keys of a call to a job with ways and defaults (settings resolved): given (the args) over the defaults,

@@ -8,6 +8,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.cond :as lcond]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.shelter :as sh]
@@ -50,9 +51,11 @@
     (contract/ok :no-hostile-near "no hostile near")))
 
 (defn safe-at
-  "The checker of a job that goes to the place (f c) ({:x :y :z}, nil: here): not threatened and not exposed there."
+  "The checker of a job that goes to the place (f c) ({:x :y :z}, nil: here): not threatened and not exposed there.
+  Its meta ::exposure is the exposed half alone, which (exposed) of a :checks form asks."
   [f]
-  (fn [c] (contract/all [(threatened c) (exposed c (f c))])))
+  (with-meta (fn [c] (contract/all [(threatened c) (exposed c (f c))]))
+    {::exposure (fn [c] (exposed c (f c)))}))
 
 (def safe-here "The checker of a job that stays put." (safe-at (constantly nil)))
 
@@ -64,9 +67,31 @@
       (contract/later :dark "night above ground, waits for dawn")
       (contract/ok :lit "lit or underground"))))
 
-(defn safe-if-lit "The checker of a job that roams: not threatened, and no dark sky over it." [c]
-  (contract/all [(threatened c) (dark-sky c)]))
+(def safe-if-lit
+  "The checker of a job that roams: not threatened, and no dark sky over it."
+  (with-meta (fn [c] (contract/all [(threatened c) (dark-sky c)])) {::exposure dark-sky}))
 
 (def fit? "Later :low-health below the risky health." checks/low-health)
 
 (defn ok "The checker of a job with nothing to check." [_] (contract/ok :ready "nothing to check"))
+
+;; ------------------------------------------------------------------ the :checks vocabulary
+
+(defn own-export
+  "The checker of the frame's own export k (:safe? or :fit?, on the def the engine puts on the ctx), ok when it has none."
+  [k]
+  (fn [c]
+    (if-let [f (get-in c [:def k])] (contract/asked c f) (contract/ok :ready (str "no " (name k))))))
+
+(defn exposure-of [c]
+  (if-let [f (::exposure (meta (get-in c [:def :safe?])))] (f c) (contract/ok :ready "no exposure check")))
+
+(def vocabulary
+  "The condition entries only a job's :checks forms use (the :ready/vocabulary hook); each holds when what its name says holds."
+  {'job-safe {:args [] :type :status :doc "the frame's own safe? holds" :fn #(own-export :safe?)}
+   'job-fit {:args [] :type :status :doc "the frame's own fit? holds" :fn #(own-export :fit?)}
+   'exposed {:args [] :type :status :doc "the place of the frame's own safe? is exposed (dark)"
+             :fn #(lcond/not exposure-of)}
+   'threatened {:args [] :type :status :doc "a hostile is near (ready/threatened)" :fn #(lcond/not threatened)}
+   'starving {:args [] :type :status :doc "food is 0" :fn #(lcond/= (lcond/food) 0)}
+   'always {:args [] :type :status :doc "always holds" :fn (fn [] (fn [_] (contract/ok :always "always")))}})
