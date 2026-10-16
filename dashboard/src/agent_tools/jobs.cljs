@@ -29,7 +29,7 @@
        "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
        "           engine restart, the --timeout), and print {:job .. :wait <the wake>}: the job's last events and a\n"
        "           bounded summary of what else happened meanwhile (reflexes fired, pickups, hurt, other jobs ended,\n"
-       "           warnings). If the wait ends before the job, :follow names the command that waits on and :note says the job is not lost. Uses the observer\n"
+       "           warnings). If the wait ends before the job, :follow names the command that waits on, :note says the job is not lost, and the exit code is 1 (0 only when the job ended). Uses the observer\n"
        "           checkpoint observe --wait uses, so the same events are not reported twice.\n"
        "Without --wait mutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion."))
 
@@ -370,9 +370,10 @@
                                                  #(observe/wait-for! {:agent (:body r) :world (:world r) :state (:state r) :socket-path (:socketPath r)}
                                                                      {:watch [id] :timeout (get-in r [:wait :timeout])} get!))
                                  (fn [[wake report]]
-                                   (output (str (data/write-edn (-> (with-hint r (wait-result answer id wake) (when (:follow (wait-result answer id wake)) manual))
-                                                                    (assoc :vitals report))) "\n"))
-                                   0))))))))))
+                                   (let [waited (wait-result answer id wake)]
+                                     (output (str (data/write-edn (-> (with-hint r waited (when (:follow waited) manual))
+                                                                      (assoc :vitals report))) "\n"))
+                                     (if (:follow waited) 1 0))))))))))))
 
 (defn clash-hint [body {:keys [id name status]}]
   (str id " " name " is " (cljs.core/name status) " on this body; a second " name " can undo its work (two digs undercut each other). "

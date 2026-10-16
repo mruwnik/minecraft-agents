@@ -304,7 +304,7 @@
       (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "100ms"] (waiting-engine events))
           (.then (fn [{:keys [code out]}]
                    (let [result (data/read-edn out)]
-                     (is (= 0 code))
+                     (is (= 1 code) "a script can tell the job did not end")
                      (is (= :timeout (get-in result [:wait :wake])))
                      (is (= "./bin/observe --wait --watch j7" (:follow result))))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
