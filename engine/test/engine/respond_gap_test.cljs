@@ -137,5 +137,5 @@
       (fn ^:async t []
         (let [{:keys [seen]} (await (no-gap-run {:inventory [cobble8 pickaxe]
                                                  :zones [{:name "keep" :owner "Miles" :min [-4 60 -4] :max [4 70 4]}]}
-                                                [:gap :flee] true))]
+                                                [:gap :gap :flee] true))]
           (is (some #(and (= :child_ended (:kind %)) (= :gap (:slot %)) (= :refused (:reason %))) @seen) "the gap job ran and placed nothing"))))))

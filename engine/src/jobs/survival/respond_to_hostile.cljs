@@ -265,10 +265,11 @@
                   (tools/can-harvest? p "stone")))))
 
 (defn ^:async gap!
-  "One call of block-arrow-gap (never fetching): :continue or its ending's kind; nothing placed lets the round decide as usual."
+  "One call of block-arrow-gap (never fetching): :continue or its ending's kind; nothing placed lets the round decide as usual.
+  Tried once it has ended; a :continue (its look around) calls it again."
   [c]
-  (ctx/update-mem! c assoc :gap-tried true)
   (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap {:radius (:ranged-radius (:args c)) :fetch false}))]
+    (when-not (= :continue e) (ctx/update-mem! c assoc :gap-tried true))
     (if (= :continue e) :continue (:kind e))))
 
 (defn hiding?

@@ -27,10 +27,10 @@
   ([zones spec]
    (let [clock (atom 1000000)
          [seen sink] (tu/legacy-capture-sink)
-         p (tu/seeing-all (tu/fake (merge {:offlineScale 0.0001 :self {:pos {:x 0.5 :y 64 :z 0.5}}
+         p ((:seeing spec tu/seeing-all) (tu/fake (merge {:offlineScale 0.0001 :self {:pos {:x 0.5 :y 64 :z 0.5}}
                                            :blocks (merge ground shell) :entities [skeleton]
                                            :inventory [{:name "cobblestone" :count 8}]}
-                                          (dissoc spec :act-ms))))
+                                          (dissoc spec :act-ms :seeing))))
          now (tu/act-clock clock p (:act-ms spec 0))
          eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now now
                            :world (ew/of-data {} {} zones)
@@ -68,6 +68,16 @@
           (is (empty? (shot-at p)) "no line of fire is left")
           (is (= 7 (cobble p)) "one block ended both rays where they meet")
           (is (= ["air" "air"] (mapv #(block-at p %) [[0 64 0] [0 65 0]])) "the body's own cells are left"))))))
+
+(deftest a-gap-not-yet-seen-is-looked-for-before-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [] {:entities [pit-skeleton] :blocks (merge ground pit shell) :seeing tu/seeing-after-look})]
+          (await (run-job! s {}))
+          (is (nil? (failed seen)))
+          (is (empty? (shot-at p)) "the gap is stoned once the body has looked")
+          (is (< (cobble p) 8)))))))
 
 (deftest a-gap-that-needs-one-block-gets-one
   (async done
