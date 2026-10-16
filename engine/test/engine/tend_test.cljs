@@ -297,6 +297,17 @@
           (is (true? (finished? s)))
           (is (= 4 (:adults (done-event s)))))))))
 
+(deftest a-body-outside-the-box-that-lists-fewer-animals-than-the-target-walks-to-the-box-and-counts-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock] :as s} (h/setup {:self {:pos {:x 20 :y 64 :z 0}} :entities [(cow 1 2) (cow 2 3) (cow 3 4) (cow 4 8)]} 50)]
+          (track-range! s 14)
+          (core/submit! eng (spec {:target 4}) {})
+          (await (tu/run-ticks eng clock 60 700))
+          (is (true? (finished? s)))
+          (is (= 4 (:adults (done-event s)))))))))
+
 (deftest a-body-outside-the-box-sees-nothing-there-after-walking-to-it-and-ends-with-an-empty-census
   (async done
     (tu/run-async done

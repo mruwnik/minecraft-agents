@@ -25,7 +25,7 @@
   - :deposit (jobs.storage.deposit): a :chest is given and produce of the kind is carried above its :carry
     entry. Produce is the hunt drops table plus eggs for chickens, never tools or breeding food.
 
-  A body outside the box that lists no animal of the kind in it first walks to the box (go-to, once; the server
+  A body outside the box that lists fewer animals of the kind in it than the target first walks to the box (go-to, once; the server
   lists animals only near the body) and counts again; the job starts for that look.
 
   A step whose conditions do not hold is skipped and booked {:skipped reason}: :at-target, :too-few-adults,
@@ -165,13 +165,13 @@
     {:skip :todo}))
 
 (defn look-due?
-  "Whether the body lists no animal of the kind in the box and has not looked there yet (walking to the box first when
-  outside it): the server lists animals only near the body, sound gives a direction, not a place, and animals behind
+  "Whether the body lists fewer animals of the kind in the box than the target and has not looked there yet (walking to
+  the box first when outside it; a walled pen shows a few through a gap): the server lists animals only near the body, sound gives a direction, not a place, and animals behind
   the body are not in view."
   [c]
   (let [{:keys [adults babies]} (cull/census c)]
     (boolean (and (not (:looked (ctx/mem c)))
-                  (empty? adults) (empty? babies)))))
+                  (< (+ (count adults) (count babies)) (:target (:args c)))))))
 
 (defn look-pos
   "The middle column of the box, as the [x z] go-to takes (the ground of that column)."
