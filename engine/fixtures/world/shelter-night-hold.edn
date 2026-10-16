@@ -19,8 +19,7 @@
    :body {:at [13.5 0 13.5]}
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]
          [:job (jobs.survival.night {})]
-         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
-         [:wait-s 30]]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
             {:event {:source :body :kind :woke} :within-s 60}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}]

@@ -21,12 +21,10 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}]}
   {:name "zombie-beyond-hearing-quiet"
    :body {:at [16.5 0 4.5]}
-   :act [[:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 12]]
+   :act [[:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 12}]
    :after [[:body-near [16.5 0 4.5] 2]]}
   {:name "cow-heard-behind-wall-quiet"
-   :act [[:summon "cow" [16.5 0 22.5] "{NoAI:1b}"]
-         [:wait-s 12]]
+   :act [[:summon "cow" [16.5 0 22.5] "{NoAI:1b}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 12}]
    :after [[:body-near [16.5 0 16.5] 2] [:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 1]]}]}

@@ -14,7 +14,7 @@
   :body {:at [12.5 0 16.5] :inventory [["cobblestone" 4]] :effects [["resistance" 900 4]]}
   :act [[:summon "cow" [20.5 0 14.5]] [:summon "cow" [21.5 0 17.5]]
         [:rcon "kill @e[type=zombie,$BOX]"] [:rcon "kill @e[type=skeleton,$BOX]"] [:rcon "kill @e[type=spider,$BOX]"] [:rcon "kill @e[type=creeper,$BOX]"]
-        [:wait-s 2]]
+        [:until-seen {:entity "cow" :min 2} 10]]
   :limit-s 120}
  :cases
  [{:name "go-to-out-of-the-pen-with-wheat-cows-stay"

@@ -151,7 +151,7 @@
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]
          [:until-pos {:x-min 15 :x-max 18 :z-min 15 :z-max 18} 10]
          [:job (jobs.movement.go-to {:pos #at [20 4 17] :range 1 :ignore-zones? true})]
-         [:wait-s 60]]
+         [:wait-s 60]] ; hold: arrival comes after the restored event
    :expect [{:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}]
    :after [[:body-near [20.5 4 17.5] 2]]
    :limit-s 300}

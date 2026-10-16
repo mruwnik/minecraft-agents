@@ -9,8 +9,7 @@
           [:fill [16 0 16] [16 6 16] "air"]]
  :body {:at [16.5 0 16.5] :inventory [["dirt" 8]]}
  :act [[:job (jobs.access.pillar {:height 5})]
-       [:await {:source :job :kind :pillar.done} 60]
-       [:wait-s 5]]
+       [:await {:source :job :kind :pillar.done} 60]]
  ;; the body is still on the pillar top (feet y 5) after the job ended: nothing dug under it
  :expect [{:event {:source :job :kind :pillar.done} :within-s 60}
           {:no-event {:source :job :kind :cleanup.done :data {:removed 1}} :from-event {:source :job :kind :pillar.done} :for-s 8}]

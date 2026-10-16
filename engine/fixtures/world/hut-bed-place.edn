@@ -30,7 +30,7 @@
   {:name "no-room-no-refire"
    :blocks [[:fill [10 0 10] [13 3 13] "stone" :hollow] [:fill [11 0 11] [12 2 12] "air"] [:set [11 2 10] "glowstone"]]
    :body {:at [11.5 0 11.5]}
-   :act [[:rcon "give $BODY red_bed 1"] [:wait-s 100]]
+   :act [[:rcon "give $BODY red_bed 1"] [:wait-s 100]] ; hold: a re-fired bed place would come after the first failure; only the pause itself is judged
    :expect [{:event {:source :job :kind :shelter.bed_place_failed} :within-s 30}]
    :after [[:item "red_bed" 1]]
    :limit-s 140}

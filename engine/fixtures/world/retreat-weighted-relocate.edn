@@ -18,7 +18,7 @@
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}]
    :act [[:summon "zombie" [10.5 0 14.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "zombie" [23.5 0 14.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 25]]
+         [:wait-s 25]] ; hold: the flight takes this long to show its distance
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:no-event {:kind :failed} :for-s 20}]
    :after [[:body-far [16.5 0 16.5] 25]]
@@ -29,7 +29,7 @@
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}]
    :act [[:summon "zombie" [16.5 0 11.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "zombie" [20.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 25]]
+         [:wait-s 25]] ; hold: the flight takes this long to show its distance
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:no-event {:kind :failed} :for-s 20}]
    :after [[:body-far [16.5 0 16.5] 15]]

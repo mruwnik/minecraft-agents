@@ -71,25 +71,25 @@
    :after [[:block [16 -1 16] "soul_sand"] [:body-near [16.5 0 16.5] 1.5]]}
  {:name "n2-pillar-up-no-false-wedge-1"
    :body {:inventory [["dirt" 8]]}
-   :act [[:job (jobs.access.pillar {:height 4})] [:await {:source :job :kind :pillar.done} 60] [:wait-s 4]]
+   :act [[:job (jobs.access.pillar {:height 4})] [:await {:source :job :kind :pillar.done} 60]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 20}]
    :after [[:not-block [16 2 16] "air"]]
    :limit-s 90}
   {:name "n2-pillar-up-no-false-wedge-2"
    :body {:inventory [["cobblestone" 8]]}
-   :act [[:job (jobs.access.pillar {:height 3})] [:await {:source :job :kind :pillar.done} 60] [:wait-s 4]]
+   :act [[:job (jobs.access.pillar {:height 3})] [:await {:source :job :kind :pillar.done} 60]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 20}]
    :after [[:not-block [16 1 16] "air"]]
    :limit-s 90}
   {:name "n2-place-next-to-feet-1"
    :body {:inventory [["cobblestone" 8]]}
-   :act [[:job (jobs.blocks.place {:pos #at [17 0 16] :item "cobblestone"})] [:await {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} 40] [:wait-s 3]]
+   :act [[:job (jobs.blocks.place {:pos #at [17 0 16] :item "cobblestone"})] [:await {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} 40]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 15}]
    :after [[:block [17 0 16] "cobblestone"]]
    :limit-s 60}
   {:name "n2-place-next-to-feet-2"
    :body {:inventory [["cobblestone" 8]]}
-   :act [[:job (jobs.blocks.place {:pos #at [16 0 17] :item "cobblestone"})] [:await {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} 40] [:wait-s 3]]
+   :act [[:job (jobs.blocks.place {:pos #at [16 0 17] :item "cobblestone"})] [:await {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} 40]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 15}]
    :after [[:block [16 0 17] "cobblestone"]]
    :limit-s 60}

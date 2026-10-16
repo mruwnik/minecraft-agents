@@ -24,7 +24,7 @@
    ;; and nothing swings at the corpse afterwards (judged by hand from the event log: one :fired, no fight after the kill)
    :body {:inventory [["stone_sword" 1]]}
    :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 20]]
+         [:wait-s 20]] ; hold: the corpse must be gone and unattacked past the 15 s window
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:no-event {:kind :fight_no_damage} :for-s 15}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [32 4 32]] 0]]
@@ -38,13 +38,12 @@
   {:name "invulnerable-zombie-no-more-swings"
    :body {:inventory [["stone_sword" 1]]}
    :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,Invulnerable:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:await {:kind :fight_no_damage} 30] [:wait-s 15]]
+         [:await {:kind :fight_no_damage} 30] [:wait-s 15]] ; hold: no further swings at the invulnerable zombie
    :expect [{:event {:kind :fight_no_damage} :within-s 30}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [32 4 32]] 1]]
    :limit-s 60}
   {:name "bare-hand-skeleton-at-range"
    :body {:effects [["resistance" 600 4]]}
-   :act [[:summon "skeleton" [26.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 25]]
+   :act [[:summon "skeleton" [26.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}]
    :limit-s 45}]}

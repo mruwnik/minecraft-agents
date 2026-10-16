@@ -59,7 +59,7 @@
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
               {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
-         [:rcon "damage $BODY 5 minecraft:generic"] [:wait-s 75]]
+         [:rcon "damage $BODY 5 minecraft:generic"] [:wait-s 75]] ; hold: the declined round must stay quiet past the 60 s window
    :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 30}
             {:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
             {:no-event {:source :job :kind :food.none :context {:job-id "j2"}} :for-s 60}]
@@ -80,8 +80,7 @@
          [:wait-s 1]
          [:rcon "execute positioned $X $Y $Z run item replace block ~60 ~ ~16 container.0 with air"]
          [:rcon "execute at $BODY run summon zombie ~3 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 20]
-         [:wait-s 60]]
+         [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 20]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :dropped :by :hostile-near}} :within-s 40}
             {:event {:source :job :kind :food.none :level :warn} :within-s 100}]

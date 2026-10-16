@@ -37,7 +37,7 @@
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:3}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]
-         [:await {:source :job :kind :stopped :data {:reason :no-tool}} 40] [:wait-s 30]]
+         [:await {:source :job :kind :stopped :data {:reason :no-tool}} 40] [:wait-s 30]] ; hold: the need fails once, no second attempt
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 40 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :no-tool}} :within-s 50 :of-job true}]
    :after [[:block [18 0 19] "stone"] [:item "dirt" 0]]}

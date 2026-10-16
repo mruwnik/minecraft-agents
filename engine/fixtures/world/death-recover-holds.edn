@@ -16,7 +16,7 @@
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]
          [:rcon "effect give $BODY minecraft:hunger 5 255 true"]
-         [:wait-s 60]]
+         [:wait-s 60]] ; hold: the recovery must run to its end before hungry may fire
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :died}} :within-s 40}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 60}]
    :after [[:item "raw_iron" 24]]}
@@ -40,7 +40,7 @@
    :act [[:wait-s 1]
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]
-         [:wait-s 40]]
+         [:wait-s 40]] ; hold: the body stays in the hut all night
    :expect [{:event {:source :job :kind :recover-drops.declined} :within-s 40}
             {:no-event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :for-s 40}]
    :after [[:body-near [5.5 0 5.5] 3.5] [:item "raw_iron" 0]]}
@@ -56,8 +56,7 @@
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]
          [:await {:source :job :kind :recover-drops.declined} 40]
-         [:time-set 1000]
-         [:wait-s 90]]
+         [:time-set 1000]]
    :expect [{:event {:source :job :kind :recover-drops.declined} :within-s 40}
             {:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 160}]
    :after [[:item "raw_iron" 24]]
