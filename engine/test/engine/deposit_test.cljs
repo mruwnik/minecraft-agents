@@ -306,7 +306,7 @@
           (let [eng (assoc-in eng [:jobs 'jobs.blocks.place]
                               (ending/wrap (assoc place-fn :can-start? (fn [c] (contract/later :not-allowed "claimed" :pos (storage/cell-of (:pos (:args c))))))))
                 result (await (wt/ending-of eng job {:items ["dirt"]} 80))]
-            (is (= {:kind :nothing-possible :cause :no-chest-spot} (select-keys result [:kind :cause])))
+            (is (= {:kind :nothing-possible :cause :all-chests-full} (select-keys result [:kind :cause])))
             (is (= #{[10 64 0]} (chests-in p)))))))))
 
 (deftest deposit-tries-every-spot-when-each-place-ends-unreachable
@@ -322,7 +322,7 @@
                                 (swap! tried conj (storage/cell-of (:pos (:args c))))
                                 (ctx/end c :nothing-possible {:reason :unreachable})))
                 result (await (wt/ending-of eng job {:items ["dirt"]} 120))]
-            (is (= {:kind :nothing-possible :cause :no-chest-spot} (select-keys result [:kind :cause])))
+            (is (= {:kind :nothing-possible :cause :all-chests-full} (select-keys result [:kind :cause])))
             (is (< 3 (count @tried)) "more spots than the failure count of a give-up")))))))
 
 (deftest deposit-with-fetching-off-does-not-fetch-the-chest

@@ -40,7 +40,7 @@
   full and :make-chests? is true, a chest (jobs.blocks.place child, fetching or crafting it by default; :fetch-chests? false only a carried one) goes down
   beside a full one and joins the group. A place that ends for a reason of the cell (a zone, the body in it, nothing to place against,
   unreachable, occupied) tries the next free spot (warn deposit.no-chest); a place that ends :need (no chest to be had) ends condition-failed
-  :no-chest-item, no free cell beside nothing-possible :no-chest-spot, :make-chests? false nothing-possible :all-chests-full. Any other :chest is used alone.
+  :no-chest-item, no free cell beside (or none left to try), or :make-chests? false, nothing-possible :all-chests-full; a chest that cannot be placed after 3 tries nothing-possible :no-chest-spot. Any other :chest is used alone.
   Found goods (jobs.lib.found: bulk or containers picked up with no job reason) stay carried, even when named in :items; one
   goods.found notice (:attention :notice) names item, count and the pick-up place.
   Stock: what the chest holds after each transfer is booked in body memory :fetch/stock (jobs.lib.stock), so observe chests shows it.")
@@ -201,19 +201,19 @@
   "The spot cannot take a chest: it is not tried again. :again while another spot is free, else the no-spot stop."
   [c pool spot]
   (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
-  (if (seq (chest-spots c pool)) :again (stop! c :nothing-possible :no-chest-spot)))
+  (if (seq (chest-spots c pool)) :again (stop! c :nothing-possible :all-chests-full)))
 
 (defn ^:async make-chest!
   "Every chest of the pool is full: put a chest down beside one (a jobs.blocks.place child), remember it in the group.
-  :again, :continue while the child waits, or a stop with the cause (all-chests-full when :make-chests? is false,
-  no-chest-spot, no-chest-item)."
+  :again, :continue while the child waits, or a stop with the cause (all-chests-full when :make-chests? is false or no free spot is left,
+  no-chest-spot after failed placing, no-chest-item)."
   [c pool]
   (cond
     (not (:make-chests? (:args c))) (stop! c :nothing-possible :all-chests-full)
     :else
     (let [spot (or (:chest-spot (ctx/mem c)) (first (chest-spots c pool)))]
       (cond
-        (nil? spot) (stop! c :nothing-possible :no-chest-spot)
+        (nil? spot) (stop! c :nothing-possible :all-chests-full)
         (= "chest" (u/seen-name (:primitives c) spot)) ; placed by an earlier round of the child
         (do (ctx/update-mem! c dissoc :chest-spot)
             (storage/add-to-group! c spot)
