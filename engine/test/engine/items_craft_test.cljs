@@ -545,6 +545,18 @@
           (is (seq (calls p "look")) "the table behind the body is not known until it looks")
           (is (= {:item "bread" :made 1 :status :done} (dissoc result :text))))))))
 
+(deftest craft-a-gate-without-a-table-makes-it-from-the-carried-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trees (into {} (for [x [4 6 8] y [64 65 66]] [(str x "," y ",3") "oak_log"]))
+              [result p] (await (craft {:blocks trees
+                                        :recipes {"oak_fence_gate" {:count 1 :needs {"oak_planks" 2 "stick" 4} :table true}}
+                                        :inventory [{:name "oak_log" :count 6} {:name "oak_planks" :count 1}]}
+                                       {:item "oak_fence_gate" :count 1}))]
+          (is (= 1 (get (inv p) "oak_fence_gate")) (pr-str result))
+          (is (every? #(< (.. % -args -pos -x) 4) (calls p "dig")) "no tree was felled (the one dig takes the table up)"))))))
+
 (deftest craft-a-gate-fetches-the-planks-its-own-sticks-used-up
   (async done
     (tu/run-async done
