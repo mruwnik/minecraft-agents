@@ -447,6 +447,18 @@
         "no position at all is a failure")
     (is (re-find #"No entity" (:why (f/judge-start origin c "No entity was found"))))))
 
+(deftest a-body-beyond-its-plot-is-reported-as-having-left
+  (let [origin [20000 150 20000]
+        at (fn [x z] (str "P has the following entity data: [" x "d, 150.0d, " z "d]"))
+        c (f/merge-case {} {:name "a" :act [[:wait-s 1]]})
+        far (f/merge-case {} {:name "a" :act [[:job {:pos (f/rel [-100 0 5])}]]})]
+    (is (nil? (f/left-plot-why origin c (at 20010.5 20031.5))) "inside")
+    (is (nil? (f/left-plot-why origin c (at 20035.5 20010.5))) "within the margin")
+    (is (re-find #"left its plot.*20064\.5 150 20010\.5" (f/left-plot-why origin c (at 20064.5 20010.5))))
+    (is (some? (f/left-plot-why origin c (at 20010.5 19980.5))) "north of the plot")
+    (is (nil? (f/left-plot-why origin c "No entity was found")))
+    (is (nil? (f/left-plot-why origin far (at 19900.5 20010.5))) "a deliberately far goal may leave")))
+
 (deftest a-case-with-nothing-to-check-cannot-run
   (let [ps (fn [c] (f/problems (f/merge-case {} c)))]
     (is (some #(re-find #":expect or :after" %) (ps {:name "a"})))

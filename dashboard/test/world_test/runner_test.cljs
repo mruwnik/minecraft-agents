@@ -502,6 +502,18 @@
                (is (= [:stalled] (mapv :status res)))
                (done))))))
 
+(deftest watch-fails-a-case-whose-body-left-its-plot
+  (async done
+    (let [c {:limit-s 100 :expect [{:event {:kind :never} :within-s 90}]}
+          calls (atom 0)
+          io (assoc (fake-watch-io {} (constantly []))
+                    :left-plot (fn [] (js/Promise.resolve (when (> (swap! calls inc) 2) "body left its plot: at x"))))]
+      (.then (r/watch-with! io c 1000000 #{} (r/stall-clock 1000000))
+             (fn [res]
+               (is (= [:fail] (mapv :status res)))
+               (is (re-find #"body left its plot" (:evidence (first res))))
+               (done))))))
+
 (deftest watch-without-a-gap-runs-to-the-limit-as-a-fail
   (async done
     (let [c {:limit-s 3 :expect [{:event {:kind :never} :within-s 1}]}

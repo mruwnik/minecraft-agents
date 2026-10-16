@@ -1323,11 +1323,18 @@
   "Polls until every expectation is decided or the case's limit; resolves to the judged results. io: {:now :sleep
   :events (events from the window start)}. clock: the case's stall clock; a gap over stall-gap-ms in it ends the watch
   with the undecided expectations :stalled. A job case whose jobs have all ended for idle-grace-ms ends early (see
-  early-end?); the pending expectations fail with :ended-early-s."
-  [{:keys [now sleep events]} c t0 ids clock]
-  (let [limit (+ t0 (* 1000 (max (:limit-s c) (+ 2 (x/deadline-s (:expect c))))))
+  early-end?); the pending expectations fail with :ended-early-s. io :left-plot (optional, -> promise of a reason or nil)
+  is asked every 2 s; a reason fails the pending expectations with it."
+  [{:keys [now sleep events left-plot]} c t0 ids clock]
+  (let [polls (atom 0)
+        limit (+ t0 (* 1000 (max (:limit-s c) (+ 2 (x/deadline-s (:expect c))))))
         idle-since (atom nil)]
-    (letfn [(poll []
+    (letfn [(check-left-plot [results]
+              (if (and left-plot (zero? (mod (swap! polls inc) 4)))
+                (.then (left-plot)
+                       (fn [why] (when why (mapv #(if (= :pending (:status %)) (assoc % :status :fail :evidence why) %) results))))
+                (js/Promise.resolve nil)))
+            (poll []
               (let [t (now)
                     _ (tick! clock t)
                     stalled? (clock-stalled? clock)
@@ -1344,13 +1351,16 @@
                   (and idle (>= (- t @idle-since) (idle-grace-ms c)))
                   (js/Promise.resolve (end-early results idle (js/Math.round (/ (- limit t) 1000)) evs ids))
                   :else
-                  (.then (sleep 500) poll))))]
+                  (.then (check-left-plot results) (fn [failed] (or failed (.then (sleep 500) poll)))))))]
       (poll))))
 
 (defn watch!
-  "watch-with! on the body's event log. window: see watch-window; events before t0 count when the window starts earlier."
-  [opts c {offset :offset from :from-ms} t0 ids clock]
+  "watch-with! on the body's event log. window: see watch-window; events before t0 count when the window starts earlier.
+  The body's position is read to fail a case whose body left its plot (origin; raw-case c: its #at tags are unresolved)."
+  [opts c raw origin {offset :offset from :from-ms} t0 ids clock]
   (watch-with! {:now js/Date.now :sleep sleep
+                :left-plot #(.then (rcon! [(f/start-check-command (:body opts))])
+                                   (fn [[reply]] (f/left-plot-why origin raw (or reply ""))))
                 :events #(filterv (fn [e] (>= (:time-ms e 0) from)) (read-events-from (events-file opts) offset))}
                c t0 ids clock))
 
@@ -1590,7 +1600,7 @@
                                       window (watch-window (some? register) @pre-register {:offset (log-cursor (events-file opts)) :from-ms t0})]
                                   (-> (run-steps! opts origin rc (:offset window) (:from-ms window))
                                       (.then (fn [ids]
-                                               (.then (watch! opts rc window t0 ids clock)
+                                               (.then (watch! opts rc c origin window t0 ids clock)
                                                       (fn [expects]
                                                         (.then (after-checks! opts origin rc)
                                                                (fn [afters]

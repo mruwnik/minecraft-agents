@@ -731,6 +731,29 @@
   (when-let [[_ x y z] (re-find #"\[(-?[\d.E-]+)d, (-?[\d.E-]+)d, (-?[\d.E-]+)d\]" reply)]
     [(js/Number x) (js/Number y) (js/Number z)]))
 
+(def leave-margin
+  "Blocks beyond the plot a body may stand before the runner fails its case: the next plot's setup would build over it."
+  8)
+
+(defn may-leave-plot?
+  "A case with a deliberately far #at position (see far-margin) sends the body out of its plot on purpose."
+  [c]
+  (let [{:keys [length width]} (:plot c)
+        lx (or length 32) lz (or width 32)]
+    (boolean (some (fn [[x _ z]] (or (< x 0) (>= x lx) (< z 0) (>= z lz)))
+                   (filter coords? (keep ::rel (filter map? (tree-seq coll? seq (:act c)))))))))
+
+(defn left-plot-why
+  "Why the body at reply (a start-check-command reply) left the case's plot by more than leave-margin, else nil."
+  [origin c reply]
+  (let [{:keys [length width]} (:plot c)
+        [ox _ oz] origin
+        [x _ z :as p] (reply-pos reply)]
+    (when (and p (not (may-leave-plot? c))
+               (or (< x (- ox leave-margin)) (>= x (+ ox (or length 32) leave-margin))
+                   (< z (- oz leave-margin)) (>= z (+ oz (or width 32) leave-margin))))
+      (str "body left its plot: it is at " (xyz-str p) ", the plot starts at " (xyz-str origin)))))
+
 (defn describe-entity-reply
   "Names the entity in a `data get entity <sel> Pos` reply: its type and plot-relative position."
   [origin reply]
