@@ -43,6 +43,16 @@
         result (await (child-outcome eng job args 8))]
     [result p seen eng]))
 
+(defn ^:async craft-counting-walks
+  "Like craft, with the number of go-to calls the job made (one call may take several rounds)."
+  [world args]
+  (let [calls (atom 0)
+        orig child/call-walk*]
+    (set! child/call-walk* (fn [c slot a] (swap! calls inc) (orig c slot a)))
+    (try
+      (conj (await (craft world args)) @calls)
+      (finally (set! child/call-walk* orig)))))
+
 (deftest craft-wants-an-item-name
   (are [args ok] (= ok (= :ok (first ((:can-start? (get registry/jobs job)) {:args args}))))
     {:item "stick"} true
@@ -163,10 +173,10 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [spec [:unreachable :noPath]]
-          (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block spec ["10,64,0"]}
-                                              {:item "bread"}))]
+          (let [[result p seen eng walks] (await (craft-counting-walks {:inventory [{:name "wheat" :count 3}] :blocks table-block spec ["10,64,0"]}
+                                                                       {:item "bread"}))]
             (is (= {:made 0 :status :stopped :reason :unreachable} (select-keys result [:made :status :reason])))
-            (is (= 1 (count (tu/walked-to eng))))
+            (is (= 1 walks))
             (is (empty? (filter #(str/starts-with? (name (:kind %)) "craft.") @seen)) "the ending carries it")))))))
 
 (deftest craft-does-not-repeat-the-craft-act-while-the-walk-to-its-table-waits
@@ -478,10 +488,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result _ _ eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block :unreachable ["10,64,0"]}
-                                             {:item "bread" :fetch false}))]
+        (let [[result _ _ _ walks] (await (craft-counting-walks {:inventory [{:name "wheat" :count 3}] :blocks table-block :unreachable ["10,64,0"]}
+                                                                {:item "bread" :fetch false}))]
           (is (= {:made 0 :status :stopped :reason :unreachable} (select-keys result [:made :status :reason])))
-          (is (= 1 (count (tu/walked-to eng))) "a table the walk cannot reach is not walked to again")
+          (is (= 1 walks) "a table the walk cannot reach is not walked to again")
           (is (re-find #"cannot be reached" (:text result))))))))
 
 (deftest craft-says-why-the-carried-table-could-not-be-put-down
