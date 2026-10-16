@@ -5,7 +5,7 @@
   An item is taken when it is seen (not behind a wall), within :radius of the body, not on :never, and on :always or
   worth the detour: jobs.lib.cost item-value (:value options) over detour-cost (:cost options) at least :min-ratio.
   It is left (the reason judge gives) when:
-    :thrown       the body threw it (make-room's junk, a give), ever; another player threw it under :thrown-s ago
+    :thrown       the body threw it (make-room's junk, a give), ever; any item of a kind make-room tossed under :dumped-s ago; another player threw it under :thrown-s ago
                   (thrower: from the spawn engine/js records; the body's own toss by item and time, a player's by its drop point);
     :zone         it lies in another's zone or claim (a :take verdict; no zone list never blocks);
     :collecting   a live job's collect-drops is collecting round it (the :collecting hold, written by collect-drops);
@@ -33,6 +33,7 @@
    ::drop-dy {:default 1.32 :spec (a/num-in 0 2) :doc "Height above a player's feet where its thrown items appear (vanilla: eye 1.62 less 0.3)."}
    ::throw-dxz {:default 0.1 :spec (a/num-in 0 1) :doc "Blocks across from a player's drop point within which an item counts as its throw."}
    ::throw-dy {:default 0.1 :spec (a/num-in 0 1) :doc "Blocks up or down from a player's drop point within which an item counts as its throw."}
+   ::dumped-s {:default 600 :spec (a/num-in 0 nil) :doc "Seconds after make-room tossed an item kind during which items of that kind are left, whatever their spawn."}
    ::toss-ms {:default 2000 :spec (a/num-in 0 nil) :doc "An item counts as the body's own throw only this many ms after a toss of that item."}
    ::toss-reach {:default 1.5 :spec (a/num-in 0 4) :doc "Blocks from the body's drop point within which an item of its toss may appear (it may be moving)."}
    ::hold-cap {:default 16 :spec (a/int-in 1 nil) :doc "Most :collecting holds kept (one per collect-drops run)."}
@@ -41,7 +42,7 @@
    ::check-radius {:default 32 :spec (a/num-in 1 nil) :doc "Blocks within which pick-up-loose looks for the items it tried, after the run."}
    ::collect-pad {:default 1 :spec (a/num-in 0 nil) :doc "Blocks added to :radius for the collect-drops child's area."}})
 
-(def option-keys [:radius :min-ratio :always :never :thrown-s :owed-s :left-s
+(def option-keys [:radius :min-ratio :always :never :thrown-s :owed-s :left-s :dumped-s
                   :drop-dy :throw-dxz :throw-dy :toss-ms :toss-reach :hold-cap :hold-ttl-s :left-cap :check-radius :collect-pad])
 
 (defn options
@@ -111,6 +112,12 @@
            (<= (js/Math.abs (- (:z pos) (:z feet))) (:throw-dxz o))
            (<= (js/Math.abs (- (:y pos) (:y feet) (:drop-dy o))) (:throw-dy o))) name)))
 
+(defn dumped-names
+  "The item names make-room tossed within :dumped-s."
+  [o view]
+  (into #{} (comp (filter #(< (- (:now view) (:t %)) (* 1000 (:dumped-s o)))) (mapcat (comp :items :data)))
+        (mem/entries view :make-room-rest)))
+
 (defn item-pos [e] (u/pos-of (.-pos e)))
 
 (defn worth
@@ -141,7 +148,7 @@
         pos (item-pos e)
         spawn (.-spawn e)
         age (when-let [t (some-> spawn .-at)] (- now t))
-        by (thrower o self name spawn)
+        by (if (contains? (dumped-names o view) name) self (thrower o self name spawn))
         holds (filter #(contains? live (:job %)) (map :data (mem/entries view hold-kind)))]
     (cond
       (nil? name) :unknown

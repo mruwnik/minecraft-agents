@@ -86,6 +86,13 @@
   (is (false? (holds? (world (assoc log-near :spawn (spawn "Ann" [4.5 64 0.5] [0.05 1.3 0] {:ago 10000}))))) "a player's toss, for a while")
   (is (true? (holds? (world (assoc log-near :spawn (spawn "Ann" [4.5 64 0.5] [0 1.32 0] {:ago 70000}))))) "a player's toss, after :thrown-s"))
 
+(deftest items-make-room-dumped-are-left-whatever-their-spawn
+  (let [dumped [[:make-room-rest {:items ["oak_log"]}]]]
+    (is (false? (holds? (world log-near) {:memory dumped})) "a dumped item name, with no spawn record")
+    (is (false? (holds? (world (assoc log-near :spawn {:at (- now 500000)})) {:memory dumped})) "lying long after the toss window")
+    (is (true? (holds? (world dirt-down log-near) {:memory [[:make-room-rest {:items ["dirt"]}]]})) "another item name is still taken")
+    (is (true? (holds-with {:dumped-s 0} (world log-near) {:memory dumped})) "past :dumped-s")))
+
 (defn xyz [[x y z]] {:x x :y y :z z})
 
 (defn thrower [s] (loose/thrower (loose/options {}) "Fake" "oak_log" (clj->js (-> s (update :pos xyz) (update-in [:player :pos] xyz)))))

@@ -72,8 +72,8 @@
   {:cap 1 :ttl 120000})
 
 (def rest-policy
-  "When make-room last tossed: the inventory-nearly-full trigger rests (its :rest-s) after it."
-  {:cap 1 :ttl 3600000})
+  "When make-room last tossed and which item kinds: the inventory-nearly-full trigger rests (its :rest-s) after it, and jobs.lib.loose leaves those kinds."
+  {:cap 8 :ttl 3600000})
 
 (defn item-worth
   "The worth of one item of an inventory entry ({:name :count? ...}): its jobs.lib.cost/item-value per item."
@@ -437,7 +437,7 @@
   (let [m (ctx/mem c)
         free-now (u/free-slots (:primitives c))
         {:keys [tossed text]} (tossed-summary m free-now)]
-    (when (seq tossed) (ctx/remember! c :make-room-rest {} rest-policy))
+    (when (seq tossed) (ctx/remember! c :make-room-rest {:items (vec (distinct (map :item tossed)))} rest-policy))
     (if (nil? reason)
       (ctx/end c :done nil {:tossed tossed :free free-now :text text})
       (ctx/end c :nothing-possible reason (cond-> {:text (str (stop-texts reason) "; " text) :free free-now :tossed tossed}
