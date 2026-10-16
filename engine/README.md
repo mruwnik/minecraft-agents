@@ -226,7 +226,7 @@ A job is a namespace under `src/jobs/` exporting `round` (and `can-start?`, `can
 There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:can-start? :round :doc :args}}`,
 built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
 that defines `round` and no old `check`, or `round` and `can-start?` or `can-run?` (others are helpers), fails the compile when such a file's `ns` does not match its
-path or a file defines `round` and `check` but none of those, and the macro `engine.registry/job-registry` emits the map, with each `engine.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args). The exports must be top-level `def`/`defn` forms, and a job must not
+path or a file defines `round` and `check` but none of those, and the macro `engine.registry/job-registry` emits the map, with each `engine.primitive` table entry as the job `jobs.primitive.<kebab-case>` (`jobs.primitive.move-to`: one act, the act's args; a failed act's ending text names its status, the block that holds the cell and its reason). The exports must be top-level `def`/`defn` forms, and a job must not
 require `engine.registry`.
 
 - **round**: returns `:continue` or an ending (`ctx/end`, Contract jobs below; the job leaves the list, its memory is

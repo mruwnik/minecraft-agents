@@ -179,6 +179,12 @@
           (is (= 1 (calls p "dig")))
           (is (= {:kind :condition-failed :cause :missing} (stopped seen))))))))
 
+(deftest a-failed-act-says-what-it-met
+  (are [r text] (= text (primitive-job/failure-text :place (js->clj r :keywordize-keys true)))
+    #js {:status "occupied" :block "white_bed"} "place: occupied by white_bed"
+    #js {:status "failed" :reason "Server refused (entities near the cell: player#3)"} "place: failed (Server refused (entities near the cell: player#3))"
+    #js {:status "no-support"} "place: no-support"))
+
 (deftest wait-and-offline-run-by-name-as-jobs
   (async done
     (tu/run-async done

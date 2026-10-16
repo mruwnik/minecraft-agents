@@ -42,6 +42,11 @@
     (precondition-statuses (:cause e)) e
     :else (assoc e :kind :nothing-possible)))
 
+(defn failure-text
+  "What a failed act of primitive k met, as the ending's words: its status, the block that holds the cell, its reason."
+  [k {:keys [status block reason]}]
+  (str (name k) ": " status (some->> block (str " by ")) (some->> reason (#(str " (" % ")")))))
+
 (defn args-data [k]
   (into {} (map (fn [arg] [arg (if (position-keys arg)
                                   {:doc "where, [x y z] or {:x :y :z}" :spec ::a/pos}
@@ -72,4 +77,5 @@
                 (if (instance? js/Error r)
                   (ctx/end c :impossible {:reason :bad-args :why (.-message r)})
                   (let [e (read-ending (ending r))]
-                    (ctx/end c (:kind e) (:cause e) (js->clj r :keywordize-keys true))))))}))
+                    (let [data (js->clj r :keywordize-keys true)]
+                      (ctx/end c (:kind e) (:cause e) (cond-> data (not= :done (:kind e)) (assoc :text (failure-text k data)))))))))}))
