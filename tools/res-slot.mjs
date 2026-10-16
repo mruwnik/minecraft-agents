@@ -83,9 +83,9 @@ const tryRun = (kind, i, cmd, onStart = () => {}, heavy = false) => new Promise(
 export const logRun = (entry) => fs.appendFileSync(path.join(dir(), 'log.jsonl'), JSON.stringify({ t: new Date().toISOString(), cwd: process.cwd(), run: process.env.MC_RUN_ID, ...entry, cmd: entry.cmd.slice(0, 200) }) + '\n')
 
 // Grants: <dir>/grants/<pid>.json = {needMb, t}. A grant reserves its need until rampMs after it started or its owner died.
-// Pure: total need of grants still ramping.
-export const reservedMb = (grants, now, rampMs, alive = () => true) =>
-  grants.filter((g) => now - g.t < rampMs && alive(g.pid)).reduce((a, g) => a + g.needMb, 0)
+// Pure: need of grants still ramping, minus what their process trees already hold (MemAvailable has dropped by that much, so it must not count twice).
+export const reservedMb = (grants, now, rampMs, alive = () => true, rss = () => 0) =>
+  grants.filter((g) => now - g.t < rampMs && alive(g.pid)).reduce((a, g) => a + Math.max(0, g.needMb - rss(g.pid)), 0)
 // Heavy waiters: <dir>/heavy-wait/<kind>.<pid>[.<n>], holding the JSON list of slots the waiter tries (empty: any slot). While one is alive, light runs of the kind leave those slots alone, so a freed slot reaches the heavy run.
 export const isHeavy = (cwd = process.cwd()) => !!process.env.RES_SLOT_HEAVY || hasHeavyMarker(cwd)
 // Pure: the free slots a light run may take. waits: one entry per live heavy waiter, the slots it tries, or null (any slot).
@@ -105,12 +105,27 @@ const readGrants = () => {
     try { return [{ ...JSON.parse(fs.readFileSync(path.join(grantDir(), f), 'utf8')), pid: Number(f.split('.')[0]), file: f }] } catch { return [] }
   })
 }
+// Resident MB of pid and all its descendants, from /proc (0 where unreadable).
+const treeRssMb = (root) => {
+  const kids = new Map()
+  const rss = new Map()
+  for (const p of fs.readdirSync('/proc').filter((f) => /^\d+$/.test(f))) {
+    try {
+      const st = fs.readFileSync(`/proc/${p}/stat`, 'utf8')
+      const ppid = Number(st.slice(st.lastIndexOf(')') + 2).split(' ')[1])
+      kids.set(ppid, [...(kids.get(ppid) ?? []), Number(p)])
+      rss.set(Number(p), Number(fs.readFileSync(`/proc/${p}/statm`, 'utf8').split(' ')[1]) * 4096 / 1048576)
+    } catch { /* process gone */ }
+  }
+  const sum = (pid) => (rss.get(pid) ?? 0) + (kids.get(pid) ?? []).reduce((a, k) => a + sum(k), 0)
+  return sum(root)
+}
 const rampMs = () => Number(process.env.RES_SLOT_RAMP_MS ?? 60000)
 const currentReserved = () => {
   const grants = readGrants()
   const live = grants.filter((g) => Date.now() - g.t < rampMs() && pidAlive(g.pid))
   for (const g of grants) if (!live.includes(g)) fs.rmSync(path.join(grantDir(), g.file), { force: true })
-  return reservedMb(live, Date.now(), rampMs())
+  return reservedMb(live, Date.now(), rampMs(), pidAlive, treeRssMb)
 }
 // Short mkdir lock so check and grant are one step across waiters; a lock older than 10 s is stale.
 const withGate = async (f) => {

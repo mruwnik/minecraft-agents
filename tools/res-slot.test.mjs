@@ -115,6 +115,11 @@ test('reservedMb: counts only grants still ramping whose owner lives', () => {
   const grants = [{ pid: 1, needMb: 700, t: 1000 }, { pid: 2, needMb: 500, t: 100 }, { pid: 3, needMb: 300, t: 1000 }]
   assert.equal(reservedMb(grants, 1500, 600, (pid) => pid !== 3), 700)
 })
+test('reservedMb: a grant reserves only its need minus the tree RSS it already holds', () => {
+  const grants = [{ pid: 1, needMb: 1000, t: 1000 }, { pid: 2, needMb: 1000, t: 1000 }, { pid: 3, needMb: 1000, t: 1000 }]
+  const rss = (pid) => ({ 1: 300, 2: 1500, 3: 0 })[pid]
+  assert.equal(reservedMb(grants, 1500, 600, () => true, rss), 700 + 0 + 1000)
+})
 test('decide: reserved memory counts as used', () => {
   const d = decide({ ...base, availableMb: 7000, reservedMb: 1000 })
   assert.equal(d.action, 'wait'); assert.match(d.why, /reserved/)
