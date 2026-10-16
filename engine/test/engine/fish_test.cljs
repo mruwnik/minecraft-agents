@@ -84,3 +84,13 @@
           (is (= :job-time (:reason res)) (pr-str res))
           (is (= 0 (:got res)) (pr-str res)))))))
 
+
+(deftest water-not-yet-seen-is-looked-for-before-no-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup (world [rod] {:catch ["cod"] :misses 0}))
+              _ (tu/seeing-after-look p)
+              res (await (tu/child-outcome eng 'jobs.food.fish {:count 1} 120))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (= 1 (:got res))))))))

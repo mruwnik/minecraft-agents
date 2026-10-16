@@ -3,7 +3,9 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -97,7 +99,7 @@
   "Later with the cause that bars the first cast."
   [c]
   (if-let [[cause text] (start-problem c)]
-    (contract/later cause text)
+    (if (= :no-water cause) (checks/unseen-later c cause text) (contract/later cause text))
     (contract/ok :ready "a rod and water to cast at")))
 
 (defn ^:async cast! [c {:keys [water]}]
@@ -137,7 +139,8 @@
       (if-let [spot (first (spots c))]
         (let [w (await (walk! c spot))]
           (if (= :arrived w) (await (cast! c spot)) w))
-        (stop! c :condition-failed :no-water "no seen water with a bank in reach")))))
+        (or (await (look/survey! c))
+            (stop! c :condition-failed :no-water "no seen water with a bank in reach"))))))
 
 (defn ^:async round [c]
   (ctx/update-mem! c update :base #(or % (fish-carried c)))
