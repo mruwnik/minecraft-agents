@@ -479,7 +479,7 @@
   once it ended (a failed one is booked, a limit ends the build), nil when nothing is due."
   [c]
   (when-let [w (plan/problem c)]
-    (let [o (select-keys (need/opts c plan/fetch-job) [:how :explore])
+    (let [o (assoc (select-keys (need/opts c plan/fetch-job) [:how :explore]) :for-plan (:plan (:args c)))
           key (plan/fetch-key w)
           what (or (:item w) (str "a tool for " (:block w)))
           _ (when-not (= key (:fetching (ctx/mem c)))

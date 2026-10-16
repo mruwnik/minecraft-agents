@@ -84,7 +84,7 @@
     (when (and spot (not (:keep-table (:args c))) (not (:picked-up (ctx/mem c)))
                (= "crafting_table" (u/seen-name (:primitives c) spot))
                (not (access/in-own-area? c spot))
-               (:ok (access/may? c :dig spot)))
+               (:ok (access/may? (access/rules-input c {:except (:for-plan (:args c))}) :dig spot)))
       spot)))
 
 (defn done?
@@ -249,7 +249,7 @@
   (loop []
     (when-let [cell (or (:spot-digging (ctx/mem c)) (first (dig-spot-cells c)))]
       (ctx/update-mem! c assoc :spot-digging cell)
-      (let [r (await (ctx/call c :spot-dig 'jobs.blocks.dig {:pos cell :collect false :need-drop false :fetch false :on-fluid :fail}))]
+      (let [r (await (ctx/call c :spot-dig 'jobs.blocks.dig {:pos cell :collect false :need-drop false :fetch false :on-fluid :fail :for-plan (:for-plan (:args c))}))]
         (if (= :continue r)
           :continue
           (do (ctx/update-mem! c #(-> % (dissoc :spot-digging) (update :spot-dug (fnil conj #{}) cell)))
@@ -281,7 +281,7 @@
   [c problem]
   (loop []
     (when-let [{:keys [item count]} (and (:fetch (:args c)) (problem c))]
-      (let [e (await (need/item! c item count {:slot (keyword (str "need-" item))}))]
+      (let [e (await (need/item! c item count {:slot (keyword (str "need-" item)) :for-plan (:for-plan (:args c))}))]
         (cond
           (= :continue e) :continue
           (not= :done (:kind e)) nil
@@ -501,7 +501,7 @@
   (let [spot (pickup-spot c)]
     (if-not spot
       (ctx/end c :done nil {})
-      (let [r (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail}))]
+      (let [r (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail :for-plan (:for-plan (:args c))}))]
         (if (= :continue r)
           :continue
           (do (ctx/update-mem! c assoc :picked-up true)

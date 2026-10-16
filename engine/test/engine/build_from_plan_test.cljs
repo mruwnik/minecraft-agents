@@ -1057,7 +1057,7 @@
           (try
             (await (child-outcome eng job {:plan "pen"} 300))
             (finally (set! ctx/call orig)))
-          (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %))) @seen) (pr-str @seen)))))))
+          (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %)) (= "pen" (:for-plan %))) @seen) (pr-str @seen)))))))
 
 (deftest stand-levels-are-the-cells-first-then-the-bodys-when-near
   (are [body cell levels] (= levels (plan/stand-levels body cell))

@@ -524,6 +524,23 @@
           (is (= 4 (get (inv s) "oak_planks")))
           (is (= 2 (get (inv s) "oak_log"))))))))
 
+(deftest obtain-passes-its-for-plan-to-the-craft-children
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              seen (atom [])
+              s (start (-> (world {}) (update :blocks dissoc chest-at) (assoc :inventory [{:name "oak_log" :count 2}])) [own-zone])]
+          (set! ctx/call (fn [c slot j args]
+                           (when (= 'jobs.items.craft j) (swap! seen conj args))
+                           (orig c slot j args)))
+          (try
+            (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4 :for-plan "house"}) {})
+            (await (run-ticks s 30))
+            (finally (set! ctx/call orig)))
+          (is (seq @seen))
+          (is (every? #(= "house" (:for-plan %)) @seen) (pr-str @seen)))))))
+
 (deftest get-tool-for-a-hand-block-is-not-needed
   (async done
     (tu/run-async done

@@ -713,4 +713,5 @@
       (fn ^:async t []
         (doseq [[args placed?] [[{:item "bread"} false] [{:item "bread" :for-plan "house"} true]]]
           (let [[_ p] (await (craft {:plans house :inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]} args))]
-            (is (= placed? (boolean (seq (placed-at p)))) (pr-str args))))))))
+            (is (= placed? (boolean (seq (placed-at p)))) (pr-str args))
+            (is (= placed? (boolean (seq (calls p "dig")))) (str "the table is dug up too " (pr-str args)))))))))
