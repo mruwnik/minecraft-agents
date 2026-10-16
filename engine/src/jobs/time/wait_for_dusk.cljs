@@ -25,7 +25,9 @@
 
 (def fit? ready/ok)
 
-(def can-start? (cond/because :dusk-not-come (cond/>= (cond/time-of-day) facts/dusk-tick)))
+(def can-run? (cond/because :dusk-not-come (cond/>= (cond/time-of-day) facts/dusk-tick)))
+
+(def can-start? ready/ok)
 
 (defn done?
   "Done when it is evening or later in the day's ticks."

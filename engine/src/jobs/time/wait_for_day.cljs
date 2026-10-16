@@ -23,7 +23,9 @@
 
 (def fit? ready/ok)
 
-(def can-start? (cond/because :day-not-come (cond/daytime)))
+(def can-run? (cond/because :day-not-come (cond/daytime)))
+
+(def can-start? ready/ok)
 
 (defn done?
   "Done when it is day."

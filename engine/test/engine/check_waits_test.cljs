@@ -52,10 +52,11 @@
           (is (= :dusk-not-come (:reason (:waiting dusk))))
           (is (= "time-of-day 6000 < 12000" (:text (:observed dusk)))))))))
 
-(deftest the-pilots-check-with-can-start-built-from-the-library
-  (are [sym] (fn? (get-in registry/jobs [sym :can-start?]))
+(deftest the-time-jobs-wait-in-can-run-and-start-anywhere
+  (are [sym] (and (fn? (get-in registry/jobs [sym :can-run?])) (not= :later (first ((get-in registry/jobs [sym :can-start?]) {}))))
     'jobs.time.wait-for-day
-    'jobs.time.wait-for-dusk
+    'jobs.time.wait-for-dusk)
+  (are [sym] (fn? (get-in registry/jobs [sym :can-start?]))
     'jobs.survival.sleep
     'jobs.movement.boat-drive
     'jobs.items.give))
