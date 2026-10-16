@@ -162,3 +162,12 @@
     (is (= ["c1"] (:tick r)))
     (is (= ["a/x" "b/f" "b/w"] (sort (map :id (t/named-cases (t/card-plan-text {:plan-notes [note]})
                                                            (t/classify [(ok "a/x") (ok "b/w") (ok "b/f")] []))))))))
+
+(deftest case-of-a-fixture-file-absent-from-the-run-is-missing
+  (let [note "Live plan (cases):\nnew/x\na/x\nnot-a-fixture/case"
+        r (t/triage {:results [(ok "a/x")] :previous [] :fixture-files #{"a" "new"}
+                     :cards [{:id "c1" :column "live" :title "one" :commits [] :plan-notes [note]}]
+                     :bugs [] :ancestor? (constantly true)})]
+    (is (= ["new/x"] (:missing (first (:cards r)))))
+    (is (= ["c1"] (:no-plan r)))
+    (is (= [] (:tick r)))))

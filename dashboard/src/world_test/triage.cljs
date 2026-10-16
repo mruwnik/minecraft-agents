@@ -91,10 +91,10 @@
                            (if (seq notes) notes (if (seq from-live) from-live lines)))))))
 
 (defn missing-cases
-  "The refs (file/case, case may be cut short) on a card's 'Live plan (cases):' lines that name a fixture file of the run but match none of its cases; other slashed tokens are no case refs."
-  [{:keys [plan-notes]} cases]
+  "The refs (file/case, case may be cut short) on a card's 'Live plan (cases):' lines that name a fixture file of the run or one of known-files (fixture files in the repo) but match none of the run's cases; other slashed tokens are no case refs."
+  [{:keys [plan-notes]} cases known-files]
   (let [ids (map (comp str/lower-case :id) cases)
-        files (into #{} (map :file) cases)]
+        files (into (set known-files) (map :file) cases)]
     (vec (remove (fn [r] (some #(str/starts-with? % r) ids))
                  (filter #(and (str/includes? % "/") (files (first (str/split % #"/"))))
                          (mapcat tokens (case-plan-lines plan-notes)))))))
@@ -148,14 +148,14 @@
   (mapv :id (filter #(let [toks (tokens (:title %))] (or (toks id) (toks file))) bugs)))
 
 (defn triage
-  "{:results cases :previous [vector ...] :cards [{:id :column :title :commits :description :plan-notes}] :bugs [{:id :title}] :ancestor? sha -> bool} -> report."
-  [{:keys [results previous cards bugs ancestor?]}]
+  "{:results cases :previous [vector ...] :cards [{:id :column :title :commits :description :plan-notes}] :bugs [{:id :title}] :ancestor? sha -> bool :fixture-files #{names of the repo's fixture files}} -> report."
+  [{:keys [results previous cards bugs ancestor? fixture-files]}]
   (let [classified (classify results previous)
         by-id (into {} (map (juxt :id identity)) classified)
         card-reports (mapv (fn [c]
                              (let [named (named-cases (card-plan-text c) classified)
                                    covered? (every? ancestor? (:commits c))
-                                   missing (missing-cases c classified)
+                                   missing (missing-cases c classified fixture-files)
                                    v (cond (not covered?) :not-in-rev
                                            (seq missing) :no-plan
                                            :else (verdict named))]
@@ -231,6 +231,14 @@
     (when-not (zero? (.-status r)) (throw (js/Error. (str "git diff " from ".." to ": " (.-stderr r)))))
     (fixture-stems (.-stdout r))))
 
+(defn repo-fixture-files
+  "The fixture file names (no .edn) under engine/fixtures/world of the repo's working tree."
+  [repo]
+  (let [dir (str repo "/engine/fixtures/world")]
+    (if (fs/existsSync dir)
+      (fixture-stems (str/join "\n" (map #(str "engine/fixtures/world/" %) (array-seq (fs/readdirSync dir)))))
+      #{})))
+
 (defn with-plans [board plans]
   (update board :cards (fn [cards] (mapv (fn [c] (if-let [t (some (fn [[p t]] (when (str/starts-with? (:id c) p) t)) plans)] (assoc c :extra-plan t) c)) cards))))
 
@@ -267,7 +275,8 @@
       :else
       (let [report (triage (merge {:results (vec (mapcat read-results (result-files (:dir o))))
                                    :previous (mapv read-results (:previous o))
-                                   :ancestor? (ancestor-fn (:repo o) (:rev o))}
+                                   :ancestor? (ancestor-fn (:repo o) (:rev o))
+                                   :fixture-files (repo-fixture-files (:repo o))}
                                   (with-plans (if-let [f (:board-file o)] {:cards (reader/read-string (fs/readFileSync f "utf8")) :bugs []} (read-board (:db o) (:board o)))
                                               (some-> (:plans o) (fs/readFileSync "utf8") reader/read-string))))]
         (when (:out o) (fs/writeFileSync (:out o) (pr-str report)))
