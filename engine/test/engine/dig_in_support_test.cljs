@@ -2,11 +2,15 @@
   "dig-in's walls place bottom-up: a wall cell with no block beside, above or below it gets a block under it first."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.events :as events]
             [engine.fake :as fake]
+            [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.shelter-support :as st]
             [jobs.survival.dig-in-cells :as dig-cells]
-            [engine.test-util :as tu :refer [run-until-empty]]))
+            [engine.test-util :as tu :refer [run-until-empty]]
+            [engine.triggers :as triggers]
+            [jobs.lib.world-files :as world-files]))
 
 (def pillar
   "A one-block pillar over a ground two blocks lower: the body's side cells have nothing under or beside them."
@@ -38,6 +42,21 @@
         (let [{:keys [seen]} (await (run-walls! {:inventory [{:name "dirt" :count 40}] :blocks pillar :floor [0 0 0 0]}))]
           (is (empty? (st/emitted seen :dig_in_failed)) (pr-str (map :text (st/emitted seen :dig_in_failed))))
           (is (= 1 (count (st/emitted seen :dig-in.sealed)))))))))
+
+(deftest a-support-block-in-another-zone-is-not-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              p (tu/fake {:offlineScale 0.0001 :floor [0 0 0 0] :blocks pillar :inventory [{:name "dirt" :count 40}] :time st/night})
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                :world (world-files/of-data {} {} [{:name "keep-out" :min [-1 62 -1] :max [1 63 1]}])
+                                :events (events/make {:body "Fake" :sinks [(second (tu/legacy-capture-sink))] :now #(deref clock)})})
+              _ (needs-support! p)]
+          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (await (run-until-empty eng 30))
+          (is (every? #(contains? #{nil "air"} (some-> (.blockAt p (clj->js %)) .-name)) [{:x 1 :y 63 :z 0} {:x 1 :y 62 :z 0} {:x 0 :y 63 :z 1} {:x -1 :y 63 :z 0}])
+              "nothing is placed under the wall cells inside the zone"))))))
 
 (deftest walls-under-a-leaf-roof-count-as-sealed
   (async done
