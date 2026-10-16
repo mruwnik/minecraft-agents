@@ -7,6 +7,7 @@
 # Shared with the main checkout by symlink, so tools and tests there write to the same place: node_modules, worlds/ (bodies, plans, zones),
 # state/, textures/ and the frozen pathfinding fixtures. Blueprints stay per checkout (tracked files): bodies started from the worktree
 # need --worlds <main>/worlds --blueprints <main>/blueprints. No builds here; a worktree runs no shadow-cljs server (tools/compile).
+# The :test build's analyzer cache is copied from the most recently compiled checkout (tools/seed-shadow-cache.sh), so the first compile is warm.
 set -euo pipefail
 
 # The main checkout (source of the shared links), whichever checkout this script runs from.
@@ -58,4 +59,5 @@ exclude=$(git -C "$repo" rev-parse --path-format=absolute --git-path info/exclud
 for p in /node_modules /dashboard/node_modules /engine/node_modules /worlds /state /textures /engine/test/fixtures/pathfinding; do
   grep -qxF "$p" "$exclude" 2>/dev/null || echo "$p" >> "$exclude"
 done
+"$(dirname "$0")/seed-shadow-cache.sh" "$wt"
 echo "$wt"

@@ -16,6 +16,8 @@ function fakeRepo() {
   for (const d of ['tools/view', 'engine', 'dashboard']) fs.mkdirSync(path.join(repo, d), { recursive: true })
   for (const d of ['engine', 'dashboard']) fs.writeFileSync(path.join(repo, d, 'keep'), '')
   fs.copyFileSync(script, path.join(repo, 'tools/integration-worktree.sh'))
+  fs.copyFileSync(path.resolve(import.meta.dirname, 'seed-shadow-cache.sh'), path.join(repo, 'tools/seed-shadow-cache.sh'))
+  fs.chmodSync(path.join(repo, 'tools/seed-shadow-cache.sh'), 0o755)
   fs.writeFileSync(path.join(repo, 'tools/compile'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
   fs.writeFileSync(path.join(repo, 'tools/view/build-cljs.mjs'), '')
   fs.writeFileSync(path.join(repo, '.gitignore'), 'worlds/\ntextures/\nnode_modules/\nengine/test/fixtures/\n')
@@ -47,5 +49,25 @@ test('the worktree links worlds/test to the main one and nothing else under worl
     assert.equal(rm.status, 0, rm.stderr)
     assert.equal(fs.existsSync(wt), false)
     assert.equal(fs.existsSync(path.join(repo, 'worlds/test/world.json')), true)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('the worktree gets the :test build cache only, no server, port, pid or lock files', () => {
+  const { root, repo } = fakeRepo()
+  try {
+    const sc = path.join(repo, 'dashboard/.shadow-cljs')
+    fs.mkdirSync(path.join(sc, 'builds/test/dev/ana'), { recursive: true })
+    fs.mkdirSync(path.join(sc, 'builds/ui/dev'), { recursive: true })
+    for (const f of ['builds/test/dev/ana/a.cache.json', 'builds/ui/dev/b.json', 'server.pid', 'http.port', 'compile.lock', 'last-use'])
+      fs.writeFileSync(path.join(sc, f), 'x')
+    const wt = path.join(root, 'wt')
+    const r = sh(repo, path.join(repo, 'tools/integration-worktree.sh'), ['HEAD', wt])
+    assert.equal(r.status, 0, r.stderr)
+    const got = path.join(wt, 'dashboard/.shadow-cljs')
+    assert.deepEqual(fs.readdirSync(got), ['builds'])
+    assert.deepEqual(fs.readdirSync(path.join(got, 'builds')), ['test'])
+    const f = 'builds/test/dev/ana/a.cache.json'
+    assert.equal(fs.readFileSync(path.join(got, f), 'utf8'), 'x')
+    assert.notEqual(fs.statSync(path.join(got, f)).ino, fs.statSync(path.join(sc, f)).ino)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })

@@ -2,7 +2,7 @@
 # Set up a fresh git worktree for integration testing.
 # Usage: tools/integration-worktree.sh <commit> <dir> | --remove <dir>
 # Checks out <commit> at <dir>, then adds what a clean checkout lacks (all git-ignored): node_modules (symlinked to the main
-# checkout's), the .shadow-cljs dir, worlds/test (symlinked to the main checkout's: world.json, biomes.json and the bodies; nothing else under worlds/), textures/, engine/test/fixtures/pathfinding, engine/out/test-ns-ms.json (shard timeouts), the built agent-tools.cjs and the viewer cljs.
+# checkout's), the .shadow-cljs dir (with the :test cache seeded by tools/seed-shadow-cache.sh), worlds/test (symlinked to the main checkout's: world.json, biomes.json and the bodies; nothing else under worlds/), textures/, engine/test/fixtures/pathfinding, engine/out/test-ns-ms.json (shard timeouts), the built agent-tools.cjs and the viewer cljs.
 # At the end it prints the body flags that point the worktree at the main checkout's worlds and blueprints (untracked blueprints are not in the checkout).
 # Any failing step fails the script. Each build there is a one-shot shadow-cljs JVM under a res-slot `server` slot (tools/compile);
 # remove the worktree afterwards with `tools/integration-worktree.sh --remove <dir>`.
@@ -24,6 +24,7 @@ for d in . engine dashboard; do
 done
 touch "$wt/.res-slot-heavy" # tools/res-slot treats runs from this checkout as heavy (agents' test runs cannot set env)
 mkdir -p "$wt/dashboard/.shadow-cljs" "$wt/worlds"
+"$repo/tools/seed-shadow-cache.sh" "$wt"
 ln -s "$repo/worlds/test" "$wt/worlds/test"
 cp -r "$repo/textures" "$wt/"
 mkdir -p "$wt/engine/test/fixtures"
