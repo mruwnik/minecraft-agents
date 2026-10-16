@@ -24,11 +24,12 @@
             [jobs.lib.util :as u]))
 
 (defn wrapped
-  "Wrapped fake primitives whose raw blockAt throws; wall? puts a stone wall between the body and the cells at z 4."
+  "Wrapped fake primitives whose raw blockAt throws; wall? puts a stone wall between the body and the cells at z 4.
+  Rays 4 degrees apart with pinned jitter: a pass costs a fraction and no ray misses a cell by chance."
   [blocks wall?]
   (let [wall (when wall? (into {} (for [y (range 60 70) x (range -2 3)] [(str x "," y ",2") "stone"])))
         p (tu/fake {:blocks (merge blocks wall)})
-        per (perception/create (fake-raw/create p) {:now (constantly 1000000)})
+        per (perception/create (fake-raw/create p) {:now (constantly 1000000) :ray-deg 4 :rand (constantly 0.5)})
         w (perception/wrap p per)]
     (perception/pass! per)
     (aset w "blockAt" (fn [_] (throw (js/Error. "raw blockAt"))))
