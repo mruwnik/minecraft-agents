@@ -251,8 +251,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (held-starving [cow (assoc cow :id 8 :pos {:x 6 :y 64 :z 0}) (assoc cow :id 9 :pos {:x 7 :y 64 :z 0})])]
-          (await (core/tick! eng))
+        (let [{:keys [eng p]} (held-starving [cow (assoc cow :id 8 :pos {:x 6 :y 64 :z 0}) (assoc cow :id 9 :pos {:x 7 :y 64 :z 0})])
+              ticked (await (js/Promise.race #js [(.then (core/tick! eng) (constantly true))
+                                                  (js/Promise. (fn [res _] (js/setTimeout #(res false) 20000)))]))]
+          (is ticked "the tick ended (a body that waits on the night yields instead of spinning)")
           (is (seq (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "it went for the cow instead of starving in the hold"))))))
 
 (deftest a-held-hungry-body-leaves-the-bait-an-animal-job-reserved

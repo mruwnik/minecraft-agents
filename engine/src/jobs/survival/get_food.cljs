@@ -190,7 +190,8 @@
     (when-not (risk/refused? c (u/pos-of (.-pos animal)))
       (let [e (await (child/run!* c :attack 'jobs.combat.attack
                                   {:targets [(.-id animal)] :radius (hunt-radius c) :attack-gap-ms (:attack-gap-ms (:args c))
-                                   :lost-s 0 :spend {:job-time 60}}))]
+                                   :lost-s 0 :spend {:job-time 60}
+                                   :checks {:safe? '(job-safe-or-starving)}}))]
         (if (= :continue e)
           :continue
           (do (ctx/update-mem! c update :skipped-animals (fnil conj []) (.-id animal))
