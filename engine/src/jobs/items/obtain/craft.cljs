@@ -6,10 +6,11 @@
             [jobs.items.obtain.base :refer [carried-of max-fruitless old-how tried!]]
             [jobs.items.obtain.plan :refer [craft-plan]]
             [jobs.items.smelt :as smelt]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]))
 
 (defn fruitless! [c why]
-  (ctx/update-mem! c update-in [:craft :fruitless] (fnil inc 0))
+  (child/fruitless! c :craft)
   (ctx/update-mem! c assoc-in [:craft :why] why)
   :again)
 
@@ -58,7 +59,7 @@
         step (or (:step mem)
                  (some-> (craft-plan c names (- target have)) :steps first))]
     (cond
-      (>= (:fruitless mem 0) (max-fruitless))
+      (>= (child/fruitless c :craft) (max-fruitless))
       (tried! c :craft (or (:why mem) :failed))
 
       ;; no plan without the seen table: try that table again (it may be reachable now); fruitless counts bound the retries

@@ -113,3 +113,15 @@
                 go-to (assoc walker :round (fn ^:async w [c] (reset! args (:args c)) (ctx/end c :done nil {:arrived true})))]
             (await (in-parent go-to (fn ^:async g [c] (await (child/walk-into!* c slot [1 65 0])))))
             (is (= (merge {:pos [1 65 0] :range 0 :ways #{:walk :clear-seal}} expect) (select-keys @args [:pos :range :ways :checks :y-margin])) (str slot))))))))
+
+(deftest fruitless-rounds-count-per-slot-until-progress
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [0 1 2 0 1 0]
+               (await (in-parent walker
+                                 (fn ^:async f [c]
+                                   (let [n #(child/fruitless c %)]
+                                     [(n :a) (child/fruitless! c :a) (child/fruitless! c :a)
+                                      (do (child/progress! c :a) (n :a))
+                                      (child/fruitless! c :a) (n :b)]))))))))))

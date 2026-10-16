@@ -9,6 +9,7 @@
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.items.obtain.table :refer [animal? gather-need]]
+            [jobs.lib.child :as child]
             [jobs.lib.need :as fetch-need]))
 
 (defn declined?
@@ -41,10 +42,8 @@
     (and (= :no-tool why) (pickaxe-first? c names need)) :again
 
     :else
-    (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))
-          why (if (and (= :no-stone-found why) (seen-of c need)) :unreachable why)]
-      (ctx/update-mem! c assoc-in [:gather :fruitless] k)
-      (when (>= k (fruitless-limit need e)) (tried! c :gather (or why :failed)))
+    (let [why (if (and (= :no-stone-found why) (seen-of c need)) :unreachable why)]
+      (when (>= (child/fruitless! c :gather) (fruitless-limit need e)) (tried! c :gather (or why :failed)))
       :again)))
 
 (defn pickaxe-args

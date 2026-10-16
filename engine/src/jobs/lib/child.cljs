@@ -22,6 +22,22 @@
   [c seconds why]
   (ctx/call c :pause 'jobs.time.noop {:seconds seconds :why why}))
 
+(defn fruitless
+  "Rounds in a row of slot's child that brought nothing (counted with fruitless!), kept in job memory."
+  [c slot]
+  (get-in (ctx/mem c) [:fruitless slot] 0))
+
+(defn fruitless!
+  "Count one more round of slot's child that brought nothing; the count so far, this one included."
+  [c slot]
+  (ctx/update-mem! c update-in [:fruitless slot] (fnil inc 0))
+  (fruitless c slot))
+
+(defn progress!
+  "slot's child brought something: its fruitless rounds start again from none."
+  [c slot]
+  (ctx/update-mem! c update :fruitless dissoc slot))
+
 (defn ^:async call-walk*
   "A go-to child in slot with args through ctx/call: :continue while the walk goes on (or waits: go-to's safe? says
   later, which makes this round wait with its reason), else go-to's ending."

@@ -63,6 +63,7 @@ Layout:
   including the walker `jobs.lib.walk`/`near`/`pass`), `jobs.<area>.*` (one area's). `jobs/hooks.edn` names the hooks.
   Results: `jobs.lib.result` (`permanent-walk?`, `unreachable-walk?`, `why` read go-to's ending).
   `jobs.lib.child/run!*` calls a child (through `ctx/call`) until it ends (50 ms timer between calls; `:continue` after a call cap; a slot run with other args starts afresh).
+  `child/fruitless!`, `child/fruitless`, `child/progress!` count a slot's rounds in a row that brought nothing in job memory (obtain's craft and gather sources use them).
   The ctx/call versions `child/call-walk*`, `run!*`, `walk-into!*`, `blocks/walk!*` return the child's ending (or `:continue`).
 - `src/triggers/` the triggers, plain fns by area (`triggers.survival.hungry`); `defaults.edn` is the default set.
 - `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, ...; `scratch/` is git-ignored for hand-run probe starts; `idle.edn` is the idle template).
