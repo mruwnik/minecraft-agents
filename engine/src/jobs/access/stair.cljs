@@ -373,6 +373,7 @@
       (and (:arrived (:data r)) (= next-feet (reach/standing-vec (:primitives c))))
       (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
           :again)
+      (rules/falling? ((:block-at (rules-in c (reach/standing-vec (:primitives c)))) next-feet)) :again ; landed while the body walked in: work! digs it
       :else {:reason :step-failed :cell next-feet
              :walk (merge (select-keys (:data r) [:why :arrived])
                           {:status (if (= :done (:kind r)) :done :stopped) :reason (contract/cause-key r)})})))
