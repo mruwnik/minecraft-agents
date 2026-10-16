@@ -4,6 +4,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.aim :as aim]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -11,7 +12,7 @@
 
 (def doc
   "Buy :count of :buy from the villager with uuid :villager. One call is the whole purchase: find the villager
-  within 48 blocks, walk within 2 of it (jobs.movement.go-to legs of 15 s), read its offers (prices move between visits),
+  within 48 blocks, walk within 2 of it, seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of 15 s), read its offers (prices move between visits),
   choose and buy. It yields (:continue) only while go-to waits on the world.
   Of the offers that give :buy and are not sold out, those whose price (the adjusted count of the first cost
   stack) is within :max-price (nil: no limit) are kept. The cheapest is taken, the lowest index on a tie.
@@ -192,6 +193,19 @@
       "out-of-reach" (retry :unreachable)
       (retry :window))))
 
+(defn cell-of
+  "The cell [x y z] of the entity's feet."
+  [e]
+  (let [{:keys [x y z]} (u/pos-of (.-pos e))]
+    (mapv #(js/Math.floor %) [x y z])))
+
+(defn in-reach?
+  "Whether the body is within reach of villager e and sees its cell over the blocks it has seen (a glass wall is solid:
+  the click would not get through)."
+  [c e]
+  (and (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))
+       (aim/body-sees? c (cell-of e))))
+
 (defn ^:async step!
   "Find the villager, walk within reach with one go-to leg (it wanders), then read the offers and buy. :again,
   :continue (go-to yields), an ending or a retry."
@@ -200,10 +214,10 @@
     (cond
       (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c)) ; villagers count only while in view
       (nil? e) (give-up! c :gone)
-      (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach)) (await (trade! c))
+      (in-reach? c e) (await (trade! c))
       :else
       (let [r (await (child/call-walk* c :walk
-                                      {:pos (u/pos-of (.-pos e)) :range (reach) :spend {:job-time chase-timeout-s} :ways #{:walk :clear-seal} :warn false}))]
+                                      {:pos (zipmap [:x :y :z] (cell-of e)) :see true :range (reach) :spend {:job-time chase-timeout-s} :ways #{:walk :clear-seal} :warn false}))]
         (cond
           (= :continue r) :continue
           (let [res (:data r)] (or (:arrived res) (:leg res))) :again
