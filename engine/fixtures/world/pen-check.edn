@@ -132,11 +132,31 @@
          [:wait-s 2]
          [:job (jobs.animals.pen-check {:plan "$plan:pen" :at #at [5 0 5]})]]
    :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 25 :animals [[:any]]}} :within-s 20 :of-job true}]}
+  ;; card 66df9d05: an L-shaped pen (x 3..7 z 3..5 plus x 3..4 z 6..7), the plan lists its fence cells; the notch of its bounding box is open ground
+  ;; and is no leak, only the 19 cells of the L are counted
+  {:name "plan-form-l-shaped-pen-is-closed"
+   :plans [{:id "pen" :metadata {:by "$body"} :parts [{:id "fence" :cells [#at [2 0 2] #at [2 0 3] #at [2 0 4] #at [2 0 5] #at [2 0 6] #at [2 0 7] #at [2 0 8] #at [3 0 2] #at [3 0 8] #at [4 0 2] #at [4 0 8] #at [5 0 2] #at [5 0 6] #at [5 0 7] #at [5 0 8] #at [6 0 2] #at [6 0 6] #at [7 0 2] #at [7 0 6] #at [8 0 2] #at [8 0 3] #at [8 0 4] #at [8 0 5] #at [8 0 6]] :want [:any "oak_fence"]}]}]
+   :blocks [[:fill [2 0 2] [8 0 8] "air"] [:set [2 0 2] "oak_fence"] [:set [2 0 3] "oak_fence"] [:set [2 0 4] "oak_fence"] [:set [2 0 5] "oak_fence"] [:set [2 0 6] "oak_fence"] [:set [2 0 7] "oak_fence"] [:set [2 0 8] "oak_fence"] [:set [3 0 2] "oak_fence"] [:set [3 0 8] "oak_fence"] [:set [4 0 2] "oak_fence"] [:set [4 0 8] "oak_fence"] [:set [5 0 2] "oak_fence"] [:set [5 0 6] "oak_fence"] [:set [5 0 7] "oak_fence"] [:set [5 0 8] "oak_fence"] [:set [6 0 2] "oak_fence"] [:set [6 0 6] "oak_fence"] [:set [7 0 2] "oak_fence"] [:set [7 0 6] "oak_fence"] [:set [8 0 2] "oak_fence"] [:set [8 0 3] "oak_fence"] [:set [8 0 4] "oak_fence"] [:set [8 0 5] "oak_fence"] [:set [8 0 6] "oak_fence"]]
+   :body {:at [4.5 0 4.5] :yaw 0}
+   :act [[:job (jobs.animals.pen-check {:plan "$plan:pen" :at #at [4 0 4]})]]
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 19 :leaks []}} :within-s 20 :of-job true}]}
   {:name "plan-form-missing-fence-lists-the-leak"
    :plans [{:id "pen" :metadata {:by "$body"} :parts [{:id "fence" :outline [#at [2 0 2] #at [8 0 8]] :want [:any "oak_fence"]}]}]
    :blocks [[:set [5 0 8] "air"]]
    :act [[:job (jobs.animals.pen-check {:plan "$plan:pen" :at #at [5 0 5]})]]
    :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak :leaks [[:any]]}} :within-s 20 :of-job true}]}
+  ;; card c0097f43: :animals lists the livestock on the pen cells (cow and sheep), not the cow outside the fence
+  {:name "animals-listed-inside-only"
+   :act [[:summon "cow" [4.5 0 6.5] "{NoAI:1b}"]
+         [:summon "sheep" [6.5 0 4.5] "{NoAI:1b}"]
+         [:summon "cow" [11.5 0 5.5] "{NoAI:1b}"]
+         [:wait-s 2]
+         [:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :animals-in 2 :animals-complete? true}} :within-s 20 :of-job true}]}
+  ;; card 3547b880: no :at, :box or :plan ends impossible :no-pen
+  {:name "no-pen-given-is-impossible"
+   :act [[:job (jobs.animals.pen-check {})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :no-pen}} :within-s 20 :of-job true}]}
   ;; card 5748db84: a big leaky pen read from inside answers in time (the check once starved the control socket for minutes)
   {:name "big-leaky-pen-answers-in-time"
    :plot {:floor "stone"}

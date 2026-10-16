@@ -50,6 +50,14 @@
             {:event {:source :job :kind :go-to.restored} :within-s 120 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:not-block [20 1 16] "air"] [:not-block [20 2 16] "air"] [:body-near [24.5 1 16.5] 2]]}
+  ;; card 66dedc16: sealed in a 1x2 pocket of natural stone with no pick at all: the escape digs the wall toward the goal by hand
+  {:name "sealed-pocket-no-pickaxe-digs-out-by-hand"
+   :blocks [[:fill [16 2 16] [16 4 16] "stone"] [:set [18 0 16] "air"]]
+   :body {:inventory []}
+   :act [[:job (jobs.movement.go-to {:pos #at [18 0 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:body-near [18.5 0 16.5] 2]]
+   :limit-s 150}
   {:name "built-wall-room-is-never-dug"
    ;; the same room of oak planks: a build, never dug; go-to gives up with :escalation {:step :none :why :no-dig}
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]

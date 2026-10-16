@@ -20,6 +20,13 @@
             {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 150}
             {:no-event {:source :job :kind :mine.torch-left-out} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "raw_iron" 1]]}
+  ;; card fd547d80: a lone ore block 13 cells down a lit corridor is seen from the line and mined
+  {:name "lone-ore-down-a-lit-corridor-is-found"
+   :blocks [[:fill [16 0 17] [16 1 28] "air"] [:set [16 0 29] "iron_ore"]
+            [:set [15 1 19] "wall_torch[facing=east]"] [:set [15 1 23] "wall_torch[facing=east]"] [:set [15 1 27] "wall_torch[facing=east]"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}]
+   :after [[:item "raw_iron" 1]]}
   {:name "ore-three-off-the-line-gets-no-torch"
    :blocks [[:fill [16 0 17] [16 1 19] "air"] [:set [16 0 20] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]

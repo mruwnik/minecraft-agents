@@ -14,6 +14,14 @@
          [:job (jobs.movement.boat-drive {:pos #at [18 -1 16]})]
          [:job (jobs.movement.boat-land {})]]
    :expect [{:event {:source :job :kind :boat.landed} :within-s 120 :of-job true}]}
+  ;; card 9a842ea8: a bank covered with short grass and flowers is a shore; the land cell's feet are a passable plant
+  {:name "grass-and-flower-covered-bank-is-a-shore"
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]
+            [:fill [11 0 13] [25 0 19] "short_grass" :outline] [:set [11 0 16] "poppy"] [:set [25 0 16] "dandelion"]]
+   :act [[:job (jobs.movement.boat-launch {})]
+         [:job (jobs.movement.boat-drive {:pos #at [18 -1 16]})]
+         [:job (jobs.movement.boat-land {})]]
+   :expect [{:event {:source :job :kind :boat.landed} :within-s 120 :of-job true}]}
   {:name "land-and-recover-the-boat"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]

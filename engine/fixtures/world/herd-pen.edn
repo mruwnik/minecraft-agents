@@ -32,6 +32,18 @@
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
+  ;; card 4f377f2f: the ground round the pen is one block higher than the pen floor, so the gate stands a step above the inside cells
+  {:name "gate-a-step-above-the-pen-floor-cow-brought"
+   :blocks [[:fill [0 0 0] [31 0 31] "grass_block"]
+            [:fill [19 0 14] [23 0 18] "air"]
+            [:fill [18 1 13] [24 1 19] "oak_fence" :outline]
+            [:set [18 1 16] "oak_fence_gate[facing=east,open=false]"]]
+   :body {:at [12.5 1 16.5] :yaw 270 :inventory [["lead" 4]]}
+   :act [[:summon "cow" [10.5 1 18.5]]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [18 1 16] "oak_fence_gate[open=false]"]]}
   {:name "planned-pen-gate-left-alone"
    :tags [:herd :animals :triggers]
    :register [{:trigger :pen-gate}]
