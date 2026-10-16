@@ -12,7 +12,7 @@
 (def doc
   "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms (nil: the held weapon's cooldown).
   Only a hostile the body has seen is fought: one only heard is judged by its direction and band (jobs.lib.danger), never
-  walked to or hit; the body turns toward it and the job declines, so the retreat takes over.
+  walked to or hit. With only heard mobs in range it does not start (:no-target); one that goes unseen mid-fight is turned toward and the job declines, so the retreat takes over.
   With :hold the body stays where it is: a melee hostile beyond reach is waited for, 15 s at most, then the job declines (a ranged one is still walked up to).
   A ranged hostile farther than ::ranged-chase (6) is not walked to while another is in range (the job declines).
   A hostile more than :leash blocks from the point the job started at is not chased (the job declines, so the retreat takes over).
