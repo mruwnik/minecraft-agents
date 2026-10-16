@@ -60,11 +60,35 @@
 
 (defn glances
   "The points a look along [dx dz] takes in from eye: level, 4 blocks ahead, then down (about 50 degrees) at the
-  floor ahead, then up (about 60 degrees) beyond the level look's field of view."
+  floor ahead."
   [eye [dx dz]]
   [{:x (+ (:x eye) (* (glance-ahead) dx)) :y (:y eye) :z (+ (:z eye) (* (glance-ahead) dz))}
-   {:x (+ (:x eye) (* (glance-near) dx)) :y (- (:y eye) game/body-height) :z (+ (:z eye) (* (glance-near) dz))}
-   {:x (+ (:x eye) (* (glance-near) dx)) :y (+ (:y eye) (* 1.7 (glance-near))) :z (+ (:z eye) (* (glance-near) dz))}])
+   {:x (+ (:x eye) (* (glance-near) dx)) :y (- (:y eye) game/body-height) :z (+ (:z eye) (* (glance-near) dz))}])
+
+(defn up-cells
+  "The cells along the ray from eye up (about 60 degrees) along [dx dz], as far as the level look takes in."
+  [eye [dx dz]]
+  (let [n (* 2 (glance-ahead))]
+    (distinct (for [i (range 1 (inc n))
+                    :let [t (/ (* i (glance-ahead)) n)]]
+                (cell-of {:x (+ (:x eye) (* t 0.5 dx)) :y (+ (:y eye) (* t 0.87)) :z (+ (:z eye) (* t 0.5 dz))})))))
+
+(defn up-unseen?
+  "Whether a cell along the up ray is unseen before the first seen solid block (a ceiling hides what is behind it)."
+  [p eye dir]
+  (loop [cells (up-cells eye dir)]
+    (when-let [cell (first cells)]
+      (let [b (u/sensed p cell)]
+        (cond (true? (some-> b .-unknown)) true
+              (not (contains? #{"air" "cave_air" "void_air"} (some-> b .-name))) false
+              :else (recur (rest cells)))))))
+
+(defn up-glance
+  "The look up (about 60 degrees) along [dx dz] from eye, which the level look's field of view misses: a point, or nil
+  when the ray's cells were seen already so the look would add nothing."
+  [p eye [dx dz :as dir]]
+  (when (or (nil? (.-sensedAt p)) (up-unseen? p eye dir))
+    {:x (+ (:x eye) (* (glance-near) dx)) :y (+ (:y eye) (* 1.7 (glance-near))) :z (+ (:z eye) (* (glance-near) dz))}))
 
 (defn see!
   "A sight pass now at effort (default glance-effort), so what the last look faced is in memory before the next decision."
@@ -74,7 +98,7 @@
      (perception/pass! per {:effort effort}))))
 
 (defn ^:async glance!
-  "Look along each of dirs ([dx dz]), level and down, a sight pass at effort (default glance-effort) after each look."
+  "Look along each of dirs ([dx dz]), level and down (look-around! adds the look up), a sight pass at effort (default glance-effort) after each look."
   ([c dirs] (glance! c dirs (glance-effort)))
   ([c dirs effort]
    (let [{:keys [x y z]} (cell-of (u/self-pos c))
@@ -85,28 +109,32 @@
          (see! c effort)
          (recur (rest points)))))))
 
-(defn ^:async look-around!
-  "Look along every heading from here at effort (default glance-effort) and note the cell in job memory under :looked."
-  ([c] (look-around! c (glance-effort)))
-  ([c effort]
-   (await (glance! c (vals headings) effort))
-   (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
-   :continue))
-
 (defn ^:async look-around-until!
-  "Look around as look-around! does, but test after each look: stop at the first truthy (f), returned. Entities are
-  sensed only inside the view cone, so what a job wants in view must be checked between looks, not after the last."
+  "Look along every heading from here at effort (default glance-effort), level, down and, unless that ray is seen
+  already, up. Test (f) after each look: stop at the first truthy one, returned (nil when none; the cell is noted in
+  job memory under :looked). Entities are sensed only inside the view cone, so what a job wants in view must be
+  checked between looks, not after the last."
   ([c f] (look-around-until! c f (glance-effort)))
   ([c f effort]
-  (let [{:keys [x y z]} (cell-of (u/self-pos c))
-        eye {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)}]
-    (loop [points (mapcat #(glances eye %) (vals headings))]
-      (if-let [pt (first points)]
-        (do (await (ctx/act c :look (clj->js {:pos pt})))
-            (see! c effort)
-            (or (f) (recur (rest points))))
-        (do (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
-            nil))))))
+   (let [{:keys [x y z]} (cell-of (u/self-pos c))
+         eye {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)}
+         p (:primitives c)]
+     (loop [steps (mapcat (fn [d] (concat (map (fn [pt] [pt]) (glances eye d)) [[nil d]])) (vals headings))]
+       (if-let [[pt d] (first steps)]
+         (if-let [pt (or pt (up-glance p eye d))]
+           (do (await (ctx/act c :look (clj->js {:pos pt})))
+               (see! c effort)
+               (or (f) (recur (rest steps))))
+           (recur (rest steps)))
+         (do (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
+             nil))))))
+
+(defn ^:async look-around!
+  "Look around as look-around-until! does, without a test; :continue."
+  ([c] (look-around! c (glance-effort)))
+  ([c effort]
+   (await (look-around-until! c (constantly nil) effort))
+   :continue))
 
 (def near-blocks 3)
 

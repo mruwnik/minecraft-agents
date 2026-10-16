@@ -3,7 +3,7 @@
 ;; (card 16b6b93e: the first walk home has no :pillar, the second, :home-last, every way).
 ;; Dirt floor, so the only stone is the case's own; body with a stone pickaxe.
 ;; Case 1: four stones on 7-high bedrock pillars 3 off, no blocks carried: none is taken, mine ends got 0 reporting each one as seen ore out of reach (:unreached), without mine.gave-up.
-;; Case 2: a 3x3 pit 3 deep, obsidian walls, stone floor; the body starts 4 off its rim, drops in, mines 2, pillars home.
+;; Case 2: a 3x3 pit 3 deep, obsidian walls, stone floor; the body starts 1.5 off its rim, drops in, mines 2, pillars home.
 {:defaults
  {:tags [:mine :jobs] :time :any
   :plot {:height 12 :floor "dirt"}

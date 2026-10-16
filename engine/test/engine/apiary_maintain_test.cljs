@@ -225,7 +225,7 @@
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-after-look))]
           (core/submit! (:eng s) (spec {:fetch false}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 10 700))
-          (is (= 12 (count (calls s "look"))) "one look around")
+          (is (= 8 (count (calls s "look"))) "one look around")
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (nil? (done-event s))))))))
 

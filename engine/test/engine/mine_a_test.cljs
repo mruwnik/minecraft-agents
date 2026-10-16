@@ -147,7 +147,7 @@
           (let [s (await (scenario args world 6))]
             (is (= :none (:reason (done-event s))) note)
             (is (empty? (calls s "dig")) note)
-            (is (= 12 (count (calls s "look"))) note)))))))
+            (is (= 10 (count (calls s "look"))) note)))))))
 
 (deftest wet-targets-are-skipped-unless-asked
   (async done

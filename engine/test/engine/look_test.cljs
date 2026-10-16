@@ -80,7 +80,27 @@
           (is (= ["iron_ore"] (names-of (await (look/find-seen! c q)))))
           (let [n (count (.-calls (.-world p)))]
             (is (empty? (await (look/find-seen! c (assoc q :names ["gold_ore"])))))
-            (is (= 12 (- (count (.-calls (.-world p))) n)) "one look around, four headings by three glances")))))))
+            (is (= 8 (- (count (.-calls (.-world p))) n)) "one look around, four headings by two glances")))))))
+
+(deftest a-glance-is-level-and-down-only
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seeing {})
+              n (count (.-calls (.-world p)))]
+          (await (look/glance! (stub-ctx p) [[0 1]]))
+          (is (= 2 (- (count (.-calls (.-world p))) n))))))))
+
+(deftest a-look-around-under-a-seen-ceiling-adds-no-look-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seeing {:blocks (tu/box -6 66 -6 6 66 6 "stone")})
+              c (stub-ctx p)
+              _ (await (look/look-around! c))
+              n (count (.-calls (.-world p)))]
+          (await (look/look-around! c))
+          (is (= 8 (- (count (.-calls (.-world p))) n))))))))
 
 (deftest seen-blocks-rejects-a-query-that-is-not-names-or-match
   (let [p (seeing {:blocks {"0,64,2" "iron_ore"}})]
