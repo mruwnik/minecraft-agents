@@ -33,12 +33,12 @@
   jobs.blocks.place child; torches are the caller's to stock); a chest minecart in the segment is looted (jobs.strip.loot-cart
   child); else the next target is dug (jobs.blocks.dig child, no fetch, drops collected): cobwebs on the walk line first, then
   the rest outward from the :entry end, each with a carried tool of its kind (shears, axe, pickaxe). With no target left it
-  walks to the far end and looks round there, so crossings and new corridors come into view, then takes back the torches
+  walks to the far end (8 cells a step, so a spawner on the way is seen and lit) and looks round there, so crossings and new corridors come into view, then takes back the torches
   standing in the segment (the caller seals behind it).
   It does not start (a skipped job) while a real danger is near (jobs.lib.danger, unless :danger-check is false: :danger)
   or the body is short of food (:food-short); a run under way waits :danger (can-run?, asked between steps) while one is near. A :segment that
   is neither a map nor a readable id is never possible (:bad-args).
-  A spawner follows :spawner: :light (default) hangs torches on the dark standable centre-line cells of the segment inside its
+  A spawner seen at any step stays in the result (the far end may be out of sight of it). A spawner follows :spawner: :light (default) hangs torches on the dark standable centre-line cells of the segment inside its
   spawn box (4 either side, 1 up or down; light 8), leaves the spawner and those torches, and lists it in :kept {:why :spawner :lit true};
   side passages and pockets the body cannot stand beside stay as they are. :break lights it so, then digs it with a pickaxe
   (no drop expected); :seal stops the trip :spawner at once with it left; :skip leaves it, listed in :kept {:why :spawner}.
@@ -195,20 +195,29 @@
          (map (fn [[x yy z :as cell]] {:pos {:x x :y yy :z z} :name (or (block-at cell) "torch") :class :torch}))
          (sort-by #(u/dist here (:pos %))))))
 
+(def hop "Cells walked between two steps on the way to the far end: a dark corridor is seen about this far." 8)
+
 (defn ^:async look-end!
-  "Walk to the segment's far end from the entry and look round there once: :again, :continue or a stop."
+  "Walk to the segment's far end from the entry, hop cells at a time (each stop is a step: it sees and lights what stands
+  there), and look round there once: :again, :continue or a stop."
   [c seg]
   (let [{:keys [axis y line from to]} seg
         entry (some-> (:entry (:args c)) a/cell)
         ea (when entry (if (= axis :x) (:x entry) (:z entry)))
         far (if (and ea (< (js/Math.abs (- ea from)) (js/Math.abs (- ea to)))) to from)
-        cell (strip/at axis y line far)
+        [fx _ fz] (b/feet-cell c)
+        here (if (= axis :x) fx fz)
+        stop-at (if (> (js/Math.abs (- far here)) hop) (+ here (* hop (if (> far here) 1 -1))) far)
+        cell (strip/at axis y line stop-at)
         w (await (near/go-near! c cell 1))]
     (case w
       :partial :continue
       :blocked (stop! c :unreachable {:cell cell})
-      (do (await (look/look-around! c))
-          :again))))
+      (if (= stop-at far)
+        (do (await (look/look-around! c))
+            :again)
+        (do (look/see! c)
+            :again)))))
 
 (defn result-of
   "What the segment leaves behind: what was taken, the cells kept (bridge planks, spawners), the segments seen beyond."
@@ -219,7 +228,7 @@
     {:taken (:taken (ctx/mem c) {})
      :kept (into (:kept (strip/targets [] seg {:block-at (access/seen-at p)}))
                  (map (fn [t] (cond-> {:pos (:pos t) :why :spawner} (= :light (:spawner (:args c))) (assoc :lit true))))
-                 (when (not= :break (:spawner (:args c))) (spawners c seg)))
+                 (when (not= :break (:spawner (:args c))) (distinct (concat (spawners c seg) (:spawners (ctx/mem c))))))
      :new-segments (vec news)}))
 
 (defn owed
@@ -245,6 +254,8 @@
         {:keys [target cart torch dark sealed-spawner]} (owed c seg)
         feet (assoc (b/feet-cell c) 1 (:y seg))
         work? (or target cart)]
+    (when-let [seen (seq (spawners c seg))]
+      (ctx/update-mem! c update :spawners #(vec (distinct (concat % seen)))))
     (when (and target (:looked (ctx/mem c))) (ctx/update-mem! c dissoc :looked))
     (cond
       (trip/food-short? c) (stop! c :food-short {})

@@ -199,7 +199,7 @@
         (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor (range 6 13))
               r (await (run! env (assoc args :spawner :break)))
               torches (map #(js->clj (.-pos (.-args %)) :keywordize-keys true) (filter #(= "torch" (.-item (.-args %))) (bd/calls p "place")))]
-          (is (= {:status :done :taken {:spawner 1 :torch 2}} (select-keys r [:status :taken])) "the torches hung are taken back")
+          (is (= {:status :done :taken {:spawner 1 :torch (count torches)}} (select-keys r [:status :taken])) "the torches hung are taken back")
           (is (gone? p [spawner-cell]))
           (is (seq torches))
           (is (every? (fn [{:keys [x y z]}] (and (<= (js/Math.abs (- x 10)) 4) (<= (js/Math.abs (- y 65)) 1) (<= (js/Math.abs (- z 2)) 4))) torches)
@@ -247,7 +247,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor (range 6 13))
               _ (await (run! env args))]
-          (is (some #(<= (:x %) 7) (torch-poses p)) "x 6 is 4 along, 2 across and 1 below the spawner: a torch stands beside it"))))))
+          (is (some #(<= (js/Math.abs (- (:x %) 6)) 3) (torch-poses p)) "x 6 is 4 along, 2 across and 1 below the spawner: a torch stands within torch-gap of it"))))))
 
 (deftest spawner-light-without-torches-in-the-dark-stops-no-torches-leaving-it
   (async done
@@ -267,6 +267,18 @@
           (is (= {:status :done :taken {:wood 21 :rail 13 :cobweb 1}} (select-keys r [:status :taken])))
           (is (some #{{:pos {:x 10 :y 65 :z 2} :why :spawner}} (:kept r)))
           (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
+
+(deftest spawner-skip-lists-a-spawner-seen-at-the-start-though-the-far-end-is-out-of-sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [air (set (for [x (range -5 56) y [64 65 66] z [-1 0 1]] (str x "," y "," z)))
+              blocks (-> (apply dissoc (tu/box -6 63 -2 56 67 2 "stone") air) (assoc "10,65,2" "spawner"))
+              long-seg (assoc seg :to 50 :id (strip/seg-id (assoc seg :to 50)))
+              env (bd/setup-seeing {:self {:pos {:x -3 :y 64 :z 0}} :blocks blocks :drops drops :inventory kit})
+              r (await (run! env (assoc args :segment long-seg :spawner :skip)))]
+          (is (= :done (:status r)))
+          (is (some #{{:pos {:x 10 :y 65 :z 2} :why :spawner}} (:kept r))))))))
 
 (deftest a-stopped-trip-ends-with-the-kind-of-its-reason
   (async done
