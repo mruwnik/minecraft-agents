@@ -9,6 +9,7 @@
             [engine.memory :as mem]
             [engine.ctx :as ctx]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -876,6 +877,17 @@
           (await (core/tick! eng))
           (is (= {:x 3 :y 64 :z 1} (first (tu/walked-to eng))) "walks to the water, not away")
           (is (zero? (count (calls p "place")))))))))
+
+(deftest an-enderman-that-stays-ends-the-hold-in-water-and-the-next-option-comes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :blocks {(key-of 0 64 0) "water"}
+                                      :entities [(enderman 2.5 64 0.5)]})]
+          (core/submit! eng retreat {})
+          (await (settings/with-settings {:jobs.survival.retreat-cornered/hold-cap 2}
+                   (fn ^:async tick [] (await (core/tick! eng)))))
+          (is (pos? (count (calls p "place"))) "after the capped holds the body walls itself in"))))))
 
 (deftest roof-cell-is-the-nearest-seen-two-high-gap-under-a-roof
   (let [solid #{[0 63 0] [3 63 0] [3 66 0] [-2 63 1] [-2 65 1] [9 63 0] [9 66 0]}

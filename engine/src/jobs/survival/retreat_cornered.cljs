@@ -175,6 +175,7 @@
    :jobs.survival.retreat-cornered/fire-hits {:default 1 :doc "Hits by a ranged mob (the damage's attacker, or an arrow) within hurt-window-s that put a cornered body under fire: cover comes before any fight, and a shooter it has not seen is never weighed as beaten. 0: never." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/beaten-hits {:default 2 :doc "Hits by a melee mob near (the damage names one within close-radius; not a creeper or an enderman) within hurt-window-s that show the flight is failing: the body fights it first, armed or not. 0: never." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
+   :jobs.survival.retreat-cornered/hold-cap {:default 60 :doc "Holds (one wait-ms each) a flight makes in water or under a roof against an angry enderman before it tries the next option (seal, pit, pocket, fight); 0: none." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
 (defn glance-reach [] (settings/get settings :jobs.survival.retreat-cornered/glance-reach))
 
@@ -222,6 +223,16 @@
       (do (flight/tried! c :back-off) nil)
       :again)))
 
+(defn ^:async hold!
+  "One hold (a pause of flight/wait-ms) in a spot an enderman cannot use: :again, or nil once the flight has held
+  hold-cap times (the option is then tried! and the next one of the order comes)."
+  [c option why]
+  (if (>= (:holds (ctx/mem c) 0) (settings/get settings :jobs.survival.retreat-cornered/hold-cap))
+    (do (flight/tried! c option) nil)
+    (do (ctx/update-mem! c update :holds (fnil inc 0))
+        (await (child/pause! c (/ (flight/wait-ms) 1000) why))
+        :again)))
+
 (def water-reach
   "Blocks within which a body hunted by an enderman looks for water to stand in."
   6)
@@ -245,7 +256,7 @@
   (let [block-at (block-at-fn (:primitives c))
         self (u/self-pos c)]
     (if (= "water" (block-at {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}))
-      (do (await (child/pause! c (/ (flight/wait-ms) 1000) "in water, away from the enderman")) :again)
+      (await (hold! c :water "in water, away from the enderman"))
       (when-let [cell (water-cell block-at self water-reach)]
         (if (await (step! c :water {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))
           :again
@@ -284,7 +295,7 @@
         self (u/self-pos c)
         here {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}]
     (if (and (escape/passable? (block-at (update here :y inc))) (escape/solid? (block-at (update here :y + 2))))
-      (do (await (child/pause! c (/ (flight/wait-ms) 1000) "under a roof, out of the enderman's reach")) :again)
+      (await (hold! c :roof "under a roof, out of the enderman's reach"))
       (when-let [cell (roof-cell block-at self roof-reach)]
         (if (await (step! c :roof {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))
           :again
