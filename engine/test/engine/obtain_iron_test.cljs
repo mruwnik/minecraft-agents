@@ -168,6 +168,20 @@
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the stone and the logs are seen")
           (is (some #(= :dark (:reason %)) (f/events-of s :waiting))))))))
 
+(deftest a-table-fetch-whose-logs-wait-out-the-night-waits-once-and-is-not-restarted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (assoc (ore-world (merge f/tree-blocks {"0,66,0" "stone"}) []) :time st/night) [f/own-zone])]
+          (doseq [pitch [-80 80 0]]
+            (swap! (fake/state (:p s)) assoc :pitch pitch)
+            (perception/pass! (aget (:p s) "perception")))
+          (core/submit! (:eng s) (list 'jobs.items.craft {:item "stone_pickaxe"}) {})
+          (await (f/run-ticks s 30))
+          (is (= [:dark] (distinct (map :reason (f/events-of s :waiting)))))
+          (is (= 1 (count (f/events-of s :waiting))) "one wait, not one per round")
+          (is (empty? (filter #(= :stopped (:kind %)) @(:seen s)))))))))
+
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done
     (tu/run-async done

@@ -1,7 +1,8 @@
 (ns jobs.lib.need
   "A contract job's way to get what it lacks: call the fetch job as a child under the caller's remainder (ctx/call) and
   read its ending. tool!, item! and blocks! resolve to :continue while the child waits on the world, else to the ending
-  to return or read: :done as the child gave it; any other with the cause {:reason :need|:tool|:free-slots ..} naming
+  to return or read (a fetch job whose own start check says :later, e.g. night, is not called: the caller waits
+  with that reason): :done as the child gave it; any other with the cause {:reason :need|:tool|:free-slots ..} naming
   what was wanted, the child's ending as its :because, the kind kept (a limit stays a limit). A duplicate call is
   the engine's refusal. Options {:slot :how :explore} pass on to the fetch job.
 
@@ -166,7 +167,10 @@
       (do
         (when (and fresh? return? (not (:need/return (ctx/mem c))))
           (ctx/update-mem! c assoc :need/return {:cell (feet c)}))
-        (let [e (ending-for (await (ctx/call c slot job args)) cause-reason wanted)]
+        (let [later (when fresh? (let [s (ctx/child-status c slot job args)] (when (= :later (first s)) s)))
+              e (if later
+                  (do (some-> (:child-wait c) (reset! (contract/status-cause later))) :continue)
+                  (ending-for (await (ctx/call c slot job args)) cause-reason wanted))]
           (when (= :done (:kind e))
             (ctx/update-mem! c #(cond-> (assoc % :need/done {:want want :have (counts c (got-names wanted e))})
                                   (:need/return %) (assoc-in [:need/return :back] true))))
