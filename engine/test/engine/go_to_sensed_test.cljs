@@ -18,13 +18,17 @@
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.pass :as pass]
             [jobs.lib.reach :as reach]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.vehicle :as vehicle]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.health :as gth]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.torch :as torch]
             [jobs.survival.retreat-cornered :as cornered]
@@ -582,7 +586,7 @@
           (is (= {:arrived true} out) (pr-str (last seen))))))))
 
 (defn record-moves!
-  "Keeps in atom a every raw moveTo and every steer tick's controls of the world {:p p} (steer ticks as [:steer controls])."
+  "Keeps in atom a every raw moveTo and every steer tick's controls of the world {:p p} (steer ticks as [:steer controls x])."
   [a]
   (fn [{:keys [p]}]
     (let [w (.-world p)]
@@ -591,7 +595,7 @@
                  (fn [token args impl]
                    (let [d (.-decide args)
                          args' (js/Object.defineProperty (js/Object.assign #js {} args) "decide"
-                                                         #js {:value (fn [pose] (let [r (d pose)] (swap! a conj [:steer (js->clj (.-controls r))]) r))})]
+                                                         #js {:value (fn [pose] (let [r (d pose)] (swap! a conj [:steer (js->clj (.-controls r)) (.-x pose)]) r))})]
                      (impl token args')))))))
 
 (deftest the-look-over-a-drop-edge-keeps-the-box-on-the-floor-by-sneaking
@@ -607,16 +611,74 @@
           (is (not-any? #{[:move-to]} @acts) "no raw moveTo to the lip: it overhangs the drop")
           (is (some #(get-in % [1 "sneak"]) steers) "the step to the lip sneaks"))))))
 
-(deftest a-hostile-near-holds-back-the-look-over-a-drop-edge
+(def look-from-afar
+  "A job that looks over the drop from [-1 60 0] to the pit floor [1 55 0] with the body far from it:."
+  {:round (fn ^:async look-round [c]
+            (ctx/update-mem! c assoc :probe-drops [{:from [-1 60 0] :floor [1 55 0]}])
+            (when-let [cell (:look (:args c))] (await (dig-look/look-at! c cell)))
+            (ctx/end c :done {:looked (boolean (await (gth/look-at-drops! c)))}))})
+
+(deftest the-lean-to-the-lip-starts-beside-the-drop-after-a-planned-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [acts (atom [])
-              {:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)
-                                               :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x -9 :y 60 :z 0}}]}
-                                              {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}
-                                              (record-moves! acts)))]
-          (is (not-any? #(get-in % [1 "sneak"]) @acts) (pr-str out)))))))
+              _ (await (run-job look-from-afar {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)}
+                                            {} (record-moves! acts)))
+              sneaks (filter #(get-in % [1 "sneak"]) @acts)]
+          (is (seq sneaks))
+          (is (every? #(>= (nth % 2) -1.1) sneaks) "no blind sneak across the stone: the lean begins beside the drop"))))))
+
+(def probe-masked
+  "A job that probes the way to the pit floor under go-to's :unknown mask (the spec go-to puts on its context)."
+  {:round (fn ^:async probe-round [c]
+            (let [c (assoc c :unknown (wworld/unknown-spec nil))]
+              (ctx/end c :done {:cost (await (gth/probe-plan! c {:x -6.5 :y 60 :z 0.5} 0))})))})
+
+(deftest the-damage-probe-plans-over-the-mask-of-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [masks (atom [])
+              orig wplan/plan-within!]
+          (set! wplan/plan-within! (fn [c pw to range weight policy]
+                                     (swap! masks conj (some? (wworld/unknown-of pw)))
+                                     (orig c pw to range weight policy)))
+          (try (await (run-job probe-masked {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)}
+                               {:pos [1 56 0] :range 0}))
+               (finally (set! wplan/plan-within! orig)))
+          (is (= [true] @masks) "the unseen pad is not read from the raw chunks"))))))
+
+(def pit-job {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}})
+
+(defn pit-sneaks
+  "The sneaking steer ticks of go-to over the slime pit with the body's spec extras and blocks."
+  [extra blocks]
+  (let [acts (atom [])]
+    (-> (run-go-to (merge {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks blocks} extra) pit-job (record-moves! acts))
+        (.then (fn [_] (filter #(get-in % [1 "sneak"]) @acts))))))
+
+(deftest a-hostile-near-holds-back-the-look-over-a-drop-edge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (empty? (await (pit-sneaks {:entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x -9 :y 60 :z 0}}]} (slime-pit slime-floor)))))))))
+
+(deftest a-hostile-beyond-the-danger-radius-does-not-hold-back-the-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (seq (await (pit-sneaks {:entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x -16 :y 60 :z 0}}]} (slime-pit slime-floor)))))))))
+
+(deftest lava-seen-in-the-drop-holds-back-the-look-over-the-edge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [acts (atom [])]
+          (await (run-job look-from-afar {:self {:pos {:x -2.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true
+                                          :blocks (assoc (slime-pit slime-floor) "1,59,0" "lava")}
+                          {:look [1 59 0]} (record-moves! acts)))
+          (is (empty? (filter #(get-in % [1 "sneak"]) @acts))))))))
 
 (deftest go-to-refuses-a-drop-onto-one-slime-block-ringed-by-stone
   (async done
@@ -625,7 +687,7 @@
         (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true
                                                :blocks (slime-pit {[1 0] "slime_block"})}
                                               {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
-          (is (not= {:arrived true} out)))))))
+          (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
 
 (deftest go-to-refuses-a-drop-onto-a-stone-pit-floor
   (async done
@@ -634,4 +696,4 @@
         (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true
                                                :blocks (slime-pit {})}
                                               {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
-          (is (not= {:arrived true} out)))))))
+          (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))

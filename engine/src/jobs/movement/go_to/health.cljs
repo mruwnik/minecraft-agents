@@ -89,7 +89,7 @@
 
 (def look-drop-min "Blocks of a drop from which its landing is looked at before the way is judged too dear." 4)
 
-(def lip-reach "How far from the middle of its cell toward a drop the body leans to look over the edge: sneaking holds its box on the cell." 0.44)
+(def lip-reach "How far from the middle of its cell toward a drop the body leans to look over the edge: sneaking stops the box at the edge, so only the centre overhangs." 0.44)
 
 (def lean-ticks "Ticks a lean to the lip may take." 60)
 
@@ -120,23 +120,33 @@
     (or (seq (danger-q/hostiles-near-way p {:x fx :y fy :z fz} (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))
         (some #(some-> (u/seen-block p {:x tx :y % :z tz}) .-name (= "lava")) (range ty (inc fy))))))
 
+(defn ^:async at-lip-cell!
+  "Whether the body stands on the takeoff cell [x y z] of a drop, walking there with a go-to child if it does not (the lean
+  is a straight steer, which goes off any edge on the way)."
+  [c [x y z]]
+  (let [pos (u/self-pos c)]
+    (or (= [x y z] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+        (:arrived (:data (await (child/run!* c :lip 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal}})))))))
+
 (defn ^:async look-at-drops!
   "A drop the budget refuses may be priced by what the body has not looked at: a bounce counts only on a pad in view
-  (landing-seen), and a floor far below shows only from the lip. Once per drop of the probed way, leans to the lip
-  (sneaking, the box on its cell) and looks at the floor: true when it did (the walk plans again). Not while a hostile is
+  (landing-seen), and a floor far below shows only from the lip. Once per drop of the probed way, walks to its takeoff cell (at-lip-cell!), leans to the lip
+  (sneaking: the edge stops the box) and looks at the floor: true when it did (the walk plans again). Not while a hostile is
   near or lava is seen in the drop; the drop is looked at on a later probe."
   [c]
   (let [m (ctx/mem c)
         {:keys [from floor] :as drop} (first (remove (set (:drops-looked m)) (:probe-drops m)))]
     (when (and drop (not (lip-unsafe? c drop)))
-      (ctx/update-mem! c update :drops-looked (fnil conj []) drop)
-      (let [[fx _ fz] from
+      (let [arrived? (await (at-lip-cell! c from))
+            [fx _ fz] from
             [tx _ tz] floor
             lip (fn [f t] (+ f 0.5 (* lip-reach (compare t f))))]
-        (await (lean-to! c (lip fx tx) (lip fz tz)))
-        (await (dig-look/look-at! c floor))
-        (look/see! c)
-        true))))
+        (ctx/update-mem! c update :drops-looked (fnil conj []) drop)
+        (when arrived?
+          (await (lean-to! c (lip fx tx) (lip fz tz)))
+          (await (dig-look/look-at! c floor))
+          (look/see! c)
+          true)))))
 
 (defn ^:async probe-plan!
   "Whether a whole way exists for the body that may spend all but 1 hp (:max-damage still capping): the hp it costs, or nil
@@ -148,7 +158,7 @@
         policy (cond-> (assoc (wworld/body-policy c) :damage-budget (cost/survivable-budget (wworld/damage-body c) {:max-damage max-damage}))
                  (some? drop-cost) (assoc :drop-cost drop-cost)
                  (some? costs) (assoc :costs costs))
-        within (await (wplan/plan-within! c (wworld/path-world (:primitives c)) [(:x pos) (:y pos) (:z pos)] range walk/default-weight policy))
+        within (await (wplan/plan-within! c (wworld/path-world (:primitives c) (:unknown c)) [(:x pos) (:y pos) (:z pos)] range walk/default-weight policy))
         ^js r (:r within)]
     (when (= "found" (.-status r))
       (ctx/update-mem! c assoc :probe-drops (drops (some-> r .-path .-steps)))
