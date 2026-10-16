@@ -2171,7 +2171,7 @@ test('jumpPlace ends not-raised when the body cannot be centred and cannot rise'
   }
 }))
 
-test('jumpPlace waits for a body inside the tolerance to stop moving before it jumps', async () => {
+test('jumpPlace waits for a body inside the tolerance to stop moving before it jumps', () => virtually(async () => {
   const { bot, p } = pillarRig({ pos: [0.5, 64, 0.5] })
   bot.entity.velocity = new Vec3(-0.014, 0, 0)
   setTimeout(() => { bot.entity.velocity = new Vec3(0, 0, 0) }, 5)
@@ -2180,13 +2180,13 @@ test('jumpPlace waits for a body inside the tolerance to stop moving before it j
   const jumpedAt = bot.calls.findIndex(c => c.name === 'setControlState' && c.args[0] === 'jump' && c.args[1])
   assert.ok(jumpedAt > bot.calls.findIndex(c => c.name === 'setControlState' && c.args[0] === 'sneak' && c.args[1]))
   assert.ok(Date.now() - startedAt >= 5)
-})
+}))
 
-test('jumpPlace does not move a body that is already centred', async () => {
+test('jumpPlace does not move a body that is already centred', () => virtually(async () => {
   const { bot, p } = pillarRig({ pos: [0.5, 64, 0.5] })
   await p.jumpPlace('t1', { item: 'dirt' })
   assert.deepEqual(controls(bot).filter(c => c[0] !== 'jump'), [])
-})
+}))
 
 test('jumpPlace without the item fails at once, without pressing anything', async () => {
   const { bot, p } = pillarRig({ items: [] })
@@ -2214,13 +2214,13 @@ test('jumpPlace that never leaves the ground reports not-raised and releases jum
   assert.equal(all['0,64,0'], undefined)
 })
 
-test('jumpPlace reports place-failed when the server refuses the block, and releases jump', async () => {
+test('jumpPlace reports place-failed when the server refuses the block, and releases jump', () => virtually(async () => {
   const { bot, p } = pillarRig()
   bot._placeBlockWithOptions = () => Promise.reject(new Error('blockUpdate did not fire'))
   const result = await p.jumpPlace('t1', { item: 'dirt' })
   assert.deepEqual([result.status, result.placed, result.reason], ['failed', 0, 'place-failed: blockUpdate did not fire'])
   assert.deepEqual(controls(bot).at(-1), ['jump', false])
-})
+}))
 
 test('jumpPlace: a cut mid-jump releases jump and rejects with cut', async () => {
   const { bot, p } = pillarRig({ hang: ['_placeBlockWithOptions'] })
@@ -2231,14 +2231,14 @@ test('jumpPlace: a cut mid-jump releases jump and rejects with cut', async () =>
   assert.deepEqual(controls(bot).at(-1), ['jump', false])
 })
 
-test('jumpPlace caps count at 8 and rejects bad arguments', async () => {
+test('jumpPlace caps count at 8 and rejects bad arguments', () => virtually(async () => {
   const { p } = pillarRig({ items: [{ name: 'dirt', count: 20, slot: 36 }] })
   const result = await p.jumpPlace('t1', { item: 'dirt', count: 100 })
   assert.deepEqual([result.status, result.placed], ['done', 8])
   for (const bad of [{}, { item: 5 }, { item: 'dirt', count: 0 }, { item: 'dirt', count: 1.5 }]) {
     await assert.rejects(p.jumpPlace('t1', bad), err => err.code === 'bad-args')
   }
-})
+}))
 
 test('jumpPlace with a stale token rejects with cut before touching the bot', async () => {
   const { bot, p } = pillarRig()
