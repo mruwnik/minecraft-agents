@@ -721,7 +721,7 @@
           (is (= [] (emitted seen :dig-in.sealed)) "no sealed claim while a wall is open")
           (let [[u] (emitted seen :dig-in.unsealed)]
             (is (some? u) "reported honestly")
-            (is (= [{:x -1 :y 64 :z 0} {:x -1 :y 65 :z 0}] (:open u)) "the open cells are named: the refused one and the one above it, which has nothing to stand against")))))))
+            (is (= [{:x -1 :y 64 :z 0}] (:open u)) "the open cell is named: the refused one")))))))
 
 (deftest dig-in-places-the-other-walls-before-retrying-a-refused-cell
   (async done
@@ -967,7 +967,7 @@
           (let [mid (mid-night! p 6 #(hash-map :holder (some? (core/holder eng)) :places (count (calls p "place"))
                                                :exposed (count (emitted seen :shelter.exposed)) :notified (notified seen)))]
             (await (tick-nights eng clock 2))
-            (is (= {:holder true :places 12 :exposed 1 :notified 0} @mid)
+            (is (= {:holder true :places 16 :exposed 1 :notified 0} @mid)
                 "held at night; each of max-sites sites tried once; one warn that the body is unsheltered; the queued job waits"))
           (is (= [] (declined-events seen :night)) "never declined, so never dropped and fired again")
           (is (= 1 (count (filter #(= :fired (:kind %)) (emitted-by seen :reflex :night)))) "fired once")
@@ -1282,7 +1282,7 @@
             (is (= :walls-failed (:reason (first @futile))) "written while the night holds"))
           (swap! clock + 11000)
           (await (tick-n eng 8))
-          (is (= 3 (count (calls p "place"))))
+          (is (= 4 (count (calls p "place"))) "each of the four cells of one step tried once")
           (is (empty? (calls p "dig"))))))))
 
 (deftest needs-bed-is-warned-once-across-firings

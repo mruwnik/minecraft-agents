@@ -32,12 +32,17 @@
     :again :again
     nil))
 
+(defn placed
+  "The spent summary and the blocks placed so far ({:cell [x y z] :item name}), for an ending's data."
+  [c]
+  (assoc (spent/summary (spent/log c)) :placed (:placed-cells (ctx/mem c) [])))
+
 (defn ^:async run!
   "Steps of the way (step!: :done, :again, or nil when it fails) with a timer between, to the call's end. A place refused for a mob
   yields (:continue) so the world moves and the mob may clear."
   [c way step!]
   (await (pace/steps! c (fn ^:async way-step []
                           (case (await (step! c))
-                            :done (ctx/end c :done nil (merge {:pos (sh/feet (:primitives c)) :way way} (spent/summary (spent/log c))))
+                            :done (ctx/end c :done nil (merge {:pos (sh/feet (:primitives c)) :way way} (placed c)))
                             :again (if (:seal-mob-since (ctx/mem c)) :continue :again)
-                            (ctx/end c :nothing-possible :failed (merge {:text (or (:seal-refusal (ctx/mem c)) (str "the " (name way) " cannot enclose the body here"))} (spent/summary (spent/log c)))))))))
+                            (ctx/end c :nothing-possible :failed (merge {:text (or (:seal-refusal (ctx/mem c)) (str "the " (name way) " cannot enclose the body here")) :status (:seal-status (ctx/mem c))} (placed c))))))))

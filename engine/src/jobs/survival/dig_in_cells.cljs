@@ -138,12 +138,21 @@
       (when (and (pos? depth) (not (avoid below)) (not (wet? p below)))
         (some-> (support-chain p below avoid (dec depth)) (conj below))))))
 
+(defn supported-order
+  "cells that can be placed in their order: placeable? now, or beside (any of the six) an earlier one that is placed first."
+  [p cells]
+  (let [beside (fn [{:keys [x y z]}] (map (fn [[dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}) rules/neighbour-deltas))
+        ok (loop [ok #{}]
+             (let [more (into #{} (filter #(and (not (ok %)) (or (placeable? p %) (some ok (beside %))))) cells)]
+               (if (empty? more) ok (recur (into ok more)))))]
+    (filterv ok cells)))
+
 (defn bottom-up
-  "The next cells to place from the open cells, in order: the placeable? ones, else the first one with the support-chain
+  "The next cells to place from the open cells, in order: the supported-order ones, else the first one with the support-chain
   under it (the cell alone when it has none: the place then says no-support)."
   [p cells feet]
   (let [avoid #{feet (update feet :y inc)}
-        ready (filterv #(placeable? p %) cells)]
+        ready (supported-order p cells)]
     (if (or (seq ready) (empty? cells))
       ready
       (conj (vec (support-chain p (first cells) avoid (settings/get settings ::support-depth))) (first cells)))))

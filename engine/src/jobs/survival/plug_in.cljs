@@ -11,7 +11,7 @@
 
 (def doc
   "Shut the body in where it stands, atomically: no night or hostile logic, no walking; whoever calls it decides when.
-  Needs nothing to start. One call is a whole attempt: it ends :done {:pos :way} once the body is enclosed (a roof within
+  Needs nothing to start. One call is a whole attempt: it ends :done {:pos :way :start :placed} once the body is enclosed (a roof within
   :roof-height over no open cell round the feet), at once when it already is.
   Ways (:ways) are child jobs: jobs.survival.plug-walls (the open sides, a roof support and the roof with carried blocks),
   plug-pit (dig down under a solid side and plug the hole), plug-pocket (dig a pocket beside the body, step in, wall the way in).
@@ -19,7 +19,7 @@
   :done, the next cheapest (after a :continue step when a hostile is within 2 blocks); a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
   :build filler, carried or dug. None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
   :why {way the child's cause}}.
-  Every placed block goes to the scaffold ledger with :purpose (default :retreat-plug, taken back by jobs.access.cleanup once no
+  :start is the cell the call began at, :placed the blocks placed ({:cell [x y z] :item}), also with an ending other than :done. Every placed block goes to the scaffold ledger with :purpose (default :retreat-plug, taken back by jobs.access.cleanup once no
   hostile is near; :shelter is left alone). A cell in another's zone is used only as a last resort (retreat.trespass-last-resort).
   Quote: time.")
 
@@ -78,7 +78,13 @@
 (defn end!
   "The call's ending with what the children placed."
   [c kind cause data]
-  (ctx/end c kind cause (merge data (spent/summary (spent/log c)))))
+  (ctx/end c kind cause (merge data (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed :start]))))
+
+(defn absorb!
+  "A child's ending: what it placed goes in the log and in :placed."
+  [c data]
+  (spent/absorb! c data)
+  (ctx/update-mem! c update :placed (fnil into []) (:placed data)))
 
 (def adjacent-reach
   "Blocks within which a hostile is at the body: a way that failed ends the step so the round and the triggers see it before the next way starts."
@@ -87,6 +93,7 @@
 (defn ^:async round
   "Start the cheapest way; one that ends other than :done is dropped for this call and the next is chosen on the next step when a hostile is at the body, else at once."
   [c]
+  (ctx/update-mem! c update :start #(or % (sh/feet (:primitives c))))
   (loop []
     (if (way/enclosed? c)
       (end! c :done nil {:pos (sh/feet (:primitives c)) :way (:way (ctx/mem c))})
@@ -95,12 +102,12 @@
             way (:way (ctx/mem c))]
         (if (nil? way)
           (end! c :nothing-possible :no-way {:text (str "cannot enclose the body: " (if-let [why (seq (vals (:why (ctx/mem c))))] (str/join "; " why) "no way left that can be done here"))
-                                             :tried (vec (:failed-ways (ctx/mem c))) :dropped (:dropped (ctx/mem c)) :why (:why (ctx/mem c))})
+                                             :tried (vec (:failed-ways (ctx/mem c))) :dropped (:dropped (ctx/mem c)) :why (:why (ctx/mem c)) :statuses (:statuses (ctx/mem c))})
           (let [e (await (ctx/call c way (first (children way)) (child-args c way)))]
             (cond
               (= :continue e) :continue
-              (= :done (:kind e)) (do (spent/absorb! c (:data e))
+              (= :done (:kind e)) (do (absorb! c (:data e))
                                       (end! c :done nil {:pos (sh/feet (:primitives c)) :way way}))
-              :else (do (spent/absorb! c (:data e))
-                        (ctx/update-mem! c #(-> % (dissoc :way) (update :failed-ways (fnil conj #{}) way) (assoc-in [:why way] (or (:text (:data e)) (:cause e)))))
+              :else (do (absorb! c (:data e))
+                        (ctx/update-mem! c #(-> % (dissoc :way) (update :failed-ways (fnil conj #{}) way) (assoc-in [:why way] (or (:text (:data e)) (:cause e))) (assoc-in [:statuses way] (:status (:data e)))))
                         (if (seq (combat/hostiles (:primitives c) adjacent-reach)) :continue (recur))))))))))

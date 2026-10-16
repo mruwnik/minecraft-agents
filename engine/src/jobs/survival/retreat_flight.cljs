@@ -41,6 +41,11 @@
   [c]
   (or (:purpose (:args c)) :retreat-plug))
 
+(defn note-placed!
+  "Job memory: item was placed at cell, for the plug's result (:placed)."
+  [c cell item]
+  (ctx/update-mem! c update :placed-cells (fnil conj []) {:cell (u/cell-vec cell) :item item}))
+
 (defn floor
   "The lowest feet height a flight step may end at under rock: retreat-walk/max-descent below where the flight began."
   [c]

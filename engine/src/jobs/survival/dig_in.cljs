@@ -28,7 +28,7 @@
   room) is :done before anything is placed.
   One call is a whole attempt. It ends :done {:pos :mode :roof} when the world shows the body shut in. Otherwise a fact of the
   site is condition-failed (:no-blocks, :no-tool, :spared, :no-roof-support, :no-floor, :fluid-here, :fluid-adjacent,
-  :fluid-above, :hazard-below) and a try that failed is nothing-possible (:walls-refused, :walls-server-refused,
+  :fluid-above, :hazard-below) and a try that failed is nothing-possible (:walls-server-refused,
   :walls-failed, :dig-failed, :descent-stalled, :left-pit, :roof-failed, :plug-failed, :no-progress, :unsealed); the data is
   {:text :pos}.
   The mode is the first of these whose cells the zone rules permit. If none is permitted it takes the first
@@ -37,9 +37,8 @@
   A pit that would cut into the footprint of a plan the body made (a pen) is not dug (:spared, a
   dig_in_failed warning naming the cell and the plan): the shelter looks elsewhere. Walls and plug are not affected.
   - plug: the body is in a closed room with a door and a hole in the roof over it. One carried block mends the hole.
-  - walls: enough of the call's :use :blocks (default the shelter fillers) are carried for every open cell. Places the four sides at feet height, the four at head height,
-    a support beside the roof cell, then the roof cell, at most :max-places per step.
-    Every step it recomputes the open cells from the current feet cell. If the blocks run out, it chooses again.
+  - walls: enough of the call's :use :blocks (default the shelter fillers) are carried for every open cell. Calls jobs.survival.plug-in (walls way, :purpose :shelter), which places the four sides at feet height, the four at head height,
+    a support beside the roof cell, then the roof cell, at most :max-places per step, and takes the open cells from the current feet cell. If the blocks run out, it chooses again; a walls attempt that fails ends the call.
   - :enclose: walls mode only, for a body under an overhang or in a cave: the walls it needs, else :no-blocks.
   - dig: digs a pit two deep (three on flat ground, where the start cell has no solid side to roof against),
     then places one block at the roof cell from a carried or dug block.
@@ -55,11 +54,9 @@
     If the body leaves the column, it chooses again.
   With no full block beside the roof cell at either height (a flower or crop is no support) it does not dig
   (dig_in_failed warning, :no-roof-support).
-  A wall cell the server refuses is retried after the others, and given up after two refusals.
-  A cell occupied by a block a mob walks through (torch, sapling, cobweb) is dug once and placed again.
-  A door, gate or trapdoor beside the body counts as a wall only when shut. An open one is shut with one click.
-  An iron one cannot be shut by hand and is given up on.
-  Fails (dig_in_failed warning) after three failures in a row to place or dig, or at once when:
+  Walls: a cell the server refuses is retried after the others, and given up after two refusals; a cell occupied by a block a mob walks through (torch, sapling, cobweb) is dug once and placed again;
+  a door, gate or trapdoor beside the body counts as a wall only when shut, an open one is shut with one click, an iron one is given up on.
+  Fails (dig_in_failed warning) after three failures in a row to dig, or at once when a walls attempt fails or:
   a hazard is below, no floor is under the pit, no block can roof the pit, or the carried tools cannot harvest the block below.
   Every end with no roof over the body leaves a :dig-in-futile {:pos :reason} entry,
   and the start declines while one lies within 8 blocks. An entry with no :reason (a lack of blocks or tools)

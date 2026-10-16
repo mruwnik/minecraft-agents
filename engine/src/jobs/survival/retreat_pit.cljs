@@ -171,7 +171,7 @@
             r (await (tidy/place! c cell item true))]
         (ledger/remember! c (ledger/reconcile l (escape/block-at-of p)))
         (cond
-          (= "placed" (.-status r)) (do (dig-cells/forget-wait! c :seal-mob-since) :again)
+          (= "placed" (.-status r)) (do (dig-cells/forget-wait! c :seal-mob-since) (flight/note-placed! c cell item) :again)
           (dig-cells/keep-waiting! c :seal-mob-since r) :again
           :else (do (dig-cells/forget-wait! c :seal-mob-since)
                     :failed))))))

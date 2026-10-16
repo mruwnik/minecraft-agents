@@ -1,47 +1,39 @@
 (ns jobs.survival.dig-in.walls
-  "dig-in's walls and plug modes: placements round the body, or one block in the roof of a closed room."
+  "dig-in's walls and plug modes: the body walled in by jobs.survival.plug-in, or one block in the roof of a closed room."
   (:require [engine.ctx :as ctx]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.seal :as seal]
             [jobs.lib.blocks :as lb]
             [jobs.lib.tidy :as tidy]
+            [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-in.mode :as mode]
             [jobs.survival.dig-in.site :as site]))
 
-(defn cells-to-try
-  "The open cells still worth a placement: not occupied, not refused site/max-refusals times, the least refused first (a cell
-  the server refused is retried after the others, which may give it a support)."
-  [c open]
-  (let [{:keys [occupied refused]} (ctx/mem c)
-        tries #(get refused % 0)]
-    (->> open
-         (remove (or occupied #{}))
-         (remove #(>= (tries %) site/max-refusals))
-         (sort-by tries))))
-
-(defn open-text [cells]
-  (str "open cells " (pr-str (mapv (juxt :x :y :z) cells))))
+(defn note-placed!
+  "Job memory: the blocks a plug-in ending (its data's :placed) placed, as the :placed cells, their items and the spent counts."
+  [c data]
+  (doseq [{:keys [cell item]} (:placed data)
+          :let [cell (u/cell-pos cell)]]
+    (ctx/update-mem! c #(-> % (update :placed (fnil conj #{}) cell) (assoc-in [:placed-items cell] item) (update-in [:spent item] (fnil inc 0))))))
 
 (defn ^:async walls-round
-  "One round of walls mode. Out of blocks (the carried ones were used up or lost, or the body moved to a cell with more
-  open cells than blocks) it forgets the mode so the next round chooses again: a pit dug with what it can harvest."
+  "One attempt of walls mode: jobs.survival.plug-in with the walls way and the shelter's blocks. Out of blocks (the carried ones
+  were used up or lost, or the body moved to a cell with more open cells than blocks) it forgets the mode so the next round
+  chooses again: a pit dug with what it can harvest."
   [c]
   (let [{:keys [max-places roof-height]} (:args c)
-        blocks (mode/blocks c)
-        p (:primitives c)
-        open (dig-cells/open-cells p (sh/feet p))
-        cells (cells-to-try c open)
-        _ (when (and (seq cells) (seal/off-centre? p)) (await (seal/centre! c)))
-        status (await (dig-cells/place-all! c blocks (take max-places (dig-cells/bottom-up p cells (sh/feet p)))))]
-    (cond
-      (empty? cells) (do (when-not (sh/roofed? p roof-height) (site/remember-failed-site! c :walls-refused))
-                         :done)
-      (= :wait status) :yield
-      (= "no-item" status) (do (ctx/update-mem! c dissoc :mode :start) :continue)
-      (not= :ok status) (site/fail-site! c (if (= "failed" status) :walls-server-refused :walls-failed) (str "cannot place a block: " status (:mob-text (ctx/mem c)) "; " (site/open-text open)))
-      (dig-cells/sealed-in? p :walls roof-height) :done
-      :else :continue)))
+        e (await (ctx/call c :plug 'jobs.survival.plug-in
+                           {:ways #{:walls} :purpose :shelter :roof-height roof-height :max-places max-places :use {:blocks (mode/blocks c)}}))]
+    (if (= :continue e)
+      :yield
+      (do (note-placed! c (:data e))
+          (cond
+            (= :done (:kind e)) :done
+            (nil? (lb/pick c (mode/blocks c))) (do (ctx/update-mem! c dissoc :mode :start) :continue)
+            :else (do (site/remember-failed-site! c (if (= "failed" (get-in e [:data :statuses :walls])) :walls-server-refused :walls-failed))
+                      (ctx/emit! c :dig_in_failed :warn {:text (str "cannot wall the body in: " (:text (:data e)))
+                                                         :open (dig-cells/open-cells (:primitives c) (sh/feet (:primitives c)))})
+                      :done))))))
 
 (defn ^:async plug-round
   "In a closed room: place one block in the hole of the roof over the body (:plug)."

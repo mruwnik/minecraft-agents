@@ -50,7 +50,9 @@
         (let [{:keys [out p eng]} (await (plug! {:blocks ct/dead-end :inventory cobble :entities [(ct/skeleton 4 64 0)]} {}))]
           (is (= [:done :walls] [(:kind out) (:way (:data out))]))
           (is (= [[1 64 0] [1 65 0]] (cells-of p "place")) "the open side towards the skeleton, feet then head")
-          (is (= #{:retreat-plug} (purposes eng))))))))
+          (is (= #{:retreat-plug} (purposes eng)))
+          (is (= [{:cell [1 64 0] :item "cobblestone"} {:cell [1 65 0] :item "cobblestone"}] (:placed (:data out))) "every placed block, for a caller to take back")
+          (is (= {:x 0 :y 64 :z 0} (:start (:data out)))))))))
 
 (deftest the-callers-purpose-labels-the-ledger-entries
   (async done

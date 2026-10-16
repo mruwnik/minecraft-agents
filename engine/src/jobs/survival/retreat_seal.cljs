@@ -11,19 +11,28 @@
             [jobs.lib.seal :as seal]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tidy :as tidy]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]))
 
-(defn occupied? [c cell] (contains? (:seal-occupied (ctx/mem c)) cell))
+(def max-refusals
+  "Times the place primitive may refuse one cell before it is given up on."
+  2)
+
+(defn occupied?
+  "Whether the seal leaves cell alone: a block it cannot clear stands in it, or the server refused it max-refusals times."
+  [c cell]
+  (let [m (ctx/mem c)]
+    (or (contains? (:seal-occupied m) cell) (>= (get-in m [:seal-refused cell] 0) max-refusals))))
 
 (defn ^:async place-seal!
   "Place carried blocks at cells in order, each ledgered (flight/plug-purpose) for the cleanup. :ok, :wait while a mob stands in a cell (the place is refused and tried again
-  for dig-cells/mob-wait-ms), or :failed at the first placement refused or with nothing left to place. A cell with
-  nothing to place against yet goes to the end of the order (its neighbours may be placed first); :failed once every
-  cell left has none. A door, gate or trapdoor standing open is shut instead
-  (dig-cells/shut-open!); a cell the place answers occupied (a torch, a chest, a bed: a block the seal leaves alone), or an
-  open iron door, is remembered in :seal-occupied and never tried again this flight."
+  for dig-cells/mob-wait-ms), or :failed with nothing left to place. A cell with nothing to place against yet, or one the
+  server refused, goes to the end of the order (its neighbours may be placed first); :failed once every cell left has none, a mob
+  that stays past the wait, or a refused one max-refusals times. A door, gate or trapdoor standing open is shut instead (dig-cells/shut-open!). A cell
+  the place answers occupied by a block a mob walks through (a torch, a sapling) is dug once and placed again; one that
+  stays (a full block, a bed, an iron door left open, a dig that fails) is remembered in :seal-occupied and never tried again this flight."
   [c cells]
   (loop [cells cells skipped 0]
     (let [item (lb/pick c (flight/blocks c))
@@ -43,16 +52,34 @@
                 (cond
                   (or (= :shut door) (= "placed" status))
                   (do (dig-cells/forget-wait! c :seal-mob-since)
+                      (when (= "placed" status) (flight/note-placed! c cell item))
                       (recur (rest cells) 0))
                   (and (= "no-support" status) (< (inc skipped) (count cells)))
                   (recur (concat (rest cells) [cell]) (inc skipped))
-                  (or (= :open door) (= "occupied" status))
+                  (= :open door)
                   (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) cell)
                       (recur (rest cells) 0))
+                  (= "occupied" status)
+                  (if (or (nil? (u/seen-block (:primitives c) cell)) (dig-cells/full-cube? c cell) (dig-cells/bed? (:primitives c) cell) (contains? (:seal-cleared (ctx/mem c)) cell))
+                    (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) cell)
+                        (recur (rest cells) 0))
+                    (let [_ (await (tools/equip-for! c (u/seen-name (:primitives c) cell) {:fast true}))
+                          d (await (tidy/dig! c cell true))]
+                      (ctx/update-mem! c update :seal-cleared (fnil conj #{}) cell)
+                      (if (= "dug" (.-status d))
+                        (recur cells 0)
+                        (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) cell)
+                            (recur (rest cells) 0)))))
                   (dig-cells/keep-waiting! c :seal-mob-since r) :wait
-                  :else (do (dig-cells/forget-wait! c :seal-mob-since)
-                            (ctx/update-mem! c assoc :seal-refusal (str "a place at " (pr-str [(:x cell) (:y cell) (:z cell)]) " was refused: " status (dig-cells/mob-text r)))
-                            :failed)))))))
+                  :else (let [support? (= "no-support" status)]
+                          (dig-cells/forget-wait! c :seal-mob-since)
+                          (ctx/update-mem! c assoc :seal-status status)
+                          (ctx/update-mem! c assoc :seal-refusal (str "a place at " (pr-str [(:x cell) (:y cell) (:z cell)]) " was refused: " status (dig-cells/mob-text r)))
+                          (when-not support? (ctx/update-mem! c update-in [:seal-refused cell] (fnil inc 0)))
+                          (cond
+                            (or support? (dig-cells/refusing-mobs r)) :failed
+                            (occupied? c cell) (recur (rest cells) 0)
+                            :else (recur (concat (rest cells) [cell]) 0)))))))))
 
 (defn shooters
   "Where the seen ranged hostiles within the flight's :ranged-radius stand."
@@ -125,7 +152,7 @@
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))
           (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
-          (case (await (place-seal! c (take max-places cells)))
+          (case (await (place-seal! c (take max-places (dig-cells/bottom-up p cells (sh/feet p)))))
             :failed :failed
             :wait :again
             (let [left (dig-cells/open-cells p (sh/feet p))]

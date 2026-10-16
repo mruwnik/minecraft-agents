@@ -9,10 +9,10 @@
 
 (def doc
   "A plug way: fill the open sides at feet and head height, a roof support and the roof round the body with carried blocks, the side
-  towards a shooter, else the nearest melee hostile, first. Needs carried blocks (the call's :use :blocks, else every :build filler).
+  towards a shooter, else the nearest melee hostile, first; a cell with nothing to place against waits for the cell it rests on, or gets the support chain under it (dig-in-cells/bottom-up). Needs carried blocks (the call's :use :blocks, else every :build filler).
   One call is a whole attempt: :done {:pos :way :walls} once enclosed, at once when it already is; nothing-possible :failed when a
   hostile stands in a cell (not with :purpose :shelter), no block is left or a place is refused. A place refused for a mob in the cell is retried
-  (dig-in-cells/mob-wait-ticks), then fails. Every block goes to the scaffold ledger with :purpose (default :retreat-plug, taken
+  (dig-in-cells/mob-wait-ticks), then fails; one refused otherwise goes after the others and is given up after two refusals; a torch or sapling in a cell is dug once and placed over. Every block goes to the scaffold ledger with :purpose (default :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :shelter is left alone). Quote: time, a placement per open cell
   (##Inf with no block carried). Picked by jobs.survival.plug-in, which shuts the body in by the cheapest way.")
 
