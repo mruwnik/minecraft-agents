@@ -196,7 +196,9 @@ test('mountVehicle uses the vehicle again while the server has not seated the bo
 test('mountVehicle times out when the server never seats the body', async () => {
   const bot = makeBot({ entities: [entity(9, 'pig')] })
   trackVehicles(bot)
-  assert.deepEqual(await mountVehicle(bot, ctx(), { id: 9 }, opts), { status: 'timeout' })
+  const r = await mountVehicle(bot, ctx(), { id: 9 }, opts)
+  assert.equal(r.status, 'timeout')
+  assert.deepEqual(Object.keys(r.vehicle).sort(), ['riders', 'x', 'y', 'z'], 'the vehicle as last seen, for the live diagnosis')
 })
 
 // the server answers a sneak by dropping the body from the list, then teleporting it beside the boat

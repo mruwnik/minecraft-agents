@@ -147,6 +147,6 @@
                     "not-mountable" (stop! c id :condition-failed :not-mountable)
                     "occupied" (stop! c id :condition-failed :occupied)
                     "hand-full" (stop! c id :condition-failed :hand-full)
-                    "timeout" (stop! c id :nothing-possible :timeout)
+                    "timeout" (stop! c id :nothing-possible :timeout {:seen (js->clj (.-vehicle r) :keywordize-keys true)})
                     "out-of-reach" (if (>= (inc fails) max-walks) (stop! c id :nothing-possible :unreachable) (recur (inc fails)))
                     (stop! c id :nothing-possible :failed {:mount status}))))))))))

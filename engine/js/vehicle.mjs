@@ -132,7 +132,9 @@ export async function mountVehicle (bot, ctx, a, { timeScale = 1, reach = settin
   bot.mount(target)
   const seated = await waitFor(ctx, () => bot.vehicle?.id === a.id, setting('vehicle/mount-wait-ms') * timeScale,
     { every: setting('vehicle/mount-retry-ms') * timeScale, again: () => bot.mount(target) })
-  return seated ? { status: 'mounted', vehicle: describe(bot.vehicle) } : { status: 'timeout' }
+  if (seated) return { status: 'mounted', vehicle: describe(bot.vehicle) }
+  const seen = bot.entities[a.id] ?? target
+  return { status: 'timeout', vehicle: { x: seen.position.x, y: seen.position.y, z: seen.position.z, riders: ridersOf(bot, seen).length } }
 }
 
 // Minecraft degrees (0 south, 90 west; pitch down positive) as a raw look: mounted Mineflayer sends none, and the
