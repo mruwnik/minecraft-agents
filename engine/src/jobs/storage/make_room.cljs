@@ -28,7 +28,7 @@
   keep of cobblestone, dirt and planks; ores, fuel and the like are not thrown (below :toss-below only). Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
   :keep-food (best food-points first; the body's 3-day food reserve when nil). Golden apples are never put away.
   Cobblestone, dirt and each kind of planks (what shelter, mend, furnace and tool jobs spend) are each kept up to
-  :keep-blocks; seeds up to :keep-seeds each; other blocks are not kept.
+  :keep-blocks; seeds up to :keep-seeds each; other blocks are not kept. Names in :keep-items are kept whole.
   Steps, in order:
   1. A chest known within :chest-range (and not marked :chest-unusable) takes what jobs.storage.deposit may put
      away, least worth keeping first: names without a floor before food and building blocks, then the cheapest,
@@ -59,6 +59,7 @@
    :chest-range {:doc "the known :chest place is used only within this distance" :spec (a/num-in 0 nil) :default 32}
    :keep-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default nil}
    :keep-blocks {:doc "cobblestone, dirt and each kind of planks kept carried, each up to this many" :spec (a/int-in 0 nil) :default 64}
+   :keep-items {:doc "item names kept carried whole, never put away or thrown (a caller's own inputs)" :spec (a/coll-of a/name?) :default []}
    :keep-seeds {:doc "each kind of seeds kept carried up to this many (a farming body sows them)" :spec (a/int-in 0 nil) :default 16}
    :toss-below {:doc "a stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay" :spec (a/num-in 0 nil) :default 3.2}
    :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :spec (a/num-in 0 nil) :default 8}
@@ -124,8 +125,8 @@
 (defn keep-counts
   "{name n}: how many of each carried name stay carried. Protected names keep
   their whole total; food names share keep-food, best food-points first;
-  shelter-blocks keep up to keep-blocks each, seeds up to keep-seeds each; the rest 0."
-  [inventory {:keys [keep-food keep-blocks keep-seeds]}]
+  shelter-blocks keep up to keep-blocks each, seeds up to keep-seeds each, keep-items whole; the rest 0."
+  [inventory {:keys [keep-food keep-blocks keep-seeds keep-items]}]
   (let [totals (totals inventory)
         names (keys totals)
         food (->> names
@@ -139,7 +140,8 @@
            (select-keys totals (filter protected? names))
            food-floors
            (capped shelter-blocks keep-blocks)
-           (capped #(str/ends-with? % "_seeds") keep-seeds))))
+           (capped #(str/ends-with? % "_seeds") keep-seeds)
+           (select-keys totals keep-items))))
 
 (defn recency
   "{item-name t}: the time of the newest :picked-up entry per item."

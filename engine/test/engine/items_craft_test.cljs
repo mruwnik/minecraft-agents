@@ -212,6 +212,16 @@
           (is (= {:item "oak_planks" :made 4 :status :done} (dissoc result :text)))
           (is (= 4 (get (inv p) "oak_planks"))))))))
 
+(deftest craft-with-a-full-inventory-never-tosses-the-recipes-inputs-to-make-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sticks (mapv (fn [_] {:name "stick" :count 64}) (range 35))
+              [result p] (await (craft {:inventory (conj sticks {:name "coal" :count 1})} {:item "torch"}))]
+          (is (= {:item "torch" :made 0 :status :stopped :reason :full} (dissoc result :text)))
+          (is (= (* 35 64) (reduce + (for [i (.-inventory (.self p)) :when (= "stick" (.-name i))] (.-count i))))
+              "the sticks the torch needs were not tossed"))))))
+
 (deftest craft-gives-up-when-the-table-arg-is-not-a-table
   (async done
     (tu/run-async done

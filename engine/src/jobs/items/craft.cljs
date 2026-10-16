@@ -320,12 +320,19 @@
 
 (declare craft-act! settle! short-of-ingredients!)
 
+(defn keep-items
+  "The names make-room must not toss: the item and every ingredient of every recipe for it, and the table."
+  [c]
+  (let [item (:item (:args c))
+        rs (get (recipes/recipes-for (game/version-of (:primitives c))) item)]
+    (vec (distinct (concat [item "crafting_table"] (mapcat (comp keys :needs) rs))))))
+
 (defn ^:async room!
-  "A full bag: once per craft, a jobs.storage.make-room child (child :room). :continue while it waits, :again when it
-  ran, nil when it was tried before."
+  "A full bag: once per craft, a jobs.storage.make-room child (child :room) that keeps the recipe's inputs. :continue
+  while it waits, :again when it ran, nil when it was tried before."
   [c]
   (when-not (:room-tried (ctx/mem c))
-    (let [r (await (ctx/call c :room 'jobs.storage.make-room {}))]
+    (let [r (await (ctx/call c :room 'jobs.storage.make-room {:keep-items (keep-items c)}))]
       (if (= :continue r)
         :continue
         (do (ctx/update-mem! c assoc :room-tried true)

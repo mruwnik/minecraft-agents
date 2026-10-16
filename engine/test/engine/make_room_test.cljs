@@ -164,6 +164,14 @@
          (mr/keep-counts [{:name "iron_axe" :count 1} {:name "bread" :count 3} {:name "dirt" :count 9} {:name "stick" :count 2}]
                          {:keep-food 0 :keep-blocks 0}))))
 
+(deftest keep-counts-keep-the-named-items-whole
+  (are [keep-items expected] (= expected (mr/keep-counts [{:name "stick" :count 40} {:name "stick" :count 40} {:name "poppy" :count 2}]
+                                                          {:keep-food 0 :keep-blocks 0 :keep-items keep-items}))
+    ["stick"] {"stick" 80 "poppy" 0}
+    ["stick" "poppy"] {"stick" 80 "poppy" 2}
+    [] {"stick" 0 "poppy" 0}
+    ["absent"] {"stick" 0 "poppy" 0}))
+
 (deftest recency-is-the-newest-picked-up-time-per-item
   (let [view {:now t0 :data {:entries {:picked-up [{:t 5 :data {:item "stick" :count 1}}
                                                    {:t 9 :data {:item "dirt" :count 1}}
