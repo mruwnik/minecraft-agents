@@ -114,7 +114,7 @@
 
 ;; ------------------------------------------------------------------ what is decided
 
-(defn fetching? [{:keys [fetch]}] (some? (need/parse-arg fetch)))
+(defn fetching? [{:keys [fetch]}] (boolean (some #(need/allows? fetch %) need/kinds)))
 
 (defn decide-guard
   [args {{:keys [fires todo left]} :fires}]
@@ -131,7 +131,7 @@
     (zero? ripe) {:skip :not-ripe}
     (seq unsafe) {:skip :unsafe-fire}
     (empty? todo) {:skip (or (first (vals declined)) :not-ripe)}
-    (and (nil? tool) (not (fetching? args))) {:skip :no-tool}
+    (and (nil? tool) (not (need/allows? (:fetch args) :tool))) {:skip :no-tool}
     :else {:call {:slot :harvest :args {}}}))
 
 (defn decide-breed
@@ -142,7 +142,7 @@
     (not day) {:skip :night}
     raining {:skip :raining}
     (< adults 2) {:skip :too-few-adults}
-    (and (nil? flower) (not (fetching? args))) {:skip :no-food}
+    (and (nil? flower) (not (need/allows? (:fetch args) :item))) {:skip :no-food}
     :else {:call {:slot :breed :args {:mob "bee" :count 2 :radius reach}}}))
 
 (defn decide-deposit

@@ -7,7 +7,8 @@
             [engine.hostile-test :as h]
             [engine.registry :as registry]
             [engine.fake :as fake]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.apiary.maintain :as maintain]))
 
 (defn inv [& pairs] (mapv (fn [[n c]] {:name n :count c}) (partition 2 pairs)))
 
@@ -327,3 +328,10 @@
         (doseq [[args w] harvest-worlds]
           (let [s (await (scenario args w 30))]
             (is (not= :declined (:skipped (step s :harvest))) (pr-str args))))))))
+
+(deftest the-fetch-kinds-allowed-decide-whether-a-missing-tool-or-flower-is-fetched
+  (let [facts {:bees 2 :adults 2 :day true :raining false :flower nil :reach 5 :tool nil :hives {:ripe 1 :todo [1]}}]
+    (is (= :no-food (:skip (maintain/decide :breed {:target 4 :fetch #{:tool}} facts))))
+    (is (= :no-tool (:skip (maintain/decide :harvest {:fetch #{:item}} facts))))
+    (is (some? (:call (maintain/decide :breed {:target 4 :fetch #{:item}} facts))))
+    (is (some? (:call (maintain/decide :harvest {:fetch #{:tool}} facts))))))

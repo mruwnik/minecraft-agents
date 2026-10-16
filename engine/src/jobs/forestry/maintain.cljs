@@ -154,7 +154,8 @@
                   (merge {:pos pos :reason reason}
                          more
                          {:text (str "forest leaves the tree at " (pr-str (cell-vec pos)) " standing: " (name reason)
-                                     (when-let [why (:why more)] (str " (" (name why) ")")))})))
+                                     (when-let [why (:why more)] (str " (" (name why) ")"))
+                                     (when-let [because (:because more)] (str " (" (checks/cause-text because) ")")))})))
 
 ;; ------------------------------------------------------------------ the plan
 
@@ -369,11 +370,11 @@
 
 (defn fail-plant!
   "Count a failed attempt to plant at pos; leave the cell at the third."
-  [c pos why]
+  [c pos why & {:as more}]
   (let [n (inc (get-in (ctx/mem c) [:fails pos] 0))]
     (ctx/update-mem! c assoc-in [:fails pos] n)
     (when (>= n (u/max-failures))
-      (leave! c pos why))))
+      (apply leave! c pos why (mapcat identity more)))))
 
 (defn settle-debts!
   "Drop the replant debts whose cell no longer wants a sapling: one now holding a sapling or something foreign, or
@@ -412,7 +413,7 @@
       (do (ctx/update-mem! c bump :planted)
           (ctx/forget-where! c forestry/replant-kind #(= pos (:pos %)))
           :again)
-      :else (do (fail-plant! c pos :no-sapling) :again))))
+      :else (do (fail-plant! c pos :no-sapling :because (let [cause (:cause e)] (cond (map? cause) cause (keyword? cause) {:reason cause}))) :again))))
 
 (defn ^:async plant!
   "Step 3: plant at the nearest owed cell, those with the sapling carried first and the cells under the body last

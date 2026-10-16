@@ -257,6 +257,10 @@
   (is (= {:call {:slot :shear :job 'jobs.animals.shear :args {:radius 5 :fetch true}}}
          (tend/decide :shear {:mob "sheep" :fetch true} {:shears false :shearable 2 :reach 5}))
       "no shears but :fetch on: shear is called and fetches")
+  (is (= :no-food (:skip (tend/decide :breed {:mob "cow" :target 4 :fetch #{:tool}} {:adults 2 :babies 0 :food nil :reach 5})))
+      ":fetch limited to tools is no leave to fetch food")
+  (is (= :no-shears (:skip (tend/decide :shear {:mob "sheep" :fetch #{:item}} {:shears false :shearable 2 :reach 5})))
+      ":fetch limited to items is no leave to fetch shears")
   (are [expected facts] (= expected (:skip (tend/decide :cull {:mob "cow" :target 4} facts)))
     :within-target {:adults 4 :babies 0}
     :within-target {:adults 2 :babies 3}

@@ -605,3 +605,12 @@
           (is (= 0 (get (h/inv p) "oak_log" 0)))
           (is (= 1 (:felled result)))
           (is (= 1 (:planted result)) "the replant follows although the pickup took nothing"))))))
+
+(deftest a-failed-sapling-fetch-passes-its-cause-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (run {:blocks (ground [[3 0]])} {"forest" oak-cell} {:plan "forest"} 200))
+              left (warns seen :forest.left)]
+          (is (= [:no-sapling] (map :reason left)))
+          (is (some? (:because (first left))) "the child's cause rides on the note"))))))

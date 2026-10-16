@@ -117,14 +117,12 @@
      :food (animals/food-carried (:primitives c) (:mob (:args c)))
      :reach (cull/reach c)}))
 
-(defn fetching? [{:keys [fetch]}] (some? (need/parse-arg fetch)))
-
 (defn decide-breed
-  [{:keys [mob target fetch] :as args} {:keys [adults babies food reach]}]
+  [{:keys [mob target fetch]} {:keys [adults babies food reach]}]
   (cond
     (>= (+ adults babies) target) {:skip :at-target}
     (< adults 2) {:skip :too-few-adults}
-    (and (nil? food) (not (fetching? args))) {:skip :no-food}
+    (and (nil? food) (not (need/allows? fetch :item))) {:skip :no-food}
     :else {:call {:slot :breed :job (jobs :breed) :args (cond-> {:mob mob :count 2 :radius reach} (some? fetch) (assoc :fetch fetch))}}))
 
 (defn decide-cull
@@ -135,10 +133,10 @@
       {:call {:slot :cull :job (jobs :cull) :args {:mob mob :box box :keep keep}}})))
 
 (defn decide-shear
-  [{:keys [mob fetch] :as args} {:keys [shears shearable reach]}]
+  [{:keys [mob fetch]} {:keys [shears shearable reach]}]
   (cond
     (not= "sheep" mob) {:skip :not-sheep}
-    (and (not shears) (not (fetching? args))) {:skip :no-shears}
+    (and (not shears) (not (need/allows? fetch :tool))) {:skip :no-shears}
     (zero? shearable) {:skip :none-shearable}
     :else {:call {:slot :shear :job (jobs :shear) :args (cond-> {:radius reach} (some? fetch) (assoc :fetch fetch))}}))
 

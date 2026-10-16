@@ -83,6 +83,12 @@
        (nil? arg) nil
        :else (merge-limits job-default arg)))))
 
+(defn allows?
+  "Whether a job's :fetch arg v lets it fetch things of kind (:tool or :item)."
+  [v kind]
+  (let [arg (parse-arg v)]
+    (boolean (and arg (not (:error arg)) (contains? (:what (merge-limits nil arg)) kind)))))
+
 (defn tighten
   "Limits o tightened by a wait's limits l: the sources both allow, the shorter :minutes; other keys of l fill in."
   [o l]
