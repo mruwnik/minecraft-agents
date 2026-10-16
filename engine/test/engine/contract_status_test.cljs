@@ -255,6 +255,17 @@
           (is (= [:impossible] (mapv #(:kind (:data %)) (job-ev seen :stopped))))
           (is (empty? (job-ev seen :completed))))))))
 
+(deftest a-job-refused-for-bad-args-starts-no-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'bad {:can-start? (constantly (contract/never :bad-args "count 0"))
+                                               :round (fn [c] (ctx/end c :done nil))}})]
+          (core/submit! eng '(bad) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (job-ev seen :stopped))) "refused with its reason")
+          (is (empty? (job-ev seen :round_started))))))))
+
 (def probe
   {:can-run? (fn [c] (swap! world update :asks (fnil conj []) (:n (:args c)))
                (if (get @world :run) (contract/ok :go "go") (contract/later :paused "paused")))

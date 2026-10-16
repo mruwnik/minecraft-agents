@@ -3,6 +3,7 @@
   entry's persistence, and starting a round."
   (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! job-fields manual-job manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
+            [engine.core.ending :refer [refused?]]
             [engine.core.fruitless :refer [book-round! note-fruitless!]]
             [engine.core.list-edits :refer [drop-cancelled!]]
             [engine.core.register :refer [trigger-holds?]]
@@ -254,7 +255,9 @@
 (defn start-round!
   "Give the body to instance id for one round; returns the round's promise."
   [eng id]
-  (let [token (str "t" (swap! (:tokens eng) inc))
+  (let [fresh? (zero? (get-in (state eng) [:instances id :round] 0))
+        refused? (and fresh? (refused? eng id))
+        token (str "t" (swap! (:tokens eng) inc))
         _ (set-owner! eng token)
         _ (swap! (:rounds eng) assoc id backoff/empty-round)
         s (swap! (:state eng)
@@ -266,6 +269,6 @@
         run {:id id :token token :reflex (:reflex inst) :round (:round inst)}]
     (reset! (:running eng) run)
     (reset! (:activity eng) {:token token :id id :in-flight 0 :last-at (now eng)})
-    (emit! eng (merge (job-fields eng id) {:source :job :kind :round_started :level :debug}))
+    (when-not refused? (emit! eng (merge (job-fields eng id) {:source :job :kind :round_started :level :debug})))
     (-> (run-round eng run inst)
         (.then #(settle! eng run %)))))

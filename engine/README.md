@@ -508,7 +508,7 @@ the token so the in-flight round is never booked; the job stays listed.
   its `:waiting`/`:holding` reason. A useful act or a list change re-arms it.
 - `job.fruitless`: a required attention request when every act of a listed job failed in 3 rounds in a row (a round that
   ends the job does not count; a round with no act neither counts nor resets); resolved by a round with progress. It only flags.
-- `job.round_started` and `job.yielded` are debug.
+- `job.round_started` and `job.yielded` are debug; a job refused for bad args (can-start? :never :bad-args) starts no round.
 
 **Backoff.** Register entries only: a reflex whose runs keep failing would fire as fast as the tick, so its entry waits.
 Listed jobs are never backed off.

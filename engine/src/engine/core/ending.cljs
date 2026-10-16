@@ -219,6 +219,12 @@
   (let [[kind _ data] (contract/all ss)]
     (and fresh? (= :never kind) (= :bad-args (:reason data)))))
 
+(defn refused?
+  "Whether the check just asked for fresh root job id left a can-start? :never :bad-args: the job is refused, its round starts nothing."
+  [eng id]
+  (let [[_ asked] (get @(:asked eng) id)]
+    (bad-args? [(:start asked) (:run asked)] true)))
+
 (defn done-between
   "The ending done? gives between steps of a started job (ctx/done): its :done ending when it ends the job, else nil."
   [def c]
