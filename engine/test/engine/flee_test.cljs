@@ -1160,3 +1160,37 @@
           (is (> (:distance (first fled)) 30)))))))
 
 
+
+(deftest a-body-in-a-dead-end-backs-off-a-creeper-and-never-steps-towards-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (setup {:floor [-3 -1 9 1] :blocks dead-end :self {:pos {:x 3.5 :y 64 :z 0.5}}
+                                        :entities [{:id 9 :uuid "u9" :name "creeper" :kind "hostile" :pos {:x 6.5 :y 64 :z 0.5} :chase {:speed 0.7}}]})
+              xs (atom [])
+              world (.-world p)
+              _ (doseq [name ["steer" "moveTo" "wait" "attack" "place" "dig" "equip" "eat"]]
+                  (.override world name (fn ^:async f [token a impl]
+                                          (swap! xs conj (:x (body-pos p)))
+                                          (await (impl token a)))))
+              _ (await (run-job! s 'jobs.survival.retreat {}))
+              _ (swap! xs conj (:x (body-pos p)))]
+          (is (<= (apply max @xs) 3.6) (str "never east, towards the creeper: " (pr-str @xs)))
+          (is (< (:x (body-pos p)) 3) "backed off west as far as the dead end allows"))))))
+
+(deftest a-body-at-the-end-of-a-dead-end-with-a-creeper-beside-it-stays-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (setup {:floor [-3 -1 9 1] :blocks dead-end :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                        :entities [{:id 9 :uuid "u9" :name "creeper" :kind "hostile" :pos {:x 2.5 :y 64 :z 0.5}}]})
+              xs (atom [])
+              world (.-world p)
+              _ (doseq [name ["steer" "moveTo" "wait" "attack" "place" "dig" "equip" "eat"]]
+                  (.override world name (fn ^:async f [token a impl]
+                                          (swap! xs conj (:x (body-pos p)))
+                                          (await (impl token a)))))
+              _ (await (run-job! s 'jobs.survival.retreat {}))
+              _ (swap! xs conj (:x (body-pos p)))]
+          (is (<= (apply max @xs) 0.6) (str "never east, towards the creeper: " (pr-str @xs)))
+          (is (<= (:x (body-pos p)) 0.6) "stays at the end"))))))
