@@ -180,35 +180,34 @@
           (is (= :not-loaded (waiting-reason seen)))
           (is (empty? (calls p "useOn"))))))))
 
-(deftest the-body-standing-in-a-door-is-not-shut-in-but-may-open-it
+(defn column-free? [p {:keys [x z]}]
+  (let [pos (.-pos (.self p))]
+    (not (and (= x (js/Math.floor (.-x pos))) (= z (js/Math.floor (.-z pos)))))))
+
+(deftest the-body-standing-in-a-door-steps-out-before-it-shuts-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [shut (await (run (world "oak_door" {:open true} 3 0) {:pos at :state :closed}))
-              open (await (run (world "oak_door" {:open false} 3 0) {:pos at :state :open}))
               upper (await (run (-> (world "oak_door" {:open true} 3 0)
                                    (assoc-in [:blocks "3,65,0"] "oak_door")
                                    (assoc-in [:states "3,65,0"] {:open true}))
-                               {:pos (assoc at :y 65) :state :closed}))]
-          (is (= :standing-in (waiting-reason (:seen shut))))
-          (is (= :standing-in (waiting-reason (:seen upper))) "the door's upper half")
-          (is (empty? (calls (:p shut) "useOn")))
+                               {:pos (assoc at :y 65) :state :closed}))
+              lower-at-head (await (run (-> (world "oak_door" {:open true} 3 0)
+                                            (update :blocks dissoc "3,64,0")
+                                            (update :states dissoc "3,64,0")
+                                            (assoc-in [:blocks "3,65,0"] "oak_door")
+                                            (assoc-in [:states "3,65,0"] {:open true :half "lower"})
+                                            (assoc-in [:blocks "3,66,0"] "oak_door")
+                                            (assoc-in [:states "3,66,0"] {:open true :half "upper"}))
+                                        {:pos (assoc at :y 66) :state :closed}))
+              open (await (run (world "oak_door" {:open false} 3 0) {:pos at :state :open}))]
+          (doseq [[nm r] [["door" shut] ["upper half" upper] ["lower half at the head" lower-at-head]]]
+            (is (= :changed (:reason (:result r))) nm)
+            (is (nil? (waiting-reason (:seen r))) nm)
+            (is (column-free? (:p r) at) (str nm ": the body ends out of the column"))
+            (is (= 1 (count (calls (:p r) "useOn"))) nm))
           (is (= :changed (:reason (:result open)))))))))
-
-(deftest naming-the-upper-half-of-a-door-whose-lower-half-is-at-the-heads-waits-standing-in
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [w (-> (world "oak_door" {:open true} 3 0)
-                    (update :blocks dissoc "3,64,0")
-                    (update :states dissoc "3,64,0")
-                    (assoc-in [:blocks "3,65,0"] "oak_door")
-                    (assoc-in [:states "3,65,0"] {:open true :half "lower"})
-                    (assoc-in [:blocks "3,66,0"] "oak_door")
-                    (assoc-in [:states "3,66,0"] {:open true :half "upper"}))
-              {:keys [seen p]} (await (run w {:pos (assoc at :y 66) :state :closed}))]
-          (is (= :standing-in (waiting-reason seen)))
-          (is (empty? (calls p "useOn"))))))))
 
 ;; ------------------------------------------------------------------ gave up after one click
 

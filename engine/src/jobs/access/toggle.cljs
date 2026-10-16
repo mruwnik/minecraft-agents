@@ -35,8 +35,8 @@
   world. There is no second click.
 
   Checked at the start (never): :bad-args, :needs-redstone, :not-toggleable and :bad-state (with :valid). Waits
-  before every round (later): :no-block, :not-loaded (the block is not loaded) and :standing-in (the body stands in
-  the door or gate to be closed; it must step out). A called job whose block has no block ends condition-failed
+  before every round (later): :no-block and :not-loaded (the block is not loaded). A body standing in the door or
+  gate to be closed first steps to a free cell beside it. A called job whose block has no block ends condition-failed
   :no-block.
 
   Ends :done (:changed or already there; data :pos :block :wanted :was :now), or impossible with the start causes
@@ -115,21 +115,15 @@
 (def can-start? (cond/and bad-args block-facts))
 
 (defn waits
-  "Later :not-loaded (the block is not loaded), :no-block (it is gone) or :standing-in (the body stands in the door or
-  gate to be closed; it must step out)."
+  "Later :not-loaded (the block is not loaded) or :no-block (it is gone)."
   [c]
   (let [{:keys [pos state error]} (parse (:args c))]
     (if error
       (contract/ok :args "nothing to wait for")
-      (let [b (u/block-at (:primitives c) pos)
-            props (some-> b click/props-of)]
+      (let [b (u/block-at (:primitives c) pos)]
         (cond
           (nil? b) (contract/later :not-loaded "the block is not loaded" :pos pos)
           (click/air? (.-name b)) (contract/later :no-block (str "no block at " (pr-str pos)) :pos pos)
-          (and (= :openable (click/kind-of (.-name b))) (= :closed state)
-               (not (click/reached? state props))
-               (click/standing-in? (u/self-pos c) pos (:half props)))
-          (contract/later :standing-in "standing in the door" :pos pos :block (.-name b))
           :else (contract/ok :ready "nothing to wait for"))))))
 
 (def can-run? waits)
@@ -186,17 +180,42 @@
       (:arrived (:data r)) (do (ctx/update-mem! c assoc :arrived true) :again)
       :else (give-up! c :unreachable pos state (str "cannot walk within reach of " block " at " (pr-str pos)) {:block block}))))
 
+(defn free-sides
+  "The cells beside the body's own whose feet and head are open air,."
+  [c]
+  (let [{:keys [x y z]} (u/self-pos c)
+        [bx by bz] (map #(js/Math.floor %) [x y z])
+        open? (fn [cx cy cz] (some-> (u/block-at (:primitives c) {:x cx :y cy :z cz}) .-name click/air?))]
+    (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+          :when (and (open? (+ bx dx) by (+ bz dz)) (open? (+ bx dx) (inc by) (+ bz dz)))]
+      {:x (+ bx dx) :y by :z (+ bz dz)})))
+
+(defn ^:async step-out! [c pos state block]
+  (let [cell (first (free-sides c))
+        r (when cell (await (child/call-walk* c :walk {:pos cell :range 0 :doors :never :ways #{:walk :clear-seal}})))]
+    (cond
+      (= :continue r) :continue
+      (:arrived (:data r)) :again
+      :else (give-up! c :unreachable pos state (str "cannot step out of " block " at " (pr-str pos)) {:block block}))))
+
 (defn ^:async next!
-  "One piece of the run: the walk or the click. :again, :continue (the walk waits) or the ending."
+  "One piece of the run: the step out of the closed door's column, the walk or the click. :again, :continue (a walk waits) or the ending."
   [c]
   (let [{:keys [pos state]} (parse (:args c))
         b (u/block-at (:primitives c) pos)
         block (some-> b .-name)]
-    (if (and (not (:arrived (ctx/mem c)))
-             (not (or (u/within? (u/self-pos c) pos (reach c))
-                      (<= (u/dist (u/self-pos c) pos) (reach c)))))
+    (cond
+      (and (= :openable (click/kind-of block)) (= :closed state)
+           (not (click/reached? state (click/props-of b)))
+           (click/standing-in? (u/self-pos c) pos (:half (click/props-of b))))
+      (await (step-out! c pos state block))
+
+      (and (not (:arrived (ctx/mem c)))
+           (not (or (u/within? (u/self-pos c) pos (reach c))
+                    (<= (u/dist (u/self-pos c) pos) (reach c)))))
       (await (walk! c pos state block))
-      (await (click! c pos state block)))))
+
+      :else (await (click! c pos state block)))))
 
 (defn ^:async round
   "The whole run: next! until it ends, a pace between pieces."

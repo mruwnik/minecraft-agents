@@ -90,13 +90,13 @@
         (let [r (await (waiting-after '(jobs.access.pillar {:height 3}) {:self {:pos {:x 0 :y 64 :z 0}} :inventory [{:name "dirt" :count 9}]}))]
           (is (nil? (:waiting r))))))))
 
-(deftest toggle-standing-in-the-door-says-so
+(deftest toggle-standing-in-the-door-does-not-wait-it-steps-out
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (waiting-after '(jobs.access.toggle {:pos [0 64 0] :state :closed})
                                       {:blocks (merge ground {"0,64,0" "oak_fence_gate"}) :states {"0,64,0" {:open true}} :self {:pos {:x 0.5 :y 64 :z 0.5}}}))]
-          (is (= :standing-in (:reason (:waiting r)))))))))
+          (is (nil? (:waiting r))))))))
 
 (deftest get-seeds-says-why-it-declines
   (async done
