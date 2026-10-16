@@ -13,14 +13,16 @@
             [engine.triggers :as triggers]
             [jobs.items.craft :as craft]
             [jobs.lib.child :as child]
-            [jobs.lib.crafting-table :as crafting-table]))
+            [jobs.lib.crafting-table :as crafting-table]
+            [jobs.lib.world-files :as world]))
 
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor world))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
+                           (:plans world) (assoc :world (world/of-data (:plans world) {} []))))]
     {:eng eng :p p :seen seen}))
 
 (defn ^:async child-outcome
@@ -693,3 +695,22 @@
     (is (nil? (contract/quote-problem q)) (pr-str q))
     (is (every? #(js/isFinite %) (get-in q [:uses :job-time])))
     (is (= [4 4 4] (get-in q [:yields :items "oak_planks"])))))
+
+(deftest craft-missing-ingredients-do-not-put-the-carried-table-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (craft {:inventory [{:name "wheat" :count 2} {:name "crafting_table" :count 1}]} {:item "bread" :fetch false}))]
+          (is (= {:item "bread" :made 0 :status :stopped :reason :need :short {"wheat" 1}} (dissoc result :text)))
+          (is (empty? (calls p "place")) "no table placed")
+          (is (= 1 (get (inv p) "crafting_table"))))))))
+
+(def house {"house" {:id "house" :parts [{:id "all" :cells (vec (for [x (range -2 3) y [64 65] z (range -2 3)] [x y z])) :want {:block "stone"}}]}})
+
+(deftest craft-puts-its-table-in-the-callers-own-plan-footprint-only-when-told-it-is-the-callers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args placed?] [[{:item "bread"} false] [{:item "bread" :for-plan "house"} true]]]
+          (let [[_ p] (await (craft {:plans house :inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]} args))]
+            (is (= placed? (boolean (seq (placed-at p)))) (pr-str args))))))))

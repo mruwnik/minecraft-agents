@@ -30,4 +30,10 @@
    :body {:inventory [["oak_planks" 3] ["stick" 2] ["crafting_table" 1]]}
    :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed :data {:spent [:any] :spent-at [:any]}} :within-s 60 :of-job true}]
-   :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 1]]}]}
+   :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 1]]}
+  {:name "missing-sticks-leave-the-carried-table-in-the-bag"
+   :blocks [[:set [14 0 19] "stone"]]
+   :body {:inventory [["oak_planks" 3] ["crafting_table" 1]]}
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :fetch false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :need}} :within-s 40 :of-job true}]
+   :after [[:item "wooden_pickaxe" 0] [:item "crafting_table" 1]]}]}

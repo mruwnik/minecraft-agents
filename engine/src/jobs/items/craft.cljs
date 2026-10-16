@@ -55,7 +55,8 @@
    :far {:doc "how far a seen crafting table is walked to when none is within :radius (the seen memory reaches 64)" :spec (a/num-in 0 64) :default 64}
    :fetch {:doc "get an ingredient that runs out (jobs.lib.need): true, a set of kinds or a map of limits; false stops :short" :spec need/option? :default true}
    :keep-table {:doc "leave a table this call put down standing; false: it is dug up again when the call ends" :spec boolean? :default false}
-   :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}})
+   :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}
+   :for-plan {:doc "id of the plan whose work this is: a table may stand in its own cells; nil: no plan's cells are used" :spec a/name? :default nil}})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds a craft may take: the walk, the batches and the table." :spec (a/num-in 0 nil)}
@@ -179,7 +180,7 @@
   (let [{:keys [x y z]} (u/self-pos c)
         cols (access/body-columns x z)
         avoid (into (ledger/own-cells c) (map (comp (juxt :x :y :z) a/cell)) (:avoid (:args c)))
-        plan-cells (known/footprints c)
+        plan-cells (known/footprints c {:except (:for-plan (:args c))})
         [x y z] (mapv #(js/Math.floor %) [x y z])]
     (for [dy [0 1]
           [dx dz] table-offsets
@@ -301,7 +302,7 @@
       :else
       (do
         (ctx/update-mem! c assoc :table-spot spot)
-        (let [r (await (ctx/call c :place 'jobs.blocks.place {:item "crafting_table" :pos spot :fetch false}))]
+        (let [r (await (ctx/call c :place 'jobs.blocks.place {:item "crafting_table" :pos spot :fetch false :for-plan (:for-plan (:args c))}))]
           (if (= :continue r)
             :continue
             (do
@@ -313,7 +314,7 @@
                 (table-why! c (str "the carried crafting_table could not be put down: "
                                    (if (= :done (:kind r)) "placing it failed" (name (contract/cause-key r)))))))))))))
 
-(declare craft-act! settle!)
+(declare craft-act! settle! short-of-ingredients!)
 
 (defn ^:async room!
   "A full bag: once per craft, a jobs.storage.make-room child (child :room). :continue while it waits, :again when it
@@ -326,24 +327,30 @@
         (do (ctx/update-mem! c assoc :room-tried true)
             :again)))))
 
+(defn ^:async table-step!
+  "table-fetch! once the ingredients are in hand: fetch a table when wanted, put a carried one down and craft at it."
+  [c]
+  (when (and (:fetch (:args c)) (not (carried-table? c))) (ctx/update-mem! c assoc :want-table true))
+  (let [f (when (:want-table (ctx/mem c)) (await (fetch! c table-problem)))
+        r (when (and (nil? f) (carried-table? c))
+            (await (ctx/atomic c :urgent :craft
+                               (fn ^:async place-and-craft []
+                                 (let [placed (await (place-table! c))]
+                                   (if (= :again placed) (await (craft-act! c)) placed))))))
+        r (if (map? r) (await (settle! c r)) r)]
+    (when-not (or f r) (ctx/update-mem! c #(-> % (dissoc :want-table) (assoc :table-tried true))))
+    (or f r)))
+
 (defn ^:async table-fetch!
   "With no table in reach: put a carried table down (also with :fetch off), else fetch one (:fetch) and put it down. Once per craft.
-  :again / :continue to go on, nil when there is nothing to do (give up). Putting a carried table down and the craft call at
+  Missing ingredients come first (short-of-ingredients!): a table is the last step. :again / :continue to go on, nil when
+  there is nothing to do (give up). Putting a carried table down and the craft call at
   it run as one urgent section (ctx/atomic :craft), so a reflex does not leave the table unused; the
   follow-up on the craft's status (settle!) is outside it."
   [c]
-  (let [o (:fetch (:args c))]
-    (when-not (:table-tried (ctx/mem c))
-      (when (and o (not (carried-table? c))) (ctx/update-mem! c assoc :want-table true))
-      (let [f (when (:want-table (ctx/mem c)) (await (fetch! c table-problem)))
-            r (when (and (nil? f) (carried-table? c))
-                (await (ctx/atomic c :urgent :craft
-                                   (fn ^:async place-and-craft []
-                                     (let [placed (await (place-table! c))]
-                                       (if (= :again placed) (await (craft-act! c)) placed))))))
-            r (if (map? r) (await (settle! c r)) r)]
-        (when-not (or f r) (ctx/update-mem! c #(-> % (dissoc :want-table) (assoc :table-tried true))))
-        (or f r)))))
+  (when-not (:table-tried (ctx/mem c))
+    (or (await (short-of-ingredients! c))
+        (await (table-step! c)))))
 
 (defn ^:async no-table!
   "No crafting table is within the radius or one can be reached: fetch one (table-fetch!), else warn and finish, with
@@ -395,11 +402,10 @@
 (defn ^:async short!
   "A craft ran out of an ingredient: fetch what it lacks (:fetch) and craft again (:again, :continue while a fetch
   waits), else emit the info and finish with what is missing, and the alternatives (name [cousins]) when other
-  recipes use different ingredients.
-  The primitive hands back every candidate recipe and the counts carried; jobs.items.shortfall chooses."
-  [c item r made]
-  (let [{:keys [short] :as shortage} (craft/no-item (js->clj (.-recipes r)) (js->clj (.-have r)))
-        have (js->clj (.-have r))]
+  recipes use different ingredients. shortage is jobs.items.shortfall/no-item over the candidate recipes, have the
+  counts carried."
+  [c item shortage have made]
+  (let [{:keys [short]} shortage]
     (when (and (seq short) (:fetch (:args c)) (not (contains? (:fetched (ctx/mem c)) [made short])))
       (ctx/update-mem! c assoc :wants (into {} (map (fn [[name n]] [name (+ n (get have name 0))])) short)))
     (let [f (when (seq (:wants (ctx/mem c))) (await (fetch! c problem)))]
@@ -411,6 +417,27 @@
         :else
         (do (ctx/update-mem! c dissoc :wants)
             (finish! c made (assoc shortage :reason :need :text (str "craft " item " is missing " (pr-str short)))))))))
+
+(defn ^:async short-of-ingredients!
+  "Before a table is put down or fetched: when no recipe of the item can be made from what is carried, short! (fetch
+  them or end :need), else nil. A table is the last step."
+  [c]
+  (let [p (:primitives c)
+        {:keys [item count]} (:args c)
+        have (storage/carried-totals (u/inventory p))
+        start (:start (ctx/mem c) (get have item 0))
+        todo (max 1 (- (+ start count) (get have item 0)))
+        rs (get (recipes/recipes-for (game/version-of p)) item)
+        needs (for [r rs :let [b (recipes/ceil-div todo (:count r))]]
+                (into {} (map (fn [[k v]] [k (* v b)])) (dissoc (:needs r) item)))]
+    (when (and (seq needs) (every? #(seq (craft/missing-for % have)) needs))
+      (await (short! c item (craft/no-item needs have) have (- (get have item 0) start))))))
+
+(defn ^:async short-from!
+  "short! for a craft call that answered no-item."
+  [c item r made]
+  (let [have (js->clj (.-have r))]
+    (await (short! c item (craft/no-item (js->clj (.-recipes r)) have) have made))))
 
 (defn ^:async craft-act!
   "The craft call alone (no follow-up): the target is carried already -> finish!'s result, else {:r the primitive's
@@ -443,9 +470,9 @@
       (when table (ctx/update-mem! c assoc :table table))
       (case status
         "crafted" (finish! c made {:text (str "crafted " made " " item)})
-        "no-item" (await (short! c item r made))
+        "no-item" (await (short-from! c item r made))
         "partial" (if (= "no-item" (.-reason r))
-                    (await (short! c item r made))
+                    (await (short-from! c item r made))
                     (do (u/progress! c) :again))
         "out-of-reach" (let [handed (u/pos-of (.-table r))]
                          (cond
