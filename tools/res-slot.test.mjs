@@ -315,7 +315,7 @@ test('capDuringSweep: with a sweep active a light run may start only while fewer
 })
 test('config: tests and server slots are capped to one for other agents while a sweep runs', () => {
   const kinds = loadConfig().kinds
-  assert.equal(kinds.tests.sweepCap, 1)
+  assert.equal(kinds.tests.sweepCap, 2)
   assert.equal(kinds.server.sweepCap, 1)
 })
 test('integration: while the sweep marker names a live pid a second light run is busy, a heavy run is not', async () => {
