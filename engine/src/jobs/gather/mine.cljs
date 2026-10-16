@@ -370,11 +370,11 @@
                  (contains? (ledger/ways-of c) (access/cell (update feet :y dec)))))))
 
 (defn dig-walk-opts
-  "The go-near! options of the walk to a dig: other ways only beyond reach, walks inside own cuts ignore the dark, a level bound with :stay-level."
-  [args in-reach? underground?]
+  "The go-near! options of the walk to a dig: other ways only beyond reach, walks inside own cuts ignore the dark (the :checks forms given, when any), a level bound with :stay-level."
+  [args in-reach? checks]
   (cond-> {:zone-tolls true}
     in-reach? (assoc :ways #{:walk :clear-seal})
-    underground? (assoc :checks {:safe? '(not (threatened))})
+    (seq checks) (assoc :checks checks)
     (:stay-level args) (assoc :y-margin (settings/get settings ::stay-margin))))
 
 (defn ^:async walk-to-dig!
@@ -384,7 +384,7 @@
   [c pos]
   (let [in-reach? (u/within? (u/self-pos c) (cell-of pos) (reach))
         walked (await (near/go-near! c pos (if (or (:stay-level (:args c)) (drop-in-line? c pos)) (reach) 1)
-                                     (dig-walk-opts (:args c) in-reach? (underground? c))))]
+                                     (dig-walk-opts (:args c) in-reach? (when (underground? c) (ready/unforced c {:safe? '(not (threatened))})))))]
     (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
       :there
       walked)))

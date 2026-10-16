@@ -8,6 +8,7 @@
             [engine.event-api :as event-api]
             [engine.fake :as fake]
             [engine.test-util :as tu]
+            [jobs.forestry.collect-drops :as job-ns]
             [jobs.lib.loose :as loose]
             [jobs.lib.shelter :as sh]))
 
@@ -193,6 +194,11 @@
           (let [result (with-redefs [sh/buried? (constantly true)]
                          (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60)))]
             (is (= 1 (:collected result)))))))))
+
+(deftest a-buried-walk-forces-its-dark-form-only-where-the-caller-has-none
+  (with-redefs [sh/buried? (constantly true)]
+    (is (= {:safe? '(not (threatened))} (:checks (job-ns/walk-args {:quote-call {}} {}))))
+    (is (nil? (:checks (job-ns/walk-args {:quote-call {:checks {:safe? '(always)}}} {}))))))
 
 (deftest only-the-want-items-count-towards-want
   (async done

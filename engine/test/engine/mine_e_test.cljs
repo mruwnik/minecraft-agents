@@ -502,7 +502,7 @@
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)))))))))
 
 (deftest a-stay-level-walk-to-ore-plans-no-way-over-the-ground
-  (is (= 8 (:y-margin (mine/dig-walk-opts {:stay-level true} false false))) "a way round over a hill is no way for a run that stays level")
-  (is (nil? (:y-margin (mine/dig-walk-opts {} false false))))
-  (is (= #{:walk :clear-seal} (:ways (mine/dig-walk-opts {:stay-level true} true false))))
-  (is (= {:safe? '(not (threatened))} (:checks (mine/dig-walk-opts {} false true)))))
+  (is (= 8 (:y-margin (mine/dig-walk-opts {:stay-level true} false nil))) "a way round over a hill is no way for a run that stays level")
+  (is (nil? (:y-margin (mine/dig-walk-opts {} false nil))))
+  (is (= #{:walk :clear-seal} (:ways (mine/dig-walk-opts {:stay-level true} true nil))))
+  (is (= {:safe? '(not (threatened))} (:checks (mine/dig-walk-opts {} false {:safe? '(not (threatened))})))))

@@ -73,7 +73,8 @@
 (defn walk-args
   "go-to args for a walk of this job: underground it ignores the dark (not (threatened) only), like the digs that made the hole."
   [c args]
-  (cond-> args (sh/buried? (:primitives c)) (assoc :checks {:safe? '(not (threatened))})))
+  (let [forms (when (sh/buried? (:primitives c)) (ready/unforced c {:safe? '(not (threatened))}))]
+    (cond-> args (seq forms) (assoc :checks forms))))
 
 (defn gained-count
   "The items an act result says entered the inventory (only those named in names when given)."
