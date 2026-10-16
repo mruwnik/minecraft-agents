@@ -209,11 +209,6 @@
     (is (false? (fires? p (trigger-store [(entry [0 54 0])] []) [])) "ten below: cleanup holds it :far-below each time the hold runs out")
     (is (true? (fires? p (trigger-store [(entry [0 54 0]) (entry [0 62 0])] []) [])) "another, in reach, still fires")))
 
-(deftest the-trigger-ignores-scaffold-too-high-for-a-walk
-  (let [p (tu/fake {:blocks {"0,70,0" "dirt" "0,66,0" "dirt"}})]
-    (is (false? (fires? p (trigger-store [(entry [0 70 0])] []) [])) "up a tree: cleanup holds it :too-high each time the hold runs out")
-    (is (true? (fires? p (trigger-store [(entry [0 70 0]) (entry [0 66 0])] []) [])) "another, in range, still fires")))
-
 (deftest the-trigger-waits-for-day-and-for-no-hostile-near
   (let [dirt (trigger-store [(entry [0 64 0])] [])
         night #(tu/fake {:blocks {"0,64,0" "dirt"} :time 14000})
@@ -262,14 +257,6 @@
     (is (= :walk (:step (go :feet [3 62 0]))) "two below is a walk")
     (is (= :walk (:step (go :feet [3 66 0] :max-below 8))))
     (is (= :walk (:step (go :feet [3 70 0] :guard-walks? false))) "an owner's or a caller's cleanup goes anyway")))
-
-(deftest a-scaffold-high-above-the-body-is-not-walked-to
-  (let [e (entry [10 70 0])
-        world (fn [pos] (if (= pos [10 70 0]) "dirt" "air"))
-        go #(apply step :entries [e] :block-at world :walk-range 3 %&)]
-    (is (= [:finish [{:cell [10 70 0] :item "dirt" :reason :too-high}]] ((juxt :step :open) (go :feet [3 64 0]))))
-    (is (= :walk (:step (go :feet [3 67 0]))) "three up is a walk")
-    (is (= :walk (:step (go :feet [3 64 0] :guard-walks? false))) "an owner's or a caller's cleanup goes anyway")))
 
 (deftest a-scaffold-where-the-body-died-is-not-walked-to
   (let [s (step :feet [3 64 0] :entries [(entry [10 64 0])] :block-at (lookup [10 64 0] "dirt") :died-near? #(= [10 64 0] %))]
@@ -791,15 +778,16 @@
               (ctx/end c :done nil result)))})
 
 (defn ^:async walk-run
-  "Cleanup of one entry 9 cells away with go-to stubbed to end with result: {:calls go-to's args :open reasons}."
-  [result]
+  "Cleanup of entries (default one 9 cells away) over blocks (default a dirt block at each) with go-to stubbed to end with result:
+  {:calls go-to's args :open reasons}."
+  ([result] (walk-run result [[9 64 0]] (pillar-blocks [[9 64 0]])))
+  ([result cells blocks]
   (let [calls (atom [])
-        cells [[9 64 0]]
-        {:keys [eng out] :as s} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (pillar-blocks cells) :entries (mapv entry cells)
+        {:keys [eng out] :as s} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks blocks :entries (mapv entry cells)
                                         :jobs {'jobs.movement.go-to (stub-go-to calls result)}})]
     (core/submit! eng '(recording-parent) {})
     (await (ticks s eng 40))
-    {:calls @calls :open (mapv :reason (:open @out))}))
+    {:calls @calls :open (mapv :reason (:open @out))})))
 
 (deftest cleanup-walks-through-go-to-never-digging-a-way
   (async done
@@ -816,6 +804,27 @@
         (let [{:keys [calls open]} (await (walk-run {:status :stopped :arrived false :reason :unreachable :why :goal-enclosed}))]
           (is (= 1 (count calls)))
           (is (= [:unreachable] open)))))))
+
+(def stair-up
+  "A stair of dirt from the ground at x 3 up to y 69 at x 9, one step a block."
+  (into {} (map (fn [i] [(cell-key [(+ 3 i) (+ 63 i) 0]) "dirt"])) (range 7)))
+
+(deftest a-scaffold-no-walk-reaches-is-held-no-way-with-no-walk-made
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cell [9 70 0]
+              {:keys [calls open]} (await (walk-run {:status :done :arrived true} [cell] (assoc (pillar-blocks []) (cell-key cell) "dirt")))]
+          (is (= [] calls) "a block in the air: no go-to, no walk out for it")
+          (is (= [:no-way] open)))))))
+
+(deftest the-top-of-an-abandoned-stair-is-walked-to-however-high
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cell [9 69 0]
+              {:keys [calls]} (await (walk-run {:status :done :arrived true} [cell] (merge (pillar-blocks []) stair-up)))]
+          (is (seq calls) "a walk climbs the stair: go-to is asked"))))))
 
 (deftest a-transient-go-to-failure-is-retried-until-give-up
   (async done

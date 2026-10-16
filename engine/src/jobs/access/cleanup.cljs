@@ -26,6 +26,8 @@
             [jobs.lib.placement :as placement]
             [jobs.lib.result :as result]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.world :as known]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]))
@@ -68,7 +70,7 @@
   never dug, unless :spare-own-builds is false.
 
   An unowned entry (:job nil, no :near) out of reach is walked to only when safe, else held with the reason: :unarmed / :low-health (no weapon carried,
-  or health under jobs.lib.body/risky-min-health: ::hold-unarmed?), :far-below (more than jobs.lib.ledger/max-below under the feet), :too-high (more than ::walk-range over the feet: up a tree, no way a walk finds),
+  or health under jobs.lib.body/risky-min-health: ::hold-unarmed?), :far-below (more than jobs.lib.ledger/max-below under the feet),
   :died-near (within ::died-radius of a :died entry in body memory), :roofed (a solid non-scaffold block within
   ::roof-height above it while the body is in the open). A walk leg also stops while a mob the body fled from within
   jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
@@ -78,7 +80,8 @@
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
   (:hazard; lava beside is :lava-adjacent) keeps the entry open, and so does :no-tool (the block needs a tool no
-  carried one is: dug by hand it drops nothing). A go-to that proves no way (see permanent-walk?) holds the cell
+  carried one is: dug by hand it drops nothing). A cell the planner proves no walk reaches to within ::walk-range of (cut off, closed in: up a tree, behind a wall), asked
+  before the walk, is held :no-way with no walk made; a go-to that proves no way (see permanent-walk?) holds it
   :unreachable at once. After :give-up walks ending out of reach the cell is held :out-of-reach, after
   :give-up failed digs :dig-failed.
 
@@ -175,7 +178,7 @@
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :spare-own-builds (:spare-own-builds (:args c))
             :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))
-            :max-below (ledger/max-below) :walk-range (walk-range) :roof-height (roof-height)
+            :max-below (ledger/max-below) :roof-height (roof-height)
             :died-near? (died-near-of (ctx/view c)) :walk-hold (walk-hold-of (:primitives c))
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 
@@ -279,13 +282,25 @@
           (if (= :continue outcome) :continue :again))))))
 
 
+(defn ^:async no-way?
+  "Whether the planner proves no walk from the body reaches within ::walk-range of cell (the verdicts go-to holds a cell unreachable for)."
+  [c cell]
+  (if-let [pw (wworld/path-world (:primitives c))]
+    (let [r (await (wplan/plan-from! c pw cell (walk-range) 1 nil))]
+      (and (not= "found" (.-status r)) (contains? result/permanent-why (keyword (.-reason r)))))
+    false))
+
 (defn ^:async walk!
   "Walk one leg toward within 3 of cell, or hold it :danger (no walk is made: the reflex acts). A permanent verdict
   holds it :unreachable, an end out of reach or a go-to that gave up for a passing reason counts a failure; a leg that
   got nearer does not. A walk that did not end counts a failure, as the round goes on."
   [c {:keys [cell]}]
-  (if (danger-ahead? c cell)
+  (cond
+    (danger-ahead? c cell)
     (do (ctx/update-mem! c assoc-in [:held cell] {:reason :danger}) :again)
+    (await (no-way? c cell))
+    (do (ctx/update-mem! c assoc-in [:held cell] {:reason :no-way}) :again)
+    :else
     (let [e (await (child/call-walk* c :walk {:pos cell :range (walk-range) :ways #{:walk} :zone-tolls true
                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))
                                               :spend {:job-time (:leg-s (:args c))}}))
