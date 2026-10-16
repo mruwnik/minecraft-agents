@@ -5,6 +5,7 @@
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [engine.fake :as fake]
+            [engine.look-support :as ls]
             [engine.test-util :as tu]))
 
 (defn sheep [id x & [more]]
@@ -259,3 +260,14 @@
         (let [s (await (scenario {:color "white"} {:inventory shears :entities [(sheep 1 2 {:color "brown"}) (sheep 2 3 {:color "white"})]} 8))]
           (is (= [false true] (world-sheared s)))
           (is (= ["u2"] (:shorn (done-event s)))))))))
+
+(deftest sheep-behind-the-body-are-looked-for-before-the-run-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory shears :entities [(sheep 1 2)]})]
+          (ls/entities-after-look (:p s))
+          (core/submit! (:eng s) (list 'jobs.animals.shear {}) {})
+          (await (run-ticks s 8 700))
+          (is (= :shorn (:reason (done-event s))))
+          (is (= [true] (world-sheared s))))))))

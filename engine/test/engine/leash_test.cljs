@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [engine.hostile-test :as h]
             [engine.perception :as perception]
+            [engine.look-support :as ls]
             [engine.test-util :as tu]))
 
 (defn cow [id x & [more]]
@@ -257,3 +258,13 @@
               far-from-center (await (scenario {:center {:x 40 :y 64 :z 0}} {:inventory lead :entities [(cow 1 5)]} 4))]
           (is (= :leashed (:reason (done-event near-center))) "a cow 15 away is within 8 of the center")
           (is (= :none (:reason (done-event far-from-center))) "a cow near the body is not within 8 of the center"))))))
+
+(deftest a-cow-behind-the-body-is-looked-for-before-the-run-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory lead :entities [(cow 1 2)]})]
+          (ls/entities-after-look (:p s))
+          (core/submit! (:eng s) (list 'jobs.animals.leash {:mob "cow"}) {})
+          (await (run-ticks s 8 700))
+          (is (= :leashed (:reason (done-event s)))))))))

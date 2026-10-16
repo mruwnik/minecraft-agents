@@ -53,6 +53,22 @@
    :expect [{:event {:source :job :kind :boat.launched :data {:boat "oak_boat"}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :no-water}} :for-s 20 :until {:source :job :kind :boat.launched}}]}
 
+  {:name "shear-the-sheep-behind-it"
+   :body {:inventory [["shears" 1]]}
+   :act [[:summon "sheep" [16.5 0 20.5]] [:job (jobs.animals.shear {:count 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]}
+  {:name "leash-the-cow-behind-it"
+   :body {:inventory [["lead" 1]]}
+   :act [[:summon "cow" [16.5 0 20.5]] [:job (jobs.animals.leash {:mob "cow"})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :leashed}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]}
+  {:name "breed-the-cows-behind-it"
+   :body {:inventory [["wheat" 4]]}
+   :act [[:summon "cow" [16.5 0 20.5]] [:summon "cow" [17.5 0 20.5]] [:job (jobs.animals.breed {:mob "cow" :count 2 :fetch false})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :fed}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]}
+
   ;; Unsensed cells: a bridge whose stand and head cells ahead are out of view (pitch up) looks before it steps; a pillar with the
   ;; cell overhead out of view (pitch down) looks up before it can give up :ceiling.
   {:name "bridge-with-the-body-looking-up"

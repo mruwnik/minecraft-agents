@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
@@ -220,6 +221,7 @@
         cands (candidates c)]
     (cond
       (= :collect (:phase m)) (await (collect! c))
+      (and (empty? cands) (empty? (:shorn m)) (not (look/surveyed? c))) (await (look/survey! c)) ; animals count only while in view
       (not (shears-carried? c)) (await (no-shears! c))
       (and n (>= (count (:shorn m)) n)) (go-collect! c :shorn)
       (empty? cands) (out-of-sheep! c)

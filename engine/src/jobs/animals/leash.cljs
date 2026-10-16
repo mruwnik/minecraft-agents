@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
@@ -194,6 +195,7 @@
 (defn ^:async step [c]
   (let [cands (candidates c)]
     (cond
+      (and (empty? cands) (not (look/surveyed? c))) (await (look/survey! c)) ; animals count only while in view
       (not (animals/lead-carried? c)) (await (no-lead! c))
       (empty? cands) (finish! c (none-reason c) nil)
       :else (await (engage! c (first cands))))))

@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
@@ -295,6 +296,7 @@
         cands (candidates c)]
     (cond
       (>= (count (:fed m)) n) (await (finish! c :fed))
+      (and (empty? cands) (empty? (:fed m)) (not (look/surveyed? c))) (await (look/survey! c)) ; animals count only while in view
       (nil? food) (await (fetch-food! c))
       (or (empty? cands) (and (empty? (:fed m)) (< (count (animals/adults (:primitives c) mob (:radius (:args c)))) 2))) (await (finish! c (out-reason c)))
       :else (await (engage! c (first cands) food)))))

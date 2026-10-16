@@ -9,6 +9,7 @@
             [engine.memory :as mem]
             [engine.takeover :as takeover]
             [engine.fake :as fake]
+            [engine.look-support :as ls]
             [engine.test-util :as tu]))
 
 (defn ent
@@ -535,3 +536,13 @@
           (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (nil? (:spend %)) (false? (:look-round %)) (:zone-tolls %)) opts)
               "a moving target is chased in legs, never dug or pillared toward")
           (is (finished? s)))))))
+
+(deftest cows-behind-the-body-are-looked-for-before-the-run-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory (wheat 4) :entities [(cow 1 2) (cow 2 3)]})]
+          (ls/entities-after-look (:p s))
+          (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow"}) {})
+          (await (run-ticks s 10 700))
+          (is (= 2 (count (:fed (done-event s))))))))))
