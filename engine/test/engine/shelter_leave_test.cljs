@@ -140,7 +140,7 @@
                                                           :entities [(cow 1 10) (cow 2 11) (cow 3 12)]}))
               _ (mem/write! (:store eng) :shelter (shelter-entry :built) {:cap 10 :ttl st/day-ms})
               _ (core/submit! eng '(jobs.combat.hunt {:count 3 :keep 0}) {})
-              _ (dotimes [_ 300] (swap! clock + 700) (await (core/tick! eng)))
+              _ (await (tu/run-ticks eng clock 300 700))
               g (first (st/emitted seen :stopped))]
           (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter g))))))))
 

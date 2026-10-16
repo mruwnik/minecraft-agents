@@ -415,7 +415,7 @@
                                 :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
           (core/submit! eng '(recording-parent) {})
-          (dotimes [_ 5] (swap! clock + 500) (await (core/tick! eng)))
+          (await (tu/run-ticks eng clock 5 500))
           (is (= [:stopped :bad-args] ((juxt :status :reason) @out)))
           (is (= :impossible (get-in @out [:ending :kind]))))))))
 

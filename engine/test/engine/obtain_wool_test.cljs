@@ -22,9 +22,7 @@
 (defn ^:async scenario [args world n]
   (let [s (h/setup world 50)]
     (core/submit! (:eng s) (list 'jobs.items.obtain args) {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
 (defn attacked [{:keys [p]}] (mapv #(.-id (.-args %)) (h/calls p "attack")))
@@ -84,9 +82,7 @@
       (fn ^:async t []
         (let [s (h/setup-seeing {:inventory (carried "oak_planks" 3)} nil 700)]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "white_wool" :count 3}) {})
-          (dotimes [_ 3]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 3 700))
           (is (empty? (filter #(= :failed (:kind %)) @(:seen s))) "no round or check threw"))))))
 
 (def shears-recipe {"shears" {:count 1 :needs {"iron_ingot" 2}}})
@@ -135,9 +131,7 @@
                   s (h/setup {:inventory inv :entities [(sheep 1 3 "white") (sheep 2 6 "white") (sheep 3 8 "white") (sheep 4 10 "white")]}
                              50 (ew/of-data {} {} pen))]
               (core/submit! (:eng s) '(jobs.items.obtain {:any-of ["white_bed"] :count 1 :ways #{:craft :smelt :gather}}) {})
-              (dotimes [_ 40]
-                (swap! (:clock s) + 700)
-                (await (core/tick! (:eng s))))
+              (await (tu/run-ticks (:eng s) (:clock s) 40 700))
               (is (empty? (attacked s)) "no sheep attacked"))))))))
 
 (deftest a-hunt-that-brings-no-wool-is-not-run-again
@@ -172,7 +166,5 @@
         (let [pen [{:name "linden-west-pen" :owner "Fake" :min [0 60 -3] :max [20 70 3]}]
               s (h/setup {:inventory h/sword :entities [(cow 1 3) (cow 2 6) (cow 3 8)]} 50 (ew/of-data {} {} pen))]
           (core/submit! (:eng s) '(jobs.items.obtain {:item "leather" :count 1}) {})
-          (dotimes [_ 40]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (empty? (attacked s)) "no cow attacked"))))))

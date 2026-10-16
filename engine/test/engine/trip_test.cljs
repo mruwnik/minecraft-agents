@@ -16,9 +16,7 @@
   (let [s (h/setup {:inventory (into h/sword junk) :containers {"10,64,0" []} :entities [(cow 1 3) (cow 2 5) (cow 3 7)]} 20)]
     (when chest (mem/write! (:store (:eng s)) :chest {:pos chest} mem/place-policy))
     (core/submit! (:eng s) (list 'jobs.combat.hunt (merge {:count 1 :keep 0} args)) {})
-    (dotimes [_ 40]
-      (swap! (:clock s) + 700)
-      (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) 40 700))
     [s (count (h/calls (:p s) "transfer")) (count (h/calls (:p s) "attack")) (set (map :kind @(:seen s)))]))
 
 (deftest a-fullish-bag-with-a-chest-near-deposits-then-hunts
@@ -63,9 +61,7 @@
   (let [s (h/setup {:inventory (into h/sword junk) :containers {"10,64,0" []} :entities [(cow 1 3) (cow 2 5) (cow 3 7)]} 20)]
     (mem/write! (:store (:eng s)) :chest {:pos {:x 10 :y 64 :z 0}} mem/place-policy)
     (core/submit! (:eng s) (list 'jobs.animals.cull (merge {:count 1 :keep 0} args)) {})
-    (dotimes [_ 40]
-      (swap! (:clock s) + 700)
-      (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) 40 700))
     [(count (h/calls (:p s) "transfer")) (count (h/calls (:p s) "attack")) (set (map :kind @(:seen s)))]))
 
 (deftest cull-deposit-first-deposits-then-culls
@@ -94,9 +90,7 @@
                           :containers {"10,64,0" []} :entities [(cow 1 3)]} 20)]
           (mem/write! (:store (:eng s)) :chest {:pos {:x 10 :y 64 :z 0}} mem/place-policy)
           (core/submit! (:eng s) '(jobs.combat.hunt {:count 1 :keep 0}) {})
-          (dotimes [_ 40]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (let [carried (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self (:p s))))]
             (is (contains? (set (map :kind @(:seen s))) :trip.deposited))
             (is (= 5 (get carried "raw_iron")))

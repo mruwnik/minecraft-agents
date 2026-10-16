@@ -526,9 +526,7 @@
                                                                           {:name "cobbled_deepslate" :count 64} {:name "granite" :count 64}]
                                                                          (same "diamond_pickaxe" 33 1)))})]
           (core/submit! eng '(jobs.storage.make-room {:free 2 :keep-blocks 0}) {})
-          (dotimes [_ 12]
-            (swap! clock + 700)
-            (await (core/tick! eng)))
+          (await (tu/run-ticks eng clock 12 700))
           (is (seq (of-kind seen :completed)) "done is emitted, not a wait for not-ready")
           (is (empty? (:list (core/state eng))) "the job ended"))))))
 
@@ -828,9 +826,7 @@
         eng (core/create {:primitives (tu/fake-on-floor world) :jobs registry/jobs :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:sinks [sink] :now #(deref clock)})})]
     (core/submit! eng (list 'jobs.storage.make-room args) {})
-    (dotimes [_ 12]
-      (swap! clock + 700)
-      (await (core/tick! eng)))
+    (await (tu/run-ticks eng clock 12 700))
     (let [e (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
       (core/shutdown! eng)
       {:event (:kind e) :kind (get-in e [:data :kind]) :reason (get-in e [:data :reason])})))

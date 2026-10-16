@@ -36,9 +36,7 @@
 
 (defn ^:async run-ticks
   [{:keys [eng clock]} n step]
-  (dotimes [_ n]
-    (swap! clock + step)
-    (await (core/tick! eng))))
+  (await (tu/run-ticks eng clock n step)))
 
 (defn ^:async submit
   "Submit (jobs.animals.lead-to args) in the setup s; run n ticks 700 ms apart."

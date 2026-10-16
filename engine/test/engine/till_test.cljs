@@ -373,9 +373,7 @@
   (let [s (h/setup-seeing {:blocks (assoc four hoe-chest "chest") :containers {hoe-chest [{:name "stone_hoe" :count 1}]}} nil)]
     (perception/pass! (aget (:p s) "perception"))
     (core/submit! (:eng s) (list job (merge box {:ignore-zones? true} extra)) {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
 (deftest till-fetches-a-hoe-from-a-seen-chest-by-default

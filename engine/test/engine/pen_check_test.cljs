@@ -37,9 +37,7 @@
   [args w]
   (let [s (h/setup w)]
     (core/submit! (:eng s) (list job args) {})
-    (dotimes [_ 2]
-      (swap! (:clock s) + 700)
-      (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) 2 700))
     {:event (ending-event @(:seen s))
      :listed (:list (core/state (:eng s)))}))
 
@@ -169,9 +167,7 @@
   (let [s (h/setup-seeing (assoc (world {}) :yaw 0) nil)
         run (fn ^:async run [] 
               (core/submit! (:eng s) (list job args) {})
-              (dotimes [_ 6]
-                (swap! (:clock s) + 700)
-                (await (core/tick! (:eng s))))
+              (await (tu/run-ticks (:eng s) (:clock s) 6 700))
               (ending-event @(:seen s) last))
         _ (await (run))
         cell (first (filter #(and (or (<= 0 (% 0) 4) (<= 0 (% 2) 4)) (not (.-visible (.sensedAt (:p s) (clj->js {:x (% 0) :y (% 1) :z (% 2)})))))

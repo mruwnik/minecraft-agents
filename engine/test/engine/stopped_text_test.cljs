@@ -20,7 +20,7 @@
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (core/submit! eng '(stopper) {})
-    (dotimes [_ 4] (swap! clock + 500) (await (core/tick! eng)))
+    (await (tu/run-ticks eng clock 4 500))
     (:text (first (filter #(= :stopped (:kind %)) @seen)))))
 
 (deftest stopped-event-carries-the-result-text

@@ -195,7 +195,7 @@
   [world-spec plans args & [zones]]
   (let [{:keys [eng p seen]} (b/start world-spec plans (if (= :none zones) nil (or zones [])))]
     (core/submit! eng (list job args) {})
-    (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
+    (await (tu/run-ticks eng h/clock 4 700))
     {:places (count (h/calls p "place"))
      :declined (mapv #(select-keys % [:plan :reason]) (kinds-of seen :pen-build.declined))
      :waits (mapv #(select-keys % [:reason :why]) (kinds-of seen :waiting))
@@ -218,7 +218,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (b/start (spec kit (dissoc built-pen "3,64,4")) {"pen" (ring-plan [[3 64 4]])} [])]
           (core/submit! eng (list job {:plan "pen"}) {})
-          (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
+          (await (tu/run-ticks eng h/clock 6 700))
           (is (= 1 (count (kinds-of seen :pen-build.leaky))))
           (is (= [{:pos {:x 3 :y 64 :z 4} :why :gap}] (:leaks (first (kinds-of seen :pen-build.leaky))))))))))
 
@@ -243,7 +243,7 @@
         (let [{:keys [eng seen w]} (b/start (spec kit) {} [])]
           (reset! (:state w) (assoc @(:state w) :plans {"pen" {:error "unreadable EDN: eof"}}))
           (core/submit! eng (list job {:plan "pen"}) {})
-          (dotimes [_ 3] (swap! h/clock + 700) (await (core/tick! eng)))
+          (await (tu/run-ticks eng h/clock 3 700))
           (is (= [{:plan "pen" :reason "the plan cannot be read: unreadable EDN: eof"}]
                  (mapv #(select-keys % [:plan :reason]) (kinds-of seen :pen-build.declined)))))))))
 
@@ -280,7 +280,7 @@
         (let [plan {:id "pen" :parts [{:id "gate" :cells [[3 64 2]] :want [:any "oak_fence_gate" "birch_fence_gate"]}]}
               {:keys [eng p seen]} (b/start {:inventory [{:name "birch_fence" :count 5}] :blocks ground :unloaded ["3,64,2"]} {"pen" plan} [])]
           (core/submit! eng (list job {:plan "pen" :fetch false}) {})
-          (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
+          (await (tu/run-ticks eng h/clock 4 700))
           (is (seq (tu/walk-calls p)))
           (is (empty? (filter #(= :no-items (:reason %)) (kinds-of seen :waiting)))))))))
 
@@ -299,7 +299,7 @@
             (await round)
             (release))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
-          (dotimes [_ 40] (swap! h/clock + 700) (await (core/tick! eng)))
+          (await (tu/run-ticks eng h/clock 40 700))
           (is (every? #(= "oak_fence" (h/block-at p (first %) (second %) (nth % 2))) fenced-ring))
           (is (= "oak_fence_gate" (h/block-at p 3 64 2)))
           (is (= 1 (count (kinds-of seen :completed))))

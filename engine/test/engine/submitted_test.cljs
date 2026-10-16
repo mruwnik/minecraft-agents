@@ -20,5 +20,5 @@
                 eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                   :now #(deref clock) :world (world/of-data {} {} [])})
                 id (core/submit! eng spec {})]
-            (dotimes [_ 3] (swap! clock + 500) (await (core/tick! eng)))
+            (await (tu/run-ticks eng clock 3 500))
             (is (= :moved-since-submit (:reason (:waiting (job-api/summary eng id)))) (pr-str spec))))))))

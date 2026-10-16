@@ -14,9 +14,7 @@
 
 (defn ^:async run-ticks
   [{:keys [eng clock]} n step]
-  (dotimes [_ n]
-    (swap! clock + step)
-    (await (core/tick! eng))))
+  (await (tu/run-ticks eng clock n step)))
 
 (defn ^:async scenario
   "Submit (jobs.animals.leash args) in a world; run n ticks 700 ms apart; the setup map."

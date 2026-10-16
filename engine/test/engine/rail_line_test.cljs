@@ -101,7 +101,7 @@
   [world-spec plans args & [zones]]
   (let [{:keys [eng p seen]} (b/start world-spec plans (if (= :none zones) nil (or zones [])))]
     (core/submit! eng (list job args) {})
-    (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
+    (await (tu/run-ticks eng h/clock 4 700))
     {:places (count (h/calls p "place"))
      :declined (mapv #(select-keys % [:plan :reason :why :refused :cells]) (h/events-of seen :rail-build.declined))
      :texts (mapv :text (h/events-of seen :rail-build.declined))
@@ -165,7 +165,7 @@
                                                :self {:pos pos}}
                                               {"line" plan} [])
                 _ (core/submit! eng (list job {:plan "line"}) {})]
-            (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
+            (await (tu/run-ticks eng h/clock 6 700))
             (is (= 1 (count (h/events-of seen :completed))) (str "ended by done? before any round " (pr-str pos)))
             (is (= 0 (count (h/events-of seen :rail-build.declined))) (pr-str pos))
             (is (= 0 (count (h/calls p "place"))) (pr-str pos))
@@ -250,7 +250,7 @@
     (await (outcome eng job {:plan "line"} 400))
     (fake/remove-block! p [7 64 0])
     (core/submit! eng (list job (merge {:plan "line"} args)) {})
-    (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
+    (await (tu/run-ticks eng h/clock 6 700))
     [seen p]))
 
 (deftest a-rail-broken-after-the-build-is-a-gap-in-the-next-proof
@@ -287,7 +287,7 @@
             (await round)
             (release))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
-          (dotimes [_ 120] (swap! h/clock + 700) (await (core/tick! eng)))
+          (await (tu/run-ticks eng h/clock 120 700))
           (is (every? #(= "rail" (h/block-at p % 64 0)) [0 1 28 29]))
           (is (every? #(= "powered_rail" (h/block-at p % 64 0)) [2 3 4 5 24 25 26 27]))
           (is (= 1 (count (h/events-of seen :completed))))
@@ -529,7 +529,7 @@
           (await (outcome eng job {:plan "line"} 900))
           (fake/remove-block! p [19 64 0])
           (core/submit! eng (list job {:plan "line" :all-carried false}) {})
-          (dotimes [_ 6] (swap! h/clock + 700) (await (core/tick! eng)))
+          (await (tu/run-ticks eng h/clock 6 700))
           (is (= [{:pos [19 64 0] :why :gap}] (:breaks (first (h/events-of seen :rail-build.broken))))))))))
 
 (deftest a-corner-in-another-plans-footprint-declines-before-anything-is-placed
@@ -555,7 +555,7 @@
             (await round)
             (release))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
-          (dotimes [_ 160] (swap! h/clock + 700) (await (core/tick! eng)))
+          (await (tu/run-ticks eng h/clock 160 700))
           (is (= ["east_west" "south_west" "north_south"] (mapv #(shape-of p %) [[18 64 0] [19 64 0] [19 64 1]])))
           (is (= 1 (count (h/events-of seen :completed))))
           (is (empty? (:list (core/state eng)))))))))

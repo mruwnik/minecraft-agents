@@ -42,9 +42,7 @@
          s (doto (h/setup w) (-> :p tu/seeing-all))
          s (update s :eng #(update % :jobs (stubs calls ends)))]
      (core/submit! (:eng s) (list job args) {})
-     (dotimes [_ n]
-       (swap! (:clock s) + 700)
-       (await (core/tick! (:eng s))))
+     (await (tu/run-ticks (:eng s) (:clock s) n 700))
      (assoc s :calls calls))))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
