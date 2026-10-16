@@ -16,6 +16,7 @@
    :body {:at [8.5 0 16.5]}
    :memory [{:kind :goal-off :data {:goal #at [56 0 16] :why :lost-ground} :policy {:cap 4 :ttl 30000}}]
    :act [[:job (jobs.movement.go-to {:pos #at [56 0 16] :range 2})]
+         [:wait-s 2]
          [:summon "zombie" [4.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:0b,duration:2400}]}"]]
    :expect [{:event {:source :job :kind :retreat.choice :data {:goal-why :given-up}} :within-s 25}
             {:event {:source :job :kind :retreat.choice :data {:lean [:near #at [56 0 16] 1.5]}} :within-s 80}]
@@ -45,7 +46,7 @@
    :limit-s 60}
   {:name "gaining-flight-never-turns-to-the-cornered-options"
    :plot {:height 12 :length 64 :width 32}
-   :body {:at [12.5 0 16.5] :inventory [["dirt" 20]]}
+   :body {:at [12.5 0 16.5] :inventory []}
    :act [[:summon "zombie" [6.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:1b,duration:2400}]}"]]
    :expect [{:count-event {:source :job :kind :retreat.target} :for-s 70 :at-least 3}
             {:no-event {:source :job :kind #{:retreat_sealed :retreat_blocked :pillar.done}} :for-s 70}]

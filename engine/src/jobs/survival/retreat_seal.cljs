@@ -19,16 +19,18 @@
 
 (defn ^:async place-seal!
   "Place carried blocks at cells in order, each ledgered as :retreat-plug for the cleanup. :ok, :wait while a mob stands in a cell (the place is refused and tried again
-  for dig-cells/mob-wait-ms), or :failed at the first placement refused or with nothing left to place. A door, gate or trapdoor standing open is shut instead
+  for dig-cells/mob-wait-ms), or :failed at the first placement refused or with nothing left to place. A cell with
+  nothing to place against yet goes to the end of the order (its neighbours may be placed first); :failed once every
+  cell left has none. A door, gate or trapdoor standing open is shut instead
   (dig-cells/shut-open!); a cell the place answers occupied (a torch, a chest, a bed: a block the seal leaves alone), or an
   open iron door, is remembered in :seal-occupied and never tried again this flight."
   [c cells]
-  (loop [cells cells]
+  (loop [cells cells skipped 0]
     (let [item (lb/pick c (flight/blocks c))
           cell (first cells)]
       (cond
         (empty? cells) :ok
-        (dig-cells/sealed? (:primitives c) cell) (recur (rest cells))
+        (dig-cells/sealed? (:primitives c) cell) (recur (rest cells) 0)
         (nil? item) :failed
         :else (let [door (await (dig-cells/shut-open! c cell))
                     l (when-not door (ledger/intend (ledger/open-entries (ctx/view c))
@@ -41,10 +43,12 @@
                 (cond
                   (or (= :shut door) (= "placed" status))
                   (do (dig-cells/forget-wait! c :seal-mob-since)
-                      (recur (rest cells)))
+                      (recur (rest cells) 0))
+                  (and (= "no-support" status) (< (inc skipped) (count cells)))
+                  (recur (concat (rest cells) [cell]) (inc skipped))
                   (or (= :open door) (= "occupied" status))
                   (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) cell)
-                      (recur (rest cells)))
+                      (recur (rest cells) 0))
                   (dig-cells/keep-waiting! c :seal-mob-since r) :wait
                   :else (do (dig-cells/forget-wait! c :seal-mob-since)
                             :failed)))))))

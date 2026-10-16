@@ -174,6 +174,23 @@
             (is (= [{:name "skeleton" :pos [4 64 0]}] (:hostiles e)) "and carries them"))
           (is (= [] (:list (core/state eng))) "done once the skeleton is gone"))))))
 
+(deftest a-seal-cell-with-nothing-to-place-against-waits-for-the-others
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [refused (atom false)
+              {:keys [seen]}
+              (await (hidden-round hiding-retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+                                                   :entities [(skeleton 4 64 0)]}
+                                   120000 (constantly nil) []
+                                   (fn [p] (.override (.-world p) "place"
+                                                      (fn [token args impl]
+                                                        (if (compare-and-set! refused false true)
+                                                          (js/Promise.resolve #js {:status "no-support"})
+                                                          (impl token args)))))))]
+          (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "sealed in though the first cell had no support")
+          (is (empty? (blocked-events seen))))))))
+
 (deftest a-seal-begun-is-finished-when-the-mob-drops-out-of-sense
   (async done
     (tu/run-async done
