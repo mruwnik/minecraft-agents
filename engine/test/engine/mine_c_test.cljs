@@ -1,6 +1,7 @@
 (ns engine.mine-c-test
   "jobs.gather.mine against the fake world."
   (:require [engine.child-ends :as ce]
+            [jobs.gather.mine.drops :as drops]
             [cljs.test :refer [deftest is async]]
             [clojure.string]
             [engine.contract :as contract]
@@ -401,6 +402,12 @@
           (is (= [[2 64 0] [1 64 0]] (dug-cells s)) "dug from behind the wall, then the wall cell between")
           (is (= 1 (get (inv s) "raw_iron")) "the body cut its way beside the dug cell and picked the drop up")
           (is (= :count (:reason (done-event s)))))))))
+
+(deftest a-cut-beside-a-dug-cell-never-opens-a-cell-under-gravel
+  (let [cut (fn [blocks] (let [s (start {:world {:blocks blocks :inventory pickaxe :yaw 270}})]
+                           (drops/drop-cut {:primitives (:p s)} [2 64 0] 4)))]
+    (is (= [[1 64 0]] (cut walled-ore)) "the wall cell between is the way")
+    (is (nil? (cut (assoc walled-ore "1,65,0" "gravel"))) "gravel over it would fall on the body walking in")))
 
 (deftest a-mine-that-ends-short-of-its-count-is-stopped-not-completed
   (async done

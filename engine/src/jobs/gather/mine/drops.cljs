@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.gather.mine.targets :refer [carried book-ground! drop-radius left-behind]]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
@@ -69,7 +70,8 @@
 
 (defn drop-cut
   "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route, falls of 1 at most, a cell never seen
-  taken for stone) from the body's cell to a stand within 1 of the dug cell, at most max-digs of them; nil with no such way."
+  taken for stone) from the body's cell to a stand within 1 of the dug cell, at most max-digs of them; nil with no such way.
+  A way digging a cell under a falling block (sand, gravel) is no way: it would land on the body walking in."
   [c dug max-digs]
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) "stone"))
@@ -77,6 +79,7 @@
     (->> [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0] [0 1 0]]
          (keep #(:dig (dig-route/route at from (mapv + dug %) {:max-digs max-digs :max-fall 1})))
          (filter #(<= (count %) max-digs))
+         (remove (fn [cells] (some #(rules/falling? (at (update % 1 inc))) cells)))
          (sort-by count)
          first)))
 
