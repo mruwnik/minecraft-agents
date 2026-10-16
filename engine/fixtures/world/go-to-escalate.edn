@@ -289,7 +289,7 @@
          [:time-set 1000]
          [:job (jobs.movement.go-to {:pos #at [22 10 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :leave-shelter}} :within-s 140 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 160 :of-job true}]
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 160 :of-job true}]
    :after [[:body-near [22.5 10 16.5] 3]]
    :limit-s 200}
   ;; card 3a3e80d6: only a scaffold-ledger entry that was :placed (or being :removing) makes a cobblestone cell the body's own; an :intent proves nothing
