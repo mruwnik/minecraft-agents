@@ -11,6 +11,7 @@
             [jobs.build.from-plan :as from-plan]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-read :as pen-read]
+            [jobs.lib.sense :as sense]
             [jobs.build.from-plan.plan :as plan]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -123,6 +124,13 @@
   [c cells]
   (pen-read/read (:primitives c) (pen-opts c cells)))
 
+(defn stale-in-sight
+  "The cells of the pen the body knows from memory only that lie within sight range: finish! looks at them before it
+  answers, done? cannot, so it does not call the pen finished on them."
+  [c cells]
+  (let [p (:primitives c)]
+    (sense/targets p (u/self-pos c) (:remembered (read-pen c cells)) #{})))
+
 (defn build-args [c]
   (select-keys (:args c) [:plan :part :reach :give-up :accept :fetch :ignore-zones? :surface]))
 
@@ -191,7 +199,7 @@
   (let [{:keys [cells trouble]} (judged-plan c)
         plan (:plan (:args c))
         answer (when-not trouble (pen/summary (read-pen c cells)))
-        holds? (boolean (and (not trouble) (empty? (plan/owed cells)) (:closed? answer) (outside? c cells)
+        holds? (boolean (and (not trouble) (empty? (plan/owed cells)) (:closed? answer) (empty? (stale-in-sight c cells)) (outside? c cells)
                              (or (:built (ctx/mem c)) (not (checks/running? c)))))]
     (checks/goal holds?
                  [:holds (str "pen of " plan " holds, " (:cells answer) " cells, placed " (get-in (ctx/mem c) [:built :placed] 0))]
