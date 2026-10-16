@@ -612,6 +612,22 @@
                     (is (= (keyword (.replace reason " " "-")) (:reason (first (of-kind seen :stopped)))) reason)
                     (is (empty? (:list (core/state eng))) reason)))))))))
 
+(deftest an-input-slot-taken-between-the-read-and-the-load-is-read-again-not-given-up-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup base-world)
+              busy (atom 1)]
+          (.override (.-world p) "furnace"
+                     (fn [token a impl]
+                       (if (and (= "load" (.-op a)) (pos? @busy))
+                         (do (swap! busy dec) (clj->js {:status "busy" :slot "input" :holds {:name "raw_copper" :count 2}}))
+                         (impl token a))))
+          (core/submit! eng iron-job {})
+          (await (ticks eng 3))
+          (is (empty? (of-kind seen :stopped)) "one busy answer is not the end")
+          (is (some #{"load"} (ops p)) "the load went in on the next round"))))))
+
 (defn ^:async result-of
   "Run the job (spec args) as the child of a recording parent, cooking and advancing the clock between ticks, until the list is empty; the child's result."
   [world args]
