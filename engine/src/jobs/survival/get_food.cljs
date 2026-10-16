@@ -1,12 +1,12 @@
 (ns jobs.survival.get-food
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
-            [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
@@ -43,7 +43,7 @@
          nearest zone or plan of its own within :source-radius it has not visited in this job and hunts there (the
          same keep rules; the kill's rule is :own-pen). Its stock is its reserve: taken after the wild food in reach, before fishing and the search.
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
-  ::explore setting; not at night nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
+  ::explore setting; not while the search would wait (dark sky, danger near) nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food with a food.none warning (what was searched, the nearest known source) and writes
   :hungry. For :ask-cooldown-ms after that a call still eats and still does the ways :bake, :cook, :collect, :hunt and :crops, but not a source it
   already knew when it gave up (one learned since is tried first; a starving body, food 0 or health below 7, rests only foods/::starving-rest-ms).
@@ -53,6 +53,7 @@
   A go-to that waits on the world, or a child still going after jobs.lib.child's call cap, yields :continue; a reflex
   call (it never yields) waits it out in the round.
   More than 12 ways in one call without getting fed ends nothing-possible :still-hungry.
+  Ready: safe? is not threatened, fit? always. The defaults :checks let a body at food 0 with no danger near walk and search at night; a merely hungry body waits for dawn in the open (intended).
   Fragile (health at or below foods/::fragile-health, 6) with no food carried, it walks out (a search, a source, its pen,
   an animal, a furnace to cook at) only on a calm day (jobs.lib.dawn/calm?) and not past known hostiles whose route
   danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it then ends condition-failed
@@ -153,6 +154,10 @@
 
 (def defaults {:checks {:safe? '(or (and (starving) (not (threatened))) (job-safe)) :fit? '(always)}
                :spend {:job-time ::job-time-s} :ways (set ways)})
+
+(def safe? ready/threatened)
+
+(def fit? ready/ok)
 
 (defn way?
   "Whether the call allows way k."
@@ -321,11 +326,15 @@
         (when (way? c :pen) (await (pen! c))))))
 
 (defn night-blocks-search?
-  "Whether the night stops the search: it does, unless the body is starving and no danger is near."
+  "Whether the search would wait: the search child's checker under defaults :checks (starving and unthreatened, else its own
+  safe-if-lit) is not ok, or the night handler holds and the body is not starving with no danger near. Asked here so a
+  child's :later does not end this job."
   [c]
-  (and (or (sh/night? (:primitives c)) (cook/night-holds? c))
-       (not (and (starving? c)
-                 (not (danger-q/danger-near? (:primitives c) (danger-q/hostile-radius) (danger-q/ranged-radius)))))))
+  (let [calm? (= :ok (first (ready/threatened c)))]
+    (boolean
+     (or (and (cook/night-holds? c) (not (and (starving? c) calm?)))
+         (not (or (and (zero? (.-food (.self (:primitives c)))) calm?)
+                  (= :ok (first (ready/safe-if-lit c)))))))))
 
 (defn explore-done?
   "Whether this job's search is over: it ran, and a starving body's foods/::starving-rest-ms has not passed since."

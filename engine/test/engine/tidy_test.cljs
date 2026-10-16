@@ -150,7 +150,6 @@
         (doseq [[world entries why kept]
                 [[{:inventory []} [dug] :not-carried 1]
                  [{:inventory [{:name "stone" :count 2}] :self {:health 6}} [dug] :unsafe 1]
-                 [{:inventory [{:name "stone" :count 2}] :entities [zombie] :blocks floor} [dug] :unsafe 1]
                  [{:inventory [{:name "stone" :count 2}] :blocks {"0,65,0" "dirt"}} [dug] :changed 0]]]
           (let [{:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] entries)]
             (await (zs/run-until-empty eng 6))
@@ -159,6 +158,20 @@
             (is (= kept (count (tidy-entries eng))) (pr-str why))
             (is (= [[{:cell [0 65 0] :was "stone" :why why}]] (mapv :cells (not-restored-runs seen))) (pr-str why))
             (is (= [] (restored-runs seen)) (pr-str why))))))))
+
+(deftest restore-waits-while-hurt-or-with-a-hostile-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[world reason] [[{:inventory [{:name "stone" :count 2}] :self {:health 5}} :low-health]
+                                [{:inventory [{:name "stone" :count 2}] :entities [zombie] :blocks floor} :hostile-near]]]
+          (let [{:keys [eng p]} (restore! world [(zs/whole-zone "Miles")] [dug])
+                id (first (:list (core/state eng)))]
+            (await (zs/run-until-empty eng 6))
+            (is (= reason (:reason (core/waiting eng id))) (pr-str reason))
+            (is (= [] (zs/calls p "place")) (pr-str reason))
+            (is (= [] (zs/calls p "dig")) (pr-str reason))
+            (is (= 1 (count (tidy-entries eng))) (pr-str reason))))))))
 
 (deftest a-cell-replanted-by-its-harvester-counts-as-restored-and-the-message-counts-only-real-failures
   (async done

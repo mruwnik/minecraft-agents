@@ -13,6 +13,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
+            [jobs.lib.ready :as ready]
             [jobs.lib.shelter :as sh]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
@@ -28,8 +29,8 @@
   so an expired trip still gets to write :abandoned.
   One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
   the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
-  Every run that leaves the death open emits recover-drops.declined with a :reason (:danger with :mob and :mob-pos, :night, :unreachable) and a text.
-  It ends condition-failed :night, without walking, while the walk would leave a shelter at night and the pile lasts until morning (::hold-at-night, off with :accept-night-risk; a pile that despawns first is weighed by its route danger alone; the window goes on), and for a pile farther than ::open-night-radius while the body is in the open at night (the night reflex shelters it first).
+  Every run that leaves the death open emits recover-drops.declined with a :reason (:danger with :mob and :mob-pos, :unreachable) and a text.
+  Ready: fit? ok; safe? is ok by day, ok at night when the pile despawns before morning (weighed by its route danger alone), else the exposure of the pile's cell (ready/exposed: later at night in the open or out of a shelter, so the died trigger is held with the reason and the pile is fetched by day while it lasts). The job's children walk under :checks {:safe? (always)}: the trip prices its own danger.
   The trip owns the danger it priced (the died trigger ranks above hostile-near, so no flight cuts the run it fires; an agent's run any reflex cuts):
   a real danger within :danger-radius has the trip weighed again with it near, once per mob, and so does a hit (:hurt) since the decision, at once: it backs off or goes on; before a decision
   the run ends condition-failed :danger so a reflex can deal with it (the died trigger fires it again); nothing-possible :unreachable when go-to does not arrive; the despawn window ends it :abandoned.
@@ -59,7 +60,7 @@
   :abandoned with :reason :unreachable (the walk was blocked, or did not arrive or got no nearer :max-blocked-retries times; a pile too far to walk after such walks ends so, not :skip), :danger
   (the trip was cut by a hostile, or declined for a danger, :max-hostile-cuts times), :nothing-found or :window-closed
   (the five minute despawn window closed). :partial carries :left and :reason :unreachable or :not-visible.
-  Endings (data :decision :text :pos :items :left): :collected is done; a skip for value condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by its reason, :window-closed limit-reached (line :time), :danger and :nothing-found condition-failed, :unreachable nothing-possible; a danger, the night or a walk that did not arrive leave the death open (see above). The abandoned text names the pile and what to do.
+  Endings (data :decision :text :pos :items :left): :collected is done; a skip for value condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by its reason, :window-closed limit-reached (line :time), :danger and :nothing-found condition-failed, :unreachable nothing-possible; a danger or a walk that did not arrive leave the death open (see above). The abandoned text names the pile and what to do.
   A pile already carried again ends :collected without a collect step.
   Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
   A run cut by a higher reflex, or a restarted body, goes on with the same trip.
@@ -74,16 +75,31 @@
    :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.need limits); false: no kit fetch" :spec need/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
    :leg-s {:doc "the walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again" :spec (a/num-in 0.1 120) :default 6}
    :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}
-   :accept-night-risk {:doc "walk out of a shelter at night for the pile even while it would last until day (by default only a pile that despawns before dawn is fetched then, weighed by its route danger)" :spec boolean? :default false}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :spec (a/num-in 0 nil) :default 10}})
 
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds of the call's time limit: the despawn window, which the job keeps itself in game ticks." :spec (a/num-in 0 nil)}
-   ::collect-s {:default 10 :doc "Seconds a collect pass at the pile is reckoned to take, in the job's quote." :spec (a/num-in 0 nil)}
-   ::hold-at-night {:default true :doc "At night a body that stands in a shelter (a roof, a closed room, underground) does not walk out of it for the pile: the run ends condition-failed :night and the died trigger tries again, by day if the pile is still there." :spec boolean?}
-   ::open-night-radius {:default 48 :doc "At night a body under the open sky does not walk farther than this for the pile: the run ends condition-failed :night so the night reflex shelters it where it stands; the trip resumes by day while the pile lasts." :spec (a/num-in 0 nil)}})
+   ::collect-s {:default 10 :doc "Seconds a collect pass at the pile is reckoned to take, in the job's quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
+
+(def own-checks
+  "The :checks of the job's children: the trip prices its own danger, and safe? has judged the night for the pile."
+  {:safe? '(always)})
+
+(defn pile-exposure
+  "Whether the walk to the pile of the next open death is exposed: ok by day and when the pile despawns before morning
+  (weighed by its route danger alone), else the exposure of the pile's cell."
+  [c]
+  (let [d (first (dth/open-deaths c))
+        night-ms (sh/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
+    (if (or (nil? d) (zero? night-ms) (>= night-ms (settings/ticks->ms (game/despawn-left-ticks d (ctx/view c)))))
+      (contract/ok :ready "no night to wait out for the pile")
+      (ready/exposed c (:pos (:data d))))))
+
+(def safe? (with-meta pile-exposure {::ready/exposure pile-exposure}))
+
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -173,8 +189,8 @@
     (dth/save-trip! c)
     (ctx/emit! c :recover-drops.seal :info {:pos pos :text "the pile is out of reach behind blocks this body placed: taking them back"})
     (let [[x y z] (:cell (apply min-key #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:cell %))) seal))]
-      (await (child/run!* c :seal-walk 'jobs.movement.go-to {:pos {:x x :y y :z z} :range (cfg/seal-sight) :ways #{:walk}})))
-    (when (= :done (:kind (await (child/run!* c :seal 'jobs.access.cleanup {:job :all :near {:pos pos :radius (cfg/seal-radius)}}))))
+      (await (child/run!* c :seal-walk 'jobs.movement.go-to {:pos {:x x :y y :z z} :range (cfg/seal-sight) :ways #{:walk} :checks own-checks})))
+    (when (= :done (:kind (await (child/run!* c :seal 'jobs.access.cleanup {:job :all :near {:pos pos :radius (cfg/seal-radius)} :checks own-checks}))))
       (ctx/update-mem! c assoc :seal-cleared true))
     :next))
 
@@ -186,7 +202,7 @@
   [c pos]
   (if-let [d (threatened? c)]
     [:danger d]
-    [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :checks {:safe? '(always)} :spend {:job-time (:leg-s (:args c))}}))]))
+    [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :checks own-checks :spend {:job-time (:leg-s (:args c))}}))]))
 
 (defn ^:async go!
   "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg (the danger and the
@@ -233,7 +249,7 @@
   reason). Not an arrival ends the trip :partial too."
   [c [x y z] pos names radius pile]
   (ctx/update-mem! c assoc :looked true)
-  (await (child/run!* c :look 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :ways #{:walk :clear-seal}}))
+  (await (child/run!* c :look 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :ways #{:walk :clear-seal} :checks own-checks}))
   (let [again (pl/pile-ids c pos names radius)]
     (if (seq again)
       (do (ctx/update-mem! c update :passes (fnil inc 0)) (dth/save-trip! c) :next)
@@ -246,7 +262,7 @@
   (ctx/update-mem! c assoc :searched true)
   (loop [cells (map-indexed (fn [i [dx dz]] [i {:x (+ x dx) :y y :z (+ z dz)}]) [[3 0] [0 3] [-3 0] [0 -3]])]
     (when-let [[i cell] (first cells)]
-      (await (child/run!* c (keyword (str "search" i)) 'jobs.movement.go-to {:pos cell :range 1 :ways #{:walk :clear-seal}}))
+      (await (child/run!* c (keyword (str "search" i)) 'jobs.movement.go-to {:pos cell :range 1 :ways #{:walk :clear-seal} :checks own-checks}))
       (or (seq (pl/pile-ids c pos names radius)) (recur (rest cells))))))
 
 (defn ^:async collect!
@@ -265,7 +281,7 @@
                   :next))
               (finish-collect! c pile ids))
           (let [swept (await (child/run!* c :collect 'jobs.forestry.collect-drops
-                                          {:radius (+ radius (cfg/stray-range) 4) :ids ids :filter names}))
+                                          {:radius (+ radius (cfg/stray-range) 4) :ids ids :filter names :checks own-checks}))
                 cell (pl/look-cell (:data swept))]
             (if (empty? (pl/left-over c pile))
               (finish-collect! c pile [])
@@ -423,7 +439,7 @@
                    (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason :detail text)))]
     (if (> need-s left-s)
       (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))
-      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :keep true :max-steps 1}]
+      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :keep true :max-steps 1 :checks own-checks}]
         (loop [n 0]
           (let [danger (threatened? c)
                 r (when-not danger (await (ctx/call c :dig 'jobs.access.tunnel args)))]
@@ -434,26 +450,6 @@
               (and (= :continue r) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
               (= :continue r) (decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
               :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (contract/cause-key r)))))))))))
-
-(defn night-shelter
-  "The shelter (jobs.lib.shelter/walk-leaves-shelter?) the walk to pos would leave at night while the pile of entry lasts until morning (a pile that despawns first is weighed by its route danger alone), else :open for a walk of
-  more than ::open-night-radius under the open sky at night, else nil; nil with ::hold-at-night off or :accept-night-risk."
-  [c entry pos]
-  (let [p (:primitives c)]
-    (when (and (settings/get settings ::hold-at-night) (not (:accept-night-risk (:args c))))
-      (or (when (< (sh/ms-until-morning (.-timeOfDay (.self p))) (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))))
-            (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) pos (cfg/arrive-range)))
-          (when (and (sh/night? p) (not (sh/sleeping? p)) (not (sh/safe-from-night? p))
-                     (> (u/dist (u/self-pos c) pos) (settings/get settings ::open-night-radius)))
-            :open)))))
-
-(defn decline-night!
-  "End condition-failed :night (not final) for the shelter the walk would leave: the despawn window goes on, so by day the trip resumes only if the pile is still there."
-  [c entry pos kind]
-  (decline! c :night
-            (str "the walk to " (pr-str pos) (if (= :open kind) " is a long one under the open sky at night; the body shelters first" (str " would leave the " (name kind) " shelter at night")) "; it waits for day while the pile lasts ("
-                 (js/Math.round (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 1000)) " s left)")
-            {:pos pos :shelter kind}))
 
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
@@ -487,7 +483,6 @@
 
       (= :collect (:phase (ctx/mem c))) (await (collect! c pos collect-radius (:inventory (:data entry))))
       (and (est/deep-pile c pos) (:blocked (ctx/mem c))) (await (dig-down! c entry pos (est/deep-pile c pos)))
-      (night-shelter c entry pos) (decline-night! c entry pos (night-shelter c entry pos))
       :else (let [r (await (go! c pos))]
               (if (and (= :unreachable (:cause r)) (:blocked (ctx/mem c)) (est/deep-pile c pos)) :next r)))))
 

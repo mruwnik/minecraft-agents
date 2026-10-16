@@ -69,7 +69,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (spawn-world {:time st/noon :blocks {"6,64,0" "respawn_anchor"}})
-              e (await (call! p 'jobs.survival.set-spawn {:bed {:x 6 :y 64 :z 0}} (constantly nil)))]
+              e (await (call! p 'jobs.survival.set-spawn {:bed {:x 6 :y 64 :z 0} :checks {:safe? '(always)}} (constantly nil)))]
           (is (= [:nothing-possible :not-set] (ending-of e))))))))
 
 (deftest set-spawn-with-no-bed-is-condition-failed
@@ -136,7 +136,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [e (await (call! (spawn-world {:time st/noon :blocks {"6,64,0" "red_bed"}}) 'jobs.survival.set-spawn
-                              {:bed {:x 6 :y 64 :z 0}} (constantly nil)))]
+                              {:bed {:x 6 :y 64 :z 0} :checks {:safe? '(always)}} (constantly nil)))]
           (is (= :done (:kind e))))))))
 
 (deftest sleep-at-night-ends-done

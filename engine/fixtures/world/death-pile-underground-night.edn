@@ -1,7 +1,7 @@
 ;; Card 34811f40: at night a pile lying in a covered stone tunnel (no sky, no hostile) is walked to and collected; recover-drops does not wait for day.
 ;; Needs night: run with --allow-time. No mobs. Stone mass x 2..30, z 10..22, y 0..6; a lit 1x2 tunnel along z 16 from x 4 to 28; the body dies at its east
 ;; end [26 0 16] and respawns at its west end [4 0 16], 22 blocks of tunnel away.
-;; Should-succeed: the pile is collected, no waiting :night. (Control with :accept-night-risk false at time 22500 is hand-run: the runner's night window ends at 22000.)
+;; Should-succeed: the pile is collected, no waiting :night.
 {:defaults
  {:tags [:survival :death :night :jobs]
   :time :night

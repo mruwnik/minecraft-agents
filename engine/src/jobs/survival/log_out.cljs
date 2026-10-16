@@ -1,5 +1,6 @@
 (ns jobs.survival.log-out
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
@@ -54,6 +55,10 @@
   {::job-time-s {:default 900 :doc "Seconds a log-out stint and the wait for the sleep count may take (a stint lasts at most until morning)." :spec (a/num-in 0 nil)}})
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 (def target [])
 

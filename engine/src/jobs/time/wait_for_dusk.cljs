@@ -1,5 +1,6 @@
 (ns jobs.time.wait-for-dusk
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [jobs.lib.game-facts :as facts]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -19,6 +20,10 @@
   {::job-time-s {:default 1800 :doc "Seconds the wait for dusk may take." :spec (a/int-in 1 nil)}})
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 (def can-start? (cond/because :dusk-not-come (cond/>= (cond/time-of-day) facts/dusk-tick)))
 

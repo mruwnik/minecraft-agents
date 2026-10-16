@@ -1,5 +1,6 @@
 (ns jobs.maintenance.shut-doors
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
@@ -40,6 +41,10 @@
 (def target [])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? ready/threatened)
+
+(def fit? ready/ok)
 
 
 (a/defargs args

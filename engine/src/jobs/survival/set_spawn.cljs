@@ -1,5 +1,6 @@
 (ns jobs.survival.set-spawn
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -51,6 +52,10 @@
 (def target [])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? (ready/safe-at bed-of))
+
+(def fit? ready/ok)
 
 (defn done?
   "The spawn is set at the bed and recorded (:spawn-bed, which the round writes with the home offer): a spawn the body only

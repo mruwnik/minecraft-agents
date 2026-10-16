@@ -16,11 +16,13 @@
             {:no-event {:source :job :kind :dig-in.sealed} :for-s 200 :until {:source :job :kind :recover-drops.decided}}]
    :after [[:item "raw_iron" 24]]}
   {:name "far-pile-in-the-open-waits-for-day-and-shelters"
-   ;; card 18d5778f: respawn at night 136 blocks from the pile with no bed under the open sky: recover-drops declines :night
-   ;; (open-night radius 48) instead of the long night walk, and the night job shelters where the body stands
+   ;; card 18d5778f: respawn late at night 136 blocks from the pile with no bed under the open sky: the pile lasts until morning, so
+   ;; recover-drops' safe? (the exposure of the pile) holds the died trigger instead of the long night walk, and the night job shelters where the body stands
+   :time :night-exclusive
+   :act [[:time-set 21500] [:wait-s 1] [:kill-body]]
    :plot {:length 160 :width 32 :height 10 :floor "dirt"}
    :body {:at [140.5 0 16.5] :spawnpoint [4 0 16]}
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :night}} :within-s 90}
+   :expect [{:event {:source :reflex :kind :held :data {:reason :exposed}} :within-s 90}
             {:no-event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :for-s 120}]
    :after [[:body-near [4.5 0 16.5] 14]]
    :limit-s 200}

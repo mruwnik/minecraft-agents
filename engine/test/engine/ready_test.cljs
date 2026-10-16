@@ -19,7 +19,15 @@
             [jobs.storage.kit :as storage-kit]
             [jobs.storage.withdraw :as withdraw]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.danger :as danger]))
+            [jobs.lib.danger :as danger]
+            [jobs.maintenance.shut-doors :as shut-doors]
+            [jobs.survival.eat :as eat]
+            [jobs.survival.get-food :as get-food]
+            [jobs.survival.log-out :as log-out]
+            [jobs.survival.restore-broken :as restore-broken]
+            [jobs.time.noop :as noop]
+            [jobs.time.wait-for-day :as wait-for-day]
+            [jobs.time.wait-for-dusk :as wait-for-dusk]))
 
 (defn ctx-of
   "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job)."
@@ -184,3 +192,22 @@
 
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))
+    (is (= [[15 64 0]] (:look-at (nth s 2))) "cells as [x y z], what the :look/around hook takes")))
+
+(deftest the-rest-of-survival-binds-its-checkers
+  (let [by-day-hostile {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}]
+    (are [check world expected] (= expected (kind check world))
+      restore-broken/safe? open-night :later
+      restore-broken/safe? (assoc open-night :time st/noon) :ok
+      restore-broken/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} :later
+      get-food/safe? by-day-hostile :later
+      get-food/safe? open-night :ok
+      get-food/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} :ok
+      shut-doors/safe? by-day-hostile :later
+      shut-doors/safe? open-night :ok)))
+
+(deftest jobs-with-nothing-to-check-are-ok-at-night-with-a-hostile-and-hurt
+  (let [world (assoc open-night :entities [zombie] :self {:pos {:x 0 :y 64 :z 0} :health 5})]
+    (doseq [check [log-out/safe? log-out/fit? eat/safe? eat/fit? noop/safe? noop/fit? wait-for-day/safe? wait-for-day/fit?
+                   wait-for-dusk/safe? wait-for-dusk/fit? shut-doors/fit?]]
+      (is (= :ok (kind check world))))))

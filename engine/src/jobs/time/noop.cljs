@@ -1,5 +1,6 @@
 (ns jobs.time.noop
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.primitive :as primitive]))
@@ -23,6 +24,10 @@
   {::job-time-s {:default 3600 :doc "Seconds one pause may take." :spec (a/int-in 1 nil)}})
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 (defn total-ms [c] (* 1000 (:seconds (:args c) 0)))
 

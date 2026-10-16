@@ -1,5 +1,6 @@
 (ns jobs.survival.restore-broken
-  (:require [jobs.lib.checks :as checks]
+  (:require [jobs.lib.ready :as ready]
+            [jobs.lib.checks :as checks]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -159,6 +160,10 @@
 (def target [])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? ready/safe-if-lit)
+
+(def fit? ready/fit?)
 
 
 (defn done?

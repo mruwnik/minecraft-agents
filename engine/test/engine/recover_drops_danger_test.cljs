@@ -8,7 +8,6 @@
             [engine.library-test :refer [setup]]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
-            [engine.settings :as settings]
             [engine.shelter-support :as st]
             [jobs.survival.recover-drops.estimate :as estimate]
             [jobs.survival.recover-drops :as recover-drops]
@@ -293,106 +292,56 @@
               "the first cleanup saw the plug and took it back")
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
 
-;; ------------------------------------------------------------ night in a shelter
+;; ------------------------------------------------------------ night: safe? judges the pile
 
 (def late-night 22500)
 
 (def roofed-at-night {:time late-night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}})
 
 (defn night-run
-  "Die with the field-report pile 20 blocks off while the body is under a roof at night, run the job once."
-  [world]
-  (fn ^:async t []
-    (let [pile dt/death-pile-of-the-field-report
-          {:keys [eng seen p]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} world))]
-      (die! eng {:pos dt/death-pos :inventory pile})
-      (core/submit! eng job {})
-      (await (run-until-empty eng 20))
-      {:eng eng :seen seen :p p})))
+  "Die with the field-report pile far-x blocks off on the same row, run the job (call `job-form`) in the world, then
+  tick a few rounds."
+  ([world far-x] (night-run world far-x job))
+  ([world far-x job-form]
+   (fn ^:async t []
+     (let [pile dt/death-pile-of-the-field-report
+           at {:x far-x :y 64 :z 0}
+           drops (map #(assoc % :pos at) (pile-drops pile))
+           {:keys [eng seen p]} (setup (merge {:floor [-30 -10 (+ far-x 20) 10] :entities (vec drops)} world))]
+       (die! eng {:pos at :inventory pile})
+       (let [id (core/submit! eng job-form {})]
+         (await (run-until-empty eng 20))
+         {:eng eng :seen seen :p p :id id})))))
 
-(deftest a-body-under-a-roof-at-night-does-not-walk-out-for-the-pile
+(deftest a-pile-that-lasts-until-day-is-waited-for-out-of-the-shelter
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen p]} (await ((night-run roofed-at-night)))]
-          (is (= [] (tu/walk-calls p)))
-          (is (nil? (recovered eng)) "not final: the window may still be open at dawn")
-          (is (every? #{:night} (map :reason (dt/emitted seen :recover-drops.declined))) "every decline names the night")
-          (is (seq (dt/emitted seen :recover-drops.declined)))
-          (is (true? (died/died nil (mem/view (:store eng)) {})) "the died trigger fires again"))))))
+        (doseq [[world far-x] [[roofed-at-night 20] [roofed-at-night 200]]]
+          (let [{:keys [eng p id]} (await ((night-run world far-x)))]
+            (is (= :exposed (:reason (core/waiting eng id))) (pr-str [world far-x (core/waiting eng id)]))
+            (is (= [] (tu/walk-calls p)))
+            (is (nil? (recovered eng)) "not final: the window may still be open at dawn")))))))
 
 (deftest a-pile-that-will-not-last-until-day-is-fetched-from-a-shelter-at-night
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (await ((night-run (assoc roofed-at-night :time st/night))))]
-          (is (= :collected (:decision (recovered eng))))
-          (is (not-any? #{:night} (map :reason (dt/emitted seen :recover-drops.declined)))))))))
-
-(deftest accept-night-risk-walks-out-of-a-shelter-at-night
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [pile dt/death-pile-of-the-field-report
-              {:keys [eng]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} roofed-at-night))]
-          (die! eng {:pos dt/death-pos :inventory pile})
-          (core/submit! eng '(jobs.survival.recover-drops {:accept-night-risk true}) {})
-          (await (run-until-empty eng 20))
+        (let [{:keys [eng]} (await ((night-run (assoc roofed-at-night :time st/night) 20)))]
           (is (= :collected (:decision (recovered eng)))))))))
 
-(deftest the-night-hold-is-a-setting
+(deftest a-checks-override-walks-out-of-a-shelter-at-night
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await (settings/with-settings {::recover-drops/hold-at-night false} (night-run roofed-at-night)))]
-          (is (not-any? #{:night} (map :reason (dt/emitted seen :recover-drops.declined)))))))))
+        (let [{:keys [eng]} (await ((night-run roofed-at-night 20 '(jobs.survival.recover-drops {:checks {:safe? (not (threatened))}}))))]
+          (is (= :collected (:decision (recovered eng)))))))))
 
 (deftest a-body-under-a-roof-by-day-walks-for-the-pile
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await ((night-run (assoc roofed-at-night :time st/noon))))]
-          (is (= :collected (:decision (recovered eng)))))))))
-
-;; ------------------------------------------------------------ night in the open
-
-(def open-at-night {:time st/night :self {:pos {:x 0 :y 64 :z 0}}})
-
-(defn open-night-run
-  "Die with the field-report pile at far-x on the same row, the body under the open sky at night, run the job once."
-  [far-x]
-  (fn ^:async t []
-    (let [pile dt/death-pile-of-the-field-report
-          at {:x far-x :y 64 :z 0}
-          drops (map #(assoc % :pos at) (pile-drops pile))
-          {:keys [eng seen p]} (setup (merge {:floor [-30 -10 (+ far-x 20) 10] :entities (vec drops)} open-at-night))]
-      (die! eng {:pos at :inventory pile})
-      (core/submit! eng job {})
-      (await (run-until-empty eng 20))
-      {:eng eng :seen seen :p p})))
-
-(deftest a-body-in-the-open-at-night-does-not-walk-far-for-the-pile
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen p]} (await ((open-night-run 200)))]
-          (is (= [] (tu/walk-calls p)))
-          (is (nil? (recovered eng)) "not final: the window may still be open at dawn")
-          (is (= [:night] (distinct (map :reason (dt/emitted seen :recover-drops.declined)))))
-          (is (true? (died/died nil (mem/view (:store eng)) {})) "the died trigger fires again"))))))
-
-(deftest a-body-in-the-open-at-night-walks-for-a-near-pile
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (await ((open-night-run 20)))]
-          (is (= :collected (:decision (recovered eng)))))))))
-
-(deftest the-open-night-walk-radius-is-a-setting
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (await (settings/with-settings {::recover-drops/open-night-radius 400} (open-night-run 200)))]
+        (let [{:keys [eng]} (await ((night-run (assoc roofed-at-night :time st/noon) 20)))]
           (is (= :collected (:decision (recovered eng)))))))))
 
 (deftest a-skip-for-danger-is-remembered-then-tried-again

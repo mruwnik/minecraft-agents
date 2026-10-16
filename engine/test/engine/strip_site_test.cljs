@@ -43,13 +43,13 @@
 (def holds (constantly (contract/ok :holds "holds")))
 
 (defn stub-of [real round-fn]
-  (assoc (dissoc real :target :quote-of :done? :can-run?) :can-start? holds
+  (assoc (dissoc real :target :quote-of :done? :can-run? :safe? :fit?) :can-start? holds
          :round (fn ^:async stub-round [c] (ending-of c (round-fn c)))))
 
 (defn ending-job
   "The real job of sym with its round replaced by one that ends with kind and cause."
   [sym kind cause]
-  (assoc (dissoc (get registry/jobs sym) :can-run?) :can-start? holds :round (fn ^:async ending-round [c] (ctx/end c kind cause nil))))
+  (assoc (dissoc (get registry/jobs sym) :can-run? :safe? :fit?) :can-start? holds :round (fn ^:async ending-round [c] (ctx/end c kind cause nil))))
 
 (defn done [result] (fn [_] result))
 

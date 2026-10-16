@@ -1,5 +1,6 @@
 (ns jobs.time.wait-for-day
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cond :as cond]
@@ -17,6 +18,10 @@
   {::job-time-s {:default 1800 :doc "Seconds the wait for day may take." :spec (a/int-in 1 nil)}})
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 (def can-start? (cond/because :day-not-come (cond/daytime)))
 

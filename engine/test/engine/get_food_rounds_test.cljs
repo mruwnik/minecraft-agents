@@ -601,16 +601,17 @@
           (await (one-round! eng {}))
           (is (= 1 (count (searches seen))) "food 0 and nothing near: the night does not stop the search"))))))
 
-(deftest a-starving-body-does-not-search-at-night-with-a-hostile-near
+(deftest a-starving-body-with-a-hostile-near-waits-at-night-without-searching
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 0 :pos {:x 0.5 :y 64 :z 0.5}} :time 15000
                                          :entities [{:id 5 :name "zombie" :kind "hostile" :pos {:x 4.5 :y 64 :z 0.5} :health 20}]}
-                                        :step-ms 5)]
-          (await (one-round! eng {}))
-          (is (= [] (searches seen)) "a hostile near: no search")
-          (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
+                                        :step-ms 5)
+              id (core/submit! eng '(jobs.survival.get-food {}) {})]
+          (await (core/tick! eng))
+          (is (= :hostile-near (:reason (core/waiting eng id))) "safe? is ready/threatened: the job does not start")
+          (is (= [] (searches seen))))))))
 
 (defn stop-text
   "The job's stopped events, printed: the ending's reason and why."
@@ -759,62 +760,18 @@
           (is (< (count (filter #{"beef"} (map #(.-name %) (.-inventory (.self p))))) 4) "raw beef was cooked")
           (is (> (food p) 5)))))))
 
-(deftest raw-beef-is-eaten-at-once-when-starvation-is-ticking
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 0 :health 3}
-                                      :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]})]
-          (await (one-round! eng {:explore false}))
-          (is (= [] (calls p "furnace")) "no time to cook")
-          (is (> (food p) 0)))))))
-
-(deftest raw-beef-is-cooked-at-food-0-when-health-outlasts-the-cook
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 0 :health 20}
-                                      :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
-                                     :step-ms 2000)]
-          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
-          (await (run-until-idle! eng p 40))
-          (is (some #{"take"} (call-args p "furnace" "op")) "cooked first")
-          (is (> (food p) 0)))))))
-
-(deftest raw-beef-is-cooked-at-a-furnace-seen-far-off-without-a-recorded-place
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks {"40,64,0" "furnace"} :self {:food 5}
-                                      :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
-                                     :step-ms 500)]
-          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
-          (await (run-until-idle! eng p 80))
-          (is (some #{"take"} (call-args p "furnace" "op")) "walked to the furnace it had seen")
-          (is (> (food p) 5)))))))
-
-(deftest raw-beef-is-cooked-at-low-food-with-a-furnace-at-hand
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 3}
-                                      :inventory [{:name "beef" :count 2} {:name "coal" :count 2}]}
-                                     :step-ms 2000)]
-          (core/submit! eng (list 'jobs.survival.get-food {}) {})
-          (await (run-until-idle! eng p 40))
-          (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
-          (is (> (food p) 3)))))))
-
-(deftest raw-beef-is-eaten-at-once-with-a-hostile-near
+(deftest a-hostile-near-keeps-get-food-from-starting-so-the-raw-beef-is-not-cooked-or-eaten
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 6 :y 64 :z 0} :health 20}
               {:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 5} :entities [zombie]
-                                      :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]})]
-          (await (one-round! eng {:explore false}))
+                                      :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]})
+              id (core/submit! eng '(jobs.survival.get-food {:explore false}) {})]
+          (await (core/tick! eng))
+          (is (some? (core/waiting eng id)) "safe? is ready/threatened")
           (is (= [] (calls p "furnace")) "no cooking under threat")
-          (is (> (food p) 5)))))))
+          (is (= 5 (food p))))))))
 
 (defn ^:async low-health-cook! [entities]
   (let [{:keys [eng p] :as w} (setup {:blocks {"30,64,0" "furnace"} :self {:food 5 :health 2} :time 6000 :entities entities

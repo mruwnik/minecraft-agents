@@ -1,5 +1,6 @@
 (ns jobs.survival.eat
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -32,6 +33,10 @@
    :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :spec boolean? :default false}})
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 (def target [:item])
 
