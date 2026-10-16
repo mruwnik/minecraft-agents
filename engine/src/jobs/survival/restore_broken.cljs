@@ -18,12 +18,13 @@
   entries jobs.lib.tidy and jobs.movement.go-to write; the body's own diggings elsewhere stay). A dug block is placed
   again from an item of the same name carried, or for an escalation hole what the block drops (cobblestone for stone). An escalation hole waits while
   the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. Both go through jobs.blocks.place / jobs.blocks.dig children (zones ignored on purpose, nothing fetched), so a cell with nothing solid beside it cannot be placed. It digs nothing else.
-  Works only when the body is safe: health at least :min-health and no hostile within :danger-radius.
+  Works only when the body is safe: health at least :min-health and no hostile within :danger-radius; when that stops
+  holding mid-run the run yields :continue (no cell is skipped for it).
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),
   with at most 3 tries per cell.
   One run over every entry, paced between steps, a cell put back forgotten at once; a step takes the first of the next
   max-candidates-checked cells whose put-back cuts the body's way to no other it reaches now; a walk is one go-to call and
-  a failed try is repeated until the cell gave up. A cell not restored for now (unsafe, item not carried) keeps its
+  a failed try is repeated until the cell gave up. A cell not restored for now (item not carried) keeps its
   entry. The others are forgotten.
   Done at once with no :tidy entry pending. Ends :done {:restored n :cells [cells put back] :not-restored [{:cell :was :why}]}
   (the lists only when not empty) when every cell was settled, else (also when max-passes ran out with cells
@@ -268,7 +269,7 @@
 
 (defn decide
   "What one pass does with the waiting entries (synchronous, its searches and floods bounded whatever the number
-  waiting): [:done], [:skip e why], [:step-clear e] or [:restore e]. An occupied cell comes first, then the first of
+  waiting): [:done], [:wait] (unsafe now), [:skip e why], [:step-clear e] or [:restore e]. An occupied cell comes first, then the first of
   the next max-candidates-checked whose put-back seals no other, else the next."
   [c waiting]
   (let [a (:args c)
@@ -279,7 +280,7 @@
         why (when e (why-not c e pr))]
     (cond
       (nil? e) [:done]
-      (unsafe? c a) [:skip e :unsafe]
+      (unsafe? c a) [:wait]
       (= :occupied why) [:step-clear e]
       why [:skip e why]
       (tidy/unreachable? (:primitives c) e (:reach a)) [:skip e :unreachable]
@@ -289,13 +290,14 @@
 
 (defn ^:async pass!
   "One step over the next waiting entry: restore it, step clear of it, or skip it with a reason. Resolves :again,
-  or :done when none is waiting."
+  :continue while the body is unsafe (nothing is skipped, the run resumes), or :done when none is waiting."
   [c]
   (let [seen (:seen (ctx/mem c) #{})
         waiting (vec (remove #(contains? seen (:cell %)) (tidy/entries c)))
         [verdict e why] (decide c waiting)]
     (case verdict
       :done :done
+      :wait :continue
       :skip (do (if (and (= :changed why) (= (:was e) (tidy/block-now (:primitives c) (:cell e))))
                   (do (tidy/forget-cell! c (:cell e))
                       (ctx/update-mem! c update :restored (fnil conj []) (:cell e))

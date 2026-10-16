@@ -77,6 +77,13 @@
 
 (def aside {:self {:pos [2 64 0]}})
 
+(deftest an-unsafe-moment-waits-the-run-and-skips-no-cell
+  (let [{:keys [p]} (setup (assoc aside :inventory [{:name "stone" :count 2}] :self {:pos [2 64 0] :health 6}) [(zs/whole-zone "Miles")])
+        c {:primitives p :args {:min-health 14 :danger-radius 8 :reach 3}}]
+    (is (= [:wait] (restore-broken/decide c [dug])))
+    (swap! (fake/state p) assoc-in [:self :health] 20)
+    (is (= :restore (first (restore-broken/decide c [dug]))))))
+
 (deftest restore-places-the-dug-block-when-carried-and-safe
   (async done
     (tu/run-async done
@@ -149,7 +156,6 @@
       (fn ^:async t []
         (doseq [[world entries why kept]
                 [[{:inventory []} [dug] :not-carried 1]
-                 [{:inventory [{:name "stone" :count 2}] :self {:health 6}} [dug] :unsafe 1]
                  [{:inventory [{:name "stone" :count 2}] :blocks {"0,65,0" "dirt"}} [dug] :changed 0]]]
           (let [{:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] entries)]
             (await (zs/run-until-empty eng 6))
