@@ -25,6 +25,7 @@
   1. Replant: seed the bare farmland of cells it cut, from the seeds carried.
   2. Cut the ripe crops, walking (a go-to child) to the nearest when out of :reach. A crop it cannot reach is skipped.
      After :give-up such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
+     A body farther than :radius from the centre with nothing cut yet walks there first (step 2b).
   3. Collect the drops (a jobs.forestry.collect-drops child).
   4. Finish.
   With no crop seen at all (ripe or not), or with :plan and no ripe crop known while a planned crop is remembered out of view, it looks around once from where it stands first; if still none it ends
@@ -436,14 +437,14 @@
 (defn max-home-fails [] (settings/get settings ::max-home-fails))
 
 (defn ^:async home!
-  "Step 2b: a body farther than :radius from the centre with debts or a sweep owed walks back
-  (range radius/2): :again, or :finish after max-home-fails walks that went nowhere; nil when
+  "Step 2b: a body farther than :radius from the centre with debts or a sweep owed, or with nothing cut yet, walks
+  there (range radius/2): :again, or :finish after max-home-fails walks that went nowhere; nil when
   there is nothing to do."
   [c]
   (let [m (ctx/mem c)
         center (center-of c)
         radius (:radius (:args c))]
-    (when (and (or (seq (:replant m)) (:collect m))
+    (when (and (or (seq (:replant m)) (:collect m) (zero? (:cut m 0)))
                (> (u/dist (u/self-pos c) center) radius))
       (if (>= (:home-fails m 0) (max-home-fails))
         :finish

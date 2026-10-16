@@ -427,6 +427,22 @@
             (is (= {:cut 1 :replanted 1 :bare [] :lost [] :gave-up false} (dissoc result :text)))
             (is (= "wheat" (block-at p 3 64 0)))))))))
 
+;; the crops are in sight only from near the field, as in the world
+(deftest a-body-far-from-a-given-centre-walks-there-before-looking-for-crops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor (assoc one-cell :floor [-30 -10 90 10]))
+              near? #(< (js/Math.abs (- (:x (u/self-pos {:primitives p})) 3)) 15)
+              _ (tu/blind p)
+              _ (aset p "seenBlocks" (fn [q] (if (near?) (.blocks p q) #js [])))
+              _ (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})))
+              _ (aset p "sensedAt" (fn [pos] (if (near?) (.blockAt p pos) #js {:unknown true})))
+              {:keys [eng]} (start {:p p})]
+          (fake/swap-self! p assoc :pos [75 64 0])
+          (let [result (await (child-outcome eng job {:center {:x 3 :y 64 :z 0}} 600))]
+            (is (= 1 (:cut result)))))))))
+
 (deftest a-centre-that-cannot-be-reached-ends-the-job-with-the-cells-bare
   (async done
     (tu/run-async done
