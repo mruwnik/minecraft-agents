@@ -36,7 +36,7 @@
 (def target [:pos])
 
 (def landed-kind :boat-land)
-(def landed-policy {:cap 4 :ttl (* 10 60 1000)})
+(def landed-policy {:cap 4 :ttl :forever})
 
 (defn given-pos [c] (when (:pos (:args c)) (:pos (b/parse (:args c)))))
 

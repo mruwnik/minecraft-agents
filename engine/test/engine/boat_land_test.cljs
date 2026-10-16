@@ -229,3 +229,6 @@
     (is (= [:look :no-shore] (tu/kind-reason (boat-land/no-shore (c world {:radius 1})))))
     (is (= [:ok :shore] (tu/kind-reason (boat-land/no-shore (c world {})))))
     (is (= [:ok :shore] (tu/kind-reason (boat-land/no-shore (c world {:pos [10 64 10]})))) "a given cell is judged by the round, which may drive nearer")))
+
+(deftest the-landing-record-never-expires
+  (is (= :forever (:ttl boat-land/landed-policy)) "a boat left ashore stays owed until seen gone"))

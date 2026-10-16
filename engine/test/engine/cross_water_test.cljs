@@ -222,3 +222,6 @@
   (let [r {:kind :nothing-possible :cause :blocked :data {:spots 2 :drive :blocked}}]
     (is (= {:spots 2 :drive :blocked} (:data (cw/failure {} r {}))))
     (is (= :no-boat (contract/cause-key (cw/failure {} {:kind :condition-failed :cause :need} {:need :no-boat}))))))
+
+(deftest the-crossing-record-never-expires
+  (is (= :forever (:ttl cw/crossing-policy))))

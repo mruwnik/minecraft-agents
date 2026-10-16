@@ -41,7 +41,7 @@
    :recover {:doc "take the boat back after landing" :spec boolean? :default true}})
 
 (def crossing-kind :cross-water)
-(def crossing-policy {:cap 4 :ttl (* 10 60 1000)})
+(def crossing-policy {:cap 4 :ttl :forever})
 
 (defn given-pos [c] (when (:pos (:args c)) (:pos (b/parse (:args c)))))
 
