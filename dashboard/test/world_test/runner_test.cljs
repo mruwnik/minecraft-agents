@@ -92,6 +92,35 @@
                    (is (not-any? #(re-find #"^gamemode" %) sent) "a body not at its start stays a spectator")
                    (done)))))))
 
+(deftest park-repeats-until-the-server-has-the-body-as-a-spectator
+  (let [none "No player was found"
+        set-mode "Set B's game mode to Spectator Mode"
+        run (fn [replies]
+              (let [sent (atom []) left (atom replies)]
+                (.then (r/park! {:send (fn [cmds] (swap! sent into cmds)
+                                         (js/Promise.resolve (mapv (fn [_] (let [x (first @left)] (swap! left rest) x)) cmds)))
+                                 :sleep (fn [_] (js/Promise.resolve nil))}
+                                "B")
+                       (fn [res] {:res res :sent @sent}))))]
+    (async done
+      (-> (js/Promise.resolve)
+          (.then #(run [set-mode]))
+          (.then (fn [{:keys [res sent]}]
+                   (is (nil? res))
+                   (is (= ["gamemode spectator B"] sent))))
+          (.then #(run [""]))
+          (.then (fn [{:keys [res sent]}]
+                   (is (nil? res) "a body already a spectator gets no reply")
+                   (is (= 1 (count sent)))))
+          (.then #(run [none none set-mode]))
+          (.then (fn [{:keys [res sent]}]
+                   (is (nil? res) "a body still logging in is parked once the server finds it")
+                   (is (= 3 (count sent)))))
+          (.then #(run (repeat 40 none)))
+          (.then (fn [{:keys [res]}]
+                   (is (re-find #"could not be parked" res))
+                   (done)))))))
+
 (deftest a-register-case-counts-events-from-before-the-register-was-put
   (let [pre {:offset 10 :from-ms 1000} post {:offset 90 :from-ms 9000}]
     (is (= pre (r/watch-window true pre post)) "a trigger firing inside the settle is counted")

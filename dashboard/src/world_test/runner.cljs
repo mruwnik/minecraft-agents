@@ -1403,6 +1403,20 @@
           (js/Promise.resolve nil)
           (f/register-put-argvs (:body opts) (:world opts) register origin)))
 
+(defn park!
+  "Sends park-commands until the server finds the body (a body still logging in is not found yet, stays survival and
+  suffocates in the plot built round its saved spot; a body already a spectator gets an empty reply), 16 tries 300 ms apart. Resolves to nil
+  when parked, else the failure message. io: {:send cmds->promise of replies, :sleep ms->promise}."
+  [{:keys [send sleep]} body]
+  (letfn [(attempt [retries]
+            (.then (send (f/park-commands body))
+                   (fn [replies]
+                     (cond
+                       (not-any? #(re-find #"(?i)no (player|entity)" (or % "")) replies) nil
+                       (zero? retries) (str "the body could not be parked as a spectator: " (str/join "; " replies))
+                       :else (.then (sleep 300) #(attempt (dec retries)))))))]
+    (attempt 16)))
+
 (defn ensure-at-start!
   "Checks the body stands at the case's start after body-commands; when it does not (a tp that did not take), repeats
   the tp and polls up to 16 times, 300 ms apart (about 5 s). Once it stands there it becomes survival (a spectator
@@ -1551,7 +1565,8 @@
                               (fn [[reply]] (reset! t-start {:ticks (daytime (or reply "")) :ms (js/Date.now)})))
                        (.then #(read-weather! rcon!))
                        (.then #(reset! weather %))
-                       (.then (fn [] (ev/emit! (ev/phase :setup)) (rcon! (f/park-commands (:body opts)))))
+                       (.then (fn [] (ev/emit! (ev/phase :setup)) (park! {:send rcon! :sleep sleep} (:body opts))))
+                       (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(reset! parked-at (js/Date.now)))
                        (.then (fn [] (build-plot! {:send rcon! :sleep sleep} grid origin rc)))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
