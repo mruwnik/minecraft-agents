@@ -13,9 +13,10 @@
             [jobs.animals.herd-run :as hr]))
 
 (defn coarse-world
-  "ht/world with sight rays 4 degrees apart: the fence stays in view and a pass costs a quarter."
+  "ht/world with sight rays 4 degrees apart: the fence stays in view and a pass costs a quarter. The ray jitter is
+  pinned: random jitter lets a 4-degree ray miss a fence cell now and then."
   [w]
-  (assoc (ht/world w) :ray-deg 4))
+  (assoc (ht/world w) :ray-deg 4 :rand (constantly 0.5)))
 
 (defn scan!
   "Turn through every heading, level and down, a sight pass at each."
