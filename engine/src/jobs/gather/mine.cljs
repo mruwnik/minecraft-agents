@@ -100,6 +100,8 @@
      body above it: a stair down the same way until the feet are at the level; the stair stopping ends the descent there
      (info mine.descent-stopped {:steps :stop :y :level}) and the tunnel runs at that height; more than mine.descent/level-slack (12) above the level
      (warn, same event) the dig phase ends :descent-stopped instead.
+  6c. Before the first step of 6 or 6b, a stair this body cut earlier (memory :stair-way) with its top within mine.descent/own-stair-reach and level with
+     the body, its foot 3+ below and not below the tunnel level, is walked down (a go-to child) and the new steps go on from its foot.
   7. Else the strip tunnel, at the level then stood on.
 
   A descent (6, 6b) goes by a mineshaft instead when one is usable (:shaft, jobs.lib.shafts): the body walks to the shaft's top (not when it stands on a step of the shaft: it goes on from there), a

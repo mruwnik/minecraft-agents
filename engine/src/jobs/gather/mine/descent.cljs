@@ -6,6 +6,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.escape :as escape]
             [jobs.lib.shafts :as shafts]
             [jobs.lib.util :as u]
             [jobs.lib.look :refer [cell-of]]
@@ -19,6 +20,7 @@
                  :doc "The feet height a strip tunnel for an ore runs at when :level is nil, by the ore's stone kind; an ore not listed tunnels where the body stands."
                  :spec (a/map-of string? (a/int-in nil nil))}
    ::level-slack {:default 12 :doc "Blocks above the tunnel level a stopped stair may leave the body and the strip tunnel still run there; higher, the run ends :descent-stopped (ore is not found that far above its level)." :spec (a/int-in 0 nil)}
+   ::own-stair-reach {:default 32 :doc "Blocks from the body the top of a stair it cut earlier may lie for the descent to walk down that stair instead of cutting a new one." :spec (a/int-in 0 nil)}
    ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}})
 
 (defn max-restairs [] (settings/get settings ::max-restairs))
@@ -188,6 +190,46 @@
                                                              :text (str "mine took shaft " id " down to y " to-y (when heading (str ", branch " (:n sh) " " (name heading))))})
                              :again))))))
 
+(defn own-stair-bottom
+  "The lowest stand of a stair this body cut earlier (memory :stair-way) worth walking down: its top within ::own-stair-reach of the
+  body and level with it (4 up or down), its bottom 3 or more below the feet and not below the tunnel level. {:cell [x y z] :heading name}, or nil."
+  [c]
+  (let [p (u/self-pos c)
+        feet (cell-of p)
+        dim (.-dimension (.self (:primitives c)))
+        level (tunnel-level (:args c))
+        stand (fn [[x y z]] [x (inc y) z])
+        ways (for [e (ctx/entries c :stair-way)
+                   :when (= dim (:dim (:data e)))
+                   :let [floors (sort-by second (map stand (:floors (:data e))))
+                         [bx by bz :as bottom] (first floors)
+                         [tx ty tz] (last floors)]
+                   :when (and bottom (<= (u/dist p {:x (+ tx 0.5) :y ty :z (+ tz 0.5)}) (settings/get settings ::own-stair-reach))
+                              (<= (js/Math.abs (- ty (:y feet))) 4) (<= by (- (:y feet) 3)) (or (nil? level) (>= by level)))]
+               {:cell bottom :heading (let [[nx _ nz] (second floors)]
+                                        (some-> (get escape/heading-names [(- bx nx) (- bz nz)]) name))})]
+    (first (sort-by (comp second :cell) ways))))
+
+(defn ^:async reuse-stair!
+  "Before the first cut of the stair down: a go-to child (slot :stair-own) down the stair this body cut earlier (own-stair-bottom),
+  so the new steps go on from its foot. nil once that is done, failed or not due, else :again / :continue while it walks."
+  [c]
+  (let [d (:descent (ctx/mem c))
+        {:keys [state cell heading]} (:own-stair d)]
+    (cond
+      (or (:top d) (contains? #{:none :done :failed} state)) nil
+      (nil? state) (let [way (own-stair-bottom c)]
+                     (ctx/update-mem! c assoc-in [:descent :own-stair] (if way (assoc way :state :walking) {:state :none}))
+                     :again)
+      :else (let [r (await (child/walk-into!* c :stair-own cell))]
+              (cond
+                (= :continue r) :continue
+                (not= cell (access/cell (cell-of (u/self-pos c)))) (do (ctx/update-mem! c assoc-in [:descent :own-stair :state] :failed) :again)
+                :else (do (ctx/update-mem! c #(cond-> (-> % (assoc-in [:descent :own-stair :state] :done)
+                                                          (update :descent assoc :top cell :top-heading (keyword heading)))
+                                                heading (assoc :heading heading)))
+                          :again))))))
+
 (defn ^:async back-on-stair!
   "Before a step of the stair down: a go-to child (slot :stair-back) to the cell the last step ended on (else the stair's top) when
   something walked the body off it (a reflex took it home). Not while a step's stair child is under way: it walks back itself.
@@ -239,8 +281,10 @@
   [c]
   (let [n (:steps (:descent (ctx/mem c)) 0)
         level? (to-level? c)
-        back (await (back-on-stair! c))]
+        own (await (reuse-stair! c))
+        back (when-not own (await (back-on-stair! c)))]
     (cond
+      own own
       (= :continue back) :continue
       back (do (ctx/emit! c :mine.not-back :warn {:cell back :text (str "mine could not walk back to its stair down at " (str/join "," back))})
                (to-mend! c :not-back))

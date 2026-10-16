@@ -491,6 +491,20 @@
           (is (seq stair-cells) "the stair cells below the start level are still open")
           (is (every? #(#{"air" nil} (block-at s (first %) (second %) (nth % 2))) stair-cells)))))))
 
+;; Linden 158: the descent to the tunnel level cut a stair of its own from the lawn beside the one the body had cut earlier.
+(deftest the-descent-walks-down-the-stair-it-cut-earlier-and-goes-on-from-its-foot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (stair-down-east 4) :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
+                                :self {:pos [0.5 64 0.5]}}})]
+          (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :mend false :torch-interval 0}) {})
+          (await (run-ticks s 300))
+          (is (every? (fn [[x]] (> x 4)) (dug-cells s)) "nothing is cut from the lawn or along the old stair")
+          (is (seq (dug-cells s)) "the new steps go on past its foot")
+          (is (<= (apply min (map second (dug-cells s))) 58) "it digs down to the level"))))))
+
 ;; Juniper j108: a tunnel run from the foot of a stair back under it would cut its lowest steps' floors.
 (deftest a-tunnel-under-the-stair-it-came-down-stops-before-it-cuts-the-way-up
   (async done
