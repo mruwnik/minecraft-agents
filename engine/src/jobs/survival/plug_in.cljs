@@ -1,28 +1,26 @@
 (ns jobs.survival.plug-in
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.checks :as checks]
-            [jobs.lib.pace :as pace]
             [jobs.lib.shelter :as sh]
-            [jobs.survival.dig-in-cells :as dig-cells]
-            [jobs.survival.retreat-pit :as pit]
-            [jobs.survival.retreat-seal :as seal]))
+            [jobs.lib.spent :as spent]
+            [jobs.survival.plug-way :as way]))
 
 (def doc
   "Shut the body in where it stands, atomically: no night or hostile logic, no walking; whoever calls it decides when.
   Needs nothing to start. One call is a whole attempt: it ends :done {:pos :way} once the body is enclosed (a roof within
   :roof-height over no open cell round the feet), at once when it already is.
-  Ways (:ways, in this order, the first that works): :walls fills the open sides at feet and head height, a roof support and the roof
-  with carried blocks, the side towards a shooter, else the nearest melee hostile, first; :pit digs down 2 (3 on flat ground) under a
-  solid side and plugs the hole over the head; :pocket digs a pocket beside the body (feet and head cell, solid on every other
-  side), steps in and walls the way in with the dug blocks. Blocks are the call's :use :blocks, else every :build filler, carried or dug.
-  A way that fails is not tried again this call; none left is nothing-possible :no-way {:text :tried}. Lava a dig lays open is filled
-  first (:on-lava :seal) and a pit or pocket that lays open fluid or a cave is dropped. A place refused for a mob in the cell is retried
-  (dig-in-cells/mob-wait-ticks), then fails that way.
+  Ways (:ways) are child jobs: jobs.survival.plug-walls (the open sides, a roof support and the roof with carried blocks),
+  plug-pit (dig down under a solid side and plug the hole), plug-pocket (dig a pocket beside the body, step in, wall the way in).
+  It quotes the ways the call allows, starts the cheapest (ties in the order walls, pit, pocket) and, when that one ends other than
+  :done, the next cheapest; a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
+  :build filler, carried or dug. None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
+  :why {way the child's cause}}.
   Every placed block goes to the scaffold ledger with :purpose (default :retreat-plug, taken back by jobs.access.cleanup once no
   hostile is near; :shelter is left alone). A cell in another's zone is used only as a last resort (retreat.trespass-last-resort).
-  Quote: time (one cell a placement up to a pit). The ways are retreat's seal, pit and pocket code (retreat-seal, retreat-pit).")
+  Quote: time.")
 
 (a/defargs args
   {:ways {:doc "the ways to enclose the body, tried in the order :walls, :pit, :pocket" :spec (a/set-of #{:walls :pit :pocket}) :default #{:walls :pit :pocket}}
@@ -43,65 +41,61 @@
 
 (def ways [:walls :pit :pocket])
 
-(defn enclosed? [c]
-  (let [p (:primitives c)]
-    (dig-cells/sealed-in? p :walls (:roof-height (:args c)))))
+(def children
+  "Each way's job and the args of this call it takes."
+  {:walls ['jobs.survival.plug-walls [:purpose :roof-height :radius :ranged-radius :max-places]]
+   :pit ['jobs.survival.plug-pit [:purpose :roof-height :radius :on-lava]]
+   :pocket ['jobs.survival.plug-pocket [:purpose :roof-height :radius :ranged-radius :max-places :on-lava]]})
 
-(defn done? [c]
-  (let [done (enclosed? c)]
-    (checks/goal done [:enclosed "the body is enclosed"] [:open "the body is not enclosed"]
-                 {:units :enclosures :done (if done 1 0) :left (if done 0 1)
-                  :result {:pos (sh/feet (:primitives c)) :way (:way (ctx/mem c))}})))
+(defn done? [c] (way/done? c (:way (ctx/mem c))))
 
 (defn quote-of [c]
-  (let [mean (if (enclosed? c) 0 (settings/get settings ::mean-s))]
+  (let [mean (if (way/enclosed? c) 0 (settings/get settings ::mean-s))]
     {:uses {:job-time [0 mean (max (* 3 mean) (settings/get settings ::job-time-s))]} :done [0 1 1]}))
 
-(defn ^:async walls-step!
-  "One step of the walls (retreat-seal/seal!): :done once enclosed, :again, or nil when they cannot be placed."
-  [c]
-  (case (await (seal/seal! c))
-    :sealed :done
-    :again :again
-    nil))
+(defn child-args [c way]
+  (merge (select-keys (:args c) (second (children way)))
+         (when-let [blocks (ctx/use c :blocks)] {:use {:blocks blocks}})))
 
-(defn ^:async pit-step!
-  "One step of the pit (retreat-pit): its plan is made once and kept in job memory. :done, :again, or nil with no pit that fits
-  or one that failed."
-  [c]
-  (when-let [plan (or (:pit (ctx/mem c)) (await (pit/plan! c)))]
-    (ctx/update-mem! c assoc :pit plan)
-    (case (await (pit/pit-round! c plan))
-      :hidden :done
-      :again :again
-      (do (ctx/update-mem! c dissoc :pit) nil))))
+(defn ^:async cost-of
+  "Seconds the child of way quotes, ##Inf when it cannot be done here or cannot be quoted."
+  [c way]
+  (let [q (await (ctx/quote c (first (children way)) (child-args c way)))]
+    (if (contract/ending? q) ##Inf (get-in q [:uses :job-time 1] ##Inf))))
 
-(defn ^:async pocket-step!
-  "A pocket dug once (retreat-pit/pocket!: it steps in), then walls on its way in: :done, :again, or nil with none that fits
-  or one that cannot be walled."
-  [c]
-  (if (:pocket-dug (ctx/mem c))
-    (or (await (walls-step! c)) (do (ctx/update-mem! c dissoc :pocket-dug) nil))
-    (when (await (pit/pocket! c))
-      (ctx/update-mem! c assoc :pocket-dug true)
-      :again)))
-
-(defn ^:async step
-  "One step of the first way not failed: :again, or the call's end."
+(defn ^:async choose
+  "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}."
   [c]
   (let [failed (:failed-ways (ctx/mem c) #{})
-        left (remove failed (filter #(ctx/way? c %) ways))]
-    (loop [[way & more] left]
-      (if (nil? way)
-        (ctx/end c :nothing-possible :no-way {:text (str "cannot enclose the body: " (pr-str ways) " all failed or left out")
-                                              :tried (vec failed)})
-        (let [r (await (case way :walls (walls-step! c) :pit (pit-step! c) :pocket (pocket-step! c)))]
-          (ctx/update-mem! c assoc :way way)
-          (case r
-            :done (ctx/end c :done nil {:pos (sh/feet (:primitives c)) :way way})
-            :again :again
-            (do (ctx/update-mem! c update :failed-ways (fnil conj #{}) way)
-                (recur more))))))))
+        left (remove failed (filter #(ctx/way? c %) ways))
+        costs (loop [[w & more] left acc []]
+                (if (nil? w) acc (recur more (conj acc [w (await (cost-of c w))]))))
+        able (remove (comp infinite? second) costs)]
+    {:way (first (first (sort-by second able)))
+     :dropped (mapv first (filter (comp infinite? second) costs))}))
 
-(defn ^:async round [c]
-  (await (pace/steps! c (fn ^:async plug-step [] (await (step c))))))
+(defn end!
+  "The call's ending with what the children placed."
+  [c kind cause data]
+  (ctx/end c kind cause (merge data (spent/summary (spent/log c)))))
+
+(defn ^:async round
+  "Start the cheapest way; one that ends other than :done is dropped for this call and the next is chosen."
+  [c]
+  (loop []
+    (if (way/enclosed? c)
+      (end! c :done nil {:pos (sh/feet (:primitives c)) :way (:way (ctx/mem c))})
+      (let [chosen (when-not (:way (ctx/mem c)) (await (choose c)))
+            _ (when chosen (ctx/update-mem! c #(-> % (assoc :way (:way chosen)) (update :dropped (fn [d] (vec (distinct (into (or d []) (:dropped chosen)))))))))
+            way (:way (ctx/mem c))]
+        (if (nil? way)
+          (end! c :nothing-possible :no-way {:text (str "cannot enclose the body: " (if-let [why (seq (vals (:why (ctx/mem c))))] (str/join "; " why) "no way left that can be done here"))
+                                             :tried (vec (:failed-ways (ctx/mem c))) :dropped (:dropped (ctx/mem c)) :why (:why (ctx/mem c))})
+          (let [e (await (ctx/call c way (first (children way)) (child-args c way)))]
+            (cond
+              (= :continue e) :continue
+              (= :done (:kind e)) (do (spent/absorb! c (:data e))
+                                      (end! c :done nil {:pos (sh/feet (:primitives c)) :way way}))
+              :else (do (spent/absorb! c (:data e))
+                        (ctx/update-mem! c #(-> % (dissoc :way) (update :failed-ways (fnil conj #{}) way) (assoc-in [:why way] (or (:text (:data e)) (:cause e)))))
+                        (recur)))))))))

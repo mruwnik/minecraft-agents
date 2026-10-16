@@ -215,6 +215,18 @@
           (is (= :place-failed (:reason (failed seen))))
           (is (re-find #"zombie" (:text (failed seen)))))))))
 
+(deftest a-hostile-seen-in-the-door-cell-is-waited-out-before-the-plug-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen clock] :as s} (setup [] {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20}]})
+              start @clock]
+          (.override (.-world p) "place" (mob-in-door-until clock (+ @clock 600000)))
+          (await (run-timed! s {}))
+          (is (= :place-failed (:reason (failed seen))))
+          (is (re-find #"zombie" (:text (failed seen))))
+          (is (>= (- @clock start) 9000) "the mob wait ran out first"))))))
+
 (deftest scan-reports-refusals-and-stops-at-the-first-allowed-site
   (let [p (tu/seeing-all (tu/fake {:blocks (merge ground hill) :inventory [{:name "iron_pickaxe" :count 1}]}))
         asked (atom 0)]

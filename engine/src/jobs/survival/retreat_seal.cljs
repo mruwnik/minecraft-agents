@@ -51,6 +51,7 @@
                       (recur (rest cells) 0))
                   (dig-cells/keep-waiting! c :seal-mob-since r) :wait
                   :else (do (dig-cells/forget-wait! c :seal-mob-since)
+                            (ctx/update-mem! c assoc :seal-refusal (str "a place at " (pr-str [(:x cell) (:y cell) (:z cell)]) " was refused: " status (dig-cells/mob-text r)))
                             :failed)))))))
 
 (defn shooters
@@ -106,7 +107,7 @@
   "Fill the open cells around the body (dig-in's 1x1: sides at feet and head
   height, a roof support, the roof) with carried :blocks, at most
   :max-places this step. :sealed when none is left open, :again while
-  more are owed, :failed when a hostile stands in one, none is carried, a
+  more are owed, :failed when a hostile stands in one (not with :purpose :shelter: the place is tried and a mob in its cell waited out), none is carried, a
   placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
   in a side cell, which the seal leaves alone; the option then counts as failed this flight, so a cornered body moves
   on to the next one instead of placing there step after step).
@@ -125,7 +126,7 @@
     (cond
       (empty? open) (do (forget!) :sealed)
       (empty? cells) (unfillable)
-      (some (seal/hostile-cells p radius) cells) (do (forget!) :failed)
+      (and (not= :shelter (:purpose (:args c))) (some (seal/hostile-cells p radius) cells)) (do (forget!) :failed)
       (nil? (lb/pick c blocks)) (do (forget!) :failed)
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))

@@ -15,16 +15,18 @@
 (def pick [{:name "stone_pickaxe" :count 1}])
 
 (defn ^:async plug!
-  "Run plug-in with args over world through a recording parent: {:out the ending :p :eng}."
-  [world args]
+  "Run plug-in with args over world through a recording parent (setup! gets the fake first): {:out the ending :p :eng :continues}."
+  [world args & [setup!]]
   (let [clock (atom 1000000)
         out (atom :not-done)
+        continues (atom 0)
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
+        _ (when setup! (setup! p))
         now (tu/act-clock clock p 1000)
         caller {:round (fn ^:async caller-round [c]
                          (let [r (await (ctx/call c :plug 'jobs.survival.plug-in args))]
-                           (if (= :continue r) :continue (do (reset! out r) (ctx/end c :done nil)))))}
+                           (if (= :continue r) (do (swap! continues inc) :continue) (do (reset! out r) (ctx/end c :done nil)))))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'caller caller) :triggers triggers/all :dir (tu/tmp-dir)
                           :now now :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (core/submit! eng '(caller) {})
@@ -32,7 +34,7 @@
       (when (and (= :not-done @out) (< i 40))
         (await (core/tick! eng))
         (recur (inc i))))
-    {:out @out :p p :eng eng}))
+    {:out @out :p p :eng eng :continues @continues}))
 
 (defn cells-of [p name]
   (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (ct/calls p name)))
@@ -95,3 +97,60 @@
         (let [{:keys [out p]} (await (plug! {:blocks ct/dead-end :inventory cobble} {:ways #{:pit}}))]
           (is (= :nothing-possible (:kind out)))
           (is (empty? (ct/calls p "place"))))))))
+
+(def room-cells
+  "A 3x3 room two high with a rock roof, over rock down to y 58: eight open cells at each of feet and head height round the body."
+  (set (for [x [-1 0 1] z [-1 0 1] y [64 65]] [x y z])))
+
+(def room (ct/rock [-3 3] [58 67] room-cells))
+
+(deftest the-cheapest-way-is-started-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (plug! {:blocks room :inventory (into cobble pick)} {}))]
+          (is (= [:done :pit] [(:kind out) (:way (:data out))]) "sixteen walls cost more than a pit")
+          (is (= [0 63 0] (first (cells-of p "dig")))))))))
+
+(deftest a-way-the-body-cannot-do-here-is-dropped-not-tried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (plug! {:blocks ct/dead-end} {}))]
+          (is (= :nothing-possible (:kind out)))
+          (is (= [:walls :pit :pocket] (:dropped (:data out))))
+          (is (empty? (:tried (:data out))))
+          (is (empty? (ct/calls p "place"))))))))
+
+(deftest a-way-that-cannot-be-done-leaves-the-next-cheapest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (plug! {:blocks ct/dead-end :inventory pick :entities [(ct/skeleton 4 64 0)]} {:ways #{:walls :pocket}}))]
+          (is (= [:done :pocket] [(:kind out) (:way (:data out))])))))))
+
+(deftest a-way-that-fails-is-named-with-its-cause-and-the-dropped-ways-are-listed-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (plug! {:blocks ct/dead-end :inventory cobble :entities [(ct/zombie 1 64 0)]} {}))
+              d (:data out)]
+          (is (= :nothing-possible (:kind out)))
+          (is (= [:walls] (:tried d)))
+          (is (= [:pit :pocket] (:dropped d)))
+          (is (= [:walls] (keys (:why d))))
+          (is (re-find #"walls" (:text d))))))))
+
+(deftest a-place-refused-for-a-mob-yields-continue-to-the-caller
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              refuse-twice (fn [p] (.override (.-world p) "place"
+                                              (fn ^:async f [token a impl]
+                                                (if (< (swap! calls inc) 3)
+                                                  #js {:status "failed" :reason "Server refused" :refusal #js {:entities #js [#js {:name "zombie" :id 7}]}}
+                                                  (await (impl token a))))))
+              {:keys [out continues]} (await (plug! {:blocks ct/dead-end :inventory cobble} {} refuse-twice))]
+          (is (pos? continues))
+          (is (= :done (:kind out))))))))

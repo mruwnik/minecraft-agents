@@ -171,14 +171,14 @@
 
 (defn stage
   "What is left to do at the site, from the world: [:dig cell] (the first solid cell, cut from the stand cell or the
-  opening), :walk-to-face, :walk-in, [:plug cell] or :sealed."
+  opening), :walk-to-face, :walk-in, :plug or :sealed."
   [p {:keys [stand dir]}]
   (let [feet (sh/feet p)
         solid (first (filter #(dig-cells/rock-solid? p %) (dug-cells stand dir)))
         open (remove #(sh/solid-at? p %) (door-cells stand dir))]
     (cond
       (and (= feet (at stand dir 2 0 0)) (not (sh/solid-at? p (at stand dir 2 0 1))))
-      (if (seq open) [:plug (first open)] [:sealed])
+      (if (seq open) [:plug] [:sealed])
       solid (if (<= (u/dist feet solid) (dig-reach)) [:dig solid] [:walk-to-face])
       :else [:walk-in])))
 
@@ -226,16 +226,17 @@
           :again)
       (fail! c :dig-failed (str "cannot dig the niche: " (.-status r))))))
 
-(defn ^:async plug-step! [c cell]
-  (let [item (lb/pick c (mode/blocks c))]
-    (if (nil? item)
-      (fail! c :no-blocks "nothing to plug the niche with")
-      (let [r (await (tidy/place! c cell item))]
-        (cond
-          (#{"placed" "occupied"} (.-status r)) (do (dig-cells/forget-wait! c :plug-since) :again)
-          (dig-cells/keep-waiting! c :plug-since r) :continue
-          :else (fail! c :place-failed
-                       (str "cannot plug the niche: " (.-status r) (dig-cells/mob-text r))))))))
+(defn ^:async plug-step!
+  "Shut the opening with jobs.survival.plug-in (walls way, ledger :shelter): :again once it is shut, :continue while it works."
+  [c]
+  (if (nil? (lb/pick c (mode/blocks c)))
+    (fail! c :no-blocks "nothing to plug the niche with")
+    (let [e (await (ctx/call c :plug 'jobs.survival.plug-in
+                             {:ways #{:walls} :purpose :shelter :roof-height (:roof-height (:args c)) :use {:blocks (mode/blocks c)}}))]
+      (cond
+        (= :continue e) :continue
+        (= :done (:kind e)) (do (spent/absorb! c (:data e)) :again)
+        :else (fail! c :place-failed (str "cannot plug the niche: " (or (get-in e [:data :text]) (name (:kind e)))))))))
 
 (defn seal!
   "Plugged: the :shelter entry and the result."
@@ -293,7 +294,7 @@
                          :failed (fail! c :unreachable "cannot step into the niche")
                          :continue :continue
                          :again))
-            :plug (await (plug-step! c cell))
+            :plug (await (plug-step! c))
             :sealed (seal! c site)))))))
 
 (defn ^:async round

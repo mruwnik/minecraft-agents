@@ -13,6 +13,12 @@
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
    :after [[:block [6 0 16] "cobblestone"] [:block [6 1 16] "cobblestone"] [:body-near [5.5 0 16.5] 1.5]]
    :limit-s 60}
+  {:name "cheapest-way-with-blocks-and-a-pickaxe-is-the-walls"
+   :body {:inventory [["cobblestone" 20] ["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.plug-in {})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:block [6 0 16] "cobblestone"] [:block [6 1 16] "cobblestone"] [:body-near [5.5 0 16.5] 1.5]]
+   :limit-s 60}
   {:name "pocket-is-dug-and-sealed"
    :plot {:floor "obsidian"}
    :body {:inventory [["stone_pickaxe" 1]]}
