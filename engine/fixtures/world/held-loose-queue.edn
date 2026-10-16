@@ -1,6 +1,6 @@
-;; Card 809bb638: a held pick-up-loose with nothing worth it ends stopped :nothing-worth-it at once instead of waiting, so a job
+;; A held pick-up-loose with nothing worth it waits (can-start? :later); a waiting holder does not block the list, so the job
 ;; queued behind it gets its round. Calm plot, no loose item.
-;; Should-succeed: pick-up-loose --hold stops :nothing-worth-it and the go-to listed behind it arrives. Should-fail: no waiting event.
+;; Should-succeed: pick-up-loose --hold waits :nothing-worth-it and the go-to listed behind it arrives. Should-fail: the holder ends.
 {:defaults
  {:tags [:scheduler :items :loose-items] :time :any
   :plot {:height 8}
@@ -10,7 +10,7 @@
  [{:name "held-pick-up-loose-does-not-block-the-next-job"
    :act [[:http :submit (jobs.items.pick-up-loose {}) [:hold] {:ok true}]
          [:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:reason :nothing-worth-it}} :within-s 20}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-worth-it}} :within-s 20}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 50 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :nothing-worth-it}} :for-s 20}]
+            {:no-event {:source :job :kind :result :data {:reason :nothing-worth-it}} :for-s 5}]
    :after [[:body-near [24.5 0 16.5] 2]]}]}

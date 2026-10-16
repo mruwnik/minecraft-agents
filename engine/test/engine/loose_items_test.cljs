@@ -197,6 +197,16 @@
           (is (empty? (filterv #(= :stopped (:kind %)) @seen)))
           (is (= #{:nothing-worth-it} (into #{} (map :reason) (filterv #(= :waiting (:kind %)) @seen)))))))))
 
+(deftest a-waiting-held-job-lets-the-next-listed-job-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (world dirt-down))]
+          (core/submit! eng '(jobs.items.pick-up-loose) {:hold? true})
+          (core/submit! eng '(jobs.movement.go-to {:pos [4.5 64 0.5] :range 1}) {})
+          (dotimes [_ 40] (await (core/tick! eng)))
+          (is (= 1 (count (:list (core/state eng)))) "the go-to ran and left; only the waiting holder is listed"))))))
+
 (deftest register-args-cut-the-running-job-at-most-once
   (async done
     (tu/run-async done
