@@ -9,9 +9,9 @@
   :plot {:height 8}
   :blocks [[:set [19 0 16] "crafting_table"]]
   :body {:at [14.5 0 16.5] :settle-s 3 :effects [["resistance" 600 4]]}
-  :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+  :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:until-rcon "data get entity $BODY Rotation[0]" "data: (-90|270)\\b" 10]
         [:rcon "execute positioned $X $Y $Z run fill ~16 ~ ~12 ~16 ~3 ~20 stone"]
-        [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 2]
+        [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:until-rcon "data get entity $BODY Rotation[0]" "data: 90\\b" 10]
         [:rcon "execute positioned $X $Y $Z run setblock ~19 ~ ~16 air"]
         [:job (jobs.items.get-tool {:item "wooden_pickaxe"})]]
   :limit-s 90}

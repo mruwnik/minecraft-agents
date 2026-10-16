@@ -11,14 +11,14 @@
  :cases
  [{:name "dig-fetches-pickaxe-from-seen-chest"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:dug true}} :within-s 80 :of-job true}]
    :after [[:block [18 0 19] "air"] [:item "wooden_pickaxe" 1] [:item "cobblestone" 1]]}
   {:name "dig-without-fetch-waits-no-tool"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-tool}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-tool}}}
@@ -27,7 +27,7 @@
   {:name "chest-never-seen-not-used"
    :blocks [[:fill [13 0 18] [15 2 20] "stone" :outline]
             [:set [14 1 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "stone"} 10]
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 30 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}
@@ -35,7 +35,7 @@
    :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
   {:name "chest-without-pickaxe-fails-once"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:3}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]
          [:await {:source :job :kind :stopped :data {:reason :no-tool}} 40] [:wait-s 30]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 40 :of-job true}
@@ -45,8 +45,8 @@
    ;; the body sees the chest, looks away for 12 s, the chest is removed, then the dig. Memory only follows changes in view, so
    ;; the body trusts the old sighting, walks to the cell, finds it gone (one open tried) and drops it: one failed need child.
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 12]
-         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 1]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:until-rcon "data get entity $BODY Rotation[0]" "data: -?180" 10]
          [:rcon "execute positioned $X $Y $Z run setblock ~14 ~ ~19 air"]
          [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 60 :of-job true}
@@ -59,7 +59,7 @@
    :blocks [[:fill [8 0 8] [24 6 24] "stone"] [:fill [8 7 8] [24 9 24] "dirt"]
             [:set [18 10 16] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
    :body {:at [10.5 10 16.5]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.access.stair {:dir :down :heading :east :steps 6 :fetch true})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 90 :of-job true}
             {:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 150 :of-job true}]
@@ -67,7 +67,7 @@
    :after [[:item "wooden_pickaxe" 1] [:body-near [16.5 4 16.5] 2.5]]}
   {:name "place-fetches-block-from-seen-chest"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:5}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.blocks.place {:pos #at [16 0 19] :item "cobblestone" :fetch true})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true}} :within-s 80 :of-job true}]
    :after [[:block [16 0 19] "cobblestone"]]}]}

@@ -12,7 +12,7 @@
   :limit-s 90}
  :cases
  [{:name "table-fetched-from-a-seen-chest-and-craft-done"
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.items.craft {:item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :need-crafting_table}} :within-s 30 :of-job true}
             {:event {:source :job :kind :child_ended :data {:slot :need-crafting_table}} :within-s 60 :of-job true}
@@ -20,7 +20,7 @@
             {:no-event {:source :job :kind :stopped} :for-s 60 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "wooden_pickaxe" 1]]}
   {:name "fetch-false-ends-no-table"
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.items.craft {:item "wooden_pickaxe" :fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-table}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need-crafting_table}} :for-s 30 :until {:source :job :kind :stopped}}]

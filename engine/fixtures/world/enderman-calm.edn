@@ -12,7 +12,7 @@
  :cases
  [{:name "calm-enderman-fires-no-reflex"
    :act [[:summon "enderman" [21.5 0 16.5] "{NoAI:1b}"]
-         [:wait-s 5]
+         [:until-seen {:entity "enderman"} 10]
          [:job (jobs.movement.look-around {})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 40}]

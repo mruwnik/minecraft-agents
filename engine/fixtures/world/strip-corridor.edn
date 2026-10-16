@@ -27,7 +27,7 @@
    :after [[:not-block [14 0 15] "oak_fence"] [:not-block [14 1 17] "oak_fence"] [:not-block [14 2 16] "oak_planks"] [:block [14 0 16] "rail"] [:block [10 1 16] "cobweb"]]}
   {:name "chest-minecart-in-the-segment-is-looted"
    :act [[:summon "chest_minecart" [12.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
-         [:wait-s 2]
+         [:until-seen {:entity "chest_minecart"} 10]
          [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 3] [:item "chest_minecart" [:>= 1]]]}

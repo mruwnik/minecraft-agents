@@ -36,7 +36,7 @@
    ;; a trench x 8..13, y 6..9 to stand in; the target (15 6 16) has lava over it, hidden behind (14 7 16)
    :blocks [[:fill [8 6 14] [13 9 18] "air"] [:set [15 6 16] "iron_ore"] [:set [15 7 16] "lava"]]
    :body {:at [13.5 6 16.5]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "iron_ore"} 10]
          [:job (jobs.access.tunnel {:target #at [15 6 16] :max-length 6 :keep true})]]
    :expect [{:event {:source :job :kind :tunnel.sealed} :within-s 90 :of-job true}
             {:event {:source :job :kind :tunnel.done} :within-s 110 :of-job true}]

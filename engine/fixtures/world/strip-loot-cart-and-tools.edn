@@ -12,14 +12,14 @@
  :cases
  [{:name "chest-minecart-emptied-and-taken"
    :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3},{Slot:1b,id:\"minecraft:bread\",count:2}]}"]
-         [:wait-s 2]
+         [:until-seen {:entity "chest_minecart"} 10]
          [:job (jobs.strip.loot-cart {})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "iron_ingot" 3] [:item "bread" 2] [:item "chest_minecart" [:>= 1]]
            [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 0]]}
   {:name "unknown-cart-id-stops"
    :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
-         [:wait-s 2]
+         [:until-seen {:entity "chest_minecart"} 10]
          [:job (jobs.strip.loot-cart {:id 99999999})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :gone}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
@@ -27,7 +27,7 @@
   {:name "cart-in-another-plans-footprint-is-refused"
    :plans [{:id "other" :metadata {:by "SomeoneElse"} :parts [{:id "p" :box [#at [18 0 15] #at [20 0 17]] :want [:any "rail"]}]}]
    :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
-         [:wait-s 2]
+         [:until-seen {:entity "chest_minecart"} 10]
          [:job (jobs.strip.loot-cart {})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]

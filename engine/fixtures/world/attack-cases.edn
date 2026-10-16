@@ -16,7 +16,7 @@
          [:summon "zombie" [12.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "skeleton" [24.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "skeleton" [8.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 2]
+         [:until-seen {:entity "zombie" :min 3} 10] [:until-seen {:entity "skeleton" :min 2} 10]
          [:job (jobs.combat.attack {:targets "zombie"})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :cleared :given-up {}}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :attack.gave-up} :for-s 90 :until {:source :job :kind :completed :data {:reason :cleared :given-up {}}}}]
@@ -26,7 +26,7 @@
    :act [[:summon "zombie" [10.5 0 10.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "husk" [22.5 0 11.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "skeleton" [24.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 2]
+         [:until-seen {:entity "zombie"} 10] [:until-seen {:entity "husk"} 10] [:until-seen {:entity "skeleton"} 10]
          [:job (jobs.combat.attack {:targets ["husk" "zombie"]})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 90 :of-job true}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 0]
@@ -34,7 +34,7 @@
            [:entities "type=skeleton,tag=wt" [[0 0 0] [31 3 31]] 1]]}
   {:name "fleeing-cow-killed"
    :act [[:summon "cow" [12.5 0 12.5]]
-         [:wait-s 2]
+         [:until-seen {:entity "cow"} 10]
          [:job (jobs.combat.attack {:targets "cow"})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 90 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}
@@ -56,14 +56,14 @@
   {:name "zombie-in-glass-box-given-up-unreachable"
    :blocks [[:fill [20 0 20] [24 3 24] "glass" :hollow]]
    :act [[:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 2]
+         [:until-seen {:entity "zombie"} 10]
          [:job (jobs.combat.attack {:targets "zombie" :lost-s 3})]]
    :expect [{:event {:source :job :kind :attack.gave-up :data {:reason :unreachable}} :within-s 90 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :gave-up :killed []}} :within-s 100 :of-job true}]
    :after [[:entities "type=zombie,tag=wt" [[20 0 20] [24 3 24]] 1]]}
   {:name "invulnerable-zombie-given-up-no-damage"
    :act [[:summon "zombie" [12.5 0 12.5] "{NoAI:1b,Invulnerable:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 2]
+         [:until-seen {:entity "zombie"} 10]
          [:job (jobs.combat.attack {:targets "zombie" :lost-s 3})]]
    :expect [{:event {:source :job :kind :attack.gave-up :data {:reason :no-damage}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :gave-up :killed []}} :within-s 90 :of-job true}]
@@ -73,7 +73,7 @@
   {:name "copper-sword-kills-zombie"
    :body {:inventory [["copper_sword" 1]]}
    :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 2]
+         [:until-seen {:entity "zombie"} 10]
          [:job (jobs.combat.attack {:targets "zombie"})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :attack.gave-up} :for-s 60 :until {:source :job :kind :completed}}]
@@ -81,7 +81,7 @@
   {:name "copper-axe-kills-zombie"
    :body {:inventory [["copper_axe" 1]]}
    :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 2]
+         [:until-seen {:entity "zombie"} 10]
          [:job (jobs.combat.attack {:targets "zombie"})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :attack.gave-up} :for-s 60 :until {:source :job :kind :completed}}]

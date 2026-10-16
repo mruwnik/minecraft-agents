@@ -12,7 +12,7 @@
   :limit-s 120}
  :cases
  [{:name "pickaxe-fetched-from-a-seen-chest-then-the-stone-is-replaced"
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.build.from-plan {:plan "$plan:wall"})]]
    :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
             {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
@@ -20,7 +20,7 @@
             {:no-event {:source :job :kind :build.gave-up} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [20 0 16] "dirt"] [:item "stone_pickaxe" 1]]}
   {:name "fetch-false-gives-the-cell-up-no-tool"
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.build.from-plan {:plan "$plan:wall" :fetch false})]]
    :expect [{:event {:source :job :kind :build.gave-up} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :fetch.started} :for-s 40 :until {:source :job :kind :build.gave-up}}]

@@ -12,13 +12,13 @@
  :cases
  [{:name "equip-fetches-an-item-from-a-seen-chest-by-default"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:iron_pickaxe\",count:1}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.items.equip {:item "iron_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed :data {:item "iron_pickaxe"}} :within-s 70 :of-job true}]
    :after [[:item "iron_pickaxe" 1]]}
   {:name "equip-fetch-false-waits-no-item-chest-untouched"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:iron_pickaxe\",count:1}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.items.equip {:item "iron_pickaxe" :fetch false})]]
    :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 30}]
@@ -26,7 +26,7 @@
   {:name "tunnel-fetches-a-pickaxe-by-default-then-cuts"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 90 :of-job true}
             {:event {:source :job :kind :tunnel.done} :within-s 200 :of-job true}]
@@ -35,7 +35,7 @@
   {:name "tunnel-fetch-false-stops-no-tool-and-fetches-nothing"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true :fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 40 :until {:source :job :kind :stopped}}
@@ -53,7 +53,7 @@
    ;; start), walks back and goes on
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]
          [:await {:source :job :kind :tunnel.step} 90]
          [:rcon "clear $BODY stone_pickaxe"]]

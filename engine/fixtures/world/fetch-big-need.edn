@@ -14,7 +14,7 @@
  :cases
  [{:name "100-cobblestone-fetched-from-a-seen-chest"
    :blocks [[:set [4 0 12] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:64},{Slot:1b,id:\"minecraft:cobblestone\",count:64}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 20"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :fetch.started :data {:args {:item "cobblestone"}}} :within-s 40 :of-job true}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 220 :of-job true}]
