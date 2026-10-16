@@ -32,4 +32,22 @@
          [:wait-s 40]]
    :expect [{:event {:source :job :kind :recover-drops.declined} :within-s 40}
             {:no-event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :for-s 40}]
-   :after [[:body-near [5.5 0 5.5] 3.5] [:item "raw_iron" 0]]}]}
+   :after [[:body-near [5.5 0 5.5] 3.5] [:item "raw_iron" 0]]}
+  ;; card a118bd2e: a decline for the shelter is no failed try: once the night is over the retry walks out through the door and fetches the pile
+  {:name "hut-pile-is-fetched-once-the-night-is-over"
+   :time :night-exclusive
+   :blocks [[:fill [2 0 2] [8 3 8] "stone" :hollow] [:fill [3 0 3] [7 2 7] "air"] [:set [3 1 3] "torch"] [:set [7 1 7] "torch"]
+            [:set [5 0 2] "oak_door[facing=south,half=lower]"] [:set [5 1 2] "oak_door[facing=south,half=upper]"]
+            [:set [26 1 26] "torch"] [:set [20 0 20] "torch"]]
+   :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
+   :body {:spawnpoint [5 0 5]}
+   :act [[:wait-s 1]
+         [:kill-body]
+         [:await {:source :body :kind :respawned} 30]
+         [:await {:source :job :kind :recover-drops.declined} 40]
+         [:time-set 1000]
+         [:wait-s 90]]
+   :expect [{:event {:source :job :kind :recover-drops.declined} :within-s 40}
+            {:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 160}]
+   :after [[:item "raw_iron" 24]]
+   :limit-s 200}]}

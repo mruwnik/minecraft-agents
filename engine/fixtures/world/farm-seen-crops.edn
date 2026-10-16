@@ -44,4 +44,11 @@
    :act [[:job (jobs.farm.harvest {:center #xyz [20 0 20] :radius 6 :replant false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 3}} :within-s 60 :of-job true}]
    :limit-s 70
-   :after [[:block [19 0 20] "air"] [:block [21 0 20] "air"]]}]}
+   :after [[:block [19 0 20] "air"] [:block [21 0 20] "air"]]}
+  ;; card 859abff2: a stopped ending names its cause; the success text ("harvest done: cut ...") is only for a done ending
+  {:name "harvest-with-no-crop-seen-names-the-cause-not-done"
+   :act [[:job (jobs.farm.harvest {:center #xyz [14 0 16] :radius 6 :replant false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-crop-seen}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped :message [:contains "harvest done"]} :for-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]
+   :limit-s 70}]}

@@ -1,0 +1,43 @@
+;; go-to's :dig-route escalation (cards 13e0e11d, e2810933, 6a8c7e34): a free body on open stone whose goal is a sealed 1x2 pocket 4 below and
+;; 3 across, with no door or stair leading down, digs the fewest cells (go-to.escalated :dig-route), looks at each cell before it is dug,
+;; plans the route again round what a look shows (a guessed cell that is not rock), seals lava a dug cell lays open, and never digs a cell
+;; of another owner's plan (not-diggable, the walls stay).
+;; Stone mass x 2..30, z 2..30, y 0..5 under a body on its top at [16.5 6 16.5]; the pocket [19 2 16] [19 3 16] is air inside the mass.
+;; The straight route is the shaft [19 5 16] [19 4 16] straight above the pocket.
+{:defaults
+ {:tags [:movement :go-to :access]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 2] [30 5 30] "stone"] [:fill [19 2 16] [19 3 16] "air"]]
+  :body {:at [16.5 6 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["stone_pickaxe" 1] ["cobblestone" 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "sealed-pocket-below-is-dug-down-to"
+   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalation-stopped} :for-s 140 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}]
+   :after [[:body-near [19.5 2 16.5] 1.5]]}
+  ;; bedrock buried under the first cell of the shaft shows only once that cell is dug: the route is planned again round it
+  {:name "bedrock-in-the-line-is-dug-round"
+   :blocks [[:set [19 4 16] "bedrock"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:block [19 4 16] "bedrock"] [:body-near [19.5 2 16.5] 1.5]]}
+  ;; lava buried beside the second shaft cell is unseen until that cell is dug: the dig child covers what it opens and the walk goes on
+  {:name "lava-beside-a-dug-cell-is-sealed"
+   :blocks [[:set [20 4 16] "lava"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :blocks.dig.sealed} :within-s 120 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:not-block [20 4 16] "lava"] [:body-near [19.5 2 16.5] 1.5]]}
+  ;; should fail: every cell around the pocket is another owner's plan: nothing is dug, the walls stay
+  {:name "pocket-walled-by-another-plan-is-never-dug"
+   :plans [{:id "other" :metadata {:by "SomeoneElse"}
+            :parts [{:id "walls" :box [#at [18 1 15] #at [20 5 17]] :want [:any "stone"]}]}]
+   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 100 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 100 :until {:source :job :kind :result :data {:arrived false}}}]
+   :after [[:block [19 5 16] "stone"] [:block [18 3 16] "stone"] [:body-far [19.5 2 16.5] 4]]}]}

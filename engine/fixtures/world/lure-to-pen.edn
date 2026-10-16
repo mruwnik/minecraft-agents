@@ -19,7 +19,9 @@
          [:wait-s 2]
          [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
+   ;; card 8d02af07: the cleanup (run before the ending is seen) shuts the gate the legs opened
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:item "wheat" [:>= 4]]]}
   {:name "penned-cow-skipped-outside-cow-led"
    :body {:at [14.5 0 16.5] :yaw 315 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
@@ -45,4 +47,20 @@
          [:job (jobs.animals.lure-to {:mob "chicken" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :arrived}} :within-s 190 :of-job true}]
    :after [[:entities "type=chicken,tag=wt" [[19 0 14] [23 1 18]] 1]]
-   :limit-s 220}]}
+   :limit-s 220}
+  ;; card 8d02af07: an empty :uuid would match every animal, and a start that two animals share names none of them: neither starts
+  {:name "empty-uuid-never-starts"
+   :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]
+         [:wait-s 2]
+         [:job (jobs.animals.lure-to {:mob "cow" :uuid "" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :empty-uuid}} :within-s 30 :of-job true}]
+   :after [[:item "wheat" 4]]
+   :limit-s 50}
+  {:name "uuid-start-two-cows-share-never-starts"
+   :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b,UUID:[I;20381,9,1,1]}"]
+         [:summon "cow" [12.5 0 18.5] "{NoAI:1b,UUID:[I;20381,9,1,2]}"]
+         [:wait-s 2]
+         [:job (jobs.animals.lure-to {:mob "cow" :uuid "00004f9d-0000-0009" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :ambiguous-uuid}} :within-s 30 :of-job true}]
+   :after [[:item "wheat" 4] [:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
+   :limit-s 50}]}

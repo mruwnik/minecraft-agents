@@ -1,0 +1,25 @@
+;; jobs.items.obtain from a seen chest the game will not open because a solid block sits on it (cards 00684bf0, 8566cc2d).
+;; The chest at [20 0 14] holds 2 oak_log and is under dirt at [20 1 14]; it is a remembered chest (:memory), the body stands at [16.5 0 16.5].
+;; Should-succeed: the body digs the dirt off the chest (a blocks.dig child), looks into it again and takes the logs.
+;; Should-fail: the dirt is in another owner's zone (not dug): the end is :no-source, the why names the chest that could not be
+;; opened (booked blocked, never read as an empty chest), the dirt stays and the logs stay in the chest.
+{:defaults
+ {:tags [:items :obtain :storage :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:set [20 0 14] "chest[facing=south]{Items:[{Slot:0b,id:\"minecraft:oak_log\",count:2}]}"] [:set [20 1 14] "dirt"]]
+  :memory [{:kind :chest :data {:pos #xyz [20 0 14]} :policy {:cap 1 :ttl :forever}}]
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "dirt-on-the-chest-is-dug-off-and-the-logs-taken"
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest} :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 100 :of-job true :until {:source :job :kind :completed}}]
+   :after [[:not-block [20 1 14] "dirt"] [:item "oak_log" 2]]}
+  {:name "dirt-in-another-owners-zone-is-left-and-the-chest-named-blocked"
+   :zones [{:name "lid" :min [20 1 14] :max [20 1 14] :owner "Other" :allow #{}}]
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest} :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "could not be opened"]}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]
+   :after [[:block [20 1 14] "dirt"] [:item "oak_log" 0]]}]}

@@ -33,4 +33,12 @@
    :body {:inventory []}
    :act [[:job (jobs.survival.dig-niche {:fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-tool}} :within-s 30 :of-job true}]
+   :limit-s 45}
+  ;; card 6fa0c797: the hill is the footprint of a plan this body made: no niche is cut in it
+  {:name "hill-in-the-bodys-own-plan-is-refused"
+   :blocks [[:fill [22 0 8] [30 4 24] "stone"]]
+   :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "hill" :box [#at [22 0 8] #at [30 4 24]] :want [:any "stone"]}]}]
+   :act [[:job (jobs.survival.dig-niche {})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :refused}} :within-s 30 :of-job true}]
+   :after [[:block [22 0 16] "stone"] [:block [23 0 16] "stone"]]
    :limit-s 45}]}

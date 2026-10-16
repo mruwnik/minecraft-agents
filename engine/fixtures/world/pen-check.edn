@@ -144,4 +144,19 @@
    :body {:at [15.5 0 15.5] :yaw 0}
    :act [[:job (jobs.animals.pen-check {:at #at [15 0 15]})]]
    :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 40 :of-job true}]
-   :limit-s 60}]}
+   :limit-s 60}
+  ;; card 9f854941: ground as high as the fence beside it is a way over the fence top (:perch-in), for a pen given by :at and by :box; a
+  ;; walled-in pocket of such ground is no way in
+  {:name "stone-beside-the-fence-top-is-a-perch-in"
+   :blocks [[:set [9 0 5] "stone"]]
+   :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
+   :expect [{:event {:source :job :kind :stopped :message [:contains "perch-in"]
+                     :data {:closed? false :reason :leak :leaks [{:why :perch-in}]}} :within-s 20 :of-job true}]}
+  {:name "stone-beside-the-fence-top-is-a-perch-in-for-a-box"
+   :blocks [[:set [9 0 5] "stone"]]
+   :act [[:job (jobs.animals.pen-check {:box {:min #xyz [3 0 3] :max #xyz [7 0 7]}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak :leaks [{:why :perch-in}]}} :within-s 20 :of-job true}]}
+  {:name "walled-in-pocket-beside-the-fence-is-closed"
+   :blocks [[:set [9 0 5] "stone"] [:fill [9 0 4] [10 5 4] "stone"] [:fill [9 0 6] [10 5 6] "stone"] [:fill [10 0 5] [10 5 5] "stone"]]
+   :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 25 :leaks []}} :within-s 20 :of-job true}]}]}

@@ -79,4 +79,19 @@
    :act [[:job (jobs.items.smelt {})]]
    :expect [{:event {:source :job :kind :completed} :within-s 130 :of-job true}]
    :after [[:item "cooked_chicken" 2] [:item "cooked_beef" 2]]
-   :limit-s 150}]}
+   :limit-s 150}
+  ;; card 51c89177: the furnace comes first; when none can be had the logs are still logs (no planks made for fuel first)
+  {:name "charcoal-with-no-furnace-to-be-had-leaves-the-logs"
+   :body {:inventory [["oak_log" 11]]}
+   :act [[:job (jobs.items.smelt {:item "charcoal" :count 3 :fetch {:how #{:chest}}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15 :of-job true :until {:source :job :kind :stopped}}]
+   :after [[:item "oak_log" 11] [:item "oak_planks" 0] [:item "charcoal" 0]]
+   :limit-s 60}
+  {:name "charcoal-makes-its-furnace-from-mined-cobble-first"
+   :blocks [[:fill [22 0 12] [24 2 20] "stone"]]
+   :body {:inventory [["oak_log" 11] ["stone_pickaxe" 1] ["crafting_table" 1]]}
+   :act [[:job (jobs.items.smelt {:item "charcoal" :count 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 1}} :within-s 200 :of-job true}]
+   :after [[:item "charcoal" 1]]
+   :limit-s 230}]}

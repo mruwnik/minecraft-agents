@@ -1,0 +1,54 @@
+;; Cards bf6983ae (b3f7422e2, aa19c55a0): go-to's cave-dip rule applies to every plan of a call, not only a round's first: a body walking its
+;; level corridor to a ladder shaft (goal 18 above the corridor) meets a zombie on the way; the plan round it would be a lower lane 9 below
+;; the start (past :climb-dip 8), so the re-plan is refused: the walk ends with replan :why :danger, go-to cuts a stair up
+;; (go-to.escalated :stair :why :way-dives) and the body does not walk the lane down. The zombie is made by a spawner in the corridor wall
+;; that wakes when the body comes within 24 blocks, so it appears on the walk, not at the start (a timer would be unstable).
+;; Stone mass x 2..61, y 0..29, z 2..29 (surface feet y 30). Corridor y 12..13 along z 16, x 4..60; ladder shaft at x 60 up to the surface;
+;; lane z 18: a stair down from the corridor at x 30 to y 3 (x 31..39), level x 40..50, a stair up to the corridor at x 59.
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:length 64 :height 31}
+  :settings {:jobs.movement.go-to.tuning/climb-dip 8}
+  :blocks [[:fill [2 0 2] [61 29 29] "stone"]
+           [:fill [4 12 16] [60 13 16] "air"]
+           [:fill [60 14 16] [60 29 16] "air"]
+           [:fill [60 12 16] [60 29 16] "ladder[facing=west]"]
+           [:fill [30 12 17] [30 13 17] "air"] [:fill [30 12 18] [30 14 18] "air"]
+           [:fill [31 11 18] [31 13 18] "air"]
+           [:fill [32 10 18] [32 12 18] "air"]
+           [:fill [33 9 18] [33 11 18] "air"]
+           [:fill [34 8 18] [34 10 18] "air"]
+           [:fill [35 7 18] [35 9 18] "air"]
+           [:fill [36 6 18] [36 8 18] "air"]
+           [:fill [37 5 18] [37 7 18] "air"]
+           [:fill [38 4 18] [38 6 18] "air"]
+           [:fill [39 3 18] [39 5 18] "air"]
+           [:fill [40 3 18] [50 5 18] "air"]
+           [:fill [51 4 18] [51 6 18] "air"]
+           [:fill [52 5 18] [52 7 18] "air"]
+           [:fill [53 6 18] [53 8 18] "air"]
+           [:fill [54 7 18] [54 9 18] "air"]
+           [:fill [55 8 18] [55 10 18] "air"]
+           [:fill [56 9 18] [56 11 18] "air"]
+           [:fill [57 10 18] [57 12 18] "air"]
+           [:fill [58 11 18] [58 13 18] "air"]
+           [:fill [59 12 18] [59 14 18] "air"]
+           [:fill [59 12 17] [59 13 17] "air"]
+           [:set [4 12 16] "torch"]]
+  :body {:at [5.5 12 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 330}
+ :cases
+ [{:name "level-corridor-and-ladder-need-no-stair"
+   :act [[:job (jobs.movement.go-to {:pos #at [60 30 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 300 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 300 :of-job true :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [60.5 30 16.5] 3]]}
+  {:name "zombie-on-the-walk-refuses-the-lane-below-and-cuts-a-stair"
+   :mobs :keep
+   :blocks [[:set [48 12 15] "spawner{SpawnData:{entity:{id:\"minecraft:zombie\",NoAI:1b,PersistenceRequired:1b}},SpawnCount:1s,SpawnRange:3s,RequiredPlayerRange:24s,MaxNearbyEntities:1s,MinSpawnDelay:20s,MaxSpawnDelay:20s,Delay:20s}"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [60 30 16] :range 1})]]
+   :expect [{:event {:source :job :kind :replan :data {:why :danger}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :go-to.escalated :data {:step :stair :why :way-dives}} :within-s 200 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 320 :of-job true}]
+   :after [[:body-near [60.5 30 16.5] 3]]}]}

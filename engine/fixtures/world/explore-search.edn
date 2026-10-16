@@ -21,4 +21,16 @@
                                      :use-notes false :max-distance 60 :max-legs 24 :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :of-job true :until {:source :job :kind :completed}}
-            {:no-event {:source :system :kind :error} :for-s 60 :until {:source :job :kind :completed}}]}]}
+            {:no-event {:source :system :kind :error} :for-s 60 :until {:source :job :kind :completed}}]}
+  ;; cards 3bd5a3eb (192108e0): a body on a leaf canopy 21 above the ground, no target anywhere: a leg whose step toward an unseen column
+  ;; cannot be walked drops that column and costs a leg, so the search ends in a bounded number of rounds, never spinning to its time bound
+  {:name "canopy-search-with-no-target-ends-instead-of-spinning"
+   :plot {:height 31}
+   :blocks [[:fill [4 20 4] [28 21 28] "oak_leaves[persistent=true]"]]
+   :body {:at [16.5 22 16.5]}
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
+                                     :use-notes false :max-distance 24 :max-legs 12 :spend {:job-time 130}})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :limit_reached} :for-s 100 :of-job true :until {:source :job :kind #{:completed :stopped}}}
+            {:no-event {:source :system :kind :error} :for-s 60}]
+   :limit-s 120}]}
