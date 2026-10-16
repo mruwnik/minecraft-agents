@@ -19,7 +19,7 @@ export RES_SLOT_DIR="$T/res" RES_SLOT_CONFIG="$T/res/cfg.json"
 sleep 300 & SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
 echo $SRV > "$T/repo/dashboard/.shadow-cljs/server.pid"
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"; chmod +x "$T/bin/npx"
-printf 'console.log("NODE", process.argv.slice(1).join(" "), process.execArgv.join(" ")); if (process.argv.join(" ").includes("hang-test")) setInterval(() => {}, 1000)\n' > "$T/repo/engine/out/test.cjs"
+printf 'console.log("NODE", process.argv.slice(1).join(" "), process.execArgv.join(" ")); if (process.argv.join(" ").includes("hang-test")) setInterval(() => {}, 1000); if (process.argv.join(" ").includes("stall-test")) { require("fs").appendFileSync(process.env.MC_TEST_TIMINGS, JSON.stringify({started: 1}) + "\\n"); for (;;); }\n' > "$T/repo/engine/out/test.cjs"
 export PATH="$T/bin:$PATH"
 C="$T/repo/tools/compile"
 
@@ -66,7 +66,7 @@ timeout 20 "$C" engine test >/dev/null 2>&1; check "compile with blocking waiter
 wait %+ 2>/dev/null
 
 # stub bundle files so the namespaces count as built (test-run.mjs refuses a namespace missing from the bundle)
-for n in engine.a-test engine.b-test engine.hang-test; do : > "$T/repo/engine/out/test/cljs-runtime/${n//-/_}.js"; done
+for n in engine.a-test engine.b-test engine.hang-test engine.stall-test; do : > "$T/repo/engine/out/test/cljs-runtime/${n//-/_}.js"; done
 # test-engine: compile for build test, then node outside the lock on a private copy, namespaces comma-joined
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.a-test engine.b-test 2>&1); check "test-engine rc" "$?" 0
 check "test-engine ns args" "$(grep -c -- '--test=engine.a-test,engine.b-test' <<<"$out")" 1
@@ -75,6 +75,9 @@ check "test-engine private copy" "$(grep -c -- '/tmp/mc-test-run-[0-9]*/out/test
 # a hung run is killed after the timeout (exit 124) and says so
 out=$(MC_TEST_TIMEOUT_S=2 timeout 30 "$T/repo/tools/test-engine" engine.hang-test 2>&1); check "hung run rc" "$?" 124
 check "hung run message" "$(grep -c 'TIMEOUT, killed after 2 s' <<<"$out")" 1
+# a run that started but finishes no test (a spinning test) is killed by the stall watchdog, not the whole-run cap
+out=$(MC_TEST_STALL_S=3 timeout 30 "$T/repo/tools/test-engine" engine.stall-test 2>&1); check "stalled run rc" "$?" 124
+check "stalled run message" "$(grep -c 'STALLED, no test finished for 3 s' <<<"$out")" 1
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.nope-test 2>&1); check "missing ns rc" "$?" 2
 check "missing ns message" "$(grep -c 'not in the :test bundle' <<<"$out")" 1
 # a failed compile that printed an ERROR / undeclared warning is retried (up to 2x); other failures, usage and busy exits are not

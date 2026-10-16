@@ -4,7 +4,7 @@
 //  --part i/N: runs only part i (1-based) of N: a greedy longest-first split by the committed engine/test-weights.json (a function of names and that file alone, so parts never overlap or leave a gap); `--write-weights` merges engine/out/test-ns-ms.json (written after any run, from the shards that passed) into it; with free memory for P shards, N=P parts of `--shards 1` balance best; timings are merged into test-ns-ms.json, the full-run timings file is left alone.
 //  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
 //  At most M shard processes run at once machine-wide (default: (MemAvailable - floorMb) / kinds.tests.needMb, 1..shardMax): each takes res-slot's 'tests' slot tests.<i> (i < M; slots above shardMax stay for targeted runs), so parallel agents cannot OOM the machine.
-//  Each shard is killed after runTimeoutS of its prior timing (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test.
+//  Each shard is killed when no test has finished for stallLimitS (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test and the namespaces not reached.
 //  TEST_EVENTS=1: prints the live-tests @@test lines (phase, plan, result per test, progress) as the shards produce them (engine.timing-test emits them).
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
 //  Isolation: after the compile, out/test.cjs and out/test/cljs-runtime are copied to /tmp/mc-test-run-<pid>/out (engine/test and node_modules symlinked beside it) and the shards run that copy (a concurrent compile cannot swap it); per-shard files carry the pid; a failing shard's output is kept in /tmp/mc-test-run-<pid>-shard-<i>.log (path printed).
@@ -13,7 +13,7 @@ import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { slotArgs, logRun, slotDir, candidateSlots, isHeavy, heavyWaitFile } from './res-slot.mjs'
-import { expectedMs, runTimeoutS, lastFinished, isolate, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
+import { WHOLE_RUN_CAP_S, lastFinished, isolate, sweepStale, cleanupOnExit, killTree, slowestPriorMs, stallLimitS, watchStall, killStalled, stallMessage } from './test-run.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const engine = path.join(repo, 'engine')
@@ -108,7 +108,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // Runs cmd under the first free slot; polls until one is free. A heavy run (integration) also tries the reserved slot first and, while it waits, keeps light res-slot runs off those slots.
 // slotsNow() is re-read every round, so a waiting shard widens its slot list as memory frees up.
 let waitSeq = 0
-export const runInSlot = async (slotsNow, cmd, opts, onOut = () => {}, onWait = () => {}) => {
+export const runInSlot = async (slotsNow, cmd, opts, onOut = () => {}, onWait = () => {}, onSpawn = () => {}) => {
   const t0 = Date.now(), heavy = isHeavy()
   const orderNow = () => candidateSlots(slotsNow(), RES.kinds.tests.max, RES.kinds.tests.reserve ?? 0, heavy)
   const wait = heavyWaitFile('tests', process.pid, waitSeq++)
@@ -122,6 +122,7 @@ export const runInSlot = async (slotsNow, cmd, opts, onOut = () => {}, onWait = 
         const r = await new Promise((res) => {
           let out = ''
           const p = spawn('flock', slotArgs('tests', i, cmd, 99), { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
+          onSpawn(p)
           p.stdout.on('data', (d) => { out += d; onOut(String(d)) }); p.stderr.on('data', (d) => { out += d })
           p.on('close', (code) => res({ code, out }))
         })
@@ -157,6 +158,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   fs.mkdirSync(slotDir(), { recursive: true })
   const nsFile = path.join(engine, 'out/test-ns-ms.json'), timingFile = path.join(engine, 'out/test-timings.jsonl')
   const prior = readPrior(nsFile)
+  const priorTests = fs.existsSync(timingFile) ? fs.readFileSync(timingFile, 'utf8').split('\n') : []
   const partIdx = argv.indexOf('--part')
   const part = partIdx < 0 ? null : parsePart(argv[partIdx + 1])
   const all = testNamespaces()
@@ -174,9 +176,13 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   const results = await Promise.all(split.map(async (nss, i) => {
     const file = `${timingFile}.${process.pid}.${i}`
     fs.writeFileSync(file, '')
-    const limit = Number(process.env.MC_TEST_TIMEOUT_S) || runTimeoutS(expectedMs(nss, prior))
-    const r = await runInSlot(slotsNow, ['timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${RES.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined)
+    const limit = Number(process.env.MC_TEST_TIMEOUT_S) || WHOLE_RUN_CAP_S
+    const stallS = Number(process.env.MC_TEST_STALL_S) || stallLimitS(slowestPriorMs(nss, priorTests))
+    let stalled = false, stop = () => {}
+    const r = await runInSlot(slotsNow, ['timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${RES.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined, (p) => { const prev = stop, w = watchStall(file, stallS, () => { stalled = true; killStalled(p.pid) }); stop = () => { prev(); w() } })
+    stop()
     events?.end(i)
+    if (stalled) { r.code = 124; r.out += `\n${stallMessage('test-shards', stallS, fs.readFileSync(file, 'utf8').split('\n'), nss)} (shard ${i})\n` } else
     if (r.code === 124 || r.code === 137) r.out += `\ntest-shards: TIMEOUT, shard ${i} killed after ${limit} s; last finished test: ${lastFinished(fs.readFileSync(file, 'utf8').split('\n')) ?? 'none'}\n`
     return { i, nss, file, ...r }
   }))

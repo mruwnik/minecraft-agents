@@ -2,7 +2,7 @@
 // Why JavaScript: a thin Node launcher (copies the compiled test bundle, runs node under res-slot and timeout(1)); no engine behaviour.
 // tools/test-run.mjs <ns>...   (called by tools/test-engine after the compile; namespaces space- or comma-separated)
 //  Runs a private copy of out/test.cjs + out/test/cljs-runtime (/tmp/mc-test-run-<pid>, so a concurrent compile cannot swap it) under one
-//  res-slot 'tests' slot sized by the namespace count (needMb), killed after runTimeoutS (from engine/out/test-ns-ms.json) so a hung test frees its slot (env MC_TEST_TIMEOUT_S overrides).
+//  res-slot 'tests' slot sized by the namespace count (needMb), killed when no test has finished for stallLimitS (MC_TEST_STALL_S overrides; a spinning test too, the watchdog is this parent) so a hung test frees its slot, and after WHOLE_RUN_CAP_S (MC_TEST_TIMEOUT_S overrides).
 //  Only the requested -test namespaces are loaded (narrowBundle: imports and shadow.test registry cut in the private copy; engine.timing-test, the timing / TEST_EVENTS=1 @@test reporter, always stays); full and shard runs keep the whole bundle.
 import fs from 'node:fs'
 import path from 'node:path'
@@ -31,11 +31,47 @@ export const expectedMs = (nss, ms) => {
   return Math.round(nss.reduce((t, n) => t + (ms[n] ?? mean), 0))
 }
 
-// Generous: a loaded machine runs a namespace up to ~3x slower than its prior timing.
-export const runTimeoutS = (expected) => Math.max(180, Math.min(1200, Math.round(60 + 5 * expected / 1000)))
+// Backstop only: the stall watchdog (watchStall) ends a hung run; this ends one that keeps finishing tests for hours.
+export const WHOLE_RUN_CAP_S = 3600
 
 // Measured peak RSS: 600-610 MB for one namespace, 750 for ten, 1.4 GB for a full shard (~45 namespaces) with the heap capped at kinds.tests.heapMb (uncapped, V8 let garbage grow it to 2.3 GB). The table of needs is kinds.tests in res-slot.json (needMb = shard and cap, goldenMb).
 export const needMb = (nsCount, tests) => Math.min(tests.needMb, tests.baseMb + tests.perNsMb * nsCount)
+
+// A hung test stops the timings file growing (one line per finished test, one {"started"} line at load), so the run is killed when it stalls, not after a whole-run time.
+// Floor, because a test may legitimately idle (waits, loaded machine); k x the slowest prior test of the requested namespaces when timings exist.
+export const STALL_FLOOR_S = 90, STALL_K = 10
+export const slowestPriorMs = (nss, lines) => {
+  const want = new Set(nss)
+  return lines.filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return {} } })
+    .filter((r) => r.var && want.has(r.var.replace(/^#'/, '').split('/')[0]))
+    .reduce((m, r) => Math.max(m, r.ms), 0)
+}
+export const stallLimitS = (slowestMs, floor = STALL_FLOOR_S, k = STALL_K) => Math.max(floor, Math.round(k * slowestMs / 1000))
+
+// Polls the timings file; once the node run has started (non-empty file) and the file has not grown for limitS, calls onStall() once. Returns stop().
+export const watchStall = (file, limitS, onStall, { pollMs = 2000, now = Date.now } = {}) => {
+  let size = 0, since = null, fired = false
+  const timer = setInterval(() => {
+    let cur
+    try { cur = fs.statSync(file).size } catch { return }
+    if (cur !== size) { size = cur; since = now(); return }
+    if (since === null || fired || now() - since < limitS * 1000) return
+    fired = true; clearInterval(timer); onStall()
+  }, pollMs)
+  return () => clearInterval(timer)
+}
+
+// SIGTERM stops a spinning node (no handler installed); SIGKILL after a grace period for the rest.
+export const killStalled = (pid, graceMs = 5000) => {
+  killTree(pid, 'SIGTERM')
+  setTimeout(() => killTree(pid, 'SIGKILL'), graceMs).unref()
+}
+
+export const stallMessage = (label, limitS, lines, nss) => {
+  const done = new Set(lines.filter(Boolean).map((l) => { try { return JSON.parse(l).var } catch { return null } }).filter(Boolean).map((v) => v.replace(/^#'/, '').split('/')[0]))
+  const untouched = nss.filter((n) => !done.has(n))
+  return `${label}: STALLED, no test finished for ${limitS} s (killed); last finished test: ${lastFinished(lines) ?? 'none'}; the stuck test is the one after it in its namespace; namespaces with no finished test: ${untouched.length ? untouched.join(' ') : 'none'}`
+}
 
 export const lastFinished = (lines) =>
   lines.filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.var).at(-1)?.var ?? null
@@ -175,6 +211,7 @@ export const missingNss = (engineDir, specs) =>
     return !fs.readFileSync(f, 'utf8').split('\n').some((l) => l.startsWith(`${ns.replaceAll('-', '_')}.${mungeName(name)} = `))
   })
 
+const readText = (f) => fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : ''
 const readJson = (f, d) => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : d
 
 const main = async () => {
@@ -188,7 +225,8 @@ const main = async () => {
   }
   const res = readJson(path.join(tools, 'res-slot.json'), null)
   const expected = expectedMs(nss, readJson(path.join(engine, 'out/test-ns-ms.json'), {}))
-  const limit = Number(process.env.MC_TEST_TIMEOUT_S) || runTimeoutS(expected)
+  const limit = Number(process.env.MC_TEST_TIMEOUT_S) || WHOLE_RUN_CAP_S
+  const stallS = Number(process.env.MC_TEST_STALL_S) || stallLimitS(slowestPriorMs(nss, (readText(path.join(engine, 'out/test-timings.jsonl'))).split('\n')))
   sweepStale()
   const { runDir, cleanup } = isolate(engine, process.pid)
   let child = null
@@ -200,8 +238,13 @@ const main = async () => {
     ['tests', '--need', String(needMb(nss.length, res.kinds.tests)), '--',
       'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${res.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${specs.join(',')}`],
     { cwd: engine, stdio: 'inherit', env: { ...process.env, MC_TEST_TIMINGS: timings, NODE_PATH: path.join(repo, 'node_modules') } })
-  const code = await new Promise((resolve) => child.on('exit', (status) => resolve(status ?? 1)))
-  if (code === 124 || code === 137)
+  let stalled = false
+  const stop = watchStall(timings, stallS, () => { stalled = true; killStalled(child.pid) })
+  const exited = await new Promise((resolve) => child.on('exit', (status) => resolve(status ?? 1)))
+  stop()
+  const code = stalled ? 124 : exited
+  if (stalled) console.error(stallMessage('test-engine', stallS, fs.readFileSync(timings, 'utf8').split('\n'), nss))
+  if (!stalled && (code === 124 || code === 137))
     console.error(`test-engine: TIMEOUT, killed after ${limit} s (prior timing ~${Math.round(expected / 1000)} s); last finished test: ${lastFinished(fs.readFileSync(timings, 'utf8').split('\n')) ?? 'none'}`)
   process.exit(code)
 }

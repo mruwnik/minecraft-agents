@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events'
 import { spawn } from 'node:child_process'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseNss, nsOf, expectedMs, runTimeoutS, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
+import { parseNss, nsOf, expectedMs, stallLimitS, slowestPriorMs, watchStall, stallMessage, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
 
 test('parseNss: space- and comma-separated namespaces, blanks dropped', () => {
   assert.deepEqual(parseNss(['engine.a-test,engine.b-test', 'engine.c-test', '']), ['engine.a-test', 'engine.b-test', 'engine.c-test'])
@@ -17,15 +17,57 @@ test('expectedMs: known ns summed, unknown ones cost the mean of the known', () 
   assert.equal(expectedMs(['x'], {}), 2100)
 })
 
-test('expectedMs without prior timings: a 52-namespace shard gets more than the 180 s floor', () => {
-  const nss = Array.from({ length: 52 }, (_, i) => `n${i}`)
-  assert.ok(runTimeoutS(expectedMs(nss, {})) > 500)
+test('stallLimitS: the floor, or 10x the slowest prior test', () => {
+  assert.equal(stallLimitS(0), 90)
+  assert.equal(stallLimitS(2000), 90)
+  assert.equal(stallLimitS(30000), 300)
 })
 
-test('runTimeoutS: 60 s plus 5x the expected time, between 180 s and 1200 s', () => {
-  assert.equal(runTimeoutS(0), 180)
-  assert.equal(runTimeoutS(57251), 346)
-  assert.equal(runTimeoutS(1e7), 1200)
+test('slowestPriorMs: slowest var of the requested namespaces only', () => {
+  const lines = ['{"var":"#\'a-test/x","ms":40}', '{"var":"#\'a-test/y","ms":900}', '{"var":"#\'b-test/z","ms":5000}', 'junk', '']
+  assert.equal(slowestPriorMs(['a-test'], lines), 900)
+  assert.equal(slowestPriorMs(['c-test'], lines), 0)
+})
+
+test('watchStall: fires once when the file stops growing, not before the run has started', async (t) => {
+  const f = `/tmp/test-run-stall-${process.pid}`
+  fs.writeFileSync(f, '')
+  t.after(() => fs.rmSync(f, { force: true }))
+  let fired = 0, clock = 0
+  const stop = watchStall(f, 10, () => fired++, { pollMs: 5, now: () => clock })
+  const tick = (ms) => new Promise((r) => setTimeout(r, ms))
+  clock = 100000; await tick(30)
+  assert.equal(fired, 0, 'an empty file means node has not started')
+  fs.appendFileSync(f, 'x\n'); await tick(30)
+  clock += 5000; await tick(30)
+  assert.equal(fired, 0, 'inside the limit')
+  fs.appendFileSync(f, 'y\n'); await tick(30)
+  clock += 9000; await tick(30)
+  assert.equal(fired, 0, 'progress resets the clock')
+  clock += 2000; await tick(30)
+  assert.equal(fired, 1)
+  clock += 20000; await tick(30)
+  assert.equal(fired, 1)
+  stop()
+})
+
+test('watchStall kills a CPU-spinning node that finished nothing (the parent is not blocked)', async (t) => {
+  const f = `/tmp/test-run-spin-${process.pid}`
+  fs.writeFileSync(f, '{"started":1}\n')
+  t.after(() => fs.rmSync(f, { force: true }))
+  const child = spawn('node', ['-e', 'for (;;);'], { stdio: 'ignore' })
+  const exit = new Promise((r) => child.on('exit', (c, sig) => r(sig)))
+  const stop = watchStall(f, 0.2, () => killTree(child.pid), { pollMs: 50 })
+  assert.equal(await exit, 'SIGTERM')
+  stop()
+})
+
+test('stallMessage names the last finished test and the namespaces with no finished test', () => {
+  const lines = ['{"started":1}', '{"var":"#\'a-test/x","ms":4}', '']
+  const m = stallMessage('test-engine', 90, lines, ['a-test', 'b-test'])
+  assert.match(m, /STALLED, no test finished for 90 s/)
+  assert.match(m, /last finished test: #'a-test\/x/)
+  assert.match(m, /no finished test: b-test$/)
 })
 
 test('needMb: measured peak plus margin per run, growing with the namespace count, capped at the shard need', () => {
