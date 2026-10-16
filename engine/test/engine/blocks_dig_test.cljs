@@ -512,6 +512,16 @@
 
 (def under-feet {:x 0 :y 63 :z 0})
 
+(deftest a-dug-cell-the-body-has-not-seen-since-is-not-told-as-a-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "stone"} :drops {"stone" "cobblestone"} :inventory pick})
+              _ (aset p "sensedAt" (fn [pos] (if (= 2 (.-x pos)) #js {:unknown true} (.blockAt p pos))))
+              result (await (tu/child-outcome eng job {:pos [2 64 0]} 10))]
+          (is (not (contains? result :now)))
+          (is (re-find #"was not seen since" (:text result))))))))
+
 (deftest the-block-under-the-feet-is-dug-from-beside
   (async done
     (tu/run-async done
